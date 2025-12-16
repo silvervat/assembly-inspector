@@ -23,24 +23,30 @@ export interface InspectionForNavigation {
 
 /**
  * Check if there's a pending navigation request from EOS2
+ * IMPORTANT: This immediately clears the request to prevent duplicate processing
  */
 export function getPendingNavigation(): NavigationRequest | null {
   try {
     const stored = localStorage.getItem(NAVIGATION_REQUEST_KEY);
     if (!stored) return null;
 
+    // Immediately clear to prevent duplicate processing
+    // Even if window is closed mid-navigation, request won't be processed again
+    clearPendingNavigation();
+
     const request: NavigationRequest = JSON.parse(stored);
 
-    // Ignore requests older than 5 minutes
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
-    if (request.timestamp < fiveMinutesAgo) {
-      clearPendingNavigation();
+    // Ignore requests older than 30 seconds (just in case)
+    const thirtySecondsAgo = Date.now() - 30 * 1000;
+    if (request.timestamp < thirtySecondsAgo) {
+      console.log('Navigation request expired (older than 30 seconds)');
       return null;
     }
 
     return request;
   } catch (e) {
     console.error('Error reading navigation request:', e);
+    clearPendingNavigation(); // Clear on error too
     return null;
   }
 }

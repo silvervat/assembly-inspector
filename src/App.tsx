@@ -5,7 +5,6 @@ import InspectorScreen from './components/InspectorScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
-  clearPendingNavigation,
   fetchInspectionForNavigation,
   navigateToInspection
 } from './utils/navigationHelper';
@@ -121,11 +120,12 @@ export default function App() {
   }, []);
 
   // Kontrolli kas on ootel navigeerimise päring EOS2-st
+  // NB: getPendingNavigation() tühistab päringu kohe lugemisel
   const checkPendingNavigation = async (apiInstance: WorkspaceAPI.WorkspaceAPI) => {
-    const pendingNav = getPendingNavigation();
+    const pendingNav = getPendingNavigation(); // See juba tühistab päringu
     if (!pendingNav) return;
 
-    console.log('Found pending navigation request:', pendingNav);
+    console.log('Processing navigation request:', pendingNav);
     setIsNavigating(true);
     setNavigationStatus('Laadin inspektsiooni andmeid...');
 
@@ -137,7 +137,6 @@ export default function App() {
           setNavigationStatus('');
           setIsNavigating(false);
         }, 3000);
-        clearPendingNavigation();
         return;
       }
 
@@ -147,19 +146,11 @@ export default function App() {
         setNavigationStatus
       );
 
-      if (success) {
-        setTimeout(() => {
-          setNavigationStatus('');
-          setIsNavigating(false);
-        }, 3000);
-      } else {
-        setTimeout(() => {
-          setNavigationStatus('');
-          setIsNavigating(false);
-        }, 3000);
-      }
+      setTimeout(() => {
+        setNavigationStatus('');
+        setIsNavigating(false);
+      }, success ? 2000 : 3000);
 
-      clearPendingNavigation();
     } catch (e) {
       console.error('Navigation error:', e);
       setNavigationStatus('Navigeerimine ebaõnnestus');
@@ -167,7 +158,6 @@ export default function App() {
         setNavigationStatus('');
         setIsNavigating(false);
       }, 3000);
-      clearPendingNavigation();
     }
   };
 
