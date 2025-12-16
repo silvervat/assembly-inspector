@@ -58,17 +58,19 @@ export default function InspectorScreen({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Kontrolli assembly selection staatust
-  useEffect(() => {
-    const checkAssemblySelection = async () => {
-      try {
-        const settings = await api.viewer.getSettings();
-        setAssemblySelectionEnabled(!!settings.assemblySelection);
-      } catch (e) {
-        console.error('Failed to get viewer settings:', e);
-      }
-    };
-    checkAssemblySelection();
+  const checkAssemblySelection = useCallback(async () => {
+    try {
+      const settings = await api.viewer.getSettings();
+      setAssemblySelectionEnabled(!!settings.assemblySelection);
+    } catch (e) {
+      console.error('Failed to get viewer settings:', e);
+    }
   }, [api]);
+
+  // Esimene kontroll laadimisel
+  useEffect(() => {
+    checkAssemblySelection();
+  }, [checkAssemblySelection]);
 
   // Valideeri valik - useCallback, et saaks kasutada checkSelection'is
   const validateSelection = useCallback(async (objects: SelectedObject[]) => {
@@ -328,10 +330,11 @@ export default function InspectorScreen({
   useEffect(() => {
     const interval = setInterval(() => {
       checkSelection();
+      checkAssemblySelection(); // Uuenda ka assembly selection staatust
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [checkSelection]);
+  }, [checkSelection, checkAssemblySelection]);
 
   // Tee snapshot ja salvesta inspektsioon
   const handleInspect = async () => {
