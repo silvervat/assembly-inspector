@@ -24,6 +24,7 @@ export interface Inspection {
   inspector_name: string;
   inspected_at: string;
   photo_url?: string;
+  photo_urls?: string[];
   notes?: string;
   project_id: string;
   // Tekla additional fields
