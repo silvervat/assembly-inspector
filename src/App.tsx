@@ -30,9 +30,6 @@ export default function App() {
         setProjectId(project.id);
         console.log('Connected to project:', project.name);
 
-        // Värvi kõik detailid valgeks
-        await paintAllWhite(connected);
-
         // Laadi inspekteeritud detailid ja värvi mustaks
         await loadInspectedAssemblies(connected, project.id);
 
@@ -59,19 +56,7 @@ export default function App() {
     }
   }, []);
 
-  // Värvi kõik detailid valgeks
-  const paintAllWhite = async (apiInstance: WorkspaceAPI.WorkspaceAPI) => {
-    try {
-      await apiInstance.viewer.setObjectState(undefined, {
-        color: { r: 255, g: 255, b: 255, a: 255 }
-      });
-      console.log('✅ All objects painted white');
-    } catch (e: any) {
-      console.error('Paint white failed:', e);
-    }
-  };
-
-  // Laadi inspekteeritud detailid ja värvi mustaks
+  // Laadi inspekteeritud detailid ja värvi mustaks (optimeeritud - üks päring)
   const loadInspectedAssemblies = async (
     apiInstance: WorkspaceAPI.WorkspaceAPI,
     projId: string
@@ -79,7 +64,7 @@ export default function App() {
     try {
       const { data: inspections, error } = await supabase
         .from('inspections')
-        .select('*')
+        .select('model_id, object_runtime_id')
         .eq('project_id', projId);
 
       if (error) throw error;
@@ -96,15 +81,16 @@ export default function App() {
           byModel[insp.model_id].push(insp.object_runtime_id);
         }
 
-        // Värvi iga mudeli inspekteeritud detailid mustaks
-        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-          const selector = {
-            modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
-          };
-          await apiInstance.viewer.setObjectState(selector, {
-            color: { r: 0, g: 0, b: 0, a: 255 }
-          });
-        }
+        // Koonda kõik mudelid ühte selectorisse - ÜKS API kutse
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId,
+          objectRuntimeIds: runtimeIds
+        }));
+
+        await apiInstance.viewer.setObjectState(
+          { modelObjectIds },
+          { color: { r: 0, g: 0, b: 0, a: 255 } }
+        );
         console.log('✅ Inspected assemblies painted black');
       }
     } catch (e: any) {
