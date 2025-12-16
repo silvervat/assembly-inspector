@@ -1,0 +1,7 @@
+{
+  "url": "http://localhost:5173",
+  "title": "Assembly Inspector",
+  "icon": "https://your-domain.com/icon.png",
+  "description": "Assembly inspection tool with PIN authentication and quality control tracking",
+  "enabled": true
+}
