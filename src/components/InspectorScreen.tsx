@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, User, Inspection } from '../supabase';
 
@@ -13,6 +13,16 @@ interface SelectedObject {
   modelId: string;
   runtimeId: number;
   assemblyMark?: string;
+  // Additional Tekla properties
+  fileName?: string;
+  guid?: string;
+  guidIfc?: string;
+  guidMs?: string;
+  objectId?: string;
+  bottomElevation?: string;
+  positionCode?: string;
+  topElevation?: string;
+  weight?: string;
 }
 
 export default function InspectorScreen({
@@ -28,6 +38,10 @@ export default function InspectorScreen({
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [inspectionCount, setInspectionCount] = useState(0);
 
+  // Refs debounce ja cleanup jaoks
+  const lastCheckTimeRef = useRef(0);
+  const isCheckingRef = useRef(false);
+
   // Kontrolli assembly selection staatust
   useEffect(() => {
     const checkAssemblySelection = async () => {
@@ -41,87 +55,8 @@ export default function InspectorScreen({
     checkAssemblySelection();
   }, [api]);
 
-  // Kuula valikute muutumist
-  useEffect(() => {
-    let isActive = true;
-
-    const checkSelection = async () => {
-      try {
-        const selection = await api.viewer.getSelection();
-        
-        if (!isActive) return;
-
-        if (!selection || selection.length === 0) {
-          setSelectedObjects([]);
-          setCanInspect(false);
-          setMessage('');
-          return;
-        }
-
-        // Kogu kõik valitud objektid
-        const allObjects: SelectedObject[] = [];
-
-        for (const modelObj of selection) {
-          const modelId = modelObj.modelId;
-          const runtimeIds = modelObj.objectRuntimeIds || [];
-
-          // Hangi iga objekti properties
-          for (const runtimeId of runtimeIds) {
-            try {
-              const props = await api.viewer.getObjectProperties(
-                modelId,
-                [runtimeId]
-              );
-
-              if (props && props.length > 0) {
-                const objProps = props[0];
-                let assemblyMark: string | undefined;
-
-                // Otsi Tekla_Assembly.AssemblyCast_unit_Mark
-                for (const pset of objProps.properties || []) {
-                  if (pset.set === 'Tekla_Assembly') {
-                    const castUnitProp = pset.properties?.find(
-                      p => p.name === 'AssemblyCast_unit_Mark'
-                    );
-                    if (castUnitProp && castUnitProp.value) {
-                      assemblyMark = String(castUnitProp.value);
-                      break;
-                    }
-                  }
-                }
-
-                allObjects.push({ modelId, runtimeId, assemblyMark });
-              }
-            } catch (e) {
-              console.error(`Failed to get properties for ${modelId}:${runtimeId}`, e);
-            }
-          }
-        }
-
-        if (!isActive) return;
-
-        setSelectedObjects(allObjects);
-        await validateSelection(allObjects);
-      } catch (e: any) {
-        console.error('Selection check error:', e);
-      }
-    };
-
-    // Pool iga 2 sekundi järel
-    const interval = setInterval(checkSelection, 2000);
-    
-    // Esimene check kohe
-    checkSelection();
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [api, assemblySelectionEnabled, projectId]);
-
-  // Valideeri valik
-  const validateSelection = async (objects: SelectedObject[]) => {
-    // Kontrolli kas valitud on täpselt 1 objekt
+  // Valideeri valik - useCallback, et saaks kasutada checkSelection'is
+  const validateSelection = useCallback(async (objects: SelectedObject[]) => {
     if (objects.length === 0) {
       setCanInspect(false);
       setMessage('');
@@ -136,7 +71,6 @@ export default function InspectorScreen({
 
     const obj = objects[0];
 
-    // Kontrolli kas on Assembly Mark
     if (!obj.assemblyMark) {
       setCanInspect(false);
       if (!assemblySelectionEnabled) {
@@ -147,11 +81,10 @@ export default function InspectorScreen({
       return;
     }
 
-    // Kontrolli kas juba inspekteeritud
     try {
       const { data } = await supabase
         .from('inspections')
-        .select('*')
+        .select('inspected_at')
         .eq('project_id', projectId)
         .eq('model_id', obj.modelId)
         .eq('object_runtime_id', obj.runtimeId)
@@ -159,18 +92,213 @@ export default function InspectorScreen({
 
       if (data) {
         setCanInspect(false);
-        setMessage(`ℹ️ See detail on juba inspekteeritud (${new Date(data.inspected_at).toLocaleString('et-EE')})`);
+        setMessage(`ℹ️ Juba inspekteeritud (${new Date(data.inspected_at).toLocaleString('et-EE')})`);
         return;
       }
 
-      // Kõik OK, saab inspekteerida
       setCanInspect(true);
-      setMessage(`✅ Valmis inspekteerimiseks: ${obj.assemblyMark}`);
+      setMessage(`✅ Valmis: ${obj.assemblyMark}`);
     } catch (e: any) {
-      console.error('Validation error:', e);
-      setMessage(`⚠️ Viga kontrollimisel: ${e.message}`);
+      // PGRST116 = not found, see on OK
+      if (e?.code === 'PGRST116') {
+        setCanInspect(true);
+        setMessage(`✅ Valmis: ${obj.assemblyMark}`);
+      } else {
+        console.error('Validation error:', e);
+        setCanInspect(true);
+        setMessage(`✅ Valmis: ${obj.assemblyMark}`);
+      }
     }
-  };
+  }, [assemblySelectionEnabled, projectId]);
+
+  // Peamine valiku kontroll - useCallback
+  const checkSelection = useCallback(async () => {
+    // Debounce - 200ms
+    const now = Date.now();
+    if (now - lastCheckTimeRef.current < 200) return;
+    if (isCheckingRef.current) return;
+
+    lastCheckTimeRef.current = now;
+    isCheckingRef.current = true;
+
+    try {
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setSelectedObjects([]);
+        setCanInspect(false);
+        setMessage('');
+        return;
+      }
+
+      const allObjects: SelectedObject[] = [];
+
+      for (const modelObj of selection) {
+        const modelId = modelObj.modelId;
+        const runtimeIds = modelObj.objectRuntimeIds || [];
+
+        // Get model info for file name
+        let fileName: string | undefined;
+        try {
+          const loadedModels = await api.viewer.getLoadedModel(modelId);
+          if (loadedModels) {
+            fileName = (loadedModels as any).name || (loadedModels as any).filename;
+          }
+        } catch (e) {
+          console.warn('Could not get model info:', e);
+        }
+
+        for (const runtimeId of runtimeIds) {
+          try {
+            const props = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+
+            if (props && props.length > 0) {
+              const objProps = props[0];
+              let assemblyMark: string | undefined;
+              let guidIfc: string | undefined;
+              let guidMs: string | undefined;
+              let guid: string | undefined;
+              let objectId: string | undefined;
+              let bottomElevation: string | undefined;
+              let positionCode: string | undefined;
+              let topElevation: string | undefined;
+              let weight: string | undefined;
+
+              // Try to get object IDs
+              try {
+                const objectIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+                if (objectIds && objectIds.length > 0) {
+                  objectId = String(objectIds[0]);
+                }
+              } catch (e) {
+                console.warn('Could not convert to object IDs:', e);
+              }
+
+              // Search all property sets for Tekla data
+              for (const pset of objProps.properties || []) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const propArray = pset.properties || [];
+
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  // Cast_unit_Mark
+                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
+                    assemblyMark = String(propValue);
+                    console.log(`✅ Found mark: ${setName}.${(prop as any).name} = ${assemblyMark}`);
+                  }
+
+                  // Cast_unit_bottom_elevation
+                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
+                    bottomElevation = String(propValue);
+                  }
+
+                  // Cast_unit_position_code
+                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
+                    positionCode = String(propValue);
+                  }
+
+                  // Cast_unit_top_elevation
+                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
+                    topElevation = String(propValue);
+                  }
+
+                  // Cast_unit_weight or just weight
+                  if (propName.includes('weight') && !weight) {
+                    weight = String(propValue);
+                  }
+
+                  // GUID from properties
+                  if ((propName === 'guid_ifc' || propName === 'ifcguid' || propName === 'globalid') && !guidIfc) {
+                    guidIfc = String(propValue);
+                  }
+                  if ((propName === 'guid_ms' || propName === 'msguid') && !guidMs) {
+                    guidMs = String(propValue);
+                  }
+                  if (propName === 'guid' && !guid) {
+                    guid = String(propValue);
+                  }
+
+                  // ObjectId from properties
+                  if ((propName === 'objectid' || propName === 'object_id' || propName === 'id') && !objectId) {
+                    objectId = String(propValue);
+                  }
+                }
+              }
+
+              // Fallback: use guidIfc as main guid if guid not found
+              if (!guid && guidIfc) {
+                guid = guidIfc;
+              }
+
+              allObjects.push({
+                modelId,
+                runtimeId,
+                assemblyMark,
+                fileName,
+                guid,
+                guidIfc,
+                guidMs,
+                objectId,
+                bottomElevation,
+                positionCode,
+                topElevation,
+                weight
+              });
+            }
+          } catch (e) {
+            console.error(`Props error ${modelId}:${runtimeId}`, e);
+          }
+        }
+      }
+
+      setSelectedObjects(allObjects);
+      await validateSelection(allObjects);
+    } catch (e: any) {
+      console.error('Selection check error:', e);
+    } finally {
+      isCheckingRef.current = false;
+    }
+  }, [api, validateSelection]);
+
+  // Event listener valiku muutustele
+  useEffect(() => {
+    const handleSelectionChanged = () => {
+      console.log('🎯 Selection changed');
+      checkSelection();
+    };
+
+    // Registreeri event listener
+    try {
+      (api.viewer as any).addOnSelectionChanged?.(handleSelectionChanged);
+      console.log('✅ Selection listener registered');
+    } catch (e) {
+      console.warn('Event listener not available:', e);
+    }
+
+    // Esimene kontroll kohe
+    checkSelection();
+
+    return () => {
+      try {
+        (api.viewer as any).removeOnSelectionChanged?.(handleSelectionChanged);
+      } catch (e) {
+        // Silent
+      }
+    };
+  }, [api, checkSelection]);
+
+  // Polling iga 2 sekundi tagant (backup)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkSelection();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [checkSelection]);
 
   // Tee snapshot ja salvesta inspektsioon
   const handleInspect = async () => {
@@ -183,16 +311,13 @@ export default function InspectorScreen({
     setMessage('📸 Teen pilti...');
 
     try {
-      // 1. Tee snapshot
       const snapshotDataUrl = await api.viewer.getSnapshot();
-      
+
       setMessage('☁️ Laadin üles...');
 
-      // 2. Konverteeri base64 -> blob
       const blob = dataURLtoBlob(snapshotDataUrl);
       const fileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_${Date.now()}.png`;
 
-      // 3. Lae pilt Supabase Storage'isse
       const { error: uploadError } = await supabase.storage
         .from('inspection-photos')
         .upload(fileName, blob, {
@@ -202,14 +327,12 @@ export default function InspectorScreen({
 
       if (uploadError) throw uploadError;
 
-      // 4. Hangi avalik URL
       const { data: urlData } = supabase.storage
         .from('inspection-photos')
         .getPublicUrl(fileName);
 
-      setMessage('💾 Salvestan andmeid...');
+      setMessage('💾 Salvestan...');
 
-      // 5. Salvesta inspection andmebaasi
       const inspection: Partial<Inspection> = {
         assembly_mark: obj.assemblyMark,
         model_id: obj.modelId,
@@ -217,7 +340,17 @@ export default function InspectorScreen({
         inspector_id: user.id,
         inspector_name: user.name,
         photo_url: urlData.publicUrl,
-        project_id: projectId
+        project_id: projectId,
+        // Additional Tekla fields
+        file_name: obj.fileName,
+        guid: obj.guid,
+        guid_ifc: obj.guidIfc,
+        guid_ms: obj.guidMs,
+        object_id: obj.objectId,
+        cast_unit_bottom_elevation: obj.bottomElevation,
+        cast_unit_position_code: obj.positionCode,
+        cast_unit_top_elevation: obj.topElevation,
+        cast_unit_weight: obj.weight
       };
 
       const { error: dbError } = await supabase
@@ -226,30 +359,23 @@ export default function InspectorScreen({
 
       if (dbError) throw dbError;
 
-      // 6. Värvi detail mustaks
-      const selector = {
-        modelObjectIds: [{
-          modelId: obj.modelId,
-          objectRuntimeIds: [obj.runtimeId]
-        }]
-      };
-
-      await api.viewer.setObjectState(selector, {
-        color: { r: 0, g: 0, b: 0, a: 255 }
-      });
+      // Värvi detail mustaks
+      await api.viewer.setObjectState(
+        { modelObjectIds: [{ modelId: obj.modelId, objectRuntimeIds: [obj.runtimeId] }] },
+        { color: { r: 0, g: 0, b: 0, a: 255 } }
+      );
 
       setMessage(`✅ Inspekteeritud: ${obj.assemblyMark}`);
       setInspectionCount(prev => prev + 1);
-      
+
       // Tühjenda valik
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-      
-      // Reset state
+
       setTimeout(() => {
         setSelectedObjects([]);
         setCanInspect(false);
         setMessage('');
-      }, 3000);
+      }, 2000);
 
     } catch (e: any) {
       console.error('Inspection failed:', e);
@@ -259,7 +385,6 @@ export default function InspectorScreen({
     }
   };
 
-  // Helper: DataURL -> Blob
   const dataURLtoBlob = (dataUrl: string): Blob => {
     const arr = dataUrl.split(',');
     const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
@@ -293,7 +418,6 @@ export default function InspectorScreen({
 
   return (
     <div className="inspector-container">
-      {/* Header */}
       <div className="inspector-header">
         <div className="user-info">
           <div className="user-avatar">{user.name.charAt(0).toUpperCase()}</div>
@@ -307,7 +431,6 @@ export default function InspectorScreen({
         </button>
       </div>
 
-      {/* Stats */}
       <div className="stats-container">
         <div className="stat-card">
           <div className="stat-label">Inspekteeritud</div>
@@ -321,21 +444,18 @@ export default function InspectorScreen({
         </div>
       </div>
 
-      {/* Assembly selection hoiatus */}
       {!assemblySelectionEnabled && (
         <div className="warning-banner">
-          ⚠️ Assembly Selection ei ole sisse lülitatud viewer seadetes
+          ⚠️ Assembly Selection pole sisse lülitatud
         </div>
       )}
 
-      {/* Message */}
       {message && (
         <div className={`message ${canInspect ? 'success' : 'info'}`}>
           {message}
         </div>
       )}
 
-      {/* Selected info */}
       {selectedObjects.length > 0 && (
         <div className="selection-info">
           <h3>Valitud: {selectedObjects.length} detail(i)</h3>
@@ -352,7 +472,6 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {/* Inspect button */}
       <div className="action-container">
         <button
           onClick={handleInspect}
@@ -363,14 +482,13 @@ export default function InspectorScreen({
         </button>
       </div>
 
-      {/* Instructions */}
       <div className="instructions">
         <h4>Juhised:</h4>
         <ol>
           <li>Vali 3D vaates üks detail</li>
-          <li>Kontrolli, et detail on õige (Assembly Mark kuvatakse)</li>
-          <li>Vajuta "Inspekteeri" nuppu</li>
-          <li>Detail märgitakse mustaks pärast inspekteerimist</li>
+          <li>Kontrolli Assembly Mark</li>
+          <li>Vajuta "Inspekteeri"</li>
+          <li>Detail värvitakse mustaks</li>
         </ol>
       </div>
     </div>
