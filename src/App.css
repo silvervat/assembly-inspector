@@ -723,3 +723,46 @@ body {
 .photo-modal-close:hover {
   transform: scale(1.1);
 }
+
+.photo-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.photo-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  background: white;
+  color: #333;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.photo-modal-btn:hover {
+  background: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+/* Topview checkbox */
+.topview-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #495057;
+  cursor: pointer;
+}
+
+.topview-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

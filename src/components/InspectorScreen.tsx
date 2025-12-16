@@ -49,6 +49,7 @@ export default function InspectorScreen({
     userEmail?: string;
   } | null>(null);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
+  const [includeTopView, setIncludeTopView] = useState(true);
 
   // Refs
   const lastCheckTimeRef = useRef(0);
@@ -371,7 +372,7 @@ export default function InspectorScreen({
         }
       }
 
-      // 2. Tee 3D vaate snapshot
+      // 2. Tee 3D vaate snapshot (praegune vaade)
       setMessage('📸 Teen 3D pilti...');
       const snapshotDataUrl = await api.viewer.getSnapshot();
       const blob = dataURLtoBlob(snapshotDataUrl);
@@ -391,6 +392,43 @@ export default function InspectorScreen({
         .getPublicUrl(snapshotFileName);
 
       allPhotoUrls.push(urlData.publicUrl);
+
+      // 3. Tee topview snapshot kui valitud
+      if (includeTopView) {
+        setMessage('📸 Teen pealtvaate pilti...');
+
+        // Salvesta praegune kaamera
+        const currentCamera = await api.viewer.getCamera();
+
+        // Lülita topview
+        await api.viewer.setCamera('top', { animationTime: 0 });
+
+        // Oota natuke, et kaamera jõuaks kohale
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Tee topview snapshot
+        const topviewDataUrl = await api.viewer.getSnapshot();
+        const topviewBlob = dataURLtoBlob(topviewDataUrl);
+        const topviewFileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_topview_${Date.now()}.png`;
+
+        const { error: topviewUploadError } = await supabase.storage
+          .from('inspection-photos')
+          .upload(topviewFileName, topviewBlob, {
+            contentType: 'image/png',
+            cacheControl: '3600'
+          });
+
+        if (!topviewUploadError) {
+          const { data: topviewUrlData } = supabase.storage
+            .from('inspection-photos')
+            .getPublicUrl(topviewFileName);
+
+          allPhotoUrls.push(topviewUrlData.publicUrl);
+        }
+
+        // Taasta kaamera
+        await api.viewer.setCamera(currentCamera, { animationTime: 0 });
+      }
 
       setMessage('💾 Salvestan...');
 
@@ -691,6 +729,15 @@ export default function InspectorScreen({
             ))}
           </div>
         )}
+
+        <label className="topview-checkbox">
+          <input
+            type="checkbox"
+            checked={includeTopView}
+            onChange={(e) => setIncludeTopView(e.target.checked)}
+          />
+          Lisa pealtvaate pilt (topview)
+        </label>
       </div>
 
       <div className="action-container">
@@ -721,6 +768,23 @@ export default function InspectorScreen({
               ✕
             </button>
             <img src={modalPhoto} alt="Inspektsiooni foto" />
+            <div className="photo-modal-actions">
+              <a
+                href={modalPhoto}
+                download={`inspection-photo-${Date.now()}.png`}
+                className="photo-modal-btn"
+              >
+                ⬇ Lae alla
+              </a>
+              <a
+                href={modalPhoto}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="photo-modal-btn"
+              >
+                ↗ Ava uues aknas
+              </a>
+            </div>
           </div>
         </div>
       )}
