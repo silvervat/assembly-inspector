@@ -52,6 +52,8 @@ export default function InspectorScreen({
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
   const [includeTopView, setIncludeTopView] = useState(true);
   const [autoClosePanel, setAutoClosePanel] = useState(false);
+  const [showingMyInspections, setShowingMyInspections] = useState(false);
+  const [myInspectionsLoading, setMyInspectionsLoading] = useState(false);
 
   // Refs
   const lastCheckTimeRef = useRef(0);
@@ -536,6 +538,49 @@ export default function InspectorScreen({
     return new Blob([u8arr], { type: mime });
   };
 
+  // Pildi optimeerimine - max 1920px, kvaliteet 0.8
+  const compressImage = (file: File, maxWidth = 1920, quality = 0.8): Promise<File> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+
+      img.onload = () => {
+        let { width, height } = img;
+
+        // Skaleeri alla kui suurem kui maxWidth
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now()
+              });
+              console.log(`📸 Compressed: ${(file.size / 1024 / 1024).toFixed(2)}MB → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`);
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Lae inspektsioonide arv
   useEffect(() => {
     const loadInspectionCount = async () => {
@@ -555,19 +600,24 @@ export default function InspectorScreen({
     loadInspectionCount();
   }, [projectId]);
 
-  // Foto lisamine
-  const handleAddPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Foto lisamine (optimeerituna)
+  const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
+
+    setMessage('📸 Optimeerin pilte...');
 
     const newPhotos: { file: File; preview: string }[] = [];
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const preview = URL.createObjectURL(file);
-      newPhotos.push({ file, preview });
+      // Optimeeri pilt
+      const compressedFile = await compressImage(file);
+      const preview = URL.createObjectURL(compressedFile);
+      newPhotos.push({ file: compressedFile, preview });
     }
 
     setPhotos(prev => [...prev, ...newPhotos]);
+    setMessage('');
 
     // Reset input
     if (fileInputRef.current) {
@@ -627,6 +677,66 @@ export default function InspectorScreen({
     }
   };
 
+  // Näita minu inspektsioone (värvi punaseks)
+  const showMyInspections = async () => {
+    setMyInspectionsLoading(true);
+    try {
+      const { data: inspections, error } = await supabase
+        .from('inspections')
+        .select('model_id, object_runtime_id')
+        .eq('project_id', projectId)
+        .eq('inspector_id', user.id);
+
+      if (error) throw error;
+
+      if (inspections && inspections.length > 0) {
+        // Grupeeri model_id järgi
+        const byModel: Record<string, number[]> = {};
+        for (const insp of inspections) {
+          if (!byModel[insp.model_id]) {
+            byModel[insp.model_id] = [];
+          }
+          byModel[insp.model_id].push(insp.object_runtime_id);
+        }
+
+        // Värvi punaseks
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId,
+          objectRuntimeIds: runtimeIds
+        }));
+
+        await api.viewer.setObjectState(
+          { modelObjectIds },
+          { color: { r: 220, g: 50, b: 50, a: 255 } }
+        );
+
+        setShowingMyInspections(true);
+        setMessage(`🔴 ${inspections.length} minu inspektsiooni märgitud`);
+        setTimeout(() => setMessage(''), 3000);
+      } else {
+        setMessage('ℹ️ Sul pole veel inspektsioone');
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (e: any) {
+      console.error('Failed to show my inspections:', e);
+      setMessage('❌ Viga inspektsioonide laadimisel');
+    } finally {
+      setMyInspectionsLoading(false);
+    }
+  };
+
+  // Välju minu inspektsioonide vaatest
+  const exitMyInspections = async () => {
+    try {
+      // Reset kõik värvid (undefined selector = kõik objektid)
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+      setShowingMyInspections(false);
+      setMessage('');
+    } catch (e) {
+      console.error('Failed to reset:', e);
+    }
+  };
+
   return (
     <div className="inspector-container">
       <div className="inspector-header-compact">
@@ -635,9 +745,9 @@ export default function InspectorScreen({
             className="user-button"
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
-            <span className="user-avatar-small">{user.name.charAt(0).toUpperCase()}</span>
-            <span className="user-name-small">{user.name}</span>
-            <span className="dropdown-arrow">▼</span>
+            <span className="user-avatar-tiny">{user.name.charAt(0).toUpperCase()}</span>
+            <span className="user-name-tiny">{user.name}</span>
+            <span className="dropdown-arrow-small">▾</span>
           </button>
           {showUserMenu && (
             <div className="user-dropdown">
@@ -649,12 +759,28 @@ export default function InspectorScreen({
           )}
         </div>
         <div className="header-right">
+          {!showingMyInspections ? (
+            <button
+              onClick={showMyInspections}
+              disabled={myInspectionsLoading}
+              className="my-inspections-btn"
+            >
+              {myInspectionsLoading ? '...' : 'MINU'}
+            </button>
+          ) : (
+            <button
+              onClick={exitMyInspections}
+              className="exit-my-inspections-btn"
+            >
+              ✕ VÄLJU
+            </button>
+          )}
           <button
             onClick={colorInspectedGreen}
             disabled={coloringDone}
             className="color-done-btn"
           >
-            {coloringDone ? '...' : 'VÄRVI tehtud'}
+            {coloringDone ? '...' : 'VÄRVI'}
           </button>
           <div className="stats-compact">
             <div className="stat-item">
