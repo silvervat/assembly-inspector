@@ -2,16 +2,14 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Inspection } from '../supabase';
 import { InspectionMode } from './MainMenu';
-import { FiArrowLeft, FiChevronDown, FiLogOut } from 'react-icons/fi';
+import { FiArrowLeft } from 'react-icons/fi';
 
 interface InspectorScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   user: TrimbleExUser;
   projectId: string;
   tcUserEmail?: string;
-  userInitials: string;
   inspectionMode: InspectionMode;
-  onLogout: () => void;
   onBackToMenu: () => void;
 }
 
@@ -61,9 +59,7 @@ export default function InspectorScreen({
   user,
   projectId,
   tcUserEmail,
-  userInitials,
   inspectionMode,
-  onLogout,
   onBackToMenu
 }: InspectorScreenProps) {
   // Režiimi nimi
@@ -89,7 +85,6 @@ export default function InspectorScreen({
   const [message, setMessage] = useState('');
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [inspectionCount, setInspectionCount] = useState(0);
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [coloringDone, setColoringDone] = useState(false);
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [existingInspection, setExistingInspection] = useState<{
@@ -941,25 +936,6 @@ export default function InspectorScreen({
       </div>
 
       <div className="inspector-header-compact">
-        <div className="user-menu-wrapper">
-          <button
-            className="user-button"
-            onClick={() => setShowUserMenu(!showUserMenu)}
-          >
-            <span className="user-avatar-tiny">{userInitials}</span>
-            <FiChevronDown size={12} className="dropdown-arrow-icon" />
-          </button>
-          {showUserMenu && (
-            <div className="user-dropdown">
-              <div className="dropdown-email">{tcUserEmail}</div>
-              <div className="dropdown-role">{user.role}</div>
-              <button onClick={onLogout} className="dropdown-logout">
-                <FiLogOut size={14} />
-                <span>Logi välja</span>
-              </button>
-            </div>
-          )}
-        </div>
         <div className="header-right">
           {!showingMyInspections ? (
             <button
