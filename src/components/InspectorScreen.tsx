@@ -245,7 +245,8 @@ export default function InspectorScreen({
 
         for (const runtimeId of runtimeIds) {
           try {
-            const props = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+            // Use includeHidden option to get all properties (including Tekla Bolt)
+            const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
 
             if (props && props.length > 0) {
               const objProps = props[0];
@@ -314,27 +315,32 @@ export default function InspectorScreen({
                     console.log(`✅ Found mark: ${setName}.${propNameOriginal} = ${assemblyMark}`);
                   }
 
-                  // Tekla_Bolt properties
-                  if (setNameLower.includes('tekla_bolt') || setNameLower.includes('bolt')) {
-                    if ((propName.includes('bolt_name') || propName === 'name') && !boltName) {
+                  // Tekla_Bolt / Tekla Bolt properties (handle both underscore and space)
+                  // Normalize: replace spaces with underscores for comparison
+                  const setNameNorm = setNameLower.replace(/\s+/g, '_');
+                  const propNameNorm = propName.replace(/\s+/g, '_');
+
+                  if (setNameNorm.includes('tekla_bolt') || setNameLower.includes('bolt')) {
+                    // Bolt Name - check various formats
+                    if ((propNameNorm.includes('bolt_name') || propName === 'name' || propNameNorm === 'bolt_name') && !boltName) {
                       boltName = String(propValue);
                       console.log(`✅ Found Bolt Name: ${setName}.${propNameOriginal} = ${boltName}`);
                     }
-                    if (propName.includes('bolt_count') && !boltCount) boltCount = String(propValue);
-                    if (propName.includes('bolt_hole_diameter') && !boltHoleDiameter) boltHoleDiameter = String(propValue);
-                    if (propName.includes('bolt_length') && !boltLength) boltLength = String(propValue);
-                    if (propName.includes('bolt_size') && !boltSize) boltSize = String(propValue);
-                    if (propName.includes('bolt_standard') && !boltStandard) boltStandard = String(propValue);
-                    if (propName.includes('location') && !boltLocation) boltLocation = String(propValue);
-                    if (propName.includes('nut_count') && !nutCount) nutCount = String(propValue);
-                    if (propName.includes('nut_name') && !nutName) nutName = String(propValue);
-                    if (propName.includes('nut_type') && !nutType) nutType = String(propValue);
-                    if (propName.includes('slotted_hole_x') && !slottedHoleX) slottedHoleX = String(propValue);
-                    if (propName.includes('slotted_hole_y') && !slottedHoleY) slottedHoleY = String(propValue);
-                    if (propName.includes('washer_count') && !washerCount) washerCount = String(propValue);
-                    if (propName.includes('washer_diameter') && !washerDiameter) washerDiameter = String(propValue);
-                    if (propName.includes('washer_name') && !washerName) washerName = String(propValue);
-                    if (propName.includes('washer_type') && !washerType) washerType = String(propValue);
+                    if ((propNameNorm.includes('bolt_count') || propNameNorm === 'count') && !boltCount) boltCount = String(propValue);
+                    if ((propNameNorm.includes('bolt_hole_diameter') || propNameNorm.includes('hole_diameter')) && !boltHoleDiameter) boltHoleDiameter = String(propValue);
+                    if ((propNameNorm.includes('bolt_length') || propNameNorm === 'length') && !boltLength) boltLength = String(propValue);
+                    if ((propNameNorm.includes('bolt_size') || propNameNorm === 'size') && !boltSize) boltSize = String(propValue);
+                    if ((propNameNorm.includes('bolt_standard') || propNameNorm === 'standard') && !boltStandard) boltStandard = String(propValue);
+                    if (propNameNorm.includes('location') && !boltLocation) boltLocation = String(propValue);
+                    if ((propNameNorm.includes('nut_count')) && !nutCount) nutCount = String(propValue);
+                    if ((propNameNorm.includes('nut_name')) && !nutName) nutName = String(propValue);
+                    if ((propNameNorm.includes('nut_type')) && !nutType) nutType = String(propValue);
+                    if ((propNameNorm.includes('slotted_hole_x')) && !slottedHoleX) slottedHoleX = String(propValue);
+                    if ((propNameNorm.includes('slotted_hole_y')) && !slottedHoleY) slottedHoleY = String(propValue);
+                    if ((propNameNorm.includes('washer_count')) && !washerCount) washerCount = String(propValue);
+                    if ((propNameNorm.includes('washer_diameter')) && !washerDiameter) washerDiameter = String(propValue);
+                    if ((propNameNorm.includes('washer_name')) && !washerName) washerName = String(propValue);
+                    if ((propNameNorm.includes('washer_type')) && !washerType) washerType = String(propValue);
                   }
 
                   // IFC Material
