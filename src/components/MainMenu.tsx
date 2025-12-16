@@ -1,4 +1,6 @@
 import { TrimbleExUser } from '../supabase';
+import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiLogOut } from 'react-icons/fi';
+import { IconType } from 'react-icons';
 
 export type InspectionMode =
   | 'paigaldatud'
@@ -20,7 +22,7 @@ interface MainMenuProps {
 interface MenuItem {
   mode: InspectionMode;
   title: string;
-  icon: string;
+  icon: IconType;
   enabled: boolean;
   description?: string;
 }
@@ -29,56 +31,56 @@ const menuItems: MenuItem[] = [
   {
     mode: 'paigaldatud',
     title: 'Paigaldatud detailide inspektsioon',
-    icon: '🔍',
+    icon: FiSearch,
     enabled: true,
     description: 'Assembly Selection SEES'
   },
   {
     mode: 'poldid',
     title: 'Poltide inspektsioon',
-    icon: '🔩',
+    icon: FiTool,
     enabled: true,
     description: 'Assembly Selection VÄLJAS'
   },
   {
     mode: 'muu',
     title: 'Muu inspektsioon',
-    icon: '📋',
+    icon: FiFileText,
     enabled: false,
     description: 'Arendamisel'
   },
   {
     mode: 'mittevastavus',
     title: 'Mitte vastavus',
-    icon: '⚠️',
+    icon: FiAlertTriangle,
     enabled: false,
     description: 'Arendamisel'
   },
   {
     mode: 'varviparandus',
     title: 'Värviparandused inspektsioon',
-    icon: '🎨',
+    icon: FiDroplet,
     enabled: false,
     description: 'Arendamisel'
   },
   {
     mode: 'keevis',
     title: 'Keeviste inspektsioon',
-    icon: '🔥',
+    icon: FiZap,
     enabled: false,
     description: 'Arendamisel'
   },
   {
     mode: 'paigaldatud_detailid',
     title: 'Paigaldatud detailid',
-    icon: '📦',
+    icon: FiPackage,
     enabled: false,
     description: 'Arendamisel'
   },
   {
     mode: 'eos2',
     title: 'Saada EOS2 tabelisse',
-    icon: '📤',
+    icon: FiUpload,
     enabled: false,
     description: 'Arendamisel'
   }
@@ -96,7 +98,8 @@ export default function MainMenu({ user, userInitials, onSelectMode, onLogout }:
           </div>
         </div>
         <button className="menu-logout-btn" onClick={onLogout}>
-          Logi välja
+          <FiLogOut size={14} />
+          <span>Logi välja</span>
         </button>
       </div>
 
@@ -105,23 +108,32 @@ export default function MainMenu({ user, userInitials, onSelectMode, onLogout }:
       </div>
 
       <div className="main-menu-items">
-        {menuItems.map((item) => (
-          <button
-            key={item.mode}
-            className={`menu-item ${item.enabled ? 'enabled' : 'disabled'}`}
-            onClick={() => item.enabled && onSelectMode(item.mode)}
-            disabled={!item.enabled}
-          >
-            <span className="menu-item-icon">{item.icon}</span>
-            <div className="menu-item-content">
-              <span className="menu-item-title">{item.title}</span>
-              {item.description && (
-                <span className="menu-item-desc">{item.description}</span>
+        {menuItems.map((item) => {
+          const IconComponent = item.icon;
+          return (
+            <button
+              key={item.mode}
+              className={`menu-item ${item.enabled ? 'enabled' : 'disabled'}`}
+              onClick={() => item.enabled && onSelectMode(item.mode)}
+              disabled={!item.enabled}
+            >
+              <span className="menu-item-icon">
+                <IconComponent size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">{item.title}</span>
+                {item.description && (
+                  <span className="menu-item-desc">{item.description}</span>
+                )}
+              </div>
+              {item.enabled && (
+                <span className="menu-item-arrow">
+                  <FiChevronRight size={18} />
+                </span>
               )}
-            </div>
-            {item.enabled && <span className="menu-item-arrow">›</span>}
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
