@@ -5,6 +5,8 @@ import InspectorScreen from './components/InspectorScreen';
 import { supabase, User } from './supabase';
 import './App.css';
 
+export const APP_VERSION = '1.1.0';
+
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -124,10 +126,24 @@ export default function App() {
     localStorage.removeItem('inspector_user');
   };
 
+  const VersionFooter = () => (
+    <div style={{
+      position: 'fixed',
+      bottom: 4,
+      right: 8,
+      fontSize: 10,
+      color: '#999',
+      pointerEvents: 'none'
+    }}>
+      v{APP_VERSION}
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="container">
         <div className="loading">Ühendatakse Trimble Connect'iga...</div>
+        <VersionFooter />
       </div>
     );
   }
@@ -142,24 +158,38 @@ export default function App() {
             Veendu, et laiendus on avatud Trimble Connect keskkonnas.
           </p>
         </div>
+        <VersionFooter />
       </div>
     );
   }
 
   if (!api) {
-    return <div className="container">API pole saadaval</div>;
+    return (
+      <div className="container">
+        API pole saadaval
+        <VersionFooter />
+      </div>
+    );
   }
 
   if (!user) {
-    return <LoginScreen onLogin={handleLogin} />;
+    return (
+      <>
+        <LoginScreen onLogin={handleLogin} />
+        <VersionFooter />
+      </>
+    );
   }
 
   return (
-    <InspectorScreen
-      api={api}
-      user={user}
-      projectId={projectId}
-      onLogout={handleLogout}
-    />
+    <>
+      <InspectorScreen
+        api={api}
+        user={user}
+        projectId={projectId}
+        onLogout={handleLogout}
+      />
+      <VersionFooter />
+    </>
   );
 }
