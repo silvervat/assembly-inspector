@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, User, Inspection } from '../supabase';
 
@@ -51,7 +51,7 @@ export default function InspectorScreen({
         
         if (!isActive) return;
 
-        if (!selection || !selection.modelObjectIds || selection.modelObjectIds.length === 0) {
+        if (!selection || selection.length === 0) {
           setSelectedObjects([]);
           setCanInspect(false);
           setMessage('');
@@ -60,8 +60,8 @@ export default function InspectorScreen({
 
         // Kogu kõik valitud objektid
         const allObjects: SelectedObject[] = [];
-        
-        for (const modelObj of selection.modelObjectIds) {
+
+        for (const modelObj of selection) {
           const modelId = modelObj.modelId;
           const runtimeIds = modelObj.objectRuntimeIds || [];
 
@@ -79,7 +79,7 @@ export default function InspectorScreen({
 
                 // Otsi Tekla_Assembly.AssemblyCast_unit_Mark
                 for (const pset of objProps.properties || []) {
-                  if (pset.name === 'Tekla_Assembly') {
+                  if (pset.set === 'Tekla_Assembly') {
                     const castUnitProp = pset.properties?.find(
                       p => p.name === 'AssemblyCast_unit_Mark'
                     );
@@ -149,7 +149,7 @@ export default function InspectorScreen({
 
     // Kontrolli kas juba inspekteeritud
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('inspections')
         .select('*')
         .eq('project_id', projectId)
@@ -193,7 +193,7 @@ export default function InspectorScreen({
       const fileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_${Date.now()}.png`;
 
       // 3. Lae pilt Supabase Storage'isse
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('inspection-photos')
         .upload(fileName, blob, {
           contentType: 'image/png',
@@ -235,8 +235,7 @@ export default function InspectorScreen({
       };
 
       await api.viewer.setObjectState(selector, {
-        color: { r: 0, g: 0, b: 0, a: 255 },
-        transparent: false
+        color: { r: 0, g: 0, b: 0, a: 255 }
       });
 
       setMessage(`✅ Inspekteeritud: ${obj.assemblyMark}`);

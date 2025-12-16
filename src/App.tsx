@@ -18,7 +18,7 @@ export default function App() {
       try {
         const connected = await WorkspaceAPI.connect(
           window.parent,
-          (event, data) => {
+          (event: string, data: unknown) => {
             console.log('Workspace event:', event, data);
           },
           30000
@@ -63,8 +63,7 @@ export default function App() {
   const paintAllWhite = async (apiInstance: WorkspaceAPI.WorkspaceAPI) => {
     try {
       await apiInstance.viewer.setObjectState(undefined, {
-        color: { r: 255, g: 255, b: 255, a: 255 },
-        transparent: false
+        color: { r: 255, g: 255, b: 255, a: 255 }
       });
       console.log('✅ All objects painted white');
     } catch (e: any) {
@@ -103,8 +102,7 @@ export default function App() {
             modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
           };
           await apiInstance.viewer.setObjectState(selector, {
-            color: { r: 0, g: 0, b: 0, a: 255 },
-            transparent: false
+            color: { r: 0, g: 0, b: 0, a: 255 }
           });
         }
         console.log('✅ Inspected assemblies painted black');
