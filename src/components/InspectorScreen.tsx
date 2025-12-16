@@ -403,11 +403,21 @@ export default function InspectorScreen({
         // Salvesta praegune kaamera
         const currentCamera = await api.viewer.getCamera();
 
-        // Lülita topview
+        // Lülita topview preset
         await api.viewer.setCamera('top', { animationTime: 0 });
 
-        // Oota natuke, et kaamera jõuaks kohale
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Oota et kaamera jõuaks kohale
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Seadista ortho projektsioon (õige pealtvaade)
+        const topCamera = await api.viewer.getCamera();
+        await api.viewer.setCamera(
+          { ...topCamera, projectionType: 'ortho' },
+          { animationTime: 0 }
+        );
+
+        // Oota renderimist
+        await new Promise(resolve => setTimeout(resolve, 150));
 
         // Tee topview snapshot
         const topviewDataUrl = await api.viewer.getSnapshot();
