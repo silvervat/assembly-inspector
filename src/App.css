@@ -130,11 +130,149 @@ body {
 
 /* INSPECTOR SCREEN */
 .inspector-container {
-  padding: 16px;
+  padding: 12px;
   max-width: 800px;
   margin: 0 auto;
 }
 
+/* Compact header */
+.inspector-header-compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.user-menu-wrapper {
+  position: relative;
+}
+
+.user-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.user-button:hover {
+  background: #f0f2f5;
+}
+
+.user-avatar-small {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1E88E5, #0a3a67);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.user-name-small {
+  font-size: 13px;
+  font-weight: 500;
+  color: #252525;
+}
+
+.dropdown-arrow {
+  font-size: 8px;
+  color: #757575;
+  margin-left: 2px;
+}
+
+.user-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-role {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #757575;
+  text-transform: uppercase;
+  border-bottom: 1px solid #e6eaf0;
+}
+
+.dropdown-logout {
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: #dc3545;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dropdown-logout:hover {
+  background: #fff5f5;
+}
+
+/* Compact stats */
+.stats-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-num {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0a3a67;
+}
+
+.stat-lbl {
+  font-size: 10px;
+  color: #757575;
+  text-transform: uppercase;
+}
+
+.stat-icon {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.stat-icon.on {
+  color: #4caf50;
+}
+
+.stat-icon.off {
+  color: #dc3545;
+}
+
+.stat-divider {
+  color: #e0e0e0;
+  font-size: 12px;
+}
+
+/* Old header styles - keeping for backwards compatibility */
 .inspector-header {
   display: flex;
   align-items: center;
