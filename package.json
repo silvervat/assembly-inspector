@@ -1,7 +1,7 @@
 {
   "name": "assembly-inspector",
-  "version": "2.0.0",
-  "description": "Trimble Connect Assembly Inspector with PIN authentication",
+  "version": "2.1.0",
+  "description": "Trimble Connect Assembly Inspector with Trimble user email authentication",
   "type": "module",
   "scripts": {
     "dev": "vite",

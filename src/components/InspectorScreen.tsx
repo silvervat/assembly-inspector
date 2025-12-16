@@ -1,13 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, User, Inspection } from '../supabase';
+import { supabase, TrimbleExUser, Inspection } from '../supabase';
+import { InspectionMode } from './MainMenu';
 
 interface InspectorScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
-  user: User;
+  user: TrimbleExUser;
   projectId: string;
   tcUserEmail?: string;
+  userInitials: string;
+  inspectionMode: InspectionMode;
   onLogout: () => void;
+  onBackToMenu: () => void;
 }
 
 interface SelectedObject {
@@ -25,6 +29,8 @@ interface SelectedObject {
   topElevation?: string;
   weight?: string;
   productName?: string;
+  // Poltide inspektsioon
+  boltName?: string;
 }
 
 export default function InspectorScreen({
@@ -32,8 +38,28 @@ export default function InspectorScreen({
   user,
   projectId,
   tcUserEmail,
-  onLogout
+  userInitials,
+  inspectionMode,
+  onLogout,
+  onBackToMenu
 }: InspectorScreenProps) {
+  // Režiimi nimi
+  const getModeTitle = (mode: InspectionMode): string => {
+    const titles: Record<InspectionMode, string> = {
+      paigaldatud: 'Paigaldatud detailide inspektsioon',
+      poldid: 'Poltide inspektsioon',
+      muu: 'Muu inspektsioon',
+      mittevastavus: 'Mitte vastavus',
+      varviparandus: 'Värviparandused inspektsioon',
+      keevis: 'Keeviste inspektsioon',
+      paigaldatud_detailid: 'Paigaldatud detailid',
+      eos2: 'Saada EOS2 tabelisse'
+    };
+    return titles[mode] || mode;
+  };
+
+  // Poltide režiimis ei nõua assembly selection'i
+  const requiresAssemblySelection = inspectionMode !== 'poldid';
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
   const [canInspect, setCanInspect] = useState(false);
   const [inspecting, setInspecting] = useState(false);
@@ -94,15 +120,27 @@ export default function InspectorScreen({
 
     const obj = objects[0];
 
-    if (!obj.assemblyMark) {
-      setCanInspect(false);
-      if (!assemblySelectionEnabled) {
-        setMessage('⚠️ Lülita sisse Assembly Selection (viewer seadetes)');
-      } else {
-        setMessage('⚠️ Sellel detailil puudub AssemblyCast_unit_Mark');
+    // Poltide režiimis kontrollime boltName'i
+    if (inspectionMode === 'poldid') {
+      if (!obj.boltName) {
+        setCanInspect(false);
+        setMessage('⚠️ Sellel detailil puudub Tekla_Bolt.Bolt_Name');
+        return;
       }
-      return;
+    } else {
+      // Tavalises režiimis kontrollime assemblyMark'i
+      if (!obj.assemblyMark) {
+        setCanInspect(false);
+        if (requiresAssemblySelection && !assemblySelectionEnabled) {
+          setMessage('⚠️ Lülita sisse Assembly Selection (viewer seadetes)');
+        } else {
+          setMessage('⚠️ Sellel detailil puudub Cast_unit_Mark');
+        }
+        return;
+      }
     }
+
+    const displayName = inspectionMode === 'poldid' ? obj.boltName : obj.assemblyMark;
 
     try {
       const { data } = await supabase
@@ -126,19 +164,19 @@ export default function InspectorScreen({
       }
 
       setCanInspect(true);
-      setMessage(`✅ Valmis: ${obj.assemblyMark}`);
+      setMessage(`✅ Valmis: ${displayName}`);
     } catch (e: any) {
       // PGRST116 = not found, see on OK
       if (e?.code === 'PGRST116') {
         setCanInspect(true);
-        setMessage(`✅ Valmis: ${obj.assemblyMark}`);
+        setMessage(`✅ Valmis: ${displayName}`);
       } else {
         console.error('Validation error:', e);
         setCanInspect(true);
-        setMessage(`✅ Valmis: ${obj.assemblyMark}`);
+        setMessage(`✅ Valmis: ${displayName}`);
       }
     }
-  }, [assemblySelectionEnabled, projectId]);
+  }, [assemblySelectionEnabled, projectId, inspectionMode, requiresAssemblySelection]);
 
   // Peamine valiku kontroll - useCallback
   const checkSelection = useCallback(async () => {
@@ -215,8 +253,11 @@ export default function InspectorScreen({
               }
 
               // Search all property sets for Tekla data
+              let boltName: string | undefined;
+
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
+                const setNameLower = setName.toLowerCase();
                 const propArray = pset.properties || [];
 
                 for (const prop of propArray) {
@@ -229,6 +270,13 @@ export default function InspectorScreen({
                   if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
                     assemblyMark = String(propValue);
                     console.log(`✅ Found mark: ${setName}.${(prop as any).name} = ${assemblyMark}`);
+                  }
+
+                  // Tekla_Bolt.Bolt_Name (poltide inspektsioon)
+                  if ((setNameLower.includes('bolt') || setNameLower.includes('tekla_bolt')) &&
+                      (propName.includes('bolt_name') || propName === 'name') && !boltName) {
+                    boltName = String(propValue);
+                    console.log(`✅ Found Bolt Name: ${setName}.${(prop as any).name} = ${boltName}`);
                   }
 
                   // Cast_unit_bottom_elevation
@@ -268,7 +316,6 @@ export default function InspectorScreen({
                   }
 
                   // Product Name (Property set "Product", property "Name")
-                  const setNameLower = setName.toLowerCase();
                   if (setNameLower === 'product' && propName === 'name' && !productName) {
                     productName = String(propValue);
                     console.log(`✅ Found Product Name: ${setName}.${(prop as any).name} = ${productName}`);
@@ -294,7 +341,8 @@ export default function InspectorScreen({
                 positionCode,
                 topElevation,
                 weight,
-                productName
+                productName,
+                boltName
               });
             }
           } catch (e) {
@@ -458,12 +506,16 @@ export default function InspectorScreen({
 
       setMessage('💾 Salvestan...');
 
+      // Poltide režiimis kasuta boltName'i, muidu assemblyMark'i
+      const markToSave = inspectionMode === 'poldid' ? obj.boltName : obj.assemblyMark;
+      const inspectorName = user.name || tcUserEmail || 'Unknown';
+
       const inspection: Partial<Inspection> = {
-        assembly_mark: obj.assemblyMark,
+        assembly_mark: markToSave,
         model_id: obj.modelId,
         object_runtime_id: obj.runtimeId,
         inspector_id: user.id,
-        inspector_name: user.name,
+        inspector_name: inspectorName,
         photo_url: allPhotoUrls[0] || '',
         photo_urls: allPhotoUrls,
         project_id: projectId,
@@ -497,7 +549,7 @@ export default function InspectorScreen({
       photos.forEach(p => URL.revokeObjectURL(p.preview));
       setPhotos([]);
 
-      setMessage(`✅ Inspekteeritud: ${obj.assemblyMark}`);
+      setMessage(`✅ Inspekteeritud: ${markToSave}`);
       setInspectionCount(prev => prev + 1);
 
       // Tühjenda valik
@@ -739,18 +791,26 @@ export default function InspectorScreen({
 
   return (
     <div className="inspector-container">
+      {/* Mode title bar with back button */}
+      <div className="mode-title-bar">
+        <button className="back-to-menu-btn" onClick={onBackToMenu}>
+          ← Menüü
+        </button>
+        <span className="mode-title">{getModeTitle(inspectionMode)}</span>
+      </div>
+
       <div className="inspector-header-compact">
         <div className="user-menu-wrapper">
           <button
             className="user-button"
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
-            <span className="user-avatar-tiny">{user.name.charAt(0).toUpperCase()}</span>
-            <span className="user-name-tiny">{user.name}</span>
+            <span className="user-avatar-tiny">{userInitials}</span>
             <span className="dropdown-arrow-small">▾</span>
           </button>
           {showUserMenu && (
             <div className="user-dropdown">
+              <div className="dropdown-email">{tcUserEmail}</div>
               <div className="dropdown-role">{user.role}</div>
               <button onClick={onLogout} className="dropdown-logout">
                 Logi välja
@@ -787,20 +847,30 @@ export default function InspectorScreen({
               <span className="stat-num">{inspectionCount}</span>
               <span className="stat-lbl">insp.</span>
             </div>
-            <div className="stat-divider">|</div>
-            <div className="stat-item">
-              <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
-                {assemblySelectionEnabled ? '✓' : '✗'}
-              </span>
-              <span className="stat-lbl">asm</span>
-            </div>
+            {requiresAssemblySelection && (
+              <>
+                <div className="stat-divider">|</div>
+                <div className="stat-item">
+                  <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
+                    {assemblySelectionEnabled ? '✓' : '✗'}
+                  </span>
+                  <span className="stat-lbl">asm</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {!assemblySelectionEnabled && (
+      {requiresAssemblySelection && !assemblySelectionEnabled && (
         <div className="warning-banner">
           ⚠️ Assembly Selection pole sisse lülitatud
+        </div>
+      )}
+
+      {inspectionMode === 'poldid' && assemblySelectionEnabled && (
+        <div className="warning-banner info-banner">
+          ℹ️ Poltide režiimis lülita Assembly Selection VÄLJA
         </div>
       )}
 
@@ -846,7 +916,9 @@ export default function InspectorScreen({
           {selectedObjects.map((obj, idx) => (
             <div key={idx} className="selected-item">
               <div className="selected-mark">
-                {obj.assemblyMark || 'Mark puudub'}
+                {inspectionMode === 'poldid'
+                  ? (obj.boltName || 'Bolt Name puudub')
+                  : (obj.assemblyMark || 'Mark puudub')}
               </div>
               <div className="selected-meta">
                 Model: {obj.modelId.substring(0, 8)}... | ID: {obj.runtimeId}
