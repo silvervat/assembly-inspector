@@ -7,7 +7,7 @@ Trimble Connect extension assembly detailide kvaliteedikontrolliks PIN autentimi
 
 ## 🚀 Kiire Deployment (3 minutit)
 
-### 1️⃣ Supabase Setup
+### 1️⃣ Supabase Setup.
 
 ```bash
 # 1. Loo konto: https://supabase.com
