@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Inspection } from '../supabase';
 import { InspectionMode } from './MainMenu';
+import { FiArrowLeft, FiChevronDown, FiLogOut } from 'react-icons/fi';
 
 interface InspectorScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -794,7 +795,8 @@ export default function InspectorScreen({
       {/* Mode title bar with back button */}
       <div className="mode-title-bar">
         <button className="back-to-menu-btn" onClick={onBackToMenu}>
-          ← Menüü
+          <FiArrowLeft size={14} />
+          <span>Menüü</span>
         </button>
         <span className="mode-title">{getModeTitle(inspectionMode)}</span>
       </div>
@@ -806,14 +808,15 @@ export default function InspectorScreen({
             onClick={() => setShowUserMenu(!showUserMenu)}
           >
             <span className="user-avatar-tiny">{userInitials}</span>
-            <span className="dropdown-arrow-small">▾</span>
+            <FiChevronDown size={12} className="dropdown-arrow-icon" />
           </button>
           {showUserMenu && (
             <div className="user-dropdown">
               <div className="dropdown-email">{tcUserEmail}</div>
               <div className="dropdown-role">{user.role}</div>
               <button onClick={onLogout} className="dropdown-logout">
-                Logi välja
+                <FiLogOut size={14} />
+                <span>Logi välja</span>
               </button>
             </div>
           )}
