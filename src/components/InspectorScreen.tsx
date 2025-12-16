@@ -4,6 +4,20 @@ import { supabase, TrimbleExUser, Inspection } from '../supabase';
 import { InspectionMode } from './MainMenu';
 import { FiArrowLeft } from 'react-icons/fi';
 
+// GUID helper functions (from Assembly Exporter)
+function normalizeGuid(s: string): string {
+  return s.replace(/^urn:(uuid:)?/i, "").trim();
+}
+
+function classifyGuid(val: string): "IFC" | "MS" | "UNKNOWN" {
+  const s = normalizeGuid(val.trim());
+  // IFC GUID: 22 characters base64 (alphanumeric + _ $)
+  if (/^[0-9A-Za-z_$]{22}$/.test(s)) return "IFC";
+  // MS GUID: UUID format (8-4-4-4-12) or 32 hex characters
+  if (/^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(s) || /^[0-9A-Fa-f]{32}$/.test(s)) return "MS";
+  return "UNKNOWN";
+}
+
 interface InspectorScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   user: TrimbleExUser;
@@ -377,30 +391,26 @@ export default function InspectorScreen({
                     weight = String(propValue);
                   }
 
-                  // GUID from properties - check various formats
-                  // Normalize property name for GUID matching
+                  // GUID from properties - use classifyGuid to determine type
                   const propNameNormGuid = propName.replace(/[\s_()]/g, '').toLowerCase();
 
-                  // IFC GUID patterns: guid_ifc, ifcguid, globalid, guid(ifc)
-                  if ((propNameNormGuid.includes('guidifc') ||
-                       propNameNormGuid === 'ifcguid' ||
-                       propNameNormGuid === 'globalid' ||
-                       (propNameNormGuid === 'guid' && setNameLower.includes('ifc'))) && !guidIfc) {
-                    guidIfc = String(propValue);
-                    console.log(`✅ Found GUID_IFC: ${setName}.${propNameOriginal} = ${guidIfc}`);
-                  }
-                  // MS GUID patterns: guid_ms, msguid, guid(ms), tekla_guid
-                  if ((propNameNormGuid.includes('guidms') ||
-                       propNameNormGuid === 'msguid' ||
-                       propNameNormGuid.includes('teklaguid') ||
-                       (propNameNormGuid === 'guid' && (setNameLower.includes('tekla') || setNameLower.includes('reference')))) && !guidMs) {
-                    guidMs = String(propValue);
-                    console.log(`✅ Found GUID_MS: ${setName}.${propNameOriginal} = ${guidMs}`);
-                  }
-                  // Generic GUID
-                  if (propNameNormGuid === 'guid' && !guid) {
-                    guid = String(propValue);
-                    console.log(`✅ Found GUID: ${setName}.${propNameOriginal} = ${guid}`);
+                  // Check if property name suggests a GUID
+                  if (propNameNormGuid.includes('guid') || propNameNormGuid === 'globalid') {
+                    const guidValue = normalizeGuid(String(propValue));
+                    const guidType = classifyGuid(guidValue);
+                    console.log(`📋 GUID candidate: ${setName}.${propNameOriginal} = ${guidValue} → ${guidType}`);
+
+                    if (guidType === 'IFC' && !guidIfc) {
+                      guidIfc = guidValue;
+                      console.log(`✅ Found GUID_IFC: ${setName}.${propNameOriginal} = ${guidIfc}`);
+                    } else if (guidType === 'MS' && !guidMs) {
+                      guidMs = guidValue;
+                      console.log(`✅ Found GUID_MS: ${setName}.${propNameOriginal} = ${guidMs}`);
+                    } else if (!guid) {
+                      // Store as generic GUID if type unknown
+                      guid = guidValue;
+                      console.log(`✅ Found GUID (unknown type): ${setName}.${propNameOriginal} = ${guid}`);
+                    }
                   }
 
                   // ObjectId from properties
@@ -420,12 +430,36 @@ export default function InspectorScreen({
               if ((objProps as any).name) objectName = String((objProps as any).name);
               if ((objProps as any).type) objectType = String((objProps as any).type);
 
+              // MS GUID fallback - use getObjectMetadata (globalId)
+              if (!guidMs) {
+                try {
+                  const metaArr = await (api?.viewer as any)?.getObjectMetadata?.(modelId, [runtimeId]);
+                  const metaOne = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+                  if (metaOne?.globalId) {
+                    const normalizedMs = normalizeGuid(String(metaOne.globalId));
+                    const msType = classifyGuid(normalizedMs);
+                    // Only assign if it's actually MS format
+                    if (msType === 'MS') {
+                      guidMs = normalizedMs;
+                      console.log(`✅ Found GUID_MS via getObjectMetadata: ${guidMs}`);
+                    } else if (msType === 'IFC' && !guidIfc) {
+                      // Sometimes globalId from metadata can be IFC format
+                      guidIfc = normalizedMs;
+                      console.log(`✅ Found GUID_IFC via getObjectMetadata.globalId: ${guidIfc}`);
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Could not get MS GUID via getObjectMetadata:', e);
+                }
+              }
+
               // IFC GUID fallback - use convertToObjectIds if not found in properties
               if (!guidIfc) {
                 try {
                   const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
                   if (externalIds && externalIds.length > 0 && externalIds[0]) {
-                    guidIfc = String(externalIds[0]);
+                    const normalizedIfc = normalizeGuid(String(externalIds[0]));
+                    guidIfc = normalizedIfc;
                     console.log(`✅ Found GUID_IFC via convertToObjectIds: ${guidIfc}`);
                   }
                 } catch (e) {
