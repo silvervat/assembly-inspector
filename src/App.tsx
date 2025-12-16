@@ -3,9 +3,14 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
 import { supabase, TrimbleExUser } from './supabase';
+import {
+  getPendingNavigation,
+  fetchInspectionForNavigation,
+  navigateToInspection
+} from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.1.0';
+export const APP_VERSION = '2.2.0';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -23,6 +28,8 @@ export default function App() {
   const [projectId, setProjectId] = useState<string>('');
   const [currentMode, setCurrentMode] = useState<InspectionMode | null>(null);
   const [authError, setAuthError] = useState<string>('');
+  const [navigationStatus, setNavigationStatus] = useState<string>('');
+  const [isNavigating, setIsNavigating] = useState(false);
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
@@ -90,6 +97,9 @@ export default function App() {
 
               // Laadi inspekteeritud detailid ja värvi mustaks
               await loadInspectedAssemblies(connected, project.id);
+
+              // Kontrolli kas on EOS2-st navigeerimise päring
+              await checkPendingNavigation(connected);
             }
           } else {
             setAuthError('Trimble Connect kasutaja email ei ole saadaval.');
@@ -108,6 +118,48 @@ export default function App() {
     }
     init();
   }, []);
+
+  // Kontrolli kas on ootel navigeerimise päring EOS2-st
+  // NB: getPendingNavigation() tühistab päringu kohe lugemisel
+  const checkPendingNavigation = async (apiInstance: WorkspaceAPI.WorkspaceAPI) => {
+    const pendingNav = getPendingNavigation(); // See juba tühistab päringu
+    if (!pendingNav) return;
+
+    console.log('Processing navigation request:', pendingNav);
+    setIsNavigating(true);
+    setNavigationStatus('Laadin inspektsiooni andmeid...');
+
+    try {
+      const inspection = await fetchInspectionForNavigation(pendingNav.inspectionId);
+      if (!inspection) {
+        setNavigationStatus('Inspektsiooni ei leitud');
+        setTimeout(() => {
+          setNavigationStatus('');
+          setIsNavigating(false);
+        }, 3000);
+        return;
+      }
+
+      const success = await navigateToInspection(
+        apiInstance,
+        inspection,
+        setNavigationStatus
+      );
+
+      setTimeout(() => {
+        setNavigationStatus('');
+        setIsNavigating(false);
+      }, success ? 2000 : 3000);
+
+    } catch (e) {
+      console.error('Navigation error:', e);
+      setNavigationStatus('Navigeerimine ebaõnnestus');
+      setTimeout(() => {
+        setNavigationStatus('');
+        setIsNavigating(false);
+      }, 3000);
+    }
+  };
 
   // Laadi inspekteeritud detailid ja värvi mustaks (optimeeritud - üks päring)
   const loadInspectedAssemblies = async (
@@ -175,6 +227,20 @@ export default function App() {
     </div>
   );
 
+  // Navigation overlay - shown when navigating from EOS2
+  const NavigationOverlay = () => {
+    if (!isNavigating && !navigationStatus) return null;
+
+    return (
+      <div className="navigation-overlay">
+        <div className="navigation-card">
+          <div className="navigation-spinner"></div>
+          <div className="navigation-status">{navigationStatus}</div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="container">
@@ -240,6 +306,7 @@ export default function App() {
   if (!currentMode) {
     return (
       <>
+        <NavigationOverlay />
         <MainMenu
           user={user}
           userInitials={getUserInitials(tcUser)}
@@ -254,6 +321,7 @@ export default function App() {
   // Näita valitud inspektsiooni ekraani
   return (
     <>
+      <NavigationOverlay />
       <InspectorScreen
         api={api}
         user={user}
