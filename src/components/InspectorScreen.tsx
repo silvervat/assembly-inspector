@@ -135,15 +135,47 @@ export default function InspectorScreen({
               const objProps = props[0];
               let assemblyMark: string | undefined;
 
+              // Otsi Cast_unit_Mark - kontrolli erinevaid kohti
               for (const pset of objProps.properties || []) {
-                if (pset.set === 'Tekla_Assembly') {
-                  const castUnitProp = pset.properties?.find(
-                    (p: any) => p.name === 'AssemblyCast_unit_Mark'
-                  );
-                  if (castUnitProp && castUnitProp.value) {
-                    assemblyMark = String(castUnitProp.value);
-                    break;
+                // Kontrolli nii 'set' kui 'name' omadust (API võib tagastada erinevalt)
+                const setName = (pset as any).set || (pset as any).name || '';
+
+                // Otsi Tekla_Assembly või sarnast
+                if (setName.toLowerCase().includes('tekla') ||
+                    setName.toLowerCase().includes('assembly')) {
+
+                  const propArray = pset.properties || [];
+                  for (const prop of propArray) {
+                    const propName = ((prop as any).name || '').toLowerCase();
+                    const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                    // Otsi Cast_unit_Mark, CastunitMark, Assembly/Cast_unit_Mark jne
+                    if (propName.includes('cast') && propName.includes('mark') && propValue) {
+                      assemblyMark = String(propValue);
+                      console.log(`✅ Found mark: ${setName}.${(prop as any).name} = ${assemblyMark}`);
+                      break;
+                    }
                   }
+                  if (assemblyMark) break;
+                }
+              }
+
+              // Kui ei leitud Tekla_Assembly alt, otsi kõikjalt
+              if (!assemblyMark) {
+                for (const pset of objProps.properties || []) {
+                  const propArray = pset.properties || [];
+                  for (const prop of propArray) {
+                    const propName = ((prop as any).name || '').toLowerCase();
+                    const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                    if (propName.includes('cast') && propName.includes('mark') && propValue) {
+                      assemblyMark = String(propValue);
+                      const setName = (pset as any).set || (pset as any).name || 'Unknown';
+                      console.log(`✅ Found mark (fallback): ${setName}.${(prop as any).name} = ${assemblyMark}`);
+                      break;
+                    }
+                  }
+                  if (assemblyMark) break;
                 }
               }
 
