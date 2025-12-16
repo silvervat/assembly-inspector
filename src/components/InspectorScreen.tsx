@@ -3,6 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Inspection } from '../supabase';
 import { InspectionMode } from './MainMenu';
 import { FiArrowLeft } from 'react-icons/fi';
+import { useEos2Navigation } from '../hooks/useEos2Navigation';
 
 // GUID helper functions (from Assembly Exporter)
 function normalizeGuid(s: string): string {
@@ -112,6 +113,35 @@ export default function InspectorScreen({
   const [autoClosePanel, setAutoClosePanel] = useState(false);
   const [showingMyInspections, setShowingMyInspections] = useState(false);
   const [myInspectionsLoading, setMyInspectionsLoading] = useState(false);
+  const [eos2NavStatus, setEos2NavStatus] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
+
+  // EOS2 Navigation hook - polls for commands from EOS2 and auto-navigates
+  useEos2Navigation({
+    api,
+    projectId,
+    enabled: true,
+    pollInterval: 2000,
+    onNavigationStart: () => {
+      setEos2NavStatus('searching');
+      setMessage('🔍 EOS2: Otsin elementi...');
+    },
+    onNavigationSuccess: (command) => {
+      setEos2NavStatus('found');
+      setMessage(`✅ EOS2: Element leitud! ${command.assembly_mark || command.guid?.substring(0, 8) || ''}`);
+      setTimeout(() => {
+        setEos2NavStatus('idle');
+        setMessage('');
+      }, 3000);
+    },
+    onNavigationError: (_error, command) => {
+      setEos2NavStatus('error');
+      setMessage(`❌ EOS2: Elementi ei leitud (${command.assembly_mark || 'GUID'})`);
+      setTimeout(() => {
+        setEos2NavStatus('idle');
+        setMessage('');
+      }, 5000);
+    }
+  });
 
   // Refs
   const lastCheckTimeRef = useRef(0);
@@ -1058,6 +1088,15 @@ export default function InspectorScreen({
       {inspectionMode === 'poldid' && assemblySelectionEnabled && (
         <div className="warning-banner info-banner">
           ℹ️ Poltide režiimis lülita Assembly Selection VÄLJA
+        </div>
+      )}
+
+      {/* EOS2 Navigation Status */}
+      {eos2NavStatus !== 'idle' && (
+        <div className={`eos2-nav-status ${eos2NavStatus}`}>
+          {eos2NavStatus === 'searching' && '🔍 Otsin EOS2 elementi...'}
+          {eos2NavStatus === 'found' && '✅ Element leitud!'}
+          {eos2NavStatus === 'error' && '❌ Elementi ei leitud'}
         </div>
       )}
 
