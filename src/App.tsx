@@ -1,21 +1,49 @@
 import { useEffect, useState } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import LoginScreen from './components/LoginScreen';
+import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
-import { supabase, User } from './supabase';
+import { supabase, TrimbleExUser } from './supabase';
 import './App.css';
 
-export const APP_VERSION = '2.0.0';
+export const APP_VERSION = '2.1.0';
+
+// Trimble Connect kasutaja info
+interface TrimbleConnectUser {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
 
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<TrimbleExUser | null>(null);
+  const [tcUser, setTcUser] = useState<TrimbleConnectUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [projectId, setProjectId] = useState<string>('');
-  const [tcUserEmail, setTcUserEmail] = useState<string>('');
+  const [currentMode, setCurrentMode] = useState<InspectionMode | null>(null);
+  const [authError, setAuthError] = useState<string>('');
 
-  // Ühenduse loomine Trimble Connect'iga
+  // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
+  const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
+    if (!tcUserData) return '?';
+
+    const firstName = tcUserData.firstName || '';
+    const lastName = tcUserData.lastName || '';
+
+    if (firstName && lastName) {
+      return `${firstName.charAt(0).toUpperCase()}.${lastName.charAt(0).toUpperCase()}`;
+    }
+
+    // Fallback - võta email esimene täht
+    if (tcUserData.email) {
+      return tcUserData.email.charAt(0).toUpperCase();
+    }
+
+    return '?';
+  };
+
+  // Ühenduse loomine Trimble Connect'iga ja kasutaja kontroll
   useEffect(() => {
     async function init() {
       try {
@@ -33,19 +61,43 @@ export default function App() {
         setProjectId(project.id);
         console.log('Connected to project:', project.name);
 
-        // Hangi Trimble Connect kasutaja email
+        // Hangi Trimble Connect kasutaja info
+        let tcUserData: TrimbleConnectUser | null = null;
         try {
-          const tcUser = await connected.user.getUser();
-          if (tcUser.email) {
-            setTcUserEmail(tcUser.email);
-            console.log('TC User email:', tcUser.email);
+          const userData = await connected.user.getUser();
+          if (userData.email) {
+            tcUserData = {
+              email: userData.email,
+              firstName: userData.firstName,
+              lastName: userData.lastName
+            };
+            setTcUser(tcUserData);
+            console.log('TC User:', tcUserData);
+
+            // Kontrolli kas kasutaja on registreeritud trimble_ex_users tabelis
+            const { data: dbUser, error: dbError } = await supabase
+              .from('trimble_ex_users')
+              .select('*')
+              .eq('user_email', userData.email)
+              .single();
+
+            if (dbError || !dbUser) {
+              console.warn('User not found in trimble_ex_users:', userData.email);
+              setAuthError(`Kasutaja "${userData.email}" ei ole registreeritud. Võta ühendust administraatoriga.`);
+            } else {
+              console.log('User authenticated:', dbUser);
+              setUser(dbUser);
+
+              // Laadi inspekteeritud detailid ja värvi mustaks
+              await loadInspectedAssemblies(connected, project.id);
+            }
+          } else {
+            setAuthError('Trimble Connect kasutaja email ei ole saadaval.');
           }
         } catch (e) {
-          console.warn('Could not get TC user:', e);
+          console.error('Could not get TC user:', e);
+          setAuthError('Trimble Connect kasutaja info laadimine ebaõnnestus.');
         }
-
-        // Laadi inspekteeritud detailid ja värvi mustaks
-        await loadInspectedAssemblies(connected, project.id);
 
         setLoading(false);
       } catch (err: any) {
@@ -55,19 +107,6 @@ export default function App() {
       }
     }
     init();
-  }, []);
-
-  // Kontrolli kas kasutaja on juba sisse loginud (localStorage)
-  useEffect(() => {
-    const storedUser = localStorage.getItem('inspector_user');
-    if (storedUser) {
-      try {
-        const parsed = JSON.parse(storedUser);
-        setUser(parsed);
-      } catch (e) {
-        localStorage.removeItem('inspector_user');
-      }
-    }
   }, []);
 
   // Laadi inspekteeritud detailid ja värvi mustaks (optimeeritud - üks päring)
@@ -105,37 +144,22 @@ export default function App() {
           { modelObjectIds },
           { color: { r: 0, g: 0, b: 0, a: 255 } }
         );
-        console.log('✅ Inspected assemblies painted black');
+        console.log('Inspected assemblies painted black');
       }
     } catch (e: any) {
       console.error('Failed to load inspections:', e);
     }
   };
 
-  // Login handler
-  const handleLogin = async (pin: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('pin_code', pin)
-        .single();
-
-      if (error || !data) {
-        throw new Error('Vale PIN kood');
-      }
-
-      setUser(data);
-      localStorage.setItem('inspector_user', JSON.stringify(data));
-    } catch (err: any) {
-      throw err;
-    }
-  };
-
   // Logout handler
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('inspector_user');
+    setCurrentMode(null);
+  };
+
+  // Mine tagasi menüüsse
+  const handleBackToMenu = () => {
+    setCurrentMode(null);
   };
 
   const VersionFooter = () => (
@@ -184,23 +208,61 @@ export default function App() {
     );
   }
 
+  // Kasutaja pole autentitud (email puudub tabelis)
+  if (authError) {
+    return (
+      <div className="container">
+        <div className="auth-error-card">
+          <div className="auth-error-icon">🔒</div>
+          <h3>Ligipääs keelatud</h3>
+          <p>{authError}</p>
+          {tcUser && (
+            <div className="auth-error-email">
+              Sinu email: <strong>{tcUser.email}</strong>
+            </div>
+          )}
+        </div>
+        <VersionFooter />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
+      <div className="container">
+        <div className="loading">Autentimine...</div>
+        <VersionFooter />
+      </div>
+    );
+  }
+
+  // Kui pole veel režiimi valitud, näita menüüd
+  if (!currentMode) {
+    return (
       <>
-        <LoginScreen onLogin={handleLogin} />
+        <MainMenu
+          user={user}
+          userInitials={getUserInitials(tcUser)}
+          onSelectMode={setCurrentMode}
+          onLogout={handleLogout}
+        />
         <VersionFooter />
       </>
     );
   }
 
+  // Näita valitud inspektsiooni ekraani
   return (
     <>
       <InspectorScreen
         api={api}
         user={user}
         projectId={projectId}
-        tcUserEmail={tcUserEmail}
+        tcUserEmail={tcUser?.email || ''}
+        userInitials={getUserInitials(tcUser)}
+        inspectionMode={currentMode}
         onLogout={handleLogout}
+        onBackToMenu={handleBackToMenu}
       />
       <VersionFooter />
     </>

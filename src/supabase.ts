@@ -7,6 +7,17 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-k
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // TypeScript tüübid
+
+// Uus tabel - trimble_ex_users (kasutaja kontroll email järgi)
+export interface TrimbleExUser {
+  id: string;
+  user_email: string;
+  name?: string;
+  role: 'inspector' | 'admin' | 'viewer';
+  created_at: string;
+}
+
+// Vana User interface (deprecated, säilitame ühilduvuse jaoks)
 export interface User {
   id: string;
   pin_code: string;

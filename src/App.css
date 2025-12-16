@@ -893,3 +893,241 @@ body {
   margin-top: 16px;
   margin-bottom: 8px;
 }
+
+/* Main Menu Styles */
+.main-menu-container {
+  padding: 12px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.main-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 16px;
+}
+
+.menu-user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.menu-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1E88E5, #0a3a67);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.menu-user-details {
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-user-email {
+  font-size: 12px;
+  color: #252525;
+  font-weight: 500;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-user-role {
+  font-size: 10px;
+  color: #757575;
+  text-transform: uppercase;
+}
+
+.menu-logout-btn {
+  padding: 8px 14px;
+  background: #f6f8fb;
+  border: 1px solid #e6eaf0;
+  border-radius: 6px;
+  color: #757575;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.menu-logout-btn:hover {
+  background: #fff5f5;
+  color: #dc3545;
+  border-color: #ffcdd2;
+}
+
+.main-menu-title {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.main-menu-title h2 {
+  font-size: 16px;
+  color: #0a3a67;
+  font-weight: 600;
+}
+
+.main-menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: white;
+  border: 1px solid #e6eaf0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  width: 100%;
+}
+
+.menu-item.enabled:hover {
+  background: #f6f8fb;
+  border-color: #1E88E5;
+  box-shadow: 0 2px 8px rgba(30, 136, 229, 0.1);
+}
+
+.menu-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+
+.menu-item-icon {
+  font-size: 20px;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.menu-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.menu-item-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #252525;
+}
+
+.menu-item-desc {
+  font-size: 11px;
+  color: #757575;
+  margin-top: 2px;
+}
+
+.menu-item-arrow {
+  font-size: 18px;
+  color: #1E88E5;
+  font-weight: bold;
+}
+
+/* Mode title bar */
+.mode-title-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #0a3a67;
+  color: white;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.back-to-menu-btn {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.back-to-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.mode-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Auth error card */
+.auth-error-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 40px;
+  text-align: center;
+  max-width: 400px;
+  margin: 40px auto;
+}
+
+.auth-error-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.auth-error-card h3 {
+  font-size: 20px;
+  color: #dc3545;
+  margin-bottom: 12px;
+}
+
+.auth-error-card p {
+  font-size: 14px;
+  color: #757575;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.auth-error-email {
+  font-size: 12px;
+  color: #495057;
+  padding: 12px;
+  background: #f6f8fb;
+  border-radius: 6px;
+}
+
+.auth-error-email strong {
+  color: #0a3a67;
+}
+
+/* Dropdown email */
+.dropdown-email {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #495057;
+  border-bottom: 1px solid #e6eaf0;
+  word-break: break-all;
+}
+
+/* Info banner (blue) */
+.warning-banner.info-banner {
+  background: #e3f2fd;
+  color: #1565c0;
+  border-left-color: #2196f3;
+}
