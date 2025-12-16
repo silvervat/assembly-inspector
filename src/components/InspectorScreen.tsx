@@ -42,6 +42,13 @@ export default function InspectorScreen({
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [coloringDone, setColoringDone] = useState(false);
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const [existingInspection, setExistingInspection] = useState<{
+    inspectorName: string;
+    inspectedAt: string;
+    photoUrls: string[];
+    userEmail?: string;
+  } | null>(null);
+  const [modalPhoto, setModalPhoto] = useState<string | null>(null);
 
   // Refs
   const lastCheckTimeRef = useRef(0);
@@ -64,6 +71,8 @@ export default function InspectorScreen({
 
   // Valideeri valik - useCallback, et saaks kasutada checkSelection'is
   const validateSelection = useCallback(async (objects: SelectedObject[]) => {
+    setExistingInspection(null);
+
     if (objects.length === 0) {
       setCanInspect(false);
       setMessage('');
@@ -91,7 +100,7 @@ export default function InspectorScreen({
     try {
       const { data } = await supabase
         .from('inspections')
-        .select('inspected_at')
+        .select('inspected_at, inspector_name, photo_urls, user_email')
         .eq('project_id', projectId)
         .eq('model_id', obj.modelId)
         .eq('object_runtime_id', obj.runtimeId)
@@ -99,7 +108,13 @@ export default function InspectorScreen({
 
       if (data) {
         setCanInspect(false);
-        setMessage(`ℹ️ Juba inspekteeritud (${new Date(data.inspected_at).toLocaleString('et-EE')})`);
+        setExistingInspection({
+          inspectorName: data.inspector_name,
+          inspectedAt: data.inspected_at,
+          photoUrls: data.photo_urls || [],
+          userEmail: data.user_email
+        });
+        setMessage('');
         return;
       }
 
@@ -597,6 +612,36 @@ export default function InspectorScreen({
         </div>
       )}
 
+      {existingInspection && (
+        <div className="existing-inspection">
+          <div className="existing-header">
+            <span className="existing-badge">✓ Inspekteeritud</span>
+            <span className="existing-date">
+              {new Date(existingInspection.inspectedAt).toLocaleString('et-EE')}
+            </span>
+          </div>
+          <div className="existing-inspector">
+            {existingInspection.inspectorName}
+            {existingInspection.userEmail && (
+              <span className="existing-email"> ({existingInspection.userEmail})</span>
+            )}
+          </div>
+          {existingInspection.photoUrls.length > 0 && (
+            <div className="existing-photos">
+              {existingInspection.photoUrls.map((url, idx) => (
+                <div
+                  key={idx}
+                  className="existing-photo-thumb"
+                  onClick={() => setModalPhoto(url)}
+                >
+                  <img src={url} alt={`Foto ${idx + 1}`} />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {selectedObjects.length > 0 && (
         <div className="selection-info">
           <h3>Valitud: {selectedObjects.length} detail(i)</h3>
@@ -667,6 +712,18 @@ export default function InspectorScreen({
           <li>Detail värvitakse mustaks</li>
         </ol>
       </div>
+
+      {/* Photo modal */}
+      {modalPhoto && (
+        <div className="photo-modal-overlay" onClick={() => setModalPhoto(null)}>
+          <div className="photo-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="photo-modal-close" onClick={() => setModalPhoto(null)}>
+              ✕
+            </button>
+            <img src={modalPhoto} alt="Inspektsiooni foto" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
