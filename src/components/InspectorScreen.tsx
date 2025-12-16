@@ -13,6 +13,16 @@ interface SelectedObject {
   modelId: string;
   runtimeId: number;
   assemblyMark?: string;
+  // Additional Tekla properties
+  fileName?: string;
+  guid?: string;
+  guidIfc?: string;
+  guidMs?: string;
+  objectId?: string;
+  bottomElevation?: string;
+  positionCode?: string;
+  topElevation?: string;
+  weight?: string;
 }
 
 export default function InspectorScreen({
@@ -127,6 +137,17 @@ export default function InspectorScreen({
         const modelId = modelObj.modelId;
         const runtimeIds = modelObj.objectRuntimeIds || [];
 
+        // Get model info for file name
+        let fileName: string | undefined;
+        try {
+          const loadedModels = await api.viewer.getLoadedModel(modelId);
+          if (loadedModels) {
+            fileName = (loadedModels as any).name || (loadedModels as any).filename;
+          }
+        } catch (e) {
+          console.warn('Could not get model info:', e);
+        }
+
         for (const runtimeId of runtimeIds) {
           try {
             const props = await api.viewer.getObjectProperties(modelId, [runtimeId]);
@@ -134,52 +155,99 @@ export default function InspectorScreen({
             if (props && props.length > 0) {
               const objProps = props[0];
               let assemblyMark: string | undefined;
+              let guidIfc: string | undefined;
+              let guidMs: string | undefined;
+              let guid: string | undefined;
+              let objectId: string | undefined;
+              let bottomElevation: string | undefined;
+              let positionCode: string | undefined;
+              let topElevation: string | undefined;
+              let weight: string | undefined;
 
-              // Otsi Cast_unit_Mark - kontrolli erinevaid kohti
+              // Try to get object IDs
+              try {
+                const objectIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+                if (objectIds && objectIds.length > 0) {
+                  objectId = String(objectIds[0]);
+                }
+              } catch (e) {
+                console.warn('Could not convert to object IDs:', e);
+              }
+
+              // Search all property sets for Tekla data
               for (const pset of objProps.properties || []) {
-                // Kontrolli nii 'set' kui 'name' omadust (API võib tagastada erinevalt)
                 const setName = (pset as any).set || (pset as any).name || '';
+                const propArray = pset.properties || [];
 
-                // Otsi Tekla_Assembly või sarnast
-                if (setName.toLowerCase().includes('tekla') ||
-                    setName.toLowerCase().includes('assembly')) {
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
 
-                  const propArray = pset.properties || [];
-                  for (const prop of propArray) {
-                    const propName = ((prop as any).name || '').toLowerCase();
-                    const propValue = (prop as any).displayValue ?? (prop as any).value;
+                  if (!propValue) continue;
 
-                    // Otsi Cast_unit_Mark, CastunitMark, Assembly/Cast_unit_Mark jne
-                    if (propName.includes('cast') && propName.includes('mark') && propValue) {
-                      assemblyMark = String(propValue);
-                      console.log(`✅ Found mark: ${setName}.${(prop as any).name} = ${assemblyMark}`);
-                      break;
-                    }
+                  // Cast_unit_Mark
+                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
+                    assemblyMark = String(propValue);
+                    console.log(`✅ Found mark: ${setName}.${(prop as any).name} = ${assemblyMark}`);
                   }
-                  if (assemblyMark) break;
+
+                  // Cast_unit_bottom_elevation
+                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
+                    bottomElevation = String(propValue);
+                  }
+
+                  // Cast_unit_position_code
+                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
+                    positionCode = String(propValue);
+                  }
+
+                  // Cast_unit_top_elevation
+                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
+                    topElevation = String(propValue);
+                  }
+
+                  // Cast_unit_weight or just weight
+                  if (propName.includes('weight') && !weight) {
+                    weight = String(propValue);
+                  }
+
+                  // GUID from properties
+                  if ((propName === 'guid_ifc' || propName === 'ifcguid' || propName === 'globalid') && !guidIfc) {
+                    guidIfc = String(propValue);
+                  }
+                  if ((propName === 'guid_ms' || propName === 'msguid') && !guidMs) {
+                    guidMs = String(propValue);
+                  }
+                  if (propName === 'guid' && !guid) {
+                    guid = String(propValue);
+                  }
+
+                  // ObjectId from properties
+                  if ((propName === 'objectid' || propName === 'object_id' || propName === 'id') && !objectId) {
+                    objectId = String(propValue);
+                  }
                 }
               }
 
-              // Kui ei leitud Tekla_Assembly alt, otsi kõikjalt
-              if (!assemblyMark) {
-                for (const pset of objProps.properties || []) {
-                  const propArray = pset.properties || [];
-                  for (const prop of propArray) {
-                    const propName = ((prop as any).name || '').toLowerCase();
-                    const propValue = (prop as any).displayValue ?? (prop as any).value;
-
-                    if (propName.includes('cast') && propName.includes('mark') && propValue) {
-                      assemblyMark = String(propValue);
-                      const setName = (pset as any).set || (pset as any).name || 'Unknown';
-                      console.log(`✅ Found mark (fallback): ${setName}.${(prop as any).name} = ${assemblyMark}`);
-                      break;
-                    }
-                  }
-                  if (assemblyMark) break;
-                }
+              // Fallback: use guidIfc as main guid if guid not found
+              if (!guid && guidIfc) {
+                guid = guidIfc;
               }
 
-              allObjects.push({ modelId, runtimeId, assemblyMark });
+              allObjects.push({
+                modelId,
+                runtimeId,
+                assemblyMark,
+                fileName,
+                guid,
+                guidIfc,
+                guidMs,
+                objectId,
+                bottomElevation,
+                positionCode,
+                topElevation,
+                weight
+              });
             }
           } catch (e) {
             console.error(`Props error ${modelId}:${runtimeId}`, e);
@@ -272,7 +340,17 @@ export default function InspectorScreen({
         inspector_id: user.id,
         inspector_name: user.name,
         photo_url: urlData.publicUrl,
-        project_id: projectId
+        project_id: projectId,
+        // Additional Tekla fields
+        file_name: obj.fileName,
+        guid: obj.guid,
+        guid_ifc: obj.guidIfc,
+        guid_ms: obj.guidMs,
+        object_id: obj.objectId,
+        cast_unit_bottom_elevation: obj.bottomElevation,
+        cast_unit_position_code: obj.positionCode,
+        cast_unit_top_elevation: obj.topElevation,
+        cast_unit_weight: obj.weight
       };
 
       const { error: dbError } = await supabase

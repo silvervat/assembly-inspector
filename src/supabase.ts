@@ -26,6 +26,16 @@ export interface Inspection {
   photo_url?: string;
   notes?: string;
   project_id: string;
+  // Tekla additional fields
+  file_name?: string;
+  guid?: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_id?: string;
+  cast_unit_bottom_elevation?: string;
+  cast_unit_position_code?: string;
+  cast_unit_top_elevation?: string;
+  cast_unit_weight?: string;
 }
 
 // Database schema:
