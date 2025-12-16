@@ -6,6 +6,7 @@ interface InspectorScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   user: User;
   projectId: string;
+  tcUserEmail?: string;
   onLogout: () => void;
 }
 
@@ -29,6 +30,7 @@ export default function InspectorScreen({
   api,
   user,
   projectId,
+  tcUserEmail,
   onLogout
 }: InspectorScreenProps) {
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
@@ -39,11 +41,13 @@ export default function InspectorScreen({
   const [inspectionCount, setInspectionCount] = useState(0);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [coloringDone, setColoringDone] = useState(false);
+  const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
 
-  // Refs debounce ja cleanup jaoks
+  // Refs
   const lastCheckTimeRef = useRef(0);
   const isCheckingRef = useRef(false);
   const lastSelectionRef = useRef<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Kontrolli assembly selection staatust
   useEffect(() => {
@@ -321,19 +325,46 @@ export default function InspectorScreen({
     if (!obj.assemblyMark) return;
 
     setInspecting(true);
-    setMessage('📸 Teen pilti...');
+    const allPhotoUrls: string[] = [];
 
     try {
+      // 1. Laadi üles kasutaja fotod
+      if (photos.length > 0) {
+        setMessage(`📤 Laadin üles ${photos.length} fotot...`);
+
+        for (let i = 0; i < photos.length; i++) {
+          const photo = photos[i];
+          const photoFileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_photo${i + 1}_${Date.now()}.jpg`;
+
+          const { error: photoUploadError } = await supabase.storage
+            .from('inspection-photos')
+            .upload(photoFileName, photo.file, {
+              contentType: photo.file.type,
+              cacheControl: '3600'
+            });
+
+          if (photoUploadError) {
+            console.error('Photo upload error:', photoUploadError);
+            continue;
+          }
+
+          const { data: photoUrlData } = supabase.storage
+            .from('inspection-photos')
+            .getPublicUrl(photoFileName);
+
+          allPhotoUrls.push(photoUrlData.publicUrl);
+        }
+      }
+
+      // 2. Tee 3D vaate snapshot
+      setMessage('📸 Teen 3D pilti...');
       const snapshotDataUrl = await api.viewer.getSnapshot();
-
-      setMessage('☁️ Laadin üles...');
-
       const blob = dataURLtoBlob(snapshotDataUrl);
-      const fileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_${Date.now()}.png`;
+      const snapshotFileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_3d_${Date.now()}.png`;
 
       const { error: uploadError } = await supabase.storage
         .from('inspection-photos')
-        .upload(fileName, blob, {
+        .upload(snapshotFileName, blob, {
           contentType: 'image/png',
           cacheControl: '3600'
         });
@@ -342,7 +373,9 @@ export default function InspectorScreen({
 
       const { data: urlData } = supabase.storage
         .from('inspection-photos')
-        .getPublicUrl(fileName);
+        .getPublicUrl(snapshotFileName);
+
+      allPhotoUrls.push(urlData.publicUrl);
 
       setMessage('💾 Salvestan...');
 
@@ -352,7 +385,8 @@ export default function InspectorScreen({
         object_runtime_id: obj.runtimeId,
         inspector_id: user.id,
         inspector_name: user.name,
-        photo_url: urlData.publicUrl,
+        photo_url: allPhotoUrls[0] || '',
+        photo_urls: allPhotoUrls,
         project_id: projectId,
         // Additional Tekla fields
         file_name: obj.fileName,
@@ -363,7 +397,8 @@ export default function InspectorScreen({
         cast_unit_bottom_elevation: obj.bottomElevation,
         cast_unit_position_code: obj.positionCode,
         cast_unit_top_elevation: obj.topElevation,
-        cast_unit_weight: obj.weight
+        cast_unit_weight: obj.weight,
+        user_email: tcUserEmail
       };
 
       const { error: dbError } = await supabase
@@ -377,6 +412,10 @@ export default function InspectorScreen({
         { modelObjectIds: [{ modelId: obj.modelId, objectRuntimeIds: [obj.runtimeId] }] },
         { color: { r: 0, g: 0, b: 0, a: 255 } }
       );
+
+      // Puhasta fotod
+      photos.forEach(p => URL.revokeObjectURL(p.preview));
+      setPhotos([]);
 
       setMessage(`✅ Inspekteeritud: ${obj.assemblyMark}`);
       setInspectionCount(prev => prev + 1);
@@ -428,6 +467,35 @@ export default function InspectorScreen({
     };
     loadInspectionCount();
   }, [projectId]);
+
+  // Foto lisamine
+  const handleAddPhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newPhotos: { file: File; preview: string }[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const preview = URL.createObjectURL(file);
+      newPhotos.push({ file, preview });
+    }
+
+    setPhotos(prev => [...prev, ...newPhotos]);
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Foto eemaldamine
+  const handleRemovePhoto = (index: number) => {
+    setPhotos(prev => {
+      const removed = prev[index];
+      URL.revokeObjectURL(removed.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   // Värvi inspekteeritud detailid roheliseks
   const colorInspectedGreen = async () => {
@@ -544,6 +612,41 @@ export default function InspectorScreen({
           ))}
         </div>
       )}
+
+      {/* Foto lisamine */}
+      <div className="photo-section">
+        <div className="photo-header">
+          <span className="photo-title">Fotod ({photos.length})</span>
+          <label className="add-photo-btn">
+            📷 Lisa foto
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              multiple
+              onChange={handleAddPhoto}
+              style={{ display: 'none' }}
+            />
+          </label>
+        </div>
+
+        {photos.length > 0 && (
+          <div className="photo-grid">
+            {photos.map((photo, idx) => (
+              <div key={idx} className="photo-thumb">
+                <img src={photo.preview} alt={`Foto ${idx + 1}`} />
+                <button
+                  className="photo-remove"
+                  onClick={() => handleRemovePhoto(idx)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="action-container">
         <button

@@ -5,7 +5,7 @@ import InspectorScreen from './components/InspectorScreen';
 import { supabase, User } from './supabase';
 import './App.css';
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.5.0';
 
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
@@ -13,6 +13,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
   const [projectId, setProjectId] = useState<string>('');
+  const [tcUserEmail, setTcUserEmail] = useState<string>('');
 
   // Ühenduse loomine Trimble Connect'iga
   useEffect(() => {
@@ -31,6 +32,17 @@ export default function App() {
         const project = await connected.project.getProject();
         setProjectId(project.id);
         console.log('Connected to project:', project.name);
+
+        // Hangi Trimble Connect kasutaja email
+        try {
+          const tcUser = await connected.user.getUser();
+          if (tcUser.email) {
+            setTcUserEmail(tcUser.email);
+            console.log('TC User email:', tcUser.email);
+          }
+        } catch (e) {
+          console.warn('Could not get TC user:', e);
+        }
 
         // Laadi inspekteeritud detailid ja värvi mustaks
         await loadInspectedAssemblies(connected, project.id);
@@ -187,6 +199,7 @@ export default function App() {
         api={api}
         user={user}
         projectId={projectId}
+        tcUserEmail={tcUserEmail}
         onLogout={handleLogout}
       />
       <VersionFooter />
