@@ -58,3 +58,38 @@ ALTER TABLE inspections
 ADD COLUMN IF NOT EXISTS user_photos JSONB,
 ADD COLUMN IF NOT EXISTS snapshot_3d_url TEXT,
 ADD COLUMN IF NOT EXISTS topview_url TEXT;
+
+-- ============================================
+-- BOLT INSPECTION SUPPORT (v2.5.0)
+-- ============================================
+-- Add inspection_type to distinguish different inspection types
+-- Add bolt-specific fields for Tekla_Bolt and IFC properties
+
+ALTER TABLE inspections
+ADD COLUMN IF NOT EXISTS inspection_type TEXT,
+ADD COLUMN IF NOT EXISTS object_name TEXT,
+ADD COLUMN IF NOT EXISTS object_type TEXT,
+-- IFC fields
+ADD COLUMN IF NOT EXISTS ifc_material TEXT,
+ADD COLUMN IF NOT EXISTS ifc_nominal_diameter TEXT,
+ADD COLUMN IF NOT EXISTS ifc_nominal_length TEXT,
+ADD COLUMN IF NOT EXISTS ifc_fastener_type_name TEXT,
+-- Tekla_Bolt fields
+ADD COLUMN IF NOT EXISTS tekla_bolt_count TEXT,
+ADD COLUMN IF NOT EXISTS tekla_bolt_hole_diameter TEXT,
+ADD COLUMN IF NOT EXISTS tekla_bolt_length TEXT,
+ADD COLUMN IF NOT EXISTS tekla_bolt_size TEXT,
+ADD COLUMN IF NOT EXISTS tekla_bolt_standard TEXT,
+ADD COLUMN IF NOT EXISTS tekla_bolt_location TEXT,
+ADD COLUMN IF NOT EXISTS tekla_nut_count TEXT,
+ADD COLUMN IF NOT EXISTS tekla_nut_name TEXT,
+ADD COLUMN IF NOT EXISTS tekla_nut_type TEXT,
+ADD COLUMN IF NOT EXISTS tekla_slotted_hole_x TEXT,
+ADD COLUMN IF NOT EXISTS tekla_slotted_hole_y TEXT,
+ADD COLUMN IF NOT EXISTS tekla_washer_count TEXT,
+ADD COLUMN IF NOT EXISTS tekla_washer_diameter TEXT,
+ADD COLUMN IF NOT EXISTS tekla_washer_name TEXT,
+ADD COLUMN IF NOT EXISTS tekla_washer_type TEXT;
+
+-- Index for inspection_type filtering
+CREATE INDEX IF NOT EXISTS idx_inspections_type ON inspections(inspection_type);

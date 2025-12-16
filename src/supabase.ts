@@ -26,6 +26,8 @@ export interface User {
   created_at: string;
 }
 
+export type InspectionType = 'paigaldatud' | 'poldid' | 'muu' | 'mittevastavus' | 'varviparandus' | 'keevis' | 'paigaldatud_detailid' | 'eos2';
+
 export interface Inspection {
   id: string;
   assembly_mark: string;
@@ -39,21 +41,45 @@ export interface Inspection {
   notes?: string;
   project_id: string;
   user_email?: string;
+  inspection_type?: InspectionType;  // Type of inspection
   // Separate photo fields for EOS2 differentiation
   user_photos?: string[];      // Photos uploaded by user
   snapshot_3d_url?: string;    // Auto-generated 3D view snapshot
   topview_url?: string;        // Auto-generated topview snapshot
-  // Tekla additional fields
+  // Tekla additional fields (paigaldatud detailide inspektsioon)
   file_name?: string;
   guid?: string;
   guid_ifc?: string;
   guid_ms?: string;
   object_id?: string;
+  object_name?: string;
+  object_type?: string;
   cast_unit_bottom_elevation?: string;
   cast_unit_position_code?: string;
   cast_unit_top_elevation?: string;
   cast_unit_weight?: string;
   product_name?: string;
+  // IFC fields (poltide inspektsioon)
+  ifc_material?: string;
+  ifc_nominal_diameter?: string;
+  ifc_nominal_length?: string;
+  ifc_fastener_type_name?: string;
+  // Tekla Bolt fields (poltide inspektsioon)
+  tekla_bolt_count?: string;
+  tekla_bolt_hole_diameter?: string;
+  tekla_bolt_length?: string;
+  tekla_bolt_size?: string;
+  tekla_bolt_standard?: string;
+  tekla_bolt_location?: string;
+  tekla_nut_count?: string;
+  tekla_nut_name?: string;
+  tekla_nut_type?: string;
+  tekla_slotted_hole_x?: string;
+  tekla_slotted_hole_y?: string;
+  tekla_washer_count?: string;
+  tekla_washer_diameter?: string;
+  tekla_washer_name?: string;
+  tekla_washer_type?: string;
 }
 
 // Database schema:

@@ -972,7 +972,7 @@ body {
 
 /* Main Menu Styles */
 .main-menu-container {
-  padding: 12px;
+  padding: var(--modus-spacing-md);
   max-width: 800px;
   margin: 0 auto;
 }
@@ -981,55 +981,60 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: white;
-  padding: 12px 16px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  margin-bottom: 16px;
+  background: var(--modus-bg-primary);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  border-radius: var(--modus-radius-md);
+  border: 1px solid var(--modus-border-light);
+  margin-bottom: var(--modus-spacing-md);
+  gap: var(--modus-spacing-sm);
 }
 
 .menu-user-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--modus-spacing-sm);
+  flex: 1;
+  min-width: 0;
 }
 
 .menu-user-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #1E88E5, #0a3a67);
+  background: linear-gradient(135deg, var(--modus-primary-light), var(--modus-primary-darker));
   color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
+  flex-shrink: 0;
 }
 
 .menu-user-details {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  flex: 1;
 }
 
 .menu-user-email {
-  font-size: 12px;
-  color: #252525;
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-primary);
   font-weight: 500;
-  max-width: 150px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .menu-user-role {
-  font-size: 10px;
-  color: #757575;
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
   text-transform: uppercase;
 }
 
 .menu-logout-btn {
-  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
   background: var(--modus-bg-secondary);
   border: 1px solid var(--modus-border);
   border-radius: var(--modus-radius-sm);
@@ -1040,23 +1045,14 @@ body {
   display: flex;
   align-items: center;
   gap: var(--modus-spacing-xs);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .menu-logout-btn:hover {
   background: #fef2f2;
   color: var(--modus-danger);
   border-color: #fca5a5;
-}
-
-.main-menu-title {
-  text-align: center;
-  margin-bottom: 16px;
-}
-
-.main-menu-title h2 {
-  font-size: 16px;
-  color: #0a3a67;
-  font-weight: 600;
 }
 
 .main-menu-items {

@@ -25,13 +25,35 @@ interface SelectedObject {
   guidIfc?: string;
   guidMs?: string;
   objectId?: string;
+  objectName?: string;
+  objectType?: string;
   bottomElevation?: string;
   positionCode?: string;
   topElevation?: string;
   weight?: string;
   productName?: string;
-  // Poltide inspektsioon
+  // Poltide inspektsioon - Tekla_Bolt properties
   boltName?: string;
+  boltCount?: string;
+  boltHoleDiameter?: string;
+  boltLength?: string;
+  boltSize?: string;
+  boltStandard?: string;
+  boltLocation?: string;
+  nutCount?: string;
+  nutName?: string;
+  nutType?: string;
+  slottedHoleX?: string;
+  slottedHoleY?: string;
+  washerCount?: string;
+  washerDiameter?: string;
+  washerName?: string;
+  washerType?: string;
+  // IFC properties for bolts
+  ifcMaterial?: string;
+  ifcNominalDiameter?: string;
+  ifcNominalLength?: string;
+  ifcFastenerTypeName?: string;
 }
 
 export default function InspectorScreen({
@@ -255,6 +277,29 @@ export default function InspectorScreen({
 
               // Search all property sets for Tekla data
               let boltName: string | undefined;
+              let objectName: string | undefined;
+              let objectType: string | undefined;
+              // Tekla_Bolt properties
+              let boltCount: string | undefined;
+              let boltHoleDiameter: string | undefined;
+              let boltLength: string | undefined;
+              let boltSize: string | undefined;
+              let boltStandard: string | undefined;
+              let boltLocation: string | undefined;
+              let nutCount: string | undefined;
+              let nutName: string | undefined;
+              let nutType: string | undefined;
+              let slottedHoleX: string | undefined;
+              let slottedHoleY: string | undefined;
+              let washerCount: string | undefined;
+              let washerDiameter: string | undefined;
+              let washerName: string | undefined;
+              let washerType: string | undefined;
+              // IFC properties
+              let ifcMaterial: string | undefined;
+              let ifcNominalDiameter: string | undefined;
+              let ifcNominalLength: string | undefined;
+              let ifcFastenerTypeName: string | undefined;
 
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
@@ -263,6 +308,7 @@ export default function InspectorScreen({
 
                 for (const prop of propArray) {
                   const propName = ((prop as any).name || '').toLowerCase();
+                  const propNameOriginal = (prop as any).name || '';
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
@@ -270,14 +316,46 @@ export default function InspectorScreen({
                   // Cast_unit_Mark
                   if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
                     assemblyMark = String(propValue);
-                    console.log(`✅ Found mark: ${setName}.${(prop as any).name} = ${assemblyMark}`);
+                    console.log(`✅ Found mark: ${setName}.${propNameOriginal} = ${assemblyMark}`);
                   }
 
-                  // Tekla_Bolt.Bolt_Name (poltide inspektsioon)
-                  if ((setNameLower.includes('bolt') || setNameLower.includes('tekla_bolt')) &&
-                      (propName.includes('bolt_name') || propName === 'name') && !boltName) {
-                    boltName = String(propValue);
-                    console.log(`✅ Found Bolt Name: ${setName}.${(prop as any).name} = ${boltName}`);
+                  // Tekla_Bolt properties
+                  if (setNameLower.includes('tekla_bolt') || setNameLower.includes('bolt')) {
+                    if ((propName.includes('bolt_name') || propName === 'name') && !boltName) {
+                      boltName = String(propValue);
+                      console.log(`✅ Found Bolt Name: ${setName}.${propNameOriginal} = ${boltName}`);
+                    }
+                    if (propName.includes('bolt_count') && !boltCount) boltCount = String(propValue);
+                    if (propName.includes('bolt_hole_diameter') && !boltHoleDiameter) boltHoleDiameter = String(propValue);
+                    if (propName.includes('bolt_length') && !boltLength) boltLength = String(propValue);
+                    if (propName.includes('bolt_size') && !boltSize) boltSize = String(propValue);
+                    if (propName.includes('bolt_standard') && !boltStandard) boltStandard = String(propValue);
+                    if (propName.includes('location') && !boltLocation) boltLocation = String(propValue);
+                    if (propName.includes('nut_count') && !nutCount) nutCount = String(propValue);
+                    if (propName.includes('nut_name') && !nutName) nutName = String(propValue);
+                    if (propName.includes('nut_type') && !nutType) nutType = String(propValue);
+                    if (propName.includes('slotted_hole_x') && !slottedHoleX) slottedHoleX = String(propValue);
+                    if (propName.includes('slotted_hole_y') && !slottedHoleY) slottedHoleY = String(propValue);
+                    if (propName.includes('washer_count') && !washerCount) washerCount = String(propValue);
+                    if (propName.includes('washer_diameter') && !washerDiameter) washerDiameter = String(propValue);
+                    if (propName.includes('washer_name') && !washerName) washerName = String(propValue);
+                    if (propName.includes('washer_type') && !washerType) washerType = String(propValue);
+                  }
+
+                  // IFC Material
+                  if (setNameLower.includes('ifcmaterial') && propName === 'material' && !ifcMaterial) {
+                    ifcMaterial = String(propValue);
+                  }
+
+                  // IFC Mechanical Fastener
+                  if (setNameLower.includes('ifcmechanicalfastener')) {
+                    if (propName.includes('nominaldiameter') && !ifcNominalDiameter) ifcNominalDiameter = String(propValue);
+                    if (propName.includes('nominallength') && !ifcNominalLength) ifcNominalLength = String(propValue);
+                  }
+
+                  // IFC Mechanical Fastener Type
+                  if (setNameLower.includes('ifcmechanicalfastenertype') && propName === 'name' && !ifcFastenerTypeName) {
+                    ifcFastenerTypeName = String(propValue);
                   }
 
                   // Cast_unit_bottom_elevation
@@ -319,10 +397,14 @@ export default function InspectorScreen({
                   // Product Name (Property set "Product", property "Name")
                   if (setNameLower === 'product' && propName === 'name' && !productName) {
                     productName = String(propValue);
-                    console.log(`✅ Found Product Name: ${setName}.${(prop as any).name} = ${productName}`);
+                    console.log(`✅ Found Product Name: ${setName}.${propNameOriginal} = ${productName}`);
                   }
                 }
               }
+
+              // Get object name and type from objProps
+              if ((objProps as any).name) objectName = String((objProps as any).name);
+              if ((objProps as any).type) objectType = String((objProps as any).type);
 
               // Fallback: use guidIfc as main guid if guid not found
               if (!guid && guidIfc) {
@@ -338,12 +420,35 @@ export default function InspectorScreen({
                 guidIfc,
                 guidMs,
                 objectId,
+                objectName,
+                objectType,
                 bottomElevation,
                 positionCode,
                 topElevation,
                 weight,
                 productName,
-                boltName
+                // Bolt properties
+                boltName,
+                boltCount,
+                boltHoleDiameter,
+                boltLength,
+                boltSize,
+                boltStandard,
+                boltLocation,
+                nutCount,
+                nutName,
+                nutType,
+                slottedHoleX,
+                slottedHoleY,
+                washerCount,
+                washerDiameter,
+                washerName,
+                washerType,
+                // IFC properties
+                ifcMaterial,
+                ifcNominalDiameter,
+                ifcNominalLength,
+                ifcFastenerTypeName
               });
             }
           } catch (e) {
@@ -530,18 +635,42 @@ export default function InspectorScreen({
         snapshot_3d_url: snapshot3dUrl,
         topview_url: topviewUrl,
         project_id: projectId,
+        inspection_type: inspectionMode,
         // Additional Tekla fields
         file_name: obj.fileName,
         guid: obj.guid,
         guid_ifc: obj.guidIfc,
         guid_ms: obj.guidMs,
         object_id: obj.objectId,
+        object_name: obj.objectName,
+        object_type: obj.objectType,
         cast_unit_bottom_elevation: obj.bottomElevation,
         cast_unit_position_code: obj.positionCode,
         cast_unit_top_elevation: obj.topElevation,
         cast_unit_weight: obj.weight,
         product_name: obj.productName,
-        user_email: tcUserEmail
+        user_email: tcUserEmail,
+        // IFC fields (poltide inspektsioon)
+        ifc_material: obj.ifcMaterial,
+        ifc_nominal_diameter: obj.ifcNominalDiameter,
+        ifc_nominal_length: obj.ifcNominalLength,
+        ifc_fastener_type_name: obj.ifcFastenerTypeName,
+        // Tekla Bolt fields (poltide inspektsioon)
+        tekla_bolt_count: obj.boltCount,
+        tekla_bolt_hole_diameter: obj.boltHoleDiameter,
+        tekla_bolt_length: obj.boltLength,
+        tekla_bolt_size: obj.boltSize,
+        tekla_bolt_standard: obj.boltStandard,
+        tekla_bolt_location: obj.boltLocation,
+        tekla_nut_count: obj.nutCount,
+        tekla_nut_name: obj.nutName,
+        tekla_nut_type: obj.nutType,
+        tekla_slotted_hole_x: obj.slottedHoleX,
+        tekla_slotted_hole_y: obj.slottedHoleY,
+        tekla_washer_count: obj.washerCount,
+        tekla_washer_diameter: obj.washerDiameter,
+        tekla_washer_name: obj.washerName,
+        tekla_washer_type: obj.washerType
       };
 
       const { error: dbError } = await supabase
