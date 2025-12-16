@@ -5,7 +5,7 @@ import InspectorScreen from './components/InspectorScreen';
 import { supabase, User } from './supabase';
 import './App.css';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);

@@ -38,6 +38,7 @@ export default function InspectorScreen({
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [inspectionCount, setInspectionCount] = useState(0);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [coloringDone, setColoringDone] = useState(false);
 
   // Refs debounce ja cleanup jaoks
   const lastCheckTimeRef = useRef(0);
@@ -428,6 +429,49 @@ export default function InspectorScreen({
     loadInspectionCount();
   }, [projectId]);
 
+  // Värvi inspekteeritud detailid roheliseks
+  const colorInspectedGreen = async () => {
+    setColoringDone(true);
+    try {
+      const { data: inspections, error } = await supabase
+        .from('inspections')
+        .select('model_id, object_runtime_id')
+        .eq('project_id', projectId);
+
+      if (error) throw error;
+
+      if (inspections && inspections.length > 0) {
+        // Grupeeri model_id järgi
+        const byModel: Record<string, number[]> = {};
+        for (const insp of inspections) {
+          if (!byModel[insp.model_id]) {
+            byModel[insp.model_id] = [];
+          }
+          byModel[insp.model_id].push(insp.object_runtime_id);
+        }
+
+        // Värvi roheliseks
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId,
+          objectRuntimeIds: runtimeIds
+        }));
+
+        await api.viewer.setObjectState(
+          { modelObjectIds },
+          { color: { r: 0, g: 180, b: 0, a: 255 } }
+        );
+
+        setMessage(`✅ ${inspections.length} detaili värvitud roheliseks`);
+        setTimeout(() => setMessage(''), 3000);
+      }
+    } catch (e: any) {
+      console.error('Failed to color inspected:', e);
+      setMessage('❌ Värvimine ebaõnnestus');
+    } finally {
+      setColoringDone(false);
+    }
+  };
+
   return (
     <div className="inspector-container">
       <div className="inspector-header-compact">
@@ -449,17 +493,26 @@ export default function InspectorScreen({
             </div>
           )}
         </div>
-        <div className="stats-compact">
-          <div className="stat-item">
-            <span className="stat-num">{inspectionCount}</span>
-            <span className="stat-lbl">insp.</span>
-          </div>
-          <div className="stat-divider">|</div>
-          <div className="stat-item">
-            <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
-              {assemblySelectionEnabled ? '✓' : '✗'}
-            </span>
-            <span className="stat-lbl">asm</span>
+        <div className="header-right">
+          <button
+            onClick={colorInspectedGreen}
+            disabled={coloringDone}
+            className="color-done-btn"
+          >
+            {coloringDone ? '...' : 'VÄRVI tehtud'}
+          </button>
+          <div className="stats-compact">
+            <div className="stat-item">
+              <span className="stat-num">{inspectionCount}</span>
+              <span className="stat-lbl">insp.</span>
+            </div>
+            <div className="stat-divider">|</div>
+            <div className="stat-item">
+              <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
+                {assemblySelectionEnabled ? '✓' : '✗'}
+              </span>
+              <span className="stat-lbl">asm</span>
+            </div>
           </div>
         </div>
       </div>
