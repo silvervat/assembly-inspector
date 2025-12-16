@@ -9,7 +9,8 @@ ADD COLUMN IF NOT EXISTS cast_unit_bottom_elevation TEXT,
 ADD COLUMN IF NOT EXISTS cast_unit_position_code TEXT,
 ADD COLUMN IF NOT EXISTS cast_unit_top_elevation TEXT,
 ADD COLUMN IF NOT EXISTS cast_unit_weight TEXT,
-ADD COLUMN IF NOT EXISTS photo_urls JSONB;
+ADD COLUMN IF NOT EXISTS photo_urls JSONB,
+ADD COLUMN IF NOT EXISTS user_email TEXT;
 
 -- Indeksid kiireks otsinguks
 CREATE INDEX IF NOT EXISTS idx_inspections_guid ON inspections(guid);

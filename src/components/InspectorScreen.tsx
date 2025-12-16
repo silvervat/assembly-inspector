@@ -6,6 +6,7 @@ interface InspectorScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   user: User;
   projectId: string;
+  tcUserEmail?: string;
   onLogout: () => void;
 }
 
@@ -29,6 +30,7 @@ export default function InspectorScreen({
   api,
   user,
   projectId,
+  tcUserEmail,
   onLogout
 }: InspectorScreenProps) {
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
@@ -395,7 +397,8 @@ export default function InspectorScreen({
         cast_unit_bottom_elevation: obj.bottomElevation,
         cast_unit_position_code: obj.positionCode,
         cast_unit_top_elevation: obj.topElevation,
-        cast_unit_weight: obj.weight
+        cast_unit_weight: obj.weight,
+        user_email: tcUserEmail
       };
 
       const { error: dbError } = await supabase
