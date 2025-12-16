@@ -132,7 +132,11 @@ export default function InspectorScreen({
 
     if (objects.length > 1) {
       setCanInspect(false);
-      setMessage('⚠️ Vali ainult ÜKS detail inspekteerimiseks');
+      if (inspectionMode === 'poldid') {
+        setMessage('⚠️ Vali ainult üks poldikomplekt inspekteerimiseks');
+      } else {
+        setMessage('⚠️ Vali ainult üks detail inspekteerimiseks');
+      }
       return;
     }
 
@@ -1030,7 +1034,11 @@ export default function InspectorScreen({
 
       {selectedObjects.length > 0 && (
         <div className="selection-info">
-          <h3>Valitud: {selectedObjects.length} detail(i)</h3>
+          <h3>
+            {inspectionMode === 'poldid'
+              ? `Valitud: ${selectedObjects.length} poldikomplekt${selectedObjects.length > 1 ? 'i' : ''}`
+              : `Valitud: ${selectedObjects.length} detail${selectedObjects.length > 1 ? 'i' : ''}`}
+          </h3>
           {selectedObjects.map((obj, idx) => (
             <div key={idx} className="selected-item">
               <div className="selected-mark">
@@ -1038,9 +1046,13 @@ export default function InspectorScreen({
                   ? (obj.boltName || 'Bolt Name puudub')
                   : (obj.assemblyMark || 'Mark puudub')}
               </div>
-              <div className="selected-meta">
-                Model: {obj.modelId.substring(0, 8)}... | ID: {obj.runtimeId}
-              </div>
+              {inspectionMode === 'poldid' && obj.boltStandard && (
+                <div className="selected-bolt-standard">
+                  Bolt standard: {obj.boltStandard}
+                  {obj.boltStandard.includes('4014') && ' osakeere'}
+                  {obj.boltStandard.includes('4017') && ' täiskeer'}
+                </div>
+              )}
             </div>
           ))}
         </div>

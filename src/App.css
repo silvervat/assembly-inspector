@@ -470,13 +470,12 @@ body {
   font-weight: 600;
   font-size: var(--modus-font-size-md);
   color: var(--modus-text-primary);
-  margin-bottom: var(--modus-spacing-xs);
 }
 
-.selected-meta {
-  font-size: var(--modus-font-size-xs);
+.selected-bolt-standard {
+  font-size: var(--modus-font-size-sm);
   color: var(--modus-text-secondary);
-  font-family: monospace;
+  margin-top: var(--modus-spacing-xs);
 }
 
 .action-container {
