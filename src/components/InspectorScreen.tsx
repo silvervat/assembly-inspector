@@ -37,10 +37,12 @@ export default function InspectorScreen({
   const [message, setMessage] = useState('');
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [inspectionCount, setInspectionCount] = useState(0);
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   // Refs debounce ja cleanup jaoks
   const lastCheckTimeRef = useRef(0);
   const isCheckingRef = useRef(false);
+  const lastSelectionRef = useRef<string>('');
 
   // Kontrolli assembly selection staatust
   useEffect(() => {
@@ -113,9 +115,9 @@ export default function InspectorScreen({
 
   // Peamine valiku kontroll - useCallback
   const checkSelection = useCallback(async () => {
-    // Debounce - 200ms
+    // Debounce - 50ms (kiirem)
     const now = Date.now();
-    if (now - lastCheckTimeRef.current < 200) return;
+    if (now - lastCheckTimeRef.current < 50) return;
     if (isCheckingRef.current) return;
 
     lastCheckTimeRef.current = now;
@@ -125,11 +127,21 @@ export default function InspectorScreen({
       const selection = await api.viewer.getSelection();
 
       if (!selection || selection.length === 0) {
-        setSelectedObjects([]);
-        setCanInspect(false);
-        setMessage('');
+        if (lastSelectionRef.current !== '') {
+          lastSelectionRef.current = '';
+          setSelectedObjects([]);
+          setCanInspect(false);
+          setMessage('');
+        }
         return;
       }
+
+      // Kontrolli kas valik muutus - kiire võrdlus
+      const selKey = selection.map(s => `${s.modelId}:${(s.objectRuntimeIds || []).join(',')}`).join('|');
+      if (selKey === lastSelectionRef.current) {
+        return; // Sama valik, skip
+      }
+      lastSelectionRef.current = selKey;
 
       const allObjects: SelectedObject[] = [];
 
@@ -418,28 +430,36 @@ export default function InspectorScreen({
 
   return (
     <div className="inspector-container">
-      <div className="inspector-header">
-        <div className="user-info">
-          <div className="user-avatar">{user.name.charAt(0).toUpperCase()}</div>
-          <div className="user-details">
-            <div className="user-name">{user.name}</div>
-            <div className="user-role">{user.role}</div>
+      <div className="inspector-header-compact">
+        <div className="user-menu-wrapper">
+          <button
+            className="user-button"
+            onClick={() => setShowUserMenu(!showUserMenu)}
+          >
+            <span className="user-avatar-small">{user.name.charAt(0).toUpperCase()}</span>
+            <span className="user-name-small">{user.name}</span>
+            <span className="dropdown-arrow">▼</span>
+          </button>
+          {showUserMenu && (
+            <div className="user-dropdown">
+              <div className="dropdown-role">{user.role}</div>
+              <button onClick={onLogout} className="dropdown-logout">
+                Logi välja
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="stats-compact">
+          <div className="stat-item">
+            <span className="stat-num">{inspectionCount}</span>
+            <span className="stat-lbl">insp.</span>
           </div>
-        </div>
-        <button onClick={onLogout} className="logout-button">
-          Logi välja
-        </button>
-      </div>
-
-      <div className="stats-container">
-        <div className="stat-card">
-          <div className="stat-label">Inspekteeritud</div>
-          <div className="stat-value">{inspectionCount}</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-label">Assembly Selection</div>
-          <div className="stat-value">
-            {assemblySelectionEnabled ? '✅' : '❌'}
+          <div className="stat-divider">|</div>
+          <div className="stat-item">
+            <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
+              {assemblySelectionEnabled ? '✓' : '✗'}
+            </span>
+            <span className="stat-lbl">asm</span>
           </div>
         </div>
       </div>
