@@ -132,7 +132,11 @@ export default function InspectorScreen({
 
     if (objects.length > 1) {
       setCanInspect(false);
-      setMessage('⚠️ Vali ainult ÜKS detail inspekteerimiseks');
+      if (inspectionMode === 'poldid') {
+        setMessage('⚠️ Vali ainult üks poldikomplekt inspekteerimiseks');
+      } else {
+        setMessage('⚠️ Vali ainult üks detail inspekteerimiseks');
+      }
       return;
     }
 
@@ -142,23 +146,17 @@ export default function InspectorScreen({
     if (inspectionMode === 'poldid') {
       if (!obj.boltName) {
         setCanInspect(false);
-        setMessage('⚠️ Sellel detailil puudub Tekla_Bolt.Bolt_Name');
+        setMessage('⚠️ Poltide inspektsiooniks märgistada poldikomplekt');
         return;
       }
     } else {
       // Tavalises režiimis kontrollime assemblyMark'i
       if (!obj.assemblyMark) {
         setCanInspect(false);
-        if (requiresAssemblySelection && !assemblySelectionEnabled) {
-          setMessage('⚠️ Lülita sisse Assembly Selection (viewer seadetes)');
-        } else {
-          setMessage('⚠️ Sellel detailil puudub Cast_unit_Mark');
-        }
+        setMessage('⚠️ Assembly Selection pole sisse lülitatud');
         return;
       }
     }
-
-    const displayName = inspectionMode === 'poldid' ? obj.boltName : obj.assemblyMark;
 
     try {
       const { data } = await supabase
@@ -182,16 +180,16 @@ export default function InspectorScreen({
       }
 
       setCanInspect(true);
-      setMessage(`✅ Valmis: ${displayName}`);
+      setMessage('');
     } catch (e: any) {
       // PGRST116 = not found, see on OK
       if (e?.code === 'PGRST116') {
         setCanInspect(true);
-        setMessage(`✅ Valmis: ${displayName}`);
+        setMessage('');
       } else {
         console.error('Validation error:', e);
         setCanInspect(true);
-        setMessage(`✅ Valmis: ${displayName}`);
+        setMessage('');
       }
     }
   }, [assemblySelectionEnabled, projectId, inspectionMode, requiresAssemblySelection]);
@@ -1036,7 +1034,11 @@ export default function InspectorScreen({
 
       {selectedObjects.length > 0 && (
         <div className="selection-info">
-          <h3>Valitud: {selectedObjects.length} detail(i)</h3>
+          <h3>
+            {inspectionMode === 'poldid'
+              ? `Valitud: ${selectedObjects.length} poldikomplekt${selectedObjects.length > 1 ? 'i' : ''}`
+              : `Valitud: ${selectedObjects.length} detail${selectedObjects.length > 1 ? 'i' : ''}`}
+          </h3>
           {selectedObjects.map((obj, idx) => (
             <div key={idx} className="selected-item">
               <div className="selected-mark">
@@ -1044,9 +1046,13 @@ export default function InspectorScreen({
                   ? (obj.boltName || 'Bolt Name puudub')
                   : (obj.assemblyMark || 'Mark puudub')}
               </div>
-              <div className="selected-meta">
-                Model: {obj.modelId.substring(0, 8)}... | ID: {obj.runtimeId}
-              </div>
+              {inspectionMode === 'poldid' && obj.boltStandard && (
+                <div className="selected-bolt-standard">
+                  Bolt standard: {obj.boltStandard}
+                  {obj.boltStandard.includes('4014') && ' osakeere'}
+                  {obj.boltStandard.includes('4017') && ' täiskeer'}
+                </div>
+              )}
             </div>
           ))}
         </div>
