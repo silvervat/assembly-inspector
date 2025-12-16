@@ -10,7 +10,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.5.0';
+export const APP_VERSION = '2.5.1';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -203,12 +203,6 @@ export default function App() {
     }
   };
 
-  // Logout handler
-  const handleLogout = () => {
-    setUser(null);
-    setCurrentMode(null);
-  };
-
   // Mine tagasi menüüsse
   const handleBackToMenu = () => {
     setCurrentMode(null);
@@ -311,7 +305,6 @@ export default function App() {
           user={user}
           userInitials={getUserInitials(tcUser)}
           onSelectMode={setCurrentMode}
-          onLogout={handleLogout}
         />
         <VersionFooter />
       </>
@@ -327,9 +320,7 @@ export default function App() {
         user={user}
         projectId={projectId}
         tcUserEmail={tcUser?.email || ''}
-        userInitials={getUserInitials(tcUser)}
         inspectionMode={currentMode}
-        onLogout={handleLogout}
         onBackToMenu={handleBackToMenu}
       />
       <VersionFooter />

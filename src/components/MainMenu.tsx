@@ -1,5 +1,5 @@
 import { TrimbleExUser } from '../supabase';
-import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiLogOut } from 'react-icons/fi';
+import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiSettings } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 
 export type InspectionMode =
@@ -16,7 +16,7 @@ interface MainMenuProps {
   user: TrimbleExUser;
   userInitials: string;
   onSelectMode: (mode: InspectionMode) => void;
-  onLogout: () => void;
+  onOpenSettings?: () => void;
 }
 
 interface MenuItem {
@@ -86,7 +86,7 @@ const menuItems: MenuItem[] = [
   }
 ];
 
-export default function MainMenu({ user, userInitials, onSelectMode, onLogout }: MainMenuProps) {
+export default function MainMenu({ user, userInitials, onSelectMode, onOpenSettings }: MainMenuProps) {
   return (
     <div className="main-menu-container">
       <div className="main-menu-header">
@@ -97,9 +97,8 @@ export default function MainMenu({ user, userInitials, onSelectMode, onLogout }:
             <span className="menu-user-role">{user.role}</span>
           </div>
         </div>
-        <button className="menu-logout-btn" onClick={onLogout}>
-          <FiLogOut size={14} />
-          <span>Logi välja</span>
+        <button className="menu-settings-btn" onClick={onOpenSettings} title="Seaded">
+          <FiSettings size={18} />
         </button>
       </div>
 
