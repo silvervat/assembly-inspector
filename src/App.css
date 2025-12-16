@@ -766,3 +766,52 @@ body {
   height: 16px;
   cursor: pointer;
 }
+
+/* Auto-close toggle switch */
+.auto-close-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: #495057;
+  cursor: pointer;
+  padding: 8px 10px;
+  background: #f0f2f5;
+  border-radius: 6px;
+}
+
+.auto-close-toggle input[type="checkbox"] {
+  display: none;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: #ccc;
+  border-radius: 20px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.auto-close-toggle input:checked + .toggle-switch {
+  background: #4caf50;
+}
+
+.auto-close-toggle input:checked + .toggle-switch::after {
+  transform: translateX(16px);
+}

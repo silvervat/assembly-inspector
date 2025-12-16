@@ -50,6 +50,7 @@ export default function InspectorScreen({
   } | null>(null);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
   const [includeTopView, setIncludeTopView] = useState(true);
+  const [autoClosePanel, setAutoClosePanel] = useState(false);
 
   // Refs
   const lastCheckTimeRef = useRef(0);
@@ -403,11 +404,21 @@ export default function InspectorScreen({
         // Salvesta praegune kaamera
         const currentCamera = await api.viewer.getCamera();
 
-        // Lülita topview
+        // Lülita topview preset
         await api.viewer.setCamera('top', { animationTime: 0 });
 
-        // Oota natuke, et kaamera jõuaks kohale
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Oota et kaamera jõuaks kohale
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Seadista ortho projektsioon (õige pealtvaade)
+        const topCamera = await api.viewer.getCamera();
+        await api.viewer.setCamera(
+          { ...topCamera, projectionType: 'ortho' },
+          { animationTime: 0 }
+        );
+
+        // Oota renderimist
+        await new Promise(resolve => setTimeout(resolve, 150));
 
         // Tee topview snapshot
         const topviewDataUrl = await api.viewer.getSnapshot();
@@ -478,6 +489,15 @@ export default function InspectorScreen({
 
       // Tühjenda valik
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
+      // Sulge paneel kui autoClosePanel on sisse lülitatud
+      if (autoClosePanel) {
+        try {
+          await api.ui.setUI({ name: 'SidePanel', state: 'collapsed' });
+        } catch (e) {
+          console.warn('Could not collapse side panel:', e);
+        }
+      }
 
       setTimeout(() => {
         setSelectedObjects([]);
@@ -740,6 +760,16 @@ export default function InspectorScreen({
             onChange={(e) => setIncludeTopView(e.target.checked)}
           />
           Lisa pealtvaate pilt (topview)
+        </label>
+
+        <label className="auto-close-toggle">
+          <input
+            type="checkbox"
+            checked={autoClosePanel}
+            onChange={(e) => setAutoClosePanel(e.target.checked)}
+          />
+          <span className="toggle-switch"></span>
+          Sulge paneel pärast inspekteerimist
         </label>
       </div>
 
