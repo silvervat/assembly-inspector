@@ -103,10 +103,6 @@ export default function MainMenu({ user, userInitials, onSelectMode, onLogout }:
         </button>
       </div>
 
-      <div className="main-menu-title">
-        <h2>Vali inspektsiooni tüüp</h2>
-      </div>
-
       <div className="main-menu-items">
         {menuItems.map((item) => {
           const IconComponent = item.icon;
