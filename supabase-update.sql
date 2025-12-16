@@ -44,3 +44,17 @@ CREATE INDEX IF NOT EXISTS idx_inspections_guid ON inspections(guid);
 CREATE INDEX IF NOT EXISTS idx_inspections_guid_ifc ON inspections(guid_ifc);
 CREATE INDEX IF NOT EXISTS idx_inspections_assembly_mark ON inspections(assembly_mark);
 CREATE INDEX IF NOT EXISTS idx_inspections_user_email ON inspections(user_email);
+
+-- ============================================
+-- PHOTO TYPE SEPARATION (v2.4.0)
+-- ============================================
+-- Separate columns for different photo types:
+-- - user_photos: JSONB array of user-uploaded photos
+-- - snapshot_3d_url: Auto-generated 3D view snapshot
+-- - topview_url: Auto-generated topview snapshot
+-- This allows EOS2 to distinguish between app-generated and user-uploaded photos
+
+ALTER TABLE inspections
+ADD COLUMN IF NOT EXISTS user_photos JSONB,
+ADD COLUMN IF NOT EXISTS snapshot_3d_url TEXT,
+ADD COLUMN IF NOT EXISTS topview_url TEXT;

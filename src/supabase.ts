@@ -35,10 +35,14 @@ export interface Inspection {
   inspector_name: string;
   inspected_at: string;
   photo_url?: string;
-  photo_urls?: string[];
+  photo_urls?: string[];  // All photos combined (backward compatibility)
   notes?: string;
   project_id: string;
   user_email?: string;
+  // Separate photo fields for EOS2 differentiation
+  user_photos?: string[];      // Photos uploaded by user
+  snapshot_3d_url?: string;    // Auto-generated 3D view snapshot
+  topview_url?: string;        // Auto-generated topview snapshot
   // Tekla additional fields
   file_name?: string;
   guid?: string;
