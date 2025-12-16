@@ -407,6 +407,9 @@ export default function InspectorScreen({
 
     setInspecting(true);
     const allPhotoUrls: string[] = [];
+    const userPhotoUrls: string[] = [];  // User-uploaded photos only
+    let snapshot3dUrl: string | undefined;  // Auto-generated 3D snapshot
+    let topviewUrl: string | undefined;     // Auto-generated topview
 
     try {
       // 1. Laadi üles kasutaja fotod
@@ -415,7 +418,7 @@ export default function InspectorScreen({
 
         for (let i = 0; i < photos.length; i++) {
           const photo = photos[i];
-          const photoFileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_photo${i + 1}_${Date.now()}.jpg`;
+          const photoFileName = `${projectId}_${obj.modelId}_${obj.runtimeId}_user_${i + 1}_${Date.now()}.jpg`;
 
           const { error: photoUploadError } = await supabase.storage
             .from('inspection-photos')
@@ -433,6 +436,7 @@ export default function InspectorScreen({
             .from('inspection-photos')
             .getPublicUrl(photoFileName);
 
+          userPhotoUrls.push(photoUrlData.publicUrl);
           allPhotoUrls.push(photoUrlData.publicUrl);
         }
       }
@@ -456,6 +460,7 @@ export default function InspectorScreen({
         .from('inspection-photos')
         .getPublicUrl(snapshotFileName);
 
+      snapshot3dUrl = urlData.publicUrl;
       allPhotoUrls.push(urlData.publicUrl);
 
       // 3. Tee topview snapshot kui valitud
@@ -498,6 +503,7 @@ export default function InspectorScreen({
             .from('inspection-photos')
             .getPublicUrl(topviewFileName);
 
+          topviewUrl = topviewUrlData.publicUrl;
           allPhotoUrls.push(topviewUrlData.publicUrl);
         }
 
@@ -519,6 +525,10 @@ export default function InspectorScreen({
         inspector_name: inspectorName,
         photo_url: allPhotoUrls[0] || '',
         photo_urls: allPhotoUrls,
+        // Separate photo fields for EOS2 differentiation
+        user_photos: userPhotoUrls.length > 0 ? userPhotoUrls : undefined,
+        snapshot_3d_url: snapshot3dUrl,
+        topview_url: topviewUrl,
         project_id: projectId,
         // Additional Tekla fields
         file_name: obj.fileName,
