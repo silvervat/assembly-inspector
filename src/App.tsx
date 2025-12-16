@@ -10,7 +10,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.5.3';
+export const APP_VERSION = '2.5.4';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {

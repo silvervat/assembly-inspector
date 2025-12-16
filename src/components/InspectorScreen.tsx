@@ -377,15 +377,30 @@ export default function InspectorScreen({
                     weight = String(propValue);
                   }
 
-                  // GUID from properties
-                  if ((propName === 'guid_ifc' || propName === 'ifcguid' || propName === 'globalid') && !guidIfc) {
+                  // GUID from properties - check various formats
+                  // Normalize property name for GUID matching
+                  const propNameNormGuid = propName.replace(/[\s_()]/g, '').toLowerCase();
+
+                  // IFC GUID patterns: guid_ifc, ifcguid, globalid, guid(ifc)
+                  if ((propNameNormGuid.includes('guidifc') ||
+                       propNameNormGuid === 'ifcguid' ||
+                       propNameNormGuid === 'globalid' ||
+                       (propNameNormGuid === 'guid' && setNameLower.includes('ifc'))) && !guidIfc) {
                     guidIfc = String(propValue);
+                    console.log(`✅ Found GUID_IFC: ${setName}.${propNameOriginal} = ${guidIfc}`);
                   }
-                  if ((propName === 'guid_ms' || propName === 'msguid') && !guidMs) {
+                  // MS GUID patterns: guid_ms, msguid, guid(ms), tekla_guid
+                  if ((propNameNormGuid.includes('guidms') ||
+                       propNameNormGuid === 'msguid' ||
+                       propNameNormGuid.includes('teklaguid') ||
+                       (propNameNormGuid === 'guid' && (setNameLower.includes('tekla') || setNameLower.includes('reference')))) && !guidMs) {
                     guidMs = String(propValue);
+                    console.log(`✅ Found GUID_MS: ${setName}.${propNameOriginal} = ${guidMs}`);
                   }
-                  if (propName === 'guid' && !guid) {
+                  // Generic GUID
+                  if (propNameNormGuid === 'guid' && !guid) {
                     guid = String(propValue);
+                    console.log(`✅ Found GUID: ${setName}.${propNameOriginal} = ${guid}`);
                   }
 
                   // ObjectId from properties
@@ -405,9 +420,25 @@ export default function InspectorScreen({
               if ((objProps as any).name) objectName = String((objProps as any).name);
               if ((objProps as any).type) objectType = String((objProps as any).type);
 
+              // IFC GUID fallback - use convertToObjectIds if not found in properties
+              if (!guidIfc) {
+                try {
+                  const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+                  if (externalIds && externalIds.length > 0 && externalIds[0]) {
+                    guidIfc = String(externalIds[0]);
+                    console.log(`✅ Found GUID_IFC via convertToObjectIds: ${guidIfc}`);
+                  }
+                } catch (e) {
+                  console.warn('Could not get IFC GUID via convertToObjectIds:', e);
+                }
+              }
+
               // Fallback: use guidIfc as main guid if guid not found
               if (!guid && guidIfc) {
                 guid = guidIfc;
+              }
+              if (!guid && guidMs) {
+                guid = guidMs;
               }
 
               allObjects.push({
