@@ -41,6 +41,7 @@ Each inspection saves these Tekla properties:
 - `cast_unit_position_code`
 - `cast_unit_weight`
 - `assembly_mark` (Cast_unit_Mark)
+- `product_name` - From Property Set "Product" > "Name"
 
 ### Database
 Run `supabase-update.sql` when adding new columns to the inspections table.

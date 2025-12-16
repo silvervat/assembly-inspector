@@ -573,6 +573,13 @@ body {
   border-radius: 6px;
   overflow: hidden;
   background: #f0f2f5;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.photo-thumb:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .photo-thumb img {
@@ -814,4 +821,9 @@ body {
 
 .auto-close-toggle input:checked + .toggle-switch::after {
   transform: translateX(16px);
+}
+
+.auto-close-toggle.bottom-toggle {
+  margin-top: 16px;
+  margin-bottom: 8px;
 }

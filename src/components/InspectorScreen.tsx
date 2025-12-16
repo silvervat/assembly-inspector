@@ -24,6 +24,7 @@ interface SelectedObject {
   positionCode?: string;
   topElevation?: string;
   weight?: string;
+  productName?: string;
 }
 
 export default function InspectorScreen({
@@ -199,6 +200,7 @@ export default function InspectorScreen({
               let positionCode: string | undefined;
               let topElevation: string | undefined;
               let weight: string | undefined;
+              let productName: string | undefined;
 
               // Try to get object IDs
               try {
@@ -262,6 +264,13 @@ export default function InspectorScreen({
                   if ((propName === 'objectid' || propName === 'object_id' || propName === 'id') && !objectId) {
                     objectId = String(propValue);
                   }
+
+                  // Product Name (Property set "Product", property "Name")
+                  const setNameLower = setName.toLowerCase();
+                  if (setNameLower === 'product' && propName === 'name' && !productName) {
+                    productName = String(propValue);
+                    console.log(`✅ Found Product Name: ${setName}.${(prop as any).name} = ${productName}`);
+                  }
                 }
               }
 
@@ -282,7 +291,8 @@ export default function InspectorScreen({
                 bottomElevation,
                 positionCode,
                 topElevation,
-                weight
+                weight,
+                productName
               });
             }
           } catch (e) {
@@ -465,6 +475,7 @@ export default function InspectorScreen({
         cast_unit_position_code: obj.positionCode,
         cast_unit_top_elevation: obj.topElevation,
         cast_unit_weight: obj.weight,
+        product_name: obj.productName,
         user_email: tcUserEmail
       };
 
@@ -740,11 +751,14 @@ export default function InspectorScreen({
         {photos.length > 0 && (
           <div className="photo-grid">
             {photos.map((photo, idx) => (
-              <div key={idx} className="photo-thumb">
+              <div key={idx} className="photo-thumb" onClick={() => setModalPhoto(photo.preview)}>
                 <img src={photo.preview} alt={`Foto ${idx + 1}`} />
                 <button
                   className="photo-remove"
-                  onClick={() => handleRemovePhoto(idx)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemovePhoto(idx);
+                  }}
                 >
                   ✕
                 </button>
@@ -760,16 +774,6 @@ export default function InspectorScreen({
             onChange={(e) => setIncludeTopView(e.target.checked)}
           />
           Lisa pealtvaate pilt (topview)
-        </label>
-
-        <label className="auto-close-toggle">
-          <input
-            type="checkbox"
-            checked={autoClosePanel}
-            onChange={(e) => setAutoClosePanel(e.target.checked)}
-          />
-          <span className="toggle-switch"></span>
-          Sulge paneel pärast inspekteerimist
         </label>
       </div>
 
@@ -792,6 +796,16 @@ export default function InspectorScreen({
           <li>Detail värvitakse mustaks</li>
         </ol>
       </div>
+
+      <label className="auto-close-toggle bottom-toggle">
+        <input
+          type="checkbox"
+          checked={autoClosePanel}
+          onChange={(e) => setAutoClosePanel(e.target.checked)}
+        />
+        <span className="toggle-switch"></span>
+        Sulge paneel pärast inspekteerimist
+      </label>
 
       {/* Photo modal */}
       {modalPhoto && (

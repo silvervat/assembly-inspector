@@ -38,6 +38,7 @@ export interface Inspection {
   cast_unit_position_code?: string;
   cast_unit_top_elevation?: string;
   cast_unit_weight?: string;
+  product_name?: string;
 }
 
 // Database schema:
