@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
+import AdminScreen from './components/AdminScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -10,7 +11,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.5.11';
+export const APP_VERSION = '2.5.12';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -305,6 +306,20 @@ export default function App() {
           user={user}
           userInitials={getUserInitials(tcUser)}
           onSelectMode={setCurrentMode}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Admin ekraan
+  if (currentMode === 'admin') {
+    return (
+      <>
+        <NavigationOverlay />
+        <AdminScreen
+          api={api}
+          onBackToMenu={handleBackToMenu}
         />
         <VersionFooter />
       </>
