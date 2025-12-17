@@ -138,60 +138,41 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
         }
 
         // Try to get bounding box / coordinates - multiple methods
-        let boundingBoxes: unknown[] = [];
+        let boundingBoxes: unknown = null;
 
-        // Method 1: getObjectsBoundingBox
+        // Method 1: getObjectBoundingBoxes (correct API method name!)
         try {
-          boundingBoxes = await (api.viewer as any).getObjectsBoundingBox?.(modelId, runtimeIds) || [];
-          console.log('📍 [1] getObjectsBoundingBox:', boundingBoxes);
+          boundingBoxes = await (api.viewer as any).getObjectBoundingBoxes?.(modelId, runtimeIds);
+          console.log('📍 [1] getObjectBoundingBoxes:', boundingBoxes);
         } catch (e) {
-          console.warn('Could not get bounding box via getObjectsBoundingBox:', e);
+          console.warn('Could not get bounding boxes:', e);
         }
 
-        // Method 2: getBoundingBox
-        if (!boundingBoxes || boundingBoxes.length === 0) {
-          try {
-            boundingBoxes = await (api.viewer as any).getBoundingBox?.(modelId, runtimeIds) || [];
-            console.log('📍 [2] getBoundingBox:', boundingBoxes);
-          } catch (e) {
-            console.warn('Could not get bounding box via getBoundingBox:', e);
-          }
+        // Method 2: getObjectPositions (should give positions!)
+        let objectPositions: unknown = null;
+        try {
+          objectPositions = await (api.viewer as any).getObjectPositions?.(modelId, runtimeIds);
+          console.log('📍 [2] getObjectPositions:', objectPositions);
+        } catch (e) {
+          console.warn('Could not get object positions:', e);
         }
 
-        // Method 3: getObjectsWorldBoundingBox (world coordinates)
-        let worldBoundingBoxes: unknown = null;
+        // Method 3: getObjects (general object data)
+        let objectsData: unknown = null;
         try {
-          worldBoundingBoxes = await (api.viewer as any).getObjectsWorldBoundingBox?.(modelId, runtimeIds);
-          console.log('📍 [3] getObjectsWorldBoundingBox:', worldBoundingBoxes);
+          objectsData = await (api.viewer as any).getObjects?.(modelId, runtimeIds);
+          console.log('📍 [3] getObjects:', objectsData);
         } catch (e) {
-          console.warn('Could not get world bounding box:', e);
+          console.warn('Could not get objects:', e);
         }
 
-        // Method 4: getObjectWorldMatrix (transformation matrix)
-        let worldMatrices: unknown[] = [];
+        // Method 4: getHierarchyChildren (get child objects of assembly)
+        let hierarchyChildren: unknown = null;
         try {
-          worldMatrices = await (api.viewer as any).getObjectWorldMatrix?.(modelId, runtimeIds) || [];
-          console.log('📍 [4] getObjectWorldMatrix:', worldMatrices);
+          hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, runtimeIds);
+          console.log('📍 [4] getHierarchyChildren:', hierarchyChildren);
         } catch (e) {
-          console.warn('Could not get world matrix:', e);
-        }
-
-        // Method 5: getObjectsInfo
-        let objectsInfo: unknown[] = [];
-        try {
-          objectsInfo = await (api.viewer as any).getObjectsInfo?.(modelId, runtimeIds) || [];
-          console.log('📍 [5] getObjectsInfo:', objectsInfo);
-        } catch (e) {
-          console.warn('Could not get objects info:', e);
-        }
-
-        // Method 6: Try to get placement/transform from object tree
-        let objectTree: unknown = null;
-        try {
-          objectTree = await (api.viewer as any).getObjectTree?.(modelId, runtimeIds[0]);
-          console.log('📍 [6] getObjectTree:', objectTree);
-        } catch (e) {
-          console.warn('Could not get object tree:', e);
+          console.warn('Could not get hierarchy children:', e);
         }
 
         // Log all available viewer methods for discovery
@@ -295,11 +276,10 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               rawData: {
                 properties: objProps,
                 metadata: objMetadata,
-                boundingBox: boundingBoxes[i] || null,
-                worldBoundingBox: worldBoundingBoxes,
-                worldMatrix: worldMatrices[i] || null,
-                objectInfo: objectsInfo[i] || null,
-                objectTree: objectTree
+                boundingBoxes: boundingBoxes,
+                objectPositions: objectPositions,
+                objectsData: objectsData,
+                hierarchyChildren: hierarchyChildren
               }
             });
           }
