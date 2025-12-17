@@ -156,21 +156,27 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               }
             }
 
-            // Build metadata object from both objProps and getObjectMetadata
+            // Build metadata object from objProps.product (IFC Product info)
+            const product = (objProps as any)?.product;
             const metadata: ObjectMetadata = {
-              name: rawProps.name || (objMetadata as any)?.name,
-              type: rawProps.type || (objMetadata as any)?.type,
+              name: product?.name || rawProps.name || (objMetadata as any)?.name,
+              type: product?.objectType || rawProps.type || (objMetadata as any)?.type,
               globalId: (objMetadata as any)?.globalId,
-              objectType: (objMetadata as any)?.objectType,
-              description: (objMetadata as any)?.description,
+              objectType: product?.objectType || (objMetadata as any)?.objectType,
+              description: product?.description || (objMetadata as any)?.description,
+              ownerHistory: product ? {
+                creationDate: product.creationDate,
+                lastModifiedDate: product.lastModificationDate,
+                owningUser: product.personId,
+                owningApplication: `${product.applicationFullName} (${product.applicationVersion})`,
+                changeAction: String(product.changeAction),
+                state: String(product.state),
+              } : undefined,
             };
 
-            // Log additional metadata fields for debugging (not added to typed object)
-            if (objMetadata && typeof objMetadata === 'object') {
-              const additionalKeys = Object.keys(objMetadata as object).filter(k => !(k in metadata));
-              if (additionalKeys.length > 0) {
-                console.log('📋 Additional metadata keys found:', additionalKeys);
-              }
+            // Log product info for debugging
+            if (product) {
+              console.log('📋 Product info found:', safeStringify(product, 2));
             }
 
             // Console log full raw data for debugging
