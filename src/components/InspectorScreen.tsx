@@ -1378,6 +1378,40 @@ export default function InspectorScreen({
                   {obj.boltStandard.includes('4017') && ' täiskeer'}
                 </div>
               )}
+              {inspectionMode === 'poldid' && (
+                <div className="bolt-details">
+                  {obj.boltCount && (
+                    <div className="bolt-detail-row">
+                      <span>Bolt count: {obj.boltCount}</span>
+                      {obj.nutCount && parseInt(obj.nutCount) > parseInt(obj.boltCount) && (
+                        <span className="bolt-warning">⚠️ topelt mutrid?</span>
+                      )}
+                    </div>
+                  )}
+                  {obj.nutCount && (
+                    <div className="bolt-detail-row">
+                      <span>Nut count: {obj.nutCount}</span>
+                    </div>
+                  )}
+                  {obj.washerCount && (
+                    <div className="bolt-detail-row">
+                      <span>Washer count: {obj.washerCount}</span>
+                    </div>
+                  )}
+                  {obj.slottedHoleX && parseFloat(obj.slottedHoleX) !== 0 && (
+                    <div className="bolt-detail-row">
+                      <span>Slotted hole X: {obj.slottedHoleX}</span>
+                      <span className="bolt-warning">⚠️ suur seib?</span>
+                    </div>
+                  )}
+                  {obj.slottedHoleY && parseFloat(obj.slottedHoleY) !== 0 && (
+                    <div className="bolt-detail-row">
+                      <span>Slotted hole Y: {obj.slottedHoleY}</span>
+                      <span className="bolt-warning">⚠️ suur seib?</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
