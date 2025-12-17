@@ -117,6 +117,9 @@ export default function InspectorScreen({
   const [inspectionListMode, setInspectionListMode] = useState<'none' | 'mine' | 'all'>('none');
   const [inspectionListData, setInspectionListData] = useState<InspectionItem[]>([]);
   const [inspectionListLoading, setInspectionListLoading] = useState(false);
+  const [inspectionListTotal, setInspectionListTotal] = useState(0);
+  const [inspectionListLoadingMore, setInspectionListLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
 
   // EOS2 Navigation hook - polls for commands from EOS2 and auto-navigates
   useEos2Navigation({
@@ -243,6 +246,9 @@ export default function InspectorScreen({
 
   // Peamine valiku kontroll - useCallback
   const checkSelection = useCallback(async () => {
+    // Skip selection tracking when viewing inspection list
+    if (inspectionListMode !== 'none') return;
+
     // Debounce - 50ms (kiirem)
     const now = Date.now();
     if (now - lastCheckTimeRef.current < 50) return;
@@ -561,7 +567,7 @@ export default function InspectorScreen({
     } finally {
       isCheckingRef.current = false;
     }
-  }, [api, validateSelection]);
+  }, [api, validateSelection, inspectionListMode]);
 
   // Event listener valiku muutustele
   useEffect(() => {
@@ -927,23 +933,50 @@ export default function InspectorScreen({
   const showMyInspections = async () => {
     setInspectionListLoading(true);
     try {
-      // Fetch full inspection data
+      // First get total count
+      const { count, error: countError } = await supabase
+        .from('inspections')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .eq('inspector_id', user.id);
+
+      if (countError) throw countError;
+
+      const totalCount = count || 0;
+      setInspectionListTotal(totalCount);
+
+      if (totalCount === 0) {
+        setMessage('ℹ️ Sul pole veel inspektsioone');
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Fetch first page of data
       const { data: inspections, error } = await supabase
         .from('inspections')
         .select('*')
         .eq('project_id', projectId)
         .eq('inspector_id', user.id)
-        .order('inspected_at', { ascending: false });
+        .order('inspected_at', { ascending: false })
+        .range(0, PAGE_SIZE - 1);
 
       if (error) throw error;
 
-      if (inspections && inspections.length > 0) {
-        // Set all objects to light gray (background)
-        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+      // Set all objects to light gray (background)
+      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
 
+      // Fetch all runtime IDs for coloring (separate query for performance)
+      const { data: colorData } = await supabase
+        .from('inspections')
+        .select('model_id, object_runtime_id')
+        .eq('project_id', projectId)
+        .eq('inspector_id', user.id);
+
+      if (colorData && colorData.length > 0) {
         // Group by model and color red
         const byModel: Record<string, number[]> = {};
-        for (const insp of inspections) {
+        for (const insp of colorData) {
           if (!byModel[insp.model_id]) {
             byModel[insp.model_id] = [];
           }
@@ -959,14 +992,11 @@ export default function InspectorScreen({
           { modelObjectIds },
           { color: { r: 220, g: 50, b: 50, a: 255 } }
         );
-
-        // Set inspection list data
-        setInspectionListData(inspections as InspectionItem[]);
-        setInspectionListMode('mine');
-      } else {
-        setMessage('ℹ️ Sul pole veel inspektsioone');
-        setTimeout(() => setMessage(''), 3000);
       }
+
+      // Set inspection list data
+      setInspectionListData((inspections || []) as InspectionItem[]);
+      setInspectionListMode('mine');
     } catch (e: any) {
       console.error('Failed to show my inspections:', e);
       setMessage('❌ Viga inspektsioonide laadimisel');
@@ -979,22 +1009,47 @@ export default function InspectorScreen({
   const showAllInspections = async () => {
     setInspectionListLoading(true);
     try {
-      // Fetch all inspections for this project
+      // First get total count
+      const { count, error: countError } = await supabase
+        .from('inspections')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId);
+
+      if (countError) throw countError;
+
+      const totalCount = count || 0;
+      setInspectionListTotal(totalCount);
+
+      if (totalCount === 0) {
+        setMessage('ℹ️ Inspektsioone pole veel tehtud');
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Fetch first page of data
       const { data: inspections, error } = await supabase
         .from('inspections')
         .select('*')
         .eq('project_id', projectId)
-        .order('inspected_at', { ascending: false });
+        .order('inspected_at', { ascending: false })
+        .range(0, PAGE_SIZE - 1);
 
       if (error) throw error;
 
-      if (inspections && inspections.length > 0) {
-        // Set all objects to light gray (background)
-        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+      // Set all objects to light gray (background)
+      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
 
+      // Fetch all runtime IDs for coloring (separate query for performance)
+      const { data: colorData } = await supabase
+        .from('inspections')
+        .select('model_id, object_runtime_id')
+        .eq('project_id', projectId);
+
+      if (colorData && colorData.length > 0) {
         // Group by model and color green
         const byModel: Record<string, number[]> = {};
-        for (const insp of inspections) {
+        for (const insp of colorData) {
           if (!byModel[insp.model_id]) {
             byModel[insp.model_id] = [];
           }
@@ -1010,19 +1065,51 @@ export default function InspectorScreen({
           { modelObjectIds },
           { color: { r: 34, g: 197, b: 94, a: 255 } }
         );
-
-        // Set inspection list data
-        setInspectionListData(inspections as InspectionItem[]);
-        setInspectionListMode('all');
-      } else {
-        setMessage('ℹ️ Inspektsioone pole veel tehtud');
-        setTimeout(() => setMessage(''), 3000);
       }
+
+      // Set inspection list data
+      setInspectionListData((inspections || []) as InspectionItem[]);
+      setInspectionListMode('all');
     } catch (e: any) {
       console.error('Failed to show all inspections:', e);
       setMessage('❌ Viga inspektsioonide laadimisel');
     } finally {
       setInspectionListLoading(false);
+    }
+  };
+
+  // Load more inspections
+  const loadMoreInspections = async () => {
+    if (inspectionListLoadingMore) return;
+    setInspectionListLoadingMore(true);
+
+    try {
+      const currentCount = inspectionListData.length;
+      let query = supabase
+        .from('inspections')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('inspected_at', { ascending: false })
+        .range(currentCount, currentCount + PAGE_SIZE - 1);
+
+      // Add filter for 'mine' mode
+      if (inspectionListMode === 'mine') {
+        query = query.eq('inspector_id', user.id);
+      }
+
+      const { data: moreInspections, error } = await query;
+
+      if (error) throw error;
+
+      if (moreInspections && moreInspections.length > 0) {
+        setInspectionListData(prev => [...prev, ...(moreInspections as InspectionItem[])]);
+      }
+    } catch (e: any) {
+      console.error('Failed to load more inspections:', e);
+      setMessage('❌ Viga juurde laadimisel');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setInspectionListLoadingMore(false);
     }
   };
 
@@ -1154,7 +1241,11 @@ export default function InspectorScreen({
         <InspectionList
           inspections={inspectionListData}
           mode={inspectionListMode}
+          totalCount={inspectionListTotal}
+          hasMore={inspectionListData.length < inspectionListTotal}
+          loadingMore={inspectionListLoadingMore}
           onZoomToInspection={zoomToInspection}
+          onLoadMore={loadMoreInspections}
           onClose={exitInspectionList}
         />
       )}

@@ -21,7 +21,11 @@ export interface InspectionItem {
 interface InspectionListProps {
   inspections: InspectionItem[];
   mode: 'mine' | 'all';
+  totalCount: number;
+  hasMore: boolean;
+  loadingMore: boolean;
   onZoomToInspection: (inspection: InspectionItem) => void;
+  onLoadMore: () => void;
   onClose: () => void;
 }
 
@@ -48,7 +52,11 @@ function groupByDate(inspections: InspectionItem[]): Record<string, InspectionIt
 export default function InspectionList({
   inspections,
   mode,
+  totalCount,
+  hasMore,
+  loadingMore,
   onZoomToInspection,
+  onLoadMore,
   onClose
 }: InspectionListProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
@@ -85,7 +93,9 @@ export default function InspectionList({
       <div className="inspection-list-header">
         <h3>
           {mode === 'mine' ? '🔴 Minu inspektsioonid' : '🟢 Kõik inspektsioonid'}
-          <span className="inspection-count">({inspections.length})</span>
+          <span className="inspection-count">
+            ({inspections.length}{totalCount > inspections.length ? ` / ${totalCount}` : ''})
+          </span>
         </h3>
         <button className="inspection-list-close" onClick={onClose}>
           <FiX size={18} />
@@ -143,6 +153,19 @@ export default function InspectionList({
             {mode === 'mine'
               ? 'Sul pole veel inspektsioone'
               : 'Inspektsioone pole veel tehtud'}
+          </div>
+        )}
+
+        {/* Load more button */}
+        {hasMore && (
+          <div className="load-more-container">
+            <button
+              className="load-more-btn"
+              onClick={onLoadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? 'Laadin...' : `Lae juurde (${totalCount - inspections.length} veel)`}
+            </button>
           </div>
         )}
       </div>

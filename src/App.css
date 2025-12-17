@@ -1561,3 +1561,34 @@ body {
 .detail-zoom-btn:hover {
   background: var(--modus-primary-darker);
 }
+
+/* Load More Button */
+.load-more-container {
+  padding: var(--modus-spacing-md);
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--modus-border-light);
+}
+
+.load-more-btn {
+  padding: var(--modus-spacing-sm) var(--modus-spacing-xl);
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-md);
+  color: var(--modus-text-primary);
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.load-more-btn:hover:not(:disabled) {
+  background: var(--modus-bg-tertiary);
+  border-color: var(--modus-primary);
+  color: var(--modus-primary);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
