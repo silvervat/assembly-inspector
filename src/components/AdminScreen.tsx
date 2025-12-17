@@ -12,12 +12,31 @@ interface PropertySet {
   properties: Record<string, unknown>;
 }
 
+interface ObjectMetadata {
+  name?: string;
+  type?: string;
+  globalId?: string;
+  objectType?: string;
+  description?: string;
+  ownerHistory?: {
+    creationDate?: string;
+    lastModifiedDate?: string;
+    owningUser?: string;
+    owningApplication?: string;
+    changeAction?: string;
+    state?: string;
+  };
+  [key: string]: unknown;
+}
+
 interface ObjectData {
   modelId: string;
   runtimeId: number;
   externalId?: string;
   class?: string;
   propertySets: PropertySet[];
+  metadata?: ObjectMetadata;
+  rawData?: unknown;
 }
 
 export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
@@ -57,8 +76,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
         setMessage(`Laadin ${runtimeIds.length} objekti propertiseid...`);
 
-        // Get properties for each object
-        const properties = await api.viewer.getObjectProperties(modelId, runtimeIds);
+        // Get properties for each object (with includeHidden to get all properties)
+        const properties = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
 
         // Get external IDs (GUIDs)
         let externalIds: string[] = [];
@@ -68,10 +87,19 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           console.warn('Could not convert to external IDs:', e);
         }
 
+        // Get object metadata (includes Product properties like name, type, owner history)
+        let metadataArr: unknown[] = [];
+        try {
+          metadataArr = await (api.viewer as any).getObjectMetadata?.(modelId, runtimeIds) || [];
+        } catch (e) {
+          console.warn('Could not get object metadata:', e);
+        }
+
         for (let i = 0; i < runtimeIds.length; i++) {
           const objProps = properties[i];
           const runtimeId = runtimeIds[i];
           const externalId = externalIds[i] || undefined;
+          const objMetadata = (metadataArr as any[])[i] || {};
 
           // Parse property sets
           const propertySets: PropertySet[] = [];
@@ -80,24 +108,75 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             // objProps structure: { class, properties: { PropertySetName: { propName: value } } }
             const rawProps = objProps as {
               class?: string;
-              properties?: Record<string, Record<string, unknown>>;
+              name?: string;
+              type?: string;
+              properties?: Record<string, Record<string, unknown>> | Array<{name?: string; set?: string; properties?: unknown[]}>;
             };
 
+            // Handle different property formats
             if (rawProps.properties) {
-              for (const [setName, setProps] of Object.entries(rawProps.properties)) {
-                propertySets.push({
-                  name: setName,
-                  properties: setProps || {}
-                });
+              if (Array.isArray(rawProps.properties)) {
+                // Format from getObjectProperties with includeHidden
+                for (const pset of rawProps.properties) {
+                  const setName = (pset as any).set || (pset as any).name || 'Unknown';
+                  const propsArray = (pset as any).properties || [];
+                  const propsObj: Record<string, unknown> = {};
+
+                  // Convert array of {name, value} to object
+                  if (Array.isArray(propsArray)) {
+                    for (const prop of propsArray) {
+                      if (prop && typeof prop === 'object' && 'name' in prop) {
+                        propsObj[(prop as any).name] = (prop as any).displayValue ?? (prop as any).value;
+                      }
+                    }
+                  }
+
+                  propertySets.push({
+                    name: setName,
+                    properties: propsObj
+                  });
+                }
+              } else {
+                // Standard format
+                for (const [setName, setProps] of Object.entries(rawProps.properties)) {
+                  propertySets.push({
+                    name: setName,
+                    properties: setProps || {}
+                  });
+                }
               }
             }
+
+            // Build metadata object from both objProps and getObjectMetadata
+            const metadata: ObjectMetadata = {
+              name: rawProps.name || (objMetadata as any)?.name,
+              type: rawProps.type || (objMetadata as any)?.type,
+              globalId: (objMetadata as any)?.globalId,
+              objectType: (objMetadata as any)?.objectType,
+              description: (objMetadata as any)?.description,
+            };
+
+            // Add any additional metadata fields from getObjectMetadata
+            if (objMetadata && typeof objMetadata === 'object') {
+              for (const [key, value] of Object.entries(objMetadata as object)) {
+                if (!(key in metadata) && value !== undefined && value !== null) {
+                  (metadata as any)[key] = value;
+                }
+              }
+            }
+
+            // Console log full raw data for debugging
+            console.log('📦 Raw object properties:', JSON.stringify(objProps, null, 2));
+            console.log('📦 Raw object metadata:', JSON.stringify(objMetadata, null, 2));
 
             allObjects.push({
               modelId,
               runtimeId,
               externalId,
               class: rawProps.class,
-              propertySets
+              propertySets,
+              metadata,
+              rawData: { properties: objProps, metadata: objMetadata }
             });
           }
         }
@@ -243,6 +322,47 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   </div>
                 )}
 
+                {/* Object Metadata Section (Product info) */}
+                {obj.metadata && Object.keys(obj.metadata).some(k => obj.metadata![k]) && (
+                  <div className="property-set metadata-section">
+                    <button
+                      className="pset-header metadata-header"
+                      onClick={() => togglePropertySet(`meta-${objIdx}`)}
+                    >
+                      <span className="pset-toggle">{expandedSets.has(`meta-${objIdx}`) ? '▼' : '▶'}</span>
+                      <span className="pset-name">📋 Object Metadata (Product info)</span>
+                      <span className="pset-count">({Object.keys(obj.metadata).filter(k => obj.metadata![k] !== undefined && obj.metadata![k] !== null).length})</span>
+                    </button>
+                    {expandedSets.has(`meta-${objIdx}`) && (
+                      <div className="pset-properties">
+                        {Object.entries(obj.metadata).map(([key, value]) => {
+                          if (value === undefined || value === null || key === 'ownerHistory') return null;
+                          return (
+                            <div key={key} className="property-row">
+                              <span className="prop-name">{key}</span>
+                              <span className="prop-value">{formatValue(value)}</span>
+                            </div>
+                          );
+                        })}
+                        {obj.metadata.ownerHistory && (
+                          <>
+                            <div className="property-row section-divider">
+                              <span className="prop-name">— Owner History —</span>
+                              <span className="prop-value"></span>
+                            </div>
+                            {Object.entries(obj.metadata.ownerHistory).map(([key, value]) => (
+                              <div key={`oh-${key}`} className="property-row">
+                                <span className="prop-name">{key}</span>
+                                <span className="prop-value">{formatValue(value)}</span>
+                              </div>
+                            ))}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="property-sets">
                   {obj.propertySets.map((pset, setIdx) => {
                     const key = `${objIdx}-${setIdx}`;
@@ -286,6 +406,24 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Raw Data Section for debugging */}
+                {obj.rawData && (
+                  <div className="property-set raw-data-section">
+                    <button
+                      className="pset-header raw-data-header"
+                      onClick={() => togglePropertySet(`raw-${objIdx}`)}
+                    >
+                      <span className="pset-toggle">{expandedSets.has(`raw-${objIdx}`) ? '▼' : '▶'}</span>
+                      <span className="pset-name">🔧 Raw API Data (debug)</span>
+                    </button>
+                    {expandedSets.has(`raw-${objIdx}`) && (
+                      <div className="pset-properties raw-json">
+                        <pre className="raw-json-content">{JSON.stringify(obj.rawData, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
