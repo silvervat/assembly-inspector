@@ -29,18 +29,31 @@ CREATE INDEX IF NOT EXISTS idx_inspection_types_tenant ON inspection_types(tenan
 CREATE INDEX IF NOT EXISTS idx_inspection_types_active ON inspection_types(is_active);
 
 -- Vaikimisi inspektsioonitüübid (EOS2 süsteemist)
-INSERT INTO inspection_types (code, name, description, icon, color, sort_order, is_system, is_active) VALUES
-  ('STEEL_INSTALLATION', 'Teraskonstruktsioonide paigaldus', 'Teraselementide paigalduse inspektsioon', 'wrench', 'teal', 1, true, true),
-  ('CONCRETE_INSTALLATION', 'Betoonelemetnide paigaldus', 'Betoonelemendide paigalduse inspektsioon', 'cube', 'gray', 2, true, true),
-  ('BOLT_TORQUE', 'Poltide pingutus', 'Poltide pingutuse ja kontrolli inspektsioon', 'tool', 'blue', 3, true, true),
-  ('PAINTING', 'Värvimine', 'Värvimistööde inspektsioon', 'paint-brush', 'orange', 4, true, true),
-  ('WELDING', 'Keevitustööd', 'Keevitustööde inspektsioon', 'fire', 'red', 5, true, true),
-  ('MONOLITHISATION', 'Monolitiseerimine', 'Monolitiseerimise inspektsioon', 'box', 'purple', 6, true, true),
-  ('SHEET_METAL', 'Plekitööd', 'Plekitööde inspektsioon', 'layers', 'zinc', 7, true, true),
-  ('SW_PANELS_INSTALL', 'SW paneelide paigaldus', 'Sandwich-paneelide paigalduse inspektsioon', 'layout', 'green', 8, true, true),
-  ('SW_PANELS', 'SW paneelid', 'Sandwich-paneelide inspektsioon', 'square', 'lime', 9, true, true),
-  ('OTHER', 'Muu', 'Muud inspektsioonid', 'more-horizontal', 'gray', 99, true, true)
-ON CONFLICT (code) DO NOTHING;
+-- Kasutame DO blokki, et vältida duplikaatide vigu
+DO $$
+DECLARE
+  type_data RECORD;
+BEGIN
+  FOR type_data IN
+    SELECT * FROM (VALUES
+      ('STEEL_INSTALLATION', 'Teraskonstruktsioonide paigaldus', 'Teraselementide paigalduse inspektsioon', 'wrench', 'teal', 1),
+      ('CONCRETE_INSTALLATION', 'Betoonelemetnide paigaldus', 'Betoonelemendide paigalduse inspektsioon', 'cube', 'gray', 2),
+      ('BOLT_TORQUE', 'Poltide pingutus', 'Poltide pingutuse ja kontrolli inspektsioon', 'tool', 'blue', 3),
+      ('PAINTING', 'Värvimine', 'Värvimistööde inspektsioon', 'paint-brush', 'orange', 4),
+      ('WELDING', 'Keevitustööd', 'Keevitustööde inspektsioon', 'fire', 'red', 5),
+      ('MONOLITHISATION', 'Monolitiseerimine', 'Monolitiseerimise inspektsioon', 'box', 'purple', 6),
+      ('SHEET_METAL', 'Plekitööd', 'Plekitööde inspektsioon', 'layers', 'zinc', 7),
+      ('SW_PANELS_INSTALL', 'SW paneelide paigaldus', 'Sandwich-paneelide paigalduse inspektsioon', 'layout', 'green', 8),
+      ('SW_PANELS', 'SW paneelid', 'Sandwich-paneelide inspektsioon', 'square', 'lime', 9),
+      ('OTHER', 'Muu', 'Muud inspektsioonid', 'more-horizontal', 'gray', 99)
+    ) AS t(code, name, description, icon, color, sort_order)
+  LOOP
+    IF NOT EXISTS (SELECT 1 FROM inspection_types WHERE code = type_data.code) THEN
+      INSERT INTO inspection_types (code, name, description, icon, color, sort_order, is_system, is_active)
+      VALUES (type_data.code, type_data.name, type_data.description, type_data.icon, type_data.color, type_data.sort_order, true, true);
+    END IF;
+  END LOOP;
+END $$;
 
 -- ============================================
 -- 2. INSPECTION CATEGORIES - Kategooriad
@@ -72,49 +85,35 @@ CREATE INDEX IF NOT EXISTS idx_inspection_categories_tenant ON inspection_catego
 CREATE INDEX IF NOT EXISTS idx_inspection_categories_project ON inspection_categories(project_id);
 
 -- Vaikimisi kategooriad (näited)
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_STEEL_VISUAL',
-  'Visuaalne kontroll',
-  'Elemendi visuaalne ülevaatus',
-  1,
-  true
-FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION'
-ON CONFLICT (code) DO NOTHING;
+-- Kasutame DO blokki, et vältida duplikaatide vigu
+DO $$
+BEGIN
+  -- Teraskonstruktsioonide kategooriad
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_STEEL_VISUAL') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_STEEL_VISUAL', 'Visuaalne kontroll', 'Elemendi visuaalne ülevaatus', 1, true
+    FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION';
+  END IF;
 
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_STEEL_POSITION',
-  'Asendi kontroll',
-  'Elemendi asendi ja paigutuse kontroll',
-  2,
-  true
-FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION'
-ON CONFLICT (code) DO NOTHING;
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_STEEL_POSITION') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_STEEL_POSITION', 'Asendi kontroll', 'Elemendi asendi ja paigutuse kontroll', 2, true
+    FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION';
+  END IF;
 
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_BOLT_VISUAL',
-  'Visuaalne kontroll',
-  'Poldi visuaalne ülevaatus',
-  1,
-  true
-FROM inspection_types it WHERE it.code = 'BOLT_TORQUE'
-ON CONFLICT (code) DO NOTHING;
+  -- Poltide kategooriad
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_BOLT_VISUAL') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_BOLT_VISUAL', 'Visuaalne kontroll', 'Poldi visuaalne ülevaatus', 1, true
+    FROM inspection_types it WHERE it.code = 'BOLT_TORQUE';
+  END IF;
 
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_BOLT_TORQUE',
-  'Pingutuse kontroll',
-  'Poldi pingutuse mõõtmine',
-  2,
-  true
-FROM inspection_types it WHERE it.code = 'BOLT_TORQUE'
-ON CONFLICT (code) DO NOTHING;
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_BOLT_TORQUE') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_BOLT_TORQUE', 'Pingutuse kontroll', 'Poldi pingutuse mõõtmine', 2, true
+    FROM inspection_types it WHERE it.code = 'BOLT_TORQUE';
+  END IF;
+END $$;
 
 -- ============================================
 -- 3. INSPECTION PLAN ITEMS - Inspektsiooni kava

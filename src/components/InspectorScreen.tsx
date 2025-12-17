@@ -1,10 +1,16 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Inspection } from '../supabase';
+import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory } from '../supabase';
 import { InspectionMode } from './MainMenu';
-import { FiArrowLeft } from 'react-icons/fi';
+import { FiArrowLeft, FiClipboard, FiAlertCircle } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
 import InspectionList, { InspectionItem } from './InspectionList';
+
+// Inspection plan with joined type and category
+interface PlanWithDetails extends InspectionPlanItem {
+  inspection_type?: InspectionTypeRef;
+  category?: InspectionCategory;
+}
 
 // GUID helper functions (from Assembly Exporter)
 function normalizeGuid(s: string): string {
@@ -110,6 +116,7 @@ export default function InspectorScreen({
     photoUrls: string[];
     userEmail?: string;
   } | null>(null);
+  const [assignedPlan, setAssignedPlan] = useState<PlanWithDetails | null>(null);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
   const [includeTopView, setIncludeTopView] = useState(true);
   const [autoClosePanel, setAutoClosePanel] = useState(false);
@@ -175,6 +182,7 @@ export default function InspectorScreen({
   // Valideeri valik - useCallback, et saaks kasutada checkSelection'is
   const validateSelection = useCallback(async (objects: SelectedObject[]) => {
     setExistingInspection(null);
+    setAssignedPlan(null);
 
     if (objects.length === 0) {
       setCanInspect(false);
@@ -211,6 +219,7 @@ export default function InspectorScreen({
     }
 
     try {
+      // Check for existing inspection
       const { data } = await supabase
         .from('inspections')
         .select('inspected_at, inspector_name, photo_urls, user_email')
@@ -228,11 +237,55 @@ export default function InspectorScreen({
           userEmail: data.user_email
         });
         setMessage('');
-        return;
+        // Still check for plan below even if already inspected
+      } else {
+        setCanInspect(true);
+        setMessage('');
       }
 
-      setCanInspect(true);
-      setMessage('');
+      // Check for assigned inspection plan by GUID
+      if (obj.guid || obj.guidIfc) {
+        const guidToCheck = obj.guidIfc || obj.guid;
+        console.log('🔍 Checking for inspection plan by GUID:', guidToCheck);
+
+        const { data: planData, error: planError } = await supabase
+          .from('inspection_plan_items')
+          .select(`
+            *,
+            inspection_types!inspection_plan_items_inspection_type_id_fkey (
+              id,
+              code,
+              name,
+              description,
+              icon,
+              color
+            ),
+            inspection_categories!inspection_plan_items_category_id_fkey (
+              id,
+              code,
+              name,
+              description
+            )
+          `)
+          .eq('project_id', projectId)
+          .eq('guid', guidToCheck)
+          .eq('status', 'planned')
+          .single();
+
+        if (planData && !planError) {
+          console.log('✅ Found inspection plan:', planData);
+          // Map the joined data to the expected format
+          const planWithDetails: PlanWithDetails = {
+            ...planData,
+            inspection_type: planData.inspection_types as InspectionTypeRef | undefined,
+            category: planData.inspection_categories as InspectionCategory | undefined
+          };
+          setAssignedPlan(planWithDetails);
+        } else if (planError && planError.code !== 'PGRST116') {
+          console.error('Plan query error:', planError);
+        }
+      }
+
     } catch (e: any) {
       // PGRST116 = not found, see on OK
       if (e?.code === 'PGRST116') {
@@ -1415,6 +1468,47 @@ export default function InspectorScreen({
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Inspection Plan Requirements - show when object has assigned plan */}
+      {inspectionListMode === 'none' && assignedPlan && (
+        <div className="inspection-plan-card">
+          <div className="plan-card-header">
+            <FiClipboard className="plan-card-icon" />
+            <span className="plan-card-title">Inspektsiooni kava</span>
+          </div>
+          <div className="plan-card-content">
+            {assignedPlan.inspection_type && (
+              <div className="plan-card-row">
+                <span className="plan-card-label">Tüüp:</span>
+                <span className="plan-card-value type-value">
+                  {assignedPlan.inspection_type.name}
+                </span>
+              </div>
+            )}
+            {assignedPlan.category && (
+              <div className="plan-card-row">
+                <span className="plan-card-label">Kategooria:</span>
+                <span className="plan-card-value">{assignedPlan.category.name}</span>
+              </div>
+            )}
+            <div className="plan-card-row">
+              <span className="plan-card-label">Assembly mode:</span>
+              <span className={`plan-card-value mode-badge ${assignedPlan.assembly_selection_mode ? 'on' : 'off'}`}>
+                {assignedPlan.assembly_selection_mode ? 'SEES' : 'VÄLJAS'}
+              </span>
+            </div>
+            {assignedPlan.planner_notes && (
+              <div className="plan-card-notes">
+                <div className="plan-notes-header">
+                  <FiAlertCircle className="plan-notes-icon" />
+                  <span>Märkmed:</span>
+                </div>
+                <div className="plan-notes-content">{assignedPlan.planner_notes}</div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
