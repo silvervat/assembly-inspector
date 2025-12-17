@@ -1216,6 +1216,8 @@ export default function InspectorScreen({
   // Välju inspektsioonide vaatest
   const exitInspectionList = async () => {
     try {
+      // Clear all selections
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
       // Reset all colors
       await api.viewer.setObjectState(undefined, { color: 'reset' });
       setInspectionListMode('none');
