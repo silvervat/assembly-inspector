@@ -179,16 +179,36 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           console.warn('Could not get hierarchy children:', e);
         }
 
-        // Method 5: Get bounding boxes of child objects (to calculate assembly bounds)
+        // Method 5: Get bounding boxes and FULL PROPERTIES of child objects
         let childBoundingBoxes: unknown = null;
+        let childFullProperties: unknown[] = [];
         let calculatedBounds: { min: {x: number, y: number, z: number}, max: {x: number, y: number, z: number} } | null = null;
         if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
           const childIds = hierarchyChildren.map((child: any) => child.id);
-          console.log('📍 [5] Getting bounding boxes for', childIds.length, 'child objects:', childIds);
+          console.log('📍 [5] Getting data for', childIds.length, 'child objects:', childIds);
 
           try {
+            // Get bounding boxes
             childBoundingBoxes = await (api.viewer as any).getObjectBoundingBoxes?.(modelId, childIds);
-            console.log('📍 [5] Child bounding boxes:', childBoundingBoxes);
+            console.log('📍 [5a] Child bounding boxes:', childBoundingBoxes);
+
+            // Get FULL properties for each child object
+            childFullProperties = await (api.viewer as any).getObjectProperties(modelId, childIds, { includeHidden: true });
+            console.log('📍 [5b] Child full properties:', childFullProperties);
+
+            // Get positions for children
+            const childPositions = await (api.viewer as any).getObjectPositions?.(modelId, childIds);
+            console.log('📍 [5c] Child positions:', childPositions);
+
+            // Merge position data into childFullProperties
+            if (childPositions && Array.isArray(childPositions)) {
+              for (let ci = 0; ci < childFullProperties.length; ci++) {
+                const pos = childPositions.find((p: any) => p.id === childIds[ci]);
+                if (pos && childFullProperties[ci]) {
+                  (childFullProperties[ci] as any)._position = pos.position;
+                }
+              }
+            }
 
             // Calculate assembly bounds from child bounding boxes
             if (childBoundingBoxes && Array.isArray(childBoundingBoxes) && childBoundingBoxes.length > 0) {
@@ -196,13 +216,13 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
 
               for (const box of childBoundingBoxes) {
-                if (box && box.min && box.max) {
-                  minX = Math.min(minX, box.min.x);
-                  minY = Math.min(minY, box.min.y);
-                  minZ = Math.min(minZ, box.min.z);
-                  maxX = Math.max(maxX, box.max.x);
-                  maxY = Math.max(maxY, box.max.y);
-                  maxZ = Math.max(maxZ, box.max.z);
+                if (box && box.boundingBox && box.boundingBox.min && box.boundingBox.max) {
+                  minX = Math.min(minX, box.boundingBox.min.x);
+                  minY = Math.min(minY, box.boundingBox.min.y);
+                  minZ = Math.min(minZ, box.boundingBox.min.z);
+                  maxX = Math.max(maxX, box.boundingBox.max.x);
+                  maxY = Math.max(maxY, box.boundingBox.max.y);
+                  maxZ = Math.max(maxZ, box.boundingBox.max.z);
                 }
               }
 
@@ -211,11 +231,11 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   min: { x: minX, y: minY, z: minZ },
                   max: { x: maxX, y: maxY, z: maxZ }
                 };
-                console.log('📍 [5] Calculated assembly bounds:', calculatedBounds);
+                console.log('📍 [5d] Calculated assembly bounds:', calculatedBounds);
               }
             }
           } catch (e) {
-            console.warn('Could not get child bounding boxes:', e);
+            console.warn('Could not get child data:', e);
           }
         }
 
@@ -338,6 +358,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 objectsData: objectsData,
                 hierarchyChildren: hierarchyChildren,
                 childBoundingBoxes: childBoundingBoxes,
+                childFullProperties: childFullProperties,
                 calculatedBounds: calculatedBounds
               }
             });
