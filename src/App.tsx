@@ -3,6 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
 import AdminScreen from './components/AdminScreen';
+import InspectionPlanScreen from './components/InspectionPlanScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -11,7 +12,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.5.31';
+export const APP_VERSION = '2.6.0';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -319,6 +320,23 @@ export default function App() {
         <NavigationOverlay />
         <AdminScreen
           api={api}
+          onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Inspektsiooni kava ekraan
+  if (currentMode === 'inspection_plan') {
+    return (
+      <>
+        <NavigationOverlay />
+        <InspectionPlanScreen
+          api={api}
+          projectId={projectId}
+          userEmail={tcUser?.email || ''}
+          userName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
         />
         <VersionFooter />
