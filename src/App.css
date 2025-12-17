@@ -2252,3 +2252,153 @@ body {
   max-height: 400px;
   overflow-y: auto;
 }
+
+/* Children (Alam-detailid) Section */
+.children-section {
+  margin-top: var(--modus-spacing-sm);
+}
+
+.children-header {
+  background: #fef3c7 !important;
+  border-color: #fbbf24 !important;
+}
+
+.children-header:hover {
+  background: #fde68a !important;
+}
+
+.children-header .pset-name {
+  color: #92400e;
+}
+
+.children-list {
+  padding: var(--modus-spacing-sm);
+  background: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-top: none;
+  border-radius: 0 0 var(--modus-radius-sm) var(--modus-radius-sm);
+}
+
+.child-item {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--modus-radius-sm);
+  margin-bottom: var(--modus-spacing-xs);
+  overflow: hidden;
+}
+
+.child-item:last-child {
+  margin-bottom: 0;
+}
+
+.child-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  padding: var(--modus-spacing-sm);
+  background: #f9fafb;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--modus-font-size-sm);
+}
+
+.child-header:hover {
+  background: #f3f4f6;
+}
+
+.child-name {
+  font-weight: 600;
+  color: var(--modus-text-primary);
+}
+
+.child-desc {
+  color: #6b7280;
+  font-size: 0.75rem;
+}
+
+.child-mark {
+  color: #059669;
+  font-weight: 500;
+  font-size: 0.75rem;
+  margin-left: auto;
+}
+
+.child-details {
+  padding: var(--modus-spacing-sm);
+  border-top: 1px solid #e5e7eb;
+}
+
+.child-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--modus-spacing-xs);
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.child-tag {
+  background: #e0f2fe;
+  color: #0369a1;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.child-position {
+  display: flex;
+  gap: var(--modus-spacing-sm);
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-xs);
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+.child-position .pos-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.child-pset {
+  margin-top: var(--modus-spacing-xs);
+  border: 1px solid #e5e7eb;
+  border-radius: var(--modus-radius-sm);
+}
+
+.child-pset-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  padding: 6px var(--modus-spacing-sm);
+  background: #f3f4f6;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.75rem;
+  color: #374151;
+}
+
+.child-pset-header:hover {
+  background: #e5e7eb;
+}
+
+.child-pset-props {
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  font-size: 0.75rem;
+}
+
+.child-pset-props .property-row {
+  padding: 2px 0;
+}
+
+.child-pset-props .prop-name {
+  min-width: 120px;
+}
+
+.child-pset-props .prop-value {
+  color: #374151;
+}

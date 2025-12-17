@@ -23,6 +23,10 @@ interface ObjectMetadata {
     y?: number;
     z?: number;
   };
+  calculatedBounds?: {
+    min: { x: number; y: number; z: number };
+    max: { x: number; y: number; z: number };
+  };
   ownerHistory?: {
     creationDate?: string;
     lastModifiedDate?: string;
@@ -175,6 +179,66 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           console.warn('Could not get hierarchy children:', e);
         }
 
+        // Method 5: Get bounding boxes and FULL PROPERTIES of child objects
+        let childBoundingBoxes: unknown = null;
+        let childFullProperties: unknown[] = [];
+        let calculatedBounds: { min: {x: number, y: number, z: number}, max: {x: number, y: number, z: number} } | null = null;
+        if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+          const childIds = hierarchyChildren.map((child: any) => child.id);
+          console.log('📍 [5] Getting data for', childIds.length, 'child objects:', childIds);
+
+          try {
+            // Get bounding boxes
+            childBoundingBoxes = await (api.viewer as any).getObjectBoundingBoxes?.(modelId, childIds);
+            console.log('📍 [5a] Child bounding boxes:', childBoundingBoxes);
+
+            // Get FULL properties for each child object
+            childFullProperties = await (api.viewer as any).getObjectProperties(modelId, childIds, { includeHidden: true });
+            console.log('📍 [5b] Child full properties:', childFullProperties);
+
+            // Get positions for children
+            const childPositions = await (api.viewer as any).getObjectPositions?.(modelId, childIds);
+            console.log('📍 [5c] Child positions:', childPositions);
+
+            // Merge position data into childFullProperties
+            if (childPositions && Array.isArray(childPositions)) {
+              for (let ci = 0; ci < childFullProperties.length; ci++) {
+                const pos = childPositions.find((p: any) => p.id === childIds[ci]);
+                if (pos && childFullProperties[ci]) {
+                  (childFullProperties[ci] as any)._position = pos.position;
+                }
+              }
+            }
+
+            // Calculate assembly bounds from child bounding boxes
+            if (childBoundingBoxes && Array.isArray(childBoundingBoxes) && childBoundingBoxes.length > 0) {
+              let minX = Infinity, minY = Infinity, minZ = Infinity;
+              let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+              for (const box of childBoundingBoxes) {
+                if (box && box.boundingBox && box.boundingBox.min && box.boundingBox.max) {
+                  minX = Math.min(minX, box.boundingBox.min.x);
+                  minY = Math.min(minY, box.boundingBox.min.y);
+                  minZ = Math.min(minZ, box.boundingBox.min.z);
+                  maxX = Math.max(maxX, box.boundingBox.max.x);
+                  maxY = Math.max(maxY, box.boundingBox.max.y);
+                  maxZ = Math.max(maxZ, box.boundingBox.max.z);
+                }
+              }
+
+              if (minX !== Infinity) {
+                calculatedBounds = {
+                  min: { x: minX, y: minY, z: minZ },
+                  max: { x: maxX, y: maxY, z: maxZ }
+                };
+                console.log('📍 [5d] Calculated assembly bounds:', calculatedBounds);
+              }
+            }
+          } catch (e) {
+            console.warn('Could not get child data:', e);
+          }
+        }
+
         // Log all available viewer methods for discovery
         console.log('📍 Available viewer methods:', Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function'));
 
@@ -233,17 +297,30 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             // Build metadata object from objProps.product (IFC Product info)
             const product = (objProps as any)?.product;
             const position = (objProps as any)?.position;
+            // Get position from objectPositions API if available
+            const apiPosition = Array.isArray(objectPositions) && objectPositions.length > 0
+              ? objectPositions.find((p: any) => p.id === runtimeId)?.position
+              : null;
+
+            // Use API position if objProps.position is 0,0,0 or undefined
+            const effectivePosition = (apiPosition && (apiPosition.x !== 0 || apiPosition.y !== 0 || apiPosition.z !== 0))
+              ? apiPosition
+              : (position && (position.x !== 0 || position.y !== 0 || position.z !== 0))
+                ? position
+                : null;
+
             const metadata: ObjectMetadata = {
               name: product?.name || rawProps.name || (objMetadata as any)?.name,
               type: product?.objectType || rawProps.type || (objMetadata as any)?.type,
               globalId: (objMetadata as any)?.globalId,
               objectType: product?.objectType || (objMetadata as any)?.objectType,
               description: product?.description || (objMetadata as any)?.description,
-              position: position ? {
-                x: position.x,
-                y: position.y,
-                z: position.z,
+              position: effectivePosition ? {
+                x: effectivePosition.x,
+                y: effectivePosition.y,
+                z: effectivePosition.z,
               } : undefined,
+              calculatedBounds: calculatedBounds || undefined,
               ownerHistory: product ? {
                 creationDate: formatTimestamp(product.creationDate),
                 lastModifiedDate: formatTimestamp(product.lastModificationDate),
@@ -279,7 +356,10 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 boundingBoxes: boundingBoxes,
                 objectPositions: objectPositions,
                 objectsData: objectsData,
-                hierarchyChildren: hierarchyChildren
+                hierarchyChildren: hierarchyChildren,
+                childBoundingBoxes: childBoundingBoxes,
+                childFullProperties: childFullProperties,
+                calculatedBounds: calculatedBounds
               }
             });
           }
@@ -472,7 +552,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                         {obj.metadata.position && (
                           <>
                             <div className="property-row section-divider">
-                              <span className="prop-name">— Position / Coordinates —</span>
+                              <span className="prop-name">— Position (keskpunkt) —</span>
                               <span className="prop-value"></span>
                             </div>
                             <div className="property-row">
@@ -486,6 +566,38 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                             <div className="property-row">
                               <span className="prop-name">Z</span>
                               <span className="prop-value">{obj.metadata.position.z?.toFixed(3) ?? '-'}</span>
+                            </div>
+                          </>
+                        )}
+                        {obj.metadata.calculatedBounds && (
+                          <>
+                            <div className="property-row section-divider">
+                              <span className="prop-name">— Bounding Box (piirid) —</span>
+                              <span className="prop-value"></span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Min X</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.min.x.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Min Y</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.min.y.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Min Z</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.min.z.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Max X</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.max.x.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Max Y</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.max.y.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Max Z</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.max.z.toFixed(3)}</span>
                             </div>
                           </>
                         )}
@@ -581,6 +693,117 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     </div>
                   )}
                 </div>
+
+                {/* Child Objects Section (Alam-detailid) */}
+                {obj.rawData && (obj.rawData as any).childFullProperties && Array.isArray((obj.rawData as any).childFullProperties) && (obj.rawData as any).childFullProperties.length > 0 && (
+                  <div className="property-set children-section">
+                    <button
+                      className="pset-header children-header"
+                      onClick={() => togglePropertySet(`children-${objIdx}`)}
+                    >
+                      <span className="pset-toggle">{expandedSets.has(`children-${objIdx}`) ? '▼' : '▶'}</span>
+                      <span className="pset-name">🧩 Alam-detailid ({(obj.rawData as any).childFullProperties.length} tk)</span>
+                    </button>
+                    {expandedSets.has(`children-${objIdx}`) && (
+                      <div className="children-list">
+                        {((obj.rawData as any).childFullProperties as any[]).map((child: any, childIdx: number) => {
+                          const childKey = `child-${objIdx}-${childIdx}`;
+                          const childName = child?.product?.name || child?.name || 'Unknown';
+                          const childDesc = child?.product?.description || child?.description || '';
+                          const childPos = child?._position;
+                          const childProps = child?.properties || [];
+
+                          // Extract key measurements from property sets
+                          let profile = '';
+                          let material = '';
+                          let length = '';
+                          let weight = '';
+                          let partMark = '';
+
+                          if (Array.isArray(childProps)) {
+                            for (const pset of childProps) {
+                              const props = pset?.properties || [];
+                              for (const prop of props) {
+                                const pname = (prop?.name || '').toLowerCase();
+                                const pval = prop?.displayValue ?? prop?.value;
+                                if (pname === 'profile' || pname === 'profilename') profile = profile || String(pval);
+                                if (pname === 'material' || pname === 'grade') material = material || String(pval);
+                                if (pname === 'length') length = length || String(pval);
+                                if (pname === 'weight' || pname === 'netweight') weight = weight || String(pval);
+                                if (pname === 'part mark' || pname === 'preliminary mark') partMark = partMark || String(pval);
+                              }
+                            }
+                          }
+
+                          return (
+                            <div key={childKey} className="child-item">
+                              <button
+                                className="child-header"
+                                onClick={() => togglePropertySet(childKey)}
+                              >
+                                <span className="pset-toggle">{expandedSets.has(childKey) ? '▼' : '▶'}</span>
+                                <span className="child-name">{childName}</span>
+                                {childDesc && <span className="child-desc">{childDesc}</span>}
+                                {partMark && <span className="child-mark">[{partMark}]</span>}
+                              </button>
+
+                              {expandedSets.has(childKey) && (
+                                <div className="child-details">
+                                  {/* Quick summary */}
+                                  <div className="child-summary">
+                                    {profile && <span className="child-tag">📐 {profile}</span>}
+                                    {material && <span className="child-tag">🔩 {material}</span>}
+                                    {length && <span className="child-tag">📏 {length}mm</span>}
+                                    {weight && <span className="child-tag">⚖️ {weight}kg</span>}
+                                  </div>
+
+                                  {/* Position */}
+                                  {childPos && (
+                                    <div className="child-position">
+                                      <span className="pos-label">Position:</span>
+                                      <span>X: {childPos.x?.toFixed(3)}</span>
+                                      <span>Y: {childPos.y?.toFixed(3)}</span>
+                                      <span>Z: {childPos.z?.toFixed(3)}</span>
+                                    </div>
+                                  )}
+
+                                  {/* All property sets */}
+                                  {Array.isArray(childProps) && childProps.map((pset: any, psetIdx: number) => {
+                                    const psetKey = `${childKey}-pset-${psetIdx}`;
+                                    const psetName = pset?.name || pset?.set || 'Properties';
+                                    const psetProps = pset?.properties || [];
+
+                                    return (
+                                      <div key={psetKey} className="child-pset">
+                                        <button
+                                          className="child-pset-header"
+                                          onClick={() => togglePropertySet(psetKey)}
+                                        >
+                                          <span className="pset-toggle">{expandedSets.has(psetKey) ? '▼' : '▶'}</span>
+                                          <span>{psetName} ({psetProps.length})</span>
+                                        </button>
+                                        {expandedSets.has(psetKey) && (
+                                          <div className="child-pset-props">
+                                            {psetProps.map((prop: any, propIdx: number) => (
+                                              <div key={propIdx} className="property-row">
+                                                <span className="prop-name">{prop?.name}</span>
+                                                <span className="prop-value">{formatValue(prop?.displayValue ?? prop?.value)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Raw Data Section for debugging */}
                 {obj.rawData && (
