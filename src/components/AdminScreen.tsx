@@ -23,6 +23,10 @@ interface ObjectMetadata {
     y?: number;
     z?: number;
   };
+  calculatedBounds?: {
+    min: { x: number; y: number; z: number };
+    max: { x: number; y: number; z: number };
+  };
   ownerHistory?: {
     creationDate?: string;
     lastModifiedDate?: string;
@@ -175,6 +179,46 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           console.warn('Could not get hierarchy children:', e);
         }
 
+        // Method 5: Get bounding boxes of child objects (to calculate assembly bounds)
+        let childBoundingBoxes: unknown = null;
+        let calculatedBounds: { min: {x: number, y: number, z: number}, max: {x: number, y: number, z: number} } | null = null;
+        if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+          const childIds = hierarchyChildren.map((child: any) => child.id);
+          console.log('📍 [5] Getting bounding boxes for', childIds.length, 'child objects:', childIds);
+
+          try {
+            childBoundingBoxes = await (api.viewer as any).getObjectBoundingBoxes?.(modelId, childIds);
+            console.log('📍 [5] Child bounding boxes:', childBoundingBoxes);
+
+            // Calculate assembly bounds from child bounding boxes
+            if (childBoundingBoxes && Array.isArray(childBoundingBoxes) && childBoundingBoxes.length > 0) {
+              let minX = Infinity, minY = Infinity, minZ = Infinity;
+              let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+              for (const box of childBoundingBoxes) {
+                if (box && box.min && box.max) {
+                  minX = Math.min(minX, box.min.x);
+                  minY = Math.min(minY, box.min.y);
+                  minZ = Math.min(minZ, box.min.z);
+                  maxX = Math.max(maxX, box.max.x);
+                  maxY = Math.max(maxY, box.max.y);
+                  maxZ = Math.max(maxZ, box.max.z);
+                }
+              }
+
+              if (minX !== Infinity) {
+                calculatedBounds = {
+                  min: { x: minX, y: minY, z: minZ },
+                  max: { x: maxX, y: maxY, z: maxZ }
+                };
+                console.log('📍 [5] Calculated assembly bounds:', calculatedBounds);
+              }
+            }
+          } catch (e) {
+            console.warn('Could not get child bounding boxes:', e);
+          }
+        }
+
         // Log all available viewer methods for discovery
         console.log('📍 Available viewer methods:', Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function'));
 
@@ -233,17 +277,30 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             // Build metadata object from objProps.product (IFC Product info)
             const product = (objProps as any)?.product;
             const position = (objProps as any)?.position;
+            // Get position from objectPositions API if available
+            const apiPosition = Array.isArray(objectPositions) && objectPositions.length > 0
+              ? objectPositions.find((p: any) => p.id === runtimeId)?.position
+              : null;
+
+            // Use API position if objProps.position is 0,0,0 or undefined
+            const effectivePosition = (apiPosition && (apiPosition.x !== 0 || apiPosition.y !== 0 || apiPosition.z !== 0))
+              ? apiPosition
+              : (position && (position.x !== 0 || position.y !== 0 || position.z !== 0))
+                ? position
+                : null;
+
             const metadata: ObjectMetadata = {
               name: product?.name || rawProps.name || (objMetadata as any)?.name,
               type: product?.objectType || rawProps.type || (objMetadata as any)?.type,
               globalId: (objMetadata as any)?.globalId,
               objectType: product?.objectType || (objMetadata as any)?.objectType,
               description: product?.description || (objMetadata as any)?.description,
-              position: position ? {
-                x: position.x,
-                y: position.y,
-                z: position.z,
+              position: effectivePosition ? {
+                x: effectivePosition.x,
+                y: effectivePosition.y,
+                z: effectivePosition.z,
               } : undefined,
+              calculatedBounds: calculatedBounds || undefined,
               ownerHistory: product ? {
                 creationDate: formatTimestamp(product.creationDate),
                 lastModifiedDate: formatTimestamp(product.lastModificationDate),
@@ -279,7 +336,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 boundingBoxes: boundingBoxes,
                 objectPositions: objectPositions,
                 objectsData: objectsData,
-                hierarchyChildren: hierarchyChildren
+                hierarchyChildren: hierarchyChildren,
+                childBoundingBoxes: childBoundingBoxes,
+                calculatedBounds: calculatedBounds
               }
             });
           }
@@ -472,7 +531,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                         {obj.metadata.position && (
                           <>
                             <div className="property-row section-divider">
-                              <span className="prop-name">— Position / Coordinates —</span>
+                              <span className="prop-name">— Position (keskpunkt) —</span>
                               <span className="prop-value"></span>
                             </div>
                             <div className="property-row">
@@ -486,6 +545,38 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                             <div className="property-row">
                               <span className="prop-name">Z</span>
                               <span className="prop-value">{obj.metadata.position.z?.toFixed(3) ?? '-'}</span>
+                            </div>
+                          </>
+                        )}
+                        {obj.metadata.calculatedBounds && (
+                          <>
+                            <div className="property-row section-divider">
+                              <span className="prop-name">— Bounding Box (piirid) —</span>
+                              <span className="prop-value"></span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Min X</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.min.x.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Min Y</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.min.y.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Min Z</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.min.z.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Max X</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.max.x.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Max Y</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.max.y.toFixed(3)}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Max Z</span>
+                              <span className="prop-value">{obj.metadata.calculatedBounds.max.z.toFixed(3)}</span>
                             </div>
                           </>
                         )}
