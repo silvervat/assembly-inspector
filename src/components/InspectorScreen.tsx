@@ -204,7 +204,7 @@ export default function InspectorScreen({
       // Tavalises režiimis kontrollime assemblyMark'i
       if (!obj.assemblyMark) {
         setCanInspect(false);
-        setMessage('⚠️ Assembly Selection pole sisse lülitatud');
+        // Warning banner already handles this case
         return;
       }
     }
