@@ -397,6 +397,32 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
     setExpandedSets(newExpanded);
   };
 
+  // Zoom to child object (turn off assembly selection and select the child)
+  const zoomToChild = async (modelId: string, childRuntimeId: number, childName: string) => {
+    try {
+      setMessage(`🔍 Valin detaili: ${childName}...`);
+
+      // Turn off assembly selection
+      await (api.viewer as any).setSettings?.({ assemblySelection: false });
+      console.log('📍 Assembly selection turned OFF');
+
+      // Select the child object
+      await api.viewer.setSelection({
+        modelObjectIds: [{
+          modelId: modelId,
+          objectRuntimeIds: [childRuntimeId]
+        }]
+      }, 'set');
+      console.log('📍 Selected child:', childRuntimeId);
+
+      setMessage(`✅ Valitud: ${childName} (Assembly Selection VÄLJAS)`);
+      setTimeout(() => setMessage(''), 3000);
+    } catch (error) {
+      console.error('Failed to zoom to child:', error);
+      setMessage('❌ Viga detaili valimisel: ' + (error as Error).message);
+    }
+  };
+
   // Copy all properties to clipboard
   const copyToClipboard = () => {
     const text = safeStringify(selectedObjects, 2);
@@ -735,17 +761,35 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                             }
                           }
 
+                          // Get child runtime ID from hierarchyChildren
+                          const hierarchyChild = ((obj.rawData as any).hierarchyChildren as any[])?.[childIdx];
+                          const childRuntimeId = hierarchyChild?.id;
+
                           return (
                             <div key={childKey} className="child-item">
-                              <button
-                                className="child-header"
-                                onClick={() => togglePropertySet(childKey)}
-                              >
-                                <span className="pset-toggle">{expandedSets.has(childKey) ? '▼' : '▶'}</span>
-                                <span className="child-name">{childName}</span>
-                                {childDesc && <span className="child-desc">{childDesc}</span>}
-                                {partMark && <span className="child-mark">[{partMark}]</span>}
-                              </button>
+                              <div className="child-header-row">
+                                <button
+                                  className="child-header"
+                                  onClick={() => togglePropertySet(childKey)}
+                                >
+                                  <span className="pset-toggle">{expandedSets.has(childKey) ? '▼' : '▶'}</span>
+                                  <span className="child-name">{childName}</span>
+                                  {childDesc && <span className="child-desc">{childDesc}</span>}
+                                  {partMark && <span className="child-mark">[{partMark}]</span>}
+                                </button>
+                                {childRuntimeId && (
+                                  <button
+                                    className="child-zoom-btn"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      zoomToChild(obj.modelId, childRuntimeId, childName);
+                                    }}
+                                    title="Vali see detail mudelis"
+                                  >
+                                    🔍
+                                  </button>
+                                )}
+                              </div>
 
                               {expandedSets.has(childKey) && (
                                 <div className="child-details">

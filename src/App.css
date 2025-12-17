@@ -2308,6 +2308,41 @@ body {
   background: #f3f4f6;
 }
 
+.child-header-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.child-header-row .child-header {
+  flex: 1;
+  border-radius: var(--modus-radius-sm) 0 0 var(--modus-radius-sm);
+}
+
+.child-header-row .child-header:only-child {
+  border-radius: var(--modus-radius-sm);
+}
+
+.child-zoom-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--modus-spacing-sm);
+  background: #dbeafe;
+  border: none;
+  border-left: 1px solid #93c5fd;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.15s ease;
+}
+
+.child-zoom-btn:hover {
+  background: #bfdbfe;
+}
+
+.child-zoom-btn:active {
+  background: #93c5fd;
+}
+
 .child-name {
   font-weight: 600;
   color: var(--modus-text-primary);
