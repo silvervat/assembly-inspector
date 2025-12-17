@@ -1374,8 +1374,8 @@ export default function InspectorScreen({
               {inspectionMode === 'poldid' && obj.boltStandard && (
                 <div className="selected-bolt-standard">
                   Bolt standard: {obj.boltStandard}
-                  {obj.boltStandard.includes('4014') && ' osakeere'}
-                  {obj.boltStandard.includes('4017') && ' täiskeer'}
+                  {obj.boltStandard.includes('4014') && <span className="bolt-thread-type">osakeere</span>}
+                  {obj.boltStandard.includes('4017') && <span className="bolt-thread-type">täiskeere</span>}
                 </div>
               )}
               {inspectionMode === 'poldid' && (
