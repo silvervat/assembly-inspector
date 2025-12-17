@@ -89,7 +89,8 @@ export default function InspectorScreen({
       keevis: 'Keeviste inspektsioon',
       paigaldatud_detailid: 'Paigaldatud detailid',
       eos2: 'Saada EOS2 tabelisse',
-      admin: 'Administratsioon'
+      admin: 'Administratsioon',
+      inspection_plan: 'Inspektsiooni kava'
     };
     return titles[mode] || mode;
   };
@@ -745,7 +746,7 @@ export default function InspectorScreen({
         snapshot_3d_url: snapshot3dUrl,
         topview_url: topviewUrl,
         project_id: projectId,
-        inspection_type: inspectionMode === 'admin' ? undefined : inspectionMode,
+        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan') ? undefined : inspectionMode,
         // Additional Tekla fields
         file_name: obj.fileName,
         guid: obj.guid,

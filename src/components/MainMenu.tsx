@@ -1,5 +1,5 @@
 import { TrimbleExUser } from '../supabase';
-import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiSettings, FiShield } from 'react-icons/fi';
+import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiSettings, FiShield, FiClipboard } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 
 export type InspectionMode =
@@ -11,7 +11,8 @@ export type InspectionMode =
   | 'keevis'
   | 'paigaldatud_detailid'
   | 'eos2'
-  | 'admin';
+  | 'admin'
+  | 'inspection_plan';
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -135,21 +136,38 @@ export default function MainMenu({ user, userInitials, onSelectMode, onOpenSetti
 
         {/* Admin menu - only visible for admin users */}
         {isAdmin && (
-          <button
-            className="menu-item admin-menu-item enabled"
-            onClick={() => onSelectMode('admin')}
-          >
-            <span className="menu-item-icon admin-icon">
-              <FiShield size={20} />
-            </span>
-            <div className="menu-item-content">
-              <span className="menu-item-title">Administratsioon</span>
-              <span className="menu-item-desc">Admin tööriistad</span>
-            </div>
-            <span className="menu-item-arrow">
-              <FiChevronRight size={18} />
-            </span>
-          </button>
+          <>
+            <button
+              className="menu-item admin-menu-item enabled"
+              onClick={() => onSelectMode('inspection_plan')}
+            >
+              <span className="menu-item-icon plan-icon">
+                <FiClipboard size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Inspektsiooni kava</span>
+                <span className="menu-item-desc">Koosta inspektsiooni kava</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+            <button
+              className="menu-item admin-menu-item enabled"
+              onClick={() => onSelectMode('admin')}
+            >
+              <span className="menu-item-icon admin-icon">
+                <FiShield size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Administratsioon</span>
+                <span className="menu-item-desc">Admin tööriistad</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+          </>
         )}
       </div>
     </div>

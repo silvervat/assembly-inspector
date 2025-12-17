@@ -82,6 +82,94 @@ export interface Inspection {
   tekla_washer_type?: string;
 }
 
+// ============================================
+// INSPECTION PLAN SYSTEM TYPES (v2.6.0)
+// ============================================
+
+export interface InspectionTypeRef {
+  id: string;
+  tenant_id?: string;
+  code: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  sort_order: number;
+  is_active: boolean;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InspectionCategory {
+  id: string;
+  tenant_id?: string;
+  type_id: string;
+  code: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  color?: string;
+  sort_order: number;
+  is_required: boolean;
+  is_active: boolean;
+  is_template: boolean;
+  project_id?: string;
+  source_category_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InspectionPlanStatus = 'planned' | 'in_progress' | 'completed' | 'skipped';
+
+export interface InspectionPlanItem {
+  id: string;
+  // Projekti ja mudeli info
+  project_id: string;
+  model_id: string;
+  // Objekti identifikaatorid (EOS2 suhtluseks)
+  guid: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_runtime_id?: number;
+  // Objekti andmed
+  assembly_mark?: string;
+  object_name?: string;
+  object_type?: string;
+  product_name?: string;
+  // Inspektsiooni seaded
+  inspection_type_id?: string;
+  category_id?: string;
+  assembly_selection_mode: boolean;
+  // Staatus
+  status: InspectionPlanStatus;
+  priority: number;
+  // Märkmed
+  notes?: string;
+  planner_notes?: string;
+  // Metadata
+  created_by?: string;
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+  // Joined data (optional)
+  inspection_type?: InspectionTypeRef;
+  category?: InspectionCategory;
+}
+
+export interface InspectionPlanStats {
+  project_id: string;
+  inspection_type_id?: string;
+  inspection_type_name?: string;
+  total_items: number;
+  planned_count: number;
+  in_progress_count: number;
+  completed_count: number;
+  skipped_count: number;
+  assembly_on_count: number;
+  assembly_off_count: number;
+}
+
 // Database schema:
 /*
 -- Users tabel
