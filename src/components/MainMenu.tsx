@@ -1,5 +1,5 @@
 import { TrimbleExUser } from '../supabase';
-import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiSettings } from 'react-icons/fi';
+import { FiSearch, FiTool, FiFileText, FiAlertTriangle, FiDroplet, FiZap, FiPackage, FiUpload, FiChevronRight, FiSettings, FiShield } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 
 export type InspectionMode =
@@ -10,7 +10,8 @@ export type InspectionMode =
   | 'varviparandus'
   | 'keevis'
   | 'paigaldatud_detailid'
-  | 'eos2';
+  | 'eos2'
+  | 'admin';
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -87,6 +88,8 @@ const menuItems: MenuItem[] = [
 ];
 
 export default function MainMenu({ user, userInitials, onSelectMode, onOpenSettings }: MainMenuProps) {
+  const isAdmin = user.role === 'admin';
+
   return (
     <div className="main-menu-container">
       <div className="main-menu-header">
@@ -94,7 +97,7 @@ export default function MainMenu({ user, userInitials, onSelectMode, onOpenSetti
           <span className="menu-user-avatar">{userInitials}</span>
           <div className="menu-user-details">
             <span className="menu-user-email">{user.user_email}</span>
-            <span className="menu-user-role">{user.role}</span>
+            <span className="menu-user-role">{user.role?.toUpperCase()}</span>
           </div>
         </div>
         <button className="menu-settings-btn" onClick={onOpenSettings} title="Seaded">
@@ -129,6 +132,25 @@ export default function MainMenu({ user, userInitials, onSelectMode, onOpenSetti
             </button>
           );
         })}
+
+        {/* Admin menu - only visible for admin users */}
+        {isAdmin && (
+          <button
+            className="menu-item admin-menu-item enabled"
+            onClick={() => onSelectMode('admin')}
+          >
+            <span className="menu-item-icon admin-icon">
+              <FiShield size={20} />
+            </span>
+            <div className="menu-item-content">
+              <span className="menu-item-title">Administratsioon</span>
+              <span className="menu-item-desc">Admin tööriistad</span>
+            </div>
+            <span className="menu-item-arrow">
+              <FiChevronRight size={18} />
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );

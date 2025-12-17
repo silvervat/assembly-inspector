@@ -88,7 +88,8 @@ export default function InspectorScreen({
       varviparandus: 'Värviparandused inspektsioon',
       keevis: 'Keeviste inspektsioon',
       paigaldatud_detailid: 'Paigaldatud detailid',
-      eos2: 'Saada EOS2 tabelisse'
+      eos2: 'Saada EOS2 tabelisse',
+      admin: 'Administratsioon'
     };
     return titles[mode] || mode;
   };
@@ -738,7 +739,7 @@ export default function InspectorScreen({
         snapshot_3d_url: snapshot3dUrl,
         topview_url: topviewUrl,
         project_id: projectId,
-        inspection_type: inspectionMode,
+        inspection_type: inspectionMode === 'admin' ? undefined : inspectionMode,
         // Additional Tekla fields
         file_name: obj.fileName,
         guid: obj.guid,
@@ -1122,9 +1123,6 @@ export default function InspectorScreen({
           objectRuntimeIds: [inspection.object_runtime_id]
         }]
       }, 'set');
-
-      setMessage(`✓ ${inspection.assembly_mark || 'Element'}`);
-      setTimeout(() => setMessage(''), 1500);
     } catch (e) {
       console.error('Failed to select inspection:', e);
     }
@@ -1148,9 +1146,6 @@ export default function InspectorScreen({
       }));
 
       await api.viewer.setSelection({ modelObjectIds }, 'set');
-
-      setMessage(`✓ Märgistatud ${inspections.length} elementi`);
-      setTimeout(() => setMessage(''), 1500);
     } catch (e) {
       console.error('Failed to select group:', e);
     }
@@ -1179,13 +1174,8 @@ export default function InspectorScreen({
       // Zoom to selected objects using setCamera with ObjectSelector
       // This automatically fits the camera to show all selected objects
       await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
-
-      setMessage(`🔍 ${inspections.length} elementi`);
-      setTimeout(() => setMessage(''), 2000);
     } catch (e) {
       console.error('Failed to zoom to group:', e);
-      setMessage('❌ Zoom ebaõnnestus');
-      setTimeout(() => setMessage(''), 2000);
     }
   };
 
@@ -1203,19 +1193,16 @@ export default function InspectorScreen({
       // Zoom to selected object using setCamera with ObjectSelector
       // This automatically fits the camera to show the selected object
       await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
-
-      setMessage(`🔍 ${inspection.assembly_mark || 'Element'}`);
-      setTimeout(() => setMessage(''), 2000);
     } catch (e) {
       console.error('Failed to zoom to inspection:', e);
-      setMessage('❌ Zoom ebaõnnestus');
-      setTimeout(() => setMessage(''), 2000);
     }
   };
 
   // Välju inspektsioonide vaatest
   const exitInspectionList = async () => {
     try {
+      // Clear all selections
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
       // Reset all colors
       await api.viewer.setObjectState(undefined, { color: 'reset' });
       setInspectionListMode('none');
