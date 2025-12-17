@@ -256,7 +256,7 @@ BEGIN
   FROM inspection_categories c
   JOIN inspection_types t ON c.type_id = t.id
   WHERE t.code = 'STEEL_INSTALLATION'
-    AND c.code = 'VISUAL'
+    AND c.code = 'CAT_STEEL_VISUAL'
   LIMIT 1;
 
   IF v_category_id IS NOT NULL THEN
@@ -341,7 +341,7 @@ BEGIN
   FROM inspection_categories c
   JOIN inspection_types t ON c.type_id = t.id
   WHERE t.code = 'STEEL_INSTALLATION'
-    AND c.code = 'POSITION'
+    AND c.code = 'CAT_STEEL_POSITION'
   LIMIT 1;
 
   IF v_category_id IS NOT NULL THEN
