@@ -2145,3 +2145,62 @@ body {
   color: var(--modus-primary-darker);
   font-weight: 600;
 }
+
+/* Metadata section (Product info) */
+.metadata-section .pset-header {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.metadata-section .pset-header:hover {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.metadata-header .pset-name {
+  color: #b45309;
+}
+
+/* Section divider in properties */
+.property-row.section-divider {
+  margin-top: var(--modus-spacing-sm);
+  padding-top: var(--modus-spacing-sm);
+  border-top: 1px dashed var(--modus-border);
+  font-weight: 600;
+  color: var(--modus-text-secondary);
+}
+
+/* Raw JSON section */
+.raw-data-section .pset-header {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.raw-data-section .pset-header:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.raw-data-header .pset-name {
+  color: #6b7280;
+  font-size: var(--modus-font-size-xs);
+}
+
+.raw-json {
+  background: #1e1e1e;
+  padding: 0;
+}
+
+.raw-json-content {
+  color: #d4d4d4;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--modus-spacing-md);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
