@@ -1113,6 +1113,82 @@ export default function InspectorScreen({
     }
   };
 
+  // Select single inspection in model (without zoom)
+  const selectInspection = async (inspection: InspectionItem) => {
+    try {
+      await api.viewer.setSelection({
+        modelObjectIds: [{
+          modelId: inspection.model_id,
+          objectRuntimeIds: [inspection.object_runtime_id]
+        }]
+      }, 'set');
+
+      setMessage(`✓ ${inspection.assembly_mark || 'Element'}`);
+      setTimeout(() => setMessage(''), 1500);
+    } catch (e) {
+      console.error('Failed to select inspection:', e);
+    }
+  };
+
+  // Select multiple inspections (group) in model
+  const selectGroup = async (inspections: InspectionItem[]) => {
+    try {
+      // Group by model_id
+      const byModel: Record<string, number[]> = {};
+      for (const insp of inspections) {
+        if (!byModel[insp.model_id]) {
+          byModel[insp.model_id] = [];
+        }
+        byModel[insp.model_id].push(insp.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      setMessage(`✓ Märgistatud ${inspections.length} elementi`);
+      setTimeout(() => setMessage(''), 1500);
+    } catch (e) {
+      console.error('Failed to select group:', e);
+    }
+  };
+
+  // Zoom to group of inspections
+  const zoomToGroup = async (inspections: InspectionItem[]) => {
+    try {
+      const viewer = api.viewer as any;
+
+      // Group by model_id
+      const byModel: Record<string, number[]> = {};
+      for (const insp of inspections) {
+        if (!byModel[insp.model_id]) {
+          byModel[insp.model_id] = [];
+        }
+        byModel[insp.model_id].push(insp.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Zoom to selection
+      await viewer.zoomToSelection?.();
+
+      setMessage(`🔍 ${inspections.length} elementi`);
+      setTimeout(() => setMessage(''), 2000);
+    } catch (e) {
+      console.error('Failed to zoom to group:', e);
+      setMessage('❌ Zoom ebaõnnestus');
+      setTimeout(() => setMessage(''), 2000);
+    }
+  };
+
   // Zoom to specific inspection
   const zoomToInspection = async (inspection: InspectionItem) => {
     try {
@@ -1245,6 +1321,9 @@ export default function InspectorScreen({
           hasMore={inspectionListData.length < inspectionListTotal}
           loadingMore={inspectionListLoadingMore}
           onZoomToInspection={zoomToInspection}
+          onSelectInspection={selectInspection}
+          onSelectGroup={selectGroup}
+          onZoomToGroup={zoomToGroup}
           onLoadMore={loadMoreInspections}
           onClose={exitInspectionList}
         />

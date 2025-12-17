@@ -4,6 +4,11 @@
   box-sizing: border-box;
 }
 
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Trimble Modus Design System Variables */
 :root {
   /* Primary Colors */
@@ -74,6 +79,9 @@ body {
   padding: 20px;
   max-width: 900px;
   margin: 0 auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .loading,
@@ -190,6 +198,11 @@ body {
   padding: var(--modus-spacing-md);
   max-width: 800px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* Compact header */
@@ -1226,9 +1239,11 @@ body {
   background: var(--modus-bg-primary);
   border-radius: var(--modus-radius-md);
   border: 1px solid var(--modus-border);
-  margin: var(--modus-spacing-sm) 0;
+  margin-top: var(--modus-spacing-sm);
+  margin-bottom: 0;
   overflow: hidden;
-  max-height: 60vh;
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -1298,21 +1313,47 @@ body {
 }
 
 .date-group-header {
-  width: 100%;
   display: flex;
   align-items: center;
   gap: var(--modus-spacing-sm);
-  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  padding: var(--modus-spacing-xs) var(--modus-spacing-md);
   background: var(--modus-bg-secondary);
-  border: none;
-  cursor: pointer;
-  text-align: left;
   font-size: var(--modus-font-size-sm);
   color: var(--modus-text-primary);
+}
+
+.date-group-toggle {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--modus-text-secondary);
+  cursor: pointer;
+  border-radius: var(--modus-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.date-group-toggle:hover {
+  background: var(--modus-bg-tertiary);
+  color: var(--modus-text-primary);
+}
+
+.date-group-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  cursor: pointer;
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  border-radius: var(--modus-radius-sm);
   transition: background 0.15s;
 }
 
-.date-group-header:hover {
+.date-group-main:hover {
   background: var(--modus-bg-tertiary);
 }
 
@@ -1322,12 +1363,33 @@ body {
 }
 
 .date-count {
-  background: var(--modus-primary-light);
-  color: var(--modus-primary);
+  background: var(--modus-primary);
+  color: white;
   padding: 2px 8px;
   border-radius: 10px;
   font-size: var(--modus-font-size-xs);
   font-weight: 600;
+}
+
+.date-group-zoom-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--modus-border);
+  background: var(--modus-bg-primary);
+  color: var(--modus-primary);
+  cursor: pointer;
+  border-radius: var(--modus-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.date-group-zoom-btn:hover {
+  background: var(--modus-primary);
+  color: white;
+  border-color: var(--modus-primary);
 }
 
 .date-group-items {
@@ -1385,9 +1447,30 @@ body {
   white-space: nowrap;
 }
 
+.inspection-info-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--modus-border);
+  background: var(--modus-bg-primary);
+  color: var(--modus-text-secondary);
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.inspection-info-btn:hover {
+  background: var(--modus-bg-tertiary);
+  color: var(--modus-primary);
+  border-color: var(--modus-primary);
+}
+
 .inspection-zoom-btn {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--modus-border);
   background: var(--modus-bg-primary);
   color: var(--modus-primary);
