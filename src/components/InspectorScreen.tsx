@@ -1159,8 +1159,6 @@ export default function InspectorScreen({
   // Zoom to group of inspections
   const zoomToGroup = async (inspections: InspectionItem[]) => {
     try {
-      const viewer = api.viewer as any;
-
       // Group by model_id
       const byModel: Record<string, number[]> = {};
       for (const insp of inspections) {
@@ -1175,10 +1173,12 @@ export default function InspectorScreen({
         objectRuntimeIds: runtimeIds
       }));
 
+      // Select objects first
       await api.viewer.setSelection({ modelObjectIds }, 'set');
 
-      // Zoom to selection
-      await viewer.zoomToSelection?.();
+      // Zoom to selected objects using setCamera with ObjectSelector
+      // This automatically fits the camera to show all selected objects
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
 
       setMessage(`🔍 ${inspections.length} elementi`);
       setTimeout(() => setMessage(''), 2000);
@@ -1192,18 +1192,17 @@ export default function InspectorScreen({
   // Zoom to specific inspection
   const zoomToInspection = async (inspection: InspectionItem) => {
     try {
-      const viewer = api.viewer as any;
+      const modelObjectIds = [{
+        modelId: inspection.model_id,
+        objectRuntimeIds: [inspection.object_runtime_id]
+      }];
 
-      // Try to select and zoom using runtime ID
-      await api.viewer.setSelection({
-        modelObjectIds: [{
-          modelId: inspection.model_id,
-          objectRuntimeIds: [inspection.object_runtime_id]
-        }]
-      }, 'set');
+      // Select the object
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
 
-      // Zoom to selection
-      await viewer.zoomToSelection?.();
+      // Zoom to selected object using setCamera with ObjectSelector
+      // This automatically fits the camera to show the selected object
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
 
       setMessage(`🔍 ${inspection.assembly_mark || 'Element'}`);
       setTimeout(() => setMessage(''), 2000);

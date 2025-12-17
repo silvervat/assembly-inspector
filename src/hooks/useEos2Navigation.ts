@@ -56,47 +56,29 @@ export function useEos2Navigation({
       console.log('[EOS2 Nav] Processing command:', command);
       console.log('[EOS2 Nav] Searching for GUID:', guidToUse);
 
-      // Try to find element by GUID
-      // Cast viewer to any to access extended API methods
-      const viewer = api.viewer as any;
+      // Convert GUID to runtime ID and zoom to element
+      const runtimeIds = await api.viewer.convertToObjectRuntimeIds(command.model_id, [guidToUse]);
 
-      // Method 1: Try direct selection with external ID (GUID)
-      try {
-        await viewer.setSelection([guidToUse], false);
-        await viewer.zoom?.([guidToUse]);
-        console.log('[EOS2 Nav] Selected and zoomed using external ID');
-        onNavigationSuccess?.(command);
-      } catch (e1) {
-        console.warn('[EOS2 Nav] Direct selection failed, trying getRuntimeIds:', e1);
-
-        // Method 2: Convert GUID to runtime ID first
-        try {
-          const runtimeIds = await viewer.getRuntimeIds?.(command.model_id, [guidToUse]);
-
-          if (runtimeIds && runtimeIds.length > 0 && runtimeIds[0]) {
-            console.log('[EOS2 Nav] Found runtime ID:', runtimeIds[0]);
-
-            // Select using model object IDs
-            await api.viewer.setSelection({
-              modelObjectIds: [{
-                modelId: command.model_id,
-                objectRuntimeIds: runtimeIds
-              }]
-            }, 'set');
-
-            // Zoom to selection
-            await viewer.zoomToSelection?.();
-
-            console.log('[EOS2 Nav] Selected and zoomed using runtime ID');
-            onNavigationSuccess?.(command);
-          } else {
-            throw new Error('GUID not found in model');
-          }
-        } catch (e2) {
-          console.error('[EOS2 Nav] getRuntimeIds failed:', e2);
-          throw e2;
-        }
+      if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
+        throw new Error('GUID not found in model');
       }
+
+      console.log('[EOS2 Nav] Found runtime ID:', runtimeIds[0]);
+
+      const modelObjectIds = [{
+        modelId: command.model_id,
+        objectRuntimeIds: runtimeIds.filter(id => id != null) as number[]
+      }];
+
+      // Select using model object IDs
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Zoom to selection using setCamera with ObjectSelector
+      // This automatically fits the camera to show all selected objects
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+
+      console.log('[EOS2 Nav] Selected and zoomed');
+      onNavigationSuccess?.(command);
 
       // Mark command as processed
       await supabase
