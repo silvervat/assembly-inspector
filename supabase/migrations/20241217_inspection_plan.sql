@@ -72,49 +72,35 @@ CREATE INDEX IF NOT EXISTS idx_inspection_categories_tenant ON inspection_catego
 CREATE INDEX IF NOT EXISTS idx_inspection_categories_project ON inspection_categories(project_id);
 
 -- Vaikimisi kategooriad (näited)
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_STEEL_VISUAL',
-  'Visuaalne kontroll',
-  'Elemendi visuaalne ülevaatus',
-  1,
-  true
-FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION'
-ON CONFLICT (code) DO NOTHING;
+-- Kasutame DO blokki, et vältida duplikaatide vigu
+DO $$
+BEGIN
+  -- Teraskonstruktsioonide kategooriad
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_STEEL_VISUAL') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_STEEL_VISUAL', 'Visuaalne kontroll', 'Elemendi visuaalne ülevaatus', 1, true
+    FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION';
+  END IF;
 
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_STEEL_POSITION',
-  'Asendi kontroll',
-  'Elemendi asendi ja paigutuse kontroll',
-  2,
-  true
-FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION'
-ON CONFLICT (code) DO NOTHING;
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_STEEL_POSITION') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_STEEL_POSITION', 'Asendi kontroll', 'Elemendi asendi ja paigutuse kontroll', 2, true
+    FROM inspection_types it WHERE it.code = 'STEEL_INSTALLATION';
+  END IF;
 
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_BOLT_VISUAL',
-  'Visuaalne kontroll',
-  'Poldi visuaalne ülevaatus',
-  1,
-  true
-FROM inspection_types it WHERE it.code = 'BOLT_TORQUE'
-ON CONFLICT (code) DO NOTHING;
+  -- Poltide kategooriad
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_BOLT_VISUAL') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_BOLT_VISUAL', 'Visuaalne kontroll', 'Poldi visuaalne ülevaatus', 1, true
+    FROM inspection_types it WHERE it.code = 'BOLT_TORQUE';
+  END IF;
 
-INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
-SELECT
-  it.id,
-  'CAT_BOLT_TORQUE',
-  'Pingutuse kontroll',
-  'Poldi pingutuse mõõtmine',
-  2,
-  true
-FROM inspection_types it WHERE it.code = 'BOLT_TORQUE'
-ON CONFLICT (code) DO NOTHING;
+  IF NOT EXISTS (SELECT 1 FROM inspection_categories WHERE code = 'CAT_BOLT_TORQUE') THEN
+    INSERT INTO inspection_categories (type_id, code, name, description, sort_order, is_active)
+    SELECT it.id, 'CAT_BOLT_TORQUE', 'Pingutuse kontroll', 'Poldi pingutuse mõõtmine', 2, true
+    FROM inspection_types it WHERE it.code = 'BOLT_TORQUE';
+  END IF;
+END $$;
 
 -- ============================================
 -- 3. INSPECTION PLAN ITEMS - Inspektsiooni kava
