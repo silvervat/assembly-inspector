@@ -32,24 +32,86 @@ interface InspectionListProps {
   onClose: () => void;
 }
 
-// Group inspections by date
-function groupByDate(inspections: InspectionItem[]): Record<string, InspectionItem[]> {
-  const groups: Record<string, InspectionItem[]> = {};
+// Get month key for grouping (e.g., "2025-12")
+function getMonthKey(dateStr: string): string {
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Get month label (e.g., "Detsember 2025")
+function getMonthLabel(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('et-EE', {
+    year: 'numeric',
+    month: 'long'
+  });
+}
+
+// Get day key for grouping (e.g., "2025-12-16")
+function getDayKey(dateStr: string): string {
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// Get day label (e.g., "16. detsember")
+function getDayLabel(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('et-EE', {
+    day: 'numeric',
+    month: 'long'
+  });
+}
+
+// Group inspections by month, then by day
+interface MonthGroup {
+  monthKey: string;
+  monthLabel: string;
+  days: DayGroup[];
+  allItems: InspectionItem[];
+}
+
+interface DayGroup {
+  dayKey: string;
+  dayLabel: string;
+  items: InspectionItem[];
+}
+
+function groupByMonthAndDay(inspections: InspectionItem[]): MonthGroup[] {
+  const monthMap: Record<string, MonthGroup> = {};
 
   for (const insp of inspections) {
-    const date = new Date(insp.inspected_at).toLocaleDateString('et-EE', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
+    const monthKey = getMonthKey(insp.inspected_at);
+    const dayKey = getDayKey(insp.inspected_at);
 
-    if (!groups[date]) {
-      groups[date] = [];
+    if (!monthMap[monthKey]) {
+      monthMap[monthKey] = {
+        monthKey,
+        monthLabel: getMonthLabel(insp.inspected_at),
+        days: [],
+        allItems: []
+      };
     }
-    groups[date].push(insp);
+
+    monthMap[monthKey].allItems.push(insp);
+
+    // Find or create day group
+    let dayGroup = monthMap[monthKey].days.find(d => d.dayKey === dayKey);
+    if (!dayGroup) {
+      dayGroup = {
+        dayKey,
+        dayLabel: getDayLabel(insp.inspected_at),
+        items: []
+      };
+      monthMap[monthKey].days.push(dayGroup);
+    }
+    dayGroup.items.push(insp);
   }
 
-  return groups;
+  // Sort months descending, days descending within each month
+  const sortedMonths = Object.values(monthMap).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  for (const month of sortedMonths) {
+    month.days.sort((a, b) => b.dayKey.localeCompare(a.dayKey));
+  }
+
+  return sortedMonths;
 }
 
 export default function InspectionList({
@@ -65,68 +127,154 @@ export default function InspectionList({
   onLoadMore,
   onClose
 }: InspectionListProps) {
-  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedInspection, setSelectedInspection] = useState<InspectionItem | null>(null);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const groupedInspections = groupByDate(inspections);
-  const sortedDates = Object.keys(groupedInspections).sort((a, b) => {
-    return new Date(groupedInspections[b][0].inspected_at).getTime() -
-           new Date(groupedInspections[a][0].inspected_at).getTime();
-  });
+  const monthGroups = groupByMonthAndDay(inspections);
+  const hasMultipleMonths = monthGroups.length > 1;
 
-  const toggleDate = (date: string) => {
-    const newExpanded = new Set(expandedDates);
-    if (newExpanded.has(date)) {
-      newExpanded.delete(date);
+  const toggleMonth = (monthKey: string) => {
+    const newExpanded = new Set(expandedMonths);
+    if (newExpanded.has(monthKey)) {
+      newExpanded.delete(monthKey);
     } else {
-      newExpanded.add(date);
+      newExpanded.add(monthKey);
     }
-    setExpandedDates(newExpanded);
+    setExpandedMonths(newExpanded);
   };
 
-  // Handle group header click - select all items in group
-  const handleGroupClick = (date: string) => {
-    const groupItems = groupedInspections[date];
-    // Update selected IDs
-    setSelectedIds(new Set(groupItems.map(item => item.id)));
-    onSelectGroup(groupItems);
-    // Also expand the group
-    if (!expandedDates.has(date)) {
-      toggleDate(date);
+  const toggleDay = (dayKey: string) => {
+    const newExpanded = new Set(expandedDays);
+    if (newExpanded.has(dayKey)) {
+      newExpanded.delete(dayKey);
+    } else {
+      newExpanded.add(dayKey);
+    }
+    setExpandedDays(newExpanded);
+  };
+
+  // Handle month click - select all items in month
+  const handleMonthClick = (month: MonthGroup) => {
+    setSelectedIds(new Set(month.allItems.map(item => item.id)));
+    onSelectGroup(month.allItems);
+    // Expand the month
+    if (!expandedMonths.has(month.monthKey)) {
+      toggleMonth(month.monthKey);
     }
   };
 
-  // Handle group zoom button - zoom to all items in group
-  const handleGroupZoom = (e: React.MouseEvent, date: string) => {
+  // Handle month zoom
+  const handleMonthZoom = (e: React.MouseEvent, month: MonthGroup) => {
     e.stopPropagation();
-    const groupItems = groupedInspections[date];
-    // Update selected IDs
-    setSelectedIds(new Set(groupItems.map(item => item.id)));
-    onZoomToGroup(groupItems);
+    setSelectedIds(new Set(month.allItems.map(item => item.id)));
+    onZoomToGroup(month.allItems);
+  };
+
+  // Handle day click - select all items in day
+  const handleDayClick = (day: DayGroup) => {
+    setSelectedIds(new Set(day.items.map(item => item.id)));
+    onSelectGroup(day.items);
+    // Expand the day
+    if (!expandedDays.has(day.dayKey)) {
+      toggleDay(day.dayKey);
+    }
+  };
+
+  // Handle day zoom
+  const handleDayZoom = (e: React.MouseEvent, day: DayGroup) => {
+    e.stopPropagation();
+    setSelectedIds(new Set(day.items.map(item => item.id)));
+    onZoomToGroup(day.items);
   };
 
   // Handle single inspection zoom
   const handleZoom = (e: React.MouseEvent, inspection: InspectionItem) => {
     e.stopPropagation();
-    // Update selected ID
     setSelectedIds(new Set([inspection.id]));
     onZoomToInspection(inspection);
   };
 
   // Handle item click - select in model
   const handleInspectionClick = (inspection: InspectionItem) => {
-    // Update selected ID
     setSelectedIds(new Set([inspection.id]));
     onSelectInspection(inspection);
   };
 
-  // Handle item double-click or info button - show detail modal
+  // Handle item info button - show detail modal
   const handleShowDetail = (e: React.MouseEvent, inspection: InspectionItem) => {
     e.stopPropagation();
     setSelectedInspection(inspection);
   };
+
+  // Render day group (used both with and without month grouping)
+  const renderDayGroup = (day: DayGroup, indented: boolean = false) => (
+    <div key={day.dayKey} className="inspection-date-group">
+      <div className={`date-group-header ${indented ? 'date-group-header-indented' : ''}`}>
+        <button
+          className="date-group-toggle"
+          onClick={() => toggleDay(day.dayKey)}
+        >
+          {expandedDays.has(day.dayKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+        </button>
+        <div
+          className="date-group-main"
+          onClick={() => handleDayClick(day)}
+        >
+          <span className="date-label">{day.dayLabel}</span>
+          <span className="date-count">{day.items.length}</span>
+        </div>
+        <button
+          className="date-group-zoom-btn"
+          onClick={(e) => handleDayZoom(e, day)}
+          title="Märgista ja zoom kõik päeva detailid"
+        >
+          <FiZoomIn size={16} />
+        </button>
+      </div>
+
+      {expandedDays.has(day.dayKey) && (
+        <div className={`date-group-items ${indented ? 'date-group-items-indented' : ''}`}>
+          {day.items.map(insp => (
+            <div
+              key={insp.id}
+              className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
+              onClick={() => handleInspectionClick(insp)}
+            >
+              <div className="inspection-item-main">
+                <span className="inspection-mark">{insp.assembly_mark || 'N/A'}</span>
+                {mode === 'all' && (
+                  <span className="inspection-inspector">{insp.inspector_name}</span>
+                )}
+              </div>
+              <div className="inspection-item-time">
+                {new Date(insp.inspected_at).toLocaleTimeString('et-EE', {
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
+              </div>
+              <button
+                className="inspection-info-btn"
+                onClick={(e) => handleShowDetail(e, insp)}
+                title="Näita detaile"
+              >
+                <FiInfo size={16} />
+              </button>
+              <button
+                className="inspection-zoom-btn"
+                onClick={(e) => handleZoom(e, insp)}
+                title="Zoom elemendile"
+              >
+                <FiZoomIn size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="inspection-list-container">
@@ -143,71 +291,44 @@ export default function InspectionList({
       </div>
 
       <div className="inspection-list-content">
-        {sortedDates.map(date => (
-          <div key={date} className="inspection-date-group">
-            <div className="date-group-header">
-              <button
-                className="date-group-toggle"
-                onClick={() => toggleDate(date)}
-              >
-                {expandedDates.has(date) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
-              </button>
-              <div
-                className="date-group-main"
-                onClick={() => handleGroupClick(date)}
-              >
-                <span className="date-label">{date}</span>
-                <span className="date-count">{groupedInspections[date].length}</span>
+        {hasMultipleMonths ? (
+          // Multi-month view: Month -> Day -> Items
+          monthGroups.map(month => (
+            <div key={month.monthKey} className="inspection-month-group">
+              <div className="month-group-header">
+                <button
+                  className="month-group-toggle"
+                  onClick={() => toggleMonth(month.monthKey)}
+                >
+                  {expandedMonths.has(month.monthKey) ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+                </button>
+                <div
+                  className="month-group-main"
+                  onClick={() => handleMonthClick(month)}
+                >
+                  <span className="month-label">{month.monthLabel}</span>
+                  <span className="month-count">{month.allItems.length}</span>
+                </div>
+                <button
+                  className="month-group-zoom-btn"
+                  onClick={(e) => handleMonthZoom(e, month)}
+                  title="Märgista ja zoom kõik kuu detailid"
+                >
+                  <FiZoomIn size={18} />
+                </button>
               </div>
-              <button
-                className="date-group-zoom-btn"
-                onClick={(e) => handleGroupZoom(e, date)}
-                title="Märgista ja zoom kõik grupi detailid"
-              >
-                <FiZoomIn size={16} />
-              </button>
-            </div>
 
-            {expandedDates.has(date) && (
-              <div className="date-group-items">
-                {groupedInspections[date].map(insp => (
-                  <div
-                    key={insp.id}
-                    className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
-                    onClick={() => handleInspectionClick(insp)}
-                  >
-                    <div className="inspection-item-main">
-                      <span className="inspection-mark">{insp.assembly_mark || 'N/A'}</span>
-                      {mode === 'all' && (
-                        <span className="inspection-inspector">{insp.inspector_name}</span>
-                      )}
-                    </div>
-                    <div className="inspection-item-time">
-                      {new Date(insp.inspected_at).toLocaleTimeString('et-EE', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </div>
-                    <button
-                      className="inspection-info-btn"
-                      onClick={(e) => handleShowDetail(e, insp)}
-                      title="Näita detaile"
-                    >
-                      <FiInfo size={16} />
-                    </button>
-                    <button
-                      className="inspection-zoom-btn"
-                      onClick={(e) => handleZoom(e, insp)}
-                      title="Zoom elemendile"
-                    >
-                      <FiZoomIn size={16} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+              {expandedMonths.has(month.monthKey) && (
+                <div className="month-group-days">
+                  {month.days.map(day => renderDayGroup(day, true))}
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          // Single month view: Day -> Items (no month header)
+          monthGroups[0]?.days.map(day => renderDayGroup(day, false))
+        )}
 
         {inspections.length === 0 && (
           <div className="inspection-list-empty">

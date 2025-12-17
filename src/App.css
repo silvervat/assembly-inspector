@@ -1303,6 +1303,100 @@ body {
   font-size: var(--modus-font-size-sm);
 }
 
+/* Month Group */
+.inspection-month-group {
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.inspection-month-group:last-child {
+  border-bottom: none;
+}
+
+.month-group-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-primary-darker);
+  font-size: var(--modus-font-size-base);
+  color: white;
+}
+
+.month-group-toggle {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: white;
+  opacity: 0.8;
+  cursor: pointer;
+  border-radius: var(--modus-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.month-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  opacity: 1;
+}
+
+.month-group-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  cursor: pointer;
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  border-radius: var(--modus-radius-sm);
+  transition: background 0.15s;
+}
+
+.month-group-main:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.month-label {
+  flex: 1;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.month-count {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: var(--modus-font-size-sm);
+  font-weight: 600;
+}
+
+.month-group-zoom-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  border-radius: var(--modus-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.month-group-zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.month-group-days {
+  background: var(--modus-bg-primary);
+}
+
 /* Date Group */
 .inspection-date-group {
   border-bottom: 1px solid var(--modus-border-light);
@@ -1320,6 +1414,10 @@ body {
   background: var(--modus-bg-secondary);
   font-size: var(--modus-font-size-sm);
   color: var(--modus-text-primary);
+}
+
+.date-group-header-indented {
+  padding-left: calc(var(--modus-spacing-md) + 16px);
 }
 
 .date-group-toggle {
@@ -1394,6 +1492,10 @@ body {
 
 .date-group-items {
   background: var(--modus-bg-primary);
+}
+
+.date-group-items-indented .inspection-item {
+  padding-left: calc(var(--modus-spacing-md) + 40px);
 }
 
 /* Inspection Item */
