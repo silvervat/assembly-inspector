@@ -305,28 +305,55 @@ export default function InspectionPlanScreen({
             for (const pset of objProps.properties) {
               const psetAny = pset as any;
               const psetName = psetAny.name || '';
-              if (psetName === 'Default' || psetName === 'Identity Data') {
-                for (const prop of psetAny.properties || []) {
-                  const propName = prop.name?.toLowerCase() || '';
-                  const propValue = String(prop.value || '');
+              const psetNameLower = psetName.toLowerCase();
 
-                  if (propName === 'guid' || propName === 'globalid') guid = propValue;
-                  if (propName === 'guid_ifc' || propName === 'ifcguid') guidIfc = propValue;
-                  if (propName === 'guid_ms') guidMs = propValue;
-                  if (propName === 'name') objectName = propValue;
+              // Search all property sets for GUIDs
+              for (const prop of psetAny.properties || []) {
+                const propName = (prop.name || '').toLowerCase();
+                const propValue = String(prop.value || '');
+
+                if (!propValue) continue;
+
+                // GUID detection - check various property names
+                if (propName === 'guid' || propName === 'globalid' || propName.includes('guid')) {
+                  // Classify GUID type by format
+                  const normalizedGuid = propValue.replace(/^urn:(uuid:)?/i, "").trim();
+                  const isIfcGuid = /^[0-9A-Za-z_$]{22}$/.test(normalizedGuid);
+                  const isMsGuid = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(normalizedGuid);
+
+                  if (isIfcGuid && !guidIfc) {
+                    guidIfc = normalizedGuid;
+                    console.log(`✅ Found IFC GUID: ${psetName}.${prop.name} = ${guidIfc}`);
+                  } else if (isMsGuid && !guidMs) {
+                    guidMs = normalizedGuid;
+                    console.log(`✅ Found MS GUID: ${psetName}.${prop.name} = ${guidMs}`);
+                  } else if (!guid) {
+                    guid = normalizedGuid;
+                  }
+                }
+
+                // Object name
+                if (propName === 'name' && !objectName) {
+                  objectName = propValue;
                 }
               }
+
+              // Tekla Assembly specific
               if (psetName === 'Tekla Assembly') {
                 for (const prop of psetAny.properties || []) {
                   if (prop.name === 'Cast_unit_Mark') assemblyMark = String(prop.value || '');
                 }
               }
+
+              // Tekla Common specific
               if (psetName === 'Tekla Common') {
                 for (const prop of psetAny.properties || []) {
                   if (prop.name === 'Name' && !objectName) objectName = String(prop.value || '');
                 }
               }
-              if (psetName === 'Product' && psetAny.Name) {
+
+              // Product name
+              if (psetNameLower === 'product' && psetAny.Name) {
                 productName = String(psetAny.Name || '');
               }
             }
@@ -335,11 +362,27 @@ export default function InspectionPlanScreen({
           // Get object class/type
           objectType = objProps?.class || '';
 
-          // Use IFC GUID if main GUID not available
+          // IFC GUID fallback - use convertToObjectIds (same as InspectorScreen)
+          if (!guidIfc) {
+            try {
+              const externalIds = await api.viewer.convertToObjectIds(sel.modelId, [runtimeId]);
+              if (externalIds && externalIds.length > 0 && externalIds[0]) {
+                const normalizedIfc = String(externalIds[0]).replace(/^urn:(uuid:)?/i, "").trim();
+                guidIfc = normalizedIfc;
+                console.log(`✅ Found IFC GUID via convertToObjectIds: ${guidIfc}`);
+              }
+            } catch (e) {
+              console.warn('Could not get IFC GUID via convertToObjectIds:', e);
+            }
+          }
+
+          // Use IFC GUID as main GUID (most reliable for matching)
           if (!guid && guidIfc) guid = guidIfc;
+          if (!guid && guidMs) guid = guidMs;
           if (!guid) {
-            // Generate a fallback GUID from model+runtime
+            // Last resort: Generate a fallback GUID from model+runtime
             guid = `${sel.modelId}_${runtimeId}`;
+            console.warn('⚠️ Using fallback GUID:', guid);
           }
 
           // Check for duplicates

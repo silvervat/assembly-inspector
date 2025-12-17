@@ -244,45 +244,55 @@ export default function InspectorScreen({
       }
 
       // Check for assigned inspection plan by GUID
-      if (obj.guid || obj.guidIfc) {
-        const guidToCheck = obj.guidIfc || obj.guid;
-        console.log('🔍 Checking for inspection plan by GUID:', guidToCheck);
+      if (obj.guid || obj.guidIfc || obj.guidMs) {
+        const guidsToCheck = [obj.guidIfc, obj.guid, obj.guidMs].filter(Boolean);
+        console.log('🔍 Checking for inspection plan by GUIDs:', guidsToCheck);
 
-        const { data: planData, error: planError } = await supabase
-          .from('inspection_plan_items')
-          .select(`
-            *,
-            inspection_types!inspection_plan_items_inspection_type_id_fkey (
-              id,
-              code,
-              name,
-              description,
-              icon,
-              color
-            ),
-            inspection_categories!inspection_plan_items_category_id_fkey (
-              id,
-              code,
-              name,
-              description
-            )
-          `)
-          .eq('project_id', projectId)
-          .eq('guid', guidToCheck)
-          .eq('status', 'planned')
-          .single();
+        // Try to find plan item matching any of the GUIDs
+        let foundPlan = null;
 
-        if (planData && !planError) {
-          console.log('✅ Found inspection plan:', planData);
+        for (const guidToCheck of guidsToCheck) {
+          if (!guidToCheck) continue;
+
+          // Check both guid and guid_ifc columns
+          const { data: planData, error: planError } = await supabase
+            .from('inspection_plan_items')
+            .select(`
+              *,
+              inspection_types!inspection_plan_items_inspection_type_id_fkey (
+                id,
+                code,
+                name,
+                description,
+                icon,
+                color
+              ),
+              inspection_categories!inspection_plan_items_category_id_fkey (
+                id,
+                code,
+                name,
+                description
+              )
+            `)
+            .eq('project_id', projectId)
+            .or(`guid.eq.${guidToCheck},guid_ifc.eq.${guidToCheck}`)
+            .single();
+
+          if (planData && !planError) {
+            foundPlan = planData;
+            console.log('✅ Found inspection plan:', planData);
+            break;
+          }
+        }
+
+        if (foundPlan) {
           // Map the joined data to the expected format
           const planWithDetails: PlanWithDetails = {
-            ...planData,
-            inspection_type: planData.inspection_types as InspectionTypeRef | undefined,
-            category: planData.inspection_categories as InspectionCategory | undefined
+            ...foundPlan,
+            inspection_type: foundPlan.inspection_types as InspectionTypeRef | undefined,
+            category: foundPlan.inspection_categories as InspectionCategory | undefined
           };
           setAssignedPlan(planWithDetails);
-        } else if (planError && planError.code !== 'PGRST116') {
-          console.error('Plan query error:', planError);
         }
       }
 
