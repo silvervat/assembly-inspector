@@ -1400,13 +1400,13 @@ export default function InspectorScreen({
                   )}
                   {obj.slottedHoleX && parseFloat(obj.slottedHoleX) !== 0 && (
                     <div className="bolt-detail-row">
-                      <span>Slotted hole X: {obj.slottedHoleX}</span>
+                      <span>Slotted hole X: {parseFloat(obj.slottedHoleX).toFixed(1)}</span>
                       <span className="bolt-warning">⚠️ suur seib?</span>
                     </div>
                   )}
                   {obj.slottedHoleY && parseFloat(obj.slottedHoleY) !== 0 && (
                     <div className="bolt-detail-row">
-                      <span>Slotted hole Y: {obj.slottedHoleY}</span>
+                      <span>Slotted hole Y: {parseFloat(obj.slottedHoleY).toFixed(1)}</span>
                       <span className="bolt-warning">⚠️ suur seib?</span>
                     </div>
                   )}
