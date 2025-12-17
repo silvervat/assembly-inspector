@@ -470,6 +470,12 @@ export default function InspectorScreen({
               if ((objProps as any).name) objectName = String((objProps as any).name);
               if ((objProps as any).type) objectType = String((objProps as any).type);
 
+              // Fallback: get productName from objProps.product.name (IFC Product metadata)
+              if (!productName && (objProps as any)?.product?.name) {
+                productName = String((objProps as any).product.name);
+                console.log(`✅ Found Product Name via objProps.product.name: ${productName}`);
+              }
+
               // MS GUID fallback - use getObjectMetadata (globalId)
               if (!guidMs) {
                 try {
@@ -1355,16 +1361,55 @@ export default function InspectorScreen({
           </h3>
           {selectedObjects.map((obj, idx) => (
             <div key={idx} className="selected-item">
-              <div className="selected-mark">
-                {inspectionMode === 'poldid'
-                  ? (obj.boltName || 'Bolt Name puudub')
-                  : (obj.assemblyMark || 'Mark puudub')}
+              <div className="selected-mark-container">
+                <span className="selected-mark">
+                  {inspectionMode === 'poldid'
+                    ? (obj.boltName || 'Bolt Name puudub')
+                    : (obj.assemblyMark || 'Mark puudub')}
+                </span>
+                {obj.productName && inspectionMode !== 'poldid' && (
+                  <span className="selected-product-name">{obj.productName}</span>
+                )}
               </div>
               {inspectionMode === 'poldid' && obj.boltStandard && (
                 <div className="selected-bolt-standard">
                   Bolt standard: {obj.boltStandard}
                   {obj.boltStandard.includes('4014') && ' osakeere'}
                   {obj.boltStandard.includes('4017') && ' täiskeer'}
+                </div>
+              )}
+              {inspectionMode === 'poldid' && (
+                <div className="bolt-details">
+                  {obj.boltCount && (
+                    <div className="bolt-detail-row">
+                      <span>Bolt count: {obj.boltCount}</span>
+                      {obj.nutCount && parseInt(obj.nutCount) > parseInt(obj.boltCount) && (
+                        <span className="bolt-warning">⚠️ topelt mutrid?</span>
+                      )}
+                    </div>
+                  )}
+                  {obj.nutCount && (
+                    <div className="bolt-detail-row">
+                      <span>Nut count: {obj.nutCount}</span>
+                    </div>
+                  )}
+                  {obj.washerCount && (
+                    <div className="bolt-detail-row">
+                      <span>Washer count: {obj.washerCount}</span>
+                    </div>
+                  )}
+                  {obj.slottedHoleX && parseFloat(obj.slottedHoleX) !== 0 && (
+                    <div className="bolt-detail-row">
+                      <span>Slotted hole X: {obj.slottedHoleX}</span>
+                      <span className="bolt-warning">⚠️ suur seib?</span>
+                    </div>
+                  )}
+                  {obj.slottedHoleY && parseFloat(obj.slottedHoleY) !== 0 && (
+                    <div className="bolt-detail-row">
+                      <span>Slotted hole Y: {obj.slottedHoleY}</span>
+                      <span className="bolt-warning">⚠️ suur seib?</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

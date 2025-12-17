@@ -479,16 +479,58 @@ body {
   margin-bottom: 0;
 }
 
+.selected-mark-container {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
 .selected-mark {
   font-weight: 600;
   font-size: var(--modus-font-size-md);
   color: var(--modus-text-primary);
+  flex-shrink: 0;
+}
+
+.selected-product-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #fff;
+  background: #4caf50;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .selected-bolt-standard {
   font-size: var(--modus-font-size-sm);
   color: var(--modus-text-secondary);
   margin-top: var(--modus-spacing-xs);
+}
+
+.bolt-details {
+  margin-top: var(--modus-spacing-xs);
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-secondary);
+}
+
+.bolt-detail-row {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  margin-top: 2px;
+}
+
+.bolt-warning {
+  color: #f59e0b;
+  font-weight: 500;
+  font-size: 0.75rem;
 }
 
 .action-container {
