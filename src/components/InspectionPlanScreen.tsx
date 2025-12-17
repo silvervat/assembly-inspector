@@ -442,14 +442,14 @@ export default function InspectionPlanScreen({
   };
 
   return (
-    <div className="inspection-plan-container">
-      {/* Header */}
-      <div className="plan-header">
-        <button className="back-btn" onClick={onBackToMenu}>
-          <FiArrowLeft size={18} />
+    <div className="inspector-container">
+      {/* Header - sama stiil nagu InspectorScreen */}
+      <div className="mode-title-bar">
+        <button className="back-to-menu-btn" onClick={onBackToMenu}>
+          <FiArrowLeft size={14} />
           <span>Menüü</span>
         </button>
-        <h2>📋 Inspektsiooni kava</h2>
+        <span className="mode-title">📋 Inspektsiooni kava</span>
       </div>
 
       {/* View Mode Toggle */}
