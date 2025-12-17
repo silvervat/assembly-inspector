@@ -1028,6 +1028,9 @@ body {
   padding: var(--modus-spacing-md);
   max-width: 800px;
   margin: 0 auto;
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .main-menu-header {
@@ -1112,6 +1115,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding-bottom: 80px;
 }
 
 .menu-item {
