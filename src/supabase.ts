@@ -170,6 +170,134 @@ export interface InspectionPlanStats {
   assembly_off_count: number;
 }
 
+// ============================================
+// CHECKPOINT SYSTEM TYPES (EOS2 Integration)
+// ============================================
+
+// Response option for a checkpoint
+export interface ResponseOption {
+  value: string;
+  label: string;
+  color: 'green' | 'yellow' | 'red' | 'blue' | 'gray' | 'orange';
+  requiresPhoto: boolean;
+  requiresComment: boolean;
+  photoMin?: number;
+  photoMax?: number;
+}
+
+// Checkpoint attachment (juhendmaterjalid)
+export interface CheckpointAttachment {
+  id: string;
+  checkpoint_id: string;
+  type: 'link' | 'video' | 'document' | 'image' | 'file';
+  name: string;
+  description?: string;
+  url: string;
+  storage_path?: string;
+  file_size?: number;
+  mime_type?: string;
+  sort_order: number;
+  created_by?: string;
+  created_at: string;
+}
+
+// Inspection checkpoint (kontrollpunkt)
+export interface InspectionCheckpoint {
+  id: string;
+  category_id: string;
+  code: string;
+  name: string;
+  description?: string;
+  instructions?: string; // Markdown format
+  sort_order: number;
+  is_required: boolean;
+  is_active: boolean;
+  // Response configuration
+  response_options: ResponseOption[];
+  display_type: 'radio' | 'checkbox' | 'dropdown';
+  allow_multiple: boolean;
+  // Comment settings
+  comment_enabled: boolean;
+  end_user_can_comment: boolean;
+  // Photo requirements
+  photos_min: number;
+  photos_max: number;
+  photos_required_responses: string[];
+  photos_allowed_responses: string[];
+  comment_required_responses: string[];
+  // Template settings
+  is_template: boolean;
+  project_id?: string;
+  source_checkpoint_id?: string;
+  // Trimble specific
+  requires_assembly_selection: boolean;
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  attachments?: CheckpointAttachment[];
+}
+
+// Inspection result (täidetud kontrollpunkti tulemus)
+export interface InspectionResult {
+  id: string;
+  plan_item_id?: string;
+  checkpoint_id: string;
+  project_id: string;
+  assembly_guid: string;
+  assembly_name?: string;
+  // Response
+  response_value: string;
+  response_label?: string;
+  comment?: string;
+  // Inspector info
+  inspector_id?: string;
+  inspector_name: string;
+  user_email?: string;
+  // Time and location
+  inspected_at: string;
+  location_lat?: number;
+  location_lng?: number;
+  device_info?: Record<string, any>;
+  // Sync status
+  synced_to_trimble: boolean;
+  trimble_sync_at?: string;
+  // Timestamps
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  photos?: InspectionResultPhoto[];
+}
+
+// Inspection result photo
+export interface InspectionResultPhoto {
+  id: string;
+  result_id: string;
+  storage_path: string;
+  url: string;
+  thumbnail_url?: string;
+  file_size?: number;
+  mime_type?: string;
+  width?: number;
+  height?: number;
+  taken_at?: string;
+  sort_order: number;
+  created_at: string;
+}
+
+// Checkpoint completion stats (from view)
+export interface CheckpointCompletionStats {
+  plan_item_id: string;
+  guid: string;
+  assembly_mark?: string;
+  category_id: string;
+  total_checkpoints: number;
+  required_checkpoints: number;
+  completed_checkpoints: number;
+  completed_required: number;
+  completion_percentage: number;
+}
+
 // Database schema:
 /*
 -- Users tabel
