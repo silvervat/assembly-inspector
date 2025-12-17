@@ -44,6 +44,16 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   const [message, setMessage] = useState('');
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
 
+  // BigInt-safe JSON stringify helper
+  const safeStringify = (obj: unknown, space?: number): string => {
+    return JSON.stringify(obj, (_key, value) => {
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return value;
+    }, space);
+  };
+
   // Suppress unused import warning
   useEffect(() => {
     // Component mounted
@@ -164,8 +174,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             }
 
             // Console log full raw data for debugging
-            console.log('📦 Raw object properties:', JSON.stringify(objProps, null, 2));
-            console.log('📦 Raw object metadata:', JSON.stringify(objMetadata, null, 2));
+            console.log('📦 Raw object properties:', safeStringify(objProps, 2));
+            console.log('📦 Raw object metadata:', safeStringify(objMetadata, 2));
 
             allObjects.push({
               modelId,
@@ -213,7 +223,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
   // Copy all properties to clipboard
   const copyToClipboard = () => {
-    const text = JSON.stringify(selectedObjects, null, 2);
+    const text = safeStringify(selectedObjects, 2);
     navigator.clipboard.writeText(text).then(() => {
       setMessage('Kopeeritud lõikelauale!');
       setTimeout(() => setMessage(''), 2000);
@@ -222,7 +232,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
   // Export as JSON
   const exportAsJson = () => {
-    const blob = new Blob([JSON.stringify(selectedObjects, null, 2)], { type: 'application/json' });
+    const blob = new Blob([safeStringify(selectedObjects, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -234,7 +244,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   // Format property value for display
   const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) return '-';
-    if (typeof value === 'object') return JSON.stringify(value);
+    if (typeof value === 'bigint') return value.toString();
+    if (typeof value === 'object') return safeStringify(value);
     return String(value);
   };
 
@@ -467,7 +478,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     </button>
                     {expandedSets.has(`raw-${objIdx}`) && (
                       <div className="pset-properties raw-json">
-                        <pre className="raw-json-content">{JSON.stringify(obj.rawData, null, 2)}</pre>
+                        <pre className="raw-json-content">{safeStringify(obj.rawData, 2)}</pre>
                       </div>
                     )}
                   </div>
