@@ -137,34 +137,65 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           console.warn('Could not get object metadata:', e);
         }
 
-        // Try to get bounding box / coordinates
+        // Try to get bounding box / coordinates - multiple methods
         let boundingBoxes: unknown[] = [];
+
+        // Method 1: getObjectsBoundingBox
         try {
-          // Try getObjectsBoundingBox method
           boundingBoxes = await (api.viewer as any).getObjectsBoundingBox?.(modelId, runtimeIds) || [];
-          console.log('📍 Bounding boxes via getObjectsBoundingBox:', boundingBoxes);
+          console.log('📍 [1] getObjectsBoundingBox:', boundingBoxes);
         } catch (e) {
           console.warn('Could not get bounding box via getObjectsBoundingBox:', e);
         }
 
-        // Try alternative methods if first didn't work
+        // Method 2: getBoundingBox
         if (!boundingBoxes || boundingBoxes.length === 0) {
           try {
             boundingBoxes = await (api.viewer as any).getBoundingBox?.(modelId, runtimeIds) || [];
-            console.log('📍 Bounding boxes via getBoundingBox:', boundingBoxes);
+            console.log('📍 [2] getBoundingBox:', boundingBoxes);
           } catch (e) {
             console.warn('Could not get bounding box via getBoundingBox:', e);
           }
         }
 
-        // Try getObjectsInfo which might contain position data
+        // Method 3: getObjectsWorldBoundingBox (world coordinates)
+        let worldBoundingBoxes: unknown = null;
+        try {
+          worldBoundingBoxes = await (api.viewer as any).getObjectsWorldBoundingBox?.(modelId, runtimeIds);
+          console.log('📍 [3] getObjectsWorldBoundingBox:', worldBoundingBoxes);
+        } catch (e) {
+          console.warn('Could not get world bounding box:', e);
+        }
+
+        // Method 4: getObjectWorldMatrix (transformation matrix)
+        let worldMatrices: unknown[] = [];
+        try {
+          worldMatrices = await (api.viewer as any).getObjectWorldMatrix?.(modelId, runtimeIds) || [];
+          console.log('📍 [4] getObjectWorldMatrix:', worldMatrices);
+        } catch (e) {
+          console.warn('Could not get world matrix:', e);
+        }
+
+        // Method 5: getObjectsInfo
         let objectsInfo: unknown[] = [];
         try {
           objectsInfo = await (api.viewer as any).getObjectsInfo?.(modelId, runtimeIds) || [];
-          console.log('📍 Objects info:', objectsInfo);
+          console.log('📍 [5] getObjectsInfo:', objectsInfo);
         } catch (e) {
           console.warn('Could not get objects info:', e);
         }
+
+        // Method 6: Try to get placement/transform from object tree
+        let objectTree: unknown = null;
+        try {
+          objectTree = await (api.viewer as any).getObjectTree?.(modelId, runtimeIds[0]);
+          console.log('📍 [6] getObjectTree:', objectTree);
+        } catch (e) {
+          console.warn('Could not get object tree:', e);
+        }
+
+        // Log all available viewer methods for discovery
+        console.log('📍 Available viewer methods:', Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function'));
 
         for (let i = 0; i < runtimeIds.length; i++) {
           const objProps = properties[i];
@@ -265,7 +296,10 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 properties: objProps,
                 metadata: objMetadata,
                 boundingBox: boundingBoxes[i] || null,
-                objectInfo: objectsInfo[i] || null
+                worldBoundingBox: worldBoundingBoxes,
+                worldMatrix: worldMatrices[i] || null,
+                objectInfo: objectsInfo[i] || null,
+                objectTree: objectTree
               }
             });
           }
