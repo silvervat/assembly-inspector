@@ -4,6 +4,14 @@
 -- and tracking inspection results with responses
 -- ============================================================
 
+-- 0. CLEANUP - Drop existing tables if partially created
+-- ============================================================
+DROP VIEW IF EXISTS checkpoint_completion_stats;
+DROP TABLE IF EXISTS inspection_result_photos CASCADE;
+DROP TABLE IF EXISTS inspection_results CASCADE;
+DROP TABLE IF EXISTS inspection_checkpoint_attachments CASCADE;
+DROP TABLE IF EXISTS inspection_checkpoints CASCADE;
+
 -- 1. INSPECTION CHECKPOINTS TABLE
 -- Specific control points within a category
 -- ============================================================

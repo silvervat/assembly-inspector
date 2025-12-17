@@ -203,7 +203,14 @@ export default function InspectorScreen({
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
 
-      if (checkpointsError) throw checkpointsError;
+      // If table doesn't exist (42P01) or other error, just skip checkpoints
+      if (checkpointsError) {
+        if (checkpointsError.code === '42P01' || checkpointsError.message?.includes('does not exist')) {
+          console.log('ℹ️ Checkpoint tables not yet created - run migration');
+          return;
+        }
+        throw checkpointsError;
+      }
 
       if (checkpointsData && checkpointsData.length > 0) {
         // Map attachments to the expected format
@@ -214,19 +221,29 @@ export default function InspectorScreen({
         setCheckpoints(checkpointsWithAttachments);
 
         // Check for existing results for this assembly
-        const { data: resultsData } = await supabase
-          .from('inspection_results')
-          .select('*')
-          .eq('project_id', projectId)
-          .eq('assembly_guid', assemblyGuid);
+        try {
+          const { data: resultsData, error: resultsError } = await supabase
+            .from('inspection_results')
+            .select('*')
+            .eq('project_id', projectId)
+            .eq('assembly_guid', assemblyGuid);
 
-        if (resultsData && resultsData.length > 0) {
-          setCheckpointResults(resultsData);
+          if (!resultsError && resultsData && resultsData.length > 0) {
+            setCheckpointResults(resultsData);
+          }
+        } catch (resultsErr: any) {
+          // Results table might not exist yet - that's OK
+          console.log('ℹ️ Results table not accessible:', resultsErr.message);
         }
 
         console.log(`✅ Found ${checkpointsData.length} checkpoints for category ${categoryId}`);
       }
     } catch (e: any) {
+      // Table doesn't exist - skip silently
+      if (e.code === '42P01' || e.message?.includes('does not exist')) {
+        console.log('ℹ️ Checkpoint tables not yet created');
+        return;
+      }
       console.error('Failed to fetch checkpoints:', e);
     } finally {
       setLoadingCheckpoints(false);
