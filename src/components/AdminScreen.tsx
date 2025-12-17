@@ -165,18 +165,21 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               objectType: product?.objectType || (objMetadata as any)?.objectType,
               description: product?.description || (objMetadata as any)?.description,
               ownerHistory: product ? {
-                creationDate: product.creationDate,
-                lastModifiedDate: product.lastModificationDate,
-                owningUser: product.personId,
-                owningApplication: `${product.applicationFullName} (${product.applicationVersion})`,
-                changeAction: String(product.changeAction),
-                state: String(product.state),
+                creationDate: product.creationDate != null ? String(product.creationDate) : undefined,
+                lastModifiedDate: product.lastModificationDate != null ? String(product.lastModificationDate) : undefined,
+                owningUser: product.personId != null ? String(product.personId) : undefined,
+                owningApplication: product.applicationFullName
+                  ? `${product.applicationFullName} (${product.applicationVersion || ''})`
+                  : undefined,
+                changeAction: product.changeAction != null ? String(product.changeAction) : undefined,
+                state: product.state != null ? String(product.state) : undefined,
               } : undefined,
             };
 
-            // Log product info for debugging
+            // Debug: Log specific product fields
             if (product) {
-              console.log('📋 Product info found:', safeStringify(product, 2));
+              console.log('📋 Product creationDate:', product.creationDate, typeof product.creationDate);
+              console.log('📋 Product lastModificationDate:', product.lastModificationDate, typeof product.lastModificationDate);
             }
 
             // Console log full raw data for debugging
