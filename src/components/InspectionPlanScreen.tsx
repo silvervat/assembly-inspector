@@ -1,7 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiAlertTriangle, FiTarget } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
+
+// Inspection data for a plan item
+interface InspectionData {
+  id: string;
+  inspected_at: string;
+  inspector_name: string;
+  user_email?: string;
+  photo_urls?: string[];
+  notes?: string;
+  model_id: string;
+  object_runtime_id: number;
+}
+
+// Plan item with inspection statistics
+interface PlanItemWithStats extends InspectionPlanItem {
+  inspections?: InspectionData[];
+  inspection_count?: number;
+  photo_count?: number;
+  has_issues?: boolean;
+}
 
 interface InspectionPlanScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -47,8 +67,11 @@ export default function InspectionPlanScreen({
   // Data state
   const [inspectionTypes, setInspectionTypes] = useState<InspectionTypeRef[]>([]);
   const [categories, setCategories] = useState<InspectionCategory[]>([]);
-  const [planItems, setPlanItems] = useState<InspectionPlanItem[]>([]);
+  const [planItems, setPlanItems] = useState<PlanItemWithStats[]>([]);
   const [stats, setStats] = useState<InspectionPlanStats | null>(null);
+
+  // Expanded items state
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
   // Selection state
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
@@ -138,9 +161,10 @@ export default function InspectionPlanScreen({
     }
   };
 
-  // Fetch existing plan items for this project
+  // Fetch existing plan items for this project with inspection data
   const fetchPlanItems = async () => {
     try {
+      // Fetch plan items
       const { data, error } = await supabase
         .from('inspection_plan_items')
         .select(`
@@ -152,24 +176,78 @@ export default function InspectionPlanScreen({
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPlanItems(data || []);
 
-      // Calculate stats
-      if (data && data.length > 0) {
-        const statsData: InspectionPlanStats = {
-          project_id: projectId,
-          total_items: data.length,
-          planned_count: data.filter(i => i.status === 'planned').length,
-          in_progress_count: data.filter(i => i.status === 'in_progress').length,
-          completed_count: data.filter(i => i.status === 'completed').length,
-          skipped_count: data.filter(i => i.status === 'skipped').length,
-          assembly_on_count: data.filter(i => i.assembly_selection_mode).length,
-          assembly_off_count: data.filter(i => !i.assembly_selection_mode).length
-        };
-        setStats(statsData);
-      } else {
+      if (!data || data.length === 0) {
+        setPlanItems([]);
         setStats(null);
+        return;
       }
+
+      // Get all GUIDs to fetch matching inspections
+      const guids = data.map(item => item.guid).filter(Boolean);
+
+      // Fetch inspections for these GUIDs
+      const { data: inspections, error: inspError } = await supabase
+        .from('inspections')
+        .select('id, guid, guid_ifc, inspected_at, inspector_name, user_email, photo_urls, notes, model_id, object_runtime_id')
+        .eq('project_id', projectId)
+        .or(`guid.in.(${guids.join(',')}),guid_ifc.in.(${guids.join(',')})`);
+
+      // Create a map of GUID -> inspections
+      const inspectionMap: Record<string, InspectionData[]> = {};
+      if (inspections && !inspError) {
+        for (const insp of inspections) {
+          const guid = insp.guid || insp.guid_ifc;
+          if (guid) {
+            if (!inspectionMap[guid]) {
+              inspectionMap[guid] = [];
+            }
+            inspectionMap[guid].push({
+              id: insp.id,
+              inspected_at: insp.inspected_at,
+              inspector_name: insp.inspector_name,
+              user_email: insp.user_email,
+              photo_urls: insp.photo_urls,
+              notes: insp.notes,
+              model_id: insp.model_id,
+              object_runtime_id: insp.object_runtime_id
+            });
+          }
+        }
+      }
+
+      // Merge inspection data with plan items
+      const itemsWithStats: PlanItemWithStats[] = data.map(item => {
+        const itemInspections = inspectionMap[item.guid] || [];
+        const photoCount = itemInspections.reduce((sum, insp) => sum + (insp.photo_urls?.length || 0), 0);
+        const hasIssues = itemInspections.some(insp => insp.notes && insp.notes.length > 0);
+
+        return {
+          ...item,
+          inspections: itemInspections,
+          inspection_count: itemInspections.length,
+          photo_count: photoCount,
+          has_issues: hasIssues
+        };
+      });
+
+      setPlanItems(itemsWithStats);
+
+      // Calculate stats including inspection data
+      const totalInspected = itemsWithStats.filter(i => (i.inspection_count || 0) > 0).length;
+
+      const statsData: InspectionPlanStats = {
+        project_id: projectId,
+        total_items: data.length,
+        planned_count: data.filter(i => i.status === 'planned').length,
+        in_progress_count: data.filter(i => i.status === 'in_progress').length,
+        completed_count: totalInspected, // Use actual inspection count
+        skipped_count: data.filter(i => i.status === 'skipped').length,
+        assembly_on_count: data.filter(i => i.assembly_selection_mode).length,
+        assembly_off_count: data.filter(i => !i.assembly_selection_mode).length
+      };
+      setStats(statsData);
+
     } catch (error) {
       console.error('Failed to fetch plan items:', error);
     }
@@ -422,6 +500,122 @@ export default function InspectionPlanScreen({
     }
   };
 
+  // Toggle item expansion
+  const toggleExpand = (itemId: string) => {
+    setExpandedItemId(expandedItemId === itemId ? null : itemId);
+  };
+
+  // Select completed items in model (items that have inspections)
+  const selectCompletedItems = async () => {
+    const completedItems = planItems.filter(item => (item.inspection_count || 0) > 0);
+
+    if (completedItems.length === 0) {
+      showMessage('⚠️ Pole tehtud inspektsioone', 'warning');
+      return;
+    }
+
+    try {
+      // Group by model_id
+      const byModel: Record<string, number[]> = {};
+      for (const item of completedItems) {
+        if (!item.object_runtime_id) continue;
+        if (!byModel[item.model_id]) {
+          byModel[item.model_id] = [];
+        }
+        byModel[item.model_id].push(item.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Color them green
+      await api.viewer.setObjectState(
+        { modelObjectIds },
+        { color: { r: 34, g: 197, b: 94, a: 255 } }
+      );
+
+      showMessage(`✅ ${completedItems.length} tehtud objekti valitud`, 'success');
+    } catch (error) {
+      console.error('Failed to select completed items:', error);
+      showMessage('❌ Viga valimisel', 'error');
+    }
+  };
+
+  // Select uncompleted items in model (items without inspections)
+  const selectUncompletedItems = async () => {
+    const uncompletedItems = planItems.filter(item => (item.inspection_count || 0) === 0);
+
+    if (uncompletedItems.length === 0) {
+      showMessage('✅ Kõik on tehtud!', 'success');
+      return;
+    }
+
+    try {
+      // Group by model_id
+      const byModel: Record<string, number[]> = {};
+      for (const item of uncompletedItems) {
+        if (!item.object_runtime_id) continue;
+        if (!byModel[item.model_id]) {
+          byModel[item.model_id] = [];
+        }
+        byModel[item.model_id].push(item.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Color them orange
+      await api.viewer.setObjectState(
+        { modelObjectIds },
+        { color: { r: 249, g: 115, b: 22, a: 255 } }
+      );
+
+      showMessage(`⚠️ ${uncompletedItems.length} tegemata objekti valitud`, 'warning');
+    } catch (error) {
+      console.error('Failed to select uncompleted items:', error);
+      showMessage('❌ Viga valimisel', 'error');
+    }
+  };
+
+  // Select inspection items for a specific inspector
+  const selectInspectorItems = async (inspections: InspectionData[]) => {
+    if (inspections.length === 0) return;
+
+    try {
+      // Group by model_id
+      const byModel: Record<string, number[]> = {};
+      for (const insp of inspections) {
+        if (!byModel[insp.model_id]) {
+          byModel[insp.model_id] = [];
+        }
+        byModel[insp.model_id].push(insp.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Zoom to selection
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+
+      showMessage(`✅ ${inspections.length} inspektsiooni valitud`, 'success');
+    } catch (error) {
+      console.error('Failed to select inspector items:', error);
+      showMessage('❌ Viga valimisel', 'error');
+    }
+  };
+
   // Get filtered categories for selected type
   const filteredCategories = categories.filter(c => c.type_id === selectedTypeId);
 
@@ -659,60 +853,196 @@ export default function InspectionPlanScreen({
               <p>Lisa objekte kavasse "Lisa kavasse" vaates</p>
             </div>
           ) : (
-            <div className="plan-items-list">
-              {planItems.map(item => (
-                <div key={item.id} className={`plan-item status-${item.status}`}>
-                  <div className="plan-item-header">
-                    <span className="plan-item-mark">
-                      {item.assembly_mark || item.object_name || 'Nimeta objekt'}
-                    </span>
-                    <span className={`plan-item-status status-badge-${item.status}`}>
-                      {item.status === 'planned' && '⏳ Ootel'}
-                      {item.status === 'in_progress' && '🔄 Pooleli'}
-                      {item.status === 'completed' && '✅ Tehtud'}
-                      {item.status === 'skipped' && '⏭️ Vahele jäetud'}
-                    </span>
-                  </div>
+            <>
+              {/* Selection Action Buttons */}
+              <div className="plan-selection-actions">
+                <button
+                  className="btn-select-completed"
+                  onClick={selectCompletedItems}
+                >
+                  <FiCheckCircle size={16} />
+                  Vali tehtud ({planItems.filter(i => (i.inspection_count || 0) > 0).length})
+                </button>
+                <button
+                  className="btn-select-uncompleted"
+                  onClick={selectUncompletedItems}
+                >
+                  <FiClock size={16} />
+                  Vali tegemata ({planItems.filter(i => (i.inspection_count || 0) === 0).length})
+                </button>
+              </div>
 
-                  <div className="plan-item-details">
-                    <span className="plan-item-type">
-                      {item.inspection_type?.name || 'Tüüp määramata'}
-                    </span>
-                    {item.category && (
-                      <span className="plan-item-category">
-                        → {item.category.name}
-                      </span>
-                    )}
-                    <span className={`plan-item-assembly-mode ${item.assembly_selection_mode ? 'mode-on' : 'mode-off'}`}>
-                      {item.assembly_selection_mode ? 'Assembly SEES' : 'Assembly VÄLJAS'}
-                    </span>
-                  </div>
+              <div className="plan-items-list">
+                {planItems.map(item => {
+                  const isExpanded = expandedItemId === item.id;
+                  const hasInspections = (item.inspection_count || 0) > 0;
 
-                  {item.planner_notes && (
-                    <div className="plan-item-notes">
-                      📝 {item.planner_notes}
+                  return (
+                    <div
+                      key={item.id}
+                      className={`plan-item ${hasInspections ? 'has-inspections' : 'no-inspections'}`}
+                    >
+                      {/* Main item row - clickable to expand */}
+                      <div
+                        className="plan-item-header clickable"
+                        onClick={() => toggleExpand(item.id)}
+                      >
+                        <div className="plan-item-main">
+                          <span className="plan-item-mark">
+                            {item.assembly_mark || item.object_name || 'Nimeta objekt'}
+                          </span>
+                          <span className={`plan-item-status ${hasInspections ? 'status-done' : 'status-pending'}`}>
+                            {hasInspections ? '✅ Tehtud' : '⏳ Ootel'}
+                          </span>
+                        </div>
+
+                        <div className="plan-item-expand">
+                          {isExpanded ? <FiChevronUp size={18} /> : <FiChevronDown size={18} />}
+                        </div>
+                      </div>
+
+                      {/* Inspection statistics row */}
+                      <div className="plan-item-stats">
+                        <span className="plan-item-type-badge">
+                          {item.inspection_type?.name || 'Tüüp määramata'}
+                        </span>
+                        {item.category && (
+                          <span className="plan-item-category-badge">
+                            {item.category.name}
+                          </span>
+                        )}
+                        <span className={`plan-item-assembly-mode ${item.assembly_selection_mode ? 'mode-on' : 'mode-off'}`}>
+                          {item.assembly_selection_mode ? 'ASM SEES' : 'ASM VÄLJAS'}
+                        </span>
+
+                        {/* Stats badges */}
+                        <div className="plan-item-stat-badges">
+                          <span className={`stat-badge insp-count ${hasInspections ? 'has-data' : ''}`}>
+                            <FiCheckCircle size={12} />
+                            {item.inspection_count || 0}
+                          </span>
+                          <span className={`stat-badge photo-count ${(item.photo_count || 0) > 0 ? 'has-data' : ''}`}>
+                            <FiCamera size={12} />
+                            {item.photo_count || 0}
+                          </span>
+                          {item.has_issues && (
+                            <span className="stat-badge issues-badge">
+                              <FiAlertTriangle size={12} />
+                              Märkmed
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Planner notes */}
+                      {item.planner_notes && (
+                        <div className="plan-item-notes">
+                          📝 {item.planner_notes}
+                        </div>
+                      )}
+
+                      {/* Quick action buttons */}
+                      <div className="plan-item-actions">
+                        <button
+                          className="btn-icon"
+                          onClick={(e) => { e.stopPropagation(); zoomToItem(item); }}
+                          title="Vali mudelist"
+                        >
+                          <FiZoomIn size={16} />
+                        </button>
+                        <button
+                          className="btn-icon btn-danger"
+                          onClick={(e) => { e.stopPropagation(); deleteItem(item); }}
+                          title="Kustuta kavast"
+                        >
+                          <FiTrash2 size={16} />
+                        </button>
+                      </div>
+
+                      {/* Expanded Details */}
+                      {isExpanded && (
+                        <div className="plan-item-expanded">
+                          {hasInspections ? (
+                            <div className="inspection-details">
+                              <h4>Inspektsioonide ajalugu ({item.inspection_count}):</h4>
+                              <div className="inspection-history">
+                                {item.inspections?.map((insp) => (
+                                  <div key={insp.id} className="inspection-history-item">
+                                    <div className="insp-header">
+                                      <span className="insp-inspector">
+                                        <FiUser size={14} />
+                                        {insp.inspector_name}
+                                      </span>
+                                      <span className="insp-date">
+                                        {new Date(insp.inspected_at).toLocaleString('et-EE')}
+                                      </span>
+                                    </div>
+
+                                    {insp.user_email && (
+                                      <div className="insp-email">{insp.user_email}</div>
+                                    )}
+
+                                    {insp.photo_urls && insp.photo_urls.length > 0 && (
+                                      <div className="insp-photos">
+                                        <FiCamera size={12} />
+                                        <span>{insp.photo_urls.length} fotot</span>
+                                        <div className="photo-thumbnails">
+                                          {insp.photo_urls.slice(0, 3).map((url, pIdx) => (
+                                            <a
+                                              key={pIdx}
+                                              href={url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="photo-thumb"
+                                            >
+                                              <img src={url} alt={`Foto ${pIdx + 1}`} />
+                                            </a>
+                                          ))}
+                                          {insp.photo_urls.length > 3 && (
+                                            <span className="more-photos">+{insp.photo_urls.length - 3}</span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {insp.notes && (
+                                      <div className="insp-notes">
+                                        <FiAlertTriangle size={12} />
+                                        {insp.notes}
+                                      </div>
+                                    )}
+
+                                    <button
+                                      className="btn-select-inspector"
+                                      onClick={() => selectInspectorItems([insp])}
+                                    >
+                                      <FiTarget size={14} />
+                                      Vali mudelis
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="no-inspections-msg">
+                              <FiClock size={24} />
+                              <p>Inspektsiooni pole veel tehtud</p>
+                              <button
+                                className="btn-select-item"
+                                onClick={() => zoomToItem(item)}
+                              >
+                                <FiZoomIn size={14} />
+                                Vali mudelist inspekteerimiseks
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-
-                  <div className="plan-item-actions">
-                    <button
-                      className="btn-icon"
-                      onClick={() => zoomToItem(item)}
-                      title="Vali mudelist"
-                    >
-                      <FiZoomIn size={16} />
-                    </button>
-                    <button
-                      className="btn-icon btn-danger"
-                      onClick={() => deleteItem(item)}
-                      title="Kustuta kavast"
-                    >
-                      <FiTrash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {/* Refresh Button */}
