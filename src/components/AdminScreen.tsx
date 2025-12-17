@@ -55,10 +55,21 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   };
 
   // Convert Unix timestamp to formatted date string
-  const formatTimestamp = (timestamp: string | number | undefined): string | undefined => {
+  const formatTimestamp = (timestamp: string | number | bigint | undefined): string | undefined => {
     if (timestamp == null) return undefined;
-    const ts = typeof timestamp === 'string' ? parseInt(timestamp, 10) : timestamp;
+
+    // Handle BigInt, string, and number types
+    let ts: number;
+    if (typeof timestamp === 'bigint') {
+      ts = Number(timestamp);
+    } else if (typeof timestamp === 'string') {
+      ts = parseInt(timestamp, 10);
+    } else {
+      ts = timestamp;
+    }
+
     if (isNaN(ts) || ts === 0) return undefined;
+
     // Unix timestamp is in seconds, JavaScript Date expects milliseconds
     const date = new Date(ts * 1000);
     // Format: DD-MM-YYYY HH:mm:ss
