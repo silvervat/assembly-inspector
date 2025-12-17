@@ -3813,3 +3813,580 @@ body {
   gap: var(--modus-spacing-sm);
   justify-content: flex-end;
 }
+
+/* ============================================
+   CHECKPOINT FORM STYLES (EOS2 Integration)
+   ============================================ */
+
+.checkpoint-form {
+  background: var(--modus-bg-primary);
+  border-radius: var(--modus-radius-md);
+  border: 1px solid var(--modus-border);
+  margin-top: var(--modus-spacing-md);
+  overflow: hidden;
+}
+
+.checkpoint-form-header {
+  background: var(--modus-bg-secondary);
+  padding: var(--modus-spacing-md);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.checkpoint-form-header h3 {
+  font-size: var(--modus-font-size-md);
+  font-weight: 600;
+  color: var(--modus-text-primary);
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.checkpoint-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+}
+
+.checkpoint-progress .progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--modus-border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.checkpoint-progress .progress-fill {
+  height: 100%;
+  background: var(--modus-success);
+  transition: width 0.3s ease;
+}
+
+.checkpoint-progress .progress-text {
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+}
+
+.checkpoint-error {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: #ffeef0;
+  color: var(--modus-danger);
+  font-size: var(--modus-font-size-sm);
+  border-bottom: 1px solid #ffcccc;
+}
+
+.checkpoint-error .error-icon {
+  flex-shrink: 0;
+}
+
+.checkpoint-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+/* Checkpoint Item */
+.checkpoint-item {
+  border-bottom: 1px solid var(--modus-border-light);
+}
+
+.checkpoint-item:last-child {
+  border-bottom: none;
+}
+
+.checkpoint-item.completed .checkpoint-header {
+  background: #f0fff4;
+}
+
+.checkpoint-item.required .checkpoint-number {
+  background: var(--modus-primary);
+}
+
+.checkpoint-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.checkpoint-header:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.checkpoint-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--modus-secondary);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--modus-font-size-xs);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.checkpoint-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.checkpoint-name {
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+  color: var(--modus-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.checkpoint-name .required-badge {
+  color: var(--modus-danger);
+  font-weight: 600;
+}
+
+.checkpoint-description {
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkpoint-status {
+  flex-shrink: 0;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-badge.pending {
+  background: var(--modus-bg-tertiary);
+  color: var(--modus-text-secondary);
+}
+
+/* Checkpoint Content (expanded) */
+.checkpoint-content {
+  padding: var(--modus-spacing-md);
+  background: var(--modus-bg-secondary);
+  border-top: 1px solid var(--modus-border-light);
+}
+
+/* Instructions Toggle */
+.checkpoint-instructions-toggle {
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.instructions-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  color: var(--modus-primary);
+  font-size: var(--modus-font-size-xs);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.instructions-btn:hover {
+  background: var(--modus-primary-selected);
+}
+
+/* Instructions Content */
+.checkpoint-instructions {
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border-light);
+  border-radius: var(--modus-radius-sm);
+  padding: var(--modus-spacing-md);
+  margin-bottom: var(--modus-spacing-md);
+  font-size: var(--modus-font-size-sm);
+}
+
+.checkpoint-instructions .instruction-h2 {
+  font-size: var(--modus-font-size-sm);
+  font-weight: 600;
+  color: var(--modus-text-primary);
+  margin: var(--modus-spacing-md) 0 var(--modus-spacing-sm);
+}
+
+.checkpoint-instructions .instruction-h2:first-child {
+  margin-top: 0;
+}
+
+.checkpoint-instructions .instruction-h3 {
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+  color: var(--modus-text-secondary);
+  margin: var(--modus-spacing-sm) 0;
+}
+
+.checkpoint-instructions .instruction-p {
+  margin: var(--modus-spacing-xs) 0;
+  color: var(--modus-text-primary);
+  line-height: 1.5;
+}
+
+.checkpoint-instructions .instruction-ol,
+.checkpoint-instructions .instruction-ul {
+  margin-left: var(--modus-spacing-md);
+  margin-bottom: var(--modus-spacing-xs);
+  color: var(--modus-text-primary);
+  line-height: 1.5;
+}
+
+/* Attachments */
+.checkpoint-attachments {
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.attachments-header {
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+  margin-bottom: var(--modus-spacing-xs);
+}
+
+.attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--modus-spacing-xs);
+}
+
+.attachment-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  color: var(--modus-primary);
+  font-size: var(--modus-font-size-xs);
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.attachment-link:hover {
+  background: var(--modus-primary-selected);
+}
+
+/* Response Options */
+.checkpoint-responses {
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.response-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--modus-spacing-xs);
+}
+
+.response-option {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-bg-primary);
+  border: 2px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex: 1;
+  min-width: 100px;
+  justify-content: center;
+}
+
+.response-option input {
+  display: none;
+}
+
+.response-option .option-label {
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+}
+
+.response-option .check-icon {
+  color: inherit;
+}
+
+/* Response Color Classes */
+.response-option.response-green {
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.response-option.response-green.selected {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
+.response-option.response-yellow {
+  border-color: #eab308;
+  color: #854d0e;
+}
+
+.response-option.response-yellow.selected {
+  background: #fef9c3;
+  border-color: #ca8a04;
+}
+
+.response-option.response-red {
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.response-option.response-red.selected {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+
+.response-option.response-blue {
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.response-option.response-blue.selected {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
+.response-option.response-gray {
+  border-color: #9ca3af;
+  color: #4b5563;
+}
+
+.response-option.response-gray.selected {
+  background: #f3f4f6;
+  border-color: #6b7280;
+}
+
+.response-option.response-orange {
+  border-color: #f97316;
+  color: #9a3412;
+}
+
+.response-option.response-orange.selected {
+  background: #ffedd5;
+  border-color: #ea580c;
+}
+
+/* Dropdown */
+.response-dropdown {
+  width: 100%;
+  padding: var(--modus-spacing-sm);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-sm);
+  background: var(--modus-bg-primary);
+}
+
+/* Photos Section */
+.checkpoint-photos {
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.checkpoint-photos .photos-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-secondary);
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.checkpoint-photos .photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: var(--modus-spacing-sm);
+}
+
+.checkpoint-photos .photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--modus-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--modus-border);
+}
+
+.checkpoint-photos .photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.checkpoint-photos .photo-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.checkpoint-photos .photo-add-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  aspect-ratio: 1;
+  border: 2px dashed var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  background: var(--modus-bg-primary);
+  color: var(--modus-primary);
+  cursor: pointer;
+  font-size: var(--modus-font-size-xs);
+  transition: all 0.2s;
+}
+
+.checkpoint-photos .photo-add-btn:hover {
+  background: var(--modus-primary-selected);
+  border-color: var(--modus-primary);
+}
+
+.checkpoint-photos .photos-warning {
+  margin-top: var(--modus-spacing-xs);
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-warning);
+}
+
+/* Comment Section */
+.checkpoint-comment {
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.checkpoint-comment .comment-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-secondary);
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.checkpoint-comment .comment-input {
+  width: 100%;
+  padding: var(--modus-spacing-sm);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-family: inherit;
+  font-size: var(--modus-font-size-sm);
+  resize: vertical;
+}
+
+.checkpoint-comment .comment-input:focus {
+  outline: none;
+  border-color: var(--modus-primary);
+}
+
+.checkpoint-comment .comment-warning {
+  margin-top: var(--modus-spacing-xs);
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-warning);
+}
+
+/* Form Actions */
+.checkpoint-form-actions {
+  display: flex;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-md);
+  background: var(--modus-bg-secondary);
+  border-top: 1px solid var(--modus-border);
+}
+
+.checkpoint-form-actions .cancel-btn {
+  flex: 1;
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  color: var(--modus-text-secondary);
+  font-size: var(--modus-font-size-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkpoint-form-actions .cancel-btn:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.checkpoint-form-actions .submit-btn {
+  flex: 2;
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-success);
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  color: white;
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkpoint-form-actions .submit-btn:hover:not(:disabled) {
+  background: #166534;
+}
+
+.checkpoint-form-actions .submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Plan Card Checkpoints Button */
+.plan-card-checkpoints {
+  margin-top: var(--modus-spacing-md);
+  padding-top: var(--modus-spacing-md);
+  border-top: 1px solid var(--modus-border-light);
+}
+
+.checkpoints-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  width: 100%;
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkpoints-btn:hover:not(:disabled) {
+  background: var(--modus-primary-dark);
+}
+
+.checkpoints-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.checkpoints-btn .results-badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  font-size: 11px;
+}

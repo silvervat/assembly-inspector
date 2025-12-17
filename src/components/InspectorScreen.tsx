@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory } from '../supabase';
+import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult } from '../supabase';
 import { InspectionMode } from './MainMenu';
-import { FiArrowLeft, FiClipboard, FiAlertCircle } from 'react-icons/fi';
+import { FiArrowLeft, FiClipboard, FiAlertCircle, FiList } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
 import InspectionList, { InspectionItem } from './InspectionList';
+import CheckpointForm from './CheckpointForm';
 
 // Inspection plan with joined type and category
 interface PlanWithDetails extends InspectionPlanItem {
@@ -117,6 +118,10 @@ export default function InspectorScreen({
     userEmail?: string;
   } | null>(null);
   const [assignedPlan, setAssignedPlan] = useState<PlanWithDetails | null>(null);
+  const [checkpoints, setCheckpoints] = useState<InspectionCheckpoint[]>([]);
+  const [showCheckpointForm, setShowCheckpointForm] = useState(false);
+  const [checkpointResults, setCheckpointResults] = useState<InspectionResult[]>([]);
+  const [loadingCheckpoints, setLoadingCheckpoints] = useState(false);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
   const [includeTopView, setIncludeTopView] = useState(true);
   const [autoClosePanel, setAutoClosePanel] = useState(false);
@@ -179,10 +184,61 @@ export default function InspectorScreen({
     checkAssemblySelection();
   }, [checkAssemblySelection]);
 
+  // Fetch checkpoints for a category
+  const fetchCheckpoints = useCallback(async (categoryId: string, assemblyGuid: string) => {
+    setLoadingCheckpoints(true);
+    setCheckpoints([]);
+    setCheckpointResults([]);
+    setShowCheckpointForm(false);
+
+    try {
+      // Fetch active checkpoints for this category
+      const { data: checkpointsData, error: checkpointsError } = await supabase
+        .from('inspection_checkpoints')
+        .select(`
+          *,
+          inspection_checkpoint_attachments (*)
+        `)
+        .eq('category_id', categoryId)
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (checkpointsError) throw checkpointsError;
+
+      if (checkpointsData && checkpointsData.length > 0) {
+        // Map attachments to the expected format
+        const checkpointsWithAttachments = checkpointsData.map(cp => ({
+          ...cp,
+          attachments: cp.inspection_checkpoint_attachments || []
+        }));
+        setCheckpoints(checkpointsWithAttachments);
+
+        // Check for existing results for this assembly
+        const { data: resultsData } = await supabase
+          .from('inspection_results')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('assembly_guid', assemblyGuid);
+
+        if (resultsData && resultsData.length > 0) {
+          setCheckpointResults(resultsData);
+        }
+
+        console.log(`✅ Found ${checkpointsData.length} checkpoints for category ${categoryId}`);
+      }
+    } catch (e: any) {
+      console.error('Failed to fetch checkpoints:', e);
+    } finally {
+      setLoadingCheckpoints(false);
+    }
+  }, [projectId]);
+
   // Valideeri valik - useCallback, et saaks kasutada checkSelection'is
   const validateSelection = useCallback(async (objects: SelectedObject[]) => {
     setExistingInspection(null);
     setAssignedPlan(null);
+    setCheckpoints([]);
+    setShowCheckpointForm(false);
 
     if (objects.length === 0) {
       setCanInspect(false);
@@ -293,6 +349,12 @@ export default function InspectorScreen({
             category: foundPlan.inspection_categories as InspectionCategory | undefined
           };
           setAssignedPlan(planWithDetails);
+
+          // Fetch checkpoints if category is assigned
+          if (planWithDetails.category_id) {
+            const guidForCheckpoints = obj.guidIfc || obj.guid || obj.guidMs || '';
+            fetchCheckpoints(planWithDetails.category_id, guidForCheckpoints);
+          }
         }
       }
 
@@ -307,7 +369,7 @@ export default function InspectorScreen({
         setMessage('');
       }
     }
-  }, [assemblySelectionEnabled, projectId, inspectionMode, requiresAssemblySelection]);
+  }, [assemblySelectionEnabled, projectId, inspectionMode, requiresAssemblySelection, fetchCheckpoints]);
 
   // Peamine valiku kontroll - useCallback
   const checkSelection = useCallback(async () => {
@@ -1518,8 +1580,51 @@ export default function InspectorScreen({
                 <div className="plan-notes-content">{assignedPlan.planner_notes}</div>
               </div>
             )}
+
+            {/* Checkpoints button */}
+            {checkpoints.length > 0 && !showCheckpointForm && (
+              <div className="plan-card-checkpoints">
+                <button
+                  className="checkpoints-btn"
+                  onClick={() => setShowCheckpointForm(true)}
+                  disabled={loadingCheckpoints}
+                >
+                  <FiList />
+                  <span>
+                    {loadingCheckpoints ? 'Laadin...' : `Kontrollpunktid (${checkpoints.length})`}
+                  </span>
+                  {checkpointResults.length > 0 && (
+                    <span className="results-badge">
+                      {checkpointResults.length} täidetud
+                    </span>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Checkpoint Form - show when checkpoints are available and form is open */}
+      {inspectionListMode === 'none' && showCheckpointForm && checkpoints.length > 0 && selectedObjects.length === 1 && (
+        <CheckpointForm
+          checkpoints={checkpoints}
+          planItemId={assignedPlan?.id}
+          projectId={projectId}
+          assemblyGuid={selectedObjects[0].guidIfc || selectedObjects[0].guid || selectedObjects[0].guidMs || ''}
+          assemblyName={selectedObjects[0].assemblyMark}
+          inspectorId={user.id}
+          inspectorName={user.name || tcUserEmail || 'Unknown'}
+          userEmail={tcUserEmail}
+          existingResults={checkpointResults}
+          onComplete={(results) => {
+            setCheckpointResults(results);
+            setShowCheckpointForm(false);
+            setMessage(`✅ Kontrollpunktid salvestatud (${results.length})`);
+            setTimeout(() => setMessage(''), 3000);
+          }}
+          onCancel={() => setShowCheckpointForm(false)}
+        />
       )}
 
       {/* Foto lisamine - hide when list view is active */}
