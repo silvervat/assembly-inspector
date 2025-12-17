@@ -68,6 +68,7 @@ export default function InspectionList({
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [selectedInspection, setSelectedInspection] = useState<InspectionItem | null>(null);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const groupedInspections = groupByDate(inspections);
   const sortedDates = Object.keys(groupedInspections).sort((a, b) => {
@@ -88,6 +89,8 @@ export default function InspectionList({
   // Handle group header click - select all items in group
   const handleGroupClick = (date: string) => {
     const groupItems = groupedInspections[date];
+    // Update selected IDs
+    setSelectedIds(new Set(groupItems.map(item => item.id)));
     onSelectGroup(groupItems);
     // Also expand the group
     if (!expandedDates.has(date)) {
@@ -99,17 +102,23 @@ export default function InspectionList({
   const handleGroupZoom = (e: React.MouseEvent, date: string) => {
     e.stopPropagation();
     const groupItems = groupedInspections[date];
+    // Update selected IDs
+    setSelectedIds(new Set(groupItems.map(item => item.id)));
     onZoomToGroup(groupItems);
   };
 
   // Handle single inspection zoom
   const handleZoom = (e: React.MouseEvent, inspection: InspectionItem) => {
     e.stopPropagation();
+    // Update selected ID
+    setSelectedIds(new Set([inspection.id]));
     onZoomToInspection(inspection);
   };
 
   // Handle item click - select in model
   const handleInspectionClick = (inspection: InspectionItem) => {
+    // Update selected ID
+    setSelectedIds(new Set([inspection.id]));
     onSelectInspection(inspection);
   };
 
@@ -164,7 +173,7 @@ export default function InspectionList({
                 {groupedInspections[date].map(insp => (
                   <div
                     key={insp.id}
-                    className="inspection-item"
+                    className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
                     onClick={() => handleInspectionClick(insp)}
                   >
                     <div className="inspection-item-main">

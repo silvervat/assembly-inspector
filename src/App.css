@@ -1416,6 +1416,14 @@ body {
   border-bottom: none;
 }
 
+.inspection-item-selected {
+  background: var(--modus-primary-selected);
+}
+
+.inspection-item-selected:hover {
+  background: var(--modus-primary-selected);
+}
+
 .inspection-item-main {
   flex: 1;
   min-width: 0;

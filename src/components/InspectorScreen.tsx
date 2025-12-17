@@ -1122,9 +1122,6 @@ export default function InspectorScreen({
           objectRuntimeIds: [inspection.object_runtime_id]
         }]
       }, 'set');
-
-      setMessage(`✓ ${inspection.assembly_mark || 'Element'}`);
-      setTimeout(() => setMessage(''), 1500);
     } catch (e) {
       console.error('Failed to select inspection:', e);
     }
@@ -1148,9 +1145,6 @@ export default function InspectorScreen({
       }));
 
       await api.viewer.setSelection({ modelObjectIds }, 'set');
-
-      setMessage(`✓ Märgistatud ${inspections.length} elementi`);
-      setTimeout(() => setMessage(''), 1500);
     } catch (e) {
       console.error('Failed to select group:', e);
     }
@@ -1179,13 +1173,8 @@ export default function InspectorScreen({
       // Zoom to selected objects using setCamera with ObjectSelector
       // This automatically fits the camera to show all selected objects
       await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
-
-      setMessage(`🔍 ${inspections.length} elementi`);
-      setTimeout(() => setMessage(''), 2000);
     } catch (e) {
       console.error('Failed to zoom to group:', e);
-      setMessage('❌ Zoom ebaõnnestus');
-      setTimeout(() => setMessage(''), 2000);
     }
   };
 
@@ -1203,13 +1192,8 @@ export default function InspectorScreen({
       // Zoom to selected object using setCamera with ObjectSelector
       // This automatically fits the camera to show the selected object
       await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
-
-      setMessage(`🔍 ${inspection.assembly_mark || 'Element'}`);
-      setTimeout(() => setMessage(''), 2000);
     } catch (e) {
       console.error('Failed to zoom to inspection:', e);
-      setMessage('❌ Zoom ebaõnnestus');
-      setTimeout(() => setMessage(''), 2000);
     }
   };
 
