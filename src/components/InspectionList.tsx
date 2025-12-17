@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FiChevronDown, FiChevronRight, FiZoomIn, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo } from 'react-icons/fi';
 
 export interface InspectionItem {
   id: string;
@@ -25,6 +25,9 @@ interface InspectionListProps {
   hasMore: boolean;
   loadingMore: boolean;
   onZoomToInspection: (inspection: InspectionItem) => void;
+  onSelectInspection: (inspection: InspectionItem) => void;
+  onSelectGroup: (inspections: InspectionItem[]) => void;
+  onZoomToGroup: (inspections: InspectionItem[]) => void;
   onLoadMore: () => void;
   onClose: () => void;
 }
@@ -56,6 +59,9 @@ export default function InspectionList({
   hasMore,
   loadingMore,
   onZoomToInspection,
+  onSelectInspection,
+  onSelectGroup,
+  onZoomToGroup,
   onLoadMore,
   onClose
 }: InspectionListProps) {
@@ -79,12 +85,37 @@ export default function InspectionList({
     setExpandedDates(newExpanded);
   };
 
+  // Handle group header click - select all items in group
+  const handleGroupClick = (date: string) => {
+    const groupItems = groupedInspections[date];
+    onSelectGroup(groupItems);
+    // Also expand the group
+    if (!expandedDates.has(date)) {
+      toggleDate(date);
+    }
+  };
+
+  // Handle group zoom button - zoom to all items in group
+  const handleGroupZoom = (e: React.MouseEvent, date: string) => {
+    e.stopPropagation();
+    const groupItems = groupedInspections[date];
+    onZoomToGroup(groupItems);
+  };
+
+  // Handle single inspection zoom
   const handleZoom = (e: React.MouseEvent, inspection: InspectionItem) => {
     e.stopPropagation();
     onZoomToInspection(inspection);
   };
 
+  // Handle item click - select in model
   const handleInspectionClick = (inspection: InspectionItem) => {
+    onSelectInspection(inspection);
+  };
+
+  // Handle item double-click or info button - show detail modal
+  const handleShowDetail = (e: React.MouseEvent, inspection: InspectionItem) => {
+    e.stopPropagation();
     setSelectedInspection(inspection);
   };
 
@@ -105,14 +136,28 @@ export default function InspectionList({
       <div className="inspection-list-content">
         {sortedDates.map(date => (
           <div key={date} className="inspection-date-group">
-            <button
-              className="date-group-header"
-              onClick={() => toggleDate(date)}
-            >
-              {expandedDates.has(date) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
-              <span className="date-label">{date}</span>
-              <span className="date-count">{groupedInspections[date].length}</span>
-            </button>
+            <div className="date-group-header">
+              <button
+                className="date-group-toggle"
+                onClick={() => toggleDate(date)}
+              >
+                {expandedDates.has(date) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+              </button>
+              <div
+                className="date-group-main"
+                onClick={() => handleGroupClick(date)}
+              >
+                <span className="date-label">{date}</span>
+                <span className="date-count">{groupedInspections[date].length}</span>
+              </div>
+              <button
+                className="date-group-zoom-btn"
+                onClick={(e) => handleGroupZoom(e, date)}
+                title="Märgista ja zoom kõik grupi detailid"
+              >
+                <FiZoomIn size={16} />
+              </button>
+            </div>
 
             {expandedDates.has(date) && (
               <div className="date-group-items">
@@ -134,6 +179,13 @@ export default function InspectionList({
                         minute: '2-digit'
                       })}
                     </div>
+                    <button
+                      className="inspection-info-btn"
+                      onClick={(e) => handleShowDetail(e, insp)}
+                      title="Näita detaile"
+                    >
+                      <FiInfo size={16} />
+                    </button>
                     <button
                       className="inspection-zoom-btn"
                       onClick={(e) => handleZoom(e, insp)}
