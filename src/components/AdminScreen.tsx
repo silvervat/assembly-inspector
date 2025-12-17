@@ -694,6 +694,117 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   )}
                 </div>
 
+                {/* Child Objects Section (Alam-detailid) */}
+                {obj.rawData && (obj.rawData as any).childFullProperties && Array.isArray((obj.rawData as any).childFullProperties) && (obj.rawData as any).childFullProperties.length > 0 && (
+                  <div className="property-set children-section">
+                    <button
+                      className="pset-header children-header"
+                      onClick={() => togglePropertySet(`children-${objIdx}`)}
+                    >
+                      <span className="pset-toggle">{expandedSets.has(`children-${objIdx}`) ? '▼' : '▶'}</span>
+                      <span className="pset-name">🧩 Alam-detailid ({(obj.rawData as any).childFullProperties.length} tk)</span>
+                    </button>
+                    {expandedSets.has(`children-${objIdx}`) && (
+                      <div className="children-list">
+                        {((obj.rawData as any).childFullProperties as any[]).map((child: any, childIdx: number) => {
+                          const childKey = `child-${objIdx}-${childIdx}`;
+                          const childName = child?.product?.name || child?.name || 'Unknown';
+                          const childDesc = child?.product?.description || child?.description || '';
+                          const childPos = child?._position;
+                          const childProps = child?.properties || [];
+
+                          // Extract key measurements from property sets
+                          let profile = '';
+                          let material = '';
+                          let length = '';
+                          let weight = '';
+                          let partMark = '';
+
+                          if (Array.isArray(childProps)) {
+                            for (const pset of childProps) {
+                              const props = pset?.properties || [];
+                              for (const prop of props) {
+                                const pname = (prop?.name || '').toLowerCase();
+                                const pval = prop?.displayValue ?? prop?.value;
+                                if (pname === 'profile' || pname === 'profilename') profile = profile || String(pval);
+                                if (pname === 'material' || pname === 'grade') material = material || String(pval);
+                                if (pname === 'length') length = length || String(pval);
+                                if (pname === 'weight' || pname === 'netweight') weight = weight || String(pval);
+                                if (pname === 'part mark' || pname === 'preliminary mark') partMark = partMark || String(pval);
+                              }
+                            }
+                          }
+
+                          return (
+                            <div key={childKey} className="child-item">
+                              <button
+                                className="child-header"
+                                onClick={() => togglePropertySet(childKey)}
+                              >
+                                <span className="pset-toggle">{expandedSets.has(childKey) ? '▼' : '▶'}</span>
+                                <span className="child-name">{childName}</span>
+                                {childDesc && <span className="child-desc">{childDesc}</span>}
+                                {partMark && <span className="child-mark">[{partMark}]</span>}
+                              </button>
+
+                              {expandedSets.has(childKey) && (
+                                <div className="child-details">
+                                  {/* Quick summary */}
+                                  <div className="child-summary">
+                                    {profile && <span className="child-tag">📐 {profile}</span>}
+                                    {material && <span className="child-tag">🔩 {material}</span>}
+                                    {length && <span className="child-tag">📏 {length}mm</span>}
+                                    {weight && <span className="child-tag">⚖️ {weight}kg</span>}
+                                  </div>
+
+                                  {/* Position */}
+                                  {childPos && (
+                                    <div className="child-position">
+                                      <span className="pos-label">Position:</span>
+                                      <span>X: {childPos.x?.toFixed(3)}</span>
+                                      <span>Y: {childPos.y?.toFixed(3)}</span>
+                                      <span>Z: {childPos.z?.toFixed(3)}</span>
+                                    </div>
+                                  )}
+
+                                  {/* All property sets */}
+                                  {Array.isArray(childProps) && childProps.map((pset: any, psetIdx: number) => {
+                                    const psetKey = `${childKey}-pset-${psetIdx}`;
+                                    const psetName = pset?.name || pset?.set || 'Properties';
+                                    const psetProps = pset?.properties || [];
+
+                                    return (
+                                      <div key={psetKey} className="child-pset">
+                                        <button
+                                          className="child-pset-header"
+                                          onClick={() => togglePropertySet(psetKey)}
+                                        >
+                                          <span className="pset-toggle">{expandedSets.has(psetKey) ? '▼' : '▶'}</span>
+                                          <span>{psetName} ({psetProps.length})</span>
+                                        </button>
+                                        {expandedSets.has(psetKey) && (
+                                          <div className="child-pset-props">
+                                            {psetProps.map((prop: any, propIdx: number) => (
+                                              <div key={propIdx} className="property-row">
+                                                <span className="prop-name">{prop?.name}</span>
+                                                <span className="prop-value">{formatValue(prop?.displayValue ?? prop?.value)}</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Raw Data Section for debugging */}
                 {obj.rawData && (
                   <div className="property-set raw-data-section">
