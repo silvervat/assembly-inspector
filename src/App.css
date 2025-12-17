@@ -514,6 +514,12 @@ body {
   margin-top: var(--modus-spacing-xs);
 }
 
+.bolt-thread-type {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  margin-left: 4px;
+}
+
 .bolt-details {
   margin-top: var(--modus-spacing-xs);
   font-size: var(--modus-font-size-sm);

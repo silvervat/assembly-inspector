@@ -132,6 +132,35 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           console.warn('Could not get object metadata:', e);
         }
 
+        // Try to get bounding box / coordinates
+        let boundingBoxes: unknown[] = [];
+        try {
+          // Try getObjectsBoundingBox method
+          boundingBoxes = await (api.viewer as any).getObjectsBoundingBox?.(modelId, runtimeIds) || [];
+          console.log('📍 Bounding boxes via getObjectsBoundingBox:', boundingBoxes);
+        } catch (e) {
+          console.warn('Could not get bounding box via getObjectsBoundingBox:', e);
+        }
+
+        // Try alternative methods if first didn't work
+        if (!boundingBoxes || boundingBoxes.length === 0) {
+          try {
+            boundingBoxes = await (api.viewer as any).getBoundingBox?.(modelId, runtimeIds) || [];
+            console.log('📍 Bounding boxes via getBoundingBox:', boundingBoxes);
+          } catch (e) {
+            console.warn('Could not get bounding box via getBoundingBox:', e);
+          }
+        }
+
+        // Try getObjectsInfo which might contain position data
+        let objectsInfo: unknown[] = [];
+        try {
+          objectsInfo = await (api.viewer as any).getObjectsInfo?.(modelId, runtimeIds) || [];
+          console.log('📍 Objects info:', objectsInfo);
+        } catch (e) {
+          console.warn('Could not get objects info:', e);
+        }
+
         for (let i = 0; i < runtimeIds.length; i++) {
           const objProps = properties[i];
           const runtimeId = runtimeIds[i];
@@ -221,7 +250,12 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               class: rawProps.class,
               propertySets,
               metadata,
-              rawData: { properties: objProps, metadata: objMetadata }
+              rawData: {
+                properties: objProps,
+                metadata: objMetadata,
+                boundingBox: boundingBoxes[i] || null,
+                objectInfo: objectsInfo[i] || null
+              }
             });
           }
         }

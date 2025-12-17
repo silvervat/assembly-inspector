@@ -204,7 +204,7 @@ export default function InspectorScreen({
       // Tavalises režiimis kontrollime assemblyMark'i
       if (!obj.assemblyMark) {
         setCanInspect(false);
-        setMessage('⚠️ Assembly Selection pole sisse lülitatud');
+        // Warning banner already handles this case
         return;
       }
     }
@@ -1374,8 +1374,8 @@ export default function InspectorScreen({
               {inspectionMode === 'poldid' && obj.boltStandard && (
                 <div className="selected-bolt-standard">
                   Bolt standard: {obj.boltStandard}
-                  {obj.boltStandard.includes('4014') && ' osakeere'}
-                  {obj.boltStandard.includes('4017') && ' täiskeer'}
+                  {obj.boltStandard.includes('4014') && <span className="bolt-thread-type">osakeere</span>}
+                  {obj.boltStandard.includes('4017') && <span className="bolt-thread-type">täiskeere</span>}
                 </div>
               )}
               {inspectionMode === 'poldid' && (
@@ -1400,13 +1400,13 @@ export default function InspectorScreen({
                   )}
                   {obj.slottedHoleX && parseFloat(obj.slottedHoleX) !== 0 && (
                     <div className="bolt-detail-row">
-                      <span>Slotted hole X: {obj.slottedHoleX}</span>
+                      <span>Slotted hole X: {parseFloat(obj.slottedHoleX).toFixed(1)}</span>
                       <span className="bolt-warning">⚠️ suur seib?</span>
                     </div>
                   )}
                   {obj.slottedHoleY && parseFloat(obj.slottedHoleY) !== 0 && (
                     <div className="bolt-detail-row">
-                      <span>Slotted hole Y: {obj.slottedHoleY}</span>
+                      <span>Slotted hole Y: {parseFloat(obj.slottedHoleY).toFixed(1)}</span>
                       <span className="bolt-warning">⚠️ suur seib?</span>
                     </div>
                   )}
