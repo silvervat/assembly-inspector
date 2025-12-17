@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiAlertTriangle, FiTarget } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
 
@@ -72,6 +72,8 @@ export default function InspectionPlanScreen({
 
   // Expanded items state
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [expandedTypeId, setExpandedTypeId] = useState<string | null>(null);
+  const [expandedCategoryId, setExpandedCategoryId] = useState<string | null>(null);
 
   // Selection state
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
@@ -628,18 +630,84 @@ export default function InspectionPlanScreen({
     }
   };
 
-  // Select inspection items for a specific inspector
-  const selectInspectorItems = async (inspections: InspectionData[]) => {
-    if (inspections.length === 0) return;
+  // Group plan items by type and category for hierarchical view
+  interface TypeGroup {
+    typeId: string;
+    typeName: string;
+    typeColor?: string;
+    categories: CategoryGroup[];
+    totalItems: number;
+    completedItems: number;
+  }
+
+  interface CategoryGroup {
+    categoryId: string;
+    categoryName: string;
+    items: PlanItemWithStats[];
+    totalItems: number;
+    completedItems: number;
+  }
+
+  const groupedPlanItems = (): TypeGroup[] => {
+    const typeMap = new Map<string, TypeGroup>();
+
+    for (const item of planItems) {
+      const typeId = item.inspection_type_id || 'unknown';
+      const typeName = item.inspection_type?.name || 'Tüüp määramata';
+      const typeColor = item.inspection_type?.color;
+      const categoryId = item.category_id || 'unknown';
+      const categoryName = item.category?.name || 'Kategooria määramata';
+
+      if (!typeMap.has(typeId)) {
+        typeMap.set(typeId, {
+          typeId,
+          typeName,
+          typeColor,
+          categories: [],
+          totalItems: 0,
+          completedItems: 0
+        });
+      }
+
+      const typeGroup = typeMap.get(typeId)!;
+      typeGroup.totalItems++;
+      if ((item.inspection_count || 0) > 0) {
+        typeGroup.completedItems++;
+      }
+
+      let categoryGroup = typeGroup.categories.find(c => c.categoryId === categoryId);
+      if (!categoryGroup) {
+        categoryGroup = {
+          categoryId,
+          categoryName,
+          items: [],
+          totalItems: 0,
+          completedItems: 0
+        };
+        typeGroup.categories.push(categoryGroup);
+      }
+
+      categoryGroup.items.push(item);
+      categoryGroup.totalItems++;
+      if ((item.inspection_count || 0) > 0) {
+        categoryGroup.completedItems++;
+      }
+    }
+
+    return Array.from(typeMap.values());
+  };
+
+  // Select all items of a specific type
+  const selectTypeItems = async (typeId: string) => {
+    const items = planItems.filter(item => item.inspection_type_id === typeId);
+    if (items.length === 0) return;
 
     try {
-      // Group by model_id
       const byModel: Record<string, number[]> = {};
-      for (const insp of inspections) {
-        if (!byModel[insp.model_id]) {
-          byModel[insp.model_id] = [];
-        }
-        byModel[insp.model_id].push(insp.object_runtime_id);
+      for (const item of items) {
+        if (!item.object_runtime_id) continue;
+        if (!byModel[item.model_id]) byModel[item.model_id] = [];
+        byModel[item.model_id].push(item.object_runtime_id);
       }
 
       const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
@@ -648,14 +716,34 @@ export default function InspectionPlanScreen({
       }));
 
       await api.viewer.setSelection({ modelObjectIds }, 'set');
-
-      // Zoom to selection
-      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
-
-      showMessage(`✅ ${inspections.length} inspektsiooni valitud`, 'success');
+      showMessage(`✅ ${items.length} objekti valitud`, 'success');
     } catch (error) {
-      console.error('Failed to select inspector items:', error);
-      showMessage('❌ Viga valimisel', 'error');
+      console.error('Failed to select type items:', error);
+    }
+  };
+
+  // Select all items of a specific category
+  const selectCategoryItems = async (categoryId: string) => {
+    const items = planItems.filter(item => item.category_id === categoryId);
+    if (items.length === 0) return;
+
+    try {
+      const byModel: Record<string, number[]> = {};
+      for (const item of items) {
+        if (!item.object_runtime_id) continue;
+        if (!byModel[item.model_id]) byModel[item.model_id] = [];
+        byModel[item.model_id].push(item.object_runtime_id);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+      showMessage(`✅ ${items.length} objekti valitud`, 'success');
+    } catch (error) {
+      console.error('Failed to select category items:', error);
     }
   };
 
@@ -788,22 +876,26 @@ export default function InspectionPlanScreen({
             </div>
           </div>
 
-          {/* Category Select */}
-          {filteredCategories.length > 0 && (
-            <div className="plan-category-select">
-              <label>Kategooria (valikuline):</label>
+          {/* Category Select - REQUIRED */}
+          <div className="plan-category-select">
+            <label>Kategooria: *</label>
+            {filteredCategories.length > 0 ? (
               <select
                 value={selectedCategoryId}
                 onChange={(e) => setSelectedCategoryId(e.target.value)}
-                className="category-dropdown"
+                className={`category-dropdown ${!selectedCategoryId ? 'required-empty' : ''}`}
               >
                 <option value="">-- Vali kategooria --</option>
                 {filteredCategories.map(cat => (
                   <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
               </select>
-            </div>
-          )}
+            ) : (
+              <div className="category-hint">
+                {selectedTypeId ? '⚠️ Sellel tüübil pole kategooriaid' : 'Vali esmalt inspektsiooni tüüp'}
+              </div>
+            )}
+          </div>
 
           {/* Notes */}
           <div className="plan-notes">
@@ -821,7 +913,7 @@ export default function InspectionPlanScreen({
             <button
               className="btn-primary btn-large"
               onClick={getSelectedFromModel}
-              disabled={isLoading || !selectedTypeId}
+              disabled={isLoading || !selectedTypeId || !selectedCategoryId}
             >
               {isLoading ? (
                 <>
@@ -886,7 +978,7 @@ export default function InspectionPlanScreen({
         </div>
       )}
 
-      {/* LIST MODE */}
+      {/* LIST MODE - Hierarchical grouped view */}
       {viewMode === 'list' && (
         <div className="plan-list-section">
           {planItems.length === 0 ? (
@@ -915,170 +1007,154 @@ export default function InspectionPlanScreen({
                 </button>
               </div>
 
-              <div className="plan-items-list">
-                {planItems.map(item => {
-                  const isExpanded = expandedItemId === item.id;
-                  const hasInspections = (item.inspection_count || 0) > 0;
+              {/* Grouped hierarchical list */}
+              <div className="plan-groups">
+                {groupedPlanItems().map(typeGroup => {
+                  const isTypeExpanded = expandedTypeId === typeGroup.typeId;
 
                   return (
-                    <div
-                      key={item.id}
-                      className={`plan-item ${hasInspections ? 'has-inspections' : 'no-inspections'}`}
-                    >
-                      {/* Main item row - clickable to expand */}
+                    <div key={typeGroup.typeId} className="plan-type-group">
+                      {/* Type Header */}
                       <div
-                        className="plan-item-header clickable"
-                        onClick={() => toggleExpand(item.id)}
+                        className="type-group-header"
+                        onClick={() => setExpandedTypeId(isTypeExpanded ? null : typeGroup.typeId)}
+                        style={{ borderLeftColor: getTypeColor(typeGroup.typeColor) }}
                       >
-                        <div className="plan-item-main">
-                          <span className="plan-item-mark">
-                            {item.assembly_mark || item.object_name || 'Nimeta objekt'}
+                        <div className="type-group-info">
+                          <span className="type-group-icon">
+                            {isTypeExpanded ? <FiChevronDown size={18} /> : <FiChevronUp size={18} style={{ transform: 'rotate(90deg)' }} />}
                           </span>
-                          <span className={`plan-item-status ${hasInspections ? 'status-done' : 'status-pending'}`}>
-                            {hasInspections ? '✅ Tehtud' : '⏳ Ootel'}
+                          <span className="type-group-name">{typeGroup.typeName}</span>
+                          <span className="type-group-stats">
+                            <span className="type-stat-done">{typeGroup.completedItems}</span>
+                            <span className="type-stat-sep">/</span>
+                            <span className="type-stat-total">{typeGroup.totalItems}</span>
                           </span>
                         </div>
-
-                        <div className="plan-item-expand">
-                          {isExpanded ? <FiChevronUp size={18} /> : <FiChevronDown size={18} />}
-                        </div>
-                      </div>
-
-                      {/* Inspection statistics row */}
-                      <div className="plan-item-stats">
-                        <span className="plan-item-type-badge">
-                          {item.inspection_type?.name || 'Tüüp määramata'}
-                        </span>
-                        {item.category && (
-                          <span className="plan-item-category-badge">
-                            {item.category.name}
-                          </span>
-                        )}
-                        <span className={`plan-item-assembly-mode ${item.assembly_selection_mode ? 'mode-on' : 'mode-off'}`}>
-                          {item.assembly_selection_mode ? 'ASM SEES' : 'ASM VÄLJAS'}
-                        </span>
-
-                        {/* Stats badges */}
-                        <div className="plan-item-stat-badges">
-                          <span className={`stat-badge insp-count ${hasInspections ? 'has-data' : ''}`}>
-                            <FiCheckCircle size={12} />
-                            {item.inspection_count || 0}
-                          </span>
-                          <span className={`stat-badge photo-count ${(item.photo_count || 0) > 0 ? 'has-data' : ''}`}>
-                            <FiCamera size={12} />
-                            {item.photo_count || 0}
-                          </span>
-                          {item.has_issues && (
-                            <span className="stat-badge issues-badge">
-                              <FiAlertTriangle size={12} />
-                              Märkmed
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Planner notes */}
-                      {item.planner_notes && (
-                        <div className="plan-item-notes">
-                          📝 {item.planner_notes}
-                        </div>
-                      )}
-
-                      {/* Quick action buttons */}
-                      <div className="plan-item-actions">
                         <button
-                          className="btn-icon"
-                          onClick={(e) => { e.stopPropagation(); zoomToItem(item); }}
-                          title="Vali mudelist"
+                          className="btn-select-group"
+                          onClick={(e) => { e.stopPropagation(); selectTypeItems(typeGroup.typeId); }}
+                          title="Vali kõik"
                         >
-                          <FiZoomIn size={16} />
-                        </button>
-                        <button
-                          className="btn-icon btn-danger"
-                          onClick={(e) => { e.stopPropagation(); deleteItem(item); }}
-                          title="Kustuta kavast"
-                        >
-                          <FiTrash2 size={16} />
+                          <FiTarget size={14} />
                         </button>
                       </div>
 
-                      {/* Expanded Details */}
-                      {isExpanded && (
-                        <div className="plan-item-expanded">
-                          {hasInspections ? (
-                            <div className="inspection-details">
-                              <h4>Inspektsioonide ajalugu ({item.inspection_count}):</h4>
-                              <div className="inspection-history">
-                                {item.inspections?.map((insp) => (
-                                  <div key={insp.id} className="inspection-history-item">
-                                    <div className="insp-header">
-                                      <span className="insp-inspector">
-                                        <FiUser size={14} />
-                                        {insp.inspector_name}
-                                      </span>
-                                      <span className="insp-date">
-                                        {new Date(insp.inspected_at).toLocaleString('et-EE')}
-                                      </span>
-                                    </div>
+                      {/* Categories */}
+                      {isTypeExpanded && (
+                        <div className="type-group-categories">
+                          {typeGroup.categories.map(catGroup => {
+                            const isCatExpanded = expandedCategoryId === catGroup.categoryId;
 
-                                    {insp.user_email && (
-                                      <div className="insp-email">{insp.user_email}</div>
-                                    )}
+                            return (
+                              <div key={catGroup.categoryId} className="plan-category-group">
+                                {/* Category Header */}
+                                <div
+                                  className="category-group-header"
+                                  onClick={() => setExpandedCategoryId(isCatExpanded ? null : catGroup.categoryId)}
+                                >
+                                  <div className="category-group-info">
+                                    <span className="category-group-icon">
+                                      {isCatExpanded ? <FiChevronDown size={16} /> : <FiChevronUp size={16} style={{ transform: 'rotate(90deg)' }} />}
+                                    </span>
+                                    <span className="category-group-name">{catGroup.categoryName}</span>
+                                    <span className="category-group-stats">
+                                      <span className="cat-stat-done">{catGroup.completedItems}</span>
+                                      <span className="cat-stat-sep">/</span>
+                                      <span className="cat-stat-total">{catGroup.totalItems}</span>
+                                    </span>
+                                  </div>
+                                  <button
+                                    className="btn-select-group btn-small"
+                                    onClick={(e) => { e.stopPropagation(); selectCategoryItems(catGroup.categoryId); }}
+                                    title="Vali kõik"
+                                  >
+                                    <FiTarget size={12} />
+                                  </button>
+                                </div>
 
-                                    {insp.photo_urls && insp.photo_urls.length > 0 && (
-                                      <div className="insp-photos">
-                                        <FiCamera size={12} />
-                                        <span>{insp.photo_urls.length} fotot</span>
-                                        <div className="photo-thumbnails">
-                                          {insp.photo_urls.slice(0, 3).map((url, pIdx) => (
-                                            <a
-                                              key={pIdx}
-                                              href={url}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                              className="photo-thumb"
-                                            >
-                                              <img src={url} alt={`Foto ${pIdx + 1}`} />
-                                            </a>
-                                          ))}
-                                          {insp.photo_urls.length > 3 && (
-                                            <span className="more-photos">+{insp.photo_urls.length - 3}</span>
+                                {/* Items List */}
+                                {isCatExpanded && (
+                                  <div className="category-items-list">
+                                    {catGroup.items.map(item => {
+                                      const hasInspections = (item.inspection_count || 0) > 0;
+                                      const isItemExpanded = expandedItemId === item.id;
+
+                                      return (
+                                        <div
+                                          key={item.id}
+                                          className={`plan-list-item ${hasInspections ? 'item-done' : 'item-pending'}`}
+                                        >
+                                          <div className="item-row" onClick={() => toggleExpand(item.id)}>
+                                            <div className="item-info">
+                                              <span className="item-mark">{item.assembly_mark || 'N/A'}</span>
+                                              {item.product_name && (
+                                                <span className="item-product">{item.product_name}</span>
+                                              )}
+                                            </div>
+                                            <div className="item-status-badges">
+                                              <span className={`item-asm-mode ${item.assembly_selection_mode ? 'asm-on' : 'asm-off'}`}>
+                                                {item.assembly_selection_mode ? 'ASM' : 'OFF'}
+                                              </span>
+                                              {hasInspections ? (
+                                                <span className="item-status-badge done">✓</span>
+                                              ) : (
+                                                <span className="item-status-badge pending">○</span>
+                                              )}
+                                            </div>
+                                            <div className="item-actions">
+                                              <button
+                                                className="btn-icon-small"
+                                                onClick={(e) => { e.stopPropagation(); zoomToItem(item); }}
+                                              >
+                                                <FiZoomIn size={14} />
+                                              </button>
+                                              <button
+                                                className="btn-icon-small btn-danger"
+                                                onClick={(e) => { e.stopPropagation(); deleteItem(item); }}
+                                              >
+                                                <FiTrash2 size={14} />
+                                              </button>
+                                            </div>
+                                          </div>
+
+                                          {/* Expanded item details */}
+                                          {isItemExpanded && (
+                                            <div className="item-expanded">
+                                              {item.planner_notes && (
+                                                <div className="item-notes">📝 {item.planner_notes}</div>
+                                              )}
+                                              {hasInspections ? (
+                                                <div className="item-inspections">
+                                                  {item.inspections?.map(insp => (
+                                                    <div key={insp.id} className="mini-inspection">
+                                                      <span className="mini-inspector">
+                                                        <FiUser size={12} /> {insp.inspector_name}
+                                                      </span>
+                                                      <span className="mini-date">
+                                                        {new Date(insp.inspected_at).toLocaleDateString('et-EE')}
+                                                      </span>
+                                                      {insp.photo_urls && insp.photo_urls.length > 0 && (
+                                                        <span className="mini-photos">
+                                                          <FiCamera size={12} /> {insp.photo_urls.length}
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              ) : (
+                                                <div className="item-no-inspection">Inspektsioon puudub</div>
+                                              )}
+                                            </div>
                                           )}
                                         </div>
-                                      </div>
-                                    )}
-
-                                    {insp.notes && (
-                                      <div className="insp-notes">
-                                        <FiAlertTriangle size={12} />
-                                        {insp.notes}
-                                      </div>
-                                    )}
-
-                                    <button
-                                      className="btn-select-inspector"
-                                      onClick={() => selectInspectorItems([insp])}
-                                    >
-                                      <FiTarget size={14} />
-                                      Vali mudelis
-                                    </button>
+                                      );
+                                    })}
                                   </div>
-                                ))}
+                                )}
                               </div>
-                            </div>
-                          ) : (
-                            <div className="no-inspections-msg">
-                              <FiClock size={24} />
-                              <p>Inspektsiooni pole veel tehtud</p>
-                              <button
-                                className="btn-select-item"
-                                onClick={() => zoomToItem(item)}
-                              >
-                                <FiZoomIn size={14} />
-                                Vali mudelist inspekteerimiseks
-                              </button>
-                            </div>
-                          )}
+                            );
+                          })}
                         </div>
                       )}
                     </div>
