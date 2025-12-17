@@ -18,6 +18,11 @@ interface ObjectMetadata {
   globalId?: string;
   objectType?: string;
   description?: string;
+  position?: {
+    x?: number;
+    y?: number;
+    z?: number;
+  };
   ownerHistory?: {
     creationDate?: string;
     lastModifiedDate?: string;
@@ -215,12 +220,18 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
             // Build metadata object from objProps.product (IFC Product info)
             const product = (objProps as any)?.product;
+            const position = (objProps as any)?.position;
             const metadata: ObjectMetadata = {
               name: product?.name || rawProps.name || (objMetadata as any)?.name,
               type: product?.objectType || rawProps.type || (objMetadata as any)?.type,
               globalId: (objMetadata as any)?.globalId,
               objectType: product?.objectType || (objMetadata as any)?.objectType,
               description: product?.description || (objMetadata as any)?.description,
+              position: position ? {
+                x: position.x,
+                y: position.y,
+                z: position.z,
+              } : undefined,
               ownerHistory: product ? {
                 creationDate: formatTimestamp(product.creationDate),
                 lastModifiedDate: formatTimestamp(product.lastModificationDate),
@@ -443,6 +454,26 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                             <span className="prop-name">description</span>
                             <span className="prop-value">{obj.metadata.description}</span>
                           </div>
+                        )}
+                        {obj.metadata.position && (
+                          <>
+                            <div className="property-row section-divider">
+                              <span className="prop-name">— Position / Coordinates —</span>
+                              <span className="prop-value"></span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">X</span>
+                              <span className="prop-value">{obj.metadata.position.x?.toFixed(3) ?? '-'}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Y</span>
+                              <span className="prop-value">{obj.metadata.position.y?.toFixed(3) ?? '-'}</span>
+                            </div>
+                            <div className="property-row">
+                              <span className="prop-name">Z</span>
+                              <span className="prop-value">{obj.metadata.position.z?.toFixed(3) ?? '-'}</span>
+                            </div>
+                          </>
                         )}
                         {obj.metadata.ownerHistory && (
                           <>
