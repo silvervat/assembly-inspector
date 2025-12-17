@@ -470,6 +470,12 @@ export default function InspectorScreen({
               if ((objProps as any).name) objectName = String((objProps as any).name);
               if ((objProps as any).type) objectType = String((objProps as any).type);
 
+              // Fallback: get productName from objProps.product.name (IFC Product metadata)
+              if (!productName && (objProps as any)?.product?.name) {
+                productName = String((objProps as any).product.name);
+                console.log(`✅ Found Product Name via objProps.product.name: ${productName}`);
+              }
+
               // MS GUID fallback - use getObjectMetadata (globalId)
               if (!guidMs) {
                 try {
@@ -1355,10 +1361,15 @@ export default function InspectorScreen({
           </h3>
           {selectedObjects.map((obj, idx) => (
             <div key={idx} className="selected-item">
-              <div className="selected-mark">
-                {inspectionMode === 'poldid'
-                  ? (obj.boltName || 'Bolt Name puudub')
-                  : (obj.assemblyMark || 'Mark puudub')}
+              <div className="selected-mark-container">
+                <span className="selected-mark">
+                  {inspectionMode === 'poldid'
+                    ? (obj.boltName || 'Bolt Name puudub')
+                    : (obj.assemblyMark || 'Mark puudub')}
+                </span>
+                {obj.productName && inspectionMode !== 'poldid' && (
+                  <span className="selected-product-name">{obj.productName}</span>
+                )}
               </div>
               {inspectionMode === 'poldid' && obj.boltStandard && (
                 <div className="selected-bolt-standard">
