@@ -4,6 +4,7 @@ import { supabase, TrimbleExUser, Inspection } from '../supabase';
 import { InspectionMode } from './MainMenu';
 import { FiArrowLeft } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
+import InspectionList, { InspectionItem } from './InspectionList';
 
 // GUID helper functions (from Assembly Exporter)
 function normalizeGuid(s: string): string {
@@ -100,7 +101,6 @@ export default function InspectorScreen({
   const [message, setMessage] = useState('');
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [inspectionCount, setInspectionCount] = useState(0);
-  const [coloringDone, setColoringDone] = useState(false);
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [existingInspection, setExistingInspection] = useState<{
     inspectorName: string;
@@ -111,9 +111,15 @@ export default function InspectorScreen({
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
   const [includeTopView, setIncludeTopView] = useState(true);
   const [autoClosePanel, setAutoClosePanel] = useState(false);
-  const [showingMyInspections, setShowingMyInspections] = useState(false);
-  const [myInspectionsLoading, setMyInspectionsLoading] = useState(false);
   const [eos2NavStatus, setEos2NavStatus] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
+
+  // Inspection list view state
+  const [inspectionListMode, setInspectionListMode] = useState<'none' | 'mine' | 'all'>('none');
+  const [inspectionListData, setInspectionListData] = useState<InspectionItem[]>([]);
+  const [inspectionListLoading, setInspectionListLoading] = useState(false);
+  const [inspectionListTotal, setInspectionListTotal] = useState(0);
+  const [inspectionListLoadingMore, setInspectionListLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
 
   // EOS2 Navigation hook - polls for commands from EOS2 and auto-navigates
   useEos2Navigation({
@@ -240,6 +246,9 @@ export default function InspectorScreen({
 
   // Peamine valiku kontroll - useCallback
   const checkSelection = useCallback(async () => {
+    // Skip selection tracking when viewing inspection list
+    if (inspectionListMode !== 'none') return;
+
     // Debounce - 50ms (kiirem)
     const now = Date.now();
     if (now - lastCheckTimeRef.current < 50) return;
@@ -558,7 +567,7 @@ export default function InspectorScreen({
     } finally {
       isCheckingRef.current = false;
     }
-  }, [api, validateSelection]);
+  }, [api, validateSelection, inspectionListMode]);
 
   // Event listener valiku muutustele
   useEffect(() => {
@@ -920,72 +929,60 @@ export default function InspectorScreen({
     });
   };
 
-  // Värvi inspekteeritud detailid roheliseks
-  const colorInspectedGreen = async () => {
-    setColoringDone(true);
+  // Näita minu inspektsioone
+  const showMyInspections = async () => {
+    setInspectionListLoading(true);
     try {
+      // First get total count
+      const { count, error: countError } = await supabase
+        .from('inspections')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId)
+        .eq('inspector_id', user.id);
+
+      if (countError) throw countError;
+
+      const totalCount = count || 0;
+      setInspectionListTotal(totalCount);
+
+      if (totalCount === 0) {
+        setMessage('ℹ️ Sul pole veel inspektsioone');
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Fetch first page of data
       const { data: inspections, error } = await supabase
         .from('inspections')
-        .select('model_id, object_runtime_id')
-        .eq('project_id', projectId);
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('inspector_id', user.id)
+        .order('inspected_at', { ascending: false })
+        .range(0, PAGE_SIZE - 1);
 
       if (error) throw error;
 
-      if (inspections && inspections.length > 0) {
-        // Grupeeri model_id järgi
-        const byModel: Record<string, number[]> = {};
-        for (const insp of inspections) {
-          if (!byModel[insp.model_id]) {
-            byModel[insp.model_id] = [];
-          }
-          byModel[insp.model_id].push(insp.object_runtime_id);
-        }
+      // Set all objects to light gray (background)
+      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
 
-        // Värvi roheliseks
-        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
-          modelId,
-          objectRuntimeIds: runtimeIds
-        }));
-
-        await api.viewer.setObjectState(
-          { modelObjectIds },
-          { color: { r: 0, g: 180, b: 0, a: 255 } }
-        );
-
-        setMessage(`✅ ${inspections.length} detaili värvitud roheliseks`);
-        setTimeout(() => setMessage(''), 3000);
-      }
-    } catch (e: any) {
-      console.error('Failed to color inspected:', e);
-      setMessage('❌ Värvimine ebaõnnestus');
-    } finally {
-      setColoringDone(false);
-    }
-  };
-
-  // Näita minu inspektsioone (värvi punaseks)
-  const showMyInspections = async () => {
-    setMyInspectionsLoading(true);
-    try {
-      const { data: inspections, error } = await supabase
+      // Fetch all runtime IDs for coloring (separate query for performance)
+      const { data: colorData } = await supabase
         .from('inspections')
         .select('model_id, object_runtime_id')
         .eq('project_id', projectId)
         .eq('inspector_id', user.id);
 
-      if (error) throw error;
-
-      if (inspections && inspections.length > 0) {
-        // Grupeeri model_id järgi
+      if (colorData && colorData.length > 0) {
+        // Group by model and color red
         const byModel: Record<string, number[]> = {};
-        for (const insp of inspections) {
+        for (const insp of colorData) {
           if (!byModel[insp.model_id]) {
             byModel[insp.model_id] = [];
           }
           byModel[insp.model_id].push(insp.object_runtime_id);
         }
 
-        // Värvi punaseks
         const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
           modelId,
           objectRuntimeIds: runtimeIds
@@ -995,28 +992,159 @@ export default function InspectorScreen({
           { modelObjectIds },
           { color: { r: 220, g: 50, b: 50, a: 255 } }
         );
-
-        setShowingMyInspections(true);
-        setMessage(`🔴 ${inspections.length} minu inspektsiooni märgitud`);
-        setTimeout(() => setMessage(''), 3000);
-      } else {
-        setMessage('ℹ️ Sul pole veel inspektsioone');
-        setTimeout(() => setMessage(''), 3000);
       }
+
+      // Set inspection list data
+      setInspectionListData((inspections || []) as InspectionItem[]);
+      setInspectionListMode('mine');
     } catch (e: any) {
       console.error('Failed to show my inspections:', e);
       setMessage('❌ Viga inspektsioonide laadimisel');
     } finally {
-      setMyInspectionsLoading(false);
+      setInspectionListLoading(false);
     }
   };
 
-  // Välju minu inspektsioonide vaatest
-  const exitMyInspections = async () => {
+  // Näita kõiki inspektsioone
+  const showAllInspections = async () => {
+    setInspectionListLoading(true);
     try {
-      // Reset kõik värvid (undefined selector = kõik objektid)
+      // First get total count
+      const { count, error: countError } = await supabase
+        .from('inspections')
+        .select('*', { count: 'exact', head: true })
+        .eq('project_id', projectId);
+
+      if (countError) throw countError;
+
+      const totalCount = count || 0;
+      setInspectionListTotal(totalCount);
+
+      if (totalCount === 0) {
+        setMessage('ℹ️ Inspektsioone pole veel tehtud');
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Fetch first page of data
+      const { data: inspections, error } = await supabase
+        .from('inspections')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('inspected_at', { ascending: false })
+        .range(0, PAGE_SIZE - 1);
+
+      if (error) throw error;
+
+      // Set all objects to light gray (background)
+      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+
+      // Fetch all runtime IDs for coloring (separate query for performance)
+      const { data: colorData } = await supabase
+        .from('inspections')
+        .select('model_id, object_runtime_id')
+        .eq('project_id', projectId);
+
+      if (colorData && colorData.length > 0) {
+        // Group by model and color green
+        const byModel: Record<string, number[]> = {};
+        for (const insp of colorData) {
+          if (!byModel[insp.model_id]) {
+            byModel[insp.model_id] = [];
+          }
+          byModel[insp.model_id].push(insp.object_runtime_id);
+        }
+
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId,
+          objectRuntimeIds: runtimeIds
+        }));
+
+        await api.viewer.setObjectState(
+          { modelObjectIds },
+          { color: { r: 34, g: 197, b: 94, a: 255 } }
+        );
+      }
+
+      // Set inspection list data
+      setInspectionListData((inspections || []) as InspectionItem[]);
+      setInspectionListMode('all');
+    } catch (e: any) {
+      console.error('Failed to show all inspections:', e);
+      setMessage('❌ Viga inspektsioonide laadimisel');
+    } finally {
+      setInspectionListLoading(false);
+    }
+  };
+
+  // Load more inspections
+  const loadMoreInspections = async () => {
+    if (inspectionListLoadingMore) return;
+    setInspectionListLoadingMore(true);
+
+    try {
+      const currentCount = inspectionListData.length;
+      let query = supabase
+        .from('inspections')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('inspected_at', { ascending: false })
+        .range(currentCount, currentCount + PAGE_SIZE - 1);
+
+      // Add filter for 'mine' mode
+      if (inspectionListMode === 'mine') {
+        query = query.eq('inspector_id', user.id);
+      }
+
+      const { data: moreInspections, error } = await query;
+
+      if (error) throw error;
+
+      if (moreInspections && moreInspections.length > 0) {
+        setInspectionListData(prev => [...prev, ...(moreInspections as InspectionItem[])]);
+      }
+    } catch (e: any) {
+      console.error('Failed to load more inspections:', e);
+      setMessage('❌ Viga juurde laadimisel');
+      setTimeout(() => setMessage(''), 3000);
+    } finally {
+      setInspectionListLoadingMore(false);
+    }
+  };
+
+  // Zoom to specific inspection
+  const zoomToInspection = async (inspection: InspectionItem) => {
+    try {
+      const viewer = api.viewer as any;
+
+      // Try to select and zoom using runtime ID
+      await api.viewer.setSelection({
+        modelObjectIds: [{
+          modelId: inspection.model_id,
+          objectRuntimeIds: [inspection.object_runtime_id]
+        }]
+      }, 'set');
+
+      // Zoom to selection
+      await viewer.zoomToSelection?.();
+
+      setMessage(`🔍 ${inspection.assembly_mark || 'Element'}`);
+      setTimeout(() => setMessage(''), 2000);
+    } catch (e) {
+      console.error('Failed to zoom to inspection:', e);
+      setMessage('❌ Zoom ebaõnnestus');
+      setTimeout(() => setMessage(''), 2000);
+    }
+  };
+
+  // Välju inspektsioonide vaatest
+  const exitInspectionList = async () => {
+    try {
+      // Reset all colors
       await api.viewer.setObjectState(undefined, { color: 'reset' });
-      setShowingMyInspections(false);
+      setInspectionListMode('none');
+      setInspectionListData([]);
       setMessage('');
     } catch (e) {
       console.error('Failed to reset:', e);
@@ -1036,29 +1164,31 @@ export default function InspectorScreen({
 
       <div className="inspector-header-compact">
         <div className="header-right">
-          {!showingMyInspections ? (
-            <button
-              onClick={showMyInspections}
-              disabled={myInspectionsLoading}
-              className="my-inspections-btn"
-            >
-              {myInspectionsLoading ? '...' : 'MINU'}
-            </button>
+          {inspectionListMode === 'none' ? (
+            <>
+              <button
+                onClick={showMyInspections}
+                disabled={inspectionListLoading}
+                className="inspection-view-btn mine"
+              >
+                {inspectionListLoading ? '...' : 'Minu'}
+              </button>
+              <button
+                onClick={showAllInspections}
+                disabled={inspectionListLoading}
+                className="inspection-view-btn all"
+              >
+                {inspectionListLoading ? '...' : 'Kõik'}
+              </button>
+            </>
           ) : (
             <button
-              onClick={exitMyInspections}
-              className="exit-my-inspections-btn"
+              onClick={exitInspectionList}
+              className="inspection-view-btn exit"
             >
-              ✕ VÄLJU
+              ✕ Sulge
             </button>
           )}
-          <button
-            onClick={colorInspectedGreen}
-            disabled={coloringDone}
-            className="color-done-btn"
-          >
-            {coloringDone ? '...' : 'VÄRVI'}
-          </button>
           <div className="stats-compact">
             <div className="stat-item">
               <span className="stat-num">{inspectionCount}</span>
@@ -1106,7 +1236,22 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {existingInspection && (
+      {/* Inspection List View */}
+      {inspectionListMode !== 'none' && (
+        <InspectionList
+          inspections={inspectionListData}
+          mode={inspectionListMode}
+          totalCount={inspectionListTotal}
+          hasMore={inspectionListData.length < inspectionListTotal}
+          loadingMore={inspectionListLoadingMore}
+          onZoomToInspection={zoomToInspection}
+          onLoadMore={loadMoreInspections}
+          onClose={exitInspectionList}
+        />
+      )}
+
+      {/* Normal inspection view - hide when list is active */}
+      {inspectionListMode === 'none' && existingInspection && (
         <div className="existing-inspection">
           <div className="existing-header">
             <span className="existing-badge">✓ Inspekteeritud</span>
@@ -1136,7 +1281,7 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {selectedObjects.length > 0 && (
+      {inspectionListMode === 'none' && selectedObjects.length > 0 && (
         <div className="selection-info">
           <h3>
             {inspectionMode === 'poldid'
@@ -1162,7 +1307,8 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {/* Foto lisamine */}
+      {/* Foto lisamine - hide when list view is active */}
+      {inspectionListMode === 'none' && (
       <div className="photo-section">
         <div className="photo-header">
           <span className="photo-title">Fotod ({photos.length})</span>
@@ -1208,7 +1354,9 @@ export default function InspectorScreen({
           Lisa pealtvaate pilt (topview)
         </label>
       </div>
+      )}
 
+      {inspectionListMode === 'none' && (
       <div className="action-container">
         <button
           onClick={handleInspect}
@@ -1218,26 +1366,31 @@ export default function InspectorScreen({
           {inspecting ? '⏳ Inspekteerin...' : '📸 Inspekteeri'}
         </button>
       </div>
+      )}
 
-      <div className="instructions">
-        <h4>Juhised:</h4>
-        <ol>
-          <li>Vali 3D vaates üks detail</li>
-          <li>Kontrolli Assembly Mark</li>
-          <li>Vajuta "Inspekteeri"</li>
-          <li>Detail värvitakse mustaks</li>
-        </ol>
-      </div>
+      {inspectionListMode === 'none' && (
+      <>
+        <div className="instructions">
+          <h4>Juhised:</h4>
+          <ol>
+            <li>Vali 3D vaates üks detail</li>
+            <li>Kontrolli Assembly Mark</li>
+            <li>Vajuta "Inspekteeri"</li>
+            <li>Detail värvitakse mustaks</li>
+          </ol>
+        </div>
 
-      <label className="auto-close-toggle bottom-toggle">
-        <input
-          type="checkbox"
-          checked={autoClosePanel}
-          onChange={(e) => setAutoClosePanel(e.target.checked)}
-        />
-        <span className="toggle-switch"></span>
-        Sulge paneel pärast inspekteerimist
-      </label>
+        <label className="auto-close-toggle bottom-toggle">
+          <input
+            type="checkbox"
+            checked={autoClosePanel}
+            onChange={(e) => setAutoClosePanel(e.target.checked)}
+          />
+          <span className="toggle-switch"></span>
+          Sulge paneel pärast inspekteerimist
+        </label>
+      </>
+      )}
 
       {/* Photo modal */}
       {modalPhoto && (
