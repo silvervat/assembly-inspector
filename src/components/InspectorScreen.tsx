@@ -193,15 +193,15 @@ export default function InspectorScreen({
 
     try {
       // Fetch active checkpoints for this category
+      console.log('🔍 Fetching checkpoints for category:', categoryId);
       const { data: checkpointsData, error: checkpointsError } = await supabase
         .from('inspection_checkpoints')
-        .select(`
-          *,
-          inspection_checkpoint_attachments (*)
-        `)
+        .select('*')
         .eq('category_id', categoryId)
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
+
+      console.log('📦 Checkpoints query result:', { data: checkpointsData, error: checkpointsError });
 
       // If table doesn't exist (42P01) or other error, just skip checkpoints
       if (checkpointsError) {
@@ -209,16 +209,18 @@ export default function InspectorScreen({
           console.log('ℹ️ Checkpoint tables not yet created - run migration');
           return;
         }
+        console.error('❌ Checkpoint query error:', checkpointsError);
         throw checkpointsError;
       }
 
       if (checkpointsData && checkpointsData.length > 0) {
-        // Map attachments to the expected format
+        // Add empty attachments array for now
         const checkpointsWithAttachments = checkpointsData.map(cp => ({
           ...cp,
-          attachments: cp.inspection_checkpoint_attachments || []
+          attachments: []
         }));
         setCheckpoints(checkpointsWithAttachments);
+        console.log('✅ Checkpoints loaded:', checkpointsWithAttachments.length);
 
         // Check for existing results for this assembly
         try {
