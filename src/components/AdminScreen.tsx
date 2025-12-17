@@ -26,7 +26,6 @@ interface ObjectMetadata {
     changeAction?: string;
     state?: string;
   };
-  [key: string]: unknown;
 }
 
 interface ObjectData {
@@ -36,7 +35,7 @@ interface ObjectData {
   class?: string;
   propertySets: PropertySet[];
   metadata?: ObjectMetadata;
-  rawData?: unknown;
+  rawData?: object;
 }
 
 export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
@@ -156,12 +155,11 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               description: (objMetadata as any)?.description,
             };
 
-            // Add any additional metadata fields from getObjectMetadata
+            // Log additional metadata fields for debugging (not added to typed object)
             if (objMetadata && typeof objMetadata === 'object') {
-              for (const [key, value] of Object.entries(objMetadata as object)) {
-                if (!(key in metadata) && value !== undefined && value !== null) {
-                  (metadata as any)[key] = value;
-                }
+              const additionalKeys = Object.keys(objMetadata as object).filter(k => !(k in metadata));
+              if (additionalKeys.length > 0) {
+                console.log('📋 Additional metadata keys found:', additionalKeys);
               }
             }
 
@@ -323,7 +321,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 )}
 
                 {/* Object Metadata Section (Product info) */}
-                {obj.metadata && Object.keys(obj.metadata).some(k => obj.metadata![k]) && (
+                {obj.metadata && (
                   <div className="property-set metadata-section">
                     <button
                       className="pset-header metadata-header"
@@ -331,31 +329,81 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     >
                       <span className="pset-toggle">{expandedSets.has(`meta-${objIdx}`) ? '▼' : '▶'}</span>
                       <span className="pset-name">📋 Object Metadata (Product info)</span>
-                      <span className="pset-count">({Object.keys(obj.metadata).filter(k => obj.metadata![k] !== undefined && obj.metadata![k] !== null).length})</span>
                     </button>
                     {expandedSets.has(`meta-${objIdx}`) && (
                       <div className="pset-properties">
-                        {Object.entries(obj.metadata).map(([key, value]) => {
-                          if (value === undefined || value === null || key === 'ownerHistory') return null;
-                          return (
-                            <div key={key} className="property-row">
-                              <span className="prop-name">{key}</span>
-                              <span className="prop-value">{formatValue(value)}</span>
-                            </div>
-                          );
-                        })}
+                        {obj.metadata.name && (
+                          <div className="property-row">
+                            <span className="prop-name">name</span>
+                            <span className="prop-value">{obj.metadata.name}</span>
+                          </div>
+                        )}
+                        {obj.metadata.type && (
+                          <div className="property-row">
+                            <span className="prop-name">type</span>
+                            <span className="prop-value">{obj.metadata.type}</span>
+                          </div>
+                        )}
+                        {obj.metadata.globalId && (
+                          <div className="property-row">
+                            <span className="prop-name">globalId</span>
+                            <span className="prop-value">{obj.metadata.globalId}</span>
+                          </div>
+                        )}
+                        {obj.metadata.objectType && (
+                          <div className="property-row">
+                            <span className="prop-name">objectType</span>
+                            <span className="prop-value">{obj.metadata.objectType}</span>
+                          </div>
+                        )}
+                        {obj.metadata.description && (
+                          <div className="property-row">
+                            <span className="prop-name">description</span>
+                            <span className="prop-value">{obj.metadata.description}</span>
+                          </div>
+                        )}
                         {obj.metadata.ownerHistory && (
                           <>
                             <div className="property-row section-divider">
                               <span className="prop-name">— Owner History —</span>
                               <span className="prop-value"></span>
                             </div>
-                            {Object.entries(obj.metadata.ownerHistory).map(([key, value]) => (
-                              <div key={`oh-${key}`} className="property-row">
-                                <span className="prop-name">{key}</span>
-                                <span className="prop-value">{formatValue(value)}</span>
+                            {obj.metadata.ownerHistory.creationDate && (
+                              <div className="property-row">
+                                <span className="prop-name">creationDate</span>
+                                <span className="prop-value">{obj.metadata.ownerHistory.creationDate}</span>
                               </div>
-                            ))}
+                            )}
+                            {obj.metadata.ownerHistory.lastModifiedDate && (
+                              <div className="property-row">
+                                <span className="prop-name">lastModifiedDate</span>
+                                <span className="prop-value">{obj.metadata.ownerHistory.lastModifiedDate}</span>
+                              </div>
+                            )}
+                            {obj.metadata.ownerHistory.owningUser && (
+                              <div className="property-row">
+                                <span className="prop-name">owningUser</span>
+                                <span className="prop-value">{obj.metadata.ownerHistory.owningUser}</span>
+                              </div>
+                            )}
+                            {obj.metadata.ownerHistory.owningApplication && (
+                              <div className="property-row">
+                                <span className="prop-name">owningApplication</span>
+                                <span className="prop-value">{obj.metadata.ownerHistory.owningApplication}</span>
+                              </div>
+                            )}
+                            {obj.metadata.ownerHistory.changeAction && (
+                              <div className="property-row">
+                                <span className="prop-name">changeAction</span>
+                                <span className="prop-value">{obj.metadata.ownerHistory.changeAction}</span>
+                              </div>
+                            )}
+                            {obj.metadata.ownerHistory.state && (
+                              <div className="property-row">
+                                <span className="prop-name">state</span>
+                                <span className="prop-value">{obj.metadata.ownerHistory.state}</span>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
