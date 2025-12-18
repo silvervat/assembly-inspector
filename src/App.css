@@ -5599,6 +5599,30 @@ button.stat-toggle.off:hover {
   color: var(--modus-warning);
 }
 
+/* Extras Toggle Button (Kommenteeri & lisa fotod) */
+.extras-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: var(--modus-spacing-sm);
+  background: var(--modus-bg-secondary);
+  border: 1px dashed var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  color: var(--modus-text-secondary);
+  font-size: var(--modus-font-size-xs);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.extras-toggle-btn:hover {
+  background: var(--modus-bg-tertiary);
+  border-color: var(--modus-primary);
+  color: var(--modus-primary);
+}
+
 /* Comment Section */
 .checkpoint-comment {
   margin-bottom: var(--modus-spacing-md);
