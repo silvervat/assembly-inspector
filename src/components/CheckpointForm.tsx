@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage, FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
 import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment, InspectionResultPhoto } from '../supabase';
+import { addToQueue } from '../utils/offlineQueue';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 
 interface CheckpointFormProps {
@@ -384,7 +385,17 @@ export default function CheckpointForm({
     const result: { snapshot3dUrl?: string; topviewUrl?: string } = {};
 
     try {
-      // 1. Capture current 3D view
+      // Save current camera state (including projection type)
+      const currentCamera = await api.viewer.getCamera();
+
+      // Get current selection for zooming
+      const selection = await api.viewer.getSelection();
+      const modelObjectIds = selection?.map(s => ({
+        modelId: s.modelId,
+        objectRuntimeIds: s.objectRuntimeIds || []
+      })) || [];
+
+      // 1. Capture current 3D view (perspective)
       const snapshot3d = await api.viewer.getSnapshot();
       const blob3d = dataURLtoBlob(snapshot3d);
       const fileName3d = `checkpoint_3d_${assemblyGuid}_${Date.now()}.png`;
@@ -404,21 +415,22 @@ export default function CheckpointForm({
         console.log('📸 Captured 3D snapshot:', result.snapshot3dUrl);
       }
 
-      // 2. Capture topview (orthogonal)
-      // Save current camera
-      const currentCamera = await api.viewer.getCamera();
+      // 2. Capture topview with Orthographic mode
+      // First switch to orthographic mode
+      await (api.viewer as any).setSettings?.({ projectionMode: 'orthographic' });
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Switch to top preset
-      await api.viewer.setCamera('top', { animationTime: 0 });
-      await new Promise(resolve => setTimeout(resolve, 150));
-
-      // Set orthogonal projection
-      const topCamera = await api.viewer.getCamera();
-      await api.viewer.setCamera(
-        { ...topCamera, projectionType: 'ortho' },
-        { animationTime: 0 }
-      );
-      await new Promise(resolve => setTimeout(resolve, 150));
+      // Zoom to selection with top view
+      if (modelObjectIds.length > 0) {
+        await api.viewer.setCamera(
+          { modelObjectIds, preset: 'top' } as any,
+          { animationTime: 0 }
+        );
+      } else {
+        // Fallback to just top preset
+        await api.viewer.setCamera('top', { animationTime: 0 });
+      }
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Capture topview
       const topviewSnapshot = await api.viewer.getSnapshot();
@@ -440,11 +452,19 @@ export default function CheckpointForm({
         console.log('📸 Captured topview snapshot:', result.topviewUrl);
       }
 
-      // Restore original camera
+      // Restore perspective mode
+      await (api.viewer as any).setSettings?.({ projectionMode: 'perspective' });
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Restore original camera position
       await api.viewer.setCamera(currentCamera, { animationTime: 0 });
 
     } catch (e) {
       console.error('Error capturing snapshots:', e);
+      // Try to restore perspective mode even if error occurred
+      try {
+        await (api.viewer as any).setSettings?.({ projectionMode: 'perspective' });
+      } catch {}
     }
 
     return result;
@@ -476,7 +496,70 @@ export default function CheckpointForm({
     return null;
   };
 
-  // Submit form
+  // Background upload helper - uploads photo and inserts record
+  const uploadPhotoInBackground = async (
+    resultId: string,
+    file: File | Blob,
+    fileName: string,
+    contentType: string,
+    sortOrder: number,
+    photoType: string
+  ) => {
+    try {
+      // Try to upload
+      const { error: uploadError } = await supabase.storage
+        .from('inspection-photos')
+        .upload(fileName, file, {
+          contentType,
+          cacheControl: '3600'
+        });
+
+      if (uploadError) {
+        console.error('Photo upload failed, queuing for retry:', uploadError);
+        // Queue for later if offline or failed
+        const reader = new FileReader();
+        reader.onload = async () => {
+          await addToQueue({
+            type: 'photo',
+            data: { resultId, sortOrder, photoType },
+            blobData: reader.result as string,
+            fileName,
+            contentType
+          });
+        };
+        reader.readAsDataURL(file as Blob);
+        return;
+      }
+
+      // Get public URL and insert record
+      const { data: urlData } = supabase.storage
+        .from('inspection-photos')
+        .getPublicUrl(fileName);
+
+      const photoRecord = {
+        result_id: resultId,
+        storage_path: fileName,
+        url: urlData.publicUrl,
+        sort_order: sortOrder,
+        photo_type: photoType
+      };
+
+      const { error: insertError } = await supabase
+        .from('inspection_result_photos')
+        .insert([photoRecord]);
+
+      if (insertError) {
+        console.error('Photo record insert failed, queuing:', insertError);
+        await addToQueue({ type: 'result_photo', data: photoRecord });
+      } else {
+        console.log(`📸 Photo uploaded: ${photoType} - ${fileName}`);
+      }
+    } catch (e) {
+      console.error('Background upload error:', e);
+    }
+  };
+
+  // Submit form - now with background uploads
   const handleSubmit = async () => {
     const validationError = validateForm();
     if (validationError) {
@@ -489,36 +572,18 @@ export default function CheckpointForm({
 
     try {
       const savedResults: InspectionResult[] = [];
+      const backgroundUploads: Promise<void>[] = [];
 
-      // Capture 3D view and topview snapshots FIRST (before processing checkpoints)
+      // Capture 3D view and topview snapshots FIRST
+      // This must be sync as it manipulates the camera
       const snapshots = await captureSnapshots();
 
+      // Save results to database (quick operation)
       for (const checkpoint of checkpoints) {
         const response = responses[checkpoint.id];
         if (!response || !response.responseValue) continue;
 
-        // Upload user photos first
-        const photoUrls: string[] = [];
-        for (let i = 0; i < (response.photos?.length || 0); i++) {
-          const photo = response.photos[i];
-          const photoFileName = `checkpoint_${checkpoint.id}_${assemblyGuid}_${i}_${Date.now()}.jpg`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('inspection-photos')
-            .upload(photoFileName, photo.file, {
-              contentType: photo.file.type,
-              cacheControl: '3600'
-            });
-
-          if (!uploadError) {
-            const { data: urlData } = supabase.storage
-              .from('inspection-photos')
-              .getPublicUrl(photoFileName);
-            photoUrls.push(urlData.publicUrl);
-          }
-        }
-
-        // Create inspection result
+        // Create inspection result immediately
         const resultData = {
           plan_item_id: planItemId || null,
           checkpoint_id: checkpoint.id,
@@ -528,8 +593,6 @@ export default function CheckpointForm({
           response_value: response.responseValue,
           response_label: response.responseLabel,
           comment: response.comment || null,
-          // Don't send inspector_id to avoid FK constraint issues
-          // inspector_id: inspectorId || null,
           inspector_name: inspectorName,
           user_email: userEmail || null
         };
@@ -542,33 +605,38 @@ export default function CheckpointForm({
 
         if (resultError) throw resultError;
 
-        // Save photos to inspection_result_photos table
-        const allPhotoRecords: any[] = [];
-
-        // Add user photos
-        photoUrls.forEach((url, idx) => {
-          allPhotoRecords.push({
-            result_id: savedResult.id,
-            storage_path: url.split('/').pop() || '',
-            url: url,
-            sort_order: idx,
-            photo_type: 'user'
+        // Queue user photo uploads for background processing
+        if (response.photos && response.photos.length > 0) {
+          response.photos.forEach((photo, idx) => {
+            const photoFileName = `checkpoint_${checkpoint.id}_${assemblyGuid}_${idx}_${Date.now()}.jpg`;
+            backgroundUploads.push(
+              uploadPhotoInBackground(
+                savedResult.id,
+                photo.file,
+                photoFileName,
+                photo.file.type,
+                idx,
+                'user'
+              )
+            );
           });
-        });
+        }
 
-        // Add auto-captured snapshots (only for first checkpoint to avoid duplicates)
+        // Add auto-captured snapshot records (only for first checkpoint)
         if (savedResults.length === 0) {
+          const snapshotRecords: any[] = [];
+
           if (snapshots.snapshot3dUrl) {
-            allPhotoRecords.push({
+            snapshotRecords.push({
               result_id: savedResult.id,
               storage_path: snapshots.snapshot3dUrl.split('/').pop() || '',
               url: snapshots.snapshot3dUrl,
-              sort_order: 100, // High sort order for auto-generated
+              sort_order: 100,
               photo_type: 'snapshot_3d'
             });
           }
           if (snapshots.topviewUrl) {
-            allPhotoRecords.push({
+            snapshotRecords.push({
               result_id: savedResult.id,
               storage_path: snapshots.topviewUrl.split('/').pop() || '',
               url: snapshots.topviewUrl,
@@ -576,12 +644,16 @@ export default function CheckpointForm({
               photo_type: 'topview'
             });
           }
-        }
 
-        if (allPhotoRecords.length > 0) {
-          await supabase
-            .from('inspection_result_photos')
-            .insert(allPhotoRecords);
+          if (snapshotRecords.length > 0) {
+            // Insert snapshot records (they're already uploaded)
+            supabase
+              .from('inspection_result_photos')
+              .insert(snapshotRecords)
+              .then(({ error }) => {
+                if (error) console.error('Snapshot record insert error:', error);
+              });
+          }
         }
 
         savedResults.push(savedResult as InspectionResult);
@@ -592,7 +664,17 @@ export default function CheckpointForm({
         r.photos?.forEach(p => URL.revokeObjectURL(p.preview));
       });
 
+      // Complete immediately - don't wait for photo uploads
       onComplete(savedResults);
+
+      // Run photo uploads in background (fire and forget)
+      if (backgroundUploads.length > 0) {
+        console.log(`📤 Uploading ${backgroundUploads.length} photos in background...`);
+        Promise.all(backgroundUploads)
+          .then(() => console.log('✅ All background uploads complete'))
+          .catch(e => console.error('Background upload errors:', e));
+      }
+
     } catch (e: any) {
       console.error('Failed to save checkpoint results:', e);
       setError(`Viga salvestamisel: ${e.message}`);
