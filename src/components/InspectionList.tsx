@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft, FiEdit2, FiSave, FiTrash2 } from 'react-icons/fi';
+import { supabase, InspectionResult, InspectionCheckpoint } from '../supabase';
 
 export interface InspectionItem {
   id: string;
@@ -18,18 +19,26 @@ export interface InspectionItem {
   user_email?: string;
 }
 
+// Extended result with checkpoint name
+interface ResultWithCheckpoint extends InspectionResult {
+  checkpoint_name?: string;
+  checkpoint_code?: string;
+}
+
 interface InspectionListProps {
   inspections: InspectionItem[];
   mode: 'mine' | 'all';
   totalCount: number;
   hasMore: boolean;
   loadingMore: boolean;
+  projectId: string;
   onZoomToInspection: (inspection: InspectionItem) => void;
   onSelectInspection: (inspection: InspectionItem) => void;
   onSelectGroup: (inspections: InspectionItem[]) => void;
   onZoomToGroup: (inspections: InspectionItem[]) => void;
   onLoadMore: () => void;
   onClose: () => void;
+  onRefresh?: () => void;
 }
 
 // Get month key for grouping (e.g., "2025-12")
@@ -120,12 +129,14 @@ export default function InspectionList({
   totalCount,
   hasMore,
   loadingMore,
+  projectId,
   onZoomToInspection,
   onSelectInspection,
   onSelectGroup,
   onZoomToGroup,
   onLoadMore,
-  onClose
+  onClose,
+  onRefresh
 }: InspectionListProps) {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -134,6 +145,14 @@ export default function InspectionList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+
+  // Checkpoint results state
+  const [checkpointResults, setCheckpointResults] = useState<ResultWithCheckpoint[]>([]);
+  const [loadingResults, setLoadingResults] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editedResults, setEditedResults] = useState<Record<string, { response_value: string; comment: string }>>({});
+  const [savingResults, setSavingResults] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<InspectionCheckpoint[]>([]);
 
   // Gallery navigation functions
   const openGallery = useCallback((photos: string[], startIndex: number) => {
@@ -199,6 +218,175 @@ export default function InspectionList({
 
     touchStartX.current = null;
     touchEndX.current = null;
+  };
+
+  // Fetch checkpoint results for an assembly
+  const fetchCheckpointResults = useCallback(async (assemblyGuid: string) => {
+    setLoadingResults(true);
+    setCheckpointResults([]);
+    setCheckpoints([]);
+
+    try {
+      // Fetch results for this assembly
+      const { data: results, error: resultsError } = await supabase
+        .from('inspection_results')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('assembly_guid', assemblyGuid)
+        .order('created_at', { ascending: true });
+
+      if (resultsError) {
+        console.error('Error fetching results:', resultsError);
+        return;
+      }
+
+      if (!results || results.length === 0) {
+        setCheckpointResults([]);
+        return;
+      }
+
+      // Fetch checkpoint details for these results
+      const checkpointIds = [...new Set(results.map(r => r.checkpoint_id))];
+      const { data: checkpointsData, error: checkpointsError } = await supabase
+        .from('inspection_checkpoints')
+        .select('*')
+        .in('id', checkpointIds);
+
+      if (checkpointsError) {
+        console.error('Error fetching checkpoints:', checkpointsError);
+      }
+
+      // Create a map of checkpoint details
+      const checkpointMap: Record<string, InspectionCheckpoint> = {};
+      if (checkpointsData) {
+        for (const cp of checkpointsData) {
+          checkpointMap[cp.id] = cp;
+        }
+        setCheckpoints(checkpointsData);
+      }
+
+      // Merge checkpoint info with results
+      const resultsWithCheckpoints: ResultWithCheckpoint[] = results.map(r => ({
+        ...r,
+        checkpoint_name: checkpointMap[r.checkpoint_id]?.name,
+        checkpoint_code: checkpointMap[r.checkpoint_id]?.code
+      }));
+
+      setCheckpointResults(resultsWithCheckpoints);
+    } catch (e) {
+      console.error('Error fetching checkpoint results:', e);
+    } finally {
+      setLoadingResults(false);
+    }
+  }, [projectId]);
+
+  // Start edit mode
+  const startEditMode = () => {
+    // Initialize edited values from current results
+    const initial: Record<string, { response_value: string; comment: string }> = {};
+    for (const result of checkpointResults) {
+      initial[result.id] = {
+        response_value: result.response_value,
+        comment: result.comment || ''
+      };
+    }
+    setEditedResults(initial);
+    setEditMode(true);
+  };
+
+  // Cancel edit mode
+  const cancelEditMode = () => {
+    setEditMode(false);
+    setEditedResults({});
+  };
+
+  // Save edited results
+  const saveEditedResults = async () => {
+    setSavingResults(true);
+    try {
+      const updates = Object.entries(editedResults).map(([id, values]) => ({
+        id,
+        response_value: values.response_value,
+        comment: values.comment || null,
+        updated_at: new Date().toISOString()
+      }));
+
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('inspection_results')
+          .update({
+            response_value: update.response_value,
+            comment: update.comment,
+            updated_at: update.updated_at
+          })
+          .eq('id', update.id);
+
+        if (error) {
+          console.error('Error updating result:', error);
+          throw error;
+        }
+      }
+
+      // Refresh the results
+      if (selectedInspection?.guid) {
+        await fetchCheckpointResults(selectedInspection.guid);
+      }
+      setEditMode(false);
+      setEditedResults({});
+      onRefresh?.();
+    } catch (e) {
+      console.error('Error saving results:', e);
+    } finally {
+      setSavingResults(false);
+    }
+  };
+
+  // Delete a single result
+  const deleteResult = async (resultId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle tulemuse kustutada?')) {
+      return;
+    }
+
+    try {
+      // First delete any photos
+      await supabase
+        .from('inspection_result_photos')
+        .delete()
+        .eq('result_id', resultId);
+
+      // Then delete the result
+      const { error } = await supabase
+        .from('inspection_results')
+        .delete()
+        .eq('id', resultId);
+
+      if (error) throw error;
+
+      // Refresh results
+      if (selectedInspection?.guid) {
+        await fetchCheckpointResults(selectedInspection.guid);
+      }
+      onRefresh?.();
+    } catch (e) {
+      console.error('Error deleting result:', e);
+    }
+  };
+
+  // Get response option color
+  const getResponseColor = (checkpoint: InspectionCheckpoint | undefined, value: string): string => {
+    if (!checkpoint) return 'var(--modus-gray-500)';
+    const option = checkpoint.response_options?.find(o => o.value === value);
+    if (!option) return 'var(--modus-gray-500)';
+
+    const colorMap: Record<string, string> = {
+      green: 'var(--modus-success)',
+      yellow: 'var(--modus-warning)',
+      red: 'var(--modus-danger)',
+      blue: 'var(--modus-info)',
+      gray: 'var(--modus-gray-500)',
+      orange: '#f97316'
+    };
+    return colorMap[option.color] || 'var(--modus-gray-500)';
   };
 
   const monthGroups = groupByMonthAndDay(inspections);
@@ -275,6 +463,22 @@ export default function InspectionList({
   const handleShowDetail = (e: React.MouseEvent, inspection: InspectionItem) => {
     e.stopPropagation();
     setSelectedInspection(inspection);
+    setEditMode(false);
+    setEditedResults({});
+
+    // Fetch checkpoint results if we have a GUID
+    if (inspection.guid || inspection.guid_ifc) {
+      fetchCheckpointResults(inspection.guid || inspection.guid_ifc || '');
+    }
+  };
+
+  // Close detail modal and reset state
+  const closeDetailModal = () => {
+    setSelectedInspection(null);
+    setCheckpointResults([]);
+    setCheckpoints([]);
+    setEditMode(false);
+    setEditedResults({});
   };
 
   // Render day group (used both with and without month grouping)
@@ -422,16 +626,27 @@ export default function InspectionList({
 
       {/* Inspection Detail Modal */}
       {selectedInspection && (
-        <div className="inspection-detail-overlay" onClick={() => setSelectedInspection(null)}>
-          <div className="inspection-detail-modal" onClick={e => e.stopPropagation()}>
+        <div className="inspection-detail-overlay" onClick={closeDetailModal}>
+          <div className="inspection-detail-modal inspection-detail-modal-large" onClick={e => e.stopPropagation()}>
             <div className="inspection-detail-header">
               <h4>{selectedInspection.assembly_mark || 'Detail'}</h4>
-              <button
-                className="inspection-detail-close"
-                onClick={() => setSelectedInspection(null)}
-              >
-                <FiX size={18} />
-              </button>
+              <div className="inspection-detail-header-actions">
+                {checkpointResults.length > 0 && !editMode && (
+                  <button
+                    className="inspection-edit-btn"
+                    onClick={startEditMode}
+                    title="Muuda"
+                  >
+                    <FiEdit2 size={16} />
+                  </button>
+                )}
+                <button
+                  className="inspection-detail-close"
+                  onClick={closeDetailModal}
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="inspection-detail-content">
@@ -488,11 +703,132 @@ export default function InspectionList({
                 </div>
               )}
 
+              {/* Checkpoint Results Section */}
+              {loadingResults && (
+                <div className="checkpoint-results-loading">
+                  Laadin kontrollpunkte...
+                </div>
+              )}
+
+              {!loadingResults && checkpointResults.length > 0 && (
+                <div className="checkpoint-results-section">
+                  <div className="checkpoint-results-header">
+                    <span className="checkpoint-results-title">Kontrollpunktid ({checkpointResults.length})</span>
+                    {editMode && (
+                      <div className="checkpoint-edit-actions">
+                        <button
+                          className="checkpoint-save-btn"
+                          onClick={saveEditedResults}
+                          disabled={savingResults}
+                        >
+                          <FiSave size={14} />
+                          {savingResults ? 'Salvestan...' : 'Salvesta'}
+                        </button>
+                        <button
+                          className="checkpoint-cancel-btn"
+                          onClick={cancelEditMode}
+                          disabled={savingResults}
+                        >
+                          Tühista
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="checkpoint-results-list">
+                    {checkpointResults.map((result) => {
+                      const checkpoint = checkpoints.find(cp => cp.id === result.checkpoint_id);
+                      const responseColor = getResponseColor(checkpoint, result.response_value);
+
+                      return (
+                        <div key={result.id} className="checkpoint-result-item">
+                          <div className="checkpoint-result-header">
+                            <span className="checkpoint-result-name">
+                              {result.checkpoint_name || result.checkpoint_code || 'Kontrollpunkt'}
+                            </span>
+                            {editMode && (
+                              <button
+                                className="checkpoint-delete-btn"
+                                onClick={() => deleteResult(result.id)}
+                                title="Kustuta"
+                              >
+                                <FiTrash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+
+                          {editMode ? (
+                            <div className="checkpoint-result-edit">
+                              <div className="checkpoint-edit-field">
+                                <label>Staatus:</label>
+                                <select
+                                  value={editedResults[result.id]?.response_value || result.response_value}
+                                  onChange={(e) => setEditedResults(prev => ({
+                                    ...prev,
+                                    [result.id]: {
+                                      ...prev[result.id],
+                                      response_value: e.target.value
+                                    }
+                                  }))}
+                                >
+                                  {checkpoint?.response_options?.map(opt => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="checkpoint-edit-field">
+                                <label>Kommentaar:</label>
+                                <textarea
+                                  value={editedResults[result.id]?.comment || ''}
+                                  onChange={(e) => setEditedResults(prev => ({
+                                    ...prev,
+                                    [result.id]: {
+                                      ...prev[result.id],
+                                      comment: e.target.value
+                                    }
+                                  }))}
+                                  rows={2}
+                                />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="checkpoint-result-view">
+                              <div
+                                className="checkpoint-result-status"
+                                style={{ backgroundColor: responseColor }}
+                              >
+                                {result.response_label || result.response_value}
+                              </div>
+                              {result.comment && (
+                                <div className="checkpoint-result-comment">
+                                  {result.comment}
+                                </div>
+                              )}
+                              <div className="checkpoint-result-meta">
+                                {new Date(result.created_at).toLocaleString('et-EE')}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {!loadingResults && checkpointResults.length === 0 && (selectedInspection.guid || selectedInspection.guid_ifc) && (
+                <div className="checkpoint-results-empty">
+                  Kontrollpunktide tulemusi ei leitud
+                </div>
+              )}
+
               <button
                 className="detail-zoom-btn"
                 onClick={() => {
                   onZoomToInspection(selectedInspection);
-                  setSelectedInspection(null);
+                  closeDetailModal();
                 }}
               >
                 <FiZoomIn size={16} />
