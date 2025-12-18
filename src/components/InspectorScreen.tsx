@@ -1057,24 +1057,46 @@ export default function InspectorScreen({
     });
   };
 
-  // Lae inspektsioonide arv
+  // Lae inspektsioonide arv (filtreeritud režiimi järgi)
   useEffect(() => {
     const loadInspectionCount = async () => {
       try {
-        const { count, error } = await supabase
-          .from('inspections')
-          .select('*', { count: 'exact', head: true })
-          .eq('project_id', projectId);
+        // For inspection_type mode, count from inspection_results instead
+        if (inspectionMode === 'inspection_type' && inspectionTypeId) {
+          // Count unique assemblies that have checkpoint results for this inspection type
+          const { data, error } = await supabase
+            .from('inspection_results')
+            .select('assembly_guid', { count: 'exact' })
+            .eq('project_id', projectId);
 
-        if (!error && count !== null) {
-          setInspectionCount(count);
+          if (!error && data) {
+            // Count unique assembly GUIDs
+            const uniqueAssemblies = new Set(data.map(r => r.assembly_guid));
+            setInspectionCount(uniqueAssemblies.size);
+          }
+        } else {
+          // For legacy modes, count from inspections table filtered by inspection_type
+          let query = supabase
+            .from('inspections')
+            .select('*', { count: 'exact', head: true })
+            .eq('project_id', projectId);
+
+          // Filter by inspection type for legacy modes
+          if (inspectionMode !== 'inspection_type') {
+            query = query.eq('inspection_type', inspectionMode);
+          }
+
+          const { count, error } = await query;
+          if (!error && count !== null) {
+            setInspectionCount(count);
+          }
         }
       } catch (e) {
         console.error('Failed to load count:', e);
       }
     };
     loadInspectionCount();
-  }, [projectId]);
+  }, [projectId, inspectionMode, inspectionTypeId]);
 
   // Foto lisamine (optimeerituna)
   const handleAddPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1415,8 +1437,7 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {/* Standard header - hide in inspection_type mode */}
-      {inspectionMode !== 'inspection_type' && (
+      {/* Header with buttons - show for all modes */}
       <div className="inspector-header-compact">
         <div className="header-right">
           {inspectionListMode === 'none' ? (
@@ -1463,7 +1484,6 @@ export default function InspectorScreen({
           </div>
         </div>
       </div>
-      )}
 
       {requiresAssemblySelection && !assemblySelectionEnabled && (
         <div className="warning-banner">

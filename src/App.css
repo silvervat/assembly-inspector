@@ -4082,8 +4082,7 @@ body {
 }
 
 .checkpoint-list {
-  max-height: 400px;
-  overflow-y: auto;
+  /* No max-height - form extends app naturally */
 }
 
 /* Checkpoint Item */
@@ -4153,9 +4152,7 @@ body {
   font-size: var(--modus-font-size-xs);
   color: var(--modus-text-secondary);
   margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Show full text - no truncation */
 }
 
 .checkpoint-status {
