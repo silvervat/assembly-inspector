@@ -264,6 +264,15 @@ export default function InspectorScreen({
     checkAssemblySelection();
   }, [checkAssemblySelection]);
 
+  // Auto-set assembly selection mode based on assigned plan
+  useEffect(() => {
+    if (assignedPlan && assignedPlan.assembly_selection_mode !== undefined) {
+      applyAssemblyMode(assignedPlan.assembly_selection_mode);
+      // Update local state to reflect the change
+      setAssemblySelectionEnabled(assignedPlan.assembly_selection_mode);
+    }
+  }, [assignedPlan]);
+
   // Fetch checkpoints for a category
   const fetchCheckpoints = useCallback(async (categoryId: string, assemblyGuid: string) => {
     setLoadingCheckpoints(true);
@@ -1212,6 +1221,7 @@ export default function InspectorScreen({
           .select(`
             id,
             assembly_guid,
+            assembly_name,
             inspector_id,
             inspector_name,
             user_email,
@@ -1280,9 +1290,11 @@ export default function InspectorScreen({
         const inspectionItems: InspectionItem[] = [];
         for (const [guid, result] of assemblyMap) {
           const plan = planLookup.get(guid);
+          // Prioritize: assembly_name from result -> assembly_mark from plan -> truncated GUID
+          const displayMark = result.assembly_name || plan?.assembly_mark || guid.substring(0, 12);
           inspectionItems.push({
             id: result.id,
-            assembly_mark: plan?.assembly_mark || guid.substring(0, 12),
+            assembly_mark: displayMark,
             model_id: plan?.model_id || '',
             object_runtime_id: plan?.object_runtime_id || 0,
             inspector_name: result.inspector_name,
@@ -1402,6 +1414,7 @@ export default function InspectorScreen({
           .select(`
             id,
             assembly_guid,
+            assembly_name,
             inspector_id,
             inspector_name,
             user_email,
@@ -1469,9 +1482,11 @@ export default function InspectorScreen({
         const inspectionItems: InspectionItem[] = [];
         for (const [guid, result] of assemblyMap) {
           const plan = planLookup.get(guid);
+          // Prioritize: assembly_name from result -> assembly_mark from plan -> truncated GUID
+          const displayMark = result.assembly_name || plan?.assembly_mark || guid.substring(0, 12);
           inspectionItems.push({
             id: result.id,
-            assembly_mark: plan?.assembly_mark || guid.substring(0, 12),
+            assembly_mark: displayMark,
             model_id: plan?.model_id || '',
             object_runtime_id: plan?.object_runtime_id || 0,
             inspector_name: result.inspector_name,
@@ -1646,9 +1661,26 @@ export default function InspectorScreen({
 
     try {
       await (api.viewer as any).setSettings?.({ assemblySelection: assemblyMode });
+      setAssemblySelectionEnabled(assemblyMode);
       console.log(`🔧 Assembly selection set to: ${assemblyMode}`);
     } catch (e) {
       console.warn('Failed to set assembly selection:', e);
+    }
+  };
+
+  // Toggle assembly selection mode
+  const toggleAssemblySelection = async () => {
+    const newMode = !assemblySelectionEnabled;
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: newMode });
+      setAssemblySelectionEnabled(newMode);
+      setMessage(newMode ? '✓ Assembly selection SEES' : '✗ Assembly selection VÄLJAS');
+      setTimeout(() => setMessage(''), 2000);
+      console.log(`🔧 Assembly selection toggled to: ${newMode}`);
+    } catch (e) {
+      console.warn('Failed to toggle assembly selection:', e);
+      setMessage('❌ Viga assembly selection muutmisel');
+      setTimeout(() => setMessage(''), 3000);
     }
   };
 
@@ -1817,12 +1849,16 @@ export default function InspectorScreen({
             {requiresAssemblySelection && (
               <>
                 <div className="stat-divider">|</div>
-                <div className="stat-item">
+                <button
+                  className={`stat-item stat-toggle ${assemblySelectionEnabled ? 'on' : 'off'}`}
+                  onClick={toggleAssemblySelection}
+                  title={assemblySelectionEnabled ? 'Lülita Assembly Selection VÄLJA' : 'Lülita Assembly Selection SISSE'}
+                >
                   <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
                     {assemblySelectionEnabled ? '✓' : '✗'}
                   </span>
                   <span className="stat-lbl">asm</span>
-                </div>
+                </button>
               </>
             )}
           </div>
@@ -1901,6 +1937,14 @@ export default function InspectorScreen({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Prompt to select a detail when nothing is selected in inspection_type mode */}
+      {inspectionListMode === 'none' && inspectionMode === 'inspection_type' && selectedObjects.length === 0 && !assignedPlan && (
+        <div className="select-detail-prompt">
+          <div className="select-detail-icon">👆</div>
+          <div className="select-detail-text">Inspekteerimiseks vali esmalt üks detail</div>
         </div>
       )}
 
