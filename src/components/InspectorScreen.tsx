@@ -33,6 +33,10 @@ interface InspectorScreenProps {
   projectId: string;
   tcUserEmail?: string;
   inspectionMode: InspectionMode;
+  // New props for inspection type mode
+  inspectionTypeId?: string;
+  inspectionTypeCode?: string;
+  inspectionTypeName?: string;
   onBackToMenu: () => void;
 }
 
@@ -83,10 +87,17 @@ export default function InspectorScreen({
   projectId,
   tcUserEmail,
   inspectionMode,
+  inspectionTypeId,
+  inspectionTypeCode,
+  inspectionTypeName,
   onBackToMenu
 }: InspectorScreenProps) {
   // Režiimi nimi
   const getModeTitle = (mode: InspectionMode): string => {
+    // If inspection_type mode, use the type name from props
+    if (mode === 'inspection_type' && inspectionTypeName) {
+      return inspectionTypeName;
+    }
     const titles: Record<InspectionMode, string> = {
       paigaldatud: 'Paigaldatud detailide inspektsioon',
       poldid: 'Poltide inspektsioon',
@@ -97,7 +108,8 @@ export default function InspectorScreen({
       paigaldatud_detailid: 'Paigaldatud detailid',
       eos2: 'Saada EOS2 tabelisse',
       admin: 'Administratsioon',
-      inspection_plan: 'Inspektsiooni kava'
+      inspection_plan: 'Inspektsiooni kava',
+      inspection_type: 'Inspektsioon'
     };
     return titles[mode] || mode;
   };
@@ -126,6 +138,7 @@ export default function InspectorScreen({
   const [includeTopView, setIncludeTopView] = useState(true);
   const [autoClosePanel, setAutoClosePanel] = useState(false);
   const [eos2NavStatus, setEos2NavStatus] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
+  const [detailNotInPlan, setDetailNotInPlan] = useState(false);
 
   // Inspection list view state
   const [inspectionListMode, setInspectionListMode] = useState<'none' | 'mine' | 'all'>('none');
@@ -258,6 +271,7 @@ export default function InspectorScreen({
     setAssignedPlan(null);
     setCheckpoints([]);
     setShowCheckpointForm(false);
+    setDetailNotInPlan(false);
 
     if (objects.length === 0) {
       setCanInspect(false);
@@ -329,8 +343,8 @@ export default function InspectorScreen({
         for (const guidToCheck of guidsToCheck) {
           if (!guidToCheck) continue;
 
-          // Check both guid and guid_ifc columns
-          const { data: planData, error: planError } = await supabase
+          // Build query - filter by inspection_type_id if in inspection_type mode
+          let query = supabase
             .from('inspection_plan_items')
             .select(`
               *,
@@ -350,8 +364,14 @@ export default function InspectorScreen({
               )
             `)
             .eq('project_id', projectId)
-            .or(`guid.eq.${guidToCheck},guid_ifc.eq.${guidToCheck}`)
-            .single();
+            .or(`guid.eq.${guidToCheck},guid_ifc.eq.${guidToCheck}`);
+
+          // Filter by inspection type if in inspection_type mode
+          if (inspectionMode === 'inspection_type' && inspectionTypeId) {
+            query = query.eq('inspection_type_id', inspectionTypeId);
+          }
+
+          const { data: planData, error: planError } = await query.single();
 
           if (planData && !planError) {
             foundPlan = planData;
@@ -374,7 +394,16 @@ export default function InspectorScreen({
             const guidForCheckpoints = obj.guidIfc || obj.guid || obj.guidMs || '';
             fetchCheckpoints(planWithDetails.category_id, guidForCheckpoints);
           }
+        } else if (inspectionMode === 'inspection_type') {
+          // In inspection_type mode, warn user if detail is not in plan
+          setDetailNotInPlan(true);
+          setCanInspect(false);
+          console.log('⚠️ Detail not found in inspection plan for this type');
         }
+      } else if (inspectionMode === 'inspection_type') {
+        // No GUID available - can't check plan
+        setDetailNotInPlan(true);
+        setCanInspect(false);
       }
 
     } catch (e: any) {
@@ -388,7 +417,7 @@ export default function InspectorScreen({
         setMessage('');
       }
     }
-  }, [assemblySelectionEnabled, projectId, inspectionMode, requiresAssemblySelection, fetchCheckpoints]);
+  }, [assemblySelectionEnabled, projectId, inspectionMode, inspectionTypeId, requiresAssemblySelection, fetchCheckpoints]);
 
   // Peamine valiku kontroll - useCallback
   const checkSelection = useCallback(async () => {
@@ -1494,6 +1523,19 @@ export default function InspectorScreen({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Warning when detail is not in inspection plan */}
+      {inspectionListMode === 'none' && detailNotInPlan && selectedObjects.length > 0 && (
+        <div className="not-in-plan-warning">
+          <FiAlertCircle size={20} />
+          <div className="not-in-plan-content">
+            <span className="not-in-plan-title">Antud detail puudub inspektsiooni kavast</span>
+            <span className="not-in-plan-desc">
+              Valitud detaili ei leitud selle inspektsiooni tüübi kavast
+            </span>
+          </div>
         </div>
       )}
 
