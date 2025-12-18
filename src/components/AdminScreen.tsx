@@ -922,78 +922,260 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
             {/* ZOOM ADVANCED section */}
             <div className="function-section">
-              <h4>🔎 Zoom detailile</h4>
+              <h4>🔎 Zoom detailile (kaugus)</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="Zoom Selection (tight)"
-                  result={functionResults["Zoom Selection (tight)"]}
-                  onClick={() => testFunction("Zoom Selection (tight)", async () => {
+                  name="Zoom: 0.05 (väga lähedal)"
+                  result={functionResults["Zoom: 0.05 (väga lähedal)"]}
+                  onClick={() => testFunction("Zoom: 0.05 (väga lähedal)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.05 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom: 0.1 (lähedal)"
+                  result={functionResults["Zoom: 0.1 (lähedal)"]}
+                  onClick={() => testFunction("Zoom: 0.1 (lähedal)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.1 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom Selection (medium)"
-                  result={functionResults["Zoom Selection (medium)"]}
-                  onClick={() => testFunction("Zoom Selection (medium)", async () => {
+                  name="Zoom: 0.3"
+                  result={functionResults["Zoom: 0.3"]}
+                  onClick={() => testFunction("Zoom: 0.3", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom: 0.5 (keskmine)"
+                  result={functionResults["Zoom: 0.5 (keskmine)"]}
+                  onClick={() => testFunction("Zoom: 0.5 (keskmine)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom Selection (wide)"
-                  result={functionResults["Zoom Selection (wide)"]}
-                  onClick={() => testFunction("Zoom Selection (wide)", async () => {
+                  name="Zoom: 1.0"
+                  result={functionResults["Zoom: 1.0"]}
+                  onClick={() => testFunction("Zoom: 1.0", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 1.5 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 1.0 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom + Top View"
-                  result={functionResults["Zoom + Top View"]}
-                  onClick={() => testFunction("Zoom + Top View", async () => {
+                  name="Zoom: 2.0 (kaugel)"
+                  result={functionResults["Zoom: 2.0 (kaugel)"]}
+                  onClick={() => testFunction("Zoom: 2.0 (kaugel)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
-                    return api.viewer.setCamera('top', { animationTime: 300 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 2.0 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom + Front View"
-                  result={functionResults["Zoom + Front View"]}
-                  onClick={() => testFunction("Zoom + Front View", async () => {
+                  name="Zoom: 5.0 (väga kaugel)"
+                  result={functionResults["Zoom: 5.0 (väga kaugel)"]}
+                  onClick={() => testFunction("Zoom: 5.0 (väga kaugel)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
-                    return api.viewer.setCamera('front', { animationTime: 300 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 5.0 });
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* ZOOM + VIEW COMBINATION section */}
+            <div className="function-section">
+              <h4>🎯 Zoom + Vaade</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Zoom + Top (lähedal)"
+                  result={functionResults["Zoom + Top (lähedal)"]}
+                  onClick={() => testFunction("Zoom + Top (lähedal)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('top', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.2 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom + ISO View"
-                  result={functionResults["Zoom + ISO View"]}
-                  onClick={() => testFunction("Zoom + ISO View", async () => {
+                  name="Zoom + Top (keskmine)"
+                  result={functionResults["Zoom + Top (keskmine)"]}
+                  onClick={() => testFunction("Zoom + Top (keskmine)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
-                    return (api.viewer as any).setCamera('iso', { animationTime: 300 });
+                    await api.viewer.setCamera('top', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.8 });
                   })}
+                />
+                <FunctionButton
+                  name="Zoom + Front (lähedal)"
+                  result={functionResults["Zoom + Front (lähedal)"]}
+                  onClick={() => testFunction("Zoom + Front (lähedal)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('front', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.2 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + Front (keskmine)"
+                  result={functionResults["Zoom + Front (keskmine)"]}
+                  onClick={() => testFunction("Zoom + Front (keskmine)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('front', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.8 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + ISO (lähedal)"
+                  result={functionResults["Zoom + ISO (lähedal)"]}
+                  onClick={() => testFunction("Zoom + ISO (lähedal)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).setCamera('iso', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.2 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + ISO (keskmine)"
+                  result={functionResults["Zoom + ISO (keskmine)"]}
+                  onClick={() => testFunction("Zoom + ISO (keskmine)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).setCamera('iso', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.8 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + Left"
+                  result={functionResults["Zoom + Left"]}
+                  onClick={() => testFunction("Zoom + Left", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('left', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + Right"
+                  result={functionResults["Zoom + Right"]}
+                  onClick={() => testFunction("Zoom + Right", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('right', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + Back"
+                  result={functionResults["Zoom + Back"]}
+                  onClick={() => testFunction("Zoom + Back", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('back', { animationTime: 200 });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* CAMERA MANIPULATION section */}
+            <div className="function-section">
+              <h4>📹 Kaamera manipulatsioon</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Get Camera Position"
+                  result={functionResults["Get Camera Position"]}
+                  onClick={() => testFunction("Get Camera Position", async () => {
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = cam.position ? (Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z]) : null;
+                    const tgt = cam.target ? (Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z]) : null;
+                    const up = cam.up ? (Array.isArray(cam.up) ? cam.up : [cam.up.x, cam.up.y, cam.up.z]) : null;
+                    return `Position: [${pos?.map((n: number) => n.toFixed(2)).join(', ') || 'N/A'}]\nTarget: [${tgt?.map((n: number) => n.toFixed(2)).join(', ') || 'N/A'}]\nUp: [${up?.map((n: number) => n.toFixed(2)).join(', ') || 'N/A'}]\nFOV: ${cam.fov || 'N/A'}`;
+                  })}
+                />
+                <FunctionButton
+                  name="FOV: 30° (narrow)"
+                  result={functionResults["FOV: 30° (narrow)"]}
+                  onClick={() => testFunction("FOV: 30° (narrow)", async () => {
+                    const cam = await api.viewer.getCamera();
+                    return (api.viewer as any).setCamera({ ...cam, fov: 30 }, { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="FOV: 45° (normal)"
+                  result={functionResults["FOV: 45° (normal)"]}
+                  onClick={() => testFunction("FOV: 45° (normal)", async () => {
+                    const cam = await api.viewer.getCamera();
+                    return (api.viewer as any).setCamera({ ...cam, fov: 45 }, { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="FOV: 60° (wide)"
+                  result={functionResults["FOV: 60° (wide)"]}
+                  onClick={() => testFunction("FOV: 60° (wide)", async () => {
+                    const cam = await api.viewer.getCamera();
+                    return (api.viewer as any).setCamera({ ...cam, fov: 60 }, { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="FOV: 90° (ultra wide)"
+                  result={functionResults["FOV: 90° (ultra wide)"]}
+                  onClick={() => testFunction("FOV: 90° (ultra wide)", async () => {
+                    const cam = await api.viewer.getCamera();
+                    return (api.viewer as any).setCamera({ ...cam, fov: 90 }, { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="Move Camera Closer (0.5x)"
+                  result={functionResults["Move Camera Closer (0.5x)"]}
+                  onClick={() => testFunction("Move Camera Closer (0.5x)", async () => {
+                    const cam = await api.viewer.getCamera() as any;
+                    if (!cam.position || !cam.target) throw new Error('Camera data missing');
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = pos.map((p: number, i: number) =>
+                      tgt[i] + (p - tgt[i]) * 0.5
+                    );
+                    return (api.viewer as any).setCamera({ ...cam, position: newPos }, { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="Move Camera Further (2x)"
+                  result={functionResults["Move Camera Further (2x)"]}
+                  onClick={() => testFunction("Move Camera Further (2x)", async () => {
+                    const cam = await api.viewer.getCamera() as any;
+                    if (!cam.position || !cam.target) throw new Error('Camera data missing');
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = pos.map((p: number, i: number) =>
+                      tgt[i] + (p - tgt[i]) * 2
+                    );
+                    return (api.viewer as any).setCamera({ ...cam, position: newPos }, { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="fitAll()"
+                  result={functionResults["fitAll()"]}
+                  onClick={() => testFunction("fitAll()", () => (api.viewer as any).fitAll?.())}
+                />
+                <FunctionButton
+                  name="zoomToSelection()"
+                  result={functionResults["zoomToSelection()"]}
+                  onClick={() => testFunction("zoomToSelection()", () => (api.viewer as any).zoomToSelection?.())}
                 />
                 <FunctionButton
                   name="fitToSelection()"
                   result={functionResults["fitToSelection()"]}
                   onClick={() => testFunction("fitToSelection()", () => (api.viewer as any).fitToSelection?.())}
-                />
-                <FunctionButton
-                  name="zoomToObjects (test)"
-                  result={functionResults["zoomToObjects (test)"]}
-                  onClick={() => testFunction("zoomToObjects (test)", async () => {
-                    const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel);
-                  })}
                 />
                 <FunctionButton
                   name="focusOnSelection()"
@@ -1007,6 +1189,95 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     return (api.viewer as any).flyTo?.(sel);
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* COMBO ACTIONS section */}
+            <div className="function-section">
+              <h4>🎬 Kombineeritud tegevused</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Detail: Isolate + Zoom"
+                  result={functionResults["Detail: Isolate + Zoom"]}
+                  onClick={() => testFunction("Detail: Isolate + Zoom", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).isolate?.(sel);
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+                <FunctionButton
+                  name="Detail: Color RED + Zoom"
+                  result={functionResults["Detail: Color RED + Zoom"]}
+                  onClick={() => testFunction("Detail: Color RED + Zoom", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 0, b: 0, a: 255 } });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+                <FunctionButton
+                  name="Detail: Color GREEN + Zoom"
+                  result={functionResults["Detail: Color GREEN + Zoom"]}
+                  onClick={() => testFunction("Detail: Color GREEN + Zoom", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 200, b: 0, a: 255 } });
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                  })}
+                />
+                <FunctionButton
+                  name="Others Gray + Selection RED"
+                  result={functionResults["Others Gray + Selection RED"]}
+                  onClick={() => testFunction("Others Gray + Selection RED", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    // First set all to gray
+                    const models = await api.viewer.getModels();
+                    for (const model of models) {
+                      await (api.viewer as any).setModelObjectState?.(model.id, { color: { r: 180, g: 180, b: 180, a: 180 } });
+                    }
+                    // Then set selection to RED
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 0, b: 0, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Top + Zoom + Snapshot"
+                  result={functionResults["Top + Zoom + Snapshot"]}
+                  onClick={() => testFunction("Top + Zoom + Snapshot", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await api.viewer.setCamera('top', { animationTime: 200 });
+                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    await new Promise(r => setTimeout(r, 500)); // wait for animation
+                    const snapshot = await api.viewer.getSnapshot();
+                    window.open(snapshot, '_blank');
+                    return 'Snapshot opened';
+                  })}
+                />
+                <FunctionButton
+                  name="ISO + Zoom + Snapshot"
+                  result={functionResults["ISO + Zoom + Snapshot"]}
+                  onClick={() => testFunction("ISO + Zoom + Snapshot", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).setCamera('iso', { animationTime: 200 });
+                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    await new Promise(r => setTimeout(r, 500)); // wait for animation
+                    const snapshot = await api.viewer.getSnapshot();
+                    window.open(snapshot, '_blank');
+                    return 'Snapshot opened';
+                  })}
+                />
+                <FunctionButton
+                  name="Reset All States"
+                  result={functionResults["Reset All States"]}
+                  onClick={() => testFunction("Reset All States", async () => {
+                    await (api.viewer as any).resetObjectState?.();
+                    await (api.viewer as any).unisolate?.();
+                    return 'All states reset';
                   })}
                 />
               </div>
