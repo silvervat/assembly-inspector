@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiArrowLeft, FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
 
@@ -93,6 +93,10 @@ export default function InspectionPlanScreen({
   const [messageType, setMessageType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
   const [duplicates, setDuplicates] = useState<DuplicateWarning[]>([]);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
+  // Editing state for individual results
+  const [editingResultId, setEditingResultId] = useState<string | null>(null);
+  const [editingComment, setEditingComment] = useState('');
 
   // Ref for tracking last selection to avoid duplicate processing
   const lastSelectionRef = useRef<string>('');
@@ -612,6 +616,75 @@ export default function InspectionPlanScreen({
     } catch (error) {
       console.error('Failed to delete inspection results:', error);
       showMessage('❌ Viga inspektsiooni tulemuste kustutamisel', 'error');
+    }
+  };
+
+  // Delete a single checkpoint result
+  const deleteSingleResult = async (resultId: string, resultName: string) => {
+    if (!confirm(`Kas kustutada tulemus "${resultName}"?`)) {
+      return;
+    }
+
+    try {
+      // First delete photos
+      await supabase
+        .from('inspection_result_photos')
+        .delete()
+        .eq('result_id', resultId);
+
+      // Then delete the result
+      const { error } = await supabase
+        .from('inspection_results')
+        .delete()
+        .eq('id', resultId);
+
+      if (error) throw error;
+
+      showMessage('✅ Tulemus kustutatud', 'success');
+      fetchPlanItems();
+    } catch (error) {
+      console.error('Failed to delete result:', error);
+      showMessage('❌ Viga kustutamisel', 'error');
+    }
+  };
+
+  // Delete a single photo
+  const deletePhoto = async (photoId: string) => {
+    if (!confirm('Kas kustutada see foto?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('inspection_result_photos')
+        .delete()
+        .eq('id', photoId);
+
+      if (error) throw error;
+
+      showMessage('✅ Foto kustutatud', 'success');
+      fetchPlanItems();
+    } catch (error) {
+      console.error('Failed to delete photo:', error);
+      showMessage('❌ Viga foto kustutamisel', 'error');
+    }
+  };
+
+  // Update a checkpoint result comment
+  const updateResultComment = async (resultId: string, newComment: string) => {
+    try {
+      const { error } = await supabase
+        .from('inspection_results')
+        .update({ comment: newComment || null, updated_at: new Date().toISOString() })
+        .eq('id', resultId);
+
+      if (error) throw error;
+
+      showMessage('✅ Kommentaar uuendatud', 'success');
+      fetchPlanItems();
+    } catch (error) {
+      console.error('Failed to update comment:', error);
+      showMessage('❌ Viga kommentaari uuendamisel', 'error');
     }
   };
 
@@ -1223,13 +1296,71 @@ export default function InspectionPlanScreen({
                                                   <div className="results-responses">
                                                     {item.checkpointResults.map(result => (
                                                       <div key={result.id} className="result-item">
-                                                        <span className="result-checkpoint">{result.checkpoint_name}</span>
-                                                        <span className={`result-value ${result.response_value === 'ok' ? 'ok' : result.response_value === 'nok' ? 'nok' : ''}`}>
-                                                          {result.response_label || result.response_value}
-                                                        </span>
-                                                        {result.comment && (
-                                                          <div className="result-comment">
-                                                            <FiMessageSquare size={10} /> {result.comment}
+                                                        <div className="result-item-header">
+                                                          <span className="result-checkpoint">{result.checkpoint_name}</span>
+                                                          <span className={`result-value ${result.response_value === 'ok' ? 'ok' : result.response_value === 'nok' ? 'nok' : ''}`}>
+                                                            {result.response_label || result.response_value}
+                                                          </span>
+                                                          <button
+                                                            className="result-action-btn delete"
+                                                            onClick={(e) => { e.stopPropagation(); deleteSingleResult(result.id, result.checkpoint_name || 'tulemus'); }}
+                                                            title="Kustuta tulemus"
+                                                          >
+                                                            <FiTrash2 size={12} />
+                                                          </button>
+                                                        </div>
+                                                        {editingResultId === result.id ? (
+                                                          <div className="result-comment-edit">
+                                                            <textarea
+                                                              value={editingComment}
+                                                              onChange={(e) => setEditingComment(e.target.value)}
+                                                              rows={2}
+                                                              placeholder="Lisa kommentaar..."
+                                                              autoFocus
+                                                            />
+                                                            <div className="comment-edit-actions">
+                                                              <button
+                                                                className="comment-save-btn"
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  updateResultComment(result.id, editingComment);
+                                                                  setEditingResultId(null);
+                                                                }}
+                                                              >
+                                                                <FiCheck size={12} /> Salvesta
+                                                              </button>
+                                                              <button
+                                                                className="comment-cancel-btn"
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  setEditingResultId(null);
+                                                                  setEditingComment('');
+                                                                }}
+                                                              >
+                                                                <FiX size={12} /> Tühista
+                                                              </button>
+                                                            </div>
+                                                          </div>
+                                                        ) : (
+                                                          <div className="result-comment-row">
+                                                            {result.comment ? (
+                                                              <div className="result-comment">
+                                                                <FiMessageSquare size={10} /> {result.comment}
+                                                              </div>
+                                                            ) : (
+                                                              <span className="result-no-comment">Kommentaar puudub</span>
+                                                            )}
+                                                            <button
+                                                              className="result-action-btn edit"
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingResultId(result.id);
+                                                                setEditingComment(result.comment || '');
+                                                              }}
+                                                              title="Muuda kommentaari"
+                                                            >
+                                                              <FiEdit2 size={12} />
+                                                            </button>
                                                           </div>
                                                         )}
                                                       </div>
@@ -1249,9 +1380,18 @@ export default function InspectionPlanScreen({
                                                             <div className="photos-label"><FiCamera size={12} /> Fotod:</div>
                                                             <div className="photos-grid-small">
                                                               {userPhotos.map(photo => (
-                                                                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
-                                                                  <img src={photo.url} alt="Foto" />
-                                                                </a>
+                                                                <div key={photo.id} className="photo-item-wrapper">
+                                                                  <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                                                                    <img src={photo.url} alt="Foto" />
+                                                                  </a>
+                                                                  <button
+                                                                    className="photo-delete-btn"
+                                                                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); deletePhoto(photo.id); }}
+                                                                    title="Kustuta foto"
+                                                                  >
+                                                                    <FiX size={10} />
+                                                                  </button>
+                                                                </div>
                                                               ))}
                                                             </div>
                                                           </div>
@@ -1261,10 +1401,19 @@ export default function InspectionPlanScreen({
                                                             <div className="photos-label"><FiImage size={12} /> 3D pildid:</div>
                                                             <div className="photos-grid-small">
                                                               {snapshots.map(photo => (
-                                                                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
-                                                                  <img src={photo.url} alt={photo.photo_type === 'topview' ? 'Pealtvaade' : '3D vaade'} />
-                                                                  <span className="snapshot-type">{photo.photo_type === 'topview' ? 'Top' : '3D'}</span>
-                                                                </a>
+                                                                <div key={photo.id} className="photo-item-wrapper">
+                                                                  <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                                                                    <img src={photo.url} alt={photo.photo_type === 'topview' ? 'Pealtvaade' : '3D vaade'} />
+                                                                    <span className="snapshot-type">{photo.photo_type === 'topview' ? 'Top' : '3D'}</span>
+                                                                  </a>
+                                                                  <button
+                                                                    className="photo-delete-btn"
+                                                                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); deletePhoto(photo.id); }}
+                                                                    title="Kustuta foto"
+                                                                  >
+                                                                    <FiX size={10} />
+                                                                  </button>
+                                                                </div>
                                                               ))}
                                                             </div>
                                                           </div>
