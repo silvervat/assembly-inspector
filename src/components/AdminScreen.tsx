@@ -904,6 +904,336 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     return methods.join(', ');
                   })}
                 />
+                <FunctionButton
+                  name="List viewer properties"
+                  result={functionResults["List viewer properties"]}
+                  onClick={() => testFunction("List viewer properties", async () => {
+                    const props = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] !== 'function');
+                    return props.join(', ');
+                  })}
+                />
+                <FunctionButton
+                  name="Get all settings"
+                  result={functionResults["Get all settings"]}
+                  onClick={() => testFunction("Get all settings", () => (api.viewer as any).getSettings?.())}
+                />
+              </div>
+            </div>
+
+            {/* ZOOM ADVANCED section */}
+            <div className="function-section">
+              <h4>🔎 Zoom detailile</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Zoom Selection (tight)"
+                  result={functionResults["Zoom Selection (tight)"]}
+                  onClick={() => testFunction("Zoom Selection (tight)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.1 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom Selection (medium)"
+                  result={functionResults["Zoom Selection (medium)"]}
+                  onClick={() => testFunction("Zoom Selection (medium)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom Selection (wide)"
+                  result={functionResults["Zoom Selection (wide)"]}
+                  onClick={() => testFunction("Zoom Selection (wide)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 1.5 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + Top View"
+                  result={functionResults["Zoom + Top View"]}
+                  onClick={() => testFunction("Zoom + Top View", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    return api.viewer.setCamera('top', { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + Front View"
+                  result={functionResults["Zoom + Front View"]}
+                  onClick={() => testFunction("Zoom + Front View", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    return api.viewer.setCamera('front', { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="Zoom + ISO View"
+                  result={functionResults["Zoom + ISO View"]}
+                  onClick={() => testFunction("Zoom + ISO View", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    return (api.viewer as any).setCamera('iso', { animationTime: 300 });
+                  })}
+                />
+                <FunctionButton
+                  name="fitToSelection()"
+                  result={functionResults["fitToSelection()"]}
+                  onClick={() => testFunction("fitToSelection()", () => (api.viewer as any).fitToSelection?.())}
+                />
+                <FunctionButton
+                  name="zoomToObjects (test)"
+                  result={functionResults["zoomToObjects (test)"]}
+                  onClick={() => testFunction("zoomToObjects (test)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).zoomToObjects?.(sel);
+                  })}
+                />
+                <FunctionButton
+                  name="focusOnSelection()"
+                  result={functionResults["focusOnSelection()"]}
+                  onClick={() => testFunction("focusOnSelection()", () => (api.viewer as any).focusOnSelection?.())}
+                />
+                <FunctionButton
+                  name="flyTo selection"
+                  result={functionResults["flyTo selection"]}
+                  onClick={() => testFunction("flyTo selection", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).flyTo?.(sel);
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* VISUAL SETTINGS section */}
+            <div className="function-section">
+              <h4>🎭 Visuaalsed seaded</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="BG: White"
+                  result={functionResults["BG: White"]}
+                  onClick={() => testFunction("BG: White", () => (api.viewer as any).setBackgroundColor?.({ r: 255, g: 255, b: 255 }))}
+                />
+                <FunctionButton
+                  name="BG: Light Gray"
+                  result={functionResults["BG: Light Gray"]}
+                  onClick={() => testFunction("BG: Light Gray", () => (api.viewer as any).setBackgroundColor?.({ r: 200, g: 200, b: 200 }))}
+                />
+                <FunctionButton
+                  name="BG: Dark Gray"
+                  result={functionResults["BG: Dark Gray"]}
+                  onClick={() => testFunction("BG: Dark Gray", () => (api.viewer as any).setBackgroundColor?.({ r: 60, g: 60, b: 60 }))}
+                />
+                <FunctionButton
+                  name="BG: Black"
+                  result={functionResults["BG: Black"]}
+                  onClick={() => testFunction("BG: Black", () => (api.viewer as any).setBackgroundColor?.({ r: 0, g: 0, b: 0 }))}
+                />
+                <FunctionButton
+                  name="BG: Blue"
+                  result={functionResults["BG: Blue"]}
+                  onClick={() => testFunction("BG: Blue", () => (api.viewer as any).setBackgroundColor?.({ r: 30, g: 60, b: 114 }))}
+                />
+                <FunctionButton
+                  name="getBackgroundColor()"
+                  result={functionResults["getBackgroundColor()"]}
+                  onClick={() => testFunction("getBackgroundColor()", () => (api.viewer as any).getBackgroundColor?.())}
+                />
+                <FunctionButton
+                  name="Grid: Show"
+                  result={functionResults["Grid: Show"]}
+                  onClick={() => testFunction("Grid: Show", () => (api.viewer as any).setSettings?.({ showGrid: true }))}
+                />
+                <FunctionButton
+                  name="Grid: Hide"
+                  result={functionResults["Grid: Hide"]}
+                  onClick={() => testFunction("Grid: Hide", () => (api.viewer as any).setSettings?.({ showGrid: false }))}
+                />
+                <FunctionButton
+                  name="Edges: Show"
+                  result={functionResults["Edges: Show"]}
+                  onClick={() => testFunction("Edges: Show", () => (api.viewer as any).setSettings?.({ showEdges: true }))}
+                />
+                <FunctionButton
+                  name="Edges: Hide"
+                  result={functionResults["Edges: Hide"]}
+                  onClick={() => testFunction("Edges: Hide", () => (api.viewer as any).setSettings?.({ showEdges: false }))}
+                />
+                <FunctionButton
+                  name="Wireframe: ON"
+                  result={functionResults["Wireframe: ON"]}
+                  onClick={() => testFunction("Wireframe: ON", () => (api.viewer as any).setRenderMode?.('wireframe'))}
+                />
+                <FunctionButton
+                  name="Shaded: ON"
+                  result={functionResults["Shaded: ON"]}
+                  onClick={() => testFunction("Shaded: ON", () => (api.viewer as any).setRenderMode?.('shaded'))}
+                />
+                <FunctionButton
+                  name="X-Ray: ON"
+                  result={functionResults["X-Ray: ON"]}
+                  onClick={() => testFunction("X-Ray: ON", () => (api.viewer as any).setRenderMode?.('xray'))}
+                />
+                <FunctionButton
+                  name="getRenderMode()"
+                  result={functionResults["getRenderMode()"]}
+                  onClick={() => testFunction("getRenderMode()", () => (api.viewer as any).getRenderMode?.())}
+                />
+                <FunctionButton
+                  name="Shadows: ON"
+                  result={functionResults["Shadows: ON"]}
+                  onClick={() => testFunction("Shadows: ON", () => (api.viewer as any).setSettings?.({ showShadows: true }))}
+                />
+                <FunctionButton
+                  name="Shadows: OFF"
+                  result={functionResults["Shadows: OFF"]}
+                  onClick={() => testFunction("Shadows: OFF", () => (api.viewer as any).setSettings?.({ showShadows: false }))}
+                />
+              </div>
+            </div>
+
+            {/* MORE COLORS section */}
+            <div className="function-section">
+              <h4>🌈 Rohkem värve</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Color: Yellow"
+                  result={functionResults["Color: Yellow"]}
+                  onClick={() => testFunction("Color: Yellow", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 255, b: 0, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Color: Orange"
+                  result={functionResults["Color: Orange"]}
+                  onClick={() => testFunction("Color: Orange", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 165, b: 0, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Color: Blue"
+                  result={functionResults["Color: Blue"]}
+                  onClick={() => testFunction("Color: Blue", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 100, b: 255, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Color: Purple"
+                  result={functionResults["Color: Purple"]}
+                  onClick={() => testFunction("Color: Purple", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 128, g: 0, b: 128, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Color: Cyan"
+                  result={functionResults["Color: Cyan"]}
+                  onClick={() => testFunction("Color: Cyan", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 255, b: 255, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Semi-transparent (50%)"
+                  result={functionResults["Semi-transparent (50%)"]}
+                  onClick={() => testFunction("Semi-transparent (50%)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 100, g: 100, b: 100, a: 128 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Semi-transparent (25%)"
+                  result={functionResults["Semi-transparent (25%)"]}
+                  onClick={() => testFunction("Semi-transparent (25%)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 100, g: 100, b: 100, a: 64 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Others: Gray 50%"
+                  result={functionResults["Others: Gray 50%"]}
+                  onClick={() => testFunction("Others: Gray 50%", async () => {
+                    // Get all models and set all objects to semi-transparent gray
+                    const models = await api.viewer.getModels();
+                    for (const model of models) {
+                      await (api.viewer as any).setModelObjectState?.(model.id, { color: { r: 150, g: 150, b: 150, a: 128 } });
+                    }
+                    return 'All models set to gray 50%';
+                  })}
+                />
+                <FunctionButton
+                  name="setModelObjectState test"
+                  result={functionResults["setModelObjectState test"]}
+                  onClick={() => testFunction("setModelObjectState test", async () => {
+                    const models = await api.viewer.getModels();
+                    if (models.length === 0) throw new Error('No models loaded');
+                    return (api.viewer as any).setModelObjectState?.(models[0].id, { color: { r: 200, g: 200, b: 200, a: 200 } });
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* HIGHLIGHT/SELECTION MODES section */}
+            <div className="function-section">
+              <h4>✨ Highlight / Selection</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Highlight: Enable"
+                  result={functionResults["Highlight: Enable"]}
+                  onClick={() => testFunction("Highlight: Enable", () => (api.viewer as any).setSettings?.({ highlightEnabled: true }))}
+                />
+                <FunctionButton
+                  name="Highlight: Disable"
+                  result={functionResults["Highlight: Disable"]}
+                  onClick={() => testFunction("Highlight: Disable", () => (api.viewer as any).setSettings?.({ highlightEnabled: false }))}
+                />
+                <FunctionButton
+                  name="Selection Outline: ON"
+                  result={functionResults["Selection Outline: ON"]}
+                  onClick={() => testFunction("Selection Outline: ON", () => (api.viewer as any).setSettings?.({ selectionOutlineEnabled: true }))}
+                />
+                <FunctionButton
+                  name="Selection Outline: OFF"
+                  result={functionResults["Selection Outline: OFF"]}
+                  onClick={() => testFunction("Selection Outline: OFF", () => (api.viewer as any).setSettings?.({ selectionOutlineEnabled: false }))}
+                />
+                <FunctionButton
+                  name="setSelectionColor RED"
+                  result={functionResults["setSelectionColor RED"]}
+                  onClick={() => testFunction("setSelectionColor RED", () => (api.viewer as any).setSelectionColor?.({ r: 255, g: 0, b: 0 }))}
+                />
+                <FunctionButton
+                  name="setSelectionColor BLUE"
+                  result={functionResults["setSelectionColor BLUE"]}
+                  onClick={() => testFunction("setSelectionColor BLUE", () => (api.viewer as any).setSelectionColor?.({ r: 0, g: 100, b: 255 }))}
+                />
+                <FunctionButton
+                  name="setHighlightColor ORANGE"
+                  result={functionResults["setHighlightColor ORANGE"]}
+                  onClick={() => testFunction("setHighlightColor ORANGE", () => (api.viewer as any).setHighlightColor?.({ r: 255, g: 165, b: 0 }))}
+                />
+                <FunctionButton
+                  name="getSelectionColor()"
+                  result={functionResults["getSelectionColor()"]}
+                  onClick={() => testFunction("getSelectionColor()", () => (api.viewer as any).getSelectionColor?.())}
+                />
               </div>
             </div>
           </div>
