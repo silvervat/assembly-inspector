@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo } from 'react-icons/fi';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft } from 'react-icons/fi';
 
 export interface InspectionItem {
   id: string;
@@ -130,8 +130,76 @@ export default function InspectionList({
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedInspection, setSelectedInspection] = useState<InspectionItem | null>(null);
-  const [modalPhoto, setModalPhoto] = useState<string | null>(null);
+  const [modalGallery, setModalGallery] = useState<{ photos: string[], currentIndex: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+
+  // Gallery navigation functions
+  const openGallery = useCallback((photos: string[], startIndex: number) => {
+    setModalGallery({ photos, currentIndex: startIndex });
+  }, []);
+
+  const closeGallery = useCallback(() => {
+    setModalGallery(null);
+  }, []);
+
+  const nextPhoto = useCallback(() => {
+    if (modalGallery && modalGallery.currentIndex < modalGallery.photos.length - 1) {
+      setModalGallery(prev => prev ? { ...prev, currentIndex: prev.currentIndex + 1 } : null);
+    }
+  }, [modalGallery]);
+
+  const prevPhoto = useCallback(() => {
+    if (modalGallery && modalGallery.currentIndex > 0) {
+      setModalGallery(prev => prev ? { ...prev, currentIndex: prev.currentIndex - 1 } : null);
+    }
+  }, [modalGallery]);
+
+  // Keyboard handler for gallery
+  useEffect(() => {
+    if (!modalGallery) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeGallery();
+      } else if (e.key === 'ArrowRight') {
+        nextPhoto();
+      } else if (e.key === 'ArrowLeft') {
+        prevPhoto();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalGallery, closeGallery, nextPhoto, prevPhoto]);
+
+  // Touch handlers for swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null || touchEndX.current === null) return;
+
+    const diff = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(diff) > minSwipeDistance) {
+      if (diff > 0) {
+        nextPhoto();
+      } else {
+        prevPhoto();
+      }
+    }
+
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
 
   const monthGroups = groupByMonthAndDay(inspections);
   const hasMultipleMonths = monthGroups.length > 1;
@@ -411,7 +479,7 @@ export default function InspectionList({
                       <div
                         key={idx}
                         className="detail-photo-thumb"
-                        onClick={() => setModalPhoto(url)}
+                        onClick={() => openGallery(selectedInspection.photo_urls || [], idx)}
                       >
                         <img src={url} alt={`Foto ${idx + 1}`} />
                       </div>
@@ -435,14 +503,43 @@ export default function InspectionList({
         </div>
       )}
 
-      {/* Photo Modal */}
-      {modalPhoto && (
-        <div className="photo-modal-overlay" onClick={() => setModalPhoto(null)}>
-          <div className="photo-modal-content" onClick={e => e.stopPropagation()}>
-            <button className="photo-modal-close" onClick={() => setModalPhoto(null)}>
+      {/* Photo Gallery Modal */}
+      {modalGallery && (
+        <div className="photo-modal-overlay" onClick={closeGallery}>
+          <div
+            className="photo-modal-content"
+            onClick={e => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <button className="photo-modal-close" onClick={closeGallery}>
               ✕
             </button>
-            <img src={modalPhoto} alt="Inspektsiooni foto" />
+            <img src={modalGallery.photos[modalGallery.currentIndex]} alt="Inspektsiooni foto" />
+
+            {/* Navigation arrows */}
+            {modalGallery.photos.length > 1 && (
+              <div className="photo-modal-nav">
+                <button
+                  className="photo-nav-btn prev"
+                  onClick={prevPhoto}
+                  disabled={modalGallery.currentIndex === 0}
+                >
+                  <FiChevronLeft size={24} />
+                </button>
+                <span className="photo-counter">
+                  {modalGallery.currentIndex + 1} / {modalGallery.photos.length}
+                </span>
+                <button
+                  className="photo-nav-btn next"
+                  onClick={nextPhoto}
+                  disabled={modalGallery.currentIndex === modalGallery.photos.length - 1}
+                >
+                  <FiChevronRight size={24} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
