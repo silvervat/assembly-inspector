@@ -210,8 +210,8 @@ body {
 /* Compact header */
 .inspector-header-compact {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: var(--modus-spacing-xs);
   background: var(--modus-bg-primary);
   padding: var(--modus-spacing-sm) var(--modus-spacing-md);
   border-radius: var(--modus-radius-md);
@@ -220,7 +220,59 @@ body {
   border: 1px solid var(--modus-border-light);
 }
 
-/* Compact stats */
+/* Stats row */
+.stats-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--modus-spacing-sm);
+}
+
+/* Buttons row */
+.buttons-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--modus-spacing-xs);
+}
+
+/* List view header */
+.list-view-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  width: 100%;
+}
+
+.list-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--modus-bg-secondary);
+  color: var(--modus-text-primary);
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.list-back-btn:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.list-title {
+  font-weight: 600;
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-primary);
+}
+
+.list-count {
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+}
+
+/* Compact stats (legacy) */
 .stats-compact {
   display: flex;
   align-items: center;
@@ -5621,6 +5673,15 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg-tertiary);
   border-color: var(--modus-primary);
   color: var(--modus-primary);
+}
+
+.extras-required-hint {
+  font-size: 9px;
+  color: var(--modus-danger);
+  background: rgba(220, 38, 38, 0.1);
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-left: 4px;
 }
 
 /* Comment Section */

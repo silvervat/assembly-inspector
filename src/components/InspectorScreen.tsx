@@ -1916,22 +1916,47 @@ export default function InspectorScreen({
 
       {/* Header with buttons - show for all modes */}
       <div className="inspector-header-compact">
-        <div className="header-right">
-          {inspectionListMode === 'none' ? (
-            <>
+        {inspectionListMode === 'none' ? (
+          <>
+            {/* Stats row */}
+            <div className="stats-row">
+              <div className="stat-item">
+                <span className="stat-num">
+                  {totalPlanItems > 0 ? `${inspectionCount}/${totalPlanItems}` : inspectionCount}
+                </span>
+                <span className="stat-lbl">insp.</span>
+              </div>
+              {requiresAssemblySelection && (
+                <>
+                  <div className="stat-divider">|</div>
+                  <button
+                    className={`stat-item stat-toggle ${assemblySelectionEnabled ? 'on' : 'off'}`}
+                    onClick={toggleAssemblySelection}
+                    title={assemblySelectionEnabled ? 'Lülita Assembly Selection VÄLJA' : 'Lülita Assembly Selection SISSE'}
+                  >
+                    <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
+                      {assemblySelectionEnabled ? '✓' : '✗'}
+                    </span>
+                    <span className="stat-lbl">asm</span>
+                  </button>
+                </>
+              )}
+            </div>
+            {/* Buttons row */}
+            <div className="buttons-row">
               <button
                 onClick={showMyInspections}
                 disabled={inspectionListLoading}
                 className="inspection-view-btn mine"
               >
-                {inspectionListLoading ? '...' : 'Minu tehtud'}
+                {inspectionListLoading ? '...' : 'Minu'}
               </button>
               <button
                 onClick={showAllInspections}
                 disabled={inspectionListLoading}
                 className="inspection-view-btn all"
               >
-                {inspectionListLoading ? '...' : 'Kõik tehtud'}
+                {inspectionListLoading ? '...' : 'Kõik'}
               </button>
               {inspectionMode === 'inspection_type' && (
                 <button
@@ -1942,39 +1967,25 @@ export default function InspectorScreen({
                   {inspectionListLoading ? '...' : 'Tegemata'}
                 </button>
               )}
-            </>
-          ) : (
+            </div>
+          </>
+        ) : (
+          /* List view header with back button and title */
+          <div className="list-view-header">
             <button
               onClick={exitInspectionList}
-              className="inspection-view-btn exit"
+              className="list-back-btn"
             >
-              ✕ Sulge
+              <FiArrowLeft size={18} />
             </button>
-          )}
-          <div className="stats-compact">
-            <div className="stat-item">
-              <span className="stat-num">
-                {totalPlanItems > 0 ? `${inspectionCount}/${totalPlanItems}` : inspectionCount}
-              </span>
-              <span className="stat-lbl">insp.</span>
-            </div>
-            {requiresAssemblySelection && (
-              <>
-                <div className="stat-divider">|</div>
-                <button
-                  className={`stat-item stat-toggle ${assemblySelectionEnabled ? 'on' : 'off'}`}
-                  onClick={toggleAssemblySelection}
-                  title={assemblySelectionEnabled ? 'Lülita Assembly Selection VÄLJA' : 'Lülita Assembly Selection SISSE'}
-                >
-                  <span className={`stat-icon ${assemblySelectionEnabled ? 'on' : 'off'}`}>
-                    {assemblySelectionEnabled ? '✓' : '✗'}
-                  </span>
-                  <span className="stat-lbl">asm</span>
-                </button>
-              </>
-            )}
+            <span className="list-title">
+              {inspectionListMode === 'mine' && 'Minu inspektsioonid'}
+              {inspectionListMode === 'all' && 'Kõik inspektsioonid'}
+              {inspectionListMode === 'todo' && 'Tegemata'}
+            </span>
+            <span className="list-count">({inspectionListTotal})</span>
           </div>
-        </div>
+        )}
       </div>
 
       {requiresAssemblySelection && !assemblySelectionEnabled && (
