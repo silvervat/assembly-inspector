@@ -1204,6 +1204,100 @@ export default function InspectorScreen({
   const showMyInspections = async () => {
     setInspectionListLoading(true);
     try {
+      // For inspection_type mode, use inspection_results table
+      if (inspectionMode === 'inspection_type') {
+        // Get unique assemblies from inspection_results for current user
+        const { data: resultsData, error: resultsError } = await supabase
+          .from('inspection_results')
+          .select(`
+            id,
+            assembly_guid,
+            inspector_id,
+            inspector_name,
+            user_email,
+            created_at,
+            result_value
+          `)
+          .eq('project_id', projectId)
+          .eq('inspector_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (resultsError) throw resultsError;
+
+        if (!resultsData || resultsData.length === 0) {
+          setMessage('ℹ️ Sul pole veel inspektsioone');
+          setTimeout(() => setMessage(''), 3000);
+          setInspectionListLoading(false);
+          return;
+        }
+
+        // Group by assembly_guid to get unique assemblies
+        const assemblyMap = new Map<string, any>();
+        for (const result of resultsData) {
+          if (!assemblyMap.has(result.assembly_guid)) {
+            assemblyMap.set(result.assembly_guid, result);
+          }
+        }
+
+        // Get plan items for these assemblies to get model_id and runtime_id
+        const assemblyGuids = Array.from(assemblyMap.keys());
+        const { data: planItems } = await supabase
+          .from('inspection_plan_items')
+          .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
+          .eq('project_id', projectId)
+          .or(assemblyGuids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(','));
+
+        // Create a lookup map for plan items
+        const planLookup = new Map<string, any>();
+        if (planItems) {
+          for (const plan of planItems) {
+            if (plan.guid) planLookup.set(plan.guid, plan);
+            if (plan.guid_ifc) planLookup.set(plan.guid_ifc, plan);
+          }
+        }
+
+        // Transform to InspectionItem format
+        const inspectionItems: InspectionItem[] = [];
+        for (const [guid, result] of assemblyMap) {
+          const plan = planLookup.get(guid);
+          inspectionItems.push({
+            id: result.id,
+            assembly_mark: plan?.assembly_mark || guid.substring(0, 12),
+            model_id: plan?.model_id || '',
+            object_runtime_id: plan?.object_runtime_id || 0,
+            inspector_name: result.inspector_name,
+            inspected_at: result.created_at,
+            guid: guid,
+            guid_ifc: plan?.guid_ifc,
+            user_email: result.user_email
+          });
+        }
+
+        setInspectionListTotal(inspectionItems.length);
+        setInspectionListData(inspectionItems);
+        setInspectionListMode('mine');
+
+        // Color the inspected objects
+        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+
+        const validItems = inspectionItems.filter(i => i.model_id && i.object_runtime_id);
+        if (validItems.length > 0) {
+          const byModel: Record<string, number[]> = {};
+          for (const item of validItems) {
+            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+            byModel[item.model_id].push(item.object_runtime_id);
+          }
+          const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+            modelId,
+            objectRuntimeIds: runtimeIds
+          }));
+          await api.viewer.setObjectState({ modelObjectIds }, { color: { r: 220, g: 50, b: 50, a: 255 } });
+        }
+
+        return;
+      }
+
+      // Legacy mode - use inspections table
       // First get total count
       const { count, error: countError } = await supabase
         .from('inspections')
@@ -1280,6 +1374,99 @@ export default function InspectorScreen({
   const showAllInspections = async () => {
     setInspectionListLoading(true);
     try {
+      // For inspection_type mode, use inspection_results table
+      if (inspectionMode === 'inspection_type') {
+        // Get unique assemblies from inspection_results for all users
+        const { data: resultsData, error: resultsError } = await supabase
+          .from('inspection_results')
+          .select(`
+            id,
+            assembly_guid,
+            inspector_id,
+            inspector_name,
+            user_email,
+            created_at,
+            result_value
+          `)
+          .eq('project_id', projectId)
+          .order('created_at', { ascending: false });
+
+        if (resultsError) throw resultsError;
+
+        if (!resultsData || resultsData.length === 0) {
+          setMessage('ℹ️ Inspektsioone pole veel tehtud');
+          setTimeout(() => setMessage(''), 3000);
+          setInspectionListLoading(false);
+          return;
+        }
+
+        // Group by assembly_guid to get unique assemblies
+        const assemblyMap = new Map<string, any>();
+        for (const result of resultsData) {
+          if (!assemblyMap.has(result.assembly_guid)) {
+            assemblyMap.set(result.assembly_guid, result);
+          }
+        }
+
+        // Get plan items for these assemblies to get model_id and runtime_id
+        const assemblyGuids = Array.from(assemblyMap.keys());
+        const { data: planItems } = await supabase
+          .from('inspection_plan_items')
+          .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
+          .eq('project_id', projectId)
+          .or(assemblyGuids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(','));
+
+        // Create a lookup map for plan items
+        const planLookup = new Map<string, any>();
+        if (planItems) {
+          for (const plan of planItems) {
+            if (plan.guid) planLookup.set(plan.guid, plan);
+            if (plan.guid_ifc) planLookup.set(plan.guid_ifc, plan);
+          }
+        }
+
+        // Transform to InspectionItem format
+        const inspectionItems: InspectionItem[] = [];
+        for (const [guid, result] of assemblyMap) {
+          const plan = planLookup.get(guid);
+          inspectionItems.push({
+            id: result.id,
+            assembly_mark: plan?.assembly_mark || guid.substring(0, 12),
+            model_id: plan?.model_id || '',
+            object_runtime_id: plan?.object_runtime_id || 0,
+            inspector_name: result.inspector_name,
+            inspected_at: result.created_at,
+            guid: guid,
+            guid_ifc: plan?.guid_ifc,
+            user_email: result.user_email
+          });
+        }
+
+        setInspectionListTotal(inspectionItems.length);
+        setInspectionListData(inspectionItems);
+        setInspectionListMode('all');
+
+        // Color the inspected objects
+        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+
+        const validItems = inspectionItems.filter(i => i.model_id && i.object_runtime_id);
+        if (validItems.length > 0) {
+          const byModel: Record<string, number[]> = {};
+          for (const item of validItems) {
+            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+            byModel[item.model_id].push(item.object_runtime_id);
+          }
+          const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+            modelId,
+            objectRuntimeIds: runtimeIds
+          }));
+          await api.viewer.setObjectState({ modelObjectIds }, { color: { r: 34, g: 197, b: 94, a: 255 } });
+        }
+
+        return;
+      }
+
+      // Legacy mode - use inspections table
       // First get total count
       const { count, error: countError } = await supabase
         .from('inspections')
