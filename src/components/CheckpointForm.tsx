@@ -263,6 +263,26 @@ export default function CheckpointForm({
         photos: prev[checkpoint.id]?.photos || []
       }
     }));
+
+    // Auto-advance to next checkpoint on green (positive) response
+    const selectedOption = checkpoint.response_options.find(opt => opt.value === value);
+    if (selectedOption?.color === 'green') {
+      // Check if this response requires photo or comment - if so, don't auto-advance
+      const needsPhotoForOption = selectedOption.requiresPhoto || (selectedOption.photoMin && selectedOption.photoMin > 0);
+      const needsCommentForOption = selectedOption.requiresComment;
+
+      if (!needsPhotoForOption && !needsCommentForOption) {
+        // Find next checkpoint index
+        const currentIndex = checkpoints.findIndex(cp => cp.id === checkpoint.id);
+        if (currentIndex >= 0 && currentIndex < checkpoints.length - 1) {
+          const nextCheckpoint = checkpoints[currentIndex + 1];
+          setExpandedCheckpoint(nextCheckpoint.id);
+        } else {
+          // Last checkpoint - close it
+          setExpandedCheckpoint(null);
+        }
+      }
+    }
   };
 
   // Handle comment change
@@ -845,7 +865,7 @@ export default function CheckpointForm({
                     {checkpoint.name}
                     {checkpoint.is_required && <span className="required-badge">*</span>}
                   </div>
-                  {checkpoint.description && (
+                  {isExpanded && checkpoint.description && (
                     <div className="checkpoint-description">{checkpoint.description}</div>
                   )}
                 </div>
