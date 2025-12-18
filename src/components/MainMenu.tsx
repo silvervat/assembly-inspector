@@ -239,12 +239,22 @@ export default function MainMenu({
                   <div className="menu-item-content">
                     <span className="menu-item-title">{type.name}</span>
                     {stats && (
-                      <span className="menu-item-desc">
-                        {pendingCount > 0
-                          ? `${pendingCount} tegemata / ${stats.totalItems} kokku`
-                          : `${stats.totalItems} tehtud`
-                        }
-                      </span>
+                      <>
+                        <span className="menu-item-desc">
+                          {pendingCount > 0
+                            ? `${pendingCount} tegemata / ${stats.totalItems} kokku`
+                            : `${stats.totalItems} tehtud`
+                          }
+                        </span>
+                        {stats.totalItems > 0 && (
+                          <div className="menu-item-progress">
+                            <div
+                              className="menu-item-progress-bar"
+                              style={{ width: `${(stats.completedItems / stats.totalItems) * 100}%` }}
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                   <span className="menu-item-arrow">
