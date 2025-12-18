@@ -3,20 +3,7 @@ import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw,
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
 
-// Inspection data for a plan item
-// Old inspection data (from inspections table)
-interface InspectionData {
-  id: string;
-  inspected_at: string;
-  inspector_name: string;
-  user_email?: string;
-  photo_urls?: string[];
-  notes?: string;
-  model_id: string;
-  object_runtime_id: number;
-}
-
-// New checkpoint result data (from inspection_results table)
+// Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
   id: string;
   checkpoint_id: string;
@@ -36,8 +23,7 @@ interface CheckpointResultData {
 
 // Plan item with inspection statistics
 interface PlanItemWithStats extends InspectionPlanItem {
-  inspections?: InspectionData[];
-  checkpointResults?: CheckpointResultData[]; // New checkpoint-based results
+  checkpointResults?: CheckpointResultData[];
   inspection_count?: number;
   photo_count?: number;
   has_issues?: boolean;
@@ -205,19 +191,11 @@ export default function InspectionPlanScreen({
         return;
       }
 
-      // Get all GUIDs and plan item IDs to fetch matching inspections
+      // Get all GUIDs and plan item IDs to fetch checkpoint results
       const guids = data.map(item => item.guid).filter(Boolean);
-      const allGuids = [...guids, ...data.map(item => item.guid_ifc).filter(Boolean)];
       const planItemIds = data.map(item => item.id);
 
-      // Fetch OLD inspections for these GUIDs (legacy support)
-      const { data: inspections, error: inspError } = await supabase
-        .from('inspections')
-        .select('id, guid, guid_ifc, inspected_at, inspector_name, user_email, photo_urls, notes, model_id, object_runtime_id')
-        .eq('project_id', projectId)
-        .or(`guid.in.(${allGuids.join(',')}),guid_ifc.in.(${allGuids.join(',')})`);
-
-      // Fetch NEW checkpoint results with photos
+      // Fetch checkpoint results with photos
       const { data: checkpointResults, error: resultsError } = await supabase
         .from('inspection_results')
         .select(`
@@ -255,29 +233,6 @@ export default function InspectionPlanScreen({
         }
       }
 
-      // Create a map of GUID -> old inspections
-      const inspectionMap: Record<string, InspectionData[]> = {};
-      if (inspections && !inspError) {
-        for (const insp of inspections) {
-          const guid = insp.guid || insp.guid_ifc;
-          if (guid) {
-            if (!inspectionMap[guid]) {
-              inspectionMap[guid] = [];
-            }
-            inspectionMap[guid].push({
-              id: insp.id,
-              inspected_at: insp.inspected_at,
-              inspector_name: insp.inspector_name,
-              user_email: insp.user_email,
-              photo_urls: insp.photo_urls,
-              notes: insp.notes,
-              model_id: insp.model_id,
-              object_runtime_id: insp.object_runtime_id
-            });
-          }
-        }
-      }
-
       // Create a map of plan_item_id/guid -> checkpoint results
       const checkpointResultsMap: Record<string, CheckpointResultData[]> = {};
       if (checkpointResults && !resultsError) {
@@ -303,30 +258,23 @@ export default function InspectionPlanScreen({
         }
       }
 
-      // Merge inspection data with plan items
+      // Merge checkpoint data with plan items
       const itemsWithStats: PlanItemWithStats[] = data.map(item => {
-        const itemInspections = inspectionMap[item.guid] || [];
         const itemCheckpointResults = checkpointResultsMap[item.id] || checkpointResultsMap[item.guid] || [];
 
-        // Count photos from both sources
-        const oldPhotoCount = itemInspections.reduce((sum, insp) => sum + (insp.photo_urls?.length || 0), 0);
-        const newPhotoCount = itemCheckpointResults.reduce((sum, r) => sum + (r.photos?.length || 0), 0);
-        const photoCount = oldPhotoCount + newPhotoCount;
+        // Count photos
+        const photoCount = itemCheckpointResults.reduce((sum, r) => sum + (r.photos?.length || 0), 0);
 
         // Has issues if any comments exist
-        const hasIssues = itemInspections.some(insp => insp.notes && insp.notes.length > 0) ||
-                         itemCheckpointResults.some(r => r.comment && r.comment.length > 0);
+        const hasIssues = itemCheckpointResults.some(r => r.comment && r.comment.length > 0);
 
-        // Total inspection count - prefer new system if has results
-        const totalInspections = itemCheckpointResults.length > 0
-          ? 1 // Has checkpoint results = 1 inspection done
-          : itemInspections.length;
+        // Count as completed if has checkpoint results
+        const isCompleted = itemCheckpointResults.length > 0 ? 1 : 0;
 
         return {
           ...item,
-          inspections: itemInspections,
           checkpointResults: itemCheckpointResults,
-          inspection_count: totalInspections,
+          inspection_count: isCompleted,
           photo_count: photoCount,
           has_issues: hasIssues
         };
@@ -1292,25 +1240,6 @@ export default function InspectionPlanScreen({
                                                       </>
                                                     );
                                                   })()}
-                                                </div>
-                                              ) : hasInspections ? (
-                                                /* OLD: Legacy inspections */
-                                                <div className="item-inspections">
-                                                  {item.inspections?.map(insp => (
-                                                    <div key={insp.id} className="mini-inspection">
-                                                      <span className="mini-inspector">
-                                                        <FiUser size={12} /> {insp.inspector_name}
-                                                      </span>
-                                                      <span className="mini-date">
-                                                        {new Date(insp.inspected_at).toLocaleDateString('et-EE')}
-                                                      </span>
-                                                      {insp.photo_urls && insp.photo_urls.length > 0 && (
-                                                        <span className="mini-photos">
-                                                          <FiCamera size={12} /> {insp.photo_urls.length}
-                                                        </span>
-                                                      )}
-                                                    </div>
-                                                  ))}
                                                 </div>
                                               ) : (
                                                 <div className="item-no-inspection">Inspektsioon puudub</div>

@@ -244,7 +244,7 @@ export default function InspectionList({
               onClick={() => handleInspectionClick(insp)}
             >
               <div className="inspection-item-main">
-                <span className="inspection-mark">{insp.assembly_mark || 'N/A'}</span>
+                <span className="inspection-mark">{insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}</span>
                 {mode === 'all' && (
                   <span className="inspection-inspector">{insp.inspector_name}</span>
                 )}
