@@ -90,8 +90,10 @@ export default function MainMenu({
         const { data: planItems, error: planError } = await supabase
           .from('inspection_plan_items')
           .select(`
+            id,
             inspection_type_id,
-            status,
+            guid,
+            guid_ifc,
             inspection_types!inspection_plan_items_inspection_type_id_fkey (
               id, code, name, description, icon, color, sort_order, is_active
             )
@@ -102,6 +104,22 @@ export default function MainMenu({
           console.error('Error loading plan items:', planError);
           setLoading(false);
           return;
+        }
+
+        // Get all completed inspection results for this project
+        const { data: results, error: resultsError } = await supabase
+          .from('inspection_results')
+          .select('plan_item_id, assembly_guid')
+          .eq('project_id', projectId);
+
+        // Create a set of completed plan_item_ids and assembly_guids
+        const completedPlanItemIds = new Set<string>();
+        const completedGuids = new Set<string>();
+        if (!resultsError && results) {
+          for (const r of results) {
+            if (r.plan_item_id) completedPlanItemIds.add(r.plan_item_id);
+            if (r.assembly_guid) completedGuids.add(r.assembly_guid);
+          }
         }
 
         // Group by inspection type and calculate stats
@@ -125,7 +143,13 @@ export default function MainMenu({
           }
 
           statsMap[typeData.id].totalItems++;
-          if (item.status === 'completed') {
+
+          // Check if this plan item is completed (has results by plan_item_id or matching GUID)
+          const isCompleted = completedPlanItemIds.has(item.id) ||
+            (item.guid && completedGuids.has(item.guid)) ||
+            (item.guid_ifc && completedGuids.has(item.guid_ifc));
+
+          if (isCompleted) {
             statsMap[typeData.id].completedItems++;
           }
         }
