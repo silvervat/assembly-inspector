@@ -1437,8 +1437,7 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {/* Standard header - hide in inspection_type mode */}
-      {inspectionMode !== 'inspection_type' && (
+      {/* Header with buttons - show for all modes */}
       <div className="inspector-header-compact">
         <div className="header-right">
           {inspectionListMode === 'none' ? (
@@ -1485,7 +1484,6 @@ export default function InspectorScreen({
           </div>
         </div>
       </div>
-      )}
 
       {requiresAssemblySelection && !assemblySelectionEnabled && (
         <div className="warning-banner">
