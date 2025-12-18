@@ -2313,6 +2313,96 @@ body {
   font-weight: 600;
 }
 
+/* Menu loading and empty states */
+.menu-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--modus-spacing-xl);
+  gap: var(--modus-spacing-md);
+  color: var(--modus-text-secondary);
+}
+
+.menu-loading .spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.menu-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--modus-spacing-xl);
+  gap: var(--modus-spacing-md);
+  color: var(--modus-text-secondary);
+  text-align: center;
+  background: var(--modus-bg-secondary);
+  border-radius: var(--modus-radius-md);
+  border: 1px dashed var(--modus-border);
+}
+
+.menu-create-plan-btn {
+  margin-top: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  font-size: var(--modus-font-size-sm);
+  transition: background 0.15s;
+}
+
+.menu-create-plan-btn:hover {
+  background: var(--modus-primary-dark);
+}
+
+.menu-divider {
+  height: 1px;
+  background: var(--modus-border);
+  margin: var(--modus-spacing-md) 0;
+}
+
+/* Not in plan warning */
+.not-in-plan-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-md);
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: var(--modus-radius-md);
+  margin-bottom: var(--modus-spacing-md);
+  color: #92400e;
+}
+
+.not-in-plan-warning svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.not-in-plan-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.not-in-plan-title {
+  font-weight: 600;
+  font-size: var(--modus-font-size-sm);
+}
+
+.not-in-plan-desc {
+  font-size: var(--modus-font-size-xs);
+  opacity: 0.8;
+}
+
 /* Metadata section (Product info) */
 .metadata-section .pset-header {
   background: #fffbeb;

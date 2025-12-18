@@ -12,13 +12,20 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.7.4';
+export const APP_VERSION = '2.8.0';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
   email: string;
   firstName?: string;
   lastName?: string;
+}
+
+// Selected inspection type info
+interface SelectedInspectionType {
+  id: string;
+  code: string;
+  name: string;
 }
 
 export default function App() {
@@ -29,6 +36,7 @@ export default function App() {
   const [error, setError] = useState<string>('');
   const [projectId, setProjectId] = useState<string>('');
   const [currentMode, setCurrentMode] = useState<InspectionMode | null>(null);
+  const [selectedInspectionType, setSelectedInspectionType] = useState<SelectedInspectionType | null>(null);
   const [authError, setAuthError] = useState<string>('');
   const [navigationStatus, setNavigationStatus] = useState<string>('');
   const [isNavigating, setIsNavigating] = useState(false);
@@ -208,6 +216,13 @@ export default function App() {
   // Mine tagasi menüüsse
   const handleBackToMenu = () => {
     setCurrentMode(null);
+    setSelectedInspectionType(null);
+  };
+
+  // Handle inspection type selection from menu
+  const handleSelectInspectionType = (typeId: string, typeCode: string, typeName: string) => {
+    setSelectedInspectionType({ id: typeId, code: typeCode, name: typeName });
+    setCurrentMode('inspection_type');
   };
 
   const VersionFooter = () => (
@@ -306,7 +321,9 @@ export default function App() {
         <MainMenu
           user={user}
           userInitials={getUserInitials(tcUser)}
+          projectId={projectId}
           onSelectMode={setCurrentMode}
+          onSelectInspectionType={handleSelectInspectionType}
         />
         <VersionFooter />
       </>
@@ -344,7 +361,28 @@ export default function App() {
     );
   }
 
-  // Näita valitud inspektsiooni ekraani
+  // Inspection type mode - show inspector with selected type
+  if (currentMode === 'inspection_type' && selectedInspectionType) {
+    return (
+      <>
+        <NavigationOverlay />
+        <InspectorScreen
+          api={api}
+          user={user}
+          projectId={projectId}
+          tcUserEmail={tcUser?.email || ''}
+          inspectionMode={currentMode}
+          inspectionTypeId={selectedInspectionType.id}
+          inspectionTypeCode={selectedInspectionType.code}
+          inspectionTypeName={selectedInspectionType.name}
+          onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Näita valitud inspektsiooni ekraani (legacy modes)
   return (
     <>
       <NavigationOverlay />
