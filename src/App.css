@@ -3977,6 +3977,69 @@ body {
   margin-bottom: var(--modus-spacing-sm);
 }
 
+/* Completed inspection header */
+.completed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--modus-spacing-md);
+}
+
+.completed-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  background: var(--modus-success);
+  color: white;
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-sm);
+  font-weight: 600;
+}
+
+.completed-badge .completed-icon {
+  font-size: 16px;
+}
+
+.edit-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.edit-btn:hover {
+  background: var(--modus-primary-dark);
+}
+
+.completed-meta {
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+  margin-top: var(--modus-spacing-xs);
+}
+
+/* View mode - no interactions */
+.checkpoint-form.view-mode .checkpoint-header {
+  cursor: default;
+}
+
+.checkpoint-form.view-mode .checkpoint-item {
+  pointer-events: none;
+}
+
+.checkpoint-form.view-mode .completed-header,
+.checkpoint-form.view-mode .edit-btn {
+  pointer-events: auto;
+}
+
 .checkpoint-progress {
   display: flex;
   align-items: center;
