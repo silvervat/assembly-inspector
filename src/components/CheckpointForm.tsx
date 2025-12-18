@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip } from 'react-icons/fi';
+import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2 } from 'react-icons/fi';
 import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment } from '../supabase';
 
 interface CheckpointFormProps {
@@ -35,13 +35,17 @@ export default function CheckpointForm({
   userEmail,
   existingResults,
   onComplete,
-  onCancel
+  onCancel: _onCancel // Not used - edit mode cancellation handled internally
 }: CheckpointFormProps) {
   const [responses, setResponses] = useState<Record<string, CheckpointResponse>>({});
   const [expandedCheckpoint, setExpandedCheckpoint] = useState<string | null>(null);
   const [expandedInstructions, setExpandedInstructions] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // View mode vs edit mode - start in view mode if existing results
+  const hasExistingResults = existingResults && existingResults.length > 0;
+  const [isEditMode, setIsEditMode] = useState(!hasExistingResults);
 
   // Initialize responses from existing results
   useEffect(() => {
@@ -57,6 +61,10 @@ export default function CheckpointForm({
         };
       }
       setResponses(initialResponses);
+      // Start in view mode if we have existing results
+      setIsEditMode(false);
+    } else {
+      setIsEditMode(true);
     }
   }, [existingResults]);
 
@@ -379,21 +387,54 @@ export default function CheckpointForm({
     ? Math.round((completedRequired / totalRequired) * 100)
     : 100;
 
+  // Get first existing result for metadata (inspector name, date)
+  const firstResult = existingResults?.[0];
+  const inspectedAt = firstResult?.inspected_at
+    ? new Date(firstResult.inspected_at).toLocaleString('et-EE')
+    : null;
+  const inspectedBy = firstResult?.inspector_name || firstResult?.user_email;
+
   return (
-    <div className="checkpoint-form">
+    <div className={`checkpoint-form ${!isEditMode ? 'view-mode' : ''}`}>
       <div className="checkpoint-form-header">
-        <h3>Kontrollpunktid</h3>
-        <div className="checkpoint-progress">
-          <div className="progress-bar">
-            <div
-              className="progress-fill"
-              style={{ width: `${completionPercent}%` }}
-            />
-          </div>
-          <span className="progress-text">
-            {completedRequired}/{totalRequired} kohustuslikku täidetud
-          </span>
-        </div>
+        {hasExistingResults && !isEditMode ? (
+          <>
+            <div className="completed-header">
+              <div className="completed-badge">
+                <FiCheck className="completed-icon" />
+                <span>Inspekteeritud</span>
+              </div>
+              <button
+                className="edit-btn"
+                onClick={() => setIsEditMode(true)}
+              >
+                <FiEdit2 />
+                <span>Muuda</span>
+              </button>
+            </div>
+            {inspectedBy && (
+              <div className="completed-meta">
+                <span>{inspectedBy}</span>
+                {inspectedAt && <span> • {inspectedAt}</span>}
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <h3>Kontrollpunktid</h3>
+            <div className="checkpoint-progress">
+              <div className="progress-bar">
+                <div
+                  className="progress-fill"
+                  style={{ width: `${completionPercent}%` }}
+                />
+              </div>
+              <span className="progress-text">
+                {completedRequired}/{totalRequired} kohustuslikku täidetud
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {error && (
@@ -422,7 +463,7 @@ export default function CheckpointForm({
             >
               <div
                 className="checkpoint-header"
-                onClick={() => setExpandedCheckpoint(isExpanded ? null : checkpoint.id)}
+                onClick={() => isEditMode && setExpandedCheckpoint(isExpanded ? null : checkpoint.id)}
               >
                 <div className="checkpoint-number">{index + 1}</div>
                 <div className="checkpoint-info">
@@ -445,7 +486,7 @@ export default function CheckpointForm({
                 </div>
               </div>
 
-              {isExpanded && (
+              {isExpanded && isEditMode && (
                 <div className="checkpoint-content">
                   {/* Instructions toggle */}
                   {checkpoint.instructions && (
@@ -634,22 +675,27 @@ export default function CheckpointForm({
         })}
       </div>
 
-      <div className="checkpoint-form-actions">
-        <button
-          className="cancel-btn"
-          onClick={onCancel}
-          disabled={submitting}
-        >
-          Tühista
-        </button>
-        <button
-          className="submit-btn"
-          onClick={handleSubmit}
-          disabled={submitting || completionPercent < 100}
-        >
-          {submitting ? 'Salvestan...' : 'Salvesta vastused'}
-        </button>
-      </div>
+      {/* Show action buttons only in edit mode */}
+      {isEditMode && (
+        <div className="checkpoint-form-actions">
+          {hasExistingResults && (
+            <button
+              className="cancel-btn"
+              onClick={() => setIsEditMode(false)}
+              disabled={submitting}
+            >
+              Tühista
+            </button>
+          )}
+          <button
+            className="submit-btn"
+            onClick={handleSubmit}
+            disabled={submitting || completionPercent < 100}
+          >
+            {submitting ? 'Salvestan...' : 'Salvesta vastused'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

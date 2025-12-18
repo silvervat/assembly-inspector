@@ -1404,6 +1404,19 @@ export default function InspectorScreen({
         <span className="mode-title">{getModeTitle(inspectionMode)}</span>
       </div>
 
+      {/* Compact plan info for inspection_type mode */}
+      {inspectionMode === 'inspection_type' && assignedPlan && (
+        <div className="plan-info-compact">
+          {assignedPlan.category && (
+            <span className="plan-info-item">{assignedPlan.category.name}</span>
+          )}
+          <span className="plan-info-divider">|</span>
+          <span className="plan-info-item">ASM: {assignedPlan.assembly_selection_mode ? 'SEES' : 'VÄLJAS'}</span>
+        </div>
+      )}
+
+      {/* Standard header - hide in inspection_type mode */}
+      {inspectionMode !== 'inspection_type' && (
       <div className="inspector-header-compact">
         <div className="header-right">
           {inspectionListMode === 'none' ? (
@@ -1450,6 +1463,7 @@ export default function InspectorScreen({
           </div>
         </div>
       </div>
+      )}
 
       {requiresAssemblySelection && !assemblySelectionEnabled && (
         <div className="warning-banner">
@@ -1604,8 +1618,8 @@ export default function InspectorScreen({
         </div>
       )}
 
-      {/* Inspection Plan Requirements - show when object has assigned plan */}
-      {inspectionListMode === 'none' && assignedPlan && (
+      {/* Inspection Plan Requirements - show when object has assigned plan (NOT in inspection_type mode) */}
+      {inspectionListMode === 'none' && assignedPlan && inspectionMode !== 'inspection_type' && (
         <div className="inspection-plan-card">
           <div className="plan-card-header">
             <FiClipboard className="plan-card-icon" />
@@ -1652,6 +1666,11 @@ export default function InspectorScreen({
         </div>
       )}
 
+      {/* Checkpoint loading indicator for inspection_type mode */}
+      {inspectionMode === 'inspection_type' && loadingCheckpoints && (
+        <div className="loading-checkpoints-inline">Laadin kontrollpunkte...</div>
+      )}
+
       {/* Checkpoint Form - show when checkpoints are available */}
       {inspectionListMode === 'none' && checkpoints.length > 0 && selectedObjects.length === 1 && (
         <CheckpointForm
@@ -1673,8 +1692,8 @@ export default function InspectorScreen({
         />
       )}
 
-      {/* Foto lisamine - hide when list view is active */}
-      {inspectionListMode === 'none' && (
+      {/* Foto lisamine - hide when list view is active or in inspection_type mode */}
+      {inspectionListMode === 'none' && inspectionMode !== 'inspection_type' && (
       <div className="photo-section">
         <div className="photo-header">
           <span className="photo-title">Fotod ({photos.length})</span>
@@ -1722,26 +1741,21 @@ export default function InspectorScreen({
       </div>
       )}
 
-      {inspectionListMode === 'none' && (
+      {/* Action container - hide in inspection_type mode */}
+      {inspectionListMode === 'none' && inspectionMode !== 'inspection_type' && (
       <div className="action-container">
-        {/* In inspection_type mode, checkpoints must be completed first */}
-        {inspectionMode === 'inspection_type' && checkpoints.length > 0 && checkpointResults.length < checkpoints.length ? (
-          <div className="checkpoint-required-hint">
-            ⚠️ Täida esmalt kontrollpunktid ({checkpointResults.length}/{checkpoints.length})
-          </div>
-        ) : (
-          <button
-            onClick={handleInspect}
-            disabled={!canInspect || inspecting}
-            className={`inspect-button ${canInspect ? 'enabled' : 'disabled'}`}
-          >
-            {inspecting ? '⏳ Inspekteerin...' : '📸 Inspekteeri'}
-          </button>
-        )}
+        <button
+          onClick={handleInspect}
+          disabled={!canInspect || inspecting}
+          className={`inspect-button ${canInspect ? 'enabled' : 'disabled'}`}
+        >
+          {inspecting ? '⏳ Inspekteerin...' : '📸 Inspekteeri'}
+        </button>
       </div>
       )}
 
-      {inspectionListMode === 'none' && (
+      {/* Instructions - hide in inspection_type mode */}
+      {inspectionListMode === 'none' && inspectionMode !== 'inspection_type' && (
       <>
         <div className="instructions">
           <h4>Juhised:</h4>
