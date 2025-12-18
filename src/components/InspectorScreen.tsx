@@ -1846,9 +1846,25 @@ export default function InspectorScreen({
       // Select objects first
       await api.viewer.setSelection({ modelObjectIds }, 'set');
 
-      // Zoom to selected objects using setCamera with ObjectSelector
-      // This automatically fits the camera to show all selected objects
-      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+      // Step 1: Get top view camera orientation
+      await api.viewer.setCamera('top', { animationTime: 0 });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const topCamera = await api.viewer.getCamera();
+
+      // Step 2: Zoom to selected objects
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 0 });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const zoomedCamera = await api.viewer.getCamera();
+
+      // Step 3: Combine - use zoomed position/lookAt with top view orientation
+      await api.viewer.setCamera({
+        position: zoomedCamera.position,
+        lookAt: zoomedCamera.lookAt,
+        quaternion: topCamera.quaternion,
+        upDirection: topCamera.upDirection,
+        projectionType: 'ortho',
+        orthoSize: zoomedCamera.orthoSize || 1
+      }, { animationTime: 300 });
     } catch (e) {
       console.error('Failed to zoom to group:', e);
     }
@@ -1869,9 +1885,25 @@ export default function InspectorScreen({
       // Select the object
       await api.viewer.setSelection({ modelObjectIds }, 'set');
 
-      // Zoom to selected object using setCamera with ObjectSelector
-      // This automatically fits the camera to show the selected object
-      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+      // Step 1: Get top view camera orientation
+      await api.viewer.setCamera('top', { animationTime: 0 });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const topCamera = await api.viewer.getCamera();
+
+      // Step 2: Zoom to selected object
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 0 });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const zoomedCamera = await api.viewer.getCamera();
+
+      // Step 3: Combine - use zoomed position/lookAt with top view orientation
+      await api.viewer.setCamera({
+        position: zoomedCamera.position,
+        lookAt: zoomedCamera.lookAt,
+        quaternion: topCamera.quaternion,
+        upDirection: topCamera.upDirection,
+        projectionType: 'ortho',
+        orthoSize: zoomedCamera.orthoSize || 1
+      }, { animationTime: 300 });
     } catch (e) {
       console.error('Failed to zoom to inspection:', e);
     }
