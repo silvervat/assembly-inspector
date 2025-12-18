@@ -1562,6 +1562,17 @@ button.stat-toggle.off:hover {
   border-color: #4ade80;
 }
 
+.inspection-view-btn.todo {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+}
+
+.inspection-view-btn.todo:hover:not(:disabled) {
+  background: #ffedd5;
+  border-color: #fb923c;
+}
+
 .inspection-view-btn.exit {
   background: #f3f4f6;
   color: #4b5563;
@@ -2277,6 +2288,35 @@ button.stat-toggle.off:hover {
 .checkpoint-result-meta {
   font-size: 10px;
   color: var(--modus-text-tertiary);
+}
+
+/* Checkpoint Result Photos */
+.checkpoint-result-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--modus-spacing-xs);
+}
+
+.checkpoint-photo-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--modus-radius-xs);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--modus-border);
+  transition: all 0.15s;
+}
+
+.checkpoint-photo-thumb:hover {
+  border-color: var(--modus-primary);
+  transform: scale(1.05);
+}
+
+.checkpoint-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* Checkpoint Edit Mode */
@@ -4627,6 +4667,171 @@ button.stat-toggle.off:hover {
   color: var(--modus-text-secondary);
   padding-top: 2px;
   font-style: italic;
+  flex: 1;
+}
+
+/* Result item editing styles */
+.result-item-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  width: 100%;
+}
+
+.result-action-btn {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: all 0.15s;
+}
+
+.result-action-btn:hover {
+  opacity: 1;
+}
+
+.result-action-btn.edit {
+  color: var(--modus-primary);
+}
+
+.result-action-btn.edit:hover {
+  background: rgba(0, 113, 228, 0.1);
+}
+
+.result-action-btn.delete {
+  color: var(--modus-danger);
+}
+
+.result-action-btn.delete:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.result-comment-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+}
+
+.result-no-comment {
+  font-size: 0.6rem;
+  color: var(--modus-text-tertiary);
+  font-style: italic;
+}
+
+.result-comment-edit {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.result-comment-edit textarea {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--modus-primary);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  resize: vertical;
+  min-height: 40px;
+}
+
+.result-comment-edit textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 113, 228, 0.2);
+}
+
+.comment-edit-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.comment-save-btn,
+.comment-cancel-btn {
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  border-radius: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.comment-save-btn {
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+}
+
+.comment-save-btn:hover {
+  background: var(--modus-primary-darker);
+}
+
+.comment-cancel-btn {
+  background: var(--modus-bg-tertiary);
+  color: var(--modus-text-secondary);
+  border: 1px solid var(--modus-border);
+}
+
+.comment-cancel-btn:hover {
+  background: var(--modus-bg-secondary);
+}
+
+/* Photo wrapper for delete button */
+.photo-item-wrapper {
+  position: relative;
+  width: 40px;
+  height: 40px;
+}
+
+.photo-item-wrapper a {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--modus-border-light);
+}
+
+.photo-item-wrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-delete-btn {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: var(--modus-danger);
+  color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+
+.photo-item-wrapper:hover .photo-delete-btn {
+  opacity: 1;
+}
+
+.photo-delete-btn:hover {
+  background: #b91c1c;
 }
 
 .results-photos,

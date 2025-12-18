@@ -122,6 +122,7 @@ export default function InspectorScreen({
   const [message, setMessage] = useState('');
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [inspectionCount, setInspectionCount] = useState(0);
+  const [totalPlanItems, setTotalPlanItems] = useState(0);
   const [photos, setPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [existingInspection, setExistingInspection] = useState<{
     inspectorName: string;
@@ -142,7 +143,7 @@ export default function InspectorScreen({
   const [detailNotInPlan, setDetailNotInPlan] = useState(false);
 
   // Inspection list view state
-  const [inspectionListMode, setInspectionListMode] = useState<'none' | 'mine' | 'all'>('none');
+  const [inspectionListMode, setInspectionListMode] = useState<'none' | 'mine' | 'all' | 'todo'>('none');
   const [inspectionListData, setInspectionListData] = useState<InspectionItem[]>([]);
   const [inspectionListLoading, setInspectionListLoading] = useState(false);
   const [inspectionListTotal, setInspectionListTotal] = useState(0);
@@ -1151,6 +1152,17 @@ export default function InspectorScreen({
             const uniqueAssemblies = new Set(data.map(r => r.assembly_guid));
             setInspectionCount(uniqueAssemblies.size);
           }
+
+          // Also fetch total plan items count for this inspection type
+          const { count: totalCount, error: totalError } = await supabase
+            .from('inspection_plan_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('project_id', projectId)
+            .eq('inspection_type_id', inspectionTypeId);
+
+          if (!totalError && totalCount !== null) {
+            setTotalPlanItems(totalCount);
+          }
         } else {
           // For legacy modes, count from inspections table filtered by inspection_type
           let query = supabase
@@ -1167,6 +1179,7 @@ export default function InspectorScreen({
           if (!error && count !== null) {
             setInspectionCount(count);
           }
+          setTotalPlanItems(0); // Legacy modes don't have plan items
         }
       } catch (e) {
         console.error('Failed to load count:', e);
@@ -1591,6 +1604,94 @@ export default function InspectorScreen({
     }
   };
 
+  // Show todo items (plan items not yet inspected)
+  const showTodoItems = async () => {
+    if (inspectionMode !== 'inspection_type' || !inspectionTypeId) {
+      setMessage('⚠️ Tegemata nimekiri on saadaval ainult inspektsiooni kava režiimis');
+      setTimeout(() => setMessage(''), 3000);
+      return;
+    }
+
+    setInspectionListLoading(true);
+    try {
+      // Get all plan items for this inspection type
+      const { data: planItems, error: planError } = await supabase
+        .from('inspection_plan_items')
+        .select('id, guid, guid_ifc, model_id, object_runtime_id, assembly_mark, object_name')
+        .eq('project_id', projectId)
+        .eq('inspection_type_id', inspectionTypeId);
+
+      if (planError) throw planError;
+
+      if (!planItems || planItems.length === 0) {
+        setMessage('ℹ️ Kavas pole ühtegi objekti');
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Get all inspected assembly GUIDs
+      const { data: resultsData } = await supabase
+        .from('inspection_results')
+        .select('assembly_guid')
+        .eq('project_id', projectId);
+
+      const inspectedGuids = new Set((resultsData || []).map(r => r.assembly_guid));
+
+      // Filter out inspected items
+      const todoItems = planItems.filter(item => {
+        const guid = item.guid || item.guid_ifc;
+        return guid && !inspectedGuids.has(guid);
+      });
+
+      if (todoItems.length === 0) {
+        setMessage('✅ Kõik objektid on inspekteeritud!');
+        setTimeout(() => setMessage(''), 3000);
+        setInspectionListLoading(false);
+        return;
+      }
+
+      // Transform to InspectionItem format (without inspector info since not inspected)
+      const inspectionItems: InspectionItem[] = todoItems.map(item => ({
+        id: item.id,
+        assembly_mark: item.assembly_mark || item.object_name || item.guid?.substring(0, 12) || 'N/A',
+        model_id: item.model_id,
+        object_runtime_id: item.object_runtime_id || 0,
+        inspector_name: '-',
+        inspected_at: '',
+        guid: item.guid,
+        guid_ifc: item.guid_ifc
+      }));
+
+      setInspectionListTotal(inspectionItems.length);
+      setInspectionListData(inspectionItems);
+      setInspectionListMode('todo');
+
+      // Color all objects light gray, then highlight todo items in orange/yellow
+      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+
+      const validItems = inspectionItems.filter(i => i.model_id && i.object_runtime_id);
+      if (validItems.length > 0) {
+        const byModel: Record<string, number[]> = {};
+        for (const item of validItems) {
+          if (!byModel[item.model_id]) byModel[item.model_id] = [];
+          byModel[item.model_id].push(item.object_runtime_id);
+        }
+        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+          modelId,
+          objectRuntimeIds: runtimeIds
+        }));
+        // Orange color for todo items
+        await api.viewer.setObjectState({ modelObjectIds }, { color: { r: 249, g: 115, b: 22, a: 255 } });
+      }
+    } catch (e: any) {
+      console.error('Failed to show todo items:', e);
+      setMessage('❌ Viga tegemata nimekirja laadimisel');
+    } finally {
+      setInspectionListLoading(false);
+    }
+  };
+
   // Load more inspections
   const loadMoreInspections = async () => {
     if (inspectionListLoadingMore) return;
@@ -1823,15 +1924,24 @@ export default function InspectorScreen({
                 disabled={inspectionListLoading}
                 className="inspection-view-btn mine"
               >
-                {inspectionListLoading ? '...' : 'Minu'}
+                {inspectionListLoading ? '...' : 'Minu tehtud'}
               </button>
               <button
                 onClick={showAllInspections}
                 disabled={inspectionListLoading}
                 className="inspection-view-btn all"
               >
-                {inspectionListLoading ? '...' : 'Kõik'}
+                {inspectionListLoading ? '...' : 'Kõik tehtud'}
               </button>
+              {inspectionMode === 'inspection_type' && (
+                <button
+                  onClick={showTodoItems}
+                  disabled={inspectionListLoading}
+                  className="inspection-view-btn todo"
+                >
+                  {inspectionListLoading ? '...' : 'Tegemata'}
+                </button>
+              )}
             </>
           ) : (
             <button
@@ -1843,7 +1953,9 @@ export default function InspectorScreen({
           )}
           <div className="stats-compact">
             <div className="stat-item">
-              <span className="stat-num">{inspectionCount}</span>
+              <span className="stat-num">
+                {totalPlanItems > 0 ? `${inspectionCount}/${totalPlanItems}` : inspectionCount}
+              </span>
               <span className="stat-lbl">insp.</span>
             </div>
             {requiresAssemblySelection && (
@@ -1953,7 +2065,7 @@ export default function InspectorScreen({
       {inspectionListMode === 'none' && inspectionMode === 'inspection_type' && selectedObjects.length === 0 && !assignedPlan && (
         <div className="select-detail-prompt">
           <div className="select-detail-icon">👆</div>
-          <div className="select-detail-text">Inspekteerimiseks vali esmalt üks detail</div>
+          <div className="select-detail-text">Inspekteerimiseks vali esmalt üks detail mudelist</div>
         </div>
       )}
 

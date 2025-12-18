@@ -23,11 +23,12 @@ export interface InspectionItem {
 interface ResultWithCheckpoint extends InspectionResult {
   checkpoint_name?: string;
   checkpoint_code?: string;
+  result_photos?: { id: string; url: string; thumbnail_url?: string }[];
 }
 
 interface InspectionListProps {
   inspections: InspectionItem[];
-  mode: 'mine' | 'all';
+  mode: 'mine' | 'all' | 'todo';
   totalCount: number;
   hasMore: boolean;
   loadingMore: boolean;
@@ -265,11 +266,35 @@ export default function InspectionList({
         setCheckpoints(checkpointsData);
       }
 
-      // Merge checkpoint info with results
+      // Fetch photos for these results
+      const resultIds = results.map(r => r.id);
+      const { data: photosData } = await supabase
+        .from('inspection_result_photos')
+        .select('id, result_id, url, thumbnail_url')
+        .in('result_id', resultIds)
+        .order('sort_order', { ascending: true });
+
+      // Create a map of photos by result_id
+      const photosMap: Record<string, { id: string; url: string; thumbnail_url?: string }[]> = {};
+      if (photosData) {
+        for (const photo of photosData) {
+          if (!photosMap[photo.result_id]) {
+            photosMap[photo.result_id] = [];
+          }
+          photosMap[photo.result_id].push({
+            id: photo.id,
+            url: photo.url,
+            thumbnail_url: photo.thumbnail_url
+          });
+        }
+      }
+
+      // Merge checkpoint info and photos with results
       const resultsWithCheckpoints: ResultWithCheckpoint[] = results.map(r => ({
         ...r,
         checkpoint_name: checkpointMap[r.checkpoint_id]?.name,
-        checkpoint_code: checkpointMap[r.checkpoint_id]?.code
+        checkpoint_code: checkpointMap[r.checkpoint_id]?.code,
+        result_photos: photosMap[r.id] || []
       }));
 
       setCheckpointResults(resultsWithCheckpoints);
@@ -804,6 +829,26 @@ export default function InspectionList({
                               {result.comment && (
                                 <div className="checkpoint-result-comment">
                                   {result.comment}
+                                </div>
+                              )}
+                              {/* Photos for this checkpoint result */}
+                              {result.result_photos && result.result_photos.length > 0 && (
+                                <div className="checkpoint-result-photos">
+                                  {result.result_photos.map((photo, idx) => (
+                                    <div
+                                      key={photo.id}
+                                      className="checkpoint-photo-thumb"
+                                      onClick={() => openGallery(
+                                        result.result_photos!.map(p => p.url),
+                                        idx
+                                      )}
+                                    >
+                                      <img
+                                        src={photo.thumbnail_url || photo.url}
+                                        alt={`Foto ${idx + 1}`}
+                                      />
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                               <div className="checkpoint-result-meta">
