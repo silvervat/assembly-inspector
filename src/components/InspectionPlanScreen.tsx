@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiArrowLeft, FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
 
@@ -97,6 +97,12 @@ export default function InspectionPlanScreen({
   // Editing state for individual results
   const [editingResultId, setEditingResultId] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState('');
+
+  // Search and filter state
+  const [searchText, setSearchText] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'done' | 'pending'>('all');
+  const [filterInspector, setFilterInspector] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
 
   // Ref for tracking last selection to avoid duplicate processing
   const lastSelectionRef = useRef<string>('');
@@ -791,10 +797,53 @@ export default function InspectionPlanScreen({
     completedItems: number;
   }
 
+  // Get unique inspector names from plan items
+  const getUniqueInspectors = (): string[] => {
+    const inspectors = new Set<string>();
+    for (const item of planItems) {
+      if (item.checkpointResults) {
+        for (const result of item.checkpointResults) {
+          if (result.inspector_name) {
+            inspectors.add(result.inspector_name);
+          }
+        }
+      }
+    }
+    return Array.from(inspectors).sort();
+  };
+
+  // Filter plan items based on search and filters
+  const filteredPlanItems = (): PlanItemWithStats[] => {
+    return planItems.filter(item => {
+      // Status filter
+      if (filterStatus === 'done' && (item.inspection_count || 0) === 0) return false;
+      if (filterStatus === 'pending' && (item.inspection_count || 0) > 0) return false;
+
+      // Inspector filter
+      if (filterInspector) {
+        const hasInspector = item.checkpointResults?.some(r => r.inspector_name === filterInspector);
+        if (!hasInspector) return false;
+      }
+
+      // Search text filter
+      if (searchText.trim()) {
+        const search = searchText.toLowerCase();
+        const matchMark = item.assembly_mark?.toLowerCase().includes(search);
+        const matchGuid = item.guid?.toLowerCase().includes(search) || item.guid_ifc?.toLowerCase().includes(search);
+        const matchName = item.object_name?.toLowerCase().includes(search);
+        const matchInspector = item.checkpointResults?.some(r => r.inspector_name?.toLowerCase().includes(search));
+        if (!matchMark && !matchGuid && !matchName && !matchInspector) return false;
+      }
+
+      return true;
+    });
+  };
+
   const groupedPlanItems = (): TypeGroup[] => {
     const typeMap = new Map<string, TypeGroup>();
+    const filtered = filteredPlanItems();
 
-    for (const item of planItems) {
+    for (const item of filtered) {
       const typeId = item.inspection_type_id || 'unknown';
       const typeName = item.inspection_type?.name || 'Tüüp määramata';
       const typeColor = item.inspection_type?.color;
@@ -1133,6 +1182,70 @@ export default function InspectionPlanScreen({
             </div>
           ) : (
             <>
+              {/* Search and Filter Section */}
+              <div className="plan-search-section">
+                <div className="search-row">
+                  <div className="search-input-wrapper">
+                    <FiSearch size={14} className="search-icon" />
+                    <input
+                      type="text"
+                      placeholder="Otsi mark, GUID, nimi..."
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      className="search-input"
+                    />
+                    {searchText && (
+                      <button className="search-clear" onClick={() => setSearchText('')}>
+                        <FiX size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    className={`filter-toggle-btn ${showFilters ? 'active' : ''}`}
+                    onClick={() => setShowFilters(!showFilters)}
+                  >
+                    <FiFilter size={14} />
+                  </button>
+                </div>
+
+                {showFilters && (
+                  <div className="filter-row">
+                    <select
+                      value={filterStatus}
+                      onChange={(e) => setFilterStatus(e.target.value as 'all' | 'done' | 'pending')}
+                      className="filter-select"
+                    >
+                      <option value="all">Kõik staatused</option>
+                      <option value="done">Tehtud</option>
+                      <option value="pending">Tegemata</option>
+                    </select>
+                    <select
+                      value={filterInspector}
+                      onChange={(e) => setFilterInspector(e.target.value)}
+                      className="filter-select"
+                    >
+                      <option value="">Kõik inspektorid</option>
+                      {getUniqueInspectors().map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {(searchText || filterStatus !== 'all' || filterInspector) && (
+                  <div className="filter-results">
+                    <span>{filteredPlanItems().length} / {planItems.length} objekti</span>
+                    <button className="filter-clear-all" onClick={() => {
+                      setSearchText('');
+                      setFilterStatus('all');
+                      setFilterInspector('');
+                    }}>
+                      Tühjenda filtrid
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Selection Action Buttons */}
               <div className="plan-selection-actions">
                 <button
@@ -1140,14 +1253,14 @@ export default function InspectionPlanScreen({
                   onClick={selectCompletedItems}
                 >
                   <FiCheckCircle size={16} />
-                  Vali tehtud ({planItems.filter(i => (i.inspection_count || 0) > 0).length})
+                  Vali tehtud ({filteredPlanItems().filter(i => (i.inspection_count || 0) > 0).length})
                 </button>
                 <button
                   className="btn-select-uncompleted"
                   onClick={selectUncompletedItems}
                 >
                   <FiClock size={16} />
-                  Vali tegemata ({planItems.filter(i => (i.inspection_count || 0) === 0).length})
+                  Vali tegemata ({filteredPlanItems().filter(i => (i.inspection_count || 0) === 0).length})
                 </button>
               </div>
 
