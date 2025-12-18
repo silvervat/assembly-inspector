@@ -1155,19 +1155,35 @@ body {
   background: var(--modus-bg-secondary);
 }
 
-/* Matched - when selected detail is in this inspection type's plan */
-.menu-item.matched {
+/* Matched-pending - when selected detail is in plan but NOT yet inspected (blue) */
+.menu-item.matched-pending {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.menu-item.matched-pending:hover {
+  background: rgba(59, 130, 246, 0.2);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.menu-item.matched-pending .menu-item-icon {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+/* Matched-completed - when selected detail is inspected (green) */
+.menu-item.matched-completed {
   background: rgba(34, 197, 94, 0.15);
   border-color: #22c55e;
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
 }
 
-.menu-item.matched:hover {
+.menu-item.matched-completed:hover {
   background: rgba(34, 197, 94, 0.25);
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
 }
 
-.menu-item.matched .menu-item-icon {
+.menu-item.matched-completed .menu-item-icon {
   background: rgba(34, 197, 94, 0.2);
 }
 

@@ -12,7 +12,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.9.3';
+export const APP_VERSION = '2.9.4';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -43,6 +43,7 @@ export default function App() {
 
   // Track matched inspection types for menu highlighting
   const [matchedTypeIds, setMatchedTypeIds] = useState<string[]>([]);
+  const [completedTypeIds, setCompletedTypeIds] = useState<string[]>([]); // Types where selected detail is already inspected
   const lastMenuSelectionRef = useRef<string>('');
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
@@ -232,6 +233,7 @@ export default function App() {
   const checkMatchingInspectionTypes = useCallback(async (guids: string[]) => {
     if (guids.length === 0 || !projectId) {
       setMatchedTypeIds([]);
+      setCompletedTypeIds([]);
       return;
     }
 
@@ -239,6 +241,7 @@ export default function App() {
       // Build OR condition for all GUIDs
       const guidConditions = guids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(',');
 
+      // Get plan items that match these GUIDs
       const { data, error } = await supabase
         .from('inspection_plan_items')
         .select('inspection_type_id')
@@ -248,6 +251,7 @@ export default function App() {
       if (error) {
         console.error('Error checking matching types:', error);
         setMatchedTypeIds([]);
+        setCompletedTypeIds([]);
         return;
       }
 
@@ -255,12 +259,35 @@ export default function App() {
         const uniqueTypeIds = [...new Set(data.map(item => item.inspection_type_id))];
         console.log('🎯 Matched inspection types:', uniqueTypeIds);
         setMatchedTypeIds(uniqueTypeIds);
+
+        // Now check which of these have completed inspection results
+        const guidOrCondition = guids.map(g => `assembly_guid.eq.${g}`).join(',');
+        const { data: resultsData, error: resultsError } = await supabase
+          .from('inspection_results')
+          .select('assembly_guid, plan_item_id, inspection_plan_items!inner(inspection_type_id)')
+          .eq('project_id', projectId)
+          .or(guidOrCondition);
+
+        if (!resultsError && resultsData && resultsData.length > 0) {
+          // Extract unique inspection_type_ids that have results
+          const completedIds = [...new Set(
+            resultsData
+              .map(r => (r.inspection_plan_items as any)?.inspection_type_id)
+              .filter(Boolean)
+          )];
+          console.log('✅ Completed inspection types:', completedIds);
+          setCompletedTypeIds(completedIds);
+        } else {
+          setCompletedTypeIds([]);
+        }
       } else {
         setMatchedTypeIds([]);
+        setCompletedTypeIds([]);
       }
     } catch (e) {
       console.error('Error in checkMatchingInspectionTypes:', e);
       setMatchedTypeIds([]);
+      setCompletedTypeIds([]);
     }
   }, [projectId]);
 
@@ -269,6 +296,7 @@ export default function App() {
     if (!api || currentMode !== null) {
       // Clear matches when not on main menu
       setMatchedTypeIds([]);
+      setCompletedTypeIds([]);
       lastMenuSelectionRef.current = '';
       return;
     }
@@ -281,6 +309,7 @@ export default function App() {
           if (lastMenuSelectionRef.current !== '') {
             lastMenuSelectionRef.current = '';
             setMatchedTypeIds([]);
+            setCompletedTypeIds([]);
           }
           return;
         }
@@ -294,6 +323,7 @@ export default function App() {
         const firstModel = selection[0];
         if (!firstModel.objectRuntimeIds || firstModel.objectRuntimeIds.length === 0) {
           setMatchedTypeIds([]);
+          setCompletedTypeIds([]);
           return;
         }
 
@@ -305,6 +335,7 @@ export default function App() {
 
         if (!props || props.length === 0) {
           setMatchedTypeIds([]);
+          setCompletedTypeIds([]);
           return;
         }
 
@@ -497,6 +528,7 @@ export default function App() {
           onSelectMode={setCurrentMode}
           onSelectInspectionType={handleSelectInspectionType}
           matchedTypeIds={matchedTypeIds}
+          completedTypeIds={completedTypeIds}
         />
         <VersionFooter />
       </>
