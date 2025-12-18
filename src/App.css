@@ -258,6 +258,39 @@ body {
   color: var(--modus-danger);
 }
 
+/* Assembly selection toggle button */
+button.stat-toggle {
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+button.stat-toggle:hover {
+  background: var(--modus-bg-tertiary);
+  border-color: var(--modus-text-secondary);
+}
+
+button.stat-toggle.on {
+  background: rgba(30, 138, 68, 0.1);
+  border-color: var(--modus-success);
+}
+
+button.stat-toggle.on:hover {
+  background: rgba(30, 138, 68, 0.2);
+}
+
+button.stat-toggle.off {
+  background: rgba(218, 33, 44, 0.1);
+  border-color: var(--modus-danger);
+}
+
+button.stat-toggle.off:hover {
+  background: rgba(218, 33, 44, 0.2);
+}
+
 .stat-divider {
   color: var(--modus-border);
   font-size: var(--modus-font-size-xs);
@@ -1198,6 +1231,32 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
   background: var(--modus-bg-secondary);
+}
+
+/* No plan items - type exists but no plan items for this project */
+.menu-item.no-plan-items {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--modus-bg-secondary);
+  border-color: var(--modus-border-light);
+}
+
+.menu-item.no-plan-items .menu-item-icon {
+  color: var(--modus-text-tertiary);
+  background: var(--modus-bg-tertiary);
+}
+
+.menu-item.no-plan-items .menu-item-title {
+  color: var(--modus-text-secondary);
+}
+
+.menu-item.no-plan-items .menu-item-desc.no-plan {
+  color: var(--modus-text-tertiary);
+  font-style: italic;
+}
+
+.menu-item.no-plan-items .menu-item-arrow {
+  color: var(--modus-text-tertiary);
 }
 
 /* Matched-pending - when selected detail is in plan but NOT yet inspected (blue) */
@@ -2691,6 +2750,31 @@ body {
   margin: var(--modus-spacing-md) 0;
 }
 
+/* Select detail prompt */
+.select-detail-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--modus-spacing-xl);
+  background: var(--modus-bg-secondary);
+  border: 2px dashed var(--modus-border);
+  border-radius: var(--modus-radius-md);
+  margin-bottom: var(--modus-spacing-md);
+  text-align: center;
+}
+
+.select-detail-icon {
+  font-size: 32px;
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.select-detail-text {
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-secondary);
+  font-weight: 500;
+}
+
 /* Not in plan warning */
 .not-in-plan-warning {
   display: flex;
@@ -3249,6 +3333,85 @@ body {
 
 .btn-success:hover {
   background: #059669 !important;
+}
+
+/* Selection Status */
+.selection-status {
+  margin-top: var(--modus-spacing-md);
+}
+
+.selection-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-md);
+  border-radius: var(--modus-radius-md);
+  font-size: var(--modus-font-size-sm);
+  transition: all 0.2s ease;
+}
+
+.selection-indicator.no-selection {
+  background: var(--modus-bg-secondary);
+  border: 2px dashed var(--modus-border);
+  color: var(--modus-text-secondary);
+}
+
+.selection-indicator.has-selection {
+  background: rgba(0, 99, 163, 0.1);
+  border: 2px solid var(--modus-primary);
+  color: var(--modus-primary-darker);
+}
+
+.selection-count {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--modus-primary);
+}
+
+.selection-label {
+  font-weight: 500;
+}
+
+.selection-duplicates {
+  font-size: var(--modus-font-size-xs);
+  color: #f59e0b;
+}
+
+.selection-hint {
+  font-style: italic;
+}
+
+/* Add to Plan Button */
+.btn-add-to-plan {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-md);
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-md);
+  font-size: var(--modus-font-size-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-to-plan:hover:not(:disabled) {
+  background: var(--modus-primary-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 99, 163, 0.3);
+}
+
+.btn-add-to-plan:disabled {
+  background: var(--modus-tertiary);
+  color: var(--modus-text-secondary);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* Selected Preview */

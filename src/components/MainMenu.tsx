@@ -81,29 +81,34 @@ export default function MainMenu({
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [typeStats, setTypeStats] = useState<Record<string, TypeStats>>({});
 
-  // Load inspection types that have plan items for this project
+  // Load ALL inspection types and determine which have plan items for this project
   useEffect(() => {
     async function loadInspectionTypes() {
       setLoading(true);
       try {
-        // Get inspection types that have plan items in this project
+        // Get ALL active inspection types from database
+        const { data: allTypes, error: typesError } = await supabase
+          .from('inspection_types')
+          .select('id, code, name, description, icon, color, sort_order, is_active')
+          .eq('is_active', true)
+          .neq('code', 'OTHER') // Skip "Muu" type
+          .order('sort_order', { ascending: true });
+
+        if (typesError) {
+          console.error('Error loading inspection types:', typesError);
+          setLoading(false);
+          return;
+        }
+
+        // Get inspection plan items for this project to know which types are used
         const { data: planItems, error: planError } = await supabase
           .from('inspection_plan_items')
-          .select(`
-            id,
-            inspection_type_id,
-            guid,
-            guid_ifc,
-            inspection_types!inspection_plan_items_inspection_type_id_fkey (
-              id, code, name, description, icon, color, sort_order, is_active
-            )
-          `)
+          .select('id, inspection_type_id, guid, guid_ifc')
           .eq('project_id', projectId);
 
         if (planError) {
           console.error('Error loading plan items:', planError);
-          setLoading(false);
-          return;
+          // Continue - we'll just show all types as inactive
         }
 
         // Get all completed inspection results for this project
@@ -122,42 +127,33 @@ export default function MainMenu({
           }
         }
 
-        // Group by inspection type and calculate stats
-        const typeMap = new Map<string, InspectionType>();
+        // Calculate stats per type from plan items
         const statsMap: Record<string, TypeStats> = {};
 
         for (const item of planItems || []) {
-          const typeData = item.inspection_types as unknown as InspectionType;
-          if (!typeData || !typeData.is_active) continue;
+          if (!item.inspection_type_id) continue;
 
-          // Skip "OTHER" / "Muu" type
-          if (typeData.code === 'OTHER') continue;
-
-          if (!typeMap.has(typeData.id)) {
-            typeMap.set(typeData.id, typeData);
-            statsMap[typeData.id] = {
-              typeId: typeData.id,
+          if (!statsMap[item.inspection_type_id]) {
+            statsMap[item.inspection_type_id] = {
+              typeId: item.inspection_type_id,
               totalItems: 0,
               completedItems: 0
             };
           }
 
-          statsMap[typeData.id].totalItems++;
+          statsMap[item.inspection_type_id].totalItems++;
 
-          // Check if this plan item is completed (has results by plan_item_id or matching GUID)
+          // Check if this plan item is completed
           const isCompleted = completedPlanItemIds.has(item.id) ||
             (item.guid && completedGuids.has(item.guid)) ||
             (item.guid_ifc && completedGuids.has(item.guid_ifc));
 
           if (isCompleted) {
-            statsMap[typeData.id].completedItems++;
+            statsMap[item.inspection_type_id].completedItems++;
           }
         }
 
-        // Sort by sort_order
-        const sortedTypes = Array.from(typeMap.values()).sort((a, b) => a.sort_order - b.sort_order);
-
-        setInspectionTypes(sortedTypes);
+        setInspectionTypes(allTypes as InspectionType[]);
         setTypeStats(statsMap);
       } catch (e) {
         console.error('Error loading inspection types:', e);
@@ -221,6 +217,7 @@ export default function MainMenu({
             {inspectionTypes.map((type) => {
               const IconComponent = getIcon(type.icon);
               const stats = typeStats[type.id];
+              const hasPlanItems = stats && stats.totalItems > 0;
               const pendingCount = stats ? stats.totalItems - stats.completedItems : 0;
               const isMatched = matchedTypeIds.includes(type.id);
               const isCompleted = completedTypeIds.includes(type.id);
@@ -230,21 +227,24 @@ export default function MainMenu({
               return (
                 <button
                   key={type.id}
-                  className={`menu-item enabled ${matchClass}`}
-                  onClick={() => handleTypeClick(type)}
+                  className={`menu-item ${hasPlanItems ? 'enabled' : 'no-plan-items'} ${matchClass}`}
+                  onClick={() => hasPlanItems && handleTypeClick(type)}
+                  disabled={!hasPlanItems}
                 >
-                  <span className="menu-item-icon" style={{ color: type.color || 'var(--modus-primary)' }}>
+                  <span className="menu-item-icon" style={{ color: hasPlanItems ? (type.color || 'var(--modus-primary)') : 'var(--modus-text-tertiary)' }}>
                     <IconComponent size={20} />
                   </span>
                   <div className="menu-item-content">
                     <span className="menu-item-title">{type.name}</span>
-                    {stats && (
+                    {hasPlanItems ? (
                       <span className="menu-item-desc">
                         {pendingCount > 0
                           ? `${pendingCount} tegemata / ${stats.totalItems} kokku`
                           : `${stats.totalItems} tehtud`
                         }
                       </span>
+                    ) : (
+                      <span className="menu-item-desc no-plan">Pole määratud</span>
                     )}
                   </div>
                   <span className="menu-item-arrow">

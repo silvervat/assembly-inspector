@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage } from 'react-icons/fi';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { FiArrowLeft, FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
 
@@ -95,6 +95,10 @@ export default function InspectionPlanScreen({
   const [duplicates, setDuplicates] = useState<DuplicateWarning[]>([]);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
 
+  // Ref for tracking last selection to avoid duplicate processing
+  const lastSelectionRef = useRef<string>('');
+  const isDetectingRef = useRef(false);
+
   // Fetch inspection types on mount
   useEffect(() => {
     fetchInspectionTypes();
@@ -125,6 +129,152 @@ export default function InspectionPlanScreen({
     };
     updateAssemblySelection();
   }, [assemblyMode, api]);
+
+  // Auto-detect selection changes every 1 second when in add mode
+  useEffect(() => {
+    if (viewMode !== 'add' || !selectedTypeId || !selectedCategoryId) {
+      return;
+    }
+
+    const detectSelection = async () => {
+      if (isDetectingRef.current || isSaving) return;
+      isDetectingRef.current = true;
+
+      try {
+        const selection = await api.viewer.getSelection();
+
+        // Create a key to compare with previous selection
+        const selKey = selection && selection.length > 0
+          ? selection.map(s => `${s.modelId}:${(s.objectRuntimeIds || []).join(',')}`).join('|')
+          : '';
+
+        // Only process if selection changed
+        if (selKey !== lastSelectionRef.current) {
+          lastSelectionRef.current = selKey;
+
+          if (!selection || selection.length === 0) {
+            setSelectedObjects([]);
+            setDuplicates([]);
+            return;
+          }
+
+          // Process selection (same logic as getSelectedFromModel but without validation messages)
+          const objects: SelectedObject[] = [];
+          const duplicateWarnings: DuplicateWarning[] = [];
+
+          for (const sel of selection) {
+            if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+            const props = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
+
+            for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+              const runtimeId = sel.objectRuntimeIds[i];
+              const objProps = props?.[i];
+
+              let guid = '';
+              let guidIfc = '';
+              let guidMs = '';
+              let assemblyMark = '';
+              let objectName = '';
+              let objectType = '';
+              let productName = '';
+
+              if (objProps?.properties) {
+                for (const pset of objProps.properties) {
+                  const psetAny = pset as any;
+                  const psetName = psetAny.name || '';
+                  const psetNameLower = psetName.toLowerCase();
+
+                  for (const prop of psetAny.properties || []) {
+                    const propName = (prop.name || '').toLowerCase();
+                    const propValue = String(prop.value || '');
+
+                    if (!propValue) continue;
+
+                    if (propName === 'guid' || propName === 'globalid' || propName.includes('guid')) {
+                      const normalizedGuid = propValue.replace(/^urn:(uuid:)?/i, "").trim();
+                      const isIfcGuid = /^[0-9A-Za-z_$]{22}$/.test(normalizedGuid);
+                      const isMsGuid = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/.test(normalizedGuid);
+
+                      if (isIfcGuid && !guidIfc) guidIfc = normalizedGuid;
+                      else if (isMsGuid && !guidMs) guidMs = normalizedGuid;
+                      else if (!guid) guid = normalizedGuid;
+                    }
+
+                    if (propName === 'name' && !objectName) objectName = propValue;
+                  }
+
+                  if (psetName === 'Tekla Assembly') {
+                    for (const prop of psetAny.properties || []) {
+                      if (prop.name === 'Cast_unit_Mark') assemblyMark = String(prop.value || '');
+                    }
+                  }
+
+                  if (psetName === 'Tekla Common') {
+                    for (const prop of psetAny.properties || []) {
+                      if (prop.name === 'Name' && !objectName) objectName = String(prop.value || '');
+                    }
+                  }
+
+                  if (psetNameLower === 'product' && psetAny.Name) {
+                    productName = String(psetAny.Name || '');
+                  }
+                }
+              }
+
+              objectType = objProps?.class || '';
+
+              if (!guidIfc) {
+                try {
+                  const externalIds = await api.viewer.convertToObjectIds(sel.modelId, [runtimeId]);
+                  if (externalIds?.[0]) {
+                    guidIfc = String(externalIds[0]).replace(/^urn:(uuid:)?/i, "").trim();
+                  }
+                } catch (e) { /* ignore */ }
+              }
+
+              if (!guid && guidIfc) guid = guidIfc;
+              if (!guid && guidMs) guid = guidMs;
+              if (!guid) guid = `${sel.modelId}_${runtimeId}`;
+
+              const existingItem = planItems.find(item =>
+                item.guid === guid && item.inspection_type_id === selectedTypeId
+              );
+
+              if (existingItem) {
+                duplicateWarnings.push({ guid, existingItem });
+              }
+
+              objects.push({
+                modelId: sel.modelId,
+                runtimeId,
+                guid,
+                guidIfc,
+                guidMs,
+                assemblyMark,
+                objectName,
+                objectType,
+                productName
+              });
+            }
+          }
+
+          setSelectedObjects(objects);
+          setDuplicates(duplicateWarnings);
+        }
+      } catch (error) {
+        console.error('Auto-detection error:', error);
+      } finally {
+        isDetectingRef.current = false;
+      }
+    };
+
+    // Run immediately and then every second
+    detectSelection();
+    const interval = setInterval(detectSelection, 1000);
+
+    return () => clearInterval(interval);
+  }, [api, viewMode, selectedTypeId, selectedCategoryId, planItems, isSaving]);
 
   // Show message helper
   const showMessage = (text: string, type: 'info' | 'success' | 'warning' | 'error' = 'info') => {
@@ -546,8 +696,11 @@ export default function InspectionPlanScreen({
     try {
       showMessage(`🔍 Otsin objekti...`, 'info');
 
-      // Turn off assembly selection for precise selection
-      await (api.viewer as any).setSettings?.({ assemblySelection: false });
+      // Apply assembly selection mode from the plan item
+      const itemAssemblyMode = item.assembly_selection_mode ?? true;
+      await (api.viewer as any).setSettings?.({ assemblySelection: itemAssemblyMode });
+      setAssemblyMode(itemAssemblyMode ? 'on' : 'off');
+      console.log(`📍 Zoom: Assembly selection set to ${itemAssemblyMode ? 'ON' : 'OFF'} (from plan item)`);
 
       // Select the object
       await api.viewer.setSelection({
@@ -557,11 +710,12 @@ export default function InspectionPlanScreen({
         }]
       }, 'set');
 
-      // Zoom to selection
-      await (api.viewer as any).setCamera?.({
-        target: { object: 'selection' },
-        animation: { duration: 500 }
-      });
+      // Zoom to selection using setCamera with modelObjectIds
+      const modelObjectIds = [{
+        modelId: item.model_id,
+        objectRuntimeIds: item.object_runtime_id ? [item.object_runtime_id] : []
+      }];
+      await api.viewer.setCamera({ modelObjectIds } as any, { animationTime: 300 });
 
       showMessage(`✅ ${item.assembly_mark || item.object_name || 'Objekt'} valitud`, 'success');
     } catch (error) {
@@ -955,31 +1109,28 @@ export default function InspectionPlanScreen({
             />
           </div>
 
-          {/* Action Buttons */}
-          <div className="plan-actions">
-            <button
-              className="btn-primary btn-large"
-              onClick={getSelectedFromModel}
-              disabled={isLoading || !selectedTypeId || !selectedCategoryId}
-            >
-              {isLoading ? (
-                <>
-                  <FiRefreshCw className="spin" size={18} />
-                  Laadin...
-                </>
-              ) : (
-                <>
-                  <FiSearch size={18} />
-                  Vali mudelist ({assemblyMode === 'on' ? 'Assembly SEES' : 'Assembly VÄLJAS'})
-                </>
-              )}
-            </button>
-          </div>
+          {/* Selection Status */}
+          {selectedTypeId && selectedCategoryId && (
+            <div className="selection-status">
+              <div className={`selection-indicator ${selectedObjects.length > 0 ? 'has-selection' : 'no-selection'}`}>
+                {selectedObjects.length > 0 ? (
+                  <>
+                    <span className="selection-count">{selectedObjects.length}</span>
+                    <span className="selection-label">objekti valitud</span>
+                    {duplicates.length > 0 && (
+                      <span className="selection-duplicates">({duplicates.length} juba kavas)</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="selection-hint">Vali mudelis objekte lisamiseks kavasse</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Selected Objects Preview */}
           {selectedObjects.length > 0 && (
             <div className="selected-preview">
-              <h4>Valitud objektid ({selectedObjects.length}):</h4>
               <div className="selected-list">
                 {selectedObjects.slice(0, 10).map((obj, idx) => (
                   <div
@@ -1001,12 +1152,16 @@ export default function InspectionPlanScreen({
                   </div>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Save Button */}
+          {/* Add Button - always visible when type and category selected */}
+          {selectedTypeId && selectedCategoryId && (
+            <div className="plan-actions">
               <button
-                className="btn-success btn-large"
+                className="btn-add-to-plan btn-large"
                 onClick={() => saveToplan(true)}
-                disabled={isSaving}
+                disabled={isSaving || selectedObjects.length === 0 || (selectedObjects.length - duplicates.length) === 0}
               >
                 {isSaving ? (
                   <>
