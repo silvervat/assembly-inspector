@@ -12,7 +12,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.9.6';
+export const APP_VERSION = '2.9.7';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -176,29 +176,48 @@ export default function App() {
     }
   };
 
-  // Laadi inspekteeritud detailid ja värvi mustaks (optimeeritud - üks päring)
+  // Laadi inspekteeritud detailid ja värvi mustaks (kasutab checkpoint tulemusi)
   const loadInspectedAssemblies = async (
     apiInstance: WorkspaceAPI.WorkspaceAPI,
     projId: string
   ) => {
     try {
-      const { data: inspections, error } = await supabase
-        .from('inspections')
-        .select('model_id, object_runtime_id')
+      // Get unique plan_item_ids from inspection_results
+      const { data: results, error: resultsError } = await supabase
+        .from('inspection_results')
+        .select('plan_item_id')
         .eq('project_id', projId);
 
-      if (error) throw error;
+      if (resultsError) throw resultsError;
 
-      if (inspections && inspections.length > 0) {
-        console.log(`Found ${inspections.length} inspected assemblies`);
+      if (!results || results.length === 0) {
+        console.log('No inspected assemblies found');
+        return;
+      }
+
+      // Get unique plan_item_ids
+      const planItemIds = [...new Set(results.map(r => r.plan_item_id).filter(Boolean))];
+      if (planItemIds.length === 0) return;
+
+      // Get model_id and object_runtime_id from plan items
+      const { data: planItems, error: planError } = await supabase
+        .from('inspection_plan_items')
+        .select('model_id, object_runtime_id')
+        .in('id', planItemIds);
+
+      if (planError) throw planError;
+
+      if (planItems && planItems.length > 0) {
+        console.log(`Found ${planItems.length} inspected assemblies`);
 
         // Grupeeri model_id järgi
         const byModel: Record<string, number[]> = {};
-        for (const insp of inspections) {
-          if (!byModel[insp.model_id]) {
-            byModel[insp.model_id] = [];
+        for (const item of planItems) {
+          if (!item.object_runtime_id) continue;
+          if (!byModel[item.model_id]) {
+            byModel[item.model_id] = [];
           }
-          byModel[insp.model_id].push(insp.object_runtime_id);
+          byModel[item.model_id].push(item.object_runtime_id);
         }
 
         // Koonda kõik mudelid ühte selectorisse - ÜKS API kutse
@@ -207,11 +226,13 @@ export default function App() {
           objectRuntimeIds: runtimeIds
         }));
 
-        await apiInstance.viewer.setObjectState(
-          { modelObjectIds },
-          { color: { r: 0, g: 0, b: 0, a: 255 } }
-        );
-        console.log('Inspected assemblies painted black');
+        if (modelObjectIds.length > 0) {
+          await apiInstance.viewer.setObjectState(
+            { modelObjectIds },
+            { color: { r: 0, g: 0, b: 0, a: 255 } }
+          );
+          console.log('Inspected assemblies painted black');
+        }
       }
     } catch (e: any) {
       console.error('Failed to load inspections:', e);
