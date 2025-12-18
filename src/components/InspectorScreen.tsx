@@ -1241,11 +1241,32 @@ export default function InspectorScreen({
 
         // Get plan items for these assemblies to get model_id and runtime_id
         const assemblyGuids = Array.from(assemblyMap.keys());
-        const { data: planItems } = await supabase
-          .from('inspection_plan_items')
-          .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
-          .eq('project_id', projectId)
-          .or(assemblyGuids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(','));
+
+        // Use .in() filter instead of .or() for better reliability
+        let planItems: any[] = [];
+        if (assemblyGuids.length > 0) {
+          const { data: planData1 } = await supabase
+            .from('inspection_plan_items')
+            .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
+            .eq('project_id', projectId)
+            .in('guid', assemblyGuids);
+
+          const { data: planData2 } = await supabase
+            .from('inspection_plan_items')
+            .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
+            .eq('project_id', projectId)
+            .in('guid_ifc', assemblyGuids);
+
+          // Combine and deduplicate
+          const allPlans = [...(planData1 || []), ...(planData2 || [])];
+          const seenIds = new Set<string>();
+          planItems = allPlans.filter(p => {
+            const key = p.guid || p.guid_ifc;
+            if (seenIds.has(key)) return false;
+            seenIds.add(key);
+            return true;
+          });
+        }
 
         // Create a lookup map for plan items
         const planLookup = new Map<string, any>();
@@ -1410,11 +1431,32 @@ export default function InspectorScreen({
 
         // Get plan items for these assemblies to get model_id and runtime_id
         const assemblyGuids = Array.from(assemblyMap.keys());
-        const { data: planItems } = await supabase
-          .from('inspection_plan_items')
-          .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
-          .eq('project_id', projectId)
-          .or(assemblyGuids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(','));
+
+        // Use .in() filter instead of .or() for better reliability
+        let planItems: any[] = [];
+        if (assemblyGuids.length > 0) {
+          const { data: planData1 } = await supabase
+            .from('inspection_plan_items')
+            .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
+            .eq('project_id', projectId)
+            .in('guid', assemblyGuids);
+
+          const { data: planData2 } = await supabase
+            .from('inspection_plan_items')
+            .select('guid, guid_ifc, model_id, object_runtime_id, assembly_mark')
+            .eq('project_id', projectId)
+            .in('guid_ifc', assemblyGuids);
+
+          // Combine and deduplicate
+          const allPlans = [...(planData1 || []), ...(planData2 || [])];
+          const seenIds = new Set<string>();
+          planItems = allPlans.filter(p => {
+            const key = p.guid || p.guid_ifc;
+            if (seenIds.has(key)) return false;
+            seenIds.add(key);
+            return true;
+          });
+        }
 
         // Create a lookup map for plan items
         const planLookup = new Map<string, any>();
