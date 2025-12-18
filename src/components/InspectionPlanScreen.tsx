@@ -572,6 +572,49 @@ export default function InspectionPlanScreen({
     }
   };
 
+  // Delete inspection results for a plan item
+  const deleteInspectionResults = async (item: PlanItemWithStats) => {
+    if (!item.checkpointResults || item.checkpointResults.length === 0) {
+      showMessage('⚠️ Sellel objektil pole inspektsiooni tulemusi', 'warning');
+      return;
+    }
+
+    const resultCount = item.checkpointResults.length;
+    if (!confirm(`Kas kustutada ${resultCount} inspektsiooni tulemust objektilt "${item.assembly_mark || item.object_name || 'objekt'}"? Seda tegevust ei saa tagasi võtta!`)) {
+      return;
+    }
+
+    try {
+      // Delete all inspection results for this assembly
+      const resultIds = item.checkpointResults.map(r => r.id);
+
+      // First delete photos
+      const { error: photoError } = await supabase
+        .from('inspection_result_photos')
+        .delete()
+        .in('result_id', resultIds);
+
+      if (photoError) {
+        console.error('Failed to delete photos:', photoError);
+        // Continue anyway to delete results
+      }
+
+      // Then delete results
+      const { error } = await supabase
+        .from('inspection_results')
+        .delete()
+        .in('id', resultIds);
+
+      if (error) throw error;
+
+      showMessage(`✅ ${resultCount} inspektsiooni tulemust kustutatud`, 'success');
+      fetchPlanItems();
+    } catch (error) {
+      console.error('Failed to delete inspection results:', error);
+      showMessage('❌ Viga inspektsiooni tulemuste kustutamisel', 'error');
+    }
+  };
+
   // Toggle item expansion
   const toggleExpand = (itemId: string) => {
     setExpandedItemId(expandedItemId === itemId ? null : itemId);
@@ -1166,6 +1209,14 @@ export default function InspectionPlanScreen({
                                                     <span className="results-date">
                                                       {new Date(item.checkpointResults[0].inspected_at).toLocaleString('et-EE')}
                                                     </span>
+                                                    <button
+                                                      className="btn-delete-results"
+                                                      onClick={(e) => { e.stopPropagation(); deleteInspectionResults(item); }}
+                                                      title="Kustuta inspektsiooni tulemused"
+                                                    >
+                                                      <FiTrash2 size={12} />
+                                                      Kustuta
+                                                    </button>
                                                   </div>
 
                                                   {/* Checkpoint responses */}
