@@ -55,6 +55,27 @@ interface ObjectData {
   rawData?: object;
 }
 
+// Assembly list item for the summary
+interface AssemblyListItem {
+  castUnitMark: string;
+  productName: string;
+  weight: string;
+  modelId: string;
+  runtimeId: number;
+}
+
+// Bolt summary item (aggregated)
+interface BoltSummaryItem {
+  boltName: string;
+  boltStandard: string;
+  boltCount: number;
+  nutName: string;
+  nutCount: number;
+  washerName: string;
+  washerCount: number;
+  washerType: string;
+}
+
 // Function button component for testing API functions
 function FunctionButton({
   name,
@@ -108,6 +129,12 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   // Function explorer state
   const [showFunctionExplorer, setShowFunctionExplorer] = useState(false);
   const [functionResults, setFunctionResults] = useState<Record<string, FunctionTestResult>>({});
+
+  // Assembly & Bolts list state
+  const [showAssemblyList, setShowAssemblyList] = useState(false);
+  const [assemblyListLoading, setAssemblyListLoading] = useState(false);
+  const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
+  const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
 
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
@@ -525,6 +552,219 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
     URL.revokeObjectURL(url);
   };
 
+  // Collect assembly data and bolt summaries from selected objects
+  const collectAssemblyData = useCallback(async () => {
+    setAssemblyListLoading(true);
+    setMessage('Kogun detailide andmeid...');
+    setAssemblyList([]);
+    setBoltSummary([]);
+
+    try {
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setMessage('Vali mudelist vähemalt üks detail!');
+        setAssemblyListLoading(false);
+        return;
+      }
+
+      const assemblies: AssemblyListItem[] = [];
+      const boltMap = new Map<string, BoltSummaryItem>(); // Key: boltName + boltStandard
+
+      for (const modelSelection of selection) {
+        const modelId = modelSelection.modelId;
+        const runtimeIds = modelSelection.objectRuntimeIds || [];
+
+        if (runtimeIds.length === 0) continue;
+
+        // Get properties for main assemblies
+        const properties = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+        for (let i = 0; i < runtimeIds.length; i++) {
+          const runtimeId = runtimeIds[i];
+          const objProps = properties?.[i];
+
+          if (!objProps) continue;
+
+          // Extract Tekla properties
+          const rawProps = (objProps as any)?.properties;
+          let castUnitMark = '';
+          let productName = '';
+          let weight = '';
+
+          if (rawProps?.sets && Array.isArray(rawProps.sets)) {
+            for (const pset of rawProps.sets) {
+              const propsArray = (pset as any).properties || [];
+              for (const prop of propsArray) {
+                const propName = (prop as any).name?.toLowerCase() || '';
+                const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
+
+                if (propName === 'cast_unit_mark' || propName === 'assembly_mark') {
+                  castUnitMark = String(propValue);
+                }
+                if (propName === 'name' && !productName) {
+                  productName = String(propValue);
+                }
+                if (propName === 'cast_unit_weight' || propName === 'assembly_weight' || propName === 'weight') {
+                  weight = String(propValue);
+                }
+              }
+            }
+          }
+
+          // Get product name from metadata if not found
+          if (!productName) {
+            productName = (objProps as any)?.product?.name || '';
+          }
+
+          assemblies.push({
+            castUnitMark,
+            productName,
+            weight,
+            modelId,
+            runtimeId
+          });
+
+          // Get child objects (bolts) for this assembly
+          try {
+            const children = await (api.viewer as any).getObjectHierarchy?.(modelId, [runtimeId]);
+            const childIds: number[] = [];
+
+            // Collect all child runtime IDs
+            if (children && Array.isArray(children)) {
+              for (const child of children) {
+                if (child.children && Array.isArray(child.children)) {
+                  for (const c of child.children) {
+                    if (c.id) childIds.push(c.id);
+                  }
+                }
+              }
+            }
+
+            if (childIds.length > 0) {
+              // Get properties for child objects
+              const childProps = await (api.viewer as any).getObjectProperties(modelId, childIds, { includeHidden: true });
+
+              for (let j = 0; j < childIds.length; j++) {
+                const childObjProps = childProps?.[j];
+                if (!childObjProps) continue;
+
+                const childRawProps = (childObjProps as any)?.properties;
+                let boltName = '';
+                let boltStandard = '';
+                let boltCount = 0;
+                let nutName = '';
+                let nutCount = 0;
+                let washerName = '';
+                let washerCount = 0;
+                let washerType = '';
+
+                if (childRawProps?.sets && Array.isArray(childRawProps.sets)) {
+                  for (const pset of childRawProps.sets) {
+                    const setName = ((pset as any).set || (pset as any).name || '').toLowerCase();
+
+                    // Only look at Tekla Bolt property sets
+                    if (!setName.includes('bolt') && !setName.includes('tekla')) continue;
+
+                    const propsArray = (pset as any).properties || [];
+                    for (const prop of propsArray) {
+                      const propName = (prop as any).name?.toLowerCase() || '';
+                      const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
+
+                      if (propName === 'bolt_name' || propName === 'name') {
+                        boltName = String(propValue);
+                      }
+                      if (propName === 'bolt_standard' || propName === 'standard') {
+                        boltStandard = String(propValue);
+                      }
+                      if (propName === 'bolt_count' || propName === 'count') {
+                        boltCount = parseInt(String(propValue)) || 1;
+                      }
+                      if (propName === 'nut_name') {
+                        nutName = String(propValue);
+                      }
+                      if (propName === 'nut_count') {
+                        nutCount = parseInt(String(propValue)) || 0;
+                      }
+                      if (propName === 'washer_name') {
+                        washerName = String(propValue);
+                      }
+                      if (propName === 'washer_count') {
+                        washerCount = parseInt(String(propValue)) || 0;
+                      }
+                      if (propName === 'washer_type') {
+                        washerType = String(propValue);
+                      }
+                    }
+                  }
+                }
+
+                // If we found bolt data, aggregate it
+                if (boltName) {
+                  const key = `${boltName}|${boltStandard}|${nutName}|${washerName}|${washerType}`;
+                  const existing = boltMap.get(key);
+
+                  if (existing) {
+                    existing.boltCount += boltCount || 1;
+                    existing.nutCount += nutCount;
+                    existing.washerCount += washerCount;
+                  } else {
+                    boltMap.set(key, {
+                      boltName,
+                      boltStandard,
+                      boltCount: boltCount || 1,
+                      nutName,
+                      nutCount,
+                      washerName,
+                      washerCount,
+                      washerType
+                    });
+                  }
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('Could not get child objects:', e);
+          }
+        }
+      }
+
+      setAssemblyList(assemblies);
+      setBoltSummary(Array.from(boltMap.values()));
+      setShowAssemblyList(true);
+      setMessage(`Leitud ${assemblies.length} detaili ja ${boltMap.size} erinevat polti`);
+    } catch (error) {
+      console.error('Assembly collection failed:', error);
+      setMessage('Viga andmete kogumisel: ' + (error as Error).message);
+    } finally {
+      setAssemblyListLoading(false);
+    }
+  }, [api]);
+
+  // Copy assembly list to clipboard (tab-separated for Excel)
+  const copyAssemblyListToClipboard = () => {
+    const header = 'Cast Unit Mark\tProduct Name\tWeight';
+    const rows = assemblyList.map(a => `${a.castUnitMark}\t${a.productName}\t${a.weight}`);
+    const text = [header, ...rows].join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      setMessage('Detailide list kopeeritud!');
+      setTimeout(() => setMessage(''), 2000);
+    });
+  };
+
+  // Copy bolt summary to clipboard (tab-separated for Excel)
+  const copyBoltSummaryToClipboard = () => {
+    const header = 'Bolt Name\tBolt Standard\tBolt Count\tNut Name\tNut Count\tWasher Name\tWasher Count\tWasher Type';
+    const rows = boltSummary.map(b =>
+      `${b.boltName}\t${b.boltStandard}\t${b.boltCount}\t${b.nutName}\t${b.nutCount}\t${b.washerName}\t${b.washerCount}\t${b.washerType}`
+    );
+    const text = [header, ...rows].join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      setMessage('Poltide kokkuvõte kopeeritud!');
+      setTimeout(() => setMessage(''), 2000);
+    });
+  };
+
   // Format property value for display
   const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) return '-';
@@ -591,6 +831,36 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             >
               <FiZap size={16} />
               Ava funktsioonide testija
+            </button>
+          </div>
+        </div>
+
+        {/* Assembly & Bolts List Card */}
+        <div className="admin-tool-card" style={{ marginTop: '12px' }}>
+          <div className="tool-header">
+            <FiDownload size={24} />
+            <h3>Assembly list & Poldid</h3>
+          </div>
+          <p className="tool-description">
+            Vali mudelist detailid ja kogu nende Cast Unit Mark, Product Name, Weight ning poltide kokkuvõte.
+          </p>
+          <div className="tool-actions">
+            <button
+              className="btn-primary"
+              onClick={collectAssemblyData}
+              disabled={assemblyListLoading}
+            >
+              {assemblyListLoading ? (
+                <>
+                  <FiRefreshCw className="spin" size={16} />
+                  Kogun andmeid...
+                </>
+              ) : (
+                <>
+                  <FiDownload size={16} />
+                  Kogu detailide andmed
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -2012,6 +2282,108 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Assembly List & Bolts Panel */}
+      {showAssemblyList && (
+        <div className="assembly-list-panel">
+          <div className="assembly-list-header">
+            <h3>Assembly list & Poldid</h3>
+            <button className="close-btn" onClick={() => setShowAssemblyList(false)}>✕</button>
+          </div>
+
+          <div className="assembly-list-content">
+            {/* Assembly List Table */}
+            <div className="assembly-section">
+              <div className="section-header">
+                <h4>📦 Detailide list ({assemblyList.length})</h4>
+                <button
+                  className="copy-btn"
+                  onClick={copyAssemblyListToClipboard}
+                  disabled={assemblyList.length === 0}
+                  title="Kopeeri tabelina clipboardi"
+                >
+                  <FiCopy size={14} />
+                  Kopeeri
+                </button>
+              </div>
+              {assemblyList.length > 0 ? (
+                <div className="assembly-table-wrapper">
+                  <table className="assembly-table">
+                    <thead>
+                      <tr>
+                        <th>Cast Unit Mark</th>
+                        <th>Product Name</th>
+                        <th>Weight</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {assemblyList.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.castUnitMark || '-'}</td>
+                          <td>{item.productName || '-'}</td>
+                          <td>{item.weight || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="no-data">Detaile ei leitud</p>
+              )}
+            </div>
+
+            {/* Bolt Summary Table */}
+            <div className="bolt-section">
+              <div className="section-header">
+                <h4>🔩 Poltide kokkuvõte ({boltSummary.length})</h4>
+                <button
+                  className="copy-btn"
+                  onClick={copyBoltSummaryToClipboard}
+                  disabled={boltSummary.length === 0}
+                  title="Kopeeri tabelina clipboardi"
+                >
+                  <FiCopy size={14} />
+                  Kopeeri
+                </button>
+              </div>
+              {boltSummary.length > 0 ? (
+                <div className="bolt-table-wrapper">
+                  <table className="bolt-table">
+                    <thead>
+                      <tr>
+                        <th>Bolt Name</th>
+                        <th>Standard</th>
+                        <th>Count</th>
+                        <th>Nut Name</th>
+                        <th>Nut Count</th>
+                        <th>Washer Name</th>
+                        <th>Washer Count</th>
+                        <th>Washer Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {boltSummary.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.boltName || '-'}</td>
+                          <td>{item.boltStandard || '-'}</td>
+                          <td>{item.boltCount}</td>
+                          <td>{item.nutName || '-'}</td>
+                          <td>{item.nutCount}</td>
+                          <td>{item.washerName || '-'}</td>
+                          <td>{item.washerCount}</td>
+                          <td>{item.washerType || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="no-data">Polte ei leitud</p>
+              )}
+            </div>
           </div>
         </div>
       )}

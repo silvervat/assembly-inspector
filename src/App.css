@@ -3006,6 +3006,150 @@ button.stat-toggle.off:hover {
   animation: spin 1s linear infinite;
 }
 
+/* Assembly List & Bolts Panel */
+.assembly-list-panel {
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-md);
+  margin-top: var(--modus-spacing-md);
+  overflow: hidden;
+}
+
+.assembly-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--modus-spacing-md);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+}
+
+.assembly-list-header h3 {
+  margin: 0;
+  font-size: var(--modus-font-size-md);
+  font-weight: 600;
+}
+
+.assembly-list-header .close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+
+.assembly-list-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.assembly-list-content {
+  padding: var(--modus-spacing-md);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.assembly-section,
+.bolt-section {
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.assembly-section:last-child,
+.bolt-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: var(--modus-font-size-sm);
+  font-weight: 600;
+  color: var(--modus-text-primary);
+}
+
+.section-header .copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.section-header .copy-btn:hover:not(:disabled) {
+  background: var(--modus-primary-dark);
+}
+
+.section-header .copy-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.assembly-table-wrapper,
+.bolt-table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+}
+
+.assembly-table,
+.bolt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--modus-font-size-xs);
+}
+
+.assembly-table th,
+.bolt-table th {
+  padding: 8px 10px;
+  background: var(--modus-bg-tertiary);
+  border-bottom: 2px solid var(--modus-border);
+  text-align: left;
+  font-weight: 600;
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+}
+
+.assembly-table td,
+.bolt-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--modus-border-light);
+  color: var(--modus-text-primary);
+}
+
+.assembly-table tr:last-child td,
+.bolt-table tr:last-child td {
+  border-bottom: none;
+}
+
+.assembly-table tr:hover,
+.bolt-table tr:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.assembly-list-content .no-data {
+  padding: var(--modus-spacing-md);
+  text-align: center;
+  color: var(--modus-text-secondary);
+  font-size: var(--modus-font-size-sm);
+  background: var(--modus-bg-secondary);
+  border-radius: var(--modus-radius-sm);
+}
+
 /* Menu loading and empty states */
 .menu-loading {
   display: flex;
