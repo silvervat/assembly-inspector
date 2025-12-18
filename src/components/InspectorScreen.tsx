@@ -233,6 +233,8 @@ export default function InspectorScreen({
           attachments: []
         }));
         setCheckpoints(checkpointsWithAttachments);
+        // Auto-show checkpoint form when checkpoints are found
+        setShowCheckpointForm(true);
         console.log('✅ Checkpoints loaded:', checkpointsWithAttachments.length);
 
         // Check for existing results for this assembly
@@ -1742,13 +1744,20 @@ export default function InspectorScreen({
 
       {inspectionListMode === 'none' && (
       <div className="action-container">
-        <button
-          onClick={handleInspect}
-          disabled={!canInspect || inspecting}
-          className={`inspect-button ${canInspect ? 'enabled' : 'disabled'}`}
-        >
-          {inspecting ? '⏳ Inspekteerin...' : '📸 Inspekteeri'}
-        </button>
+        {/* In inspection_type mode, checkpoints must be completed first */}
+        {inspectionMode === 'inspection_type' && checkpoints.length > 0 && checkpointResults.length < checkpoints.length ? (
+          <div className="checkpoint-required-hint">
+            ⚠️ Täida esmalt kontrollpunktid ({checkpointResults.length}/{checkpoints.length})
+          </div>
+        ) : (
+          <button
+            onClick={handleInspect}
+            disabled={!canInspect || inspecting}
+            className={`inspect-button ${canInspect ? 'enabled' : 'disabled'}`}
+          >
+            {inspecting ? '⏳ Inspekteerin...' : '📸 Inspekteeri'}
+          </button>
+        )}
       </div>
       )}
 
