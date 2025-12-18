@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
+
+// Test result type for function explorer
+interface FunctionTestResult {
+  name: string;
+  status: 'success' | 'error' | 'pending' | 'idle';
+  result?: string;
+  error?: string;
+}
 
 interface AdminScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -47,11 +55,85 @@ interface ObjectData {
   rawData?: object;
 }
 
+// Function button component for testing API functions
+function FunctionButton({
+  name,
+  result,
+  onClick
+}: {
+  name: string;
+  result?: FunctionTestResult;
+  onClick: () => void;
+}) {
+  const status = result?.status || 'idle';
+
+  const copyCode = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(name);
+  };
+
+  return (
+    <div className={`function-btn-wrapper ${status}`}>
+      <button className="function-btn" onClick={onClick} disabled={status === 'pending'}>
+        <span className="function-name">{name}</span>
+        <span className="function-status">
+          {status === 'pending' && <FiLoader className="spin" size={14} />}
+          {status === 'success' && <FiCheck size={14} />}
+          {status === 'error' && <FiX size={14} />}
+          {status === 'idle' && <FiZap size={14} />}
+        </span>
+      </button>
+      <button className="function-copy-btn" onClick={copyCode} title="Kopeeri">
+        <FiCopy size={12} />
+      </button>
+      {result && (status === 'success' || status === 'error') && (
+        <div className="function-result">
+          {status === 'success' ? (
+            <pre className="result-success">{result.result}</pre>
+          ) : (
+            <pre className="result-error">{result.error}</pre>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
   const [message, setMessage] = useState('');
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
+
+  // Function explorer state
+  const [showFunctionExplorer, setShowFunctionExplorer] = useState(false);
+  const [functionResults, setFunctionResults] = useState<Record<string, FunctionTestResult>>({});
+
+  // Update function result
+  const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
+    setFunctionResults(prev => ({
+      ...prev,
+      [fnName]: { ...prev[fnName], name: fnName, ...result } as FunctionTestResult
+    }));
+  };
+
+  // Test a viewer function
+  const testFunction = async (
+    fnName: string,
+    fn: () => Promise<unknown>
+  ) => {
+    updateFunctionResult(fnName, { status: 'pending', result: undefined, error: undefined });
+    try {
+      const result = await fn();
+      const resultStr = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result ?? 'OK (void)');
+      updateFunctionResult(fnName, { status: 'success', result: resultStr.substring(0, 500) });
+      console.log(`✅ ${fnName}:`, result);
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      updateFunctionResult(fnName, { status: 'error', error: errMsg });
+      console.error(`❌ ${fnName}:`, e);
+    }
+  };
 
   // BigInt-safe JSON stringify helper
   const safeStringify = (obj: unknown, space?: number): string => {
@@ -492,7 +574,341 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             </button>
           </div>
         </div>
+
+        {/* Function Explorer Card */}
+        <div className="admin-tool-card" style={{ marginTop: '12px' }}>
+          <div className="tool-header">
+            <FiZap size={24} />
+            <h3>Avasta funktsioone</h3>
+          </div>
+          <p className="tool-description">
+            Testi erinevaid Trimble Connect viewer funktsioone - kaamera, vaated, paneelid jne.
+          </p>
+          <div className="tool-actions">
+            <button
+              className="btn-primary"
+              onClick={() => setShowFunctionExplorer(true)}
+            >
+              <FiZap size={16} />
+              Ava funktsioonide testija
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Function Explorer Panel */}
+      {showFunctionExplorer && (
+        <div className="function-explorer">
+          <div className="function-explorer-header">
+            <h3>Funktsioonide testija</h3>
+            <button className="close-btn" onClick={() => setShowFunctionExplorer(false)}>✕</button>
+          </div>
+
+          <div className="function-explorer-content">
+            {/* CAMERA / VIEW section */}
+            <div className="function-section">
+              <h4>📷 Kaamera / Vaated</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="setCamera('top')"
+                  result={functionResults["setCamera('top')"]}
+                  onClick={() => testFunction("setCamera('top')", () => api.viewer.setCamera('top', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="setCamera('front')"
+                  result={functionResults["setCamera('front')"]}
+                  onClick={() => testFunction("setCamera('front')", () => api.viewer.setCamera('front', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="setCamera('back')"
+                  result={functionResults["setCamera('back')"]}
+                  onClick={() => testFunction("setCamera('back')", () => api.viewer.setCamera('back', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="setCamera('left')"
+                  result={functionResults["setCamera('left')"]}
+                  onClick={() => testFunction("setCamera('left')", () => api.viewer.setCamera('left', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="setCamera('right')"
+                  result={functionResults["setCamera('right')"]}
+                  onClick={() => testFunction("setCamera('right')", () => api.viewer.setCamera('right', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="setCamera('bottom')"
+                  result={functionResults["setCamera('bottom')"]}
+                  onClick={() => testFunction("setCamera('bottom')", () => api.viewer.setCamera('bottom', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="setCamera('iso')"
+                  result={functionResults["setCamera('iso')"]}
+                  onClick={() => testFunction("setCamera('iso')", () => (api.viewer as any).setCamera('iso', { animationTime: 300 }))}
+                />
+                <FunctionButton
+                  name="getCamera()"
+                  result={functionResults["getCamera()"]}
+                  onClick={() => testFunction("getCamera()", () => api.viewer.getCamera())}
+                />
+                <FunctionButton
+                  name="fitAll()"
+                  result={functionResults["fitAll()"]}
+                  onClick={() => testFunction("fitAll()", () => (api.viewer as any).fitAll?.())}
+                />
+                <FunctionButton
+                  name="zoomToSelection()"
+                  result={functionResults["zoomToSelection()"]}
+                  onClick={() => testFunction("zoomToSelection()", () => (api.viewer as any).zoomToSelection?.())}
+                />
+              </div>
+            </div>
+
+            {/* PROJECTION section */}
+            <div className="function-section">
+              <h4>🔲 Projektsiooni tüüp</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Perspective (persp)"
+                  result={functionResults["Perspective (persp)"]}
+                  onClick={() => testFunction("Perspective (persp)", async () => {
+                    const cam = await api.viewer.getCamera();
+                    return (api.viewer as any).setCamera({ ...cam, projectionType: 'persp' }, { animationTime: 0 });
+                  })}
+                />
+                <FunctionButton
+                  name="Orthographic (ortho)"
+                  result={functionResults["Orthographic (ortho)"]}
+                  onClick={() => testFunction("Orthographic (ortho)", async () => {
+                    const cam = await api.viewer.getCamera();
+                    return (api.viewer as any).setCamera({ ...cam, projectionType: 'ortho' }, { animationTime: 0 });
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* UI / PANELS section */}
+            <div className="function-section">
+              <h4>📱 UI / Paneelid</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="SidePanel: collapsed"
+                  result={functionResults["SidePanel: collapsed"]}
+                  onClick={() => testFunction("SidePanel: collapsed", () => api.ui.setUI({ name: 'SidePanel', state: 'collapsed' }))}
+                />
+                <FunctionButton
+                  name="SidePanel: expanded"
+                  result={functionResults["SidePanel: expanded"]}
+                  onClick={() => testFunction("SidePanel: expanded", () => api.ui.setUI({ name: 'SidePanel', state: 'expanded' }))}
+                />
+                <FunctionButton
+                  name="BottomBar: collapsed"
+                  result={functionResults["BottomBar: collapsed"]}
+                  onClick={() => testFunction("BottomBar: collapsed", () => (api.ui as any).setUI({ name: 'BottomBar', state: 'collapsed' }))}
+                />
+                <FunctionButton
+                  name="BottomBar: expanded"
+                  result={functionResults["BottomBar: expanded"]}
+                  onClick={() => testFunction("BottomBar: expanded", () => (api.ui as any).setUI({ name: 'BottomBar', state: 'expanded' }))}
+                />
+                <FunctionButton
+                  name="TopBar: hidden"
+                  result={functionResults["TopBar: hidden"]}
+                  onClick={() => testFunction("TopBar: hidden", () => (api.ui as any).setUI({ name: 'TopBar', state: 'hidden' }))}
+                />
+                <FunctionButton
+                  name="TopBar: visible"
+                  result={functionResults["TopBar: visible"]}
+                  onClick={() => testFunction("TopBar: visible", () => (api.ui as any).setUI({ name: 'TopBar', state: 'visible' }))}
+                />
+                <FunctionButton
+                  name="TreeView: hidden"
+                  result={functionResults["TreeView: hidden"]}
+                  onClick={() => testFunction("TreeView: hidden", () => (api.ui as any).setUI({ name: 'TreeView', state: 'hidden' }))}
+                />
+                <FunctionButton
+                  name="TreeView: visible"
+                  result={functionResults["TreeView: visible"]}
+                  onClick={() => testFunction("TreeView: visible", () => (api.ui as any).setUI({ name: 'TreeView', state: 'visible' }))}
+                />
+                <FunctionButton
+                  name="getUI()"
+                  result={functionResults["getUI()"]}
+                  onClick={() => testFunction("getUI()", () => api.ui.getUI())}
+                />
+              </div>
+            </div>
+
+            {/* SELECTION section */}
+            <div className="function-section">
+              <h4>🎯 Valik (Selection)</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getSelection()"
+                  result={functionResults["getSelection()"]}
+                  onClick={() => testFunction("getSelection()", () => api.viewer.getSelection())}
+                />
+                <FunctionButton
+                  name="clearSelection()"
+                  result={functionResults["clearSelection()"]}
+                  onClick={() => testFunction("clearSelection()", () => api.viewer.setSelection({ modelObjectIds: [] }, 'set'))}
+                />
+                <FunctionButton
+                  name="Assembly Selection ON"
+                  result={functionResults["Assembly Selection ON"]}
+                  onClick={() => testFunction("Assembly Selection ON", () => (api.viewer as any).setSettings?.({ assemblySelection: true }))}
+                />
+                <FunctionButton
+                  name="Assembly Selection OFF"
+                  result={functionResults["Assembly Selection OFF"]}
+                  onClick={() => testFunction("Assembly Selection OFF", () => (api.viewer as any).setSettings?.({ assemblySelection: false }))}
+                />
+                <FunctionButton
+                  name="getSettings()"
+                  result={functionResults["getSettings()"]}
+                  onClick={() => testFunction("getSettings()", () => (api.viewer as any).getSettings?.())}
+                />
+              </div>
+            </div>
+
+            {/* VISIBILITY / COLOR section */}
+            <div className="function-section">
+              <h4>🎨 Nähtavus / Värvid</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="resetObjectState()"
+                  result={functionResults["resetObjectState()"]}
+                  onClick={() => testFunction("resetObjectState()", () => (api.viewer as any).resetObjectState?.())}
+                />
+                <FunctionButton
+                  name="isolateSelection()"
+                  result={functionResults["isolateSelection()"]}
+                  onClick={() => testFunction("isolateSelection()", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return (api.viewer as any).isolate?.(sel);
+                  })}
+                />
+                <FunctionButton
+                  name="unisolate()"
+                  result={functionResults["unisolate()"]}
+                  onClick={() => testFunction("unisolate()", () => (api.viewer as any).unisolate?.())}
+                />
+                <FunctionButton
+                  name="Color Selection RED"
+                  result={functionResults["Color Selection RED"]}
+                  onClick={() => testFunction("Color Selection RED", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 0, b: 0, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Color Selection GREEN"
+                  result={functionResults["Color Selection GREEN"]}
+                  onClick={() => testFunction("Color Selection GREEN", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 255, b: 0, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Color Selection BLACK"
+                  result={functionResults["Color Selection BLACK"]}
+                  onClick={() => testFunction("Color Selection BLACK", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 0, b: 0, a: 255 } });
+                  })}
+                />
+                <FunctionButton
+                  name="Hide Selection"
+                  result={functionResults["Hide Selection"]}
+                  onClick={() => testFunction("Hide Selection", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+                    return api.viewer.setObjectState({ modelObjectIds: sel }, { visible: false });
+                  })}
+                />
+                <FunctionButton
+                  name="Show All"
+                  result={functionResults["Show All"]}
+                  onClick={() => testFunction("Show All", () => (api.viewer as any).resetObjectState?.())}
+                />
+              </div>
+            </div>
+
+            {/* SNAPSHOT section */}
+            <div className="function-section">
+              <h4>📸 Ekraanipilt</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getSnapshot()"
+                  result={functionResults["getSnapshot()"]}
+                  onClick={() => testFunction("getSnapshot()", async () => {
+                    const snapshot = await api.viewer.getSnapshot();
+                    console.log('Snapshot data URL length:', snapshot.length);
+                    // Open in new tab
+                    window.open(snapshot, '_blank');
+                    return 'Snapshot opened in new tab';
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* MODEL INFO section */}
+            <div className="function-section">
+              <h4>📁 Mudeli info</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getModels()"
+                  result={functionResults["getModels()"]}
+                  onClick={() => testFunction("getModels()", () => api.viewer.getModels())}
+                />
+                <FunctionButton
+                  name="getProject()"
+                  result={functionResults["getProject()"]}
+                  onClick={() => testFunction("getProject()", () => api.project.getProject())}
+                />
+                <FunctionButton
+                  name="getCurrentUser()"
+                  result={functionResults["getCurrentUser()"]}
+                  onClick={() => testFunction("getCurrentUser()", () => (api.project as any).getCurrentUser?.())}
+                />
+              </div>
+            </div>
+
+            {/* OTHER/EXPERIMENTAL section */}
+            <div className="function-section">
+              <h4>🧪 Muud / Eksperimentaalsed</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="List all viewer methods"
+                  result={functionResults["List all viewer methods"]}
+                  onClick={() => testFunction("List all viewer methods", async () => {
+                    const methods = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function');
+                    return methods.join(', ');
+                  })}
+                />
+                <FunctionButton
+                  name="List all ui methods"
+                  result={functionResults["List all ui methods"]}
+                  onClick={() => testFunction("List all ui methods", async () => {
+                    const methods = Object.keys(api.ui).filter(k => typeof (api.ui as any)[k] === 'function');
+                    return methods.join(', ');
+                  })}
+                />
+                <FunctionButton
+                  name="List all project methods"
+                  result={functionResults["List all project methods"]}
+                  onClick={() => testFunction("List all project methods", async () => {
+                    const methods = Object.keys(api.project).filter(k => typeof (api.project as any)[k] === 'function');
+                    return methods.join(', ');
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Message */}
       {message && (

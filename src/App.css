@@ -2390,6 +2390,206 @@ body {
   font-weight: 600;
 }
 
+/* ====== Function Explorer ====== */
+.function-explorer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--modus-bg-primary);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.function-explorer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--modus-spacing-md);
+  background: var(--modus-primary-darker);
+  color: white;
+}
+
+.function-explorer-header h3 {
+  font-size: var(--modus-font-size-md);
+  font-weight: 600;
+  margin: 0;
+}
+
+.function-explorer-header .close-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--modus-radius-sm);
+}
+
+.function-explorer-header .close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.function-explorer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--modus-spacing-md);
+}
+
+.function-section {
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-md);
+  padding: var(--modus-spacing-md);
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.function-section h4 {
+  font-size: var(--modus-font-size-sm);
+  font-weight: 600;
+  color: var(--modus-text-primary);
+  margin: 0 0 var(--modus-spacing-sm) 0;
+  padding-bottom: var(--modus-spacing-xs);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.function-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--modus-spacing-sm);
+}
+
+.function-btn-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  overflow: hidden;
+}
+
+.function-btn-wrapper.success {
+  border-color: var(--modus-success);
+}
+
+.function-btn-wrapper.error {
+  border-color: var(--modus-danger);
+}
+
+.function-btn-wrapper.pending {
+  border-color: var(--modus-info);
+}
+
+.function-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--modus-spacing-xs);
+  padding: var(--modus-spacing-sm);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-primary);
+  transition: background 0.15s;
+}
+
+.function-btn:hover:not(:disabled) {
+  background: var(--modus-bg-secondary);
+}
+
+.function-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.function-name {
+  flex: 1;
+  word-break: break-word;
+  font-family: monospace;
+}
+
+.function-status {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.function-btn-wrapper.success .function-status {
+  color: var(--modus-success);
+}
+
+.function-btn-wrapper.error .function-status {
+  color: var(--modus-danger);
+}
+
+.function-btn-wrapper.pending .function-status {
+  color: var(--modus-info);
+}
+
+.function-btn-wrapper.idle .function-status {
+  color: var(--modus-text-tertiary);
+}
+
+.function-copy-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.function-btn-wrapper:hover .function-copy-btn {
+  opacity: 1;
+}
+
+.function-copy-btn:hover {
+  background: var(--modus-primary-selected);
+  color: var(--modus-primary);
+}
+
+.function-result {
+  padding: var(--modus-spacing-xs) var(--modus-spacing-sm);
+  border-top: 1px solid var(--modus-border);
+  background: var(--modus-bg-secondary);
+  max-height: 80px;
+  overflow: auto;
+}
+
+.function-result pre {
+  margin: 0;
+  font-size: 10px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.function-result .result-success {
+  color: var(--modus-success);
+}
+
+.function-result .result-error {
+  color: var(--modus-danger);
+}
+
+/* Spin animation for function explorer */
+.function-explorer .spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Menu loading and empty states */
 .menu-loading {
   display: flex;
