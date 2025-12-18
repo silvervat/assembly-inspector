@@ -202,7 +202,9 @@ body {
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Compact header */
@@ -4379,7 +4381,7 @@ body {
   border-radius: var(--modus-radius-md);
   border: 1px solid var(--modus-border);
   margin-top: var(--modus-spacing-md);
-  overflow: hidden;
+  margin-bottom: var(--modus-spacing-lg);
 }
 
 .checkpoint-form-header {
