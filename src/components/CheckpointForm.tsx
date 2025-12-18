@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2 } from 'react-icons/fi';
-import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment } from '../supabase';
+import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage } from 'react-icons/fi';
+import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment, InspectionResultPhoto } from '../supabase';
+import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 
 interface CheckpointFormProps {
   checkpoints: InspectionCheckpoint[];
@@ -12,6 +13,7 @@ interface CheckpointFormProps {
   inspectorName: string;
   userEmail?: string;
   existingResults?: InspectionResult[];
+  api?: WorkspaceAPI.WorkspaceAPI; // For capturing snapshots
   onComplete: (results: InspectionResult[]) => void;
   onCancel: () => void;
 }
@@ -34,6 +36,7 @@ export default function CheckpointForm({
   inspectorName,
   userEmail,
   existingResults,
+  api,
   onComplete,
   onCancel: _onCancel // Not used - edit mode cancellation handled internally
 }: CheckpointFormProps) {
@@ -42,6 +45,12 @@ export default function CheckpointForm({
   const [expandedInstructions, setExpandedInstructions] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Existing photos from database (for view mode)
+  const [existingPhotos, setExistingPhotos] = useState<Record<string, InspectionResultPhoto[]>>({});
+
+  // Modal for viewing photos
+  const [modalPhoto, setModalPhoto] = useState<string | null>(null);
 
   // View mode vs edit mode - start in view mode if existing results
   const hasExistingResults = existingResults && existingResults.length > 0;
@@ -63,10 +72,49 @@ export default function CheckpointForm({
       setResponses(initialResponses);
       // Start in view mode if we have existing results
       setIsEditMode(false);
+
+      // Load existing photos for each result
+      loadExistingPhotos(existingResults);
     } else {
       setIsEditMode(true);
     }
   }, [existingResults]);
+
+  // Load photos for existing results
+  const loadExistingPhotos = async (results: InspectionResult[]) => {
+    try {
+      const resultIds = results.map(r => r.id);
+      const { data: photos, error } = await supabase
+        .from('inspection_result_photos')
+        .select('*')
+        .in('result_id', resultIds)
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        console.log('Could not load existing photos:', error.message);
+        return;
+      }
+
+      if (photos && photos.length > 0) {
+        // Group photos by checkpoint_id (via result_id)
+        const photosByCheckpoint: Record<string, InspectionResultPhoto[]> = {};
+        for (const photo of photos) {
+          // Find which checkpoint this photo belongs to
+          const result = results.find(r => r.id === photo.result_id);
+          if (result) {
+            if (!photosByCheckpoint[result.checkpoint_id]) {
+              photosByCheckpoint[result.checkpoint_id] = [];
+            }
+            photosByCheckpoint[result.checkpoint_id].push(photo);
+          }
+        }
+        setExistingPhotos(photosByCheckpoint);
+        console.log('📸 Loaded existing photos:', photosByCheckpoint);
+      }
+    } catch (e) {
+      console.error('Error loading existing photos:', e);
+    }
+  };
 
   // Get response option config
   const getResponseOption = (checkpoint: InspectionCheckpoint, value: string): ResponseOption | undefined => {
@@ -198,6 +246,92 @@ export default function CheckpointForm({
     });
   };
 
+  // Convert dataURL to Blob
+  const dataURLtoBlob = (dataUrl: string): Blob => {
+    const arr = dataUrl.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  };
+
+  // Capture 3D view and topview snapshots
+  const captureSnapshots = async (): Promise<{ snapshot3dUrl?: string; topviewUrl?: string }> => {
+    if (!api) return {};
+
+    const result: { snapshot3dUrl?: string; topviewUrl?: string } = {};
+
+    try {
+      // 1. Capture current 3D view
+      const snapshot3d = await api.viewer.getSnapshot();
+      const blob3d = dataURLtoBlob(snapshot3d);
+      const fileName3d = `checkpoint_3d_${assemblyGuid}_${Date.now()}.png`;
+
+      const { error: uploadError3d } = await supabase.storage
+        .from('inspection-photos')
+        .upload(fileName3d, blob3d, {
+          contentType: 'image/png',
+          cacheControl: '3600'
+        });
+
+      if (!uploadError3d) {
+        const { data: urlData } = supabase.storage
+          .from('inspection-photos')
+          .getPublicUrl(fileName3d);
+        result.snapshot3dUrl = urlData.publicUrl;
+        console.log('📸 Captured 3D snapshot:', result.snapshot3dUrl);
+      }
+
+      // 2. Capture topview (orthogonal)
+      // Save current camera
+      const currentCamera = await api.viewer.getCamera();
+
+      // Switch to top preset
+      await api.viewer.setCamera('top', { animationTime: 0 });
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Set orthogonal projection
+      const topCamera = await api.viewer.getCamera();
+      await api.viewer.setCamera(
+        { ...topCamera, projectionType: 'ortho' },
+        { animationTime: 0 }
+      );
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Capture topview
+      const topviewSnapshot = await api.viewer.getSnapshot();
+      const blobTop = dataURLtoBlob(topviewSnapshot);
+      const fileNameTop = `checkpoint_topview_${assemblyGuid}_${Date.now()}.png`;
+
+      const { error: uploadErrorTop } = await supabase.storage
+        .from('inspection-photos')
+        .upload(fileNameTop, blobTop, {
+          contentType: 'image/png',
+          cacheControl: '3600'
+        });
+
+      if (!uploadErrorTop) {
+        const { data: urlData } = supabase.storage
+          .from('inspection-photos')
+          .getPublicUrl(fileNameTop);
+        result.topviewUrl = urlData.publicUrl;
+        console.log('📸 Captured topview snapshot:', result.topviewUrl);
+      }
+
+      // Restore original camera
+      await api.viewer.setCamera(currentCamera, { animationTime: 0 });
+
+    } catch (e) {
+      console.error('Error capturing snapshots:', e);
+    }
+
+    return result;
+  };
+
   // Validate form
   const validateForm = (): string | null => {
     for (const checkpoint of checkpoints) {
@@ -238,11 +372,14 @@ export default function CheckpointForm({
     try {
       const savedResults: InspectionResult[] = [];
 
+      // Capture 3D view and topview snapshots FIRST (before processing checkpoints)
+      const snapshots = await captureSnapshots();
+
       for (const checkpoint of checkpoints) {
         const response = responses[checkpoint.id];
         if (!response || !response.responseValue) continue;
 
-        // Upload photos first
+        // Upload user photos first
         const photoUrls: string[] = [];
         for (let i = 0; i < (response.photos?.length || 0); i++) {
           const photo = response.photos[i];
@@ -288,17 +425,45 @@ export default function CheckpointForm({
         if (resultError) throw resultError;
 
         // Save photos to inspection_result_photos table
-        if (photoUrls.length > 0 && savedResult) {
-          const photoRecords = photoUrls.map((url, idx) => ({
+        const allPhotoRecords: any[] = [];
+
+        // Add user photos
+        photoUrls.forEach((url, idx) => {
+          allPhotoRecords.push({
             result_id: savedResult.id,
             storage_path: url.split('/').pop() || '',
             url: url,
-            sort_order: idx
-          }));
+            sort_order: idx,
+            photo_type: 'user'
+          });
+        });
 
+        // Add auto-captured snapshots (only for first checkpoint to avoid duplicates)
+        if (savedResults.length === 0) {
+          if (snapshots.snapshot3dUrl) {
+            allPhotoRecords.push({
+              result_id: savedResult.id,
+              storage_path: snapshots.snapshot3dUrl.split('/').pop() || '',
+              url: snapshots.snapshot3dUrl,
+              sort_order: 100, // High sort order for auto-generated
+              photo_type: 'snapshot_3d'
+            });
+          }
+          if (snapshots.topviewUrl) {
+            allPhotoRecords.push({
+              result_id: savedResult.id,
+              storage_path: snapshots.topviewUrl.split('/').pop() || '',
+              url: snapshots.topviewUrl,
+              sort_order: 101,
+              photo_type: 'topview'
+            });
+          }
+        }
+
+        if (allPhotoRecords.length > 0) {
           await supabase
             .from('inspection_result_photos')
-            .insert(photoRecords);
+            .insert(allPhotoRecords);
         }
 
         savedResults.push(savedResult as InspectionResult);
@@ -670,10 +835,83 @@ export default function CheckpointForm({
                   )}
                 </div>
               )}
+
+              {/* View mode content - show comment and photos */}
+              {!isEditMode && response?.responseValue && (
+                <div className="checkpoint-view-content">
+                  {/* Comment display */}
+                  {response.comment && (
+                    <div className="view-comment">
+                      <FiMessageSquare className="view-comment-icon" />
+                      <span>{response.comment}</span>
+                    </div>
+                  )}
+
+                  {/* Photos display - user photos and auto-captured snapshots */}
+                  {existingPhotos[checkpoint.id] && existingPhotos[checkpoint.id].length > 0 && (
+                    <div className="view-photos">
+                      {existingPhotos[checkpoint.id]
+                        .filter(p => (p as any).photo_type === 'user' || !(p as any).photo_type)
+                        .map((photo, idx) => (
+                        <div
+                          key={photo.id || idx}
+                          className="view-photo-thumb"
+                          onClick={() => setModalPhoto(photo.url)}
+                        >
+                          <img src={photo.thumbnail_url || photo.url} alt={`Foto ${idx + 1}`} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Auto-captured snapshots section (shown in view mode) */}
+      {!isEditMode && hasExistingResults && (
+        <div className="auto-snapshots-section">
+          {/* Find snapshots from all existing photos */}
+          {(() => {
+            const allPhotos = Object.values(existingPhotos).flat();
+            const snapshot3d = allPhotos.find(p => (p as any).photo_type === 'snapshot_3d');
+            const topview = allPhotos.find(p => (p as any).photo_type === 'topview');
+
+            if (!snapshot3d && !topview) return null;
+
+            return (
+              <div className="auto-snapshots">
+                <div className="auto-snapshots-header">
+                  <FiImage />
+                  <span>Automaatsed ekraanipildid</span>
+                </div>
+                <div className="auto-snapshots-grid">
+                  {snapshot3d && (
+                    <div
+                      className="auto-snapshot-thumb"
+                      onClick={() => setModalPhoto(snapshot3d.url)}
+                    >
+                      <img src={snapshot3d.thumbnail_url || snapshot3d.url} alt="3D vaade" />
+                      <span className="snapshot-label">3D vaade</span>
+                    </div>
+                  )}
+                  {topview && (
+                    <div
+                      className="auto-snapshot-thumb"
+                      onClick={() => setModalPhoto(topview.url)}
+                    >
+                      <img src={topview.thumbnail_url || topview.url} alt="Pealtvaade" />
+                      <span className="snapshot-label">Pealtvaade</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* Show action buttons only in edit mode */}
       {isEditMode && (
@@ -694,6 +932,35 @@ export default function CheckpointForm({
           >
             {submitting ? 'Salvestan...' : 'Salvesta vastused'}
           </button>
+        </div>
+      )}
+
+      {/* Photo modal */}
+      {modalPhoto && (
+        <div className="photo-modal-overlay" onClick={() => setModalPhoto(null)}>
+          <div className="photo-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="photo-modal-close" onClick={() => setModalPhoto(null)}>
+              ✕
+            </button>
+            <img src={modalPhoto} alt="Foto" />
+            <div className="photo-modal-actions">
+              <a
+                href={modalPhoto}
+                download={`checkpoint-photo-${Date.now()}.png`}
+                className="photo-modal-btn"
+              >
+                ⬇ Lae alla
+              </a>
+              <a
+                href={modalPhoto}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="photo-modal-btn"
+              >
+                ↗ Ava uues aknas
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </div>

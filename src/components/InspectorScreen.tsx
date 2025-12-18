@@ -1703,6 +1703,7 @@ export default function InspectorScreen({
           inspectorName={user.name || tcUserEmail || 'Unknown'}
           userEmail={tcUserEmail}
           existingResults={checkpointResults}
+          api={api}
           onComplete={(results) => {
             setCheckpointResults(results);
             setMessage(`✅ Kontrollpunktid salvestatud (${results.length})`);
