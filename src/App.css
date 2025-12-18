@@ -1232,6 +1232,39 @@ body {
   font-weight: 600;
 }
 
+/* Compact plan info bar (for inspection_type mode) */
+.plan-info-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-xs) var(--modus-spacing-md);
+  background: var(--modus-primary);
+  color: white;
+  font-size: var(--modus-font-size-xs);
+  margin-top: calc(-1 * var(--modus-spacing-md));
+  margin-bottom: var(--modus-spacing-sm);
+  border-radius: 0 0 var(--modus-radius-sm) var(--modus-radius-sm);
+}
+
+.plan-info-item {
+  opacity: 0.95;
+}
+
+.plan-info-divider {
+  opacity: 0.5;
+}
+
+/* Loading checkpoints inline indicator */
+.loading-checkpoints-inline {
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: var(--modus-bg-secondary);
+  border-radius: var(--modus-radius-sm);
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+  text-align: center;
+  margin-bottom: var(--modus-spacing-sm);
+}
+
 /* Auth error card */
 .auth-error-card {
   background: white;
