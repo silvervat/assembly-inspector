@@ -5723,14 +5723,15 @@ button.stat-toggle.off:hover {
 }
 
 .checkpoint-photos .photos-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: var(--modus-spacing-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--modus-spacing-xs);
 }
 
 .checkpoint-photos .photo-thumb {
   position: relative;
-  aspect-ratio: 1;
+  width: 60px;
+  height: 60px;
   border-radius: var(--modus-radius-sm);
   overflow: hidden;
   border: 1px solid var(--modus-border);
@@ -5765,7 +5766,8 @@ button.stat-toggle.off:hover {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  aspect-ratio: 1;
+  width: 60px;
+  height: 60px;
   border: 2px dashed var(--modus-border);
   border-radius: var(--modus-radius-sm);
   background: var(--modus-bg-primary);
