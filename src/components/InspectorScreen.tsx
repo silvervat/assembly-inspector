@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult } from '../supabase';
 import { InspectionMode } from './MainMenu';
-import { FiArrowLeft, FiClipboard, FiAlertCircle, FiList } from 'react-icons/fi';
+import { FiArrowLeft, FiClipboard, FiAlertCircle } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
 import InspectionList, { InspectionItem } from './InspectionList';
 import CheckpointForm from './CheckpointForm';
@@ -131,7 +131,6 @@ export default function InspectorScreen({
   } | null>(null);
   const [assignedPlan, setAssignedPlan] = useState<PlanWithDetails | null>(null);
   const [checkpoints, setCheckpoints] = useState<InspectionCheckpoint[]>([]);
-  const [showCheckpointForm, setShowCheckpointForm] = useState(false);
   const [checkpointResults, setCheckpointResults] = useState<InspectionResult[]>([]);
   const [loadingCheckpoints, setLoadingCheckpoints] = useState(false);
   const [modalPhoto, setModalPhoto] = useState<string | null>(null);
@@ -202,7 +201,6 @@ export default function InspectorScreen({
     setLoadingCheckpoints(true);
     setCheckpoints([]);
     setCheckpointResults([]);
-    setShowCheckpointForm(false);
 
     try {
       // Fetch active checkpoints for this category
@@ -233,8 +231,6 @@ export default function InspectorScreen({
           attachments: []
         }));
         setCheckpoints(checkpointsWithAttachments);
-        // Auto-show checkpoint form when checkpoints are found
-        setShowCheckpointForm(true);
         console.log('✅ Checkpoints loaded:', checkpointsWithAttachments.length);
 
         // Check for existing results for this assembly
@@ -272,7 +268,6 @@ export default function InspectorScreen({
     setExistingInspection(null);
     setAssignedPlan(null);
     setCheckpoints([]);
-    setShowCheckpointForm(false);
     setDetailNotInPlan(false);
 
     if (objects.length === 0) {
@@ -1647,32 +1642,18 @@ export default function InspectorScreen({
               </div>
             )}
 
-            {/* Checkpoints button */}
-            {checkpoints.length > 0 && !showCheckpointForm && (
+            {/* Checkpoint loading indicator */}
+            {loadingCheckpoints && (
               <div className="plan-card-checkpoints">
-                <button
-                  className="checkpoints-btn"
-                  onClick={() => setShowCheckpointForm(true)}
-                  disabled={loadingCheckpoints}
-                >
-                  <FiList />
-                  <span>
-                    {loadingCheckpoints ? 'Laadin...' : `Kontrollpunktid (${checkpoints.length})`}
-                  </span>
-                  {checkpointResults.length > 0 && (
-                    <span className="results-badge">
-                      {checkpointResults.length} täidetud
-                    </span>
-                  )}
-                </button>
+                <span className="loading-checkpoints">Laadin kontrollpunkte...</span>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Checkpoint Form - show when checkpoints are available and form is open */}
-      {inspectionListMode === 'none' && showCheckpointForm && checkpoints.length > 0 && selectedObjects.length === 1 && (
+      {/* Checkpoint Form - show when checkpoints are available */}
+      {inspectionListMode === 'none' && checkpoints.length > 0 && selectedObjects.length === 1 && (
         <CheckpointForm
           checkpoints={checkpoints}
           planItemId={assignedPlan?.id}
@@ -1685,11 +1666,10 @@ export default function InspectorScreen({
           existingResults={checkpointResults}
           onComplete={(results) => {
             setCheckpointResults(results);
-            setShowCheckpointForm(false);
             setMessage(`✅ Kontrollpunktid salvestatud (${results.length})`);
             setTimeout(() => setMessage(''), 3000);
           }}
-          onCancel={() => setShowCheckpointForm(false)}
+          onCancel={() => { /* Form always visible when checkpoints exist */ }}
         />
       )}
 
