@@ -30,7 +30,7 @@ export default function CheckpointForm({
   projectId,
   assemblyGuid,
   assemblyName,
-  inspectorId,
+  inspectorId: _inspectorId, // Reserved for future use when FK is properly configured
   inspectorName,
   userEmail,
   existingResults,
@@ -265,7 +265,8 @@ export default function CheckpointForm({
           response_value: response.responseValue,
           response_label: response.responseLabel,
           comment: response.comment || null,
-          inspector_id: inspectorId || null,
+          // Don't send inspector_id to avoid FK constraint issues
+          // inspector_id: inspectorId || null,
           inspector_name: inspectorName,
           user_email: userEmail || null
         };
