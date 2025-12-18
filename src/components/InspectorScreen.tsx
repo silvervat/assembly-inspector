@@ -88,7 +88,7 @@ export default function InspectorScreen({
   tcUserEmail,
   inspectionMode,
   inspectionTypeId,
-  inspectionTypeCode,
+  inspectionTypeCode: _inspectionTypeCode, // Reserved for future use
   inspectionTypeName,
   onBackToMenu
 }: InspectorScreenProps) {
@@ -919,7 +919,10 @@ export default function InspectorScreen({
         snapshot_3d_url: snapshot3dUrl,
         topview_url: topviewUrl,
         project_id: projectId,
-        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan') ? undefined : inspectionMode,
+        // inspection_type is for legacy modes only; inspection_type mode uses plan-based tracking
+        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type')
+          ? undefined
+          : inspectionMode,
         // Additional Tekla fields
         file_name: obj.fileName,
         guid: obj.guid,
