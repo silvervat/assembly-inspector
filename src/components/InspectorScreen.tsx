@@ -1384,9 +1384,54 @@ export default function InspectorScreen({
     }
   };
 
+  // Get assembly selection mode from inspection plan by GUID
+  const getAssemblyModeFromPlan = async (guid?: string, guidIfc?: string): Promise<boolean | null> => {
+    if (!guid && !guidIfc) return null;
+
+    try {
+      const guidsToCheck = [guidIfc, guid].filter(Boolean);
+
+      for (const guidToCheck of guidsToCheck) {
+        if (!guidToCheck) continue;
+
+        const { data: planData, error } = await supabase
+          .from('inspection_plan_items')
+          .select('assembly_selection_mode')
+          .eq('project_id', projectId)
+          .or(`guid.eq.${guidToCheck},guid_ifc.eq.${guidToCheck}`)
+          .single();
+
+        if (planData && !error) {
+          console.log(`✅ Found plan with assembly_selection_mode: ${planData.assembly_selection_mode}`);
+          return planData.assembly_selection_mode ?? null;
+        }
+      }
+    } catch (e) {
+      console.log('Plan lookup failed:', e);
+    }
+
+    return null;
+  };
+
+  // Apply assembly selection mode to viewer
+  const applyAssemblyMode = async (assemblyMode: boolean | null) => {
+    if (assemblyMode === null) return;
+
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: assemblyMode });
+      console.log(`🔧 Assembly selection set to: ${assemblyMode}`);
+    } catch (e) {
+      console.warn('Failed to set assembly selection:', e);
+    }
+  };
+
   // Select single inspection in model (without zoom)
   const selectInspection = async (inspection: InspectionItem) => {
     try {
+      // Look up and apply assembly selection mode from plan
+      const assemblyMode = await getAssemblyModeFromPlan(inspection.guid, inspection.guid_ifc);
+      await applyAssemblyMode(assemblyMode);
+
       await api.viewer.setSelection({
         modelObjectIds: [{
           modelId: inspection.model_id,
@@ -1452,6 +1497,10 @@ export default function InspectorScreen({
   // Zoom to specific inspection
   const zoomToInspection = async (inspection: InspectionItem) => {
     try {
+      // Look up and apply assembly selection mode from plan
+      const assemblyMode = await getAssemblyModeFromPlan(inspection.guid, inspection.guid_ifc);
+      await applyAssemblyMode(assemblyMode);
+
       const modelObjectIds = [{
         modelId: inspection.model_id,
         objectRuntimeIds: [inspection.object_runtime_id]
