@@ -571,6 +571,18 @@ body {
   cursor: not-allowed;
 }
 
+.checkpoint-required-hint {
+  width: 100%;
+  padding: var(--modus-spacing-md);
+  border-radius: var(--modus-radius-md);
+  background: linear-gradient(135deg, #fff3cd, #ffeeba);
+  border: 1px solid #ffc107;
+  color: #856404;
+  font-size: var(--modus-font-size-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
 .instructions {
   background: var(--modus-bg-primary);
   padding: var(--modus-spacing-md);
