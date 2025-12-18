@@ -1900,12 +1900,21 @@ export default function InspectorScreen({
           totalCount={inspectionListTotal}
           hasMore={inspectionListData.length < inspectionListTotal}
           loadingMore={inspectionListLoadingMore}
+          projectId={projectId}
           onZoomToInspection={zoomToInspection}
           onSelectInspection={selectInspection}
           onSelectGroup={selectGroup}
           onZoomToGroup={zoomToGroup}
           onLoadMore={loadMoreInspections}
           onClose={exitInspectionList}
+          onRefresh={() => {
+            // Refresh the list by re-running the appropriate function
+            if (inspectionListMode === 'mine') {
+              showMyInspections();
+            } else {
+              showAllInspections();
+            }
+          }}
         />
       )}
 
