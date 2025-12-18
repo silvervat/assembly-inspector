@@ -5939,6 +5939,42 @@ button.stat-toggle.off:hover {
   cursor: not-allowed;
 }
 
+/* Continue Inspection Button (mobile) */
+.checkpoint-continue-section {
+  padding: var(--modus-spacing-md);
+  background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+  border-top: 2px solid var(--modus-primary);
+}
+
+.continue-inspection-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--modus-spacing-sm);
+  width: 100%;
+  padding: var(--modus-spacing-md);
+  background: linear-gradient(135deg, var(--modus-primary) 0%, #1e40af 100%);
+  border: none;
+  border-radius: var(--modus-radius-md);
+  color: white;
+  font-size: var(--modus-font-size-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.continue-inspection-btn:hover {
+  background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+.continue-inspection-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 /* Plan Card Checkpoints Button */
 .plan-card-checkpoints {
   margin-top: var(--modus-spacing-md);

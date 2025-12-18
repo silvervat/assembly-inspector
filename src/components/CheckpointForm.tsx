@@ -47,6 +47,7 @@ export default function CheckpointForm({
   const [expandedExtras, setExpandedExtras] = useState<Set<string>>(new Set()); // Track manually expanded photo/comment sections
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showContinueButton, setShowContinueButton] = useState(false); // Show after successful save on mobile
 
   // Existing photos from database (for view mode)
   const [existingPhotos, setExistingPhotos] = useState<Record<string, InspectionResultPhoto[]>>({});
@@ -390,10 +391,6 @@ export default function CheckpointForm({
 
       // Get current selection for zooming
       const selection = await api.viewer.getSelection();
-      const modelObjectIds = selection?.map(s => ({
-        modelId: s.modelId,
-        objectRuntimeIds: s.objectRuntimeIds || []
-      })) || [];
 
       // 1. Capture current 3D view (perspective)
       const snapshot3d = await api.viewer.getSnapshot();
@@ -416,23 +413,28 @@ export default function CheckpointForm({
       }
 
       // 2. Capture topview with Orthographic mode
-      // First switch to orthographic mode
-      await (api.viewer as any).setSettings?.({ projectionMode: 'orthographic' });
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Step 1: Switch to top view preset first
+      await api.viewer.setCamera('top', { animationTime: 0 });
+      await new Promise(resolve => setTimeout(resolve, 150));
 
-      // Zoom to selection with top view
-      if (modelObjectIds.length > 0) {
+      // Step 2: Zoom to selected objects if we have selection
+      if (selection && selection.length > 0) {
         await api.viewer.setCamera(
-          { modelObjectIds, preset: 'top' } as any,
-          { animationTime: 0 }
+          { modelObjectIds: selection } as any,
+          { animationTime: 0, margin: 0.3 } as any
         );
-      } else {
-        // Fallback to just top preset
-        await api.viewer.setCamera('top', { animationTime: 0 });
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
-      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Capture topview
+      // Step 3: Get current camera and set orthographic projection
+      const topCamera = await api.viewer.getCamera();
+      await api.viewer.setCamera(
+        { ...topCamera, projectionType: 'ortho' },
+        { animationTime: 0 }
+      );
+      await new Promise(resolve => setTimeout(resolve, 150));
+
+      // Step 4: Capture topview snapshot
       const topviewSnapshot = await api.viewer.getSnapshot();
       const blobTop = dataURLtoBlob(topviewSnapshot);
       const fileNameTop = `checkpoint_topview_${assemblyGuid}_${Date.now()}.png`;
@@ -452,18 +454,22 @@ export default function CheckpointForm({
         console.log('📸 Captured topview snapshot:', result.topviewUrl);
       }
 
-      // Restore perspective mode
-      await (api.viewer as any).setSettings?.({ projectionMode: 'perspective' });
+      // Step 5: Restore perspective mode
+      await api.viewer.setCamera(
+        { ...topCamera, projectionType: 'perspective' },
+        { animationTime: 0 }
+      );
       await new Promise(resolve => setTimeout(resolve, 50));
 
-      // Restore original camera position
+      // Step 6: Restore original camera position
       await api.viewer.setCamera(currentCamera, { animationTime: 0 });
 
     } catch (e) {
       console.error('Error capturing snapshots:', e);
       // Try to restore perspective mode even if error occurred
       try {
-        await (api.viewer as any).setSettings?.({ projectionMode: 'perspective' });
+        const cam = await api.viewer.getCamera();
+        await api.viewer.setCamera({ ...cam, projectionType: 'perspective' }, { animationTime: 0 });
       } catch {}
     }
 
@@ -666,6 +672,9 @@ export default function CheckpointForm({
 
       // Complete immediately - don't wait for photo uploads
       onComplete(savedResults);
+
+      // Show continue button on mobile
+      setShowContinueButton(true);
 
       // Run photo uploads in background (fire and forget)
       if (backgroundUploads.length > 0) {
@@ -1168,6 +1177,24 @@ export default function CheckpointForm({
             disabled={submitting || completionPercent < 100}
           >
             {submitting ? 'Salvestan...' : 'Salvesta vastused'}
+          </button>
+        </div>
+      )}
+
+      {/* Continue button for mobile - appears after successful save */}
+      {showContinueButton && api && (
+        <div className="checkpoint-continue-section">
+          <button
+            className="continue-inspection-btn"
+            onClick={async () => {
+              try {
+                await api.ui.setUI({ name: 'SidePanel', state: 'collapsed' });
+              } catch (e) {
+                console.error('Failed to collapse sidebar:', e);
+              }
+            }}
+          >
+            Jätka inspekteerimisega
           </button>
         </div>
       )}
