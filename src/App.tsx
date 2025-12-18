@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
@@ -12,7 +12,7 @@ import {
 } from './utils/navigationHelper';
 import './App.css';
 
-export const APP_VERSION = '2.9.1';
+export const APP_VERSION = '2.9.2';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -40,6 +40,10 @@ export default function App() {
   const [authError, setAuthError] = useState<string>('');
   const [navigationStatus, setNavigationStatus] = useState<string>('');
   const [isNavigating, setIsNavigating] = useState(false);
+
+  // Track matched inspection types for menu highlighting
+  const [matchedTypeIds, setMatchedTypeIds] = useState<string[]>([]);
+  const lastMenuSelectionRef = useRef<string>('');
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
@@ -219,6 +223,174 @@ export default function App() {
     setSelectedInspectionType(null);
   };
 
+  // Helper: normalize GUID
+  const normalizeGuid = (s: string): string => {
+    return s.replace(/^urn:(uuid:)?/i, "").trim();
+  };
+
+  // Check which inspection types have the selected detail in their plan
+  const checkMatchingInspectionTypes = useCallback(async (guids: string[]) => {
+    if (guids.length === 0 || !projectId) {
+      setMatchedTypeIds([]);
+      return;
+    }
+
+    try {
+      // Build OR condition for all GUIDs
+      const guidConditions = guids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(',');
+
+      const { data, error } = await supabase
+        .from('inspection_plan_items')
+        .select('inspection_type_id')
+        .eq('project_id', projectId)
+        .or(guidConditions);
+
+      if (error) {
+        console.error('Error checking matching types:', error);
+        setMatchedTypeIds([]);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const uniqueTypeIds = [...new Set(data.map(item => item.inspection_type_id))];
+        console.log('🎯 Matched inspection types:', uniqueTypeIds);
+        setMatchedTypeIds(uniqueTypeIds);
+      } else {
+        setMatchedTypeIds([]);
+      }
+    } catch (e) {
+      console.error('Error in checkMatchingInspectionTypes:', e);
+      setMatchedTypeIds([]);
+    }
+  }, [projectId]);
+
+  // Track selection when on main menu to highlight matching inspection types
+  useEffect(() => {
+    if (!api || currentMode !== null) {
+      // Clear matches when not on main menu
+      setMatchedTypeIds([]);
+      lastMenuSelectionRef.current = '';
+      return;
+    }
+
+    const checkMenuSelection = async () => {
+      try {
+        const selection = await api.viewer.getSelection();
+
+        if (!selection || selection.length === 0) {
+          if (lastMenuSelectionRef.current !== '') {
+            lastMenuSelectionRef.current = '';
+            setMatchedTypeIds([]);
+          }
+          return;
+        }
+
+        // Get selection key for change detection
+        const selKey = selection.map(s => `${s.modelId}:${(s.objectRuntimeIds || []).join(',')}`).join('|');
+        if (selKey === lastMenuSelectionRef.current) return;
+        lastMenuSelectionRef.current = selKey;
+
+        // Only check first selected object (single selection)
+        const firstModel = selection[0];
+        if (!firstModel.objectRuntimeIds || firstModel.objectRuntimeIds.length === 0) {
+          setMatchedTypeIds([]);
+          return;
+        }
+
+        const modelId = firstModel.modelId;
+        const runtimeId = firstModel.objectRuntimeIds[0];
+
+        // Get object properties to find GUIDs
+        const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
+
+        if (!props || props.length === 0) {
+          setMatchedTypeIds([]);
+          return;
+        }
+
+        const objProps = props[0];
+        const guidsFound: string[] = [];
+
+        // Search for GUIDs in properties
+        for (const pset of objProps.properties || []) {
+          const propArray = pset.properties || [];
+          for (const prop of propArray) {
+            const propName = ((prop as any).name || '').toLowerCase().replace(/[\s_()]/g, '');
+            const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+            if (!propValue) continue;
+
+            if (propName.includes('guid') || propName === 'globalid') {
+              const guidValue = normalizeGuid(String(propValue));
+              if (guidValue && !guidsFound.includes(guidValue)) {
+                guidsFound.push(guidValue);
+              }
+            }
+          }
+        }
+
+        // Also try convertToObjectIds for IFC GUID
+        try {
+          const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+          if (externalIds && externalIds.length > 0 && externalIds[0]) {
+            const ifcGuid = normalizeGuid(String(externalIds[0]));
+            if (ifcGuid && !guidsFound.includes(ifcGuid)) {
+              guidsFound.push(ifcGuid);
+            }
+          }
+        } catch (e) {
+          // Ignore
+        }
+
+        // Also try getObjectMetadata for MS GUID
+        try {
+          const metaArr = await (api.viewer as any)?.getObjectMetadata?.(modelId, [runtimeId]);
+          const metaOne = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+          if (metaOne?.globalId) {
+            const msGuid = normalizeGuid(String(metaOne.globalId));
+            if (msGuid && !guidsFound.includes(msGuid)) {
+              guidsFound.push(msGuid);
+            }
+          }
+        } catch (e) {
+          // Ignore
+        }
+
+        console.log('📋 Menu selection GUIDs found:', guidsFound);
+        await checkMatchingInspectionTypes(guidsFound);
+
+      } catch (e) {
+        console.error('Error checking menu selection:', e);
+      }
+    };
+
+    // Initial check
+    checkMenuSelection();
+
+    // Set up selection listener
+    const handleSelectionChanged = () => {
+      checkMenuSelection();
+    };
+
+    try {
+      (api.viewer as any).addOnSelectionChanged?.(handleSelectionChanged);
+    } catch (e) {
+      console.warn('Could not add selection listener:', e);
+    }
+
+    // Polling as backup (every 2 seconds)
+    const interval = setInterval(checkMenuSelection, 2000);
+
+    return () => {
+      clearInterval(interval);
+      try {
+        (api.viewer as any).removeOnSelectionChanged?.(handleSelectionChanged);
+      } catch (e) {
+        // Silent
+      }
+    };
+  }, [api, currentMode, checkMatchingInspectionTypes]);
+
   // Handle inspection type selection from menu
   const handleSelectInspectionType = (typeId: string, typeCode: string, typeName: string) => {
     setSelectedInspectionType({ id: typeId, code: typeCode, name: typeName });
@@ -324,6 +496,7 @@ export default function App() {
           projectId={projectId}
           onSelectMode={setCurrentMode}
           onSelectInspectionType={handleSelectInspectionType}
+          matchedTypeIds={matchedTypeIds}
         />
         <VersionFooter />
       </>

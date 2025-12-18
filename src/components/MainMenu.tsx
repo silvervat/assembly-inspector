@@ -27,6 +27,7 @@ interface MainMenuProps {
   onSelectMode: (mode: InspectionMode) => void;
   onSelectInspectionType?: (typeId: string, typeCode: string, typeName: string) => void;
   onOpenSettings?: () => void;
+  matchedTypeIds?: string[]; // Inspection types that match currently selected detail
 }
 
 // Database inspection type
@@ -70,7 +71,8 @@ export default function MainMenu({
   projectId,
   onSelectMode,
   onSelectInspectionType,
-  onOpenSettings
+  onOpenSettings,
+  matchedTypeIds = []
 }: MainMenuProps) {
   const isAdmin = user.role === 'admin';
   const [loading, setLoading] = useState(true);
@@ -194,11 +196,12 @@ export default function MainMenu({
               const IconComponent = getIcon(type.icon);
               const stats = typeStats[type.id];
               const pendingCount = stats ? stats.totalItems - stats.completedItems : 0;
+              const isMatched = matchedTypeIds.includes(type.id);
 
               return (
                 <button
                   key={type.id}
-                  className="menu-item enabled"
+                  className={`menu-item enabled ${isMatched ? 'matched' : ''}`}
                   onClick={() => handleTypeClick(type)}
                 >
                   <span className="menu-item-icon" style={{ color: type.color || 'var(--modus-primary)' }}>
