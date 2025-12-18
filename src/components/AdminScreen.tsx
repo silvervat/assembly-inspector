@@ -670,16 +670,38 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="Perspective (persp)"
                   result={functionResults["Perspective (persp)"]}
                   onClick={() => testFunction("Perspective (persp)", async () => {
-                    const cam = await api.viewer.getCamera();
-                    return (api.viewer as any).setCamera({ ...cam, projectionType: 'persp' }, { animationTime: 0 });
+                    // Use setSettings for projection change
+                    const result = await (api.viewer as any).setSettings?.({ projectionType: 'perspective' });
+                    if (result === undefined) {
+                      // Fallback: try camera-based approach
+                      const cam = await api.viewer.getCamera() as any;
+                      return api.viewer.setCamera({
+                        position: cam.position,
+                        target: cam.target,
+                        up: cam.up,
+                        projectionType: 'persp'
+                      } as any, { animationTime: 0 });
+                    }
+                    return result;
                   })}
                 />
                 <FunctionButton
                   name="Orthographic (ortho)"
                   result={functionResults["Orthographic (ortho)"]}
                   onClick={() => testFunction("Orthographic (ortho)", async () => {
-                    const cam = await api.viewer.getCamera();
-                    return (api.viewer as any).setCamera({ ...cam, projectionType: 'ortho' }, { animationTime: 0 });
+                    // Use setSettings for projection change
+                    const result = await (api.viewer as any).setSettings?.({ projectionType: 'orthographic' });
+                    if (result === undefined) {
+                      // Fallback: try camera-based approach
+                      const cam = await api.viewer.getCamera() as any;
+                      return api.viewer.setCamera({
+                        position: cam.position,
+                        target: cam.target,
+                        up: cam.up,
+                        projectionType: 'ortho'
+                      } as any, { animationTime: 0 });
+                    }
+                    return result;
                   })}
                 />
               </div>
@@ -930,7 +952,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 0.05 (väga lähedal)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.05 });
+                    // Use setCamera with modelObjectIds and margin
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.05 } as any);
                   })}
                 />
                 <FunctionButton
@@ -939,7 +962,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 0.1 (lähedal)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.1 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.1 } as any);
                   })}
                 />
                 <FunctionButton
@@ -948,7 +971,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 0.3", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
                 <FunctionButton
@@ -957,7 +980,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 0.5 (keskmine)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.5 } as any);
                   })}
                 />
                 <FunctionButton
@@ -966,7 +989,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 1.0", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 1.0 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 1.0 } as any);
                   })}
                 />
                 <FunctionButton
@@ -975,7 +998,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 2.0 (kaugel)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 2.0 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 2.0 } as any);
                   })}
                 />
                 <FunctionButton
@@ -984,7 +1007,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Zoom: 5.0 (väga kaugel)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 5.0 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 5.0 } as any);
                   })}
                 />
               </div>
@@ -1001,7 +1024,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('top', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.2 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.2 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1011,7 +1035,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('top', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.8 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.8 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1021,7 +1046,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('front', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.2 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.2 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1031,7 +1057,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('front', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.8 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.8 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1041,7 +1068,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await (api.viewer as any).setCamera('iso', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.2 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.2 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1051,7 +1079,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await (api.viewer as any).setCamera('iso', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.8 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.8 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1061,7 +1090,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('left', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1071,7 +1101,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('right', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1081,7 +1112,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('back', { animationTime: 200 });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    await new Promise(r => setTimeout(r, 250));
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
               </div>
@@ -1205,7 +1237,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await (api.viewer as any).isolate?.(sel);
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1215,7 +1247,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 255, g: 0, b: 0, a: 255 } });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1225,7 +1257,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 0, g: 200, b: 0, a: 255 } });
-                    return (api.viewer as any).zoomToObjects?.(sel, { padding: 0.3 });
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
                   })}
                 />
                 <FunctionButton
@@ -1250,7 +1282,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await api.viewer.setCamera('top', { animationTime: 200 });
-                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    await new Promise(r => setTimeout(r, 250));
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.5 } as any);
                     await new Promise(r => setTimeout(r, 500)); // wait for animation
                     const snapshot = await api.viewer.getSnapshot();
                     window.open(snapshot, '_blank');
@@ -1264,7 +1297,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
                     await (api.viewer as any).setCamera('iso', { animationTime: 200 });
-                    await (api.viewer as any).zoomToObjects?.(sel, { padding: 0.5 });
+                    await new Promise(r => setTimeout(r, 250));
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.5 } as any);
                     await new Promise(r => setTimeout(r, 500)); // wait for animation
                     const snapshot = await api.viewer.getSnapshot();
                     window.open(snapshot, '_blank');
