@@ -2279,6 +2279,35 @@ button.stat-toggle.off:hover {
   color: var(--modus-text-tertiary);
 }
 
+/* Checkpoint Result Photos */
+.checkpoint-result-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--modus-spacing-xs);
+}
+
+.checkpoint-photo-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--modus-radius-xs);
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid var(--modus-border);
+  transition: all 0.15s;
+}
+
+.checkpoint-photo-thumb:hover {
+  border-color: var(--modus-primary);
+  transform: scale(1.05);
+}
+
+.checkpoint-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* Checkpoint Edit Mode */
 .checkpoint-result-edit {
   display: flex;
