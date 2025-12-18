@@ -1155,6 +1155,22 @@ body {
   background: var(--modus-bg-secondary);
 }
 
+/* Matched - when selected detail is in this inspection type's plan */
+.menu-item.matched {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.menu-item.matched:hover {
+  background: rgba(34, 197, 94, 0.25);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3);
+}
+
+.menu-item.matched .menu-item-icon {
+  background: rgba(34, 197, 94, 0.2);
+}
+
 .menu-item-icon {
   width: 36px;
   height: 36px;
