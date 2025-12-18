@@ -667,41 +667,72 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               <h4>🔲 Projektsiooni tüüp</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="Perspective (persp)"
-                  result={functionResults["Perspective (persp)"]}
-                  onClick={() => testFunction("Perspective (persp)", async () => {
-                    // Use setSettings for projection change
-                    const result = await (api.viewer as any).setSettings?.({ projectionType: 'perspective' });
-                    if (result === undefined) {
-                      // Fallback: try camera-based approach
-                      const cam = await api.viewer.getCamera() as any;
-                      return api.viewer.setCamera({
-                        position: cam.position,
-                        target: cam.target,
-                        up: cam.up,
-                        projectionType: 'persp'
-                      } as any, { animationTime: 0 });
+                  name="Perspective"
+                  result={functionResults["Perspective"]}
+                  onClick={() => testFunction("Perspective", async () => {
+                    // Try multiple approaches
+                    // 1. Try setProjection if exists
+                    if ((api.viewer as any).setProjection) {
+                      return (api.viewer as any).setProjection('perspective');
                     }
-                    return result;
+                    // 2. Try setViewProjection if exists
+                    if ((api.viewer as any).setViewProjection) {
+                      return (api.viewer as any).setViewProjection('perspective');
+                    }
+                    // 3. Get current camera and recreate with perspective
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
+                    // 4. Set camera with projection
+                    await api.viewer.setCamera({
+                      position: pos,
+                      target: tgt,
+                      up: cam.up || [0, 0, 1],
+                      projection: 'perspective',
+                      projectionType: 'perspective'
+                    } as any, { animationTime: 0 });
+                    return 'Set perspective';
                   })}
                 />
                 <FunctionButton
-                  name="Orthographic (ortho)"
-                  result={functionResults["Orthographic (ortho)"]}
-                  onClick={() => testFunction("Orthographic (ortho)", async () => {
-                    // Use setSettings for projection change
-                    const result = await (api.viewer as any).setSettings?.({ projectionType: 'orthographic' });
-                    if (result === undefined) {
-                      // Fallback: try camera-based approach
-                      const cam = await api.viewer.getCamera() as any;
-                      return api.viewer.setCamera({
-                        position: cam.position,
-                        target: cam.target,
-                        up: cam.up,
-                        projectionType: 'ortho'
-                      } as any, { animationTime: 0 });
+                  name="Orthographic"
+                  result={functionResults["Orthographic"]}
+                  onClick={() => testFunction("Orthographic", async () => {
+                    // Try multiple approaches
+                    // 1. Try setProjection if exists
+                    if ((api.viewer as any).setProjection) {
+                      return (api.viewer as any).setProjection('orthographic');
                     }
-                    return result;
+                    // 2. Try setViewProjection if exists
+                    if ((api.viewer as any).setViewProjection) {
+                      return (api.viewer as any).setViewProjection('orthographic');
+                    }
+                    // 3. Get current camera and recreate with ortho
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
+                    // 4. Set camera with projection
+                    await api.viewer.setCamera({
+                      position: pos,
+                      target: tgt,
+                      up: cam.up || [0, 0, 1],
+                      projection: 'orthographic',
+                      projectionType: 'orthographic'
+                    } as any, { animationTime: 0 });
+                    return 'Set orthographic';
+                  })}
+                />
+                <FunctionButton
+                  name="getCamera() info"
+                  result={functionResults["getCamera() info"]}
+                  onClick={() => testFunction("getCamera() info", async () => {
+                    const cam = await api.viewer.getCamera() as any;
+                    return JSON.stringify({
+                      projection: cam.projection,
+                      projectionType: cam.projectionType,
+                      type: cam.type,
+                      keys: Object.keys(cam)
+                    }, null, 2);
                   })}
                 />
               </div>
@@ -947,67 +978,129 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               <h4>🔎 Zoom detailile (kaugus)</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="Zoom: 0.05 (väga lähedal)"
-                  result={functionResults["Zoom: 0.05 (väga lähedal)"]}
-                  onClick={() => testFunction("Zoom: 0.05 (väga lähedal)", async () => {
+                  name="Zoom: 0.3x (väga lähedal)"
+                  result={functionResults["Zoom: 0.3x (väga lähedal)"]}
+                  onClick={() => testFunction("Zoom: 0.3x (väga lähedal)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    // Use setCamera with modelObjectIds and margin
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.05 } as any);
+                    // First zoom to object normally
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
+                    await new Promise(r => setTimeout(r, 150));
+                    // Get camera and move closer
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    // Move position 70% closer to target (0.3x distance)
+                    const newPos = [
+                      tgt[0] + (pos[0] - tgt[0]) * 0.3,
+                      tgt[1] + (pos[1] - tgt[1]) * 0.3,
+                      tgt[2] + (pos[2] - tgt[2]) * 0.3
+                    ];
+                    return api.viewer.setCamera({ position: newPos, target: tgt, up: cam.up } as any, { animationTime: 200 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 0.1 (lähedal)"
-                  result={functionResults["Zoom: 0.1 (lähedal)"]}
-                  onClick={() => testFunction("Zoom: 0.1 (lähedal)", async () => {
+                  name="Zoom: 0.5x (lähedal)"
+                  result={functionResults["Zoom: 0.5x (lähedal)"]}
+                  onClick={() => testFunction("Zoom: 0.5x (lähedal)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.1 } as any);
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
+                    await new Promise(r => setTimeout(r, 150));
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = [
+                      tgt[0] + (pos[0] - tgt[0]) * 0.5,
+                      tgt[1] + (pos[1] - tgt[1]) * 0.5,
+                      tgt[2] + (pos[2] - tgt[2]) * 0.5
+                    ];
+                    return api.viewer.setCamera({ position: newPos, target: tgt, up: cam.up } as any, { animationTime: 200 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 0.3"
-                  result={functionResults["Zoom: 0.3"]}
-                  onClick={() => testFunction("Zoom: 0.3", async () => {
+                  name="Zoom: 0.7x"
+                  result={functionResults["Zoom: 0.7x"]}
+                  onClick={() => testFunction("Zoom: 0.7x", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.3 } as any);
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
+                    await new Promise(r => setTimeout(r, 150));
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = [
+                      tgt[0] + (pos[0] - tgt[0]) * 0.7,
+                      tgt[1] + (pos[1] - tgt[1]) * 0.7,
+                      tgt[2] + (pos[2] - tgt[2]) * 0.7
+                    ];
+                    return api.viewer.setCamera({ position: newPos, target: tgt, up: cam.up } as any, { animationTime: 200 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 0.5 (keskmine)"
-                  result={functionResults["Zoom: 0.5 (keskmine)"]}
-                  onClick={() => testFunction("Zoom: 0.5 (keskmine)", async () => {
+                  name="Zoom: 1.0x (vaikimisi)"
+                  result={functionResults["Zoom: 1.0x (vaikimisi)"]}
+                  onClick={() => testFunction("Zoom: 1.0x (vaikimisi)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 0.5 } as any);
+                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 1.0"
-                  result={functionResults["Zoom: 1.0"]}
-                  onClick={() => testFunction("Zoom: 1.0", async () => {
+                  name="Zoom: 1.5x (kaugemal)"
+                  result={functionResults["Zoom: 1.5x (kaugemal)"]}
+                  onClick={() => testFunction("Zoom: 1.5x (kaugemal)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 1.0 } as any);
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
+                    await new Promise(r => setTimeout(r, 150));
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = [
+                      tgt[0] + (pos[0] - tgt[0]) * 1.5,
+                      tgt[1] + (pos[1] - tgt[1]) * 1.5,
+                      tgt[2] + (pos[2] - tgt[2]) * 1.5
+                    ];
+                    return api.viewer.setCamera({ position: newPos, target: tgt, up: cam.up } as any, { animationTime: 200 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 2.0 (kaugel)"
-                  result={functionResults["Zoom: 2.0 (kaugel)"]}
-                  onClick={() => testFunction("Zoom: 2.0 (kaugel)", async () => {
+                  name="Zoom: 2.0x (kaugel)"
+                  result={functionResults["Zoom: 2.0x (kaugel)"]}
+                  onClick={() => testFunction("Zoom: 2.0x (kaugel)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 2.0 } as any);
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
+                    await new Promise(r => setTimeout(r, 150));
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = [
+                      tgt[0] + (pos[0] - tgt[0]) * 2.0,
+                      tgt[1] + (pos[1] - tgt[1]) * 2.0,
+                      tgt[2] + (pos[2] - tgt[2]) * 2.0
+                    ];
+                    return api.viewer.setCamera({ position: newPos, target: tgt, up: cam.up } as any, { animationTime: 200 });
                   })}
                 />
                 <FunctionButton
-                  name="Zoom: 5.0 (väga kaugel)"
-                  result={functionResults["Zoom: 5.0 (väga kaugel)"]}
-                  onClick={() => testFunction("Zoom: 5.0 (väga kaugel)", async () => {
+                  name="Zoom: 3.0x (väga kaugel)"
+                  result={functionResults["Zoom: 3.0x (väga kaugel)"]}
+                  onClick={() => testFunction("Zoom: 3.0x (väga kaugel)", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 200, margin: 5.0 } as any);
+                    await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
+                    await new Promise(r => setTimeout(r, 150));
+                    const cam = await api.viewer.getCamera() as any;
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const newPos = [
+                      tgt[0] + (pos[0] - tgt[0]) * 3.0,
+                      tgt[1] + (pos[1] - tgt[1]) * 3.0,
+                      tgt[2] + (pos[2] - tgt[2]) * 3.0
+                    ];
+                    return api.viewer.setCamera({ position: newPos, target: tgt, up: cam.up } as any, { animationTime: 200 });
                   })}
                 />
               </div>
