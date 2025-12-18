@@ -1873,8 +1873,8 @@ export default function InspectorScreen({
         />
       )}
 
-      {/* Normal inspection view - hide when list is active */}
-      {inspectionListMode === 'none' && existingInspection && (
+      {/* Normal inspection view - hide when list is active or in inspection_type mode */}
+      {inspectionListMode === 'none' && existingInspection && inspectionMode !== 'inspection_type' && (
         <div className="existing-inspection">
           <div className="existing-header">
             <span className="existing-badge">✓ Inspekteeritud</span>
