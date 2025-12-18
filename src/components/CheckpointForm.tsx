@@ -758,15 +758,18 @@ export default function CheckpointForm({
                     <div className="checkpoint-description">{checkpoint.description}</div>
                   )}
                 </div>
-                <div className="checkpoint-status">
-                  {response?.responseValue && selectedOption ? (
-                    <span className={`status-badge ${getColorClass(selectedOption.color)}`}>
-                      {selectedOption.label}
-                    </span>
-                  ) : (
-                    <span className="status-badge pending">Täitmata</span>
-                  )}
-                </div>
+                {/* Only show status if checkpoint has more than one option */}
+                {checkpoint.response_options.length > 1 && (
+                  <div className="checkpoint-status">
+                    {response?.responseValue && selectedOption ? (
+                      <span className={`status-badge ${getColorClass(selectedOption.color)}`}>
+                        {selectedOption.label}
+                      </span>
+                    ) : (
+                      <span className="status-badge pending">Täitmata</span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {isExpanded && isEditMode && (
