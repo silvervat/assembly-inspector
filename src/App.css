@@ -3476,8 +3476,6 @@ button.stat-toggle.off:hover {
 
 /* List Section */
 .plan-list-section {
-  flex: 1;
-  overflow-y: auto;
   padding: var(--modus-spacing-md);
 }
 
@@ -4317,7 +4315,7 @@ button.stat-toggle.off:hover {
 .checkpoint-results-view .results-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--modus-spacing-sm);
   padding: 4px var(--modus-spacing-xs);
   background: #d1fae5;
   border-radius: var(--modus-radius-sm);
@@ -4336,6 +4334,26 @@ button.stat-toggle.off:hover {
 .checkpoint-results-view .results-date {
   font-size: 0.65rem;
   color: var(--modus-text-secondary);
+  flex: 1;
+}
+
+.btn-delete-results {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--modus-danger);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: 0.65rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-delete-results:hover {
+  background: #b91c1c;
 }
 
 .results-responses {
