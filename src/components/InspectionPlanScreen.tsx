@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
 
 // Inspection data for a plan item
+// Old inspection data (from inspections table)
 interface InspectionData {
   id: string;
   inspected_at: string;
@@ -15,9 +16,28 @@ interface InspectionData {
   object_runtime_id: number;
 }
 
+// New checkpoint result data (from inspection_results table)
+interface CheckpointResultData {
+  id: string;
+  checkpoint_id: string;
+  checkpoint_name?: string;
+  response_value: string;
+  response_label?: string;
+  comment?: string;
+  inspector_name: string;
+  user_email?: string;
+  inspected_at: string;
+  photos?: {
+    id: string;
+    url: string;
+    photo_type?: string;
+  }[];
+}
+
 // Plan item with inspection statistics
 interface PlanItemWithStats extends InspectionPlanItem {
   inspections?: InspectionData[];
+  checkpointResults?: CheckpointResultData[]; // New checkpoint-based results
   inspection_count?: number;
   photo_count?: number;
   has_issues?: boolean;
@@ -185,17 +205,57 @@ export default function InspectionPlanScreen({
         return;
       }
 
-      // Get all GUIDs to fetch matching inspections
+      // Get all GUIDs and plan item IDs to fetch matching inspections
       const guids = data.map(item => item.guid).filter(Boolean);
+      const allGuids = [...guids, ...data.map(item => item.guid_ifc).filter(Boolean)];
+      const planItemIds = data.map(item => item.id);
 
-      // Fetch inspections for these GUIDs
+      // Fetch OLD inspections for these GUIDs (legacy support)
       const { data: inspections, error: inspError } = await supabase
         .from('inspections')
         .select('id, guid, guid_ifc, inspected_at, inspector_name, user_email, photo_urls, notes, model_id, object_runtime_id')
         .eq('project_id', projectId)
-        .or(`guid.in.(${guids.join(',')}),guid_ifc.in.(${guids.join(',')})`);
+        .or(`guid.in.(${allGuids.join(',')}),guid_ifc.in.(${allGuids.join(',')})`);
 
-      // Create a map of GUID -> inspections
+      // Fetch NEW checkpoint results with photos
+      const { data: checkpointResults, error: resultsError } = await supabase
+        .from('inspection_results')
+        .select(`
+          id,
+          plan_item_id,
+          checkpoint_id,
+          assembly_guid,
+          response_value,
+          response_label,
+          comment,
+          inspector_name,
+          user_email,
+          inspected_at,
+          inspection_checkpoints(name)
+        `)
+        .eq('project_id', projectId)
+        .or(`plan_item_id.in.(${planItemIds.join(',')}),assembly_guid.in.(${guids.join(',')})`);
+
+      // Fetch photos for results
+      let resultPhotos: Record<string, any[]> = {};
+      if (checkpointResults && checkpointResults.length > 0) {
+        const resultIds = checkpointResults.map(r => r.id);
+        const { data: photos } = await supabase
+          .from('inspection_result_photos')
+          .select('id, result_id, url, photo_type')
+          .in('result_id', resultIds);
+
+        if (photos) {
+          for (const photo of photos) {
+            if (!resultPhotos[photo.result_id]) {
+              resultPhotos[photo.result_id] = [];
+            }
+            resultPhotos[photo.result_id].push(photo);
+          }
+        }
+      }
+
+      // Create a map of GUID -> old inspections
       const inspectionMap: Record<string, InspectionData[]> = {};
       if (inspections && !inspError) {
         for (const insp of inspections) {
@@ -218,16 +278,55 @@ export default function InspectionPlanScreen({
         }
       }
 
+      // Create a map of plan_item_id/guid -> checkpoint results
+      const checkpointResultsMap: Record<string, CheckpointResultData[]> = {};
+      if (checkpointResults && !resultsError) {
+        for (const result of checkpointResults) {
+          const key = result.plan_item_id || result.assembly_guid;
+          if (key) {
+            if (!checkpointResultsMap[key]) {
+              checkpointResultsMap[key] = [];
+            }
+            checkpointResultsMap[key].push({
+              id: result.id,
+              checkpoint_id: result.checkpoint_id,
+              checkpoint_name: (result.inspection_checkpoints as any)?.name || '',
+              response_value: result.response_value,
+              response_label: result.response_label,
+              comment: result.comment,
+              inspector_name: result.inspector_name,
+              user_email: result.user_email,
+              inspected_at: result.inspected_at,
+              photos: resultPhotos[result.id] || []
+            });
+          }
+        }
+      }
+
       // Merge inspection data with plan items
       const itemsWithStats: PlanItemWithStats[] = data.map(item => {
         const itemInspections = inspectionMap[item.guid] || [];
-        const photoCount = itemInspections.reduce((sum, insp) => sum + (insp.photo_urls?.length || 0), 0);
-        const hasIssues = itemInspections.some(insp => insp.notes && insp.notes.length > 0);
+        const itemCheckpointResults = checkpointResultsMap[item.id] || checkpointResultsMap[item.guid] || [];
+
+        // Count photos from both sources
+        const oldPhotoCount = itemInspections.reduce((sum, insp) => sum + (insp.photo_urls?.length || 0), 0);
+        const newPhotoCount = itemCheckpointResults.reduce((sum, r) => sum + (r.photos?.length || 0), 0);
+        const photoCount = oldPhotoCount + newPhotoCount;
+
+        // Has issues if any comments exist
+        const hasIssues = itemInspections.some(insp => insp.notes && insp.notes.length > 0) ||
+                         itemCheckpointResults.some(r => r.comment && r.comment.length > 0);
+
+        // Total inspection count - prefer new system if has results
+        const totalInspections = itemCheckpointResults.length > 0
+          ? 1 // Has checkpoint results = 1 inspection done
+          : itemInspections.length;
 
         return {
           ...item,
           inspections: itemInspections,
-          inspection_count: itemInspections.length,
+          checkpointResults: itemCheckpointResults,
+          inspection_count: totalInspections,
           photo_count: photoCount,
           has_issues: hasIssues
         };
@@ -1087,8 +1186,10 @@ export default function InspectionPlanScreen({
                                         >
                                           <div className="item-row" onClick={() => toggleExpand(item.id)}>
                                             <div className="item-info">
-                                              <span className="item-mark">{item.assembly_mark || 'N/A'}</span>
-                                              {item.product_name && (
+                                              <span className="item-mark">
+                                                {item.assembly_mark || item.object_name || `Object #${item.object_runtime_id || '?'}`}
+                                              </span>
+                                              {item.assembly_selection_mode && item.product_name && (
                                                 <span className="item-product">{item.product_name}</span>
                                               )}
                                             </div>
@@ -1124,7 +1225,76 @@ export default function InspectionPlanScreen({
                                               {item.planner_notes && (
                                                 <div className="item-notes">📝 {item.planner_notes}</div>
                                               )}
-                                              {hasInspections ? (
+
+                                              {/* NEW: Checkpoint results */}
+                                              {item.checkpointResults && item.checkpointResults.length > 0 ? (
+                                                <div className="checkpoint-results-view">
+                                                  {/* Inspector and date */}
+                                                  <div className="results-header">
+                                                    <span className="results-inspector">
+                                                      <FiUser size={12} /> {item.checkpointResults[0].inspector_name}
+                                                    </span>
+                                                    <span className="results-date">
+                                                      {new Date(item.checkpointResults[0].inspected_at).toLocaleString('et-EE')}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* Checkpoint responses */}
+                                                  <div className="results-responses">
+                                                    {item.checkpointResults.map(result => (
+                                                      <div key={result.id} className="result-item">
+                                                        <span className="result-checkpoint">{result.checkpoint_name}</span>
+                                                        <span className={`result-value ${result.response_value === 'ok' ? 'ok' : result.response_value === 'nok' ? 'nok' : ''}`}>
+                                                          {result.response_label || result.response_value}
+                                                        </span>
+                                                        {result.comment && (
+                                                          <div className="result-comment">
+                                                            <FiMessageSquare size={10} /> {result.comment}
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    ))}
+                                                  </div>
+
+                                                  {/* Photos */}
+                                                  {(() => {
+                                                    const allPhotos = item.checkpointResults.flatMap(r => r.photos || []);
+                                                    const userPhotos = allPhotos.filter(p => p.photo_type === 'user' || !p.photo_type);
+                                                    const snapshots = allPhotos.filter(p => p.photo_type === 'snapshot_3d' || p.photo_type === 'topview');
+
+                                                    return (
+                                                      <>
+                                                        {userPhotos.length > 0 && (
+                                                          <div className="results-photos">
+                                                            <div className="photos-label"><FiCamera size={12} /> Fotod:</div>
+                                                            <div className="photos-grid-small">
+                                                              {userPhotos.map(photo => (
+                                                                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
+                                                                  <img src={photo.url} alt="Foto" />
+                                                                </a>
+                                                              ))}
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                        {snapshots.length > 0 && (
+                                                          <div className="results-snapshots">
+                                                            <div className="photos-label"><FiImage size={12} /> 3D pildid:</div>
+                                                            <div className="photos-grid-small">
+                                                              {snapshots.map(photo => (
+                                                                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
+                                                                  <img src={photo.url} alt={photo.photo_type === 'topview' ? 'Pealtvaade' : '3D vaade'} />
+                                                                  <span className="snapshot-type">{photo.photo_type === 'topview' ? 'Top' : '3D'}</span>
+                                                                </a>
+                                                              ))}
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                      </>
+                                                    );
+                                                  })()}
+                                                </div>
+                                              ) : hasInspections ? (
+                                                /* OLD: Legacy inspections */
                                                 <div className="item-inspections">
                                                   {item.inspections?.map(insp => (
                                                     <div key={insp.id} className="mini-inspection">
