@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult } from '../supabase';
 import { InspectionMode } from './MainMenu';
-import { FiArrowLeft, FiClipboard, FiAlertCircle } from 'react-icons/fi';
+import { FiArrowLeft, FiClipboard, FiAlertCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
 import InspectionList, { InspectionItem } from './InspectionList';
 import CheckpointForm from './CheckpointForm';
@@ -133,7 +133,9 @@ export default function InspectorScreen({
   const [checkpoints, setCheckpoints] = useState<InspectionCheckpoint[]>([]);
   const [checkpointResults, setCheckpointResults] = useState<InspectionResult[]>([]);
   const [loadingCheckpoints, setLoadingCheckpoints] = useState(false);
-  const [modalPhoto, setModalPhoto] = useState<string | null>(null);
+  const [modalGallery, setModalGallery] = useState<{ photos: string[], currentIndex: number } | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
   const [includeTopView, setIncludeTopView] = useState(true);
   const [autoClosePanel, setAutoClosePanel] = useState(false);
   const [eos2NavStatus, setEos2NavStatus] = useState<'idle' | 'searching' | 'found' | 'error'>('idle');
@@ -174,6 +176,72 @@ export default function InspectorScreen({
       }, 5000);
     }
   });
+
+  // Gallery navigation functions
+  const openGallery = useCallback((photos: string[], startIndex: number) => {
+    setModalGallery({ photos, currentIndex: startIndex });
+  }, []);
+
+  const closeGallery = useCallback(() => {
+    setModalGallery(null);
+  }, []);
+
+  const nextPhoto = useCallback(() => {
+    if (modalGallery && modalGallery.currentIndex < modalGallery.photos.length - 1) {
+      setModalGallery(prev => prev ? { ...prev, currentIndex: prev.currentIndex + 1 } : null);
+    }
+  }, [modalGallery]);
+
+  const prevPhoto = useCallback(() => {
+    if (modalGallery && modalGallery.currentIndex > 0) {
+      setModalGallery(prev => prev ? { ...prev, currentIndex: prev.currentIndex - 1 } : null);
+    }
+  }, [modalGallery]);
+
+  // Keyboard handler for gallery
+  useEffect(() => {
+    if (!modalGallery) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeGallery();
+      } else if (e.key === 'ArrowRight') {
+        nextPhoto();
+      } else if (e.key === 'ArrowLeft') {
+        prevPhoto();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalGallery, closeGallery, nextPhoto, prevPhoto]);
+
+  // Touch handlers for swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null || touchEndX.current === null) return;
+
+    const diff = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(diff) > minSwipeDistance) {
+      if (diff > 0) {
+        nextPhoto();
+      } else {
+        prevPhoto();
+      }
+    }
+
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
 
   // Refs
   const lastCheckTimeRef = useRef(0);
@@ -1550,7 +1618,7 @@ export default function InspectorScreen({
                 <div
                   key={idx}
                   className="existing-photo-thumb"
-                  onClick={() => setModalPhoto(url)}
+                  onClick={() => openGallery(existingInspection.photoUrls, idx)}
                 >
                   <img src={url} alt={`Foto ${idx + 1}`} />
                 </div>
@@ -1735,7 +1803,7 @@ export default function InspectorScreen({
         {photos.length > 0 && (
           <div className="photo-grid">
             {photos.map((photo, idx) => (
-              <div key={idx} className="photo-thumb" onClick={() => setModalPhoto(photo.preview)}>
+              <div key={idx} className="photo-thumb" onClick={() => openGallery(photos.map(p => p.preview), idx)}>
                 <img src={photo.preview} alt={`Foto ${idx + 1}`} />
                 <button
                   className="photo-remove"
@@ -1800,24 +1868,54 @@ export default function InspectorScreen({
       </>
       )}
 
-      {/* Photo modal */}
-      {modalPhoto && (
-        <div className="photo-modal-overlay" onClick={() => setModalPhoto(null)}>
-          <div className="photo-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="photo-modal-close" onClick={() => setModalPhoto(null)}>
+      {/* Photo gallery modal */}
+      {modalGallery && (
+        <div className="photo-modal-overlay" onClick={closeGallery}>
+          <div
+            className="photo-modal-content"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <button className="photo-modal-close" onClick={closeGallery}>
               ✕
             </button>
-            <img src={modalPhoto} alt="Inspektsiooni foto" />
+            <img src={modalGallery.photos[modalGallery.currentIndex]} alt="Inspektsiooni foto" />
+
+            {/* Navigation arrows */}
+            {modalGallery.photos.length > 1 && (
+              <div className="photo-modal-nav">
+                <button
+                  className="photo-nav-btn prev"
+                  onClick={prevPhoto}
+                  disabled={modalGallery.currentIndex === 0}
+                >
+                  <FiChevronLeft size={24} />
+                </button>
+                <span className="photo-counter">
+                  {modalGallery.currentIndex + 1} / {modalGallery.photos.length}
+                </span>
+                <button
+                  className="photo-nav-btn next"
+                  onClick={nextPhoto}
+                  disabled={modalGallery.currentIndex === modalGallery.photos.length - 1}
+                >
+                  <FiChevronRight size={24} />
+                </button>
+              </div>
+            )}
+
             <div className="photo-modal-actions">
               <a
-                href={modalPhoto}
+                href={modalGallery.photos[modalGallery.currentIndex]}
                 download={`inspection-photo-${Date.now()}.png`}
                 className="photo-modal-btn"
               >
                 ⬇ Lae alla
               </a>
               <a
-                href={modalPhoto}
+                href={modalGallery.photos[modalGallery.currentIndex]}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="photo-modal-btn"

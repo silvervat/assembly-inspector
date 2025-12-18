@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage } from 'react-icons/fi';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment, InspectionResultPhoto } from '../supabase';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 
@@ -49,12 +49,116 @@ export default function CheckpointForm({
   // Existing photos from database (for view mode)
   const [existingPhotos, setExistingPhotos] = useState<Record<string, InspectionResultPhoto[]>>({});
 
-  // Modal for viewing photos
-  const [modalPhoto, setModalPhoto] = useState<string | null>(null);
+  // Modal for viewing photos - now with gallery support
+  const [modalGallery, setModalGallery] = useState<{ photos: string[], currentIndex: number } | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
 
   // View mode vs edit mode - start in view mode if existing results
   const hasExistingResults = existingResults && existingResults.length > 0;
   const [isEditMode, setIsEditMode] = useState(!hasExistingResults);
+
+  // Gallery navigation functions
+  const openGallery = useCallback((photos: string[], startIndex: number) => {
+    setModalGallery({ photos, currentIndex: startIndex });
+  }, []);
+
+  const closeGallery = useCallback(() => {
+    setModalGallery(null);
+  }, []);
+
+  const nextPhoto = useCallback(() => {
+    if (modalGallery && modalGallery.currentIndex < modalGallery.photos.length - 1) {
+      setModalGallery(prev => prev ? { ...prev, currentIndex: prev.currentIndex + 1 } : null);
+    }
+  }, [modalGallery]);
+
+  const prevPhoto = useCallback(() => {
+    if (modalGallery && modalGallery.currentIndex > 0) {
+      setModalGallery(prev => prev ? { ...prev, currentIndex: prev.currentIndex - 1 } : null);
+    }
+  }, [modalGallery]);
+
+  // Keyboard handler for gallery
+  useEffect(() => {
+    if (!modalGallery) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeGallery();
+      } else if (e.key === 'ArrowRight') {
+        nextPhoto();
+      } else if (e.key === 'ArrowLeft') {
+        prevPhoto();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalGallery, closeGallery, nextPhoto, prevPhoto]);
+
+  // Touch handlers for swipe
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStartX.current === null || touchEndX.current === null) return;
+
+    const diff = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+
+    if (Math.abs(diff) > minSwipeDistance) {
+      if (diff > 0) {
+        // Swipe left - next photo
+        nextPhoto();
+      } else {
+        // Swipe right - previous photo
+        prevPhoto();
+      }
+    }
+
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  // Helper to collect all visible photos for gallery
+  const getAllViewablePhotos = useCallback((): string[] => {
+    const photos: string[] = [];
+
+    // Collect user photos from all checkpoints
+    Object.values(existingPhotos).forEach(checkpointPhotos => {
+      checkpointPhotos
+        .filter(p => (p as any).photo_type === 'user' || !(p as any).photo_type)
+        .forEach(p => photos.push(p.url));
+    });
+
+    // Collect auto-captured snapshots
+    const allPhotos = Object.values(existingPhotos).flat();
+    const snapshot3d = allPhotos.find(p => (p as any).photo_type === 'snapshot_3d');
+    const topview = allPhotos.find(p => (p as any).photo_type === 'topview');
+
+    if (snapshot3d) photos.push(snapshot3d.url);
+    if (topview) photos.push(topview.url);
+
+    return photos;
+  }, [existingPhotos]);
+
+  // Open gallery with specific photo
+  const openPhotoInGallery = useCallback((photoUrl: string) => {
+    const allPhotos = getAllViewablePhotos();
+    const index = allPhotos.indexOf(photoUrl);
+    if (index >= 0) {
+      openGallery(allPhotos, index);
+    } else {
+      // Fallback: open single photo
+      openGallery([photoUrl], 0);
+    }
+  }, [getAllViewablePhotos, openGallery]);
 
   // Initialize responses from existing results
   useEffect(() => {
@@ -856,7 +960,7 @@ export default function CheckpointForm({
                         <div
                           key={photo.id || idx}
                           className="view-photo-thumb"
-                          onClick={() => setModalPhoto(photo.url)}
+                          onClick={() => openPhotoInGallery(photo.url)}
                         >
                           <img src={photo.thumbnail_url || photo.url} alt={`Foto ${idx + 1}`} />
                         </div>
@@ -891,7 +995,7 @@ export default function CheckpointForm({
                   {snapshot3d && (
                     <div
                       className="auto-snapshot-thumb"
-                      onClick={() => setModalPhoto(snapshot3d.url)}
+                      onClick={() => openPhotoInGallery(snapshot3d.url)}
                     >
                       <img src={snapshot3d.thumbnail_url || snapshot3d.url} alt="3D vaade" />
                       <span className="snapshot-label">3D vaade</span>
@@ -900,7 +1004,7 @@ export default function CheckpointForm({
                   {topview && (
                     <div
                       className="auto-snapshot-thumb"
-                      onClick={() => setModalPhoto(topview.url)}
+                      onClick={() => openPhotoInGallery(topview.url)}
                     >
                       <img src={topview.thumbnail_url || topview.url} alt="Pealtvaade" />
                       <span className="snapshot-label">Pealtvaade</span>
@@ -935,24 +1039,54 @@ export default function CheckpointForm({
         </div>
       )}
 
-      {/* Photo modal */}
-      {modalPhoto && (
-        <div className="photo-modal-overlay" onClick={() => setModalPhoto(null)}>
-          <div className="photo-modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="photo-modal-close" onClick={() => setModalPhoto(null)}>
+      {/* Photo gallery modal */}
+      {modalGallery && (
+        <div className="photo-modal-overlay" onClick={closeGallery}>
+          <div
+            className="photo-modal-content"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <button className="photo-modal-close" onClick={closeGallery}>
               ✕
             </button>
-            <img src={modalPhoto} alt="Foto" />
+            <img src={modalGallery.photos[modalGallery.currentIndex]} alt="Foto" />
+
+            {/* Navigation arrows */}
+            {modalGallery.photos.length > 1 && (
+              <div className="photo-modal-nav">
+                <button
+                  className="photo-nav-btn prev"
+                  onClick={prevPhoto}
+                  disabled={modalGallery.currentIndex === 0}
+                >
+                  <FiChevronLeft size={24} />
+                </button>
+                <span className="photo-counter">
+                  {modalGallery.currentIndex + 1} / {modalGallery.photos.length}
+                </span>
+                <button
+                  className="photo-nav-btn next"
+                  onClick={nextPhoto}
+                  disabled={modalGallery.currentIndex === modalGallery.photos.length - 1}
+                >
+                  <FiChevronRight size={24} />
+                </button>
+              </div>
+            )}
+
             <div className="photo-modal-actions">
               <a
-                href={modalPhoto}
+                href={modalGallery.photos[modalGallery.currentIndex]}
                 download={`checkpoint-photo-${Date.now()}.png`}
                 className="photo-modal-btn"
               >
                 ⬇ Lae alla
               </a>
               <a
-                href={modalPhoto}
+                href={modalGallery.photos[modalGallery.currentIndex]}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="photo-modal-btn"
