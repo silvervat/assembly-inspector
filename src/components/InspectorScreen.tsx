@@ -1215,8 +1215,7 @@ export default function InspectorScreen({
             inspector_id,
             inspector_name,
             user_email,
-            created_at,
-            result_value
+            created_at
           `)
           .eq('project_id', projectId)
           .eq('inspector_id', user.id)
@@ -1406,8 +1405,7 @@ export default function InspectorScreen({
             inspector_id,
             inspector_name,
             user_email,
-            created_at,
-            result_value
+            created_at
           `)
           .eq('project_id', projectId)
           .order('created_at', { ascending: false });
