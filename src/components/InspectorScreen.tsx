@@ -1241,7 +1241,7 @@ export default function InspectorScreen({
             created_at
           `)
           .eq('project_id', projectId)
-          .eq('inspector_id', user.id)
+          .eq('user_email', tcUserEmail)
           .order('created_at', { ascending: false });
 
         if (resultsError) throw resultsError;
@@ -1348,7 +1348,7 @@ export default function InspectorScreen({
         .from('inspections')
         .select('*', { count: 'exact', head: true })
         .eq('project_id', projectId)
-        .eq('inspector_id', user.id);
+        .eq('user_email', tcUserEmail);
 
       if (countError) throw countError;
 
@@ -1367,7 +1367,7 @@ export default function InspectorScreen({
         .from('inspections')
         .select('*')
         .eq('project_id', projectId)
-        .eq('inspector_id', user.id)
+        .eq('user_email', tcUserEmail)
         .order('inspected_at', { ascending: false })
         .range(0, PAGE_SIZE - 1);
 
@@ -1381,7 +1381,7 @@ export default function InspectorScreen({
         .from('inspections')
         .select('model_id, object_runtime_id')
         .eq('project_id', projectId)
-        .eq('inspector_id', user.id);
+        .eq('user_email', tcUserEmail);
 
       if (colorData && colorData.length > 0) {
         // Group by model and color red
@@ -1708,7 +1708,7 @@ export default function InspectorScreen({
 
       // Add filter for 'mine' mode
       if (inspectionListMode === 'mine') {
-        query = query.eq('inspector_id', user.id);
+        query = query.eq('user_email', tcUserEmail);
       }
 
       const { data: moreInspections, error } = await query;
