@@ -1562,6 +1562,17 @@ button.stat-toggle.off:hover {
   border-color: #4ade80;
 }
 
+.inspection-view-btn.todo {
+  background: #fff7ed;
+  color: #ea580c;
+  border: 1px solid #fed7aa;
+}
+
+.inspection-view-btn.todo:hover:not(:disabled) {
+  background: #ffedd5;
+  border-color: #fb923c;
+}
+
 .inspection-view-btn.exit {
   background: #f3f4f6;
   color: #4b5563;

@@ -28,7 +28,7 @@ interface ResultWithCheckpoint extends InspectionResult {
 
 interface InspectionListProps {
   inspections: InspectionItem[];
-  mode: 'mine' | 'all';
+  mode: 'mine' | 'all' | 'todo';
   totalCount: number;
   hasMore: boolean;
   loadingMore: boolean;
