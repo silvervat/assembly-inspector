@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, FiLink, FiPaperclip, FiEdit2, FiImage, FiChevronLeft, FiChevronRight, FiPlus } from 'react-icons/fi';
 import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment, InspectionResultPhoto } from '../supabase';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 
@@ -43,6 +43,7 @@ export default function CheckpointForm({
   const [responses, setResponses] = useState<Record<string, CheckpointResponse>>({});
   const [expandedCheckpoint, setExpandedCheckpoint] = useState<string | null>(null);
   const [expandedInstructions, setExpandedInstructions] = useState<string | null>(null);
+  const [expandedExtras, setExpandedExtras] = useState<Set<string>>(new Set()); // Track manually expanded photo/comment sections
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -271,6 +272,19 @@ export default function CheckpointForm({
         comment
       }
     }));
+  };
+
+  // Toggle extras section (photo/comment) expansion
+  const toggleExtras = (checkpointId: string) => {
+    setExpandedExtras(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(checkpointId)) {
+        newSet.delete(checkpointId);
+      } else {
+        newSet.add(checkpointId);
+      }
+      return newSet;
+    });
   };
 
   // Handle photo add
@@ -868,75 +882,109 @@ export default function CheckpointForm({
                     )}
                   </div>
 
-                  {/* Photo section - show when needed */}
-                  {(needsPhoto || checkpoint.photos_max > 0) && response?.responseValue && (
-                    <div className="checkpoint-photos">
-                      <div className="photos-header">
-                        <FiCamera />
-                        <span>
-                          Fotod {needsPhoto && `(min ${minPhotos})`}
-                          {response.photos?.length > 0 && ` - ${response.photos.length} lisatud`}
-                        </span>
-                      </div>
+                  {/* Photo and Comment sections */}
+                  {response?.responseValue && (() => {
+                    const canAddPhotos = checkpoint.photos_max > 0;
+                    const canAddComment = checkpoint.comment_enabled;
+                    const extrasRequired = needsPhoto || needsComment;
+                    const extrasExpanded = expandedExtras.has(checkpoint.id);
+                    const showExtras = extrasRequired || extrasExpanded;
 
-                      <div className="photos-grid">
-                        {response.photos?.map((photo, idx) => (
-                          <div key={idx} className="photo-thumb">
-                            <img src={photo.preview} alt={`Foto ${idx + 1}`} />
-                            <button
-                              className="photo-remove"
-                              onClick={() => handlePhotoRemove(checkpoint.id, idx)}
-                            >
-                              <FiX />
-                            </button>
-                          </div>
-                        ))}
+                    // If nothing is required and user hasn't expanded, show the toggle button
+                    if ((canAddPhotos || canAddComment) && !extrasRequired && !extrasExpanded) {
+                      return (
+                        <button
+                          className="extras-toggle-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExtras(checkpoint.id);
+                          }}
+                        >
+                          <FiPlus size={14} />
+                          <span>Kommenteeri & lisa fotod</span>
+                        </button>
+                      );
+                    }
 
-                        {(response.photos?.length || 0) < checkpoint.photos_max && (
-                          <label className="photo-add-btn">
-                            <FiCamera />
-                            <span>Lisa foto</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              multiple
-                              onChange={(e) => e.target.files && handlePhotoAdd(checkpoint.id, e.target.files)}
-                              style={{ display: 'none' }}
-                            />
-                          </label>
-                        )}
-                      </div>
+                    // Show photo and comment sections if required or expanded
+                    if (showExtras) {
+                      return (
+                        <>
+                          {/* Photo section - show when needed */}
+                          {(needsPhoto || canAddPhotos) && (
+                            <div className="checkpoint-photos">
+                              <div className="photos-header">
+                                <FiCamera />
+                                <span>
+                                  Fotod {needsPhoto && `(min ${minPhotos})`}
+                                  {response.photos?.length > 0 && ` - ${response.photos.length} lisatud`}
+                                </span>
+                              </div>
 
-                      {needsPhoto && (response.photos?.length || 0) < minPhotos && (
-                        <div className="photos-warning">
-                          ⚠️ Lisa vähemalt {minPhotos} foto(t)
-                        </div>
-                      )}
-                    </div>
-                  )}
+                              <div className="photos-grid">
+                                {response.photos?.map((photo, idx) => (
+                                  <div key={idx} className="photo-thumb">
+                                    <img src={photo.preview} alt={`Foto ${idx + 1}`} />
+                                    <button
+                                      className="photo-remove"
+                                      onClick={() => handlePhotoRemove(checkpoint.id, idx)}
+                                    >
+                                      <FiX />
+                                    </button>
+                                  </div>
+                                ))}
 
-                  {/* Comment section */}
-                  {(checkpoint.comment_enabled || needsComment) && response?.responseValue && (
-                    <div className="checkpoint-comment">
-                      <div className="comment-header">
-                        <FiMessageSquare />
-                        <span>Kommentaar {needsComment && '(kohustuslik)'}</span>
-                      </div>
-                      <textarea
-                        className="comment-input"
-                        placeholder="Lisa kommentaar..."
-                        value={response.comment || ''}
-                        onChange={(e) => handleCommentChange(checkpoint.id, e.target.value)}
-                        rows={3}
-                      />
-                      {needsComment && !response.comment?.trim() && (
-                        <div className="comment-warning">
-                          ⚠️ Kommentaar on kohustuslik
-                        </div>
-                      )}
-                    </div>
-                  )}
+                                {(response.photos?.length || 0) < checkpoint.photos_max && (
+                                  <label className="photo-add-btn">
+                                    <FiCamera />
+                                    <span>Lisa foto</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      multiple
+                                      onChange={(e) => e.target.files && handlePhotoAdd(checkpoint.id, e.target.files)}
+                                      style={{ display: 'none' }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+
+                              {needsPhoto && (response.photos?.length || 0) < minPhotos && (
+                                <div className="photos-warning">
+                                  ⚠️ Lisa vähemalt {minPhotos} foto(t)
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Comment section */}
+                          {(canAddComment || needsComment) && (
+                            <div className="checkpoint-comment">
+                              <div className="comment-header">
+                                <FiMessageSquare />
+                                <span>Kommentaar {needsComment && '(kohustuslik)'}</span>
+                              </div>
+                              <textarea
+                                className="comment-input"
+                                placeholder="Lisa kommentaar..."
+                                value={response.comment || ''}
+                                onChange={(e) => handleCommentChange(checkpoint.id, e.target.value)}
+                                rows={3}
+                              />
+                              {needsComment && !response.comment?.trim() && (
+                                <div className="comment-warning">
+                                  ⚠️ Kommentaar on kohustuslik
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      );
+                    }
+
+                    return null;
+                  })()}
                 </div>
               )}
 
