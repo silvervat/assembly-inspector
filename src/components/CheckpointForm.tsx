@@ -890,11 +890,6 @@ export default function CheckpointForm({
                     const extrasExpanded = expandedExtras.has(checkpoint.id);
                     const showExtras = extrasRequired || extrasExpanded;
 
-                    // Check if any response option requires photo or comment (for warning indicator)
-                    const anyRequiresPhoto = checkpoint.response_options.some(opt => opt.requiresPhoto);
-                    const anyRequiresComment = checkpoint.response_options.some(opt => opt.requiresComment);
-                    const hasRequiredHint = anyRequiresPhoto || anyRequiresComment;
-
                     // If nothing is required and user hasn't expanded, show the toggle button
                     if ((canAddPhotos || canAddComment) && !extrasRequired && !extrasExpanded) {
                       return (
@@ -907,12 +902,6 @@ export default function CheckpointForm({
                         >
                           <FiPlus size={14} />
                           <span>Kommenteeri & lisa fotod</span>
-                          {hasRequiredHint && (
-                            <span className="extras-required-hint">
-                              {anyRequiresPhoto && anyRequiresComment ? 'foto/komm. võib olla kohustuslik' :
-                               anyRequiresPhoto ? 'foto võib olla kohustuslik' : 'komm. võib olla kohustuslik'}
-                            </span>
-                          )}
                         </button>
                       );
                     }
