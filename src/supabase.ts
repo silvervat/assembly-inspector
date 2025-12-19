@@ -411,6 +411,7 @@ export interface ScheduleItem {
   product_name?: string;
   file_name?: string;
   cast_unit_weight?: string;
+  cast_unit_position_code?: string;
   // Ajakava
   scheduled_date: string;
   sort_order: number;

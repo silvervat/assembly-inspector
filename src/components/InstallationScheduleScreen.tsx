@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import { supabase, ScheduleItem, TrimbleExUser } from '../supabase';
+import * as XLSX from 'xlsx';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
-  FiTrash2, FiCalendar, FiMove, FiX, FiDownload
+  FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
+  FiArrowUp, FiArrowDown
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -23,15 +25,19 @@ interface SelectedObject {
   guidIfc?: string;
   productName?: string;
   castUnitWeight?: string;
+  positionCode?: string;
 }
 
-// Playback speeds in milliseconds
+// Playback speeds in milliseconds (faster)
 const PLAYBACK_SPEEDS = [
-  { label: '0.5x', value: 2000 },
-  { label: '1x', value: 1000 },
-  { label: '2x', value: 500 },
-  { label: '4x', value: 250 }
+  { label: '0.5x', value: 1500 },
+  { label: '1x', value: 800 },
+  { label: '2x', value: 300 },
+  { label: '4x', value: 100 }
 ];
+
+// Estonian weekday names
+const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
 
 // Convert IFC GUID to MS GUID (UUID format)
 const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -57,6 +63,16 @@ const ifcToMsGuid = (ifcGuid: string): string => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 };
 
+// Format date as DD.MM.YY Day
+const formatDateEstonian = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear()).slice(-2);
+  const weekday = WEEKDAY_NAMES[date.getDay()];
+  return `${day}.${month}.${year} ${weekday}`;
+};
+
 export default function InstallationScheduleScreen({ api, projectId, user: _user, tcUserEmail, onBackToMenu }: Props) {
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -68,12 +84,21 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Selection state
+  // Selection state from model
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
+
+  // Active item in list (selected in model)
+  const [activeItemId, setActiveItemId] = useState<string | null>(null);
+
+  // Collapsed date groups
+  const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+
+  // Date picker for moving items
+  const [datePickerItemId, setDatePickerItemId] = useState<string | null>(null);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1000);
+  const [playbackSpeed, setPlaybackSpeed] = useState(800);
   const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -106,13 +131,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     loadSchedule();
   }, [loadSchedule]);
 
-  // Listen to selection changes
+  // Listen to selection changes from model
   useEffect(() => {
     const handleSelectionChange = async () => {
       try {
         const selection = await api.viewer.getSelection();
         if (!selection || selection.length === 0) {
           setSelectedObjects([]);
+          setActiveItemId(null);
           return;
         }
 
@@ -122,10 +148,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           const runtimeIds = sel.objectRuntimeIds || [];
 
           if (runtimeIds.length > 0) {
-            // Get object properties
             const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
-
-            // Get IFC GUIDs
             const ifcGuids = await api.viewer.convertToObjectIds(modelId, runtimeIds);
 
             for (let i = 0; i < runtimeIds.length; i++) {
@@ -136,8 +159,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               let assemblyMark = `Object_${runtimeId}`;
               let productName: string | undefined;
               let castUnitWeight: string | undefined;
+              let positionCode: string | undefined;
 
-              // Extract properties
               if (objProps?.properties) {
                 for (const pset of objProps.properties) {
                   if (!pset.properties) continue;
@@ -153,6 +176,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     if (name === 'cast_unit_weight' || name === 'cast unit weight') {
                       castUnitWeight = String(val);
                     }
+                    if (name === 'cast_unit_position_code' || name === 'cast unit position code') {
+                      positionCode = String(val);
+                    }
                   }
                 }
               }
@@ -164,28 +190,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 guid: guidIfc || `runtime_${runtimeId}`,
                 guidIfc,
                 productName,
-                castUnitWeight
+                castUnitWeight,
+                positionCode
               });
             }
           }
         }
         setSelectedObjects(objects);
+
+        // Check if any selected object matches a schedule item
+        if (objects.length === 1) {
+          const selectedGuid = objects[0].guidIfc || objects[0].guid;
+          const matchingItem = scheduleItems.find(item =>
+            item.guid_ifc === selectedGuid || item.guid === selectedGuid
+          );
+          setActiveItemId(matchingItem?.id || null);
+        } else {
+          setActiveItemId(null);
+        }
       } catch (e) {
         console.error('Error handling selection:', e);
       }
     };
 
-    // Initial check
     handleSelectionChange();
 
-    // Use Trimble API's selection listener
     try {
       (api.viewer as any).addOnSelectionChanged?.(handleSelectionChange);
     } catch (e) {
       console.warn('Could not add selection listener:', e);
     }
 
-    // Polling as backup (every 2 seconds)
     const interval = setInterval(handleSelectionChange, 2000);
 
     return () => {
@@ -196,7 +231,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         // Silent
       }
     };
-  }, [api]);
+  }, [api, scheduleItems]);
 
   // Group items by date
   const itemsByDate = scheduleItems.reduce((acc, item) => {
@@ -214,18 +249,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     const lastDay = new Date(year, month + 1, 0);
     const days: Date[] = [];
 
-    // Add padding days from previous month
     const startPadding = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
     for (let i = startPadding; i > 0; i--) {
       days.push(new Date(year, month, 1 - i));
     }
 
-    // Add days of current month
     for (let i = 1; i <= lastDay.getDate(); i++) {
       days.push(new Date(year, month, i));
     }
 
-    // Add padding days for next month
     const endPadding = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= endPadding; i++) {
       days.push(new Date(year, month + 1, i));
@@ -245,7 +277,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       return;
     }
 
-    // Check for duplicates
     const existingGuids = new Set(scheduleItems.map(item => item.guid));
     const duplicates = selectedObjects.filter(obj => existingGuids.has(obj.guid || ''));
 
@@ -257,7 +288,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setSaving(true);
     try {
       const newItems = selectedObjects.map((obj, idx) => {
-        // Calculate MS GUID from IFC GUID if available
         const guidMs = obj.guidIfc ? ifcToMsGuid(obj.guidIfc) : undefined;
 
         return {
@@ -270,6 +300,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           assembly_mark: obj.assemblyMark,
           product_name: obj.productName,
           cast_unit_weight: obj.castUnitWeight,
+          cast_unit_position_code: obj.positionCode,
           scheduled_date: date,
           sort_order: (itemsByDate[date]?.length || 0) + idx,
           status: 'planned',
@@ -283,10 +314,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
       if (error) throw error;
 
-      setMessage(`${newItems.length} detaili lisatud kuupäevale ${date}`);
+      setMessage(`${newItems.length} detaili lisatud`);
       loadSchedule();
 
-      // Clear selection in viewer
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
     } catch (e: any) {
       console.error('Error adding to schedule:', e);
@@ -312,10 +342,43 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         .eq('id', itemId);
 
       if (error) throw error;
+      setDatePickerItemId(null);
       loadSchedule();
     } catch (e) {
       console.error('Error moving item:', e);
       setMessage('Viga detaili liigutamisel');
+    }
+  };
+
+  // Reorder item within same date
+  const reorderItem = async (itemId: string, direction: 'up' | 'down') => {
+    const item = scheduleItems.find(i => i.id === itemId);
+    if (!item) return;
+
+    const dateItems = itemsByDate[item.scheduled_date];
+    const currentIndex = dateItems.findIndex(i => i.id === itemId);
+
+    if (direction === 'up' && currentIndex === 0) return;
+    if (direction === 'down' && currentIndex === dateItems.length - 1) return;
+
+    const swapIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    const swapItem = dateItems[swapIndex];
+
+    try {
+      // Swap sort_order values
+      await supabase
+        .from('installation_schedule')
+        .update({ sort_order: swapItem.sort_order, updated_by: tcUserEmail })
+        .eq('id', item.id);
+
+      await supabase
+        .from('installation_schedule')
+        .update({ sort_order: item.sort_order, updated_by: tcUserEmail })
+        .eq('id', swapItem.id);
+
+      loadSchedule();
+    } catch (e) {
+      console.error('Error reordering:', e);
     }
   };
 
@@ -346,20 +409,54 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         return;
       }
 
-      // Convert GUID to runtime ID
       const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
       if (!runtimeIds || runtimeIds.length === 0) {
         setMessage('Objekti ei leitud mudelist');
         return;
       }
 
-      // Select and zoom
       await api.viewer.setSelection({
         modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
       }, 'set');
       await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+
+      setActiveItemId(item.id);
     } catch (e) {
       console.error('Error selecting item:', e);
+    }
+  };
+
+  // Select and zoom to all items for a date
+  const selectDateInViewer = async (date: string) => {
+    const items = itemsByDate[date];
+    if (!items || items.length === 0) return;
+
+    try {
+      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+
+      for (const item of items) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        const existing = modelObjects.find(m => m.modelId === modelId);
+        if (existing) {
+          existing.objectRuntimeIds.push(...runtimeIds);
+        } else {
+          modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
+        }
+      }
+
+      if (modelObjects.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+      }
+    } catch (e) {
+      console.error('Error selecting date items:', e);
     }
   };
 
@@ -384,19 +481,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   };
 
   // Playback controls
-  const getAllItemsSorted = () => {
-    const sorted = [...scheduleItems].sort((a, b) => {
+  const getAllItemsSorted = useCallback(() => {
+    return [...scheduleItems].sort((a, b) => {
       if (a.scheduled_date < b.scheduled_date) return -1;
       if (a.scheduled_date > b.scheduled_date) return 1;
       return a.sort_order - b.sort_order;
     });
-    return sorted;
-  };
+  }, [scheduleItems]);
 
   const startPlayback = async () => {
-    // Reset colors first
     await api.viewer.setObjectState(undefined, { color: 'reset' });
-
     setIsPlaying(true);
     setCurrentPlayIndex(0);
   };
@@ -437,7 +531,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, currentPlayIndex, playbackSpeed]);
+  }, [isPlaying, currentPlayIndex, playbackSpeed, getAllItemsSorted]);
+
+  // Toggle date collapse
+  const toggleDateCollapse = (date: string) => {
+    setCollapsedDates(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) {
+        next.delete(date);
+      } else {
+        next.add(date);
+      }
+      return next;
+    });
+  };
 
   // Drag handlers
   const handleDragStart = (item: ScheduleItem) => {
@@ -453,7 +560,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     e.preventDefault();
     setDragOverDate(null);
 
-    if (draggedItem && draggedItem.scheduled_date !== targetDate) {
+    if (!draggedItem) return;
+
+    if (draggedItem.scheduled_date !== targetDate) {
+      // Moving to different date
       await moveItemToDate(draggedItem.id, targetDate);
     }
     setDraggedItem(null);
@@ -498,7 +608,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   const dateStats = getDateStats();
 
-  // Export to Excel (CSV format)
+  // Export to real Excel .xlsx file
   const exportToExcel = () => {
     const sortedItems = getAllItemsSorted();
     const totalItems = sortedItems.length;
@@ -508,34 +618,34 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       return;
     }
 
-    // Build CSV content with headers
-    const headers = [
+    // Main data sheet
+    const mainData: any[][] = [[
       'Nr',
       'Kuupäev',
-      'Detaili mark',
+      'Päev',
+      'Assembly Mark',
+      'Position Code',
       'Toode',
       'Kaal (kg)',
       'GUID (MS)',
       'GUID (IFC)',
       'Kumulatiivne %'
-    ];
+    ]];
 
-    const rows: string[][] = [];
     let cumulative = 0;
-    let lastDate = '';
-
     sortedItems.forEach((item, index) => {
       cumulative++;
       const percentage = Math.round((cumulative / totalItems) * 100);
+      const date = new Date(item.scheduled_date);
+      const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
+      const weekday = WEEKDAY_NAMES[date.getDay()];
 
-      // Format date for display
-      const dateDisplay = item.scheduled_date !== lastDate ? item.scheduled_date : '';
-      lastDate = item.scheduled_date;
-
-      rows.push([
-        String(index + 1),
-        dateDisplay,
+      mainData.push([
+        index + 1,
+        dateFormatted,
+        weekday,
         item.assembly_mark || '',
+        item.cast_unit_position_code || '',
         item.product_name || '',
         item.cast_unit_weight || '',
         item.guid_ms || '',
@@ -544,52 +654,72 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       ]);
     });
 
-    // Add summary row
-    rows.push([]);
-    rows.push(['Kokku:', String(totalItems), '', '', '', '', '', '100%']);
-
-    // Add daily breakdown
-    rows.push([]);
-    rows.push(['Päevade kokkuvõte:']);
-    rows.push(['Kuupäev', 'Detaile', 'Kumulatiivne', '%']);
+    // Summary sheet
+    const summaryData: any[][] = [[
+      'Kuupäev',
+      'Päev',
+      'Detaile',
+      'Kumulatiivne',
+      '%'
+    ]];
 
     const sortedDates = Object.keys(itemsByDate).sort();
-    let cumulativeForSummary = 0;
-    for (const date of sortedDates) {
-      const count = itemsByDate[date].length;
-      cumulativeForSummary += count;
-      const pct = Math.round((cumulativeForSummary / totalItems) * 100);
-      rows.push([date, String(count), String(cumulativeForSummary), `${pct}%`]);
+    let cumulativeSum = 0;
+    for (const dateStr of sortedDates) {
+      const count = itemsByDate[dateStr].length;
+      cumulativeSum += count;
+      const pct = Math.round((cumulativeSum / totalItems) * 100);
+      const date = new Date(dateStr);
+      const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
+      const weekday = WEEKDAY_NAMES[date.getDay()];
+      summaryData.push([dateFormatted, weekday, count, cumulativeSum, `${pct}%`]);
     }
 
-    // Convert to CSV
-    const escapeCSV = (str: string) => {
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        return `"${str.replace(/"/g, '""')}"`;
-      }
-      return str;
-    };
+    // Create workbook
+    const wb = XLSX.utils.book_new();
 
-    const csvContent = [
-      headers.map(escapeCSV).join(','),
-      ...rows.map(row => row.map(escapeCSV).join(','))
-    ].join('\n');
+    const ws1 = XLSX.utils.aoa_to_sheet(mainData);
+    // Set column widths
+    ws1['!cols'] = [
+      { wch: 5 },   // Nr
+      { wch: 12 },  // Kuupäev
+      { wch: 12 },  // Päev
+      { wch: 20 },  // Assembly Mark
+      { wch: 15 },  // Position Code
+      { wch: 25 },  // Toode
+      { wch: 12 },  // Kaal
+      { wch: 40 },  // GUID MS
+      { wch: 25 },  // GUID IFC
+      { wch: 12 }   // %
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, 'Graafik');
 
-    // Add BOM for Excel UTF-8 compatibility
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
+    const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
+    ws2['!cols'] = [
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 8 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Kokkuvõte');
 
     // Download
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `paigaldusgraafik_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    XLSX.writeFile(wb, `paigaldusgraafik_${new Date().toISOString().split('T')[0]}.xlsx`);
 
-    setMessage('Graafik eksporditud CSV failina');
+    setMessage('Graafik eksporditud Excel failina');
+  };
+
+  // Generate date picker options (next 60 days)
+  const getDatePickerDates = () => {
+    const dates: string[] = [];
+    const start = new Date();
+    for (let i = 0; i < 60; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      dates.push(formatDateKey(d));
+    }
+    return dates;
   };
 
   return (
@@ -699,7 +829,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           className="export-btn"
           onClick={exportToExcel}
           disabled={scheduleItems.length === 0}
-          title="Ekspordi CSV"
+          title="Ekspordi Excel"
         >
           <FiDownload size={16} />
         </button>
@@ -718,51 +848,112 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         ) : (
           Object.entries(itemsByDate)
             .sort(([a], [b]) => a.localeCompare(b))
-            .map(([date, items]) => (
-              <div
-                key={date}
-                className={`date-group ${dragOverDate === date ? 'drag-over' : ''}`}
-                onDragOver={(e) => handleDragOver(e, date)}
-                onDrop={(e) => handleDrop(e, date)}
-              >
-                <div className="date-header">
-                  <FiCalendar size={14} />
-                  <span className="date-label">{date}</span>
-                  <span className="date-count">{items.length} detaili</span>
-                  {dateStats[date] && (
-                    <span className="date-percentage">{dateStats[date].percentage}%</span>
+            .map(([date, items]) => {
+              const isCollapsed = collapsedDates.has(date);
+              const stats = dateStats[date];
+
+              return (
+                <div
+                  key={date}
+                  className={`date-group ${dragOverDate === date ? 'drag-over' : ''}`}
+                  onDragOver={(e) => handleDragOver(e, date)}
+                  onDrop={(e) => handleDrop(e, date)}
+                >
+                  <div
+                    className="date-header"
+                    onClick={() => selectDateInViewer(date)}
+                  >
+                    <button
+                      className="collapse-btn"
+                      onClick={(e) => { e.stopPropagation(); toggleDateCollapse(date); }}
+                    >
+                      {isCollapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
+                    </button>
+                    <span className="date-label">{formatDateEstonian(date)}</span>
+                    <span className="date-count">{items.length} tk</span>
+                    {stats && <span className="date-percentage">{stats.percentage}%</span>}
+                  </div>
+
+                  {!isCollapsed && (
+                    <div className="date-items">
+                      {items.map((item, idx) => (
+                        <div
+                          key={item.id}
+                          className={`schedule-item ${isPlaying && getAllItemsSorted()[currentPlayIndex]?.id === item.id ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''}`}
+                          draggable
+                          onDragStart={() => handleDragStart(item)}
+                          onDragOver={(e) => handleDragOver(e, date)}
+                          onDrop={(e) => handleDrop(e, date)}
+                          onClick={() => selectInViewer(item)}
+                        >
+                          <span className="item-index">{idx + 1}</span>
+                          <div className="item-drag-handle">
+                            <FiMove size={10} />
+                          </div>
+                          <div className="item-content">
+                            <span className="item-mark">
+                              {item.assembly_mark}
+                              {item.product_name && <span className="item-separator"> | </span>}
+                              {item.product_name && <span className="item-product">{item.product_name}</span>}
+                            </span>
+                          </div>
+                          <div className="item-actions">
+                            <button
+                              className="item-action-btn"
+                              onClick={(e) => { e.stopPropagation(); reorderItem(item.id, 'up'); }}
+                              disabled={idx === 0}
+                              title="Liiguta üles"
+                            >
+                              <FiArrowUp size={10} />
+                            </button>
+                            <button
+                              className="item-action-btn"
+                              onClick={(e) => { e.stopPropagation(); reorderItem(item.id, 'down'); }}
+                              disabled={idx === items.length - 1}
+                              title="Liiguta alla"
+                            >
+                              <FiArrowDown size={10} />
+                            </button>
+                            <button
+                              className="item-action-btn calendar-btn"
+                              onClick={(e) => { e.stopPropagation(); setDatePickerItemId(datePickerItemId === item.id ? null : item.id); }}
+                              title="Muuda kuupäeva"
+                            >
+                              <FiCalendar size={10} />
+                            </button>
+                            <button
+                              className="item-action-btn delete-btn"
+                              onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
+                              title="Kustuta"
+                            >
+                              <FiTrash2 size={10} />
+                            </button>
+                          </div>
+
+                          {/* Date picker dropdown */}
+                          {datePickerItemId === item.id && (
+                            <div className="date-picker-dropdown" onClick={(e) => e.stopPropagation()}>
+                              <div className="date-picker-header">Vali uus kuupäev</div>
+                              <div className="date-picker-list">
+                                {getDatePickerDates().map(d => (
+                                  <div
+                                    key={d}
+                                    className={`date-picker-item ${d === item.scheduled_date ? 'current' : ''}`}
+                                    onClick={() => moveItemToDate(item.id, d)}
+                                  >
+                                    {formatDateEstonian(d)}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-
-                <div className="date-items">
-                  {items.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`schedule-item ${isPlaying && getAllItemsSorted()[currentPlayIndex]?.id === item.id ? 'playing' : ''}`}
-                      draggable
-                      onDragStart={() => handleDragStart(item)}
-                      onClick={() => selectInViewer(item)}
-                    >
-                      <div className="item-drag-handle">
-                        <FiMove size={12} />
-                      </div>
-                      <div className="item-content">
-                        <span className="item-mark">{item.assembly_mark}</span>
-                        {item.product_name && (
-                          <span className="item-product">{item.product_name}</span>
-                        )}
-                      </div>
-                      <button
-                        className="item-delete"
-                        onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                      >
-                        <FiTrash2 size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))
+              );
+            })
         )}
       </div>
     </div>
