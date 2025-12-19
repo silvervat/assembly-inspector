@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye, FiList } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye, FiList, FiInfo } from 'react-icons/fi';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // GUID helper functions
@@ -158,6 +158,13 @@ export default function InstallationsScreen({
   // Property discovery state
   const [showProperties, setShowProperties] = useState(false);
   const [discoveredProperties, setDiscoveredProperties] = useState<any>(null);
+
+  // Installation info modal state
+  const [showInstallInfo, setShowInstallInfo] = useState<{
+    assemblyMark: string;
+    installedAt: string;
+    userEmail: string;
+  } | null>(null);
 
   // Assembly selection state
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
@@ -787,6 +794,35 @@ export default function InstallationsScreen({
     }
   };
 
+  // Unselect a single object
+  const unselectObject = async (objIndex: number) => {
+    const newSelection = selectedObjects.filter((_, idx) => idx !== objIndex);
+    setSelectedObjects(newSelection);
+
+    // Also update the viewer selection
+    if (newSelection.length === 0) {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      lastSelectionRef.current = '';
+    } else {
+      // Group remaining objects by model
+      const modelObjectMap: Record<string, number[]> = {};
+      for (const obj of newSelection) {
+        if (!modelObjectMap[obj.modelId]) {
+          modelObjectMap[obj.modelId] = [];
+        }
+        modelObjectMap[obj.modelId].push(obj.runtimeId);
+      }
+
+      const modelObjectIds = Object.entries(modelObjectMap).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+      lastSelectionRef.current = modelObjectIds.map(m => `${m.modelId}:${m.objectRuntimeIds.join(',')}`).join('|');
+    }
+  };
+
   // Filter installations
   const filteredInstallations = installations.filter(inst => {
     // Filter by mode
@@ -1025,22 +1061,36 @@ export default function InstallationsScreen({
                   {selectedObjects.map((obj, idx) => {
                     const guid = getObjectGuid(obj);
                     const isInstalled = guid && installedGuids.has(guid);
+                    const installInfo = guid ? installedGuids.get(guid) : undefined;
                     return (
                       <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''}`}>
                         <span className="object-mark">{obj.assemblyMark}</span>
                         {obj.productName && <span className="object-product">{obj.productName}</span>}
-                        {isInstalled && <span className="installed-badge">✓</span>}
-                        {/* Debug: show detected GUID */}
-                        <span className="debug-guid" style={{ fontSize: '9px', color: '#999', marginLeft: 'auto' }}>
-                          {guid ? guid.substring(0, 12) + '...' : 'no guid'}
-                        </span>
+                        <div className="object-actions">
+                          {isInstalled && installInfo && (
+                            <button
+                              className="object-info-btn"
+                              onClick={() => setShowInstallInfo({
+                                assemblyMark: obj.assemblyMark || installInfo.assemblyMark,
+                                installedAt: installInfo.installedAt,
+                                userEmail: installInfo.userEmail
+                              })}
+                              title="Paigalduse info"
+                            >
+                              <FiInfo size={14} />
+                            </button>
+                          )}
+                          <button
+                            className="object-unselect-btn"
+                            onClick={() => unselectObject(idx)}
+                            title="Eemalda valikust"
+                          >
+                            <FiX size={14} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
-                </div>
-                {/* Debug: show installedGuids count */}
-                <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                  DB guids: {installedGuids.size}
                 </div>
                 {alreadyInstalledCount > 0 && (
                   <div className="already-installed-note">
@@ -1056,8 +1106,15 @@ export default function InstallationsScreen({
         <div className="installations-list-view">
           {/* Search and filter */}
           <div className="list-controls">
-            <div className="search-box">
-              <FiSearch size={16} />
+            <button
+              className="list-back-btn"
+              onClick={() => setShowList(false)}
+              title="Tagasi"
+            >
+              <FiArrowLeft size={16} />
+            </button>
+            <div className="search-box compact">
+              <FiSearch size={14} />
               <input
                 type="text"
                 placeholder="Otsi..."
@@ -1169,6 +1226,56 @@ export default function InstallationsScreen({
                 style={{ marginTop: '12px', width: '100%' }}
               >
                 Selge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Installation Info Modal */}
+      {showInstallInfo && (
+        <div className="properties-modal-overlay" onClick={() => setShowInstallInfo(null)}>
+          <div className="properties-modal install-info-modal" onClick={e => e.stopPropagation()}>
+            <div className="properties-modal-header" style={{ background: '#4CAF50' }}>
+              <h3>Paigalduse info</h3>
+              <button className="close-modal-btn" onClick={() => setShowInstallInfo(null)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="properties-modal-content" style={{ padding: '20px' }}>
+              <div className="install-info-row">
+                <span className="install-info-label">Detail:</span>
+                <span className="install-info-value">{showInstallInfo.assemblyMark}</span>
+              </div>
+              <div className="install-info-row">
+                <span className="install-info-label">Kuupäev:</span>
+                <span className="install-info-value">
+                  {new Date(showInstallInfo.installedAt).toLocaleDateString('et-EE', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+              <div className="install-info-row">
+                <span className="install-info-label">Kellaaeg:</span>
+                <span className="install-info-value">
+                  {new Date(showInstallInfo.installedAt).toLocaleTimeString('et-EE', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+              <div className="install-info-row">
+                <span className="install-info-label">Paigaldaja:</span>
+                <span className="install-info-value">{showInstallInfo.userEmail}</span>
+              </div>
+              <button
+                className="btn-primary"
+                onClick={() => setShowInstallInfo(null)}
+                style={{ marginTop: '16px', width: '100%' }}
+              >
+                Sulge
               </button>
             </div>
           </div>

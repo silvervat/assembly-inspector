@@ -2761,6 +2761,25 @@ button.stat-toggle.off:hover {
   color: var(--modus-text-primary);
 }
 
+.object-guids {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.object-guids .object-guid {
+  border-bottom: none;
+}
+
+.object-guids .object-guid:not(:last-child) {
+  border-bottom: 1px dashed var(--modus-border-light);
+}
+
+.guid-value.guid-ms {
+  color: #6b21a8;
+  background: #f3e8ff;
+}
+
 /* Property sets */
 .property-sets {
   padding: var(--modus-spacing-sm);
@@ -6866,6 +6885,74 @@ button.stat-toggle.off:hover {
   font-weight: bold;
 }
 
+/* Object row action buttons */
+.selected-object-row .object-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.selected-object-row .object-info-btn,
+.selected-object-row .object-unselect-btn {
+  padding: 4px;
+  border: none;
+  border-radius: var(--modus-radius-xs);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.selected-object-row .object-info-btn {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.selected-object-row .object-info-btn:hover {
+  background: #1976d2;
+  color: white;
+}
+
+.selected-object-row .object-unselect-btn {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.selected-object-row .object-unselect-btn:hover {
+  background: #c62828;
+  color: white;
+}
+
+/* Installation info modal */
+.install-info-modal {
+  max-width: 360px;
+}
+
+.install-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--modus-border-light);
+}
+
+.install-info-row:last-of-type {
+  border-bottom: none;
+}
+
+.install-info-label {
+  color: var(--modus-text-secondary);
+  font-size: var(--modus-font-size-sm);
+}
+
+.install-info-value {
+  font-weight: 600;
+  color: var(--modus-text-primary);
+  font-size: var(--modus-font-size-sm);
+}
+
 /* Selected objects title with discover button */
 .selected-objects-title {
   display: flex;
@@ -7082,6 +7169,24 @@ button.stat-toggle.off:hover {
   border-bottom: 1px solid var(--modus-border);
 }
 
+.list-back-btn {
+  padding: 6px 8px;
+  border: 1px solid var(--modus-border);
+  background: white;
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+}
+
+.list-back-btn:hover {
+  background: var(--modus-primary);
+  color: white;
+  border-color: var(--modus-primary);
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -7091,6 +7196,11 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg-light);
   border-radius: var(--modus-radius-sm);
   border: 1px solid var(--modus-border);
+}
+
+.search-box.compact {
+  flex: 0 1 140px;
+  min-width: 100px;
 }
 
 .search-box input {
