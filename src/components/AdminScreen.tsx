@@ -121,6 +121,9 @@ function FunctionButton({
 }
 
 export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
+  // View mode: 'main' | 'properties' | 'assemblyList'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList'>('main');
+
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
   const [message, setMessage] = useState('');
@@ -131,7 +134,6 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   const [functionResults, setFunctionResults] = useState<Record<string, FunctionTestResult>>({});
 
   // Assembly & Bolts list state
-  const [showAssemblyList, setShowAssemblyList] = useState(false);
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
   const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
@@ -487,6 +489,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
         setExpandedSets(firstExpanded);
       }
 
+      // Navigate to properties view
+      setAdminView('properties');
+
     } catch (error) {
       console.error('Property discovery failed:', error);
       setMessage('Viga propertiste laadimisel: ' + (error as Error).message);
@@ -773,7 +778,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
       setAssemblyList(assemblies);
       setBoltSummary(Array.from(boltMap.values()));
-      setShowAssemblyList(true);
+      setAdminView('assemblyList');
       setMessage(`Leitud ${assemblies.length} detaili ja ${boltMap.size} erinevat polti`);
     } catch (error) {
       console.error('Assembly collection failed:', error);
@@ -819,15 +824,28 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
     <div className="admin-container">
       {/* Header */}
       <div className="admin-header">
-        <button className="back-btn" onClick={onBackToMenu}>
-          <FiArrowLeft size={18} />
-          <span>Menüü</span>
-        </button>
-        <h2>Administratsioon</h2>
+        {adminView === 'main' ? (
+          <button className="back-btn" onClick={onBackToMenu}>
+            <FiArrowLeft size={18} />
+            <span>Menüü</span>
+          </button>
+        ) : (
+          <button className="back-btn" onClick={() => setAdminView('main')}>
+            <FiArrowLeft size={18} />
+            <span>Tagasi</span>
+          </button>
+        )}
+        <h2>
+          {adminView === 'main' && 'Administratsioon'}
+          {adminView === 'properties' && 'Avasta propertised'}
+          {adminView === 'assemblyList' && 'Assembly list & Poldid'}
+        </h2>
       </div>
 
-      {/* Tools section */}
-      <div className="admin-tools">
+      {/* Main Tools View */}
+      {adminView === 'main' && (
+        <>
+        <div className="admin-tools">
         <div className="admin-tool-card">
           <div className="tool-header">
             <FiSearch size={24} />
@@ -1949,16 +1967,18 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           </div>
         </div>
       )}
+        </>
+      )}
 
-      {/* Message */}
+      {/* Message - shown in all views */}
       {message && (
         <div className="admin-message">
           {message}
         </div>
       )}
 
-      {/* Results */}
-      {selectedObjects.length > 0 && (
+      {/* Properties View */}
+      {adminView === 'properties' && selectedObjects.length > 0 && (
         <div className="admin-results">
           <div className="results-header">
             <h3>Leitud propertised ({selectedObjects.length} objekti)</h3>
@@ -2328,14 +2348,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
         </div>
       )}
 
-      {/* Assembly List & Bolts Panel */}
-      {showAssemblyList && (
-        <div className="assembly-list-panel">
-          <div className="assembly-list-header">
-            <h3>Assembly list & Poldid</h3>
-            <button className="close-btn" onClick={() => setShowAssemblyList(false)}>✕</button>
-          </div>
-
+      {/* Assembly List View */}
+      {adminView === 'assemblyList' && (
+        <div className="assembly-list-panel" style={{ position: 'relative', marginTop: 0 }}>
           <div className="assembly-list-content">
             {/* Assembly List Table */}
             <div className="assembly-section">
