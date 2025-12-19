@@ -122,8 +122,8 @@ function FunctionButton({
 }
 
 export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -138,6 +138,11 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
   const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
+
+  // GUID Import state
+  const [guidImportText, setGuidImportText] = useState('');
+  const [guidImportLoading, setGuidImportLoading] = useState(false);
+  const [guidImportResults, setGuidImportResults] = useState<{found: number; notFound: string[]; total: number} | null>(null);
 
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
@@ -207,6 +212,170 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   useEffect(() => {
     // Component mounted
   }, []);
+
+  // IFC GUID base64 charset (non-standard!)
+  const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+
+  // Convert MS GUID (UUID format) to IFC GUID (22 chars)
+  // Reverse of ifcToMsGuid: MS GUID → 128 bits → IFC GUID
+  const msToIfcGuid = (msGuid: string): string => {
+    if (!msGuid) return '';
+
+    // Remove dashes and validate
+    const hex = msGuid.replace(/-/g, '').toLowerCase();
+    if (hex.length !== 32 || !/^[0-9a-f]+$/.test(hex)) return '';
+
+    // Convert hex to 128 bits
+    let bits = '';
+    for (const char of hex) {
+      bits += parseInt(char, 16).toString(2).padStart(4, '0');
+    }
+
+    // Convert bits to IFC GUID characters
+    // First char: 2 bits, remaining 21 chars: 6 bits each
+    let ifcGuid = '';
+    ifcGuid += IFC_GUID_CHARS[parseInt(bits.slice(0, 2), 2)];
+    for (let i = 2; i < 128; i += 6) {
+      ifcGuid += IFC_GUID_CHARS[parseInt(bits.slice(i, i + 6), 2)];
+    }
+
+    return ifcGuid;
+  };
+
+  // Process GUID import - find objects by MS GUID and select them
+  const processGuidImport = useCallback(async () => {
+    if (!guidImportText.trim()) {
+      setMessage('Sisesta vähemalt üks GUID (MS)');
+      return;
+    }
+
+    setGuidImportLoading(true);
+    setGuidImportResults(null);
+    setMessage('Otsin objekte...');
+
+    try {
+      // Parse input - split by newlines, semicolons, or commas
+      const rawGuids = guidImportText
+        .split(/[\n;,]+/)
+        .map(g => g.trim())
+        .filter(g => g.length > 0);
+
+      // Extract valid UUIDs using regex
+      const uuidRegex = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
+      const allMatches: string[] = [];
+      for (const line of rawGuids) {
+        const matches = line.match(uuidRegex);
+        if (matches) {
+          allMatches.push(...matches);
+        }
+      }
+
+      // Remove duplicates
+      const uniqueMsGuids = [...new Set(allMatches.map(g => g.toLowerCase()))];
+
+      if (uniqueMsGuids.length === 0) {
+        setMessage('Ühtegi kehtivat GUID (MS) ei leitud');
+        setGuidImportLoading(false);
+        return;
+      }
+
+      console.log(`Found ${uniqueMsGuids.length} unique MS GUIDs to search for`);
+
+      // Convert MS GUIDs to IFC GUIDs
+      const ifcGuids = uniqueMsGuids.map(msGuid => ({
+        msGuid,
+        ifcGuid: msToIfcGuid(msGuid)
+      })).filter(item => item.ifcGuid.length === 22);
+
+      console.log('Converted to IFC GUIDs:', ifcGuids);
+
+      // Get all models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) {
+        setMessage('Mudeleid ei leitud');
+        setGuidImportLoading(false);
+        return;
+      }
+
+      // Try to find objects by IFC GUID
+      const foundObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      const notFound: string[] = [];
+
+      for (const { msGuid, ifcGuid } of ifcGuids) {
+        let found = false;
+
+        for (const model of models) {
+          const modelId = (model as any).id;
+          if (!modelId) continue;
+
+          try {
+            // Use convertToObjectRuntimeIds to find objects by IFC GUID
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [ifcGuid]);
+
+            if (runtimeIds && runtimeIds.length > 0) {
+              // Find existing entry or create new one
+              const existing = foundObjects.find(f => f.modelId === modelId);
+              if (existing) {
+                existing.objectRuntimeIds.push(...runtimeIds);
+              } else {
+                foundObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
+              }
+              found = true;
+              console.log(`✅ Found ${msGuid} as IFC ${ifcGuid} in model ${modelId}: ${runtimeIds}`);
+              break; // Found in this model, no need to check other models
+            }
+          } catch (e) {
+            console.warn(`Error searching for ${ifcGuid} in model ${modelId}:`, e);
+          }
+        }
+
+        if (!found) {
+          notFound.push(msGuid);
+        }
+      }
+
+      // Select found objects
+      if (foundObjects.length > 0) {
+        // Remove duplicate runtime IDs within each model
+        const selectionSpec = foundObjects.map(fo => ({
+          modelId: fo.modelId,
+          objectRuntimeIds: [...new Set(fo.objectRuntimeIds)]
+        }));
+
+        const totalFound = selectionSpec.reduce((sum, s) => sum + s.objectRuntimeIds.length, 0);
+
+        await api.viewer.setSelection({ modelObjectIds: selectionSpec }, 'set');
+
+        // Zoom to selection
+        try {
+          await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+        } catch (e) {
+          console.warn('Could not zoom to selection:', e);
+        }
+
+        setGuidImportResults({
+          found: totalFound,
+          notFound,
+          total: uniqueMsGuids.length
+        });
+
+        setMessage(`Leitud ja valitud ${totalFound} objekti ${uniqueMsGuids.length}-st`);
+      } else {
+        setGuidImportResults({
+          found: 0,
+          notFound,
+          total: uniqueMsGuids.length
+        });
+        setMessage('Ühtegi objekti ei leitud');
+      }
+
+    } catch (error) {
+      console.error('GUID import error:', error);
+      setMessage(`Viga: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setGuidImportLoading(false);
+    }
+  }, [api, guidImportText]);
 
   // Discover properties for selected objects
   const discoverProperties = useCallback(async () => {
@@ -862,6 +1031,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           {adminView === 'main' && 'Administratsioon'}
           {adminView === 'properties' && 'Avasta propertised'}
           {adminView === 'assemblyList' && 'Assembly list & Poldid'}
+          {adminView === 'guidImport' && 'Import GUID (MS)'}
         </h2>
       </div>
 
@@ -944,6 +1114,26 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   Kogu detailide andmed
                 </>
               )}
+            </button>
+          </div>
+        </div>
+
+        {/* Import GUID (MS) Card */}
+        <div className="admin-tool-card" style={{ marginTop: '12px' }}>
+          <div className="tool-header">
+            <FiSearch size={24} />
+            <h3>Import GUID (MS)</h3>
+          </div>
+          <p className="tool-description">
+            Kleebi Excelist GUID (MS) koodid ja süsteem leiab need mudelist üles ning valib need.
+          </p>
+          <div className="tool-actions">
+            <button
+              className="btn-primary"
+              onClick={() => setAdminView('guidImport')}
+            >
+              <FiSearch size={16} />
+              Ava GUID import
             </button>
           </div>
         </div>
@@ -3107,6 +3297,129 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* GUID Import View */}
+      {adminView === 'guidImport' && (
+        <div className="guid-import-panel" style={{ padding: '16px' }}>
+          <div className="guid-import-description" style={{ marginBottom: '16px', color: '#666' }}>
+            <p>Kleebi siia GUID (MS) koodid (UUID formaat). Süsteem tuvastab automaatselt kõik kehtivad UUID-d tekstist.</p>
+            <p style={{ fontSize: '12px', marginTop: '4px' }}>Toetatud formaadid: üks GUID rea kohta, komaga eraldatud, semikooloniga eraldatud.</p>
+          </div>
+
+          <textarea
+            className="guid-import-textarea"
+            value={guidImportText}
+            onChange={(e) => setGuidImportText(e.target.value)}
+            placeholder="Kleebi siia GUID (MS) koodid, nt:&#10;a70672f3-14be-4009-ac56-154776793a53&#10;b81783g4-25cf-5110-bd67-265887894b64&#10;..."
+            style={{
+              width: '100%',
+              minHeight: '200px',
+              padding: '12px',
+              fontFamily: 'monospace',
+              fontSize: '13px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              resize: 'vertical'
+            }}
+          />
+
+          <div className="guid-import-actions" style={{ marginTop: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button
+              className="btn-primary"
+              onClick={processGuidImport}
+              disabled={guidImportLoading || !guidImportText.trim()}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {guidImportLoading ? (
+                <>
+                  <FiRefreshCw className="spin" size={16} />
+                  Otsin...
+                </>
+              ) : (
+                <>
+                  <FiSearch size={16} />
+                  Otsi ja vali objektid
+                </>
+              )}
+            </button>
+
+            <button
+              className="btn-secondary"
+              onClick={() => {
+                setGuidImportText('');
+                setGuidImportResults(null);
+                setMessage('');
+              }}
+              disabled={guidImportLoading}
+              style={{ padding: '8px 16px' }}
+            >
+              Tühjenda
+            </button>
+
+            {message && (
+              <span style={{ color: message.includes('Viga') ? '#dc2626' : '#059669', fontWeight: 500 }}>
+                {message}
+              </span>
+            )}
+          </div>
+
+          {/* Results */}
+          {guidImportResults && (
+            <div className="guid-import-results" style={{ marginTop: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+              <h4 style={{ margin: '0 0 12px 0', fontSize: '14px' }}>📊 Tulemused</h4>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                <div style={{ backgroundColor: '#dcfce7', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#16a34a' }}>{guidImportResults.found}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Leitud</div>
+                </div>
+                <div style={{ backgroundColor: '#fef2f2', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#dc2626' }}>{guidImportResults.notFound.length}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Ei leitud</div>
+                </div>
+                <div style={{ backgroundColor: '#f3f4f6', padding: '12px', borderRadius: '6px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#374151' }}>{guidImportResults.total}</div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>Kokku</div>
+                </div>
+              </div>
+
+              {guidImportResults.notFound.length > 0 && (
+                <div style={{ marginTop: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <h5 style={{ margin: 0, fontSize: '13px', color: '#dc2626' }}>❌ Ei leitud ({guidImportResults.notFound.length})</h5>
+                    <button
+                      className="copy-btn"
+                      onClick={() => {
+                        navigator.clipboard.writeText(guidImportResults.notFound.join('\n'));
+                        setMessage('Puuduvad GUID-d kopeeritud!');
+                        setTimeout(() => setMessage(''), 2000);
+                      }}
+                      style={{ padding: '4px 8px', fontSize: '12px' }}
+                    >
+                      <FiCopy size={12} />
+                      Kopeeri
+                    </button>
+                  </div>
+                  <div style={{
+                    maxHeight: '150px',
+                    overflowY: 'auto',
+                    backgroundColor: '#fff',
+                    border: '1px solid #fee2e2',
+                    borderRadius: '4px',
+                    padding: '8px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px'
+                  }}>
+                    {guidImportResults.notFound.map((guid, idx) => (
+                      <div key={idx} style={{ padding: '2px 0', color: '#991b1b' }}>{guid}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
