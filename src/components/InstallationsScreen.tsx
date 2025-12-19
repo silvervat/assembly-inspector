@@ -332,8 +332,9 @@ export default function InstallationsScreen({
   useEffect(() => {
     if (!api) return;
 
-    // Clear selection on mount
-    api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+    // Don't clear selection on mount - keep existing selection
+    // Immediately check current selection
+    checkSelection();
 
     const interval = setInterval(() => {
       checkSelection();
@@ -407,10 +408,14 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Filter out already installed objects
+    // Filter out already installed objects (only if they have a GUID)
+    // Objects without GUID can always be saved (we can't track duplicates for them)
     const newObjects = selectedObjects.filter(obj => {
       const guid = obj.guidIfc || obj.guid;
-      return guid && !installedGuids.has(guid);
+      // If no GUID, allow saving (can't check duplicates)
+      if (!guid) return true;
+      // If has GUID, check if not already installed
+      return !installedGuids.has(guid);
     });
 
     if (newObjects.length === 0) {
@@ -829,9 +834,17 @@ export default function InstallationsScreen({
                       <span className="object-mark">{obj.assemblyMark}</span>
                       {obj.productName && <span className="object-product">{obj.productName}</span>}
                       {isInstalled && <span className="installed-badge">✓</span>}
+                      {/* Debug: show detected GUID */}
+                      <span className="debug-guid" style={{ fontSize: '9px', color: '#999', marginLeft: 'auto' }}>
+                        {guid ? guid.substring(0, 12) + '...' : 'no guid'}
+                      </span>
                     </div>
                   );
                 })}
+                {/* Debug: show installedGuids count */}
+                <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+                  DB guids: {installedGuids.size}
+                </div>
                 {alreadyInstalledCount > 0 && (
                   <div className="already-installed-note">
                     {alreadyInstalledCount} juba paigaldatud
