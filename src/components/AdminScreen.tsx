@@ -1660,6 +1660,63 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     return Array.from(setNames).join('\n');
                   })}
                 />
+                <FunctionButton
+                  name="IFC → MS GUID"
+                  result={functionResults["IFC → MS GUID"]}
+                  onClick={() => testFunction("IFC → MS GUID", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    // IFC GUID base64 charset (non-standard!)
+                    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+
+                    // Convert IFC GUID (22 chars) to MS GUID (UUID format)
+                    function ifcToMsGuid(ifcGuid: string): string {
+                      if (!ifcGuid || ifcGuid.length !== 22) return '';
+
+                      // Decode base64 to hex
+                      let hex = '';
+                      for (let i = 0; i < 22; i += 4) {
+                        let n = 0;
+                        for (let j = 0; j < 4 && i + j < 22; j++) {
+                          const idx = chars.indexOf(ifcGuid[i + j]);
+                          if (idx < 0) return '';
+                          n = n * 64 + idx;
+                        }
+                        // Convert to hex (6 chars per 4 base64 chars, except last group)
+                        const hexChars = i === 20 ? 2 : 6;
+                        hex += n.toString(16).padStart(hexChars, '0');
+                      }
+
+                      // Format as UUID: 8-4-4-4-12
+                      if (hex.length >= 32) {
+                        return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`.toLowerCase();
+                      }
+                      return hex;
+                    }
+
+                    const results: string[] = [];
+
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) continue;
+
+                      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+                      for (const obj of props) {
+                        const ifcGuid = (obj as any).externalId || '';
+                        if (ifcGuid && ifcGuid.length === 22) {
+                          const msGuid = ifcToMsGuid(ifcGuid);
+                          results.push(`IFC: ${ifcGuid}\nMS:  ${msGuid}`);
+                        }
+                      }
+                    }
+
+                    if (results.length === 0) return 'IFC GUID ei leitud';
+                    return results.join('\n\n');
+                  })}
+                />
               </div>
             </div>
 
