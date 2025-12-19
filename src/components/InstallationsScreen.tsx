@@ -1699,7 +1699,39 @@ export default function InstallationsScreen({
                     }
                   }
 
-                  // Not found - show note
+                  // Method 4: Convert IFC GUID to MS GUID
+                  const ifcGuid = (discoveredProperties as any).externalId;
+                  if (ifcGuid && ifcGuid.length === 22) {
+                    // IFC GUID base64 charset (non-standard!)
+                    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+
+                    // Decode base64 to hex
+                    let hex = '';
+                    let valid = true;
+                    for (let i = 0; i < 22 && valid; i += 4) {
+                      let n = 0;
+                      for (let j = 0; j < 4 && i + j < 22; j++) {
+                        const idx = chars.indexOf(ifcGuid[i + j]);
+                        if (idx < 0) { valid = false; break; }
+                        n = n * 64 + idx;
+                      }
+                      const hexChars = i === 20 ? 2 : 6;
+                      hex += n.toString(16).padStart(hexChars, '0');
+                    }
+
+                    if (valid && hex.length >= 32) {
+                      const msGuid = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`.toLowerCase();
+                      return (
+                        <div className="prop-info-row">
+                          <span className="prop-info-label">GUID (MS):</span>
+                          <code className="prop-info-guid guid-ms">{msGuid}</code>
+                          <span className="prop-info-source">(arvutatud)</span>
+                        </div>
+                      );
+                    }
+                  }
+
+                  // Not found and can't convert
                   return (
                     <div className="prop-info-row prop-info-missing">
                       <span className="prop-info-label">GUID (MS):</span>
