@@ -1184,6 +1184,62 @@ export default function InstallationsScreen({
     );
   };
 
+  // Manual color application for testing
+  const manualApplyColors = async () => {
+    console.log('=== MANUAL COLOR TEST ===');
+    try {
+      // Step 1: Reset
+      console.log('Manual: Resetting...');
+      await api.viewer.setObjectState(undefined, { color: "reset" });
+
+      // Step 2: Get all objects
+      const allModelObjects = await api.viewer.getObjects();
+      if (!allModelObjects || allModelObjects.length === 0) {
+        console.log('No objects found');
+        return;
+      }
+
+      // Step 3: Color ALL gray
+      console.log('Manual: Coloring all gray...');
+      for (const modelObj of allModelObjects) {
+        const modelId = modelObj.modelId;
+        const allIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
+        if (allIds.length > 0) {
+          console.log(`Coloring ${allIds.length} objects gray in model ${modelId}`);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: allIds }] },
+            { color: { r: 180, g: 180, b: 180, a: 255 } }
+          );
+        }
+      }
+
+      // Step 4: Color installed green
+      const installedIfcGuids = Array.from(installedGuids.keys()).filter(guid => classifyGuid(guid) === 'IFC');
+      console.log(`Manual: Coloring ${installedIfcGuids.length} installed objects green...`);
+
+      for (const modelObj of allModelObjects) {
+        const modelId = modelObj.modelId;
+        if (installedIfcGuids.length > 0) {
+          const installedIds = await api.viewer.convertToObjectRuntimeIds(modelId, installedIfcGuids);
+          const validIds = (installedIds || []).filter((id: number) => id && id > 0);
+          if (validIds.length > 0) {
+            console.log(`Coloring ${validIds.length} installed objects green in model ${modelId}`);
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: validIds }] },
+              { color: { r: 0, g: 255, b: 0, a: 255 } } // Bright green for testing
+            );
+          }
+        }
+      }
+
+      console.log('=== MANUAL COLOR COMPLETE ===');
+      setMessage('Värvid rakendatud!');
+    } catch (e) {
+      console.error('Manual color error:', e);
+      setMessage('Viga värvide rakendamisel');
+    }
+  };
+
   return (
     <div className="installations-screen">
       {/* Mode title bar - same as InspectorScreen */}
@@ -1193,6 +1249,13 @@ export default function InstallationsScreen({
           <span>Menüü</span>
         </button>
         <span className="mode-title">Paigaldamised</span>
+        <button
+          className="btn-secondary"
+          onClick={manualApplyColors}
+          style={{ marginLeft: 'auto', padding: '4px 8px', fontSize: '12px' }}
+        >
+          🎨 Värvi
+        </button>
       </div>
 
       {!showList ? (
@@ -1747,12 +1810,19 @@ export default function InstallationsScreen({
                     <span className="prop-set-count">({pset.properties?.length || 0})</span>
                   </div>
                   <div className="prop-set-table">
-                    {pset.properties?.map((prop: any, propIdx: number) => (
-                      <div key={propIdx} className="prop-row">
-                        <span className="prop-name">{prop.name}</span>
-                        <span className="prop-value">{prop.displayValue ?? prop.value ?? '-'}</span>
-                      </div>
-                    ))}
+                    {pset.properties?.map((prop: any, propIdx: number) => {
+                      let displayVal = prop.displayValue ?? prop.value ?? '-';
+                      // Handle BigInt values
+                      if (typeof displayVal === 'bigint') {
+                        displayVal = displayVal.toString();
+                      }
+                      return (
+                        <div key={propIdx} className="prop-row">
+                          <span className="prop-name">{prop.name}</span>
+                          <span className="prop-value">{String(displayVal)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -1760,7 +1830,9 @@ export default function InstallationsScreen({
               {/* Raw JSON toggle */}
               <details className="raw-json-section">
                 <summary>📄 Raw JSON</summary>
-                <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+                <pre>{JSON.stringify(discoveredProperties, (_key, value) =>
+                  typeof value === 'bigint' ? value.toString() : value
+                , 2)}</pre>
               </details>
             </div>
           </div>
