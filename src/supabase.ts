@@ -8,11 +8,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // TypeScript tüübid
 
-// Uus tabel - trimble_ex_users (kasutaja kontroll email järgi)
+// Tabel - trimble_inspection_users (kasutaja kontroll email ja projekti järgi)
 export interface TrimbleExUser {
   id: string;
-  project_id: string;
-  trimble_project_id: string; // Trimble Connect project ID (e.g., "qdU40jBduvU")
+  project_id?: string;
   user_id?: string;
   email: string;
   name?: string;
@@ -22,6 +21,7 @@ export interface TrimbleExUser {
   is_active: boolean;
   created_at: string;
   updated_at?: string;
+  trimble_project_id: string;
 }
 
 // Vana User interface (deprecated, säilitame ühilduvuse jaoks)
