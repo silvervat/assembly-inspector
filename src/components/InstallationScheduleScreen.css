@@ -776,3 +776,163 @@
   opacity: 0.5;
   background: #f3f4f6;
 }
+
+/* Settings Button */
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  background: var(--modus-bg-primary);
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+}
+
+.settings-btn:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-primary);
+}
+
+/* Settings Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.settings-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--modus-bg-secondary);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.modal-header button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--modus-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.modal-header button:hover {
+  background: #e5e7eb;
+  color: var(--modus-text-primary);
+}
+
+.modal-body {
+  padding: 16px;
+}
+
+.setting-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+}
+
+.setting-option:last-child {
+  border-bottom: none;
+}
+
+.setting-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  cursor: pointer;
+}
+
+.setting-option span {
+  font-size: 13px;
+  color: var(--modus-text-primary);
+}
+
+.setting-option small {
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  margin-left: 26px;
+  margin-top: 2px;
+}
+
+.setting-option input:disabled + span {
+  opacity: 0.5;
+}
+
+/* Collapsible Calendar */
+.calendar-collapse-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--modus-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.calendar-collapse-btn:hover {
+  color: var(--modus-primary);
+}
+
+.calendar-month {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+}
+
+.schedule-calendar.collapsed {
+  padding: 8px 12px;
+}
+
+.schedule-calendar.collapsed .calendar-header {
+  margin-bottom: 0;
+}
+
+.schedule-calendar.collapsed .calendar-header button:first-child,
+.schedule-calendar.collapsed .calendar-header button:last-child {
+  visibility: hidden;
+}
+
+/* Date Color Indicator */
+.date-color-indicator {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+}

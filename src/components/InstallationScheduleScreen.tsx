@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
-  FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch
+  FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
+  FiSettings, FiChevronUp
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -127,6 +128,34 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Calendar collapsed state
+  const [calendarCollapsed, setCalendarCollapsed] = useState(false);
+
+  // Playback settings modal
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [playbackSettings, setPlaybackSettings] = useState({
+    colorPreviousDayBlack: false,  // Option 1: Color previous day black when new day starts
+    colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
+    colorEachDayDifferent: false   // Option 3: Color each day different color (disables option 1)
+  });
+
+  // Track current playback day for coloring
+  const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
+  const [playbackDateColors, setPlaybackDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+
+  // Generate date colors when setting is enabled or items change
+  useEffect(() => {
+    if (playbackSettings.colorEachDayDifferent) {
+      const dates = Object.keys(itemsByDate);
+      if (dates.length > 0) {
+        const colors = generateDateColors(dates);
+        setPlaybackDateColors(colors);
+      }
+    } else {
+      setPlaybackDateColors({});
+    }
+  }, [playbackSettings.colorEachDayDifferent, scheduleItems]);
 
   // Ref for auto-scrolling to playing item
   const playingItemRef = useRef<HTMLDivElement | null>(null);
@@ -704,10 +733,72 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Color all scheduled items with a specific color
+  const colorAllItems = async (color: { r: number; g: number; b: number }) => {
+    try {
+      for (const item of scheduleItems) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { ...color, a: 255 } }
+        );
+      }
+    } catch (e) {
+      console.error('Error coloring all items:', e);
+    }
+  };
+
+  // Color all items for a specific date
+  const colorDateItems = async (date: string, color: { r: number; g: number; b: number }) => {
+    const items = itemsByDate[date];
+    if (!items) return;
+
+    try {
+      for (const item of items) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { ...color, a: 255 } }
+        );
+      }
+    } catch (e) {
+      console.error('Error coloring date items:', e);
+    }
+  };
+
   const startPlayback = async () => {
     await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+    // Generate colors for each day if needed
+    if (playbackSettings.colorEachDayDifferent) {
+      const dates = Object.keys(itemsByDate);
+      const colors = generateDateColors(dates);
+      setPlaybackDateColors(colors);
+    }
+
+    // Color all items white if setting is enabled
+    if (playbackSettings.colorAllWhiteAtStart) {
+      await colorAllItems({ r: 255, g: 255, b: 255 });
+    }
+
+    // Reset current playback date
+    setCurrentPlaybackDate(null);
+
     // Zoom out to show all items first
     await zoomToAllItems();
+
     // Wait a moment then start
     setTimeout(() => {
       setIsPlaying(true);
@@ -745,6 +836,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     if (currentPlayIndex >= items.length) {
       setIsPlaying(false);
       setIsPaused(false);
+      setCurrentPlaybackDate(null);
       // Zoom out at end
       zoomToAllItems();
       return;
@@ -762,8 +854,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     const playNext = async () => {
+      // Check if we've moved to a new day
+      if (currentPlaybackDate && currentPlaybackDate !== item.scheduled_date) {
+        // Option 1: Color previous day black (only if option 3 is not enabled)
+        if (playbackSettings.colorPreviousDayBlack && !playbackSettings.colorEachDayDifferent) {
+          await colorDateItems(currentPlaybackDate, { r: 40, g: 40, b: 40 });
+        }
+      }
+
+      // Option 3: Color items with their day's color
+      if (playbackSettings.colorEachDayDifferent && playbackDateColors[item.scheduled_date]) {
+        const dayColor = playbackDateColors[item.scheduled_date];
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        if (modelId && guidIfc) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { ...dayColor, a: 255 } }
+            );
+          }
+        }
+      } else {
+        // Default: color item green
+        await colorItemGreen(item);
+      }
+
       await selectInViewer(item);
-      await colorItemGreen(item);
+
+      // Update current playback date
+      setCurrentPlaybackDate(item.scheduled_date);
 
       playbackRef.current = setTimeout(() => {
         setCurrentPlayIndex(prev => prev + 1);
@@ -777,7 +898,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, getAllItemsSorted]);
+  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors]);
 
   // Auto-scroll to playing item
   useEffect(() => {
@@ -1224,38 +1345,45 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       )}
 
       {/* Calendar Header */}
-      <div className="schedule-calendar">
+      <div className={`schedule-calendar ${calendarCollapsed ? 'collapsed' : ''}`}>
         <div className="calendar-header">
-          <button onClick={prevMonth}><FiChevronLeft size={20} /></button>
-          <span className="calendar-month">{monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}</span>
-          <button onClick={nextMonth}><FiChevronRight size={20} /></button>
+          <button onClick={prevMonth} disabled={calendarCollapsed}><FiChevronLeft size={20} /></button>
+          <span className="calendar-month" onClick={() => setCalendarCollapsed(!calendarCollapsed)}>
+            {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            <button className="calendar-collapse-btn" title={calendarCollapsed ? 'Ava kalender' : 'Sulge kalender'}>
+              {calendarCollapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={16} />}
+            </button>
+          </span>
+          <button onClick={nextMonth} disabled={calendarCollapsed}><FiChevronRight size={20} /></button>
         </div>
 
-        <div className="calendar-grid">
-          {dayNames.map(day => (
-            <div key={day} className="calendar-day-name">{day}</div>
-          ))}
-          {getDaysInMonth().map((date, idx) => {
-            const dateKey = formatDateKey(date);
-            const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-            const isToday = dateKey === today;
-            const isSelected = dateKey === selectedDate;
-            const itemCount = itemsByDate[dateKey]?.length || 0;
+        {!calendarCollapsed && (
+          <div className="calendar-grid">
+            {dayNames.map(day => (
+              <div key={day} className="calendar-day-name">{day}</div>
+            ))}
+            {getDaysInMonth().map((date, idx) => {
+              const dateKey = formatDateKey(date);
+              const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+              const isToday = dateKey === today;
+              const isSelected = dateKey === selectedDate;
+              const itemCount = itemsByDate[dateKey]?.length || 0;
 
-            return (
-              <div
-                key={idx}
-                className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''}`}
-                onClick={() => setSelectedDate(dateKey)}
-                onDragOver={(e) => handleDragOver(e, dateKey)}
-                onDrop={(e) => handleDrop(e, dateKey)}
-              >
-                <span className="day-number">{date.getDate()}</span>
-                {itemCount > 0 && <span className="day-count">{itemCount}</span>}
-              </div>
-            );
-          })}
-        </div>
+              return (
+                <div
+                  key={idx}
+                  className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''}`}
+                  onClick={() => setSelectedDate(dateKey)}
+                  onDragOver={(e) => handleDragOver(e, dateKey)}
+                  onDrop={(e) => handleDrop(e, dateKey)}
+                >
+                  <span className="day-number">{date.getDate()}</span>
+                  {itemCount > 0 && <span className="day-count">{itemCount}</span>}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Calendar Statistics */}
@@ -1340,6 +1468,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           </>
         )}
 
+        <button
+          className="settings-btn"
+          onClick={() => setShowSettingsModal(true)}
+          title="Mängimise seaded"
+        >
+          <FiSettings size={16} />
+        </button>
+
         <div className="speed-selector">
           {PLAYBACK_SPEEDS.map(speed => (
             <button
@@ -1368,6 +1504,52 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           <FiDownload size={16} />
         </button>
       </div>
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Mängimise seaded</h3>
+              <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <label className="setting-option">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.colorAllWhiteAtStart}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, colorAllWhiteAtStart: e.target.checked }))}
+                />
+                <span>Värvi kõik detailid valgeks enne mängimist</span>
+              </label>
+
+              <label className="setting-option">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.colorPreviousDayBlack}
+                  disabled={playbackSettings.colorEachDayDifferent}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, colorPreviousDayBlack: e.target.checked }))}
+                />
+                <span>Värvi eelmine päev mustaks uue päeva alguses</span>
+              </label>
+
+              <label className="setting-option">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.colorEachDayDifferent}
+                  onChange={e => setPlaybackSettings(prev => ({
+                    ...prev,
+                    colorEachDayDifferent: e.target.checked,
+                    colorPreviousDayBlack: e.target.checked ? false : prev.colorPreviousDayBlack
+                  }))}
+                />
+                <span>Värvi iga päev erineva värviga</span>
+                <small>(tühistab eelmise päeva mustaks värvimise)</small>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search bar */}
       <div className="schedule-search">
@@ -1432,6 +1614,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     >
                       {isCollapsed ? <FiChevronRight size={14} /> : <FiChevronDown size={14} />}
                     </button>
+                    {playbackSettings.colorEachDayDifferent && playbackDateColors[date] && (
+                      <span
+                        className="date-color-indicator"
+                        style={{
+                          backgroundColor: `rgb(${playbackDateColors[date].r}, ${playbackDateColors[date].g}, ${playbackDateColors[date].b})`
+                        }}
+                      />
+                    )}
                     <span className="date-label">{formatDateEstonian(date)}</span>
                     <span className="date-count">{items.length} tk</span>
                     {stats && <span className="date-percentage">{stats.dailyPercentage}% | {stats.percentage}%</span>}
