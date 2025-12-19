@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
 import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo } from 'react-icons/fi';
-import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // GUID helper functions
 function normalizeGuid(s: string): string {
@@ -225,6 +224,14 @@ export default function InstallationsScreen({
       (api.viewer as any).resetObjectState?.().catch(() => {});
     };
   }, [projectId]);
+
+  // Auto-dismiss messages after 3 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // Selection checking function
   const checkSelection = async () => {
@@ -905,59 +912,7 @@ export default function InstallationsScreen({
     setSelectedInstallationIds(newSelected);
   };
 
-  // Virtualization constants
-  const ITEM_HEIGHT = 32;
-  const MAX_VISIBLE_ITEMS = 12;
-
   const renderDayGroup = (day: DayGroup) => {
-    const listHeight = Math.min(day.items.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
-
-    const DayItemRow = ({ index, style }: ListChildComponentProps) => {
-      const inst = day.items[index];
-      const canDelete = isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase();
-      const isSelected = selectedInstallationIds.has(inst.id);
-
-      return (
-        <div style={style} className="installation-item" key={inst.id}>
-          <input
-            type="checkbox"
-            className="installation-item-checkbox"
-            checked={isSelected}
-            onChange={() => {}}
-            onClick={(e) => toggleInstallationSelect(inst.id, e)}
-          />
-          <div className="installation-item-main" onClick={() => zoomToInstallation(inst)}>
-            <div className="installation-item-mark">
-              {inst.assembly_mark}
-              {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
-            </div>
-          </div>
-          <span className="installation-time" style={{ fontSize: '10px', color: '#6a6e79' }}>
-            {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </span>
-          <button
-            className="installation-zoom-btn"
-            onClick={() => zoomToInstallation(inst)}
-            title="Zoom"
-          >
-            <FiZoomIn size={14} />
-          </button>
-          {canDelete && (
-            <button
-              className="installation-delete-btn"
-              onClick={() => deleteInstallation(inst.id)}
-              title="Kustuta"
-            >
-              <FiTrash2 size={14} />
-            </button>
-          )}
-        </div>
-      );
-    };
-
     return (
       <div key={day.dayKey} className="installation-date-group">
         <div className="date-group-header" onClick={() => toggleDay(day.dayKey)}>
@@ -975,14 +930,49 @@ export default function InstallationsScreen({
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
-            <List
-              height={listHeight}
-              itemCount={day.items.length}
-              itemSize={ITEM_HEIGHT}
-              width="100%"
-            >
-              {DayItemRow}
-            </List>
+            {day.items.map(inst => {
+              const canDelete = isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase();
+              const isSelected = selectedInstallationIds.has(inst.id);
+              return (
+                <div className="installation-item" key={inst.id}>
+                  <input
+                    type="checkbox"
+                    className="installation-item-checkbox"
+                    checked={isSelected}
+                    onChange={() => {}}
+                    onClick={(e) => toggleInstallationSelect(inst.id, e)}
+                  />
+                  <div className="installation-item-main" onClick={() => zoomToInstallation(inst)}>
+                    <div className="installation-item-mark">
+                      {inst.assembly_mark}
+                      {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
+                    </div>
+                  </div>
+                  <span className="installation-time" style={{ fontSize: '10px', color: '#6a6e79' }}>
+                    {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                  <button
+                    className="installation-zoom-btn"
+                    onClick={() => zoomToInstallation(inst)}
+                    title="Zoom"
+                  >
+                    <FiZoomIn size={14} />
+                  </button>
+                  {canDelete && (
+                    <button
+                      className="installation-delete-btn"
+                      onClick={() => deleteInstallation(inst.id)}
+                      title="Kustuta"
+                    >
+                      <FiTrash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
