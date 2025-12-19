@@ -211,6 +211,21 @@ export default function InstallationsScreen({
           console.warn('Could not get model info:', e);
         }
 
+        // Get external IDs (IFC GUIDs) for all runtimeIds at once
+        let externalIdMap = new Map<number, string>();
+        try {
+          const externalIds = await api.viewer.convertToObjectIds(modelId, runtimeIds);
+          if (externalIds && Array.isArray(externalIds)) {
+            runtimeIds.forEach((rid, idx) => {
+              if (externalIds[idx]) {
+                externalIdMap.set(rid, externalIds[idx]);
+              }
+            });
+          }
+        } catch (e) {
+          console.warn('Could not get external IDs:', e);
+        }
+
         for (const runtimeId of runtimeIds) {
           try {
             const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
@@ -218,7 +233,8 @@ export default function InstallationsScreen({
             if (props && props.length > 0) {
               const objProps = props[0];
               let assemblyMark: string | undefined;
-              let guidIfc: string | undefined;
+              // Get IFC GUID from convertToObjectIds (most reliable source)
+              let guidIfc: string | undefined = externalIdMap.get(runtimeId);
               let guidMs: string | undefined;
               let guid: string | undefined;
               let productName: string | undefined;
@@ -254,13 +270,13 @@ export default function InstallationsScreen({
                     assemblyMark = String(propValue);
                   }
 
-                  // GUID detection - check standard guid fields
+                  // GUID detection - check standard guid fields (only if not already from convertToObjectIds)
                   if (propName === 'guid' || propName === 'globalid') {
                     const val = String(propValue);
                     const guidType = classifyGuid(val);
-                    if (guidType === 'IFC') guidIfc = normalizeGuid(val);
+                    if (guidType === 'IFC' && !guidIfc) guidIfc = normalizeGuid(val);
                     else if (guidType === 'MS') guidMs = normalizeGuid(val);
-                    else guid = normalizeGuid(val);
+                    else if (!guid) guid = normalizeGuid(val);
                   }
 
                   // MS GUID from Reference Object property set
