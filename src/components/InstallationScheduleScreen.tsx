@@ -64,14 +64,15 @@ const ifcToMsGuid = (ifcGuid: string): string => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 };
 
-// Format date as DD.MM.YY Day
+// Format date as DD.MM.YY Day (parsing local date from YYYY-MM-DD string)
 const formatDateEstonian = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear()).slice(-2);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayStr = String(day).padStart(2, '0');
+  const monthStr = String(month).padStart(2, '0');
+  const yearStr = String(year).slice(-2);
   const weekday = WEEKDAY_NAMES[date.getDay()];
-  return `${day}.${month}.${year} ${weekday}`;
+  return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
 // RGB to hex color
@@ -190,6 +191,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
+
+  // Auto-dismiss success messages after 2 seconds
+  useEffect(() => {
+    if (message && !message.includes('Viga')) {
+      const timer = setTimeout(() => {
+        setMessage(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
 
   // Fetch project name
   useEffect(() => {
@@ -403,7 +414,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   };
 
   const formatDateKey = (date: Date) => {
-    return date.toISOString().split('T')[0];
+    // Use local date components to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   // Add selected objects to date
@@ -1597,18 +1612,17 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
         return (
           <div className="selection-info">
-            <span>Valitud mudelis: {selectedObjects.length}</span>
-            {allScheduled ? (
-              <span className="already-scheduled-info">
-                ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
-              </span>
-            ) : someScheduled ? (
-              <span className="partially-scheduled-info">
-                ⚠ {scheduledInfo.length} juba planeeritud
-              </span>
-            ) : null}
-            {!allScheduled && (
-              <>
+            <div className="selection-info-row">
+              <span>Valitud mudelis: {selectedObjects.length}</span>
+              {allScheduled ? (
+                <span className="already-scheduled-info">
+                  ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
+                </span>
+              ) : someScheduled ? (
+                <span className="partially-scheduled-info">
+                  ⚠ {scheduledInfo.length} juba planeeritud
+                </span>
+              ) : (
                 <div className="install-method-selector">
                   <span>Paigaldus:</span>
                   <button
@@ -1616,34 +1630,34 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
                     title="Kraana"
                   >
-                    <img src="/icons/crane.png" alt="Kraana" />
+                    <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
                   </button>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
                     onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
                     title="Tõstuk"
                   >
-                    <img src="/icons/forklift.png" alt="Tõstuk" />
+                    <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Tõstuk" />
                   </button>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
                     onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
                     title="Käsitsi"
                   >
-                    <img src="/icons/muscle.png" alt="Käsitsi" />
+                    <img src={`${import.meta.env.BASE_URL}icons/muscle.png`} alt="Käsitsi" />
                   </button>
                 </div>
-                {selectedDate && (
-                  <button
-                    className="btn-primary"
-                    onClick={() => addToDate(selectedDate)}
-                    disabled={saving}
-                  >
-                    <FiPlus size={14} />
-                    Lisa {formatDateEstonian(selectedDate)}
-                  </button>
-                )}
-              </>
+              )}
+            </div>
+            {!allScheduled && selectedDate && (
+              <button
+                className="btn-primary add-to-date-btn"
+                onClick={() => addToDate(selectedDate)}
+                disabled={saving}
+              >
+                <FiPlus size={14} />
+                Lisa {formatDateEstonian(selectedDate)}
+              </button>
             )}
           </div>
         );
@@ -1878,7 +1892,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             </div>
                             {(item as any).install_method && (
                               <img
-                                src={`/icons/${(item as any).install_method}.png`}
+                                src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
                                 alt={(item as any).install_method}
                                 className="item-install-icon"
                                 title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
