@@ -1671,28 +1671,27 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 
                     // Convert IFC GUID (22 chars) to MS GUID (UUID format)
+                    // First char = 2 bits, remaining 21 chars = 6 bits each = 128 bits total
                     function ifcToMsGuid(ifcGuid: string): string {
                       if (!ifcGuid || ifcGuid.length !== 22) return '';
 
-                      // Decode base64 to hex
+                      let bits = '';
+                      for (let i = 0; i < 22; i++) {
+                        const idx = chars.indexOf(ifcGuid[i]);
+                        if (idx < 0) return '';
+                        // First char only 2 bits (values 0-3), rest 6 bits
+                        const numBits = i === 0 ? 2 : 6;
+                        bits += idx.toString(2).padStart(numBits, '0');
+                      }
+
+                      // Convert 128 bits to 32 hex chars
                       let hex = '';
-                      for (let i = 0; i < 22; i += 4) {
-                        let n = 0;
-                        for (let j = 0; j < 4 && i + j < 22; j++) {
-                          const idx = chars.indexOf(ifcGuid[i + j]);
-                          if (idx < 0) return '';
-                          n = n * 64 + idx;
-                        }
-                        // Convert to hex (6 chars per 4 base64 chars, except last group)
-                        const hexChars = i === 20 ? 2 : 6;
-                        hex += n.toString(16).padStart(hexChars, '0');
+                      for (let i = 0; i < 128; i += 4) {
+                        hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
                       }
 
                       // Format as UUID: 8-4-4-4-12
-                      if (hex.length >= 32) {
-                        return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`.toLowerCase();
-                      }
-                      return hex;
+                      return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
                     }
 
                     const results: string[] = [];

@@ -1705,22 +1705,24 @@ export default function InstallationsScreen({
                     // IFC GUID base64 charset (non-standard!)
                     const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
 
-                    // Decode base64 to hex
-                    let hex = '';
+                    // First char = 2 bits, remaining 21 chars = 6 bits each = 128 bits total
+                    let bits = '';
                     let valid = true;
-                    for (let i = 0; i < 22 && valid; i += 4) {
-                      let n = 0;
-                      for (let j = 0; j < 4 && i + j < 22; j++) {
-                        const idx = chars.indexOf(ifcGuid[i + j]);
-                        if (idx < 0) { valid = false; break; }
-                        n = n * 64 + idx;
-                      }
-                      const hexChars = i === 20 ? 2 : 6;
-                      hex += n.toString(16).padStart(hexChars, '0');
+                    for (let i = 0; i < 22 && valid; i++) {
+                      const idx = chars.indexOf(ifcGuid[i]);
+                      if (idx < 0) { valid = false; break; }
+                      // First char only 2 bits (values 0-3), rest 6 bits
+                      const numBits = i === 0 ? 2 : 6;
+                      bits += idx.toString(2).padStart(numBits, '0');
                     }
 
-                    if (valid && hex.length >= 32) {
-                      const msGuid = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`.toLowerCase();
+                    if (valid && bits.length === 128) {
+                      // Convert 128 bits to 32 hex chars
+                      let hex = '';
+                      for (let i = 0; i < 128; i += 4) {
+                        hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+                      }
+                      const msGuid = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
                       return (
                         <div className="prop-info-row">
                           <span className="prop-info-label">GUID (MS):</span>
