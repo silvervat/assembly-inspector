@@ -691,29 +691,55 @@ export default function InstallationsScreen({
       console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length);
 
       // Step 1: Reset all colors first (required to allow new colors!)
+      console.log('Step 1: Resetting colors...');
       await api.viewer.setObjectState(undefined, { color: "reset" });
 
       // Step 2: Get all objects from all models
+      console.log('Step 2: Getting all objects...');
       const allModelObjects = await api.viewer.getObjects();
+      if (!allModelObjects || allModelObjects.length === 0) {
+        console.log('No objects returned from getObjects()');
+        return;
+      }
 
-      // Build maps per model
-      const allObjectsMap = new Map<string, Set<number>>();
-      const installedObjectsMap = new Map<string, Set<number>>();
-
-      for (const modelObj of allModelObjects || []) {
+      // Step 3: Color ALL objects gray first (like AdminScreen does)
+      console.log('Step 3: Coloring ALL objects gray...');
+      let totalGray = 0;
+      for (const modelObj of allModelObjects) {
         const modelId = modelObj.modelId;
         const allIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
         if (allIds.length > 0) {
-          allObjectsMap.set(modelId, new Set(allIds));
+          totalGray += allIds.length;
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: allIds }] },
+            { color: { r: 200, g: 200, b: 200, a: 255 } } // Gray
+          );
         }
+      }
+      console.log(`Colored ${totalGray} objects gray`);
 
-        // Convert installed GUIDs to runtime IDs for this model
+      // Step 4: Color installed objects green ON TOP (overrides gray)
+      console.log('Step 4: Coloring installed objects green...');
+      coloredObjectsRef.current = new Map();
+      let totalGreen = 0;
+
+      for (const modelObj of allModelObjects) {
+        const modelId = modelObj.modelId;
+
         if (installedIfcGuids.length > 0) {
           try {
             const installedIds = await api.viewer.convertToObjectRuntimeIds(modelId, installedIfcGuids);
             const validInstalledIds = (installedIds || []).filter((id: number) => id && id > 0);
+
             if (validInstalledIds.length > 0) {
-              installedObjectsMap.set(modelId, new Set(validInstalledIds));
+              totalGreen += validInstalledIds.length;
+              coloredObjectsRef.current.set(modelId, validInstalledIds);
+
+              console.log(`Model ${modelId}: coloring ${validInstalledIds.length} installed objects green`);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: validInstalledIds }] },
+                { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
+              );
             }
           } catch (e) {
             console.warn(`Could not convert GUIDs for model ${modelId}:`, e);
@@ -721,59 +747,8 @@ export default function InstallationsScreen({
         }
       }
 
-      // Debug: Log ID comparison
-      console.log('=== COLORING DEBUG ===');
-      for (const [modelId, allIdsSet] of allObjectsMap.entries()) {
-        const installedIdsSet = installedObjectsMap.get(modelId) || new Set();
-        const allIdsArray = Array.from(allIdsSet);
-        const installedIdsArray = Array.from(installedIdsSet);
-
-        // Check overlap
-        const overlapping = installedIdsArray.filter(id => allIdsSet.has(id));
-
-        console.log(`Model ${modelId}:`);
-        console.log(`  - getObjects() returned ${allIdsArray.length} IDs, sample:`, allIdsArray.slice(0, 5));
-        console.log(`  - convertToObjectRuntimeIds() returned ${installedIdsArray.length} IDs, sample:`, installedIdsArray.slice(0, 5));
-        console.log(`  - Overlapping IDs: ${overlapping.length}`);
-
-        if (overlapping.length === 0 && installedIdsArray.length > 0) {
-          console.warn('⚠️ NO OVERLAP! IDs from different sources do not match!');
-        }
-      }
-      console.log('=== END DEBUG ===');
-
-      // Step 3: Color NON-installed objects gray (avoid double-coloring!)
-      let totalGray = 0;
-      for (const [modelId, allIdsSet] of allObjectsMap.entries()) {
-        const installedIdsSet = installedObjectsMap.get(modelId) || new Set();
-        // Filter out installed IDs to get only non-installed
-        const nonInstalledIds = Array.from(allIdsSet).filter(id => !installedIdsSet.has(id));
-
-        if (nonInstalledIds.length > 0) {
-          totalGray += nonInstalledIds.length;
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: nonInstalledIds }] },
-            { color: { r: 230, g: 230, b: 230, a: 255 } } // Light gray
-          );
-        }
-      }
-      console.log('Colored', totalGray, 'non-installed objects gray');
-
-      // Step 4: Color installed objects green
-      coloredObjectsRef.current = new Map();
-      let totalGreen = 0;
-
-      for (const [modelId, installedIdsSet] of installedObjectsMap.entries()) {
-        const installedIds = Array.from(installedIdsSet);
-        totalGreen += installedIds.length;
-        coloredObjectsRef.current.set(modelId, installedIds);
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: installedIds }] },
-          { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
-        );
-      }
-
-      console.log('Colored', totalGreen, 'installed objects green');
+      console.log(`Colored ${totalGreen} installed objects green`);
+      console.log('=== COLORING COMPLETE ===');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
     }
