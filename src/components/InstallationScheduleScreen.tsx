@@ -513,6 +513,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Delete multiple selected items
+  const deleteSelectedItems = async () => {
+    if (selectedItemIds.size === 0) return;
+
+    const confirmed = window.confirm(`Kustuta ${selectedItemIds.size} detaili graafikust?`);
+    if (!confirmed) return;
+
+    try {
+      for (const itemId of selectedItemIds) {
+        await supabase
+          .from('installation_schedule')
+          .delete()
+          .eq('id', itemId);
+      }
+      setSelectedItemIds(new Set());
+      setMessage(`${selectedItemIds.size} detaili kustutatud`);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error deleting items:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
   // Select and zoom to item in viewer
   const selectInViewer = async (item: ScheduleItem) => {
     try {
@@ -1453,6 +1476,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         <div className="multi-select-bar">
           <span>{selectedItemIds.size} detaili valitud</span>
           <button onClick={clearItemSelection}>Tühista</button>
+          <button className="delete-selected-btn" onClick={deleteSelectedItems}>
+            <FiTrash2 size={12} />
+            Kustuta
+          </button>
           <span className="hint">Lohista või vali 📅 kuupäeva muutmiseks</span>
         </div>
       )}

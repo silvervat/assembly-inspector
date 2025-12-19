@@ -622,6 +622,20 @@
   color: white;
 }
 
+.multi-select-bar .delete-selected-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #fee2e2;
+  color: #dc2626;
+  border-color: #dc2626;
+}
+
+.multi-select-bar .delete-selected-btn:hover {
+  background: #dc2626;
+  color: white;
+}
+
 .multi-select-bar .hint {
   margin-left: auto;
   font-size: 11px;
