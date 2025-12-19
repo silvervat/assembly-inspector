@@ -1106,8 +1106,15 @@ export default function InstallationsScreen({
         <div className="installations-list-view">
           {/* Search and filter */}
           <div className="list-controls">
-            <div className="search-box">
-              <FiSearch size={16} />
+            <button
+              className="list-back-btn"
+              onClick={() => setShowList(false)}
+              title="Tagasi"
+            >
+              <FiArrowLeft size={16} />
+            </button>
+            <div className="search-box compact">
+              <FiSearch size={14} />
               <input
                 type="text"
                 placeholder="Otsi..."

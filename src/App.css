@@ -7169,6 +7169,24 @@ button.stat-toggle.off:hover {
   border-bottom: 1px solid var(--modus-border);
 }
 
+.list-back-btn {
+  padding: 6px 8px;
+  border: 1px solid var(--modus-border);
+  background: white;
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+}
+
+.list-back-btn:hover {
+  background: var(--modus-primary);
+  color: white;
+  border-color: var(--modus-primary);
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -7178,6 +7196,11 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg-light);
   border-radius: var(--modus-radius-sm);
   border: 1px solid var(--modus-border);
+}
+
+.search-box.compact {
+  flex: 0 1 140px;
+  min-width: 100px;
 }
 
 .search-box input {
