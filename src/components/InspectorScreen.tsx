@@ -1910,18 +1910,12 @@ export default function InspectorScreen({
   };
 
   // Välju inspektsioonide vaatest
-  const exitInspectionList = async () => {
-    try {
-      // Clear all selections
-      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-      // Reset all colors
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
-      setInspectionListMode('none');
-      setInspectionListData([]);
-      setMessage('');
-    } catch (e) {
-      console.error('Failed to reset:', e);
-    }
+  const exitInspectionList = () => {
+    // Keep selection and colors intact when going back
+    // User can continue inspecting or navigate elsewhere
+    setInspectionListMode('none');
+    setInspectionListData([]);
+    setMessage('');
   };
 
   return (
