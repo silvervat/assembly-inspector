@@ -447,7 +447,7 @@ export default function InstallationsScreen({
         cast_unit_position_code: obj.castUnitPositionCode,
         object_type: obj.objectType,
         installer_name: installerName,
-        user_email: userEmail,
+        user_email: userEmail.toLowerCase(),
         installation_method_id: selectedMethodId || null,
         installation_method_name: method?.name || null,
         installed_at: installDate,

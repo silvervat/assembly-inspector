@@ -586,17 +586,18 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
 
           if (!objProps) continue;
 
-          // Extract Tekla properties
+          // Extract Tekla properties - support both old (rawProps.sets) and new (objProps.properties) formats
           const rawProps = (objProps as any)?.properties;
           let castUnitMark = '';
           let productName = '';
           let weight = '';
 
+          // Try old format first (rawProps.sets)
           if (rawProps?.sets && Array.isArray(rawProps.sets)) {
             for (const pset of rawProps.sets) {
               const propsArray = (pset as any).properties || [];
               for (const prop of propsArray) {
-                const propName = (prop as any).name?.toLowerCase() || '';
+                const propName = ((prop as any).name || '').toLowerCase();
                 const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
 
                 if (propName === 'cast_unit_mark' || propName === 'assembly_mark') {
@@ -606,6 +607,33 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   productName = String(propValue);
                 }
                 if (propName === 'cast_unit_weight' || propName === 'assembly_weight' || propName === 'weight') {
+                  weight = String(propValue);
+                }
+              }
+            }
+          }
+          // Fallback to new format (objProps.properties as array)
+          else if (Array.isArray(rawProps)) {
+            for (const pset of rawProps) {
+              const setName = (pset as any).set || (pset as any).name || '';
+              const propsArray = (pset as any).properties || [];
+
+              for (const prop of propsArray) {
+                const propName = ((prop as any).name || '').toLowerCase();
+                const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
+
+                if (!propValue) continue;
+
+                // Cast unit mark
+                if ((propName.includes('cast') && propName.includes('mark')) || propName === 'assembly_mark') {
+                  castUnitMark = String(propValue);
+                }
+                // Product name from Product property set
+                if ((setName === 'Product' || setName.toLowerCase().includes('product')) && propName === 'name') {
+                  productName = String(propValue);
+                }
+                // Weight
+                if (propName.includes('cast_unit_weight') || propName === 'assembly_weight' || propName === 'weight') {
                   weight = String(propValue);
                 }
               }
@@ -659,43 +687,57 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                 let washerCount = 0;
                 let washerType = '';
 
+                // Helper function to extract bolt properties from a property set
+                const extractBoltProps = (pset: any, setName: string) => {
+                  // Only look at Tekla Bolt property sets
+                  if (!setName.includes('bolt') && !setName.includes('tekla')) return;
+
+                  const propsArray = (pset as any).properties || [];
+                  for (const prop of propsArray) {
+                    const propName = ((prop as any).name || '').toLowerCase();
+                    const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
+
+                    if (!propValue) continue;
+
+                    if (propName === 'bolt_name' || propName === 'name') {
+                      boltName = String(propValue);
+                    }
+                    if (propName === 'bolt_standard' || propName === 'standard') {
+                      boltStandard = String(propValue);
+                    }
+                    if (propName === 'bolt_count' || propName === 'count') {
+                      boltCount = parseInt(String(propValue)) || 1;
+                    }
+                    if (propName === 'nut_name') {
+                      nutName = String(propValue);
+                    }
+                    if (propName === 'nut_count') {
+                      nutCount = parseInt(String(propValue)) || 0;
+                    }
+                    if (propName === 'washer_name') {
+                      washerName = String(propValue);
+                    }
+                    if (propName === 'washer_count') {
+                      washerCount = parseInt(String(propValue)) || 0;
+                    }
+                    if (propName === 'washer_type') {
+                      washerType = String(propValue);
+                    }
+                  }
+                };
+
+                // Try old format first (childRawProps.sets)
                 if (childRawProps?.sets && Array.isArray(childRawProps.sets)) {
                   for (const pset of childRawProps.sets) {
                     const setName = ((pset as any).set || (pset as any).name || '').toLowerCase();
-
-                    // Only look at Tekla Bolt property sets
-                    if (!setName.includes('bolt') && !setName.includes('tekla')) continue;
-
-                    const propsArray = (pset as any).properties || [];
-                    for (const prop of propsArray) {
-                      const propName = (prop as any).name?.toLowerCase() || '';
-                      const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
-
-                      if (propName === 'bolt_name' || propName === 'name') {
-                        boltName = String(propValue);
-                      }
-                      if (propName === 'bolt_standard' || propName === 'standard') {
-                        boltStandard = String(propValue);
-                      }
-                      if (propName === 'bolt_count' || propName === 'count') {
-                        boltCount = parseInt(String(propValue)) || 1;
-                      }
-                      if (propName === 'nut_name') {
-                        nutName = String(propValue);
-                      }
-                      if (propName === 'nut_count') {
-                        nutCount = parseInt(String(propValue)) || 0;
-                      }
-                      if (propName === 'washer_name') {
-                        washerName = String(propValue);
-                      }
-                      if (propName === 'washer_count') {
-                        washerCount = parseInt(String(propValue)) || 0;
-                      }
-                      if (propName === 'washer_type') {
-                        washerType = String(propValue);
-                      }
-                    }
+                    extractBoltProps(pset, setName);
+                  }
+                }
+                // Fallback to new format (childObjProps.properties as array)
+                else if (Array.isArray(childRawProps)) {
+                  for (const pset of childRawProps) {
+                    const setName = ((pset as any).set || (pset as any).name || '').toLowerCase();
+                    extractBoltProps(pset, setName);
                   }
                 }
 

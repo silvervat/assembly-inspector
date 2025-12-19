@@ -1012,7 +1012,7 @@ export default function InspectorScreen({
         cast_unit_top_elevation: obj.topElevation,
         cast_unit_weight: obj.weight,
         product_name: obj.productName,
-        user_email: tcUserEmail,
+        user_email: tcUserEmail?.toLowerCase(),
         // IFC fields (poltide inspektsioon)
         ifc_material: obj.ifcMaterial,
         ifc_nominal_diameter: obj.ifcNominalDiameter,
