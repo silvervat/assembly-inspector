@@ -721,6 +721,27 @@ export default function InstallationsScreen({
         }
       }
 
+      // Debug: Log ID comparison
+      console.log('=== COLORING DEBUG ===');
+      for (const [modelId, allIdsSet] of allObjectsMap.entries()) {
+        const installedIdsSet = installedObjectsMap.get(modelId) || new Set();
+        const allIdsArray = Array.from(allIdsSet);
+        const installedIdsArray = Array.from(installedIdsSet);
+
+        // Check overlap
+        const overlapping = installedIdsArray.filter(id => allIdsSet.has(id));
+
+        console.log(`Model ${modelId}:`);
+        console.log(`  - getObjects() returned ${allIdsArray.length} IDs, sample:`, allIdsArray.slice(0, 5));
+        console.log(`  - convertToObjectRuntimeIds() returned ${installedIdsArray.length} IDs, sample:`, installedIdsArray.slice(0, 5));
+        console.log(`  - Overlapping IDs: ${overlapping.length}`);
+
+        if (overlapping.length === 0 && installedIdsArray.length > 0) {
+          console.warn('⚠️ NO OVERLAP! IDs from different sources do not match!');
+        }
+      }
+      console.log('=== END DEBUG ===');
+
       // Step 3: Color NON-installed objects gray (avoid double-coloring!)
       let totalGray = 0;
       for (const [modelId, allIdsSet] of allObjectsMap.entries()) {
