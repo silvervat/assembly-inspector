@@ -1967,6 +1967,12 @@ button.stat-toggle.off:hover {
   text-overflow: ellipsis;
 }
 
+.inspection-product {
+  font-weight: 400;
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-tertiary);
+}
+
 .inspection-inspector {
   font-size: var(--modus-font-size-xs);
   color: var(--modus-text-secondary);

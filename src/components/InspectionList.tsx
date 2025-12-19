@@ -17,6 +17,7 @@ export interface InspectionItem {
   guid_ifc?: string;
   file_name?: string;
   user_email?: string;
+  product_name?: string;
 }
 
 // Extended result with checkpoint name
@@ -541,7 +542,10 @@ export default function InspectionList({
               onClick={() => handleInspectionClick(insp)}
             >
               <div className="inspection-item-main">
-                <span className="inspection-mark">{insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}</span>
+                <span className="inspection-mark">
+                  {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
+                  {insp.product_name && <span className="inspection-product"> | {insp.product_name}</span>}
+                </span>
                 {mode === 'all' && (
                   <span className="inspection-inspector">{insp.inspector_name}</span>
                 )}
