@@ -6318,17 +6318,60 @@ button.stat-toggle.off:hover {
 
 .form-field-inline select,
 .form-field-inline input {
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid var(--modus-border);
-  border-radius: var(--modus-radius-xs);
+  border-radius: var(--modus-radius-sm);
   font-size: 13px;
   min-width: 0;
+  background: white;
+  color: var(--modus-text-primary);
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .form-field-inline select:focus,
 .form-field-inline input:focus {
   outline: none;
   border-color: var(--modus-primary);
+  box-shadow: 0 0 0 3px rgba(0, 86, 162, 0.1);
+}
+
+/* Modern datetime-local styling */
+.form-field-inline input[type="datetime-local"] {
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--modus-text-primary);
+  background: linear-gradient(to bottom, #fff, #f8f9fa);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+}
+
+.form-field-inline input[type="datetime-local"]:hover {
+  border-color: var(--modus-primary-light);
+  background: linear-gradient(to bottom, #fff, #f0f4f8);
+}
+
+.form-field-inline input[type="datetime-local"]:focus {
+  background: white;
+  border-color: var(--modus-primary);
+  box-shadow: 0 0 0 3px rgba(0, 86, 162, 0.15);
+}
+
+/* Style the calendar icon */
+.form-field-inline input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  padding: 4px;
+  margin-left: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.form-field-inline input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: var(--modus-bg-light);
 }
 
 .no-methods-inline {
