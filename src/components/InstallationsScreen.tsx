@@ -487,73 +487,54 @@ export default function InstallationsScreen({
     }
   };
 
-  // Apply coloring: not installed = white, installed = green (single pass per category)
+  // Apply coloring: all objects white, installed objects green
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>) => {
     try {
+      // First, set ALL objects to white/light gray
+      await api.viewer.setObjectState(undefined, { color: { r: 220, g: 220, b: 220, a: 255 } });
+
       // Get all loaded models
       const models = await api.viewer.getModels();
-      if (!models || models.length === 0) return;
+      if (!models || models.length === 0) {
+        console.log('No models loaded for coloring');
+        return;
+      }
 
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
         const guidType = classifyGuid(guid);
         return guidType === 'IFC';
       });
-      const installedSet = new Set(installedIfcGuids);
 
       console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length);
+      if (installedIfcGuids.length === 0) {
+        console.log('No IFC GUIDs to color green');
+        return;
+      }
 
-      // Process each model - separate installed and not installed objects
-      let totalGreen = 0;
-      let totalWhite = 0;
-
+      // For each model, convert GUIDs to runtime IDs and color them green
+      let totalColored = 0;
       for (const model of models) {
         try {
-          // Get all objects from model
-          const allObjects = await (api.viewer as any).getObjects?.(model.id);
-          if (!allObjects || allObjects.length === 0) continue;
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, installedIfcGuids);
 
-          // Get all external IDs (IFC GUIDs) for this model
-          const allRuntimeIds = allObjects.map((obj: any) => obj.id || obj.runtimeId).filter(Boolean);
-          if (allRuntimeIds.length === 0) continue;
+          if (runtimeIds && runtimeIds.length > 0) {
+            // Filter out invalid runtime IDs (0 or undefined)
+            const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
 
-          const allExternalIds = await api.viewer.convertToObjectIds(model.id, allRuntimeIds);
-
-          // Separate into installed and not installed
-          const installedRuntimeIds: number[] = [];
-          const notInstalledRuntimeIds: number[] = [];
-
-          allRuntimeIds.forEach((rid: number, idx: number) => {
-            const extId = allExternalIds[idx];
-            if (extId && installedSet.has(extId)) {
-              installedRuntimeIds.push(rid);
-            } else {
-              notInstalledRuntimeIds.push(rid);
+            if (validRuntimeIds.length > 0) {
+              totalColored += validRuntimeIds.length;
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validRuntimeIds }] },
+                { color: { r: 34, g: 197, b: 94, a: 255 } }
+              );
             }
-          });
-
-          // Color not installed objects white (single call)
-          if (notInstalledRuntimeIds.length > 0) {
-            totalWhite += notInstalledRuntimeIds.length;
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: notInstalledRuntimeIds }] },
-              { color: { r: 220, g: 220, b: 220, a: 255 } }
-            );
-          }
-
-          // Color installed objects green (single call)
-          if (installedRuntimeIds.length > 0) {
-            totalGreen += installedRuntimeIds.length;
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: installedRuntimeIds }] },
-              { color: { r: 34, g: 197, b: 94, a: 255 } }
-            );
           }
         } catch (e) {
-          console.warn(`Could not color objects for model ${model.id}:`, e);
+          console.warn(`Could not color installed objects for model ${model.id}:`, e);
         }
       }
-      console.log('Colored:', totalGreen, 'green (installed),', totalWhite, 'white (not installed)');
+      console.log('Colored', totalColored, 'installed objects green');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
     }
@@ -771,6 +752,32 @@ export default function InstallationsScreen({
 
   const zoomToInstallation = async (installation: Installation) => {
     try {
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      // Try to find object by GUID first (more reliable)
+      const guid = installation.guid_ifc || installation.guid;
+      if (guid) {
+        for (const model of models) {
+          try {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+            if (runtimeIds && runtimeIds.length > 0 && runtimeIds[0] > 0) {
+              const objectRuntimeIds = [runtimeIds[0]];
+              // Select the object
+              await api.viewer.setSelection({
+                modelObjectIds: [{ modelId: model.id, objectRuntimeIds }]
+              }, 'set');
+              // Zoom to the object
+              await (api.viewer as any).zoomToObjects?.([{ modelId: model.id, objectRuntimeIds }]);
+              return;
+            }
+          } catch (e) {
+            // Try next model
+          }
+        }
+      }
+
+      // Fallback to stored runtime ID
       if (installation.object_runtime_id && installation.model_id) {
         await api.viewer.setSelection({
           modelObjectIds: [{
@@ -778,8 +785,7 @@ export default function InstallationsScreen({
             objectRuntimeIds: [installation.object_runtime_id]
           }]
         }, 'set');
-        // Zoom to selected object
-        await (api.viewer as any).zoomToObjects([{
+        await (api.viewer as any).zoomToObjects?.([{
           modelId: installation.model_id,
           objectRuntimeIds: [installation.object_runtime_id]
         }]);

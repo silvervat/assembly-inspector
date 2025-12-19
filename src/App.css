@@ -7292,6 +7292,8 @@ button.stat-toggle.off:hover {
 .installations-list-content {
   flex: 1;
   padding: var(--modus-spacing-md);
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .empty-list {
@@ -7441,7 +7443,7 @@ button.stat-toggle.off:hover {
 }
 
 .installation-item:hover {
-  background: var(--modus-bg-light);
+  background: var(--modus-primary-selected);
 }
 
 .installation-item-main {
