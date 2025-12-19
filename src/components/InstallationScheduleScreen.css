@@ -176,6 +176,24 @@
   font-size: 12px;
 }
 
+.already-scheduled-info {
+  background: #dcfce7;
+  color: #166534;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.partially-scheduled-info {
+  background: #fef3c7;
+  color: #92400e;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 /* Playback Controls */
 .playback-controls {
   display: flex;

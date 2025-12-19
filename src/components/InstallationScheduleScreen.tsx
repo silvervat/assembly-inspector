@@ -1582,46 +1582,72 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         </div>
       )}
 
-      {/* Selection Info */}
-      {selectedObjects.length > 0 && (
-        <div className="selection-info">
-          <span>Valitud mudelis: {selectedObjects.length}</span>
-          <div className="install-method-selector">
-            <span>Paigaldus:</span>
-            <button
-              className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
-              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
-              title="Kraana"
-            >
-              <img src="/icons/crane.png" alt="Kraana" />
-            </button>
-            <button
-              className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
-              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
-              title="Tõstuk"
-            >
-              <img src="/icons/forklift.png" alt="Tõstuk" />
-            </button>
-            <button
-              className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
-              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
-              title="Käsitsi"
-            >
-              <img src="/icons/muscle.png" alt="Käsitsi" />
-            </button>
+      {/* Selection Info - hide during playback */}
+      {selectedObjects.length > 0 && !isPlaying && !isPaused && (() => {
+        // Check if selected objects are already scheduled
+        const scheduledInfo = selectedObjects
+          .map(obj => {
+            const scheduled = scheduleItems.find(item => item.guid === obj.guid || item.guid_ifc === obj.guidIfc);
+            return scheduled ? { obj, date: scheduled.scheduled_date } : null;
+          })
+          .filter(Boolean) as { obj: SelectedObject; date: string }[];
+
+        const allScheduled = scheduledInfo.length === selectedObjects.length;
+        const someScheduled = scheduledInfo.length > 0 && scheduledInfo.length < selectedObjects.length;
+
+        return (
+          <div className="selection-info">
+            <span>Valitud mudelis: {selectedObjects.length}</span>
+            {allScheduled ? (
+              <span className="already-scheduled-info">
+                ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
+              </span>
+            ) : someScheduled ? (
+              <span className="partially-scheduled-info">
+                ⚠ {scheduledInfo.length} juba planeeritud
+              </span>
+            ) : null}
+            {!allScheduled && (
+              <>
+                <div className="install-method-selector">
+                  <span>Paigaldus:</span>
+                  <button
+                    className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
+                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
+                    title="Kraana"
+                  >
+                    <img src="/icons/crane.png" alt="Kraana" />
+                  </button>
+                  <button
+                    className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
+                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
+                    title="Tõstuk"
+                  >
+                    <img src="/icons/forklift.png" alt="Tõstuk" />
+                  </button>
+                  <button
+                    className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
+                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
+                    title="Käsitsi"
+                  >
+                    <img src="/icons/muscle.png" alt="Käsitsi" />
+                  </button>
+                </div>
+                {selectedDate && (
+                  <button
+                    className="btn-primary"
+                    onClick={() => addToDate(selectedDate)}
+                    disabled={saving}
+                  >
+                    <FiPlus size={14} />
+                    Lisa {formatDateEstonian(selectedDate)}
+                  </button>
+                )}
+              </>
+            )}
           </div>
-          {selectedDate && (
-            <button
-              className="btn-primary"
-              onClick={() => addToDate(selectedDate)}
-              disabled={saving}
-            >
-              <FiPlus size={14} />
-              Lisa {formatDateEstonian(selectedDate)}
-            </button>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* Playback Controls */}
       <div className="playback-controls">
