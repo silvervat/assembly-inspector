@@ -110,6 +110,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Drag state
   const [draggedItems, setDraggedItems] = useState<ScheduleItem[]>([]);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   // Search state
@@ -873,6 +874,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setIsDragging(false);
     setDraggedItems([]);
     setDragOverDate(null);
+    setDragOverIndex(null);
   };
 
   const handleDragOver = (e: React.DragEvent, date: string) => {
@@ -881,22 +883,76 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setDragOverDate(date);
   };
 
-  const handleDrop = async (e: React.DragEvent, targetDate: string) => {
+  // Handle drag over a specific item to show drop indicator
+  const handleItemDragOver = (e: React.DragEvent, date: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDate(date);
+
+    // Determine if dropping above or below based on mouse position
+    const rect = (e.target as HTMLElement).closest('.schedule-item')?.getBoundingClientRect();
+    if (rect) {
+      const midY = rect.top + rect.height / 2;
+      const dropIndex = e.clientY < midY ? index : index + 1;
+      setDragOverIndex(dropIndex);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetDate: string, targetIndex?: number) => {
     e.preventDefault();
     setDragOverDate(null);
+    setDragOverIndex(null);
     setIsDragging(false);
 
     if (draggedItems.length === 0) return;
 
     try {
-      for (const item of draggedItems) {
-        if (item.scheduled_date !== targetDate) {
+      const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
+
+      if (isSameDate && targetIndex !== undefined) {
+        // Reordering within same date
+        const dateItems = [...(itemsByDate[targetDate] || [])];
+        const draggedIds = new Set(draggedItems.map(i => i.id));
+
+        // Remove dragged items from list
+        const remaining = dateItems.filter(i => !draggedIds.has(i.id));
+
+        // Adjust target index based on removed items
+        let adjustedIndex = targetIndex;
+        for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
+          if (draggedIds.has(dateItems[i].id)) {
+            adjustedIndex--;
+          }
+        }
+        adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
+
+        // Insert dragged items at new position
+        const newOrder = [
+          ...remaining.slice(0, adjustedIndex),
+          ...draggedItems,
+          ...remaining.slice(adjustedIndex)
+        ];
+
+        // Update sort_order for all items in this date
+        for (let i = 0; i < newOrder.length; i++) {
           await supabase
             .from('installation_schedule')
-            .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
-            .eq('id', item.id);
+            .update({ sort_order: i, updated_by: tcUserEmail })
+            .eq('id', newOrder[i].id);
+        }
+      } else {
+        // Moving to different date
+        for (const item of draggedItems) {
+          if (item.scheduled_date !== targetDate) {
+            await supabase
+              .from('installation_schedule')
+              .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
+              .eq('id', item.id);
+          }
         }
       }
+
       setDraggedItems([]);
       setSelectedItemIds(new Set());
       loadSchedule();
@@ -1302,21 +1358,23 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       {items.map((item, idx) => {
                         const isItemSelected = selectedItemIds.has(item.id);
                         const allSorted = getAllItemsSorted();
-
                         const isCurrentlyPlaying = isPlaying && allSorted[currentPlayIndex]?.id === item.id;
+                        const showDropBefore = dragOverDate === date && dragOverIndex === idx;
+                        const showDropAfter = dragOverDate === date && dragOverIndex === idx + 1 && idx === items.length - 1;
 
                         return (
-                          <div
-                            key={item.id}
-                            ref={isCurrentlyPlaying ? playingItemRef : null}
-                            className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''}`}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, item)}
-                            onDragEnd={handleDragEnd}
-                            onDragOver={(e) => handleDragOver(e, date)}
-                            onDrop={(e) => handleDrop(e, date)}
-                            onClick={(e) => handleItemClick(e, item, allSorted)}
-                          >
+                          <div key={item.id} className="schedule-item-wrapper">
+                            {showDropBefore && <div className="drop-indicator" />}
+                            <div
+                              ref={isCurrentlyPlaying ? playingItemRef : null}
+                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''}`}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, item)}
+                              onDragEnd={handleDragEnd}
+                              onDragOver={(e) => handleItemDragOver(e, date, idx)}
+                              onDrop={(e) => handleDrop(e, date, dragOverIndex ?? undefined)}
+                              onClick={(e) => handleItemClick(e, item, allSorted)}
+                            >
                             <span className="item-index">{idx + 1}</span>
                             <div className="item-drag-handle">
                               <FiMove size={10} />
@@ -1377,6 +1435,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                 </div>
                               </div>
                             )}
+                            </div>
+                            {showDropAfter && <div className="drop-indicator" />}
                           </div>
                         );
                       })}
