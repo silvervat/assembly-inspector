@@ -1663,6 +1663,56 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               </div>
             </div>
 
+            {/* BACKGROUND COLOR section */}
+            <div className="function-section">
+              <h4>🎨 Taustavärv</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Praegune taust"
+                  result={functionResults["Praegune taust"]}
+                  onClick={() => testFunction("Praegune taust", async () => {
+                    const settings = await api.viewer.getSettings();
+                    return `Taust: ${(settings as any).backgroundColor || 'Unknown'}`;
+                  })}
+                />
+                <FunctionButton
+                  name="Taust: White"
+                  result={functionResults["Taust: White"]}
+                  onClick={() => testFunction("Taust: White", () => api.viewer.setSettings({ backgroundColor: "White" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: LightGray"
+                  result={functionResults["Taust: LightGray"]}
+                  onClick={() => testFunction("Taust: LightGray", () => api.viewer.setSettings({ backgroundColor: "LightGray" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Gray1"
+                  result={functionResults["Taust: Gray1"]}
+                  onClick={() => testFunction("Taust: Gray1", () => api.viewer.setSettings({ backgroundColor: "Gray1" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Gray2"
+                  result={functionResults["Taust: Gray2"]}
+                  onClick={() => testFunction("Taust: Gray2", () => api.viewer.setSettings({ backgroundColor: "Gray2" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Gray3"
+                  result={functionResults["Taust: Gray3"]}
+                  onClick={() => testFunction("Taust: Gray3", () => api.viewer.setSettings({ backgroundColor: "Gray3" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: GrayDark2"
+                  result={functionResults["Taust: GrayDark2"]}
+                  onClick={() => testFunction("Taust: GrayDark2", () => api.viewer.setSettings({ backgroundColor: "GrayDark2" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Default"
+                  result={functionResults["Taust: Default"]}
+                  onClick={() => testFunction("Taust: Default", () => api.viewer.setSettings({ backgroundColor: "Default" } as any))}
+                />
+              </div>
+            </div>
+
             {/* SNAPSHOT section */}
             <div className="function-section">
               <h4>📸 Ekraanipilt</h4>
