@@ -950,3 +950,82 @@
   flex-shrink: 0;
   border: 1px solid rgba(0, 0, 0, 0.15);
 }
+
+/* Installation Method Selector */
+.install-method-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.install-method-selector > span {
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+}
+
+.install-method-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  padding: 4px;
+  transition: all 0.15s;
+}
+
+.install-method-btn img {
+  width: 18px;
+  height: 18px;
+  opacity: 0.5;
+  filter: grayscale(100%);
+}
+
+.install-method-btn:hover {
+  border-color: var(--modus-primary);
+  background: #f0f7ff;
+}
+
+.install-method-btn:hover img {
+  opacity: 0.8;
+}
+
+.install-method-btn.active {
+  border-color: var(--modus-primary);
+  background: var(--modus-primary);
+}
+
+.install-method-btn.active img {
+  opacity: 1;
+  filter: grayscale(0%) brightness(0) invert(1);
+}
+
+/* Item row layout */
+.item-main-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-weight {
+  font-size: 10px;
+  color: var(--modus-text-secondary);
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Installation method icon on item */
+.item-install-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.6;
+  filter: grayscale(100%);
+  flex-shrink: 0;
+  margin-right: 4px;
+}

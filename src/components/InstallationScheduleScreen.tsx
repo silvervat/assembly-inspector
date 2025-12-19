@@ -129,6 +129,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Project name for export
+  const [projectName, setProjectName] = useState<string>('');
+
+  // Installation method for new items
+  const [selectedInstallMethod, setSelectedInstallMethod] = useState<'crane' | 'forklift' | 'manual' | null>(null);
+
   // Calendar collapsed state
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
@@ -184,6 +190,21 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
+
+  // Fetch project name
+  useEffect(() => {
+    const fetchProjectName = async () => {
+      try {
+        const projectInfo = await (api as any).project?.getProject?.();
+        if (projectInfo?.name) {
+          setProjectName(projectInfo.name);
+        }
+      } catch (e) {
+        console.log('Could not fetch project name:', e);
+      }
+    };
+    fetchProjectName();
+  }, [api]);
 
   // Listen to selection changes from model
   useEffect(() => {
@@ -419,6 +440,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           scheduled_date: date,
           sort_order: (itemsByDate[date]?.length || 0) + idx,
           status: 'planned',
+          install_method: selectedInstallMethod,
           created_by: tcUserEmail
         };
       });
@@ -1103,18 +1125,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     if (draggedItems.length === 0) return;
 
-    try {
-      const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
+    const draggedIds = new Set(draggedItems.map(i => i.id));
+    const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
+
+    // Optimistic update - update local state immediately
+    setScheduleItems(prev => {
+      let updated = [...prev];
 
       if (isSameDate && targetIndex !== undefined) {
         // Reordering within same date
-        const dateItems = [...(itemsByDate[targetDate] || [])];
-        const draggedIds = new Set(draggedItems.map(i => i.id));
-
-        // Remove dragged items from list
+        const dateItems = updated.filter(i => i.scheduled_date === targetDate);
+        const otherItems = updated.filter(i => i.scheduled_date !== targetDate);
         const remaining = dateItems.filter(i => !draggedIds.has(i.id));
 
-        // Adjust target index based on removed items
+        // Adjust target index
         let adjustedIndex = targetIndex;
         for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
           if (draggedIds.has(dateItems[i].id)) {
@@ -1124,36 +1148,68 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
 
         // Insert dragged items at new position
+        const newDateItems = [
+          ...remaining.slice(0, adjustedIndex),
+          ...draggedItems,
+          ...remaining.slice(adjustedIndex)
+        ].map((item, idx) => ({ ...item, sort_order: idx }));
+
+        updated = [...otherItems, ...newDateItems];
+      } else {
+        // Moving to different date - update scheduled_date
+        updated = updated.map(item =>
+          draggedIds.has(item.id)
+            ? { ...item, scheduled_date: targetDate }
+            : item
+        );
+      }
+
+      return updated;
+    });
+
+    setDraggedItems([]);
+    setSelectedItemIds(new Set());
+
+    // Background database update (no await to prevent blocking)
+    try {
+      if (isSameDate && targetIndex !== undefined) {
+        const dateItems = [...(itemsByDate[targetDate] || [])];
+        const remaining = dateItems.filter(i => !draggedIds.has(i.id));
+        let adjustedIndex = targetIndex;
+        for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
+          if (draggedIds.has(dateItems[i].id)) {
+            adjustedIndex--;
+          }
+        }
+        adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
         const newOrder = [
           ...remaining.slice(0, adjustedIndex),
           ...draggedItems,
           ...remaining.slice(adjustedIndex)
         ];
 
-        // Update sort_order for all items in this date
         for (let i = 0; i < newOrder.length; i++) {
-          await supabase
+          supabase
             .from('installation_schedule')
             .update({ sort_order: i, updated_by: tcUserEmail })
-            .eq('id', newOrder[i].id);
+            .eq('id', newOrder[i].id)
+            .then();
         }
       } else {
-        // Moving to different date
         for (const item of draggedItems) {
           if (item.scheduled_date !== targetDate) {
-            await supabase
+            supabase
               .from('installation_schedule')
               .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
-              .eq('id', item.id);
+              .eq('id', item.id)
+              .then();
           }
         }
       }
-
-      setDraggedItems([]);
-      setSelectedItemIds(new Set());
-      loadSchedule();
     } catch (e) {
-      console.error('Error moving items:', e);
+      console.error('Error saving to database:', e);
+      // Reload to sync with database on error
+      loadSchedule();
     }
   };
 
@@ -1210,6 +1266,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     // Generate colors for each date (same as model coloring)
     const dates = Object.keys(itemsByDate);
     const dateColors = generateDateColors(dates);
+
+    // Thin border style
+    const thinBorder = {
+      top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+    };
 
     // Main data sheet
     const mainData: any[][] = [[
@@ -1287,11 +1351,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       { wch: 12 }   // %
     ];
 
-    // Apply header style
+    // Apply header style with border
     const headerStyle = {
       font: { bold: true, color: { rgb: 'FFFFFF' } },
       fill: { fgColor: { rgb: '4A5568' } },
-      alignment: { horizontal: 'center' }
+      alignment: { horizontal: 'center' },
+      border: thinBorder
     };
     for (let c = 0; c < 10; c++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c });
@@ -1300,22 +1365,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     }
 
-    // Apply date-based colors to data rows
+    // Add autofilter to header row
+    ws1['!autofilter'] = { ref: `A1:J${sortedItems.length + 1}` };
+
+    // Apply styles to data rows - only date column (column 1) gets color
     sortedItems.forEach((item, index) => {
       const rowIndex = index + 1; // +1 for header row
       const color = dateColors[item.scheduled_date];
-      if (color) {
-        const bgColor = rgbToHex(color.r, color.g, color.b);
-        const textColor = getTextColor(color.r, color.g, color.b);
-        const cellStyle = {
-          fill: { fgColor: { rgb: bgColor } },
-          font: { color: { rgb: textColor } }
-        };
 
-        for (let c = 0; c < 10; c++) {
-          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
-          if (ws1[cellRef]) {
-            ws1[cellRef].s = cellStyle;
+      for (let c = 0; c < 10; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
+        if (ws1[cellRef]) {
+          if (c === 1 && color) {
+            // Date column - apply color
+            const bgColor = rgbToHex(color.r, color.g, color.b);
+            const textColor = getTextColor(color.r, color.g, color.b);
+            ws1[cellRef].s = {
+              fill: { fgColor: { rgb: bgColor } },
+              font: { color: { rgb: textColor } },
+              border: thinBorder
+            };
+          } else {
+            // Other columns - just border
+            ws1[cellRef].s = { border: thinBorder };
           }
         }
       }
@@ -1323,7 +1395,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     XLSX.utils.book_append_sheet(wb, ws1, 'Graafik');
 
-    // Summary sheet with colors
+    // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
     ws2['!cols'] = [
       { wch: 12 },
@@ -1341,22 +1413,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     }
 
-    // Apply date-based colors to summary rows
+    // Add autofilter to summary header
+    ws2['!autofilter'] = { ref: `A1:E${sortedDates.length + 1}` };
+
+    // Apply styles to summary rows - only date column (column 0) gets color
     sortedDates.forEach((dateStr, index) => {
       const rowIndex = index + 1;
       const color = dateColors[dateStr];
-      if (color) {
-        const bgColor = rgbToHex(color.r, color.g, color.b);
-        const textColor = getTextColor(color.r, color.g, color.b);
-        const cellStyle = {
-          fill: { fgColor: { rgb: bgColor } },
-          font: { color: { rgb: textColor } }
-        };
 
-        for (let c = 0; c < 5; c++) {
-          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
-          if (ws2[cellRef]) {
-            ws2[cellRef].s = cellStyle;
+      for (let c = 0; c < 5; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
+        if (ws2[cellRef]) {
+          if (c === 0 && color) {
+            // Date column - apply color
+            const bgColor = rgbToHex(color.r, color.g, color.b);
+            const textColor = getTextColor(color.r, color.g, color.b);
+            ws2[cellRef].s = {
+              fill: { fgColor: { rgb: bgColor } },
+              font: { color: { rgb: textColor } },
+              border: thinBorder
+            };
+          } else {
+            // Other columns - just border
+            ws2[cellRef].s = { border: thinBorder };
           }
         }
       }
@@ -1364,8 +1443,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     XLSX.utils.book_append_sheet(wb, ws2, 'Kokkuvõte');
 
-    // Download
-    XLSX.writeFile(wb, `paigaldusgraafik_${new Date().toISOString().split('T')[0]}.xlsx`);
+    // Generate filename with project name
+    const safeProjectName = projectName
+      ? projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s-]/g, '').replace(/\s+/g, '_').substring(0, 50)
+      : 'projekt';
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `${safeProjectName}_paigaldusgraafik_${dateStr}.xlsx`);
   };
 
   // Generate date picker options (next 60 days)
@@ -1488,6 +1571,30 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {selectedObjects.length > 0 && (
         <div className="selection-info">
           <span>Valitud mudelis: {selectedObjects.length}</span>
+          <div className="install-method-selector">
+            <span>Paigaldus:</span>
+            <button
+              className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
+              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
+              title="Kraana"
+            >
+              <img src="/icons/crane.png" alt="Kraana" />
+            </button>
+            <button
+              className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
+              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
+              title="Tõstuk"
+            >
+              <img src="/icons/forklift.png" alt="Tõstuk" />
+            </button>
+            <button
+              className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
+              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
+              title="Käsitsi"
+            >
+              <img src="/icons/muscle.png" alt="Käsitsi" />
+            </button>
+          </div>
           {selectedDate && (
             <button
               className="btn-primary"
@@ -1720,9 +1827,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               <FiMove size={10} />
                             </div>
                             <div className="item-content">
-                              <span className="item-mark">{item.assembly_mark}</span>
+                              <div className="item-main-row">
+                                <span className="item-mark">{item.assembly_mark}</span>
+                                {(item as any).cast_unit_weight && (
+                                  <span className="item-weight">{(item as any).cast_unit_weight} kg</span>
+                                )}
+                              </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
+                            {(item as any).install_method && (
+                              <img
+                                src={`/icons/${(item as any).install_method}.png`}
+                                alt={(item as any).install_method}
+                                className="item-install-icon"
+                                title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                              />
+                            )}
                             <div className="item-actions">
                               <button
                                 className="item-action-btn"
