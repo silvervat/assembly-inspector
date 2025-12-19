@@ -496,12 +496,9 @@ export default function InstallationsScreen({
     }
   };
 
-  // Apply coloring: all objects white, installed objects green
+  // Apply coloring: not installed = white, installed = green (single pass per category)
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>) => {
     try {
-      // First, set ALL objects to white/light gray
-      await api.viewer.setObjectState(undefined, { color: { r: 220, g: 220, b: 220, a: 255 } });
-
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) return;
@@ -511,39 +508,61 @@ export default function InstallationsScreen({
         const guidType = classifyGuid(guid);
         return guidType === 'IFC';
       });
+      const installedSet = new Set(installedIfcGuids);
 
-      console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length, 'of', guidsMap.size);
-      if (installedIfcGuids.length === 0) return;
+      console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length);
 
-      // For each model, try to convert GUIDs to runtime IDs and color them green
-      let totalColored = 0;
+      // Process each model - separate installed and not installed objects
+      let totalGreen = 0;
+      let totalWhite = 0;
+
       for (const model of models) {
         try {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, installedIfcGuids);
+          // Get all objects from model
+          const allObjects = await (api.viewer as any).getObjects?.(model.id);
+          if (!allObjects || allObjects.length === 0) continue;
 
-          if (runtimeIds && runtimeIds.length > 0) {
-            // Filter out invalid runtime IDs (0 or undefined)
-            const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
+          // Get all external IDs (IFC GUIDs) for this model
+          const allRuntimeIds = allObjects.map((obj: any) => obj.id || obj.runtimeId).filter(Boolean);
+          if (allRuntimeIds.length === 0) continue;
 
-            if (validRuntimeIds.length > 0) {
-              totalColored += validRuntimeIds.length;
-              const modelObjectIds = [{
-                modelId: model.id,
-                objectRuntimeIds: validRuntimeIds
-              }];
+          const allExternalIds = await api.viewer.convertToObjectIds(model.id, allRuntimeIds);
 
-              // Color installed objects green
-              await api.viewer.setObjectState(
-                { modelObjectIds },
-                { color: { r: 34, g: 197, b: 94, a: 255 } }
-              );
+          // Separate into installed and not installed
+          const installedRuntimeIds: number[] = [];
+          const notInstalledRuntimeIds: number[] = [];
+
+          allRuntimeIds.forEach((rid: number, idx: number) => {
+            const extId = allExternalIds[idx];
+            if (extId && installedSet.has(extId)) {
+              installedRuntimeIds.push(rid);
+            } else {
+              notInstalledRuntimeIds.push(rid);
             }
+          });
+
+          // Color not installed objects white (single call)
+          if (notInstalledRuntimeIds.length > 0) {
+            totalWhite += notInstalledRuntimeIds.length;
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: notInstalledRuntimeIds }] },
+              { color: { r: 220, g: 220, b: 220, a: 255 } }
+            );
+          }
+
+          // Color installed objects green (single call)
+          if (installedRuntimeIds.length > 0) {
+            totalGreen += installedRuntimeIds.length;
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: installedRuntimeIds }] },
+              { color: { r: 34, g: 197, b: 94, a: 255 } }
+            );
           }
         } catch (e) {
-          console.warn(`Could not color installed objects for model ${model.id}:`, e);
+          console.warn(`Could not color objects for model ${model.id}:`, e);
         }
       }
-      console.log('Colored', totalColored, 'installed objects green');
+      console.log('Colored:', totalGreen, 'green (installed),', totalWhite, 'white (not installed)');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
     }
