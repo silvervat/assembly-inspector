@@ -129,6 +129,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Project name for export
+  const [projectName, setProjectName] = useState<string>('');
+
   // Calendar collapsed state
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
@@ -184,6 +187,21 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
+
+  // Fetch project name
+  useEffect(() => {
+    const fetchProjectName = async () => {
+      try {
+        const projectInfo = await (api as any).project?.getProject?.();
+        if (projectInfo?.name) {
+          setProjectName(projectInfo.name);
+        }
+      } catch (e) {
+        console.log('Could not fetch project name:', e);
+      }
+    };
+    fetchProjectName();
+  }, [api]);
 
   // Listen to selection changes from model
   useEffect(() => {
@@ -1211,6 +1229,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     const dates = Object.keys(itemsByDate);
     const dateColors = generateDateColors(dates);
 
+    // Thin border style
+    const thinBorder = {
+      top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+      right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+    };
+
     // Main data sheet
     const mainData: any[][] = [[
       'Nr',
@@ -1287,11 +1313,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       { wch: 12 }   // %
     ];
 
-    // Apply header style
+    // Apply header style with border
     const headerStyle = {
       font: { bold: true, color: { rgb: 'FFFFFF' } },
       fill: { fgColor: { rgb: '4A5568' } },
-      alignment: { horizontal: 'center' }
+      alignment: { horizontal: 'center' },
+      border: thinBorder
     };
     for (let c = 0; c < 10; c++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c });
@@ -1300,22 +1327,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     }
 
-    // Apply date-based colors to data rows
+    // Add autofilter to header row
+    ws1['!autofilter'] = { ref: `A1:J${sortedItems.length + 1}` };
+
+    // Apply styles to data rows - only date column (column 1) gets color
     sortedItems.forEach((item, index) => {
       const rowIndex = index + 1; // +1 for header row
       const color = dateColors[item.scheduled_date];
-      if (color) {
-        const bgColor = rgbToHex(color.r, color.g, color.b);
-        const textColor = getTextColor(color.r, color.g, color.b);
-        const cellStyle = {
-          fill: { fgColor: { rgb: bgColor } },
-          font: { color: { rgb: textColor } }
-        };
 
-        for (let c = 0; c < 10; c++) {
-          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
-          if (ws1[cellRef]) {
-            ws1[cellRef].s = cellStyle;
+      for (let c = 0; c < 10; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
+        if (ws1[cellRef]) {
+          if (c === 1 && color) {
+            // Date column - apply color
+            const bgColor = rgbToHex(color.r, color.g, color.b);
+            const textColor = getTextColor(color.r, color.g, color.b);
+            ws1[cellRef].s = {
+              fill: { fgColor: { rgb: bgColor } },
+              font: { color: { rgb: textColor } },
+              border: thinBorder
+            };
+          } else {
+            // Other columns - just border
+            ws1[cellRef].s = { border: thinBorder };
           }
         }
       }
@@ -1323,7 +1357,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     XLSX.utils.book_append_sheet(wb, ws1, 'Graafik');
 
-    // Summary sheet with colors
+    // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
     ws2['!cols'] = [
       { wch: 12 },
@@ -1341,22 +1375,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     }
 
-    // Apply date-based colors to summary rows
+    // Add autofilter to summary header
+    ws2['!autofilter'] = { ref: `A1:E${sortedDates.length + 1}` };
+
+    // Apply styles to summary rows - only date column (column 0) gets color
     sortedDates.forEach((dateStr, index) => {
       const rowIndex = index + 1;
       const color = dateColors[dateStr];
-      if (color) {
-        const bgColor = rgbToHex(color.r, color.g, color.b);
-        const textColor = getTextColor(color.r, color.g, color.b);
-        const cellStyle = {
-          fill: { fgColor: { rgb: bgColor } },
-          font: { color: { rgb: textColor } }
-        };
 
-        for (let c = 0; c < 5; c++) {
-          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
-          if (ws2[cellRef]) {
-            ws2[cellRef].s = cellStyle;
+      for (let c = 0; c < 5; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
+        if (ws2[cellRef]) {
+          if (c === 0 && color) {
+            // Date column - apply color
+            const bgColor = rgbToHex(color.r, color.g, color.b);
+            const textColor = getTextColor(color.r, color.g, color.b);
+            ws2[cellRef].s = {
+              fill: { fgColor: { rgb: bgColor } },
+              font: { color: { rgb: textColor } },
+              border: thinBorder
+            };
+          } else {
+            // Other columns - just border
+            ws2[cellRef].s = { border: thinBorder };
           }
         }
       }
@@ -1364,8 +1405,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     XLSX.utils.book_append_sheet(wb, ws2, 'Kokkuvõte');
 
-    // Download
-    XLSX.writeFile(wb, `paigaldusgraafik_${new Date().toISOString().split('T')[0]}.xlsx`);
+    // Generate filename with project name
+    const safeProjectName = projectName
+      ? projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s-]/g, '').replace(/\s+/g, '_').substring(0, 50)
+      : 'projekt';
+    const dateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `${safeProjectName}_paigaldusgraafik_${dateStr}.xlsx`);
   };
 
   // Generate date picker options (next 60 days)
