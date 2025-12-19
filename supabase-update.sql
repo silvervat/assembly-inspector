@@ -93,3 +93,70 @@ ADD COLUMN IF NOT EXISTS tekla_washer_type TEXT;
 
 -- Index for inspection_type filtering
 CREATE INDEX IF NOT EXISTS idx_inspections_type ON inspections(inspection_type);
+
+-- ============================================
+-- INSTALLATIONS & INSTALLATION METHODS (v2.9.0)
+-- ============================================
+
+-- Installations table for tracking installed assemblies
+CREATE TABLE IF NOT EXISTS installations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id TEXT NOT NULL,
+  model_id TEXT,
+  guid TEXT,
+  guid_ifc TEXT,
+  guid_ms TEXT,
+  object_runtime_id INTEGER,
+  assembly_mark TEXT,
+  product_name TEXT,
+  file_name TEXT,
+  cast_unit_weight TEXT,
+  cast_unit_bottom_elevation TEXT,
+  cast_unit_top_elevation TEXT,
+  cast_unit_position_code TEXT,
+  object_type TEXT,
+  installation_method_id UUID,
+  installation_method_name TEXT,
+  installed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  notes TEXT,
+  user_email TEXT,
+  installer_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes for installations
+CREATE INDEX IF NOT EXISTS idx_installations_project ON installations(project_id);
+CREATE INDEX IF NOT EXISTS idx_installations_guid ON installations(guid);
+CREATE INDEX IF NOT EXISTS idx_installations_guid_ifc ON installations(guid_ifc);
+CREATE INDEX IF NOT EXISTS idx_installations_user ON installations(user_email);
+
+-- Installation methods table
+CREATE TABLE IF NOT EXISTS installation_methods (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id TEXT NOT NULL,
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  icon TEXT,
+  is_active BOOLEAN DEFAULT true,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for installation methods
+CREATE INDEX IF NOT EXISTS idx_installation_methods_project ON installation_methods(project_id);
+
+-- ============================================
+-- INSTALLATION METHODS DATA
+-- ============================================
+-- IMPORTANT: Replace 'YOUR_PROJECT_ID' with your actual Trimble Connect project ID
+-- You can find it in the URL when viewing the project
+
+-- Example inserts (uncomment and update project_id):
+-- INSERT INTO installation_methods (project_id, code, name, description, icon, sort_order) VALUES
+--   ('YOUR_PROJECT_ID', 'CRANE', 'Kraana', 'Paigaldamine kraanaga', '🏗️', 1),
+--   ('YOUR_PROJECT_ID', 'LIFT', 'Upitaja', 'Paigaldamine tõstukiga', '🚜', 2),
+--   ('YOUR_PROJECT_ID', 'MANUAL', 'Käsitsi', 'Käsitsi paigaldamine', '🔧', 3)
+-- ON CONFLICT DO NOTHING;
