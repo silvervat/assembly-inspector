@@ -12,6 +12,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 export interface TrimbleExUser {
   id: string;
   project_id: string;
+  trimble_project_id: string; // Trimble Connect project ID (e.g., "qdU40jBduvU")
   user_id?: string;
   email: string;
   name?: string;
