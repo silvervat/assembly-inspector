@@ -1636,46 +1636,76 @@ export default function InstallationsScreen({
                     <code className="prop-info-guid">{(discoveredProperties as any).externalId}</code>
                   </div>
                 )}
-                {/* Extract and display GUID (MS) from Reference Object property set */}
+                {/* Extract and display GUID (MS) from properties */}
                 {(() => {
                   const props = (discoveredProperties as any).properties || [];
-                  // Find Reference Object property set (case-insensitive)
+                  // UUID regex pattern (MS GUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+                  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+                  // Method 1: Find Reference Object property set
                   const refObj = props.find((p: any) => {
                     const setName = (p.set || p.name || '').toLowerCase();
                     return setName.includes('reference') && setName.includes('object');
                   });
                   if (refObj?.properties) {
-                    // Find GUID (MS) property (case-insensitive, multiple variants)
                     const guidMs = refObj.properties.find((p: any) => {
                       const propName = (p.name || '').toLowerCase();
-                      return propName === 'guid (ms)' || propName === 'guid' || propName === 'guid_ms' || propName === 'ms guid';
+                      return propName === 'guid (ms)' || propName === 'guid' || propName === 'guid_ms';
                     });
-                    if (guidMs?.value || guidMs?.displayValue) {
+                    const val = guidMs?.displayValue || guidMs?.value;
+                    if (val && uuidPattern.test(String(val))) {
                       return (
                         <div className="prop-info-row">
                           <span className="prop-info-label">GUID (MS):</span>
-                          <code className="prop-info-guid guid-ms">{guidMs.displayValue || guidMs.value}</code>
+                          <code className="prop-info-guid guid-ms">{val}</code>
                         </div>
                       );
                     }
                   }
-                  // Fallback: search ALL property sets for GUID (MS)
+
+                  // Method 2: Search ALL property sets for GUID property with UUID value
                   for (const pset of props) {
                     if (!pset.properties) continue;
-                    const guidMs = pset.properties.find((p: any) => {
-                      const propName = (p.name || '').toLowerCase();
-                      return propName === 'guid (ms)';
-                    });
-                    if (guidMs?.value || guidMs?.displayValue) {
-                      return (
-                        <div className="prop-info-row">
-                          <span className="prop-info-label">GUID (MS):</span>
-                          <code className="prop-info-guid guid-ms">{guidMs.displayValue || guidMs.value}</code>
-                        </div>
-                      );
+                    for (const prop of pset.properties) {
+                      const propName = (prop.name || '').toLowerCase();
+                      const val = prop.displayValue || prop.value;
+                      // Check if property name contains 'guid' and value is UUID format
+                      if (propName.includes('guid') && val && uuidPattern.test(String(val))) {
+                        return (
+                          <div className="prop-info-row">
+                            <span className="prop-info-label">GUID (MS):</span>
+                            <code className="prop-info-guid guid-ms">{val}</code>
+                            <span className="prop-info-source">({pset.set || pset.name})</span>
+                          </div>
+                        );
+                      }
                     }
                   }
-                  return null;
+
+                  // Method 3: Search for any UUID-formatted value in common property names
+                  for (const pset of props) {
+                    if (!pset.properties) continue;
+                    for (const prop of pset.properties) {
+                      const val = prop.displayValue || prop.value;
+                      if (val && uuidPattern.test(String(val))) {
+                        return (
+                          <div className="prop-info-row">
+                            <span className="prop-info-label">GUID (MS):</span>
+                            <code className="prop-info-guid guid-ms">{val}</code>
+                            <span className="prop-info-source">({prop.name})</span>
+                          </div>
+                        );
+                      }
+                    }
+                  }
+
+                  // Not found - show note
+                  return (
+                    <div className="prop-info-row prop-info-missing">
+                      <span className="prop-info-label">GUID (MS):</span>
+                      <span className="prop-info-value">Puudub</span>
+                    </div>
+                  );
                 })()}
               </div>
 
