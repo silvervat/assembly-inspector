@@ -6405,6 +6405,50 @@ button.stat-toggle.off:hover {
   cursor: not-allowed;
 }
 
+/* Assembly Selection Warning */
+.assembly-selection-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--modus-spacing-md);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: #fff3e0;
+  border: 1px solid #ffcc80;
+  border-radius: var(--modus-radius-md);
+}
+
+.assembly-selection-warning .warning-content {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+}
+
+.assembly-selection-warning .warning-icon {
+  font-size: 18px;
+}
+
+.assembly-selection-warning .warning-text {
+  font-size: 13px;
+  color: #e65100;
+}
+
+.enable-assembly-btn {
+  padding: 6px 12px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.enable-assembly-btn:hover {
+  background: #f57c00;
+}
+
 /* Compact Form View (legacy) */
 .installations-form-compact {
   flex: 1;
@@ -7200,6 +7244,25 @@ button.stat-toggle.off:hover {
   color: white;
   padding: 2px 8px;
   border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.installation-date-group .date-count.clickable:hover {
+  background: var(--modus-primary-dark);
+  transform: scale(1.05);
+}
+
+.month-count.clickable {
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.month-count.clickable:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 .installation-date-group .date-group-items {
