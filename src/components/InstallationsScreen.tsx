@@ -1747,12 +1747,19 @@ export default function InstallationsScreen({
                     <span className="prop-set-count">({pset.properties?.length || 0})</span>
                   </div>
                   <div className="prop-set-table">
-                    {pset.properties?.map((prop: any, propIdx: number) => (
-                      <div key={propIdx} className="prop-row">
-                        <span className="prop-name">{prop.name}</span>
-                        <span className="prop-value">{prop.displayValue ?? prop.value ?? '-'}</span>
-                      </div>
-                    ))}
+                    {pset.properties?.map((prop: any, propIdx: number) => {
+                      let displayVal = prop.displayValue ?? prop.value ?? '-';
+                      // Handle BigInt values
+                      if (typeof displayVal === 'bigint') {
+                        displayVal = displayVal.toString();
+                      }
+                      return (
+                        <div key={propIdx} className="prop-row">
+                          <span className="prop-name">{prop.name}</span>
+                          <span className="prop-value">{String(displayVal)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -1760,7 +1767,9 @@ export default function InstallationsScreen({
               {/* Raw JSON toggle */}
               <details className="raw-json-section">
                 <summary>📄 Raw JSON</summary>
-                <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+                <pre>{JSON.stringify(discoveredProperties, (_key, value) =>
+                  typeof value === 'bigint' ? value.toString() : value
+                , 2)}</pre>
               </details>
             </div>
           </div>
