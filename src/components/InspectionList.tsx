@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft, FiEdit2, FiSave, FiTrash2 } from 'react-icons/fi';
-import { supabase, InspectionResult, InspectionCheckpoint } from '../supabase';
+import { supabase, InspectionResult, InspectionCheckpoint, TrimbleExUser } from '../supabase';
 
 export interface InspectionItem {
   id: string;
@@ -35,6 +35,7 @@ interface InspectionListProps {
   hasMore: boolean;
   loadingMore: boolean;
   projectId: string;
+  currentUser: TrimbleExUser;
   onZoomToInspection: (inspection: InspectionItem) => void;
   onSelectInspection: (inspection: InspectionItem) => void;
   onSelectGroup: (inspections: InspectionItem[]) => void;
@@ -168,6 +169,7 @@ export default function InspectionList({
   hasMore,
   loadingMore,
   projectId,
+  currentUser,
   onZoomToInspection,
   onSelectInspection,
   onSelectGroup,
@@ -176,6 +178,22 @@ export default function InspectionList({
   onClose,
   onRefresh
 }: InspectionListProps) {
+  // Permission helpers
+  const isAdminOrModerator = currentUser.role === 'admin' || currentUser.role === 'moderator';
+
+  // Check if current user can edit this inspection
+  const canEditInspection = (inspection: InspectionItem): boolean => {
+    // Admin/moderator can edit any
+    if (isAdminOrModerator) return true;
+    // Inspector can only edit their own
+    return inspection.user_email?.toLowerCase() === currentUser.email.toLowerCase();
+  };
+
+  // Check if current user can delete inspection results
+  const canDeleteResult = (): boolean => {
+    // Only admin/moderator can delete results
+    return isAdminOrModerator;
+  };
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
@@ -432,6 +450,29 @@ export default function InspectionList({
       onRefresh?.();
     } catch (e) {
       console.error('Error deleting result:', e);
+    }
+  };
+
+  // Delete a single photo from a result
+  const deletePhoto = async (photoId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle foto kustutada?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('inspection_result_photos')
+        .delete()
+        .eq('id', photoId);
+
+      if (error) throw error;
+
+      // Refresh results
+      if (selectedInspection?.guid) {
+        await fetchCheckpointResults(selectedInspection.guid);
+      }
+    } catch (e) {
+      console.error('Error deleting photo:', e);
     }
   };
 
@@ -831,7 +872,7 @@ export default function InspectionList({
             <div className="inspection-detail-header">
               <h4>{selectedInspection.assembly_mark || 'Detail'}</h4>
               <div className="inspection-detail-header-actions">
-                {checkpointResults.length > 0 && !editMode && (
+                {checkpointResults.length > 0 && !editMode && canEditInspection(selectedInspection) && (
                   <button
                     className="inspection-edit-btn"
                     onClick={startEditMode}
@@ -946,7 +987,7 @@ export default function InspectionList({
                             <span className="checkpoint-result-name">
                               {result.checkpoint_name || result.checkpoint_code || 'Kontrollpunkt'}
                             </span>
-                            {editMode && (
+                            {editMode && canDeleteResult() && (
                               <button
                                 className="checkpoint-delete-btn"
                                 onClick={() => deleteResult(result.id)}
@@ -992,6 +1033,36 @@ export default function InspectionList({
                                   rows={2}
                                 />
                               </div>
+                              {/* Photos in edit mode with delete option */}
+                              {result.result_photos && result.result_photos.length > 0 && (
+                                <div className="checkpoint-edit-photos">
+                                  <label>Fotod:</label>
+                                  <div className="checkpoint-result-photos">
+                                    {result.result_photos.map((photo) => (
+                                      <div
+                                        key={photo.id}
+                                        className="checkpoint-photo-thumb checkpoint-photo-editable"
+                                      >
+                                        <img
+                                          src={photo.thumbnail_url || photo.url}
+                                          alt="Foto"
+                                          onClick={() => openGallery(
+                                            result.result_photos!.map(p => p.url),
+                                            result.result_photos!.findIndex(p => p.id === photo.id)
+                                          )}
+                                        />
+                                        <button
+                                          className="photo-delete-btn"
+                                          onClick={() => deletePhoto(photo.id)}
+                                          title="Kustuta foto"
+                                        >
+                                          <FiTrash2 size={12} />
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div className="checkpoint-result-view">

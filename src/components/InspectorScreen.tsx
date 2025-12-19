@@ -2050,6 +2050,7 @@ export default function InspectorScreen({
           hasMore={inspectionListData.length < inspectionListTotal}
           loadingMore={inspectionListLoadingMore}
           projectId={projectId}
+          currentUser={user}
           onZoomToInspection={zoomToInspection}
           onSelectInspection={selectInspection}
           onSelectGroup={selectGroup}
