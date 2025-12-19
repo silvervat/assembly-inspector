@@ -1562,6 +1562,157 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               </div>
             </div>
 
+            {/* PROPERTIES DEBUG section */}
+            <div className="function-section">
+              <h4>🔍 Properties Debug</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Raw getObjectProperties"
+                  result={functionResults["Raw getObjectProperties"]}
+                  onClick={() => testFunction("Raw getObjectProperties", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    const allProps: any[] = [];
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) continue;
+
+                      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+                      allProps.push(...props);
+                    }
+
+                    console.log('=== RAW getObjectProperties ===');
+                    console.log(JSON.stringify(allProps, null, 2));
+                    return allProps;
+                  })}
+                />
+                <FunctionButton
+                  name="Otsi GUID (MS)"
+                  result={functionResults["Otsi GUID (MS)"]}
+                  onClick={() => testFunction("Otsi GUID (MS)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    const found: string[] = [];
+
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) continue;
+
+                      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+                      for (const obj of props) {
+                        // Check all property sets
+                        for (const pset of (obj.properties || []) as any[]) {
+                          const setName = pset.set || (pset as any).name || 'Unknown';
+                          for (const prop of (pset.properties || []) as any[]) {
+                            const propName = prop.name || '';
+                            const val = (prop as any).displayValue || prop.value || '';
+                            const strVal = String(val);
+
+                            // Log any property with 'guid' in name
+                            if (propName.toLowerCase().includes('guid')) {
+                              found.push(`${setName} → ${propName}: "${strVal}"`);
+                            }
+
+                            // Log any UUID-formatted value
+                            if (uuidPattern.test(strVal)) {
+                              found.push(`${setName} → ${propName}: ${strVal} [UUID!]`);
+                            }
+                          }
+                        }
+                      }
+                    }
+
+                    if (found.length === 0) {
+                      return 'GUID (MS) ei leitud API kaudu.\nVaata Console logi (F12) täpsemaks infoks.';
+                    }
+                    return found.join('\n');
+                  })}
+                />
+                <FunctionButton
+                  name="Property Set nimed"
+                  result={functionResults["Property Set nimed"]}
+                  onClick={() => testFunction("Property Set nimed", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    const setNames = new Set<string>();
+
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) continue;
+
+                      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+                      for (const obj of props) {
+                        for (const pset of (obj.properties || []) as any[]) {
+                          setNames.add(pset.set || (pset as any).name || 'Unknown');
+                        }
+                      }
+                    }
+
+                    return Array.from(setNames).join('\n');
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* BACKGROUND COLOR section */}
+            <div className="function-section">
+              <h4>🎨 Taustavärv</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Praegune taust"
+                  result={functionResults["Praegune taust"]}
+                  onClick={() => testFunction("Praegune taust", async () => {
+                    const settings = await api.viewer.getSettings();
+                    return `Taust: ${(settings as any).backgroundColor || 'Unknown'}`;
+                  })}
+                />
+                <FunctionButton
+                  name="Taust: White"
+                  result={functionResults["Taust: White"]}
+                  onClick={() => testFunction("Taust: White", () => api.viewer.setSettings({ backgroundColor: "White" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: LightGray"
+                  result={functionResults["Taust: LightGray"]}
+                  onClick={() => testFunction("Taust: LightGray", () => api.viewer.setSettings({ backgroundColor: "LightGray" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Gray1"
+                  result={functionResults["Taust: Gray1"]}
+                  onClick={() => testFunction("Taust: Gray1", () => api.viewer.setSettings({ backgroundColor: "Gray1" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Gray2"
+                  result={functionResults["Taust: Gray2"]}
+                  onClick={() => testFunction("Taust: Gray2", () => api.viewer.setSettings({ backgroundColor: "Gray2" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Gray3"
+                  result={functionResults["Taust: Gray3"]}
+                  onClick={() => testFunction("Taust: Gray3", () => api.viewer.setSettings({ backgroundColor: "Gray3" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: GrayDark2"
+                  result={functionResults["Taust: GrayDark2"]}
+                  onClick={() => testFunction("Taust: GrayDark2", () => api.viewer.setSettings({ backgroundColor: "GrayDark2" } as any))}
+                />
+                <FunctionButton
+                  name="Taust: Default"
+                  result={functionResults["Taust: Default"]}
+                  onClick={() => testFunction("Taust: Default", () => api.viewer.setSettings({ backgroundColor: "Default" } as any))}
+                />
+              </div>
+            </div>
+
             {/* SNAPSHOT section */}
             <div className="function-section">
               <h4>📸 Ekraanipilt</h4>
