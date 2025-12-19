@@ -1,6 +1,6 @@
 {
   "name": "assembly-inspector",
-  "version": "2.10.3",
+  "version": "2.10.4",
   "description": "Trimble Connect Assembly Inspector with Trimble user email authentication",
   "type": "module",
   "scripts": {
@@ -16,7 +16,8 @@
     "react-icons": "^5.5.0",
     "react-window": "^1.8.10",
     "trimble-connect-workspace-api": "^0.3.33",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

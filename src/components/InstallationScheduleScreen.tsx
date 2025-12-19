@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import { supabase, ScheduleItem, TrimbleExUser } from '../supabase';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
@@ -71,6 +71,18 @@ const formatDateEstonian = (dateStr: string): string => {
   const year = String(date.getFullYear()).slice(-2);
   const weekday = WEEKDAY_NAMES[date.getDay()];
   return `${day}.${month}.${year} ${weekday}`;
+};
+
+// RGB to hex color
+const rgbToHex = (r: number, g: number, b: number): string => {
+  return ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+};
+
+// Calculate if text should be black or white based on background luminance
+const getTextColor = (r: number, g: number, b: number): string => {
+  // Calculate relative luminance
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? '000000' : 'FFFFFF';
 };
 
 export default function InstallationScheduleScreen({ api, projectId, user: _user, tcUserEmail, onBackToMenu }: Props) {
@@ -1001,7 +1013,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   const dateStats = getDateStats();
 
-  // Export to real Excel .xlsx file
+  // Export to real Excel .xlsx file with date-based colors
   const exportToExcel = () => {
     const sortedItems = getAllItemsSorted();
     const totalItems = sortedItems.length;
@@ -1010,6 +1022,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setMessage('Graafik on tühi, pole midagi eksportida');
       return;
     }
+
+    // Generate colors for each date (same as model coloring)
+    const dates = Object.keys(itemsByDate);
+    const dateColors = generateDateColors(dates);
 
     // Main data sheet
     const mainData: any[][] = [[
@@ -1072,6 +1088,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     const wb = XLSX.utils.book_new();
 
     const ws1 = XLSX.utils.aoa_to_sheet(mainData);
+
     // Set column widths
     ws1['!cols'] = [
       { wch: 5 },   // Nr
@@ -1085,8 +1102,44 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       { wch: 25 },  // GUID IFC
       { wch: 12 }   // %
     ];
+
+    // Apply header style
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '4A5568' } },
+      alignment: { horizontal: 'center' }
+    };
+    for (let c = 0; c < 10; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws1[cellRef]) {
+        ws1[cellRef].s = headerStyle;
+      }
+    }
+
+    // Apply date-based colors to data rows
+    sortedItems.forEach((item, index) => {
+      const rowIndex = index + 1; // +1 for header row
+      const color = dateColors[item.scheduled_date];
+      if (color) {
+        const bgColor = rgbToHex(color.r, color.g, color.b);
+        const textColor = getTextColor(color.r, color.g, color.b);
+        const cellStyle = {
+          fill: { fgColor: { rgb: bgColor } },
+          font: { color: { rgb: textColor } }
+        };
+
+        for (let c = 0; c < 10; c++) {
+          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
+          if (ws1[cellRef]) {
+            ws1[cellRef].s = cellStyle;
+          }
+        }
+      }
+    });
+
     XLSX.utils.book_append_sheet(wb, ws1, 'Graafik');
 
+    // Summary sheet with colors
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
     ws2['!cols'] = [
       { wch: 12 },
@@ -1095,6 +1148,36 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       { wch: 12 },
       { wch: 8 }
     ];
+
+    // Apply header style to summary
+    for (let c = 0; c < 5; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+      if (ws2[cellRef]) {
+        ws2[cellRef].s = headerStyle;
+      }
+    }
+
+    // Apply date-based colors to summary rows
+    sortedDates.forEach((dateStr, index) => {
+      const rowIndex = index + 1;
+      const color = dateColors[dateStr];
+      if (color) {
+        const bgColor = rgbToHex(color.r, color.g, color.b);
+        const textColor = getTextColor(color.r, color.g, color.b);
+        const cellStyle = {
+          fill: { fgColor: { rgb: bgColor } },
+          font: { color: { rgb: textColor } }
+        };
+
+        for (let c = 0; c < 5; c++) {
+          const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
+          if (ws2[cellRef]) {
+            ws2[cellRef].s = cellStyle;
+          }
+        }
+      }
+    });
+
     XLSX.utils.book_append_sheet(wb, ws2, 'Kokkuvõte');
 
     // Download
