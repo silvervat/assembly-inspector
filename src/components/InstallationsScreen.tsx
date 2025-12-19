@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye, FiList } from 'react-icons/fi';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // GUID helper functions
@@ -810,26 +810,42 @@ export default function InstallationsScreen({
           <span>Menüü</span>
         </button>
         <span className="mode-title">Paigaldamised</span>
-        {/* Nimekiri button in header */}
-        <button
-          className={`header-list-btn ${showList ? 'active' : ''}`}
-          onClick={() => setShowList(!showList)}
-        >
-          {showList ? 'Vorm' : `Nimekiri (${installations.length})`}
-        </button>
       </div>
 
       {!showList ? (
-        /* Form View - compact */
-        <div className="installations-form-compact">
-          {/* Compact form */}
-          <div className="compact-form-row">
-            <div className="form-field-inline">
-              <label><FiTruck size={12} /> Paigaldusviis</label>
+        /* Form View */
+        <div className="installations-form-view">
+          {/* Menu with list button */}
+          <div className="installations-menu">
+            <button
+              className="installations-menu-btn"
+              onClick={() => setShowList(true)}
+            >
+              <FiList size={16} />
+              <span>Paigaldatud detailide nimekiri</span>
+              <span className="menu-count">{installations.length}</span>
+            </button>
+          </div>
+
+          {/* Form fields - each on separate row */}
+          <div className="installations-form-fields">
+            <div className="form-row">
+              <label><FiCalendar size={14} /> Kuupäev</label>
+              <input
+                type="datetime-local"
+                value={installDate}
+                onChange={(e) => setInstallDate(e.target.value)}
+                className="full-width-input"
+              />
+            </div>
+
+            <div className="form-row">
+              <label><FiTruck size={14} /> Paigaldusviis</label>
               {installationMethods.length > 0 ? (
                 <select
                   value={selectedMethodId}
                   onChange={(e) => setSelectedMethodId(e.target.value)}
+                  className="full-width-input"
                 >
                   <option value="">-- Vali --</option>
                   {installationMethods.map(method => (
@@ -843,34 +859,26 @@ export default function InstallationsScreen({
               )}
             </div>
 
-            <div className="form-field-inline">
-              <label><FiCalendar size={12} /> Kuupäev</label>
-              <input
-                type="datetime-local"
-                value={installDate}
-                onChange={(e) => setInstallDate(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="compact-form-row">
-            <div className="form-field-inline flex-grow">
-              <label><FiEdit2 size={12} /> Märkused</label>
-              <input
-                type="text"
+            <div className="form-row">
+              <label><FiEdit2 size={14} /> Märkused</label>
+              <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Lisa märkused..."
+                className="full-width-textarea"
+                rows={2}
               />
             </div>
 
-            <button
-              className="save-installation-btn-compact"
-              onClick={saveInstallation}
-              disabled={saving || newObjectsCount === 0}
-            >
-              {saving ? '...' : <><FiPlus size={14} /> Salvesta ({newObjectsCount})</>}
-            </button>
+            <div className="form-row">
+              <button
+                className="save-installation-btn"
+                onClick={saveInstallation}
+                disabled={saving || newObjectsCount === 0}
+              >
+                {saving ? 'Salvestan...' : <><FiPlus size={16} /> Salvesta paigaldus ({newObjectsCount})</>}
+              </button>
+            </div>
           </div>
 
           {/* Selected objects list */}
