@@ -189,29 +189,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               if (objProps?.properties) {
                 for (const pset of objProps.properties) {
                   if (!pset.properties) continue;
-                  const setName = (pset.set || '').toLowerCase();
+                  const setName = ((pset as any).name || (pset as any).set || '').toLowerCase();
 
                   for (const prop of pset.properties) {
-                    const propName = ((prop as any).name || '').toLowerCase().replace(/\s+/g, '_');
+                    const rawName = ((prop as any).name || '');
+                    const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                     const propValue = (prop as any).displayValue ?? (prop as any).value;
 
-                    if (!propValue) continue;
+                    if (propValue === undefined || propValue === null || propValue === '') continue;
 
-                    // Cast_unit_Mark (like InstallationsScreen)
-                    if (propName.includes('cast') && propName.includes('mark') && assemblyMark.startsWith('Object_')) {
-                      assemblyMark = String(propValue);
+                    // Assembly/Cast unit Mark OR ASSEMBLY_POS
+                    if (assemblyMark.startsWith('Object_')) {
+                      if (propName.includes('cast') && propName.includes('mark')) {
+                        assemblyMark = String(propValue);
+                      } else if (propName === 'assembly_pos') {
+                        assemblyMark = String(propValue);
+                      }
                     }
+
                     // Product Name
                     if (propName === 'name' && setName.includes('product')) {
                       productName = String(propValue);
                     }
-                    // Cast unit weight
-                    if (propName.includes('cast_unit_weight') || propName.includes('cast') && propName.includes('weight')) {
+
+                    // Assembly/Cast unit weight
+                    if (propName.includes('cast') && propName.includes('weight')) {
                       castUnitWeight = String(propValue);
                     }
-                    // Cast unit position code
-                    if (propName.includes('cast_unit_position_code') || propName.includes('position_code')) {
-                      positionCode = String(propValue);
+
+                    // Assembly/Cast unit position code OR ASSEMBLY_POSITION_CODE
+                    if (propName.includes('position') && propName.includes('code')) {
+                      if (!positionCode) positionCode = String(propValue);
                     }
                   }
                 }
@@ -769,7 +777,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, currentPlayIndex, playbackSpeed, getAllItemsSorted]);
+  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, getAllItemsSorted]);
 
   // Auto-scroll to playing item
   useEffect(() => {
