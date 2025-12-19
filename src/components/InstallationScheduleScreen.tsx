@@ -215,29 +215,46 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               let castUnitWeight: string | undefined;
               let positionCode: string | undefined;
 
+              // Log full object properties for debugging
+              console.log('[Schedule] Full objProps for runtimeId', runtimeId, ':', JSON.stringify(objProps, null, 2));
+
+              // Get product name from top-level product object
+              if ((objProps as any)?.product?.name) {
+                productName = String((objProps as any).product.name);
+                console.log('[Schedule] Found product name from top-level:', productName);
+              }
+
               if (objProps?.properties) {
                 for (const pset of objProps.properties) {
                   if (!pset.properties) continue;
                   const setName = ((pset as any).name || (pset as any).set || '').toLowerCase();
+
+                  // Log property set for debugging
+                  console.log('[Schedule] Property set:', setName, pset);
 
                   for (const prop of pset.properties) {
                     const rawName = ((prop as any).name || '');
                     const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                     const propValue = (prop as any).displayValue ?? (prop as any).value;
 
+                    // Log each property for debugging
+                    console.log('[Schedule] Property:', rawName, '->', propName, '=', propValue);
+
                     if (propValue === undefined || propValue === null || propValue === '') continue;
 
-                    // Assembly/Cast unit Mark OR ASSEMBLY_POS
+                    // Assembly/Cast unit Mark OR ASSEMBLY_POS - look in Tekla Assembly property set
                     if (assemblyMark.startsWith('Object_')) {
                       if (propName.includes('cast') && propName.includes('mark')) {
                         assemblyMark = String(propValue);
+                        console.log('[Schedule] Found assembly mark:', assemblyMark);
                       } else if (propName === 'assembly_pos') {
                         assemblyMark = String(propValue);
+                        console.log('[Schedule] Found assembly_pos:', assemblyMark);
                       }
                     }
 
-                    // Product Name
-                    if (propName === 'name' && setName.includes('product')) {
+                    // Product Name from property set (fallback if not in top-level product object)
+                    if (!productName && propName === 'name' && setName.includes('product')) {
                       productName = String(propValue);
                     }
 
@@ -253,6 +270,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   }
                 }
               }
+
+              console.log('[Schedule] Final values:', { assemblyMark, productName, castUnitWeight, positionCode });
 
               objects.push({
                 modelId,
