@@ -16,7 +16,10 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '2.9.44';
+export const APP_VERSION = '2.9.45';
+
+// Super admin - always has full access regardless of database settings
+const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
 
 // Trimble Connect kasutaja info
 interface TrimbleConnectUser {
@@ -100,6 +103,9 @@ export default function App() {
             setTcUser(tcUserData);
             console.log('TC User:', tcUserData);
 
+            // Super admin check - always has full access
+            const isSuperAdmin = userData.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+
             // Kontrolli kas kasutaja on registreeritud trimble_ex_users tabelis
             const { data: dbUser, error: dbError } = await supabase
               .from('trimble_ex_users')
@@ -107,7 +113,33 @@ export default function App() {
               .eq('user_email', userData.email)
               .single();
 
-            if (dbError || !dbUser) {
+            if (isSuperAdmin) {
+              // Super admin - override with full permissions
+              const superAdminUser: TrimbleExUser = dbUser ? {
+                ...dbUser,
+                role: 'admin',
+                can_assembly_inspection: true,
+                can_bolt_inspection: true,
+                is_active: true
+              } : {
+                id: 'super-admin',
+                user_email: userData.email,
+                name: 'Super Admin',
+                role: 'admin',
+                can_assembly_inspection: true,
+                can_bolt_inspection: true,
+                is_active: true,
+                created_at: new Date().toISOString()
+              };
+              console.log('Super admin authenticated:', superAdminUser);
+              setUser(superAdminUser);
+
+              // Laadi inspekteeritud detailid ja värvi mustaks
+              await loadInspectedAssemblies(connected, project.id);
+
+              // Kontrolli kas on EOS2-st navigeerimise päring
+              await checkPendingNavigation(connected);
+            } else if (dbError || !dbUser) {
               console.warn('User not found in trimble_ex_users:', userData.email);
               setAuthError(`Kasutaja "${userData.email}" ei ole registreeritud. Võta ühendust administraatoriga.`);
             } else if (dbUser.is_active === false) {
