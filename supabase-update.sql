@@ -196,6 +196,9 @@ CREATE TABLE IF NOT EXISTS installation_schedule (
   CONSTRAINT unique_guid_per_project UNIQUE (project_id, guid)
 );
 
+-- Add position_code column (v2.10.2)
+ALTER TABLE installation_schedule ADD COLUMN IF NOT EXISTS cast_unit_position_code TEXT;
+
 -- Indexes for installation_schedule
 CREATE INDEX IF NOT EXISTS idx_schedule_project ON installation_schedule(project_id);
 CREATE INDEX IF NOT EXISTS idx_schedule_date ON installation_schedule(scheduled_date);
