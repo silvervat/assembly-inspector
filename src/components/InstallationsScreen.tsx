@@ -469,15 +469,24 @@ export default function InstallationsScreen({
       if (error) throw error;
 
       const guidsMap = new Map<string, InstalledGuidInfo>();
+      let ifcCount = 0;
       for (const item of data || []) {
         const info: InstalledGuidInfo = {
           installedAt: item.installed_at,
           userEmail: item.user_email || 'Tundmatu',
           assemblyMark: item.assembly_mark || 'Tundmatu'
         };
-        if (item.guid) guidsMap.set(item.guid, info);
-        if (item.guid_ifc) guidsMap.set(item.guid_ifc, info);
+        // Store guid_ifc first (IFC format - needed for coloring)
+        if (item.guid_ifc) {
+          guidsMap.set(item.guid_ifc, info);
+          if (classifyGuid(item.guid_ifc) === 'IFC') ifcCount++;
+        }
+        // Also store guid for lookup (might be same as guid_ifc or different format)
+        if (item.guid && item.guid !== item.guid_ifc) {
+          guidsMap.set(item.guid, info);
+        }
       }
+      console.log('Loaded installed GUIDs:', guidsMap.size, 'total,', ifcCount, 'IFC format');
       setInstalledGuids(guidsMap);
 
       // Apply coloring after loading GUIDs
@@ -497,11 +506,17 @@ export default function InstallationsScreen({
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) return;
 
-      // Collect all installed GUIDs (IFC format)
-      const installedIfcGuids = Array.from(guidsMap.keys());
+      // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
+      const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
+        const guidType = classifyGuid(guid);
+        return guidType === 'IFC';
+      });
+
+      console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length, 'of', guidsMap.size);
       if (installedIfcGuids.length === 0) return;
 
       // For each model, try to convert GUIDs to runtime IDs and color them green
+      let totalColored = 0;
       for (const model of models) {
         try {
           const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, installedIfcGuids);
@@ -511,6 +526,7 @@ export default function InstallationsScreen({
             const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
 
             if (validRuntimeIds.length > 0) {
+              totalColored += validRuntimeIds.length;
               const modelObjectIds = [{
                 modelId: model.id,
                 objectRuntimeIds: validRuntimeIds
@@ -527,6 +543,7 @@ export default function InstallationsScreen({
           console.warn(`Could not color installed objects for model ${model.id}:`, e);
         }
       }
+      console.log('Colored', totalColored, 'installed objects green');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
     }
