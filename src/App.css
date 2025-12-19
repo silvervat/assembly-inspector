@@ -6898,7 +6898,6 @@ button.stat-toggle.off:hover {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
 .list-controls {
@@ -6965,7 +6964,6 @@ button.stat-toggle.off:hover {
 /* List Content */
 .installations-list-content {
   flex: 1;
-  overflow-y: auto;
   padding: var(--modus-spacing-md);
 }
 
