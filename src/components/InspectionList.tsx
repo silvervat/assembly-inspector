@@ -575,6 +575,7 @@ export default function InspectionList({
   // Virtualization constants
   const ITEM_HEIGHT = 44; // Height of each inspection item in pixels
   const MAX_VISIBLE_ITEMS = 10; // Maximum items visible before scrolling
+  const OVERSCAN_COUNT = 5; // Pre-render extra items above/below viewport for smooth scrolling
 
   // Render product group (for todo mode)
   const renderProductGroup = (product: ProductGroup) => {
@@ -644,6 +645,7 @@ export default function InspectionList({
               itemCount={product.items.length}
               itemSize={ITEM_HEIGHT}
               width="100%"
+              overscanCount={OVERSCAN_COUNT}
             >
               {ProductItemRow}
             </List>
@@ -731,6 +733,7 @@ export default function InspectionList({
               itemCount={day.items.length}
               itemSize={ITEM_HEIGHT}
               width="100%"
+              overscanCount={OVERSCAN_COUNT}
             >
               {DayItemRow}
             </List>

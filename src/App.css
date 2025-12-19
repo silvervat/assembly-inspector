@@ -1918,6 +1918,12 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg-primary);
 }
 
+/* Virtualized list container - mobile touch scrolling */
+.date-group-items > div {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 .date-group-items-indented .inspection-item {
   padding-left: calc(var(--modus-spacing-md) + 40px);
 }
