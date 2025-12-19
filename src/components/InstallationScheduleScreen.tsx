@@ -144,7 +144,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [playbackSettings, setPlaybackSettings] = useState({
     colorPreviousDayBlack: false,  // Option 1: Color previous day black when new day starts
     colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
-    colorEachDayDifferent: false   // Option 3: Color each day different color (disables option 1)
+    colorEachDayDifferent: false,  // Option 3: Color each day different color (disables option 1)
+    progressiveReveal: false       // Option 4: Hide all items at start, reveal one by one
   });
 
   // Track current playback day for coloring
@@ -846,6 +847,46 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Hide all scheduled items
+  const hideAllItems = async () => {
+    try {
+      for (const item of scheduleItems) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { visible: false }
+        );
+      }
+    } catch (e) {
+      console.error('Error hiding all items:', e);
+    }
+  };
+
+  // Show a specific item (make visible)
+  const showItem = async (item: ScheduleItem) => {
+    try {
+      const modelId = item.model_id;
+      const guidIfc = item.guid_ifc || item.guid;
+      if (!modelId || !guidIfc) return;
+
+      const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+      if (!runtimeIds || runtimeIds.length === 0) return;
+
+      await api.viewer.setObjectState(
+        { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+        { visible: true }
+      );
+    } catch (e) {
+      console.error('Error showing item:', e);
+    }
+  };
+
   // Color all items for a specific date
   const colorDateItems = async (date: string, color: { r: number; g: number; b: number }) => {
     const items = itemsByDate[date];
@@ -880,6 +921,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setPlaybackDateColors(colors);
     }
 
+    // Progressive reveal: hide all items first
+    if (playbackSettings.progressiveReveal) {
+      await api.viewer.setObjectState(undefined, { visible: 'reset' }); // First show all
+      await hideAllItems(); // Then hide only scheduled items
+    }
+
     // Color all items white if setting is enabled
     if (playbackSettings.colorAllWhiteAtStart) {
       await colorAllItems({ r: 255, g: 255, b: 255 });
@@ -911,12 +958,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setIsPaused(false);
   };
 
-  const stopPlayback = () => {
+  const stopPlayback = async () => {
     setIsPlaying(false);
     setIsPaused(false);
     if (playbackRef.current) {
       clearTimeout(playbackRef.current);
       playbackRef.current = null;
+    }
+    // Reset visibility if progressive reveal was enabled
+    if (playbackSettings.progressiveReveal) {
+      await api.viewer.setObjectState(undefined, { visible: 'reset' });
     }
   };
 
@@ -929,6 +980,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setIsPlaying(false);
       setIsPaused(false);
       setCurrentPlaybackDate(null);
+      // Reset visibility if progressive reveal was enabled
+      if (playbackSettings.progressiveReveal) {
+        api.viewer.setObjectState(undefined, { visible: 'reset' });
+      }
       // Zoom out at end
       zoomToAllItems();
       return;
@@ -946,6 +1001,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     const playNext = async () => {
+      // Progressive reveal: show the item first
+      if (playbackSettings.progressiveReveal) {
+        await showItem(item);
+      }
+
       // Check if we've moved to a new day
       if (currentPlaybackDate && currentPlaybackDate !== item.scheduled_date) {
         // Option 1: Color previous day black (only if option 3 is not enabled)
@@ -1766,6 +1826,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 />
                 <span>Värvi iga päev erineva värviga</span>
                 <small>(tühistab eelmise päeva mustaks värvimise)</small>
+              </label>
+
+              <label className="setting-option">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.progressiveReveal}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, progressiveReveal: e.target.checked }))}
+                />
+                <span>Järk-järguline esitus</span>
+                <small>(peida kõik detailid alguses, kuva järjest)</small>
               </label>
             </div>
           </div>
