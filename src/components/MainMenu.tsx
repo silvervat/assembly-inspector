@@ -3,7 +3,7 @@ import { TrimbleExUser, supabase } from '../supabase';
 import {
   FiSearch, FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
   FiShield, FiClipboard, FiBox, FiDroplet, FiZap, FiLayers,
-  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiTruck
+  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiTruck, FiCalendar
 } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 
@@ -19,7 +19,8 @@ export type InspectionMode =
   | 'admin'
   | 'inspection_plan'
   | 'inspection_type'
-  | 'installations'; // Paigaldamiste süsteem
+  | 'installations' // Paigaldamiste süsteem
+  | 'schedule'; // Paigaldusgraafik
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -276,6 +277,23 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Paigaldamised</span>
                 <span className="menu-item-desc">Paigalduste päevik</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Paigaldusgraafik - installation schedule */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('schedule')}
+            >
+              <span className="menu-item-icon" style={{ color: '#8b5cf6' }}>
+                <FiCalendar size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Paigaldusgraafik</span>
+                <span className="menu-item-desc">Planeeri ja esitle paigaldusi</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />

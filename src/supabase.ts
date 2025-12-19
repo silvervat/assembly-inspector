@@ -391,6 +391,56 @@ export interface InstallerStats {
   working_days: number;
 }
 
+// ============================================
+// PAIGALDUSGRAAFIK (Installation Schedule v2.10.0)
+// ============================================
+
+export type ScheduleItemStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface ScheduleItem {
+  id: string;
+  project_id: string;
+  // Objekti identifikaatorid
+  model_id?: string;
+  guid: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_runtime_id?: number;
+  // Objekti andmed
+  assembly_mark: string;
+  product_name?: string;
+  file_name?: string;
+  cast_unit_weight?: string;
+  // Ajakava
+  scheduled_date: string;
+  sort_order: number;
+  notes?: string;
+  // Staatus
+  status: ScheduleItemStatus;
+  // Audit väljad
+  created_by: string;
+  created_at: string;
+  updated_by?: string;
+  updated_at: string;
+}
+
+export interface ScheduleItemHistory {
+  id: string;
+  schedule_id: string;
+  action: 'created' | 'date_changed' | 'status_changed' | 'deleted' | 'reordered';
+  old_value?: string;
+  new_value?: string;
+  changed_by: string;
+  changed_at: string;
+}
+
+// Päevade kaupa grupeeritud kirjed
+export interface ScheduleByDate {
+  date: string;
+  items: ScheduleItem[];
+  count: number;
+}
+
 // Database schema:
 /*
 -- Users tabel

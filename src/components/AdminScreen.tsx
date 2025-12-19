@@ -1038,106 +1038,29 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
       {/* Main Tools View */}
       {adminView === 'main' && (
         <>
-        <div className="admin-tools">
-        <div className="admin-tool-card">
-          <div className="tool-header">
-            <FiSearch size={24} />
-            <h3>Avasta propertised</h3>
-          </div>
-          <p className="tool-description">
-            Vali mudelist üks või mitu detaili ja vajuta nuppu, et näha kõiki nende propertiseid.
-          </p>
-          <div className="tool-actions">
-            <button
-              className="btn-primary"
-              onClick={discoverProperties}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <FiRefreshCw className="spin" size={16} />
-                  Otsin...
-                </>
-              ) : (
-                <>
-                  <FiSearch size={16} />
-                  Avasta propertised
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+        <div className="admin-tools-compact">
+          <button className="admin-tool-btn" onClick={discoverProperties} disabled={isLoading}>
+            <FiSearch size={18} />
+            <span>Avasta propertised</span>
+            {isLoading && <FiRefreshCw className="spin" size={14} />}
+          </button>
 
-        {/* Function Explorer Card */}
-        <div className="admin-tool-card" style={{ marginTop: '12px' }}>
-          <div className="tool-header">
-            <FiZap size={24} />
-            <h3>Avasta funktsioone</h3>
-          </div>
-          <p className="tool-description">
-            Testi erinevaid Trimble Connect viewer funktsioone - kaamera, vaated, paneelid jne.
-          </p>
-          <div className="tool-actions">
-            <button
-              className="btn-primary"
-              onClick={() => setShowFunctionExplorer(true)}
-            >
-              <FiZap size={16} />
-              Ava funktsioonide testija
-            </button>
-          </div>
-        </div>
+          <button className="admin-tool-btn" onClick={() => setShowFunctionExplorer(true)}>
+            <FiZap size={18} />
+            <span>Funktsioonide testija</span>
+          </button>
 
-        {/* Assembly & Bolts List Card */}
-        <div className="admin-tool-card" style={{ marginTop: '12px' }}>
-          <div className="tool-header">
-            <FiDownload size={24} />
-            <h3>Assembly list & Poldid</h3>
-          </div>
-          <p className="tool-description">
-            Vali mudelist detailid ja kogu nende Cast Unit Mark, Product Name, Weight ning poltide kokkuvõte.
-          </p>
-          <div className="tool-actions">
-            <button
-              className="btn-primary"
-              onClick={collectAssemblyData}
-              disabled={assemblyListLoading}
-            >
-              {assemblyListLoading ? (
-                <>
-                  <FiRefreshCw className="spin" size={16} />
-                  Kogun andmeid...
-                </>
-              ) : (
-                <>
-                  <FiDownload size={16} />
-                  Kogu detailide andmed
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+          <button className="admin-tool-btn" onClick={collectAssemblyData} disabled={assemblyListLoading}>
+            <FiDownload size={18} />
+            <span>Assembly list & Poldid</span>
+            {assemblyListLoading && <FiRefreshCw className="spin" size={14} />}
+          </button>
 
-        {/* Import GUID (MS) Card */}
-        <div className="admin-tool-card" style={{ marginTop: '12px' }}>
-          <div className="tool-header">
-            <FiSearch size={24} />
-            <h3>Import GUID (MS)</h3>
-          </div>
-          <p className="tool-description">
-            Kleebi Excelist GUID (MS) koodid ja süsteem leiab need mudelist üles ning valib need.
-          </p>
-          <div className="tool-actions">
-            <button
-              className="btn-primary"
-              onClick={() => setAdminView('guidImport')}
-            >
-              <FiSearch size={16} />
-              Ava GUID import
-            </button>
-          </div>
+          <button className="admin-tool-btn" onClick={() => setAdminView('guidImport')}>
+            <FiSearch size={18} />
+            <span>Import GUID (MS)</span>
+          </button>
         </div>
-      </div>
 
       {/* Function Explorer Panel */}
       {showFunctionExplorer && (

@@ -160,3 +160,109 @@ CREATE INDEX IF NOT EXISTS idx_installation_methods_project ON installation_meth
 --   ('YOUR_PROJECT_ID', 'LIFT', 'Upitaja', 'Paigaldamine tõstukiga', '🚜', 2),
 --   ('YOUR_PROJECT_ID', 'MANUAL', 'Käsitsi', 'Käsitsi paigaldamine', '🔧', 3)
 -- ON CONFLICT DO NOTHING;
+
+-- ============================================
+-- INSTALLATION SCHEDULE (v2.10.0)
+-- ============================================
+-- Schedule for planned installations with date grouping
+-- Each detail can only be scheduled once (unique GUID per project)
+
+CREATE TABLE IF NOT EXISTS installation_schedule (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id TEXT NOT NULL,
+  -- Object identification
+  model_id TEXT,
+  guid TEXT NOT NULL,
+  guid_ifc TEXT,
+  guid_ms TEXT,
+  object_runtime_id INTEGER,
+  -- Object details
+  assembly_mark TEXT NOT NULL,
+  product_name TEXT,
+  file_name TEXT,
+  cast_unit_weight TEXT,
+  -- Scheduling
+  scheduled_date DATE NOT NULL,
+  sort_order INTEGER DEFAULT 0,
+  notes TEXT,
+  -- Status
+  status TEXT DEFAULT 'planned' CHECK (status IN ('planned', 'in_progress', 'completed', 'cancelled')),
+  -- Audit fields
+  created_by TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_by TEXT,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  -- Ensure no duplicate GUIDs per project
+  CONSTRAINT unique_guid_per_project UNIQUE (project_id, guid)
+);
+
+-- Indexes for installation_schedule
+CREATE INDEX IF NOT EXISTS idx_schedule_project ON installation_schedule(project_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_date ON installation_schedule(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_schedule_guid ON installation_schedule(guid);
+CREATE INDEX IF NOT EXISTS idx_schedule_guid_ifc ON installation_schedule(guid_ifc);
+CREATE INDEX IF NOT EXISTS idx_schedule_status ON installation_schedule(status);
+CREATE INDEX IF NOT EXISTS idx_schedule_project_date ON installation_schedule(project_id, scheduled_date);
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_schedule_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for auto-updating updated_at
+DROP TRIGGER IF EXISTS schedule_updated_at ON installation_schedule;
+CREATE TRIGGER schedule_updated_at
+  BEFORE UPDATE ON installation_schedule
+  FOR EACH ROW
+  EXECUTE FUNCTION update_schedule_timestamp();
+
+-- ============================================
+-- INSTALLATION SCHEDULE HISTORY (v2.10.0)
+-- ============================================
+-- Track all changes to scheduled items for audit purposes
+
+CREATE TABLE IF NOT EXISTS installation_schedule_history (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  schedule_id UUID NOT NULL REFERENCES installation_schedule(id) ON DELETE CASCADE,
+  action TEXT NOT NULL CHECK (action IN ('created', 'date_changed', 'status_changed', 'deleted', 'reordered')),
+  old_value TEXT,
+  new_value TEXT,
+  changed_by TEXT NOT NULL,
+  changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Index for history
+CREATE INDEX IF NOT EXISTS idx_schedule_history_schedule ON installation_schedule_history(schedule_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_history_action ON installation_schedule_history(action);
+
+-- Function to log schedule changes
+CREATE OR REPLACE FUNCTION log_schedule_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    INSERT INTO installation_schedule_history (schedule_id, action, new_value, changed_by)
+    VALUES (NEW.id, 'created', NEW.scheduled_date::TEXT, NEW.created_by);
+  ELSIF TG_OP = 'UPDATE' THEN
+    IF OLD.scheduled_date != NEW.scheduled_date THEN
+      INSERT INTO installation_schedule_history (schedule_id, action, old_value, new_value, changed_by)
+      VALUES (NEW.id, 'date_changed', OLD.scheduled_date::TEXT, NEW.scheduled_date::TEXT, COALESCE(NEW.updated_by, NEW.created_by));
+    END IF;
+    IF OLD.status != NEW.status THEN
+      INSERT INTO installation_schedule_history (schedule_id, action, old_value, new_value, changed_by)
+      VALUES (NEW.id, 'status_changed', OLD.status, NEW.status, COALESCE(NEW.updated_by, NEW.created_by));
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for logging changes
+DROP TRIGGER IF EXISTS schedule_change_log ON installation_schedule;
+CREATE TRIGGER schedule_change_log
+  AFTER INSERT OR UPDATE ON installation_schedule
+  FOR EACH ROW
+  EXECUTE FUNCTION log_schedule_change();
