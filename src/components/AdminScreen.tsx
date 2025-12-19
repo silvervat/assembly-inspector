@@ -1190,6 +1190,32 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Reset All Visibility", () => api.viewer.setObjectState(undefined, { visible: "reset" }))}
                 />
                 <FunctionButton
+                  name="ALL → White"
+                  result={functionResults["ALL → White"]}
+                  onClick={() => testFunction("ALL → White", () => api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } }))}
+                />
+                <FunctionButton
+                  name="ALL → Light Gray"
+                  result={functionResults["ALL → Light Gray"]}
+                  onClick={() => testFunction("ALL → Light Gray", () => api.viewer.setObjectState(undefined, { color: { r: 200, g: 200, b: 200, a: 255 } }))}
+                />
+                <FunctionButton
+                  name="ALL White + Selection Green"
+                  result={functionResults["ALL White + Selection Green"]}
+                  onClick={() => testFunction("ALL White + Selection Green", async () => {
+                    // Step 1: Color ALL objects white
+                    await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+                    // Step 2: Get selection
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) {
+                      return 'All white (no selection to color green)';
+                    }
+                    // Step 3: Color selected objects green
+                    await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 34, g: 197, b: 94, a: 255 } });
+                    return `All white, ${sel.length} selected green`;
+                  })}
+                />
+                <FunctionButton
                   name="isolateSelection()"
                   result={functionResults["isolateSelection()"]}
                   onClick={() => testFunction("isolateSelection()", async () => {
@@ -1351,8 +1377,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     await new Promise(r => setTimeout(r, 150));
                     // Get camera and move closer
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    if (!cam.position || !cam.target) throw new Error('Kaamera positsioon pole saadaval');
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     // Move position 70% closer to target (0.3x distance)
                     const newPos = [
                       tgt[0] + (pos[0] - tgt[0]) * 0.3,
@@ -1371,8 +1398,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    if (!cam.position || !cam.target) throw new Error('Kaamera positsioon pole saadaval');
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = [
                       tgt[0] + (pos[0] - tgt[0]) * 0.5,
                       tgt[1] + (pos[1] - tgt[1]) * 0.5,
@@ -1390,8 +1418,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = [
                       tgt[0] + (pos[0] - tgt[0]) * 0.7,
                       tgt[1] + (pos[1] - tgt[1]) * 0.7,
@@ -1418,8 +1446,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = [
                       tgt[0] + (pos[0] - tgt[0]) * 1.5,
                       tgt[1] + (pos[1] - tgt[1]) * 1.5,
@@ -1437,8 +1465,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = [
                       tgt[0] + (pos[0] - tgt[0]) * 2.0,
                       tgt[1] + (pos[1] - tgt[1]) * 2.0,
@@ -1456,8 +1484,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     await api.viewer.setCamera({ modelObjectIds: sel } as any, { animationTime: 100 });
                     await new Promise(r => setTimeout(r, 150));
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = [
                       tgt[0] + (pos[0] - tgt[0]) * 3.0,
                       tgt[1] + (pos[1] - tgt[1]) * 3.0,
@@ -1584,9 +1612,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   result={functionResults["Get Camera Position"]}
                   onClick={() => testFunction("Get Camera Position", async () => {
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = cam.position ? (Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z]) : null;
-                    const tgt = cam.target ? (Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z]) : null;
-                    const up = cam.up ? (Array.isArray(cam.up) ? cam.up : [cam.up.x, cam.up.y, cam.up.z]) : null;
+                    const pos = cam.position ? (Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0]) : null;
+                    const tgt = cam.target ? (Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0]) : null;
+                    const up = cam.up ? (Array.isArray(cam.up) ? cam.up : [cam.up?.x || 0, cam.up?.y || 0, cam.up?.z || 0]) : null;
                     return `Position: [${pos?.map((n: number) => n.toFixed(2)).join(', ') || 'N/A'}]\nTarget: [${tgt?.map((n: number) => n.toFixed(2)).join(', ') || 'N/A'}]\nUp: [${up?.map((n: number) => n.toFixed(2)).join(', ') || 'N/A'}]\nFOV: ${cam.fov || 'N/A'}`;
                   })}
                 />
@@ -1628,8 +1656,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Move Camera Closer (0.5x)", async () => {
                     const cam = await api.viewer.getCamera() as any;
                     if (!cam.position || !cam.target) throw new Error('Camera data missing');
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = pos.map((p: number, i: number) =>
                       tgt[i] + (p - tgt[i]) * 0.5
                     );
@@ -1642,8 +1670,8 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("Move Camera Further (2x)", async () => {
                     const cam = await api.viewer.getCamera() as any;
                     if (!cam.position || !cam.target) throw new Error('Camera data missing');
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target.x, cam.target.y, cam.target.z];
+                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
+                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
                     const newPos = pos.map((p: number, i: number) =>
                       tgt[i] + (p - tgt[i]) * 2
                     );
