@@ -305,6 +305,90 @@ export interface CheckpointCompletionStats {
   completion_percentage: number;
 }
 
+// ============================================
+// PAIGALDAMISTE SÜSTEEM (Installations System)
+// ============================================
+
+// Paigaldusmeetod (kraana, tõstuk jne)
+export interface InstallationMethod {
+  id: string;
+  project_id: string;
+  code: string;
+  name: string;
+  description?: string;
+  icon?: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// Paigaldamise kirje
+export interface Installation {
+  id: string;
+  // Projekti info
+  project_id: string;
+  model_id: string;
+  // Objekti identifikaatorid
+  guid: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_runtime_id?: number;
+  // Detaili andmed
+  assembly_mark: string;
+  product_name?: string;
+  file_name?: string;
+  // Tekla properties
+  cast_unit_weight?: string;
+  cast_unit_bottom_elevation?: string;
+  cast_unit_top_elevation?: string;
+  cast_unit_position_code?: string;
+  object_type?: string;
+  // Paigaldaja info
+  installer_id?: string;
+  installer_name: string;
+  user_email: string;
+  // Paigaldamise info
+  installation_method_id?: string;
+  installation_method_name?: string;
+  installed_at: string;
+  // Märkused
+  notes?: string;
+  // Metadata
+  created_at: string;
+  updated_at: string;
+}
+
+// Päevade kaupa statistika (vaade)
+export interface InstallationsByDay {
+  project_id: string;
+  install_date: string;
+  total_installed: number;
+  unique_installers: number;
+  installer_names: string[];
+  methods_used: string[];
+}
+
+// Kuude kaupa statistika (vaade)
+export interface InstallationsByMonth {
+  project_id: string;
+  install_month: string;
+  total_installed: number;
+  unique_installers: number;
+  working_days: number;
+}
+
+// Paigaldaja statistika (vaade)
+export interface InstallerStats {
+  project_id: string;
+  user_email: string;
+  installer_name: string;
+  total_installed: number;
+  first_installation: string;
+  last_installation: string;
+  working_days: number;
+}
+
 // Database schema:
 /*
 -- Users tabel

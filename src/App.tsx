@@ -4,6 +4,7 @@ import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
 import AdminScreen from './components/AdminScreen';
 import InspectionPlanScreen from './components/InspectionPlanScreen';
+import InstallationsScreen from './components/InstallationsScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -16,7 +17,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '2.9.51';
+export const APP_VERSION = '2.9.52';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -625,6 +626,24 @@ export default function App() {
           projectId={projectId}
           userEmail={tcUser?.email || ''}
           userName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
+          onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Paigaldamiste ekraan
+  if (currentMode === 'installations') {
+    return (
+      <>
+        <NavigationOverlay />
+        <InstallationsScreen
+          api={api}
+          user={user}
+          projectId={projectId}
+          tcUserEmail={tcUser?.email || ''}
+          tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
         />
         <VersionFooter />
