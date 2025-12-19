@@ -7817,5 +7817,12 @@ button.stat-toggle.off:hover {
   font-weight: 500;
   color: var(--modus-text-primary);
   text-align: right;
+}
+
+.compact-date {
+  font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-size: 11px;
+  letter-spacing: -0.3px;
+  color: var(--modus-text-secondary);
   word-break: break-word;
 }

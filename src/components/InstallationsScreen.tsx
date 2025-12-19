@@ -61,10 +61,9 @@ function getMonthKey(dateStr: string): string {
 }
 
 function getMonthLabel(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('et-EE', {
-    year: 'numeric',
-    month: 'long'
-  });
+  const date = new Date(dateStr);
+  const months = ['Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juuni', 'Juuli', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
+  return `${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
 function getDayKey(dateStr: string): string {
@@ -73,10 +72,21 @@ function getDayKey(dateStr: string): string {
 }
 
 function getDayLabel(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('et-EE', {
-    day: 'numeric',
-    month: 'long'
-  });
+  const date = new Date(dateStr);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}.${month}`;
+}
+
+// Compact date format: dd.mm.yy HH:MM
+function formatCompactDateTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear()).slice(-2);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${day}.${month}.${year} ${hours}:${minutes}`;
 }
 
 function groupByMonthAndDay(installations: Installation[]): MonthGroup[] {
@@ -187,7 +197,6 @@ export default function InstallationsScreen({
 
   // List view state
   const [showList, setShowList] = useState(false);
-  const [listMode, setListMode] = useState<'all' | 'mine'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -1040,20 +1049,16 @@ export default function InstallationsScreen({
     }
   };
 
-  // Filter installations
+  // Filter installations by search query
   const filteredInstallations = installations.filter(inst => {
-    // Filter by mode
-    if (listMode === 'mine' && inst.user_email?.toLowerCase() !== user.email.toLowerCase()) {
-      return false;
-    }
-    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
         inst.assembly_mark?.toLowerCase().includes(query) ||
         inst.product_name?.toLowerCase().includes(query) ||
         inst.installer_name?.toLowerCase().includes(query) ||
-        inst.installation_method_name?.toLowerCase().includes(query)
+        inst.installation_method_name?.toLowerCase().includes(query) ||
+        inst.team_members?.toLowerCase().includes(query)
       );
     }
     return true;
@@ -1128,7 +1133,7 @@ export default function InstallationsScreen({
                       {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
                     </div>
                   </div>
-                  <span className="installation-time" style={{ fontSize: '10px', color: '#6a6e79' }}>
+                  <span className="installation-time compact-date">
                     {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
                       hour: '2-digit',
                       minute: '2-digit'
@@ -1187,7 +1192,7 @@ export default function InstallationsScreen({
               onClick={() => setShowList(true)}
             >
               <FiList size={16} />
-              <span>Paigaldatud detailide nimekiri</span>
+              <span>Paigaldatud detailid</span>
               <span className="menu-count">{installations.length}</span>
             </button>
           </div>
@@ -1447,20 +1452,6 @@ export default function InstallationsScreen({
                 </button>
               )}
             </div>
-            <div className="mode-toggle">
-              <button
-                className={listMode === 'all' ? 'active' : ''}
-                onClick={() => setListMode('all')}
-              >
-                Kõik
-              </button>
-              <button
-                className={listMode === 'mine' ? 'active' : ''}
-                onClick={() => setListMode('mine')}
-              >
-                Minu
-              </button>
-            </div>
           </div>
 
           {/* List content */}
@@ -1573,16 +1564,7 @@ export default function InstallationsScreen({
               <div className="install-info-rows">
                 <div className="install-info-row">
                   <span className="install-info-label">Paigaldatud</span>
-                  <span className="install-info-value">
-                    {new Date(showInstallInfo.installed_at).toLocaleDateString('et-EE', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short'
-                    })} {new Date(showInstallInfo.installed_at).toLocaleTimeString('et-EE', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
+                  <span className="install-info-value compact-date">{formatCompactDateTime(showInstallInfo.installed_at)}</span>
                 </div>
                 <div className="install-info-row">
                   <span className="install-info-label">Meetod</span>
@@ -1601,13 +1583,7 @@ export default function InstallationsScreen({
                 <div className="install-info-row muted">
                   <span className="install-info-label">Kirje sisestas</span>
                   <span className="install-info-value">
-                    {showInstallInfo.user_email.split('@')[0]} · {new Date(showInstallInfo.created_at).toLocaleDateString('et-EE', {
-                      day: 'numeric',
-                      month: 'short'
-                    })} {new Date(showInstallInfo.created_at).toLocaleTimeString('et-EE', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+                    {showInstallInfo.user_email.split('@')[0]} · <span className="compact-date">{formatCompactDateTime(showInstallInfo.created_at)}</span>
                   </span>
                 </div>
               </div>
