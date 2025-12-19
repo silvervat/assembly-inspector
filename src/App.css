@@ -6477,9 +6477,8 @@ button.stat-toggle.off:hover {
   text-transform: uppercase;
 }
 
-/* Selected objects section - compact at bottom */
+/* Selected objects section */
 .selected-objects-section {
-  margin-top: auto;
   background: white;
   border-radius: var(--modus-radius-md);
   padding: var(--modus-spacing-sm);
@@ -6535,13 +6534,11 @@ button.stat-toggle.off:hover {
   align-self: flex-start;
 }
 
-/* Selected objects list - row style */
+/* Selected objects list - row style, no scroll - page scrolls */
 .selected-objects-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .selected-object-row {
