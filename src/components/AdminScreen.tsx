@@ -1003,14 +1003,14 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("getCamera()", () => api.viewer.getCamera())}
                 />
                 <FunctionButton
-                  name="fitAll()"
-                  result={functionResults["fitAll()"]}
-                  onClick={() => testFunction("fitAll()", () => (api.viewer as any).fitAll?.())}
+                  name="fitAll / reset"
+                  result={functionResults["fitAll / reset"]}
+                  onClick={() => testFunction("fitAll / reset", () => api.viewer.setCamera("reset", { animationTime: 300 }))}
                 />
                 <FunctionButton
                   name="zoomToSelection()"
                   result={functionResults["zoomToSelection()"]}
-                  onClick={() => testFunction("zoomToSelection()", () => (api.viewer as any).zoomToSelection?.())}
+                  onClick={() => testFunction("zoomToSelection()", () => api.viewer.setCamera({ selected: true }, { animationTime: 300 }))}
                 />
               </div>
             </div>
@@ -1180,9 +1180,14 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               <h4>🎨 Nähtavus / Värvid</h4>
               <div className="function-grid">
                 <FunctionButton
-                  name="resetObjectState()"
-                  result={functionResults["resetObjectState()"]}
-                  onClick={() => testFunction("resetObjectState()", () => (api.viewer as any).resetObjectState?.())}
+                  name="Reset All Colors"
+                  result={functionResults["Reset All Colors"]}
+                  onClick={() => testFunction("Reset All Colors", () => api.viewer.setObjectState(undefined, { color: "reset" }))}
+                />
+                <FunctionButton
+                  name="Reset All Visibility"
+                  result={functionResults["Reset All Visibility"]}
+                  onClick={() => testFunction("Reset All Visibility", () => api.viewer.setObjectState(undefined, { visible: "reset" }))}
                 />
                 <FunctionButton
                   name="isolateSelection()"
@@ -1190,13 +1195,18 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   onClick={() => testFunction("isolateSelection()", async () => {
                     const sel = await api.viewer.getSelection();
                     if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
-                    return (api.viewer as any).isolate?.(sel);
+                    // Convert selection to IModelEntities format for isolateEntities
+                    const modelEntities = sel.map((s: any) => ({
+                      modelId: s.modelId,
+                      entityIds: s.objectRuntimeIds || []
+                    }));
+                    return api.viewer.isolateEntities(modelEntities);
                   })}
                 />
                 <FunctionButton
-                  name="unisolate()"
-                  result={functionResults["unisolate()"]}
-                  onClick={() => testFunction("unisolate()", () => (api.viewer as any).unisolate?.())}
+                  name="Show All (unisolate)"
+                  result={functionResults["Show All (unisolate)"]}
+                  onClick={() => testFunction("Show All (unisolate)", () => api.viewer.setObjectState(undefined, { visible: "reset" }))}
                 />
                 <FunctionButton
                   name="Color Selection RED"
@@ -1235,9 +1245,9 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   })}
                 />
                 <FunctionButton
-                  name="Show All"
-                  result={functionResults["Show All"]}
-                  onClick={() => testFunction("Show All", () => (api.viewer as any).resetObjectState?.())}
+                  name="Show All + Reset Colors"
+                  result={functionResults["Show All + Reset Colors"]}
+                  onClick={() => testFunction("Show All + Reset Colors", () => api.viewer.setObjectState(undefined, { color: "reset", visible: "reset" }))}
                 />
               </div>
             </div>
@@ -1755,8 +1765,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="Reset All States"
                   result={functionResults["Reset All States"]}
                   onClick={() => testFunction("Reset All States", async () => {
-                    await (api.viewer as any).resetObjectState?.();
-                    await (api.viewer as any).unisolate?.();
+                    await api.viewer.setObjectState(undefined, { color: "reset", visible: "reset" });
                     return 'All states reset';
                   })}
                 />
@@ -1984,6 +1993,110 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="getSelectionColor()"
                   result={functionResults["getSelectionColor()"]}
                   onClick={() => testFunction("getSelectionColor()", () => (api.viewer as any).getSelectionColor?.())}
+                />
+              </div>
+            </div>
+
+            {/* CAMERA MODES section - Official API */}
+            <div className="function-section">
+              <h4>🚶 Kaamera režiimid</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getCameraMode()"
+                  result={functionResults["getCameraMode()"]}
+                  onClick={() => testFunction("getCameraMode()", () => api.viewer.getCameraMode())}
+                />
+                <FunctionButton
+                  name="Mode: Rotate"
+                  result={functionResults["Mode: Rotate"]}
+                  onClick={() => testFunction("Mode: Rotate", () => api.viewer.setCameraMode('rotate' as any))}
+                />
+                <FunctionButton
+                  name="Mode: Pan"
+                  result={functionResults["Mode: Pan"]}
+                  onClick={() => testFunction("Mode: Pan", () => api.viewer.setCameraMode('pan' as any))}
+                />
+                <FunctionButton
+                  name="Mode: Walk"
+                  result={functionResults["Mode: Walk"]}
+                  onClick={() => testFunction("Mode: Walk", () => api.viewer.setCameraMode('walk' as any))}
+                />
+                <FunctionButton
+                  name="Mode: Look Around"
+                  result={functionResults["Mode: Look Around"]}
+                  onClick={() => testFunction("Mode: Look Around", () => api.viewer.setCameraMode('look_around' as any))}
+                />
+              </div>
+            </div>
+
+            {/* SECTION PLANES section - Official API */}
+            <div className="function-section">
+              <h4>✂️ Lõiketasandid</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getSectionPlanes()"
+                  result={functionResults["getSectionPlanes()"]}
+                  onClick={() => testFunction("getSectionPlanes()", () => api.viewer.getSectionPlanes())}
+                />
+                <FunctionButton
+                  name="Add Section X"
+                  result={functionResults["Add Section X"]}
+                  onClick={() => testFunction("Add Section X", () => api.viewer.addSectionPlane({
+                    normal: [1, 0, 0],
+                    distance: 0
+                  } as any))}
+                />
+                <FunctionButton
+                  name="Add Section Y"
+                  result={functionResults["Add Section Y"]}
+                  onClick={() => testFunction("Add Section Y", () => api.viewer.addSectionPlane({
+                    normal: [0, 1, 0],
+                    distance: 0
+                  } as any))}
+                />
+                <FunctionButton
+                  name="Add Section Z"
+                  result={functionResults["Add Section Z"]}
+                  onClick={() => testFunction("Add Section Z", () => api.viewer.addSectionPlane({
+                    normal: [0, 0, 1],
+                    distance: 0
+                  } as any))}
+                />
+                <FunctionButton
+                  name="Remove All Sections"
+                  result={functionResults["Remove All Sections"]}
+                  onClick={() => testFunction("Remove All Sections", () => api.viewer.removeSectionPlanes())}
+                />
+              </div>
+            </div>
+
+            {/* ADDITIONAL INFO section - Official API */}
+            <div className="function-section">
+              <h4>📊 Lisainfo</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getPresentation()"
+                  result={functionResults["getPresentation()"]}
+                  onClick={() => testFunction("getPresentation()", () => api.viewer.getPresentation())}
+                />
+                <FunctionButton
+                  name="getColoredObjects()"
+                  result={functionResults["getColoredObjects()"]}
+                  onClick={() => testFunction("getColoredObjects()", () => api.viewer.getColoredObjects())}
+                />
+                <FunctionButton
+                  name="getLayers(first model)"
+                  result={functionResults["getLayers(first model)"]}
+                  onClick={() => testFunction("getLayers(first model)", async () => {
+                    const models = await api.viewer.getModels();
+                    if (!models || models.length === 0) throw new Error('No models loaded');
+                    return api.viewer.getLayers(models[0].id);
+                  })}
+                />
+                <FunctionButton
+                  name="getTrimbimModels()"
+                  result={functionResults["getTrimbimModels()"]}
+                  onClick={() => testFunction("getTrimbimModels()", () => api.viewer.getTrimbimModels())}
                 />
               </div>
             </div>
