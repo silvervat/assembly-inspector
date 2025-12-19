@@ -249,8 +249,8 @@ export default function InstallationsScreen({
                     else guid = normalizeGuid(val);
                   }
 
-                  // Product name
-                  if (setName === 'Product' && propName === 'name') {
+                  // Product name - check multiple possible set names
+                  if ((setName === 'Product' || setName.toLowerCase().includes('product')) && propName === 'name') {
                     productName = String(propValue);
                   }
 
@@ -563,8 +563,12 @@ export default function InstallationsScreen({
   const monthGroups = groupByMonthAndDay(filteredInstallations);
 
   // Check which selected objects are already installed
+  const getObjectGuid = (obj: SelectedObject): string | undefined => {
+    return obj.guidIfc || obj.guid || undefined;
+  };
+
   const alreadyInstalledCount = selectedObjects.filter(obj => {
-    const guid = obj.guidIfc || obj.guid;
+    const guid = getObjectGuid(obj);
     return guid && installedGuids.has(guid);
   }).length;
 
@@ -652,15 +656,17 @@ export default function InstallationsScreen({
 
   return (
     <div className="installations-screen">
-      {/* Header */}
-      <div className="installations-header">
-        <button className="back-button" onClick={onBackToMenu}>
-          <FiArrowLeft size={18} />
+      {/* Mode title bar - same as InspectorScreen */}
+      <div className="mode-title-bar">
+        <button className="back-to-menu-btn" onClick={onBackToMenu}>
+          <FiArrowLeft size={14} />
+          <span>Menüü</span>
         </button>
-        <h2>
-          <FiTruck size={20} />
-          Paigaldamised
-        </h2>
+        <span className="mode-title">Paigaldamised</span>
+      </div>
+
+      {/* Sub-header with toggle */}
+      <div className="installations-sub-header">
         <button
           className={`list-toggle-btn ${showList ? 'active' : ''}`}
           onClick={() => setShowList(!showList)}
@@ -672,33 +678,18 @@ export default function InstallationsScreen({
       {!showList ? (
         /* Form View */
         <div className="installations-form">
-          {/* Selected objects info */}
-          <div className="selected-objects-info">
-            <h3>Valitud detailid ({selectedObjects.length})</h3>
-            {selectedObjects.length === 0 ? (
-              <div className="no-selection">
-                <FiSearch size={24} />
-                <p>Vali mudelilt detail(id), mida soovid paigaldada</p>
-              </div>
-            ) : (
-              <div className="selected-objects-list">
-                {selectedObjects.map((obj, idx) => {
-                  const isInstalled = obj.guid && installedGuids.has(obj.guid);
-                  return (
-                    <div key={idx} className={`selected-object ${isInstalled ? 'already-installed' : ''}`}>
-                      <span className="object-mark">{obj.assemblyMark}</span>
-                      {obj.productName && <span className="object-product">{obj.productName}</span>}
-                      {isInstalled && <span className="installed-badge">Juba paigaldatud</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            {alreadyInstalledCount > 0 && (
-              <div className="already-installed-warning">
-                {alreadyInstalledCount} detaili on juba paigaldatud ja jäetakse vahele
-              </div>
-            )}
+          {/* Stats at top */}
+          <div className="installations-stats">
+            <div className="stat-item">
+              <span className="stat-value">{installations.length}</span>
+              <span className="stat-label">PAIGALDUSI KOKKU</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">
+                {installations.filter(i => i.user_email?.toLowerCase() === user.email.toLowerCase()).length}
+              </span>
+              <span className="stat-label">MINU PAIGALDUSI</span>
+            </div>
           </div>
 
           {/* Installation form */}
@@ -751,6 +742,39 @@ export default function InstallationsScreen({
                 rows={2}
               />
             </div>
+          </div>
+
+          {/* Selected objects at bottom - compact */}
+          <div className="selected-objects-section">
+            {selectedObjects.length === 0 ? (
+              <div className="no-selection-compact">
+                <FiSearch size={16} />
+                <span>Vali mudelilt detail(id)</span>
+              </div>
+            ) : (
+              <>
+                <div className="selected-objects-header">
+                  <span>Valitud: </span>
+                  <span className="selected-marks">
+                    {selectedObjects.map((obj, idx) => {
+                      const guid = getObjectGuid(obj);
+                      const isInstalled = guid && installedGuids.has(guid);
+                      return (
+                        <span key={idx} className={`mark-tag ${isInstalled ? 'installed' : ''}`}>
+                          {obj.assemblyMark}
+                          {obj.productName && ` | ${obj.productName}`}
+                        </span>
+                      );
+                    })}
+                  </span>
+                </div>
+                {alreadyInstalledCount > 0 && (
+                  <div className="already-installed-note">
+                    {alreadyInstalledCount} juba paigaldatud
+                  </div>
+                )}
+              </>
+            )}
 
             <button
               className="save-installation-btn"
@@ -760,24 +784,10 @@ export default function InstallationsScreen({
               {saving ? 'Salvestan...' : (
                 <>
                   <FiPlus size={16} />
-                  Salvesta paigaldus ({newObjectsCount} detaili)
+                  Salvesta paigaldus ({newObjectsCount})
                 </>
               )}
             </button>
-          </div>
-
-          {/* Stats */}
-          <div className="installations-stats">
-            <div className="stat-item">
-              <span className="stat-value">{installations.length}</span>
-              <span className="stat-label">Paigaldusi kokku</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-value">
-                {installations.filter(i => i.user_email?.toLowerCase() === user.email.toLowerCase()).length}
-              </span>
-              <span className="stat-label">Minu paigaldusi</span>
-            </div>
           </div>
         </div>
       ) : (

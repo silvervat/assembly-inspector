@@ -6254,23 +6254,12 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg);
 }
 
-.installations-header {
+.installations-sub-header {
   display: flex;
-  align-items: center;
-  gap: var(--modus-spacing-md);
-  padding: var(--modus-spacing-md);
+  justify-content: flex-end;
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
   background: white;
   border-bottom: 1px solid var(--modus-border);
-}
-
-.installations-header h2 {
-  display: flex;
-  align-items: center;
-  gap: var(--modus-spacing-sm);
-  margin: 0;
-  font-size: var(--modus-font-size-lg);
-  color: var(--modus-text-primary);
-  flex: 1;
 }
 
 .list-toggle-btn {
@@ -6436,30 +6425,32 @@ button.stat-toggle.off:hover {
   align-items: center;
   justify-content: center;
   gap: var(--modus-spacing-sm);
-  padding: var(--modus-spacing-md);
-  background: var(--modus-success);
-  color: white;
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: #198754;
+  color: white !important;
   border: none;
   border-radius: var(--modus-radius-sm);
   font-size: var(--modus-font-size-md);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s;
 }
 
 .save-installation-btn:hover:not(:disabled) {
-  background: var(--modus-success-dark);
+  background: #157347;
+  color: white !important;
 }
 
 .save-installation-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
+  background: #6c757d;
 }
 
-/* Stats */
+/* Stats - compact at top */
 .installations-stats {
   display: flex;
-  gap: var(--modus-spacing-md);
+  gap: var(--modus-spacing-sm);
 }
 
 .installations-stats .stat-item {
@@ -6467,22 +6458,81 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: var(--modus-spacing-md);
+  padding: var(--modus-spacing-sm);
   background: white;
-  border-radius: var(--modus-radius-md);
+  border-radius: var(--modus-radius-sm);
   border: 1px solid var(--modus-border);
 }
 
 .installations-stats .stat-value {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   color: var(--modus-primary);
 }
 
 .installations-stats .stat-label {
-  font-size: var(--modus-font-size-xs);
+  font-size: 10px;
   color: var(--modus-text-secondary);
   text-align: center;
+  text-transform: uppercase;
+}
+
+/* Selected objects section - compact at bottom */
+.selected-objects-section {
+  margin-top: auto;
+  background: white;
+  border-radius: var(--modus-radius-md);
+  padding: var(--modus-spacing-sm);
+  border: 1px solid var(--modus-border);
+  display: flex;
+  flex-direction: column;
+  gap: var(--modus-spacing-sm);
+}
+
+.no-selection-compact {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  color: var(--modus-text-secondary);
+  font-size: var(--modus-font-size-sm);
+  padding: var(--modus-spacing-xs) 0;
+}
+
+.selected-objects-header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--modus-spacing-xs);
+  font-size: var(--modus-font-size-sm);
+}
+
+.selected-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mark-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  background: var(--modus-bg-light);
+  border-radius: var(--modus-radius-xs);
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.mark-tag.installed {
+  background: #fff3cd;
+  color: #856404;
+  text-decoration: line-through;
+}
+
+.already-installed-note {
+  font-size: 11px;
+  color: #856404;
+  background: #fff3cd;
+  padding: 2px 6px;
+  border-radius: var(--modus-radius-xs);
+  align-self: flex-start;
 }
 
 /* List View */
