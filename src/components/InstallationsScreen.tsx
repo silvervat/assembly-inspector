@@ -752,6 +752,32 @@ export default function InstallationsScreen({
 
   const zoomToInstallation = async (installation: Installation) => {
     try {
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      // Try to find object by GUID first (more reliable)
+      const guid = installation.guid_ifc || installation.guid;
+      if (guid) {
+        for (const model of models) {
+          try {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+            if (runtimeIds && runtimeIds.length > 0 && runtimeIds[0] > 0) {
+              const objectRuntimeIds = [runtimeIds[0]];
+              // Select the object
+              await api.viewer.setSelection({
+                modelObjectIds: [{ modelId: model.id, objectRuntimeIds }]
+              }, 'set');
+              // Zoom to the object
+              await (api.viewer as any).zoomToObjects?.([{ modelId: model.id, objectRuntimeIds }]);
+              return;
+            }
+          } catch (e) {
+            // Try next model
+          }
+        }
+      }
+
+      // Fallback to stored runtime ID
       if (installation.object_runtime_id && installation.model_id) {
         await api.viewer.setSelection({
           modelObjectIds: [{
@@ -759,8 +785,7 @@ export default function InstallationsScreen({
             objectRuntimeIds: [installation.object_runtime_id]
           }]
         }, 'set');
-        // Zoom to selected object
-        await (api.viewer as any).zoomToObjects([{
+        await (api.viewer as any).zoomToObjects?.([{
           modelId: installation.model_id,
           objectRuntimeIds: [installation.object_runtime_id]
         }]);
