@@ -677,7 +677,7 @@ export default function CheckpointForm({
           response_label: response.responseLabel,
           comment: response.comment || null,
           inspector_name: inspectorName,
-          user_email: userEmail || null
+          user_email: userEmail?.toLowerCase() || null
         };
 
         const { data: savedResult, error: resultError } = await supabase
