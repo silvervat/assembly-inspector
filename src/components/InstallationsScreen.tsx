@@ -668,7 +668,7 @@ export default function InstallationsScreen({
     onBackToMenu();
   };
 
-  // Apply coloring: installed objects green only (don't touch other objects)
+  // Apply coloring: ALL objects white/gray, installed objects green
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
@@ -682,9 +682,25 @@ export default function InstallationsScreen({
         return;
       }
 
-      // NOTE: We don't set all objects white/gray because that overrides manual color changes
-      // Only color installed objects green, leave everything else as is
+      // Step 1: Reset all colors first (required to allow new colors!)
+      await api.viewer.setObjectState(undefined, { color: "reset" });
 
+      // Step 2: Get all objects and color them light gray
+      const allModelObjects = await api.viewer.getObjects();
+      if (allModelObjects && allModelObjects.length > 0) {
+        for (const modelObj of allModelObjects) {
+          const runtimeIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
+          if (runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: modelObj.modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: 230, g: 230, b: 230, a: 255 } } // Light gray
+            );
+          }
+        }
+        console.log('Colored all objects light gray');
+      }
+
+      // Step 3: Color installed objects green (overrides gray)
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
         const guidType = classifyGuid(guid);
@@ -716,7 +732,7 @@ export default function InstallationsScreen({
               coloredObjectsRef.current.set(model.id, validRuntimeIds);
               await api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validRuntimeIds }] },
-                { color: { r: 34, g: 197, b: 94, a: 255 } }
+                { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
               );
             }
           }
