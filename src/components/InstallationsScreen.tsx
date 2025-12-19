@@ -901,13 +901,53 @@ export default function InstallationsScreen({
         <div className="properties-modal-overlay" onClick={() => setShowProperties(false)}>
           <div className="properties-modal" onClick={e => e.stopPropagation()}>
             <div className="properties-modal-header">
-              <h3>Avastatud propertised</h3>
+              <h3>Leitud {selectedObjects.length} objekti propertised</h3>
               <button className="close-modal-btn" onClick={() => setShowProperties(false)}>
                 <FiX size={18} />
               </button>
             </div>
             <div className="properties-modal-content">
-              <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+              {/* Object Info */}
+              <div className="prop-object-info">
+                <div className="prop-info-row">
+                  <span className="prop-info-label">Class:</span>
+                  <span className="prop-info-value">{(discoveredProperties as any).class || 'Unknown'}</span>
+                </div>
+                <div className="prop-info-row">
+                  <span className="prop-info-label">ID:</span>
+                  <span className="prop-info-value">{(discoveredProperties as any).id || '-'}</span>
+                </div>
+                {(discoveredProperties as any).externalId && (
+                  <div className="prop-info-row">
+                    <span className="prop-info-label">GUID:</span>
+                    <code className="prop-info-guid">{(discoveredProperties as any).externalId}</code>
+                  </div>
+                )}
+              </div>
+
+              {/* Property Sets */}
+              {(discoveredProperties as any).properties?.map((pset: any, psetIdx: number) => (
+                <div key={psetIdx} className="prop-set">
+                  <div className="prop-set-header">
+                    📁 {pset.set || pset.name || `Property Set ${psetIdx + 1}`}
+                    <span className="prop-set-count">({pset.properties?.length || 0})</span>
+                  </div>
+                  <div className="prop-set-table">
+                    {pset.properties?.map((prop: any, propIdx: number) => (
+                      <div key={propIdx} className="prop-row">
+                        <span className="prop-name">{prop.name}</span>
+                        <span className="prop-value">{prop.displayValue ?? prop.value ?? '-'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Raw JSON toggle */}
+              <details className="raw-json-section">
+                <summary>📄 Raw JSON</summary>
+                <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+              </details>
             </div>
           </div>
         </div>

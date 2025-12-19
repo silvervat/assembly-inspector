@@ -6748,6 +6748,110 @@ button.stat-toggle.off:hover {
   border-radius: var(--modus-radius-sm);
 }
 
+/* Property Discovery Styled View */
+.prop-object-info {
+  background: var(--modus-primary-dark);
+  color: white;
+  padding: var(--modus-spacing-sm);
+  border-radius: var(--modus-radius-sm);
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.prop-info-row {
+  display: flex;
+  gap: var(--modus-spacing-sm);
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.prop-info-label {
+  font-weight: 500;
+  min-width: 50px;
+}
+
+.prop-info-guid {
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 4px;
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+.prop-set {
+  margin-bottom: var(--modus-spacing-sm);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  overflow: hidden;
+}
+
+.prop-set-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-xs);
+  padding: 8px 12px;
+  background: var(--modus-bg-light);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--modus-text-primary);
+}
+
+.prop-set-count {
+  color: var(--modus-text-secondary);
+  font-weight: normal;
+  font-size: 11px;
+}
+
+.prop-set-table {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.prop-row {
+  display: flex;
+  border-bottom: 1px solid var(--modus-border-light);
+  font-size: 12px;
+}
+
+.prop-row:last-child {
+  border-bottom: none;
+}
+
+.prop-row .prop-name {
+  flex: 0 0 40%;
+  padding: 6px 12px;
+  background: var(--modus-bg-light);
+  color: var(--modus-text-secondary);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.prop-row .prop-value {
+  flex: 1;
+  padding: 6px 12px;
+  word-break: break-word;
+}
+
+.raw-json-section {
+  margin-top: var(--modus-spacing-sm);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+}
+
+.raw-json-section summary {
+  padding: 8px 12px;
+  background: var(--modus-bg-light);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.raw-json-section pre {
+  max-height: 300px;
+  overflow: auto;
+  margin: 0;
+  border-radius: 0;
+}
+
 /* List View */
 .installations-list-view {
   flex: 1;
