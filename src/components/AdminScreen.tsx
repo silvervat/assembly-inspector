@@ -1213,22 +1213,20 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="Perspective"
                   result={functionResults["Perspective"]}
                   onClick={() => testFunction("Perspective", async () => {
-                    // NOTE: Trimble Connect API does not officially support changing projection type
-                    // This is experimental and may not work
+                    // Set projection type to perspective
+                    await api.viewer.setCamera({ projectionType: 'perspective' } as any, { animationTime: 300 });
                     const cam = await api.viewer.getCamera() as any;
-                    console.log('Current camera for perspective:', cam);
-                    // Return info about current camera projection
-                    return `Kaamera info: projection=${cam.projection || 'N/A'}, type=${cam.type || 'N/A'}. Projektsiooni muutmine pole ametlikult toetatud.`;
+                    return `Projektsioon muudetud: ${cam.projectionType || 'perspective'}`;
                   })}
                 />
                 <FunctionButton
                   name="Orthographic"
                   result={functionResults["Orthographic"]}
                   onClick={() => testFunction("Orthographic", async () => {
-                    // NOTE: Trimble Connect API does not officially support changing projection type
+                    // Set projection type to orthographic
+                    await api.viewer.setCamera({ projectionType: 'ortho' } as any, { animationTime: 300 });
                     const cam = await api.viewer.getCamera() as any;
-                    console.log('Current camera for orthographic:', cam);
-                    return `Kaamera info: projection=${cam.projection || 'N/A'}, type=${cam.type || 'N/A'}. Projektsiooni muutmine pole ametlikult toetatud.`;
+                    return `Projektsioon muudetud: ${cam.projectionType || 'ortho'}`;
                   })}
                 />
                 <FunctionButton
