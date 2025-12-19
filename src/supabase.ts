@@ -11,13 +11,16 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // Uus tabel - trimble_ex_users (kasutaja kontroll email järgi)
 export interface TrimbleExUser {
   id: string;
-  user_email: string;
+  project_id: string;
+  user_id?: string;
+  email: string;
   name?: string;
-  role: 'inspector' | 'admin' | 'moderator' | 'viewer';
+  role: 'admin' | 'moderator' | 'inspector';
   can_assembly_inspection: boolean;
   can_bolt_inspection: boolean;
   is_active: boolean;
   created_at: string;
+  updated_at?: string;
 }
 
 // Vana User interface (deprecated, säilitame ühilduvuse jaoks)
