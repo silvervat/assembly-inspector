@@ -1915,44 +1915,120 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="Praegune taust"
                   result={functionResults["Praegune taust"]}
                   onClick={() => testFunction("Praegune taust", async () => {
-                    const settings = await api.viewer.getSettings();
-                    return `Taust: ${(settings as any).backgroundColor || 'Unknown'}`;
+                    // Try user.getSettings() first (where backgroundColor should be)
+                    try {
+                      const userSettings = await api.user.getSettings();
+                      console.log('User settings:', userSettings);
+                      return `Kasutaja taust: ${userSettings.backgroundColor || 'N/A'}`;
+                    } catch (e) {
+                      console.log('user.getSettings error:', e);
+                    }
+                    // Fallback to viewer settings
+                    const viewerSettings = await api.viewer.getSettings();
+                    console.log('Viewer settings:', viewerSettings);
+                    return `Viewer settings: ${JSON.stringify(viewerSettings)}`;
                   })}
                 />
                 <FunctionButton
                   name="Taust: White"
                   result={functionResults["Taust: White"]}
-                  onClick={() => testFunction("Taust: White", () => api.viewer.setSettings({ backgroundColor: "White" } as any))}
+                  onClick={() => testFunction("Taust: White", async () => {
+                    // Try api.user.setSettings if it exists (not in types but might work)
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "White" });
+                      return 'Set via user.setSettings';
+                    }
+                    // Try via extension/embed API
+                    const embed = api.embed as any;
+                    if (typeof embed.setSettings === 'function') {
+                      await embed.setSettings({ backgroundColor: "White" });
+                      return 'Set via embed.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval - API ei toeta taustavärvi muutmist');
+                  })}
                 />
                 <FunctionButton
                   name="Taust: LightGray"
                   result={functionResults["Taust: LightGray"]}
-                  onClick={() => testFunction("Taust: LightGray", () => api.viewer.setSettings({ backgroundColor: "LightGray" } as any))}
+                  onClick={() => testFunction("Taust: LightGray", async () => {
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "LightGray" });
+                      return 'Set via user.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval');
+                  })}
                 />
                 <FunctionButton
                   name="Taust: Gray1"
                   result={functionResults["Taust: Gray1"]}
-                  onClick={() => testFunction("Taust: Gray1", () => api.viewer.setSettings({ backgroundColor: "Gray1" } as any))}
+                  onClick={() => testFunction("Taust: Gray1", async () => {
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "Gray1" });
+                      return 'Set via user.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval');
+                  })}
                 />
                 <FunctionButton
                   name="Taust: Gray2"
                   result={functionResults["Taust: Gray2"]}
-                  onClick={() => testFunction("Taust: Gray2", () => api.viewer.setSettings({ backgroundColor: "Gray2" } as any))}
+                  onClick={() => testFunction("Taust: Gray2", async () => {
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "Gray2" });
+                      return 'Set via user.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval');
+                  })}
                 />
                 <FunctionButton
                   name="Taust: Gray3"
                   result={functionResults["Taust: Gray3"]}
-                  onClick={() => testFunction("Taust: Gray3", () => api.viewer.setSettings({ backgroundColor: "Gray3" } as any))}
+                  onClick={() => testFunction("Taust: Gray3", async () => {
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "Gray3" });
+                      return 'Set via user.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval');
+                  })}
                 />
                 <FunctionButton
                   name="Taust: GrayDark2"
                   result={functionResults["Taust: GrayDark2"]}
-                  onClick={() => testFunction("Taust: GrayDark2", () => api.viewer.setSettings({ backgroundColor: "GrayDark2" } as any))}
+                  onClick={() => testFunction("Taust: GrayDark2", async () => {
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "GrayDark2" });
+                      return 'Set via user.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval');
+                  })}
                 />
                 <FunctionButton
                   name="Taust: Default"
                   result={functionResults["Taust: Default"]}
-                  onClick={() => testFunction("Taust: Default", () => api.viewer.setSettings({ backgroundColor: "Default" } as any))}
+                  onClick={() => testFunction("Taust: Default", async () => {
+                    const userApi = api.user as any;
+                    if (typeof userApi.setSettings === 'function') {
+                      await userApi.setSettings({ backgroundColor: "Default" });
+                      return 'Set via user.setSettings';
+                    }
+                    throw new Error('setSettings pole saadaval');
+                  })}
+                />
+                <FunctionButton
+                  name="API meetodid"
+                  result={functionResults["API meetodid"]}
+                  onClick={() => testFunction("API meetodid", async () => {
+                    // Check what methods are available
+                    const userMethods = Object.keys(api.user).filter(k => typeof (api.user as any)[k] === 'function');
+                    const viewerMethods = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function').filter(m => m.includes('etting') || m.includes('ackground'));
+                    return `user methods: ${userMethods.join(', ')}\n\nviewer settings methods: ${viewerMethods.join(', ')}`;
+                  })}
                 />
               </div>
             </div>
