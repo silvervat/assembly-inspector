@@ -5,17 +5,24 @@
   flex-direction: column;
   height: 100%;
   background: var(--modus-bg-secondary);
+  position: relative;
 }
 
-/* Message */
+/* Message - floating toast notification */
 .schedule-message {
+  position: absolute;
+  top: 48px;
+  left: 12px;
+  right: 12px;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  margin: 8px 12px;
   border-radius: 6px;
   font-size: 13px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  animation: fadeInOut 2s ease-in-out forwards;
 }
 
 .schedule-message.success {
@@ -26,6 +33,7 @@
 .schedule-message.error {
   background: #fee2e2;
   color: #dc2626;
+  animation: none;
 }
 
 .schedule-message button {
@@ -38,6 +46,13 @@
 
 .schedule-message button:hover {
   opacity: 1;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-10px); }
+  10% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
 }
 
 /* Calendar */
@@ -162,13 +177,20 @@
 /* Selection Info */
 .selection-info {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 8px;
   padding: 8px 12px;
   background: #dbeafe;
   border-bottom: 1px solid #93c5fd;
   font-size: 13px;
   color: #1e40af;
+}
+
+.selection-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
 }
 
 .selection-info .btn-primary {
@@ -192,6 +214,11 @@
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
+}
+
+.selection-info .add-to-date-btn {
+  width: 100%;
+  justify-content: center;
 }
 
 /* Playback Controls */
@@ -410,12 +437,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
+  padding: 3px 8px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
   position: relative;
-  min-height: 28px;
+  min-height: 24px;
 }
 
 .schedule-item:last-child {
@@ -479,8 +506,10 @@
 }
 
 .item-product {
+  font-size: 9px;
   font-weight: 400;
   color: var(--modus-text-secondary);
+  line-height: 1.1;
 }
 
 /* Item actions - show on hover */
@@ -697,7 +726,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0;
 }
 
 .item-mark {
@@ -709,12 +738,13 @@
 }
 
 .item-product {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 400;
   color: var(--modus-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.1;
 }
 
 /* Drag over date highlight */
