@@ -2021,13 +2021,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             <div className="item-content">
                               <div className="item-main-row">
                                 <span className="item-mark">{item.assembly_mark}</span>
-                                {(item as any).cast_unit_weight && (
-                                  <span className="item-weight">{(item as any).cast_unit_weight} kg</span>
+                                {item.cast_unit_weight && (
+                                  <span className="item-weight">{item.cast_unit_weight} kg</span>
                                 )}
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
-                            {(item as any).install_method && (
+                            {item.install_method && (
                               <div
                                 className="item-install-icons"
                                 onContextMenu={(e) => {
@@ -2037,17 +2037,17 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                 }}
                               >
                                 <img
-                                  src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
-                                  alt={(item as any).install_method}
+                                  src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
+                                  alt={item.install_method}
                                   className="item-install-icon"
-                                  title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
                                 />
-                                {(item as any).install_method_count > 1 && (
+                                {(item.install_method_count ?? 1) > 1 && (
                                   <img
-                                    src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
-                                    alt={(item as any).install_method}
+                                    src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
+                                    alt={item.install_method}
                                     className="item-install-icon"
-                                    title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
                                   />
                                 )}
                               </div>
