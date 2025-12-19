@@ -711,48 +711,28 @@ export default function InstallationsScreen({
           <span>Menüü</span>
         </button>
         <span className="mode-title">Paigaldamised</span>
-      </div>
-
-      {/* Sub-header with toggle */}
-      <div className="installations-sub-header">
+        {/* Nimekiri button in header */}
         <button
-          className={`list-toggle-btn ${showList ? 'active' : ''}`}
+          className={`header-list-btn ${showList ? 'active' : ''}`}
           onClick={() => setShowList(!showList)}
         >
-          {showList ? 'Vorm' : 'Nimekiri'}
+          {showList ? 'Vorm' : `Nimekiri (${installations.length})`}
         </button>
       </div>
 
       {!showList ? (
-        /* Form View */
-        <div className="installations-form">
-          {/* Stats at top */}
-          <div className="installations-stats">
-            <div className="stat-item">
-              <span className="stat-value">{installations.length}</span>
-              <span className="stat-label">PAIGALDUSI KOKKU</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-value">
-                {installations.filter(i => i.user_email?.toLowerCase() === user.email.toLowerCase()).length}
-              </span>
-              <span className="stat-label">MINU PAIGALDUSI</span>
-            </div>
-          </div>
-
-          {/* Installation form */}
-          <div className="installation-form-fields">
-            <div className="form-field">
-              <label>
-                <FiTruck size={14} />
-                Paigaldusviis
-              </label>
+        /* Form View - compact */
+        <div className="installations-form-compact">
+          {/* Compact form */}
+          <div className="compact-form-row">
+            <div className="form-field-inline">
+              <label><FiTruck size={12} /> Paigaldusviis</label>
               {installationMethods.length > 0 ? (
                 <select
                   value={selectedMethodId}
                   onChange={(e) => setSelectedMethodId(e.target.value)}
                 >
-                  <option value="">-- Vali meetod --</option>
+                  <option value="">-- Vali --</option>
                   {installationMethods.map(method => (
                     <option key={method.id} value={method.id}>
                       {method.name}
@@ -760,53 +740,41 @@ export default function InstallationsScreen({
                   ))}
                 </select>
               ) : (
-                <div className="no-methods">
-                  <span>Paigaldusmeetodeid pole seadistatud</span>
-                </div>
+                <span className="no-methods-inline">Pole seadistatud</span>
               )}
             </div>
 
-            <div className="form-field">
-              <label>
-                <FiCalendar size={14} />
-                Paigalduse kuupäev ja aeg
-              </label>
+            <div className="form-field-inline">
+              <label><FiCalendar size={12} /> Kuupäev</label>
               <input
                 type="datetime-local"
                 value={installDate}
                 onChange={(e) => setInstallDate(e.target.value)}
               />
             </div>
+          </div>
 
-            <div className="form-field">
-              <label>
-                <FiEdit2 size={14} />
-                Märkused (valikuline)
-              </label>
-              <textarea
+          <div className="compact-form-row">
+            <div className="form-field-inline flex-grow">
+              <label><FiEdit2 size={12} /> Märkused</label>
+              <input
+                type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Lisa märkused..."
-                rows={2}
               />
             </div>
 
-            {/* Save button right after form */}
             <button
-              className="save-installation-btn"
+              className="save-installation-btn-compact"
               onClick={saveInstallation}
               disabled={saving || newObjectsCount === 0}
             >
-              {saving ? 'Salvestan...' : (
-                <>
-                  <FiPlus size={16} />
-                  Salvesta paigaldus ({newObjectsCount})
-                </>
-              )}
+              {saving ? '...' : <><FiPlus size={14} /> Salvesta ({newObjectsCount})</>}
             </button>
           </div>
 
-          {/* Selected objects list - separate section, page scrolls */}
+          {/* Selected objects list */}
           <div className="selected-objects-section">
             {selectedObjects.length === 0 ? (
               <div className="no-selection-compact">

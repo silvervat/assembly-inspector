@@ -6254,36 +6254,115 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg);
 }
 
-.installations-sub-header {
-  display: flex;
-  justify-content: flex-end;
-  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
-  background: white;
-  border-bottom: 1px solid var(--modus-border);
-}
-
-.list-toggle-btn {
-  padding: var(--modus-spacing-xs) var(--modus-spacing-md);
-  background: var(--modus-bg-light);
-  border: 1px solid var(--modus-border);
+/* Header list button */
+.header-list-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--modus-radius-sm);
-  font-size: var(--modus-font-size-sm);
-  color: var(--modus-text-secondary);
+  color: white;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
 }
 
-.list-toggle-btn:hover {
-  background: var(--modus-bg-dark);
+.header-list-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
-.list-toggle-btn.active {
-  background: var(--modus-primary);
-  color: white;
+.header-list-btn.active {
+  background: white;
+  color: var(--modus-primary);
+}
+
+/* Compact Form View */
+.installations-form-compact {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--modus-spacing-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--modus-spacing-sm);
+}
+
+.compact-form-row {
+  display: flex;
+  gap: var(--modus-spacing-sm);
+  align-items: flex-end;
+  background: white;
+  padding: var(--modus-spacing-sm);
+  border-radius: var(--modus-radius-sm);
+  border: 1px solid var(--modus-border);
+}
+
+.form-field-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-field-inline.flex-grow {
+  flex: 1;
+}
+
+.form-field-inline label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+}
+
+.form-field-inline select,
+.form-field-inline input {
+  padding: 6px 8px;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-xs);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.form-field-inline select:focus,
+.form-field-inline input:focus {
+  outline: none;
   border-color: var(--modus-primary);
 }
 
-/* Form View */
+.no-methods-inline {
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  padding: 6px 0;
+}
+
+.save-installation-btn-compact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #198754;
+  color: white !important;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.save-installation-btn-compact:hover:not(:disabled) {
+  background: #157347;
+}
+
+.save-installation-btn-compact:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Legacy Form View - keep for compatibility */
 .installations-form {
   flex: 1;
   overflow-y: auto;
