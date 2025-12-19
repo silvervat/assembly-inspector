@@ -110,6 +110,9 @@ export default function App() {
             if (dbError || !dbUser) {
               console.warn('User not found in trimble_ex_users:', userData.email);
               setAuthError(`Kasutaja "${userData.email}" ei ole registreeritud. Võta ühendust administraatoriga.`);
+            } else if (dbUser.is_active === false) {
+              console.warn('User account is inactive:', userData.email);
+              setAuthError(`Kasutaja "${userData.email}" konto on deaktiveeritud. Võta ühendust administraatoriga.`);
             } else {
               console.log('User authenticated:', dbUser);
               setUser(dbUser);

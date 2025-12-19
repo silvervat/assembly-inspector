@@ -13,7 +13,10 @@ export interface TrimbleExUser {
   id: string;
   user_email: string;
   name?: string;
-  role: 'inspector' | 'admin' | 'viewer';
+  role: 'inspector' | 'admin' | 'moderator' | 'viewer';
+  can_assembly_inspection: boolean;
+  can_bolt_inspection: boolean;
+  is_active: boolean;
   created_at: string;
 }
 
