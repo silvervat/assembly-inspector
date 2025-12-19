@@ -135,6 +135,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   // Installation method for new items
   const [selectedInstallMethod, setSelectedInstallMethod] = useState<'crane' | 'forklift' | 'manual' | null>(null);
+  const [selectedInstallMethodCount, setSelectedInstallMethodCount] = useState<number>(1);
+
+  // Context menu for install method
+  const [installMethodContextMenu, setInstallMethodContextMenu] = useState<{ x: number; y: number; method: 'crane' | 'forklift' | 'manual' } | null>(null);
+  const [listItemContextMenu, setListItemContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null);
 
   // Calendar collapsed state
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
@@ -457,6 +462,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           sort_order: (itemsByDate[date]?.length || 0) + idx,
           status: 'planned',
           install_method: selectedInstallMethod,
+          install_method_count: selectedInstallMethod ? selectedInstallMethodCount : null,
           created_by: tcUserEmail
         };
       });
@@ -548,6 +554,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     } catch (e) {
       console.error('Error deleting item:', e);
       setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Update install method count for an item
+  const updateItemInstallMethodCount = async (itemId: string, count: number) => {
+    try {
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({ install_method_count: count })
+        .eq('id', itemId);
+
+      if (error) throw error;
+      loadSchedule();
+      setListItemContextMenu(null);
+    } catch (e) {
+      console.error('Error updating install method count:', e);
     }
   };
 
@@ -1687,24 +1709,69 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   <span>Paigaldus:</span>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
-                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
-                    title="Kraana"
+                    onClick={() => {
+                      if (selectedInstallMethod === 'crane') {
+                        setSelectedInstallMethod(null);
+                        setSelectedInstallMethodCount(1);
+                      } else {
+                        setSelectedInstallMethod('crane');
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedInstallMethod('crane');
+                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'crane' });
+                    }}
+                    title="Kraana (parem klõps = x2)"
                   >
                     <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
+                    {selectedInstallMethod === 'crane' && selectedInstallMethodCount > 1 && (
+                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
+                    )}
                   </button>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
-                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
-                    title="Tõstuk"
+                    onClick={() => {
+                      if (selectedInstallMethod === 'forklift') {
+                        setSelectedInstallMethod(null);
+                        setSelectedInstallMethodCount(1);
+                      } else {
+                        setSelectedInstallMethod('forklift');
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedInstallMethod('forklift');
+                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'forklift' });
+                    }}
+                    title="Tõstuk (parem klõps = x2)"
                   >
                     <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Tõstuk" />
+                    {selectedInstallMethod === 'forklift' && selectedInstallMethodCount > 1 && (
+                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
+                    )}
                   </button>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
-                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
-                    title="Käsitsi"
+                    onClick={() => {
+                      if (selectedInstallMethod === 'manual') {
+                        setSelectedInstallMethod(null);
+                        setSelectedInstallMethodCount(1);
+                      } else {
+                        setSelectedInstallMethod('manual');
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedInstallMethod('manual');
+                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'manual' });
+                    }}
+                    title="Käsitsi (parem klõps = x2)"
                   >
                     <img src={`${import.meta.env.BASE_URL}icons/muscle.png`} alt="Käsitsi" />
+                    {selectedInstallMethod === 'manual' && selectedInstallMethodCount > 1 && (
+                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
+                    )}
                   </button>
                 </div>
               )}
@@ -1961,12 +2028,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
                             {(item as any).install_method && (
-                              <img
-                                src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
-                                alt={(item as any).install_method}
-                                className="item-install-icon"
-                                title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
-                              />
+                              <div
+                                className="item-install-icons"
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setListItemContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
+                                }}
+                              >
+                                <img
+                                  src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
+                                  alt={(item as any).install_method}
+                                  className="item-install-icon"
+                                  title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                />
+                                {(item as any).install_method_count > 1 && (
+                                  <img
+                                    src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
+                                    alt={(item as any).install_method}
+                                    className="item-install-icon"
+                                    title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                  />
+                                )}
+                              </div>
                             )}
                             <div className="item-actions">
                               <button
@@ -2032,6 +2116,67 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
             })
         )}
       </div>
+
+      {/* Context menu for install method buttons */}
+      {installMethodContextMenu && (
+        <div
+          className="context-menu"
+          style={{ top: installMethodContextMenu.y, left: installMethodContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              setSelectedInstallMethodCount(1);
+              setInstallMethodContextMenu(null);
+            }}
+          >
+            x1 (üks)
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              setSelectedInstallMethodCount(2);
+              setInstallMethodContextMenu(null);
+            }}
+          >
+            x2 (kaks)
+          </div>
+        </div>
+      )}
+
+      {/* Context menu for list item icons */}
+      {listItemContextMenu && (
+        <div
+          className="context-menu"
+          style={{ top: listItemContextMenu.y, left: listItemContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => updateItemInstallMethodCount(listItemContextMenu.itemId, 1)}
+          >
+            x1 (üks)
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => updateItemInstallMethodCount(listItemContextMenu.itemId, 2)}
+          >
+            x2 (kaks)
+          </div>
+        </div>
+      )}
+
+      {/* Click outside to close context menus */}
+      {(installMethodContextMenu || listItemContextMenu) && (
+        <div
+          className="context-menu-backdrop"
+          onClick={() => {
+            setInstallMethodContextMenu(null);
+            setListItemContextMenu(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1089,5 +1089,62 @@
   opacity: 0.6;
   filter: grayscale(100%);
   flex-shrink: 0;
+}
+
+.item-install-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   margin-right: 4px;
+  cursor: pointer;
+}
+
+/* Method count badge on selection buttons */
+.method-count-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 8px;
+  font-weight: 600;
+  background: var(--modus-primary);
+  color: white;
+  padding: 0 3px;
+  border-radius: 3px;
+  line-height: 1.2;
+}
+
+.install-method-btn {
+  position: relative;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
+  min-width: 100px;
+  overflow: hidden;
+}
+
+.context-menu-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.context-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.context-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
 }
