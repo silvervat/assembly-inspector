@@ -16,7 +16,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '2.9.49';
+export const APP_VERSION = '2.9.50';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -106,10 +106,10 @@ export default function App() {
             // Super admin check - always has full access
             const isSuperAdmin = userData.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
 
-            // Kontrolli kas kasutaja on registreeritud trimble_ex_users tabelis (Trimble projekti-põhine)
+            // Kontrolli kas kasutaja on registreeritud trimble_inspection_users tabelis
             // Email võrdlus on case-insensitive (mõlemad lowercase)
             const { data: dbUser, error: dbError } = await supabase
-              .from('trimble_ex_users')
+              .from('trimble_inspection_users')
               .select('*')
               .eq('email', userData.email.toLowerCase())
               .eq('trimble_project_id', project.id)
