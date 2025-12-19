@@ -214,6 +214,9 @@ export default function InstallationsScreen({
   const isCheckingRef = useRef(false);
   const lastCheckTimeRef = useRef(0);
 
+  // Track colored object IDs for proper reset
+  const coloredObjectsRef = useRef<Map<string, number[]>>(new Map());
+
   const isAdminOrModerator = user.role === 'admin' || user.role === 'moderator';
 
   // Check assembly selection status
@@ -260,7 +263,17 @@ export default function InstallationsScreen({
     // Cleanup: reset object colors and stop polling when leaving the screen
     return () => {
       clearInterval(pollInterval);
-      (api.viewer as any).resetObjectState?.().catch(() => {});
+      // Reset colors when component unmounts (backup to handleBackToMenu)
+      const coloredObjects = coloredObjectsRef.current;
+      if (coloredObjects.size > 0) {
+        for (const [modelId, runtimeIds] of coloredObjects.entries()) {
+          api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: undefined }
+          ).catch(() => {});
+        }
+        coloredObjectsRef.current = new Map();
+      }
     };
   }, [projectId]);
 
@@ -618,6 +631,43 @@ export default function InstallationsScreen({
     }
   };
 
+  // Reset colors on all colored objects (call before leaving the screen)
+  const resetColors = async () => {
+    try {
+      const coloredObjects = coloredObjectsRef.current;
+      if (coloredObjects.size === 0) {
+        console.log('No colored objects to reset');
+        return;
+      }
+
+      console.log('Resetting colors for', coloredObjects.size, 'models');
+
+      // Reset colors by setting state to undefined (removes color override)
+      for (const [modelId, runtimeIds] of coloredObjects.entries()) {
+        try {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: undefined }
+          );
+        } catch (e) {
+          console.warn(`Could not reset colors for model ${modelId}:`, e);
+        }
+      }
+
+      // Clear the ref
+      coloredObjectsRef.current = new Map();
+      console.log('Colors reset successfully');
+    } catch (e) {
+      console.error('Error resetting colors:', e);
+    }
+  };
+
+  // Handle back to menu - reset colors first
+  const handleBackToMenu = async () => {
+    await resetColors();
+    onBackToMenu();
+  };
+
   // Apply coloring: installed objects green only (don't touch other objects)
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
@@ -647,6 +697,9 @@ export default function InstallationsScreen({
         return;
       }
 
+      // Clear previous colored objects tracking
+      coloredObjectsRef.current = new Map();
+
       // For each model, convert GUIDs to runtime IDs and color them green
       let totalColored = 0;
       for (const model of models) {
@@ -659,6 +712,8 @@ export default function InstallationsScreen({
 
             if (validRuntimeIds.length > 0) {
               totalColored += validRuntimeIds.length;
+              // Track colored objects for later reset
+              coloredObjectsRef.current.set(model.id, validRuntimeIds);
               await api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validRuntimeIds }] },
                 { color: { r: 34, g: 197, b: 94, a: 255 } }
@@ -1113,7 +1168,7 @@ export default function InstallationsScreen({
     <div className="installations-screen">
       {/* Mode title bar - same as InspectorScreen */}
       <div className="mode-title-bar">
-        <button className="back-to-menu-btn" onClick={onBackToMenu}>
+        <button className="back-to-menu-btn" onClick={handleBackToMenu}>
           <FiArrowLeft size={14} />
           <span>Menüü</span>
         </button>
