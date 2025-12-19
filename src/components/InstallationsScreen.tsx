@@ -668,7 +668,7 @@ export default function InstallationsScreen({
     onBackToMenu();
   };
 
-  // Apply coloring: ALL objects light gray, installed objects green
+  // Apply coloring: non-installed objects gray, installed objects green
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
@@ -696,16 +696,15 @@ export default function InstallationsScreen({
       // Step 2: Get all objects from all models
       const allModelObjects = await api.viewer.getObjects();
 
-      // Build map of model -> all runtime IDs
-      const allObjectsMap = new Map<string, number[]>();
-      // Build map of model -> installed runtime IDs
-      const installedObjectsMap = new Map<string, number[]>();
+      // Build maps per model
+      const allObjectsMap = new Map<string, Set<number>>();
+      const installedObjectsMap = new Map<string, Set<number>>();
 
       for (const modelObj of allModelObjects || []) {
         const modelId = modelObj.modelId;
         const allIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
         if (allIds.length > 0) {
-          allObjectsMap.set(modelId, allIds);
+          allObjectsMap.set(modelId, new Set(allIds));
         }
 
         // Convert installed GUIDs to runtime IDs for this model
@@ -714,7 +713,7 @@ export default function InstallationsScreen({
             const installedIds = await api.viewer.convertToObjectRuntimeIds(modelId, installedIfcGuids);
             const validInstalledIds = (installedIds || []).filter((id: number) => id && id > 0);
             if (validInstalledIds.length > 0) {
-              installedObjectsMap.set(modelId, validInstalledIds);
+              installedObjectsMap.set(modelId, new Set(validInstalledIds));
             }
           } catch (e) {
             console.warn(`Could not convert GUIDs for model ${modelId}:`, e);
@@ -722,21 +721,30 @@ export default function InstallationsScreen({
         }
       }
 
-      // Step 3: Color ALL objects light gray
-      for (const [modelId, allIds] of allObjectsMap.entries()) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: allIds }] },
-          { color: { r: 230, g: 230, b: 230, a: 255 } } // Light gray
-        );
+      // Step 3: Color NON-installed objects gray (avoid double-coloring!)
+      let totalGray = 0;
+      for (const [modelId, allIdsSet] of allObjectsMap.entries()) {
+        const installedIdsSet = installedObjectsMap.get(modelId) || new Set();
+        // Filter out installed IDs to get only non-installed
+        const nonInstalledIds = Array.from(allIdsSet).filter(id => !installedIdsSet.has(id));
+
+        if (nonInstalledIds.length > 0) {
+          totalGray += nonInstalledIds.length;
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: nonInstalledIds }] },
+            { color: { r: 230, g: 230, b: 230, a: 255 } } // Light gray
+          );
+        }
       }
-      console.log('Colored all objects light gray');
+      console.log('Colored', totalGray, 'non-installed objects gray');
 
-      // Step 4: Color installed objects green (overrides gray)
+      // Step 4: Color installed objects green
       coloredObjectsRef.current = new Map();
-      let totalColored = 0;
+      let totalGreen = 0;
 
-      for (const [modelId, installedIds] of installedObjectsMap.entries()) {
-        totalColored += installedIds.length;
+      for (const [modelId, installedIdsSet] of installedObjectsMap.entries()) {
+        const installedIds = Array.from(installedIdsSet);
+        totalGreen += installedIds.length;
         coloredObjectsRef.current.set(modelId, installedIds);
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: installedIds }] },
@@ -744,7 +752,7 @@ export default function InstallationsScreen({
         );
       }
 
-      console.log('Colored', totalColored, 'installed objects green');
+      console.log('Colored', totalGreen, 'installed objects green');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
     }
