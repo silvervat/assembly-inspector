@@ -711,48 +711,28 @@ export default function InstallationsScreen({
           <span>Menüü</span>
         </button>
         <span className="mode-title">Paigaldamised</span>
-      </div>
-
-      {/* Sub-header with toggle */}
-      <div className="installations-sub-header">
+        {/* Nimekiri button in header */}
         <button
-          className={`list-toggle-btn ${showList ? 'active' : ''}`}
+          className={`header-list-btn ${showList ? 'active' : ''}`}
           onClick={() => setShowList(!showList)}
         >
-          {showList ? 'Vorm' : 'Nimekiri'}
+          {showList ? 'Vorm' : `Nimekiri (${installations.length})`}
         </button>
       </div>
 
       {!showList ? (
-        /* Form View */
-        <div className="installations-form">
-          {/* Stats at top */}
-          <div className="installations-stats">
-            <div className="stat-item">
-              <span className="stat-value">{installations.length}</span>
-              <span className="stat-label">PAIGALDUSI KOKKU</span>
-            </div>
-            <div className="stat-item">
-              <span className="stat-value">
-                {installations.filter(i => i.user_email?.toLowerCase() === user.email.toLowerCase()).length}
-              </span>
-              <span className="stat-label">MINU PAIGALDUSI</span>
-            </div>
-          </div>
-
-          {/* Installation form */}
-          <div className="installation-form-fields">
-            <div className="form-field">
-              <label>
-                <FiTruck size={14} />
-                Paigaldusviis
-              </label>
+        /* Form View - compact */
+        <div className="installations-form-compact">
+          {/* Compact form */}
+          <div className="compact-form-row">
+            <div className="form-field-inline">
+              <label><FiTruck size={12} /> Paigaldusviis</label>
               {installationMethods.length > 0 ? (
                 <select
                   value={selectedMethodId}
                   onChange={(e) => setSelectedMethodId(e.target.value)}
                 >
-                  <option value="">-- Vali meetod --</option>
+                  <option value="">-- Vali --</option>
                   {installationMethods.map(method => (
                     <option key={method.id} value={method.id}>
                       {method.name}
@@ -760,53 +740,41 @@ export default function InstallationsScreen({
                   ))}
                 </select>
               ) : (
-                <div className="no-methods">
-                  <span>Paigaldusmeetodeid pole seadistatud</span>
-                </div>
+                <span className="no-methods-inline">Pole seadistatud</span>
               )}
             </div>
 
-            <div className="form-field">
-              <label>
-                <FiCalendar size={14} />
-                Paigalduse kuupäev ja aeg
-              </label>
+            <div className="form-field-inline">
+              <label><FiCalendar size={12} /> Kuupäev</label>
               <input
                 type="datetime-local"
                 value={installDate}
                 onChange={(e) => setInstallDate(e.target.value)}
               />
             </div>
+          </div>
 
-            <div className="form-field">
-              <label>
-                <FiEdit2 size={14} />
-                Märkused (valikuline)
-              </label>
-              <textarea
+          <div className="compact-form-row">
+            <div className="form-field-inline flex-grow">
+              <label><FiEdit2 size={12} /> Märkused</label>
+              <input
+                type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Lisa märkused..."
-                rows={2}
               />
             </div>
 
-            {/* Save button right after form */}
             <button
-              className="save-installation-btn"
+              className="save-installation-btn-compact"
               onClick={saveInstallation}
               disabled={saving || newObjectsCount === 0}
             >
-              {saving ? 'Salvestan...' : (
-                <>
-                  <FiPlus size={16} />
-                  Salvesta paigaldus ({newObjectsCount})
-                </>
-              )}
+              {saving ? '...' : <><FiPlus size={14} /> Salvesta ({newObjectsCount})</>}
             </button>
           </div>
 
-          {/* Selected objects list - separate section, page scrolls */}
+          {/* Selected objects list */}
           <div className="selected-objects-section">
             {selectedObjects.length === 0 ? (
               <div className="no-selection-compact">
@@ -933,13 +901,53 @@ export default function InstallationsScreen({
         <div className="properties-modal-overlay" onClick={() => setShowProperties(false)}>
           <div className="properties-modal" onClick={e => e.stopPropagation()}>
             <div className="properties-modal-header">
-              <h3>Avastatud propertised</h3>
+              <h3>Leitud {selectedObjects.length} objekti propertised</h3>
               <button className="close-modal-btn" onClick={() => setShowProperties(false)}>
                 <FiX size={18} />
               </button>
             </div>
             <div className="properties-modal-content">
-              <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+              {/* Object Info */}
+              <div className="prop-object-info">
+                <div className="prop-info-row">
+                  <span className="prop-info-label">Class:</span>
+                  <span className="prop-info-value">{(discoveredProperties as any).class || 'Unknown'}</span>
+                </div>
+                <div className="prop-info-row">
+                  <span className="prop-info-label">ID:</span>
+                  <span className="prop-info-value">{(discoveredProperties as any).id || '-'}</span>
+                </div>
+                {(discoveredProperties as any).externalId && (
+                  <div className="prop-info-row">
+                    <span className="prop-info-label">GUID:</span>
+                    <code className="prop-info-guid">{(discoveredProperties as any).externalId}</code>
+                  </div>
+                )}
+              </div>
+
+              {/* Property Sets */}
+              {(discoveredProperties as any).properties?.map((pset: any, psetIdx: number) => (
+                <div key={psetIdx} className="prop-set">
+                  <div className="prop-set-header">
+                    📁 {pset.set || pset.name || `Property Set ${psetIdx + 1}`}
+                    <span className="prop-set-count">({pset.properties?.length || 0})</span>
+                  </div>
+                  <div className="prop-set-table">
+                    {pset.properties?.map((prop: any, propIdx: number) => (
+                      <div key={propIdx} className="prop-row">
+                        <span className="prop-name">{prop.name}</span>
+                        <span className="prop-value">{prop.displayValue ?? prop.value ?? '-'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Raw JSON toggle */}
+              <details className="raw-json-section">
+                <summary>📄 Raw JSON</summary>
+                <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+              </details>
             </div>
           </div>
         </div>
