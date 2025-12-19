@@ -6442,8 +6442,6 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-direction: column;
   gap: var(--modus-spacing-xs);
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .selected-object {
