@@ -187,7 +187,7 @@ export default function MainMenu({
         <div className="menu-user-info">
           <span className="menu-user-avatar">{userInitials}</span>
           <div className="menu-user-details">
-            <span className="menu-user-email">{user.user_email}</span>
+            <span className="menu-user-email">{user.email}</span>
             <span className="menu-user-role">{user.role?.toUpperCase()}</span>
           </div>
         </div>

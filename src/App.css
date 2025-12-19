@@ -5574,6 +5574,17 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
+.checkpoint-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: #fff3cd;
+  color: #856404;
+  font-size: var(--modus-font-size-sm);
+  border-bottom: 1px solid #ffc107;
+}
+
 .checkpoint-list {
   /* No max-height - form extends app naturally */
 }

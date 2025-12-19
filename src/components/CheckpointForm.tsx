@@ -47,6 +47,7 @@ export default function CheckpointForm({
   const [expandedExtras, setExpandedExtras] = useState<Set<string>>(new Set()); // Track manually expanded photo/comment sections
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationWarning, setValidationWarning] = useState<string | null>(null);
   const [showContinueButton, setShowContinueButton] = useState(false); // Show after successful save on mobile
 
   // Existing photos from database (for view mode)
@@ -249,6 +250,62 @@ export default function CheckpointForm({
     if (!responseValue) return checkpoint.photos_min || 0;
     const option = getResponseOption(checkpoint, responseValue);
     return option?.photoMin ?? checkpoint.photos_min ?? 0;
+  };
+
+  // Check if checkpoint has unmet requirements (photo/comment)
+  const hasUnmetRequirements = (checkpointId: string): string | null => {
+    const checkpoint = checkpoints.find(cp => cp.id === checkpointId);
+    if (!checkpoint) return null;
+
+    const response = responses[checkpointId];
+    if (!response?.responseValue) return null; // No response yet, no requirements
+
+    // Check photo requirement
+    if (requiresPhoto(checkpoint, response.responseValue)) {
+      const minPhotos = getMinPhotos(checkpoint, response.responseValue);
+      if ((response.photos?.length || 0) < minPhotos) {
+        return `Lisa vähemalt ${minPhotos} foto(t)`;
+      }
+    }
+
+    // Check comment requirement
+    if (requiresComment(checkpoint, response.responseValue) && !response.comment?.trim()) {
+      return 'Lisa kommentaar';
+    }
+
+    return null;
+  };
+
+  // Handle checkpoint header click - validate before collapsing
+  const handleCheckpointClick = (checkpointId: string) => {
+    if (!isEditMode) return;
+
+    const isCurrentlyExpanded = expandedCheckpoint === checkpointId;
+
+    // Clear any previous warning
+    setValidationWarning(null);
+
+    // If trying to collapse or switch to another checkpoint
+    if (expandedCheckpoint && expandedCheckpoint !== checkpointId) {
+      const validationError = hasUnmetRequirements(expandedCheckpoint);
+      if (validationError) {
+        // Can't switch - show warning
+        setValidationWarning(validationError);
+        return;
+      }
+    }
+
+    // If trying to collapse current checkpoint
+    if (isCurrentlyExpanded) {
+      const validationError = hasUnmetRequirements(checkpointId);
+      if (validationError) {
+        // Can't collapse - show warning
+        setValidationWarning(validationError);
+        return;
+      }
+    }
+
+    setExpandedCheckpoint(isCurrentlyExpanded ? null : checkpointId);
   };
 
   // Handle response change
@@ -838,6 +895,12 @@ export default function CheckpointForm({
         </div>
       )}
 
+      {validationWarning && (
+        <div className="checkpoint-warning">
+          ⚠️ {validationWarning}
+        </div>
+      )}
+
       <div className="checkpoint-list">
         {checkpoints.map((checkpoint, index) => {
           const response = responses[checkpoint.id];
@@ -857,7 +920,7 @@ export default function CheckpointForm({
             >
               <div
                 className="checkpoint-header"
-                onClick={() => isEditMode && setExpandedCheckpoint(isExpanded ? null : checkpoint.id)}
+                onClick={() => handleCheckpointClick(checkpoint.id)}
               >
                 <div className="checkpoint-number">{index + 1}</div>
                 <div className="checkpoint-info">
