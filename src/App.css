@@ -6535,6 +6535,143 @@ button.stat-toggle.off:hover {
   align-self: flex-start;
 }
 
+/* Selected objects list - row style */
+.selected-objects-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.selected-object-row {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: 6px 8px;
+  background: var(--modus-bg-light);
+  border-radius: var(--modus-radius-xs);
+  font-size: var(--modus-font-size-sm);
+}
+
+.selected-object-row.installed {
+  background: #fff3cd;
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+.selected-object-row .object-mark {
+  font-weight: 600;
+  color: var(--modus-text-primary);
+}
+
+.selected-object-row .object-product {
+  color: var(--modus-text-secondary);
+  font-size: 12px;
+}
+
+.selected-object-row .installed-badge {
+  margin-left: auto;
+  color: #856404;
+  font-weight: bold;
+}
+
+/* Selected objects title with discover button */
+.selected-objects-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--modus-font-size-sm);
+  color: var(--modus-text-secondary);
+  font-weight: 500;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.discover-props-btn {
+  padding: 4px 8px;
+  background: var(--modus-bg-light);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+}
+
+.discover-props-btn:hover {
+  background: var(--modus-primary);
+  color: white;
+  border-color: var(--modus-primary);
+}
+
+/* Properties Discovery Modal */
+.properties-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.properties-modal {
+  background: white;
+  border-radius: var(--modus-radius-md);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.properties-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--modus-spacing-md);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.properties-modal-header h3 {
+  margin: 0;
+  font-size: var(--modus-font-size-md);
+  color: var(--modus-text-primary);
+}
+
+.close-modal-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+  display: flex;
+  align-items: center;
+}
+
+.close-modal-btn:hover {
+  color: var(--modus-text-primary);
+}
+
+.properties-modal-content {
+  flex: 1;
+  overflow: auto;
+  padding: var(--modus-spacing-md);
+}
+
+.properties-modal-content pre {
+  margin: 0;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  background: var(--modus-bg-light);
+  padding: var(--modus-spacing-sm);
+  border-radius: var(--modus-radius-sm);
+}
+
 /* List View */
 .installations-list-view {
   flex: 1;
