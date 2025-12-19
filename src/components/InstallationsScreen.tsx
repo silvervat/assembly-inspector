@@ -197,12 +197,8 @@ export default function InstallationsScreen({
   const [showProperties, setShowProperties] = useState(false);
   const [discoveredProperties, setDiscoveredProperties] = useState<any>(null);
 
-  // Installation info modal state
-  const [showInstallInfo, setShowInstallInfo] = useState<{
-    assemblyMark: string;
-    installedAt: string;
-    userEmail: string;
-  } | null>(null);
+  // Installation info modal state - stores full Installation object
+  const [showInstallInfo, setShowInstallInfo] = useState<Installation | null>(null);
 
   // Day info modal state
   const [showDayInfo, setShowDayInfo] = useState<DayGroup | null>(null);
@@ -622,7 +618,7 @@ export default function InstallationsScreen({
     }
   };
 
-  // Apply coloring: all objects white, installed objects green
+  // Apply coloring: installed objects green only (don't touch other objects)
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
@@ -636,8 +632,8 @@ export default function InstallationsScreen({
         return;
       }
 
-      // First, set ALL objects to white/light gray (not installed)
-      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+      // NOTE: We don't set all objects white/gray because that overrides manual color changes
+      // Only color installed objects green, leave everything else as is
 
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
@@ -1082,6 +1078,13 @@ export default function InstallationsScreen({
                     })}
                   </span>
                   <button
+                    className="installation-info-btn"
+                    onClick={(e) => { e.stopPropagation(); setShowInstallInfo(inst); }}
+                    title="Info"
+                  >
+                    <FiInfo size={14} />
+                  </button>
+                  <button
                     className="installation-zoom-btn"
                     onClick={() => zoomToInstallation(inst)}
                     title="Zoom"
@@ -1320,20 +1323,21 @@ export default function InstallationsScreen({
                   {selectedObjects.map((obj, idx) => {
                     const guid = getObjectGuid(obj);
                     const isInstalled = guid && installedGuids.has(guid);
-                    const installInfo = guid ? installedGuids.get(guid) : undefined;
                     return (
                       <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''}`}>
                         <span className="object-mark">{obj.assemblyMark}</span>
                         {obj.productName && <span className="object-product">{obj.productName}</span>}
                         <div className="object-actions">
-                          {isInstalled && installInfo && (
+                          {isInstalled && (
                             <button
                               className="object-info-btn"
-                              onClick={() => setShowInstallInfo({
-                                assemblyMark: obj.assemblyMark || installInfo.assemblyMark,
-                                installedAt: installInfo.installedAt,
-                                userEmail: installInfo.userEmail
-                              })}
+                              onClick={() => {
+                                // Find the full installation record
+                                const fullInstall = installations.find(i =>
+                                  i.guid_ifc === guid || i.guid === guid
+                                );
+                                if (fullInstall) setShowInstallInfo(fullInstall);
+                              }}
                               title="Paigalduse info"
                             >
                               <FiInfo size={14} />
@@ -1503,46 +1507,70 @@ export default function InstallationsScreen({
         <div className="properties-modal-overlay" onClick={() => setShowInstallInfo(null)}>
           <div className="properties-modal install-info-modal" onClick={e => e.stopPropagation()}>
             <div className="properties-modal-header" style={{ background: '#4CAF50' }}>
-              <h3>Paigalduse info</h3>
+              <h3>{showInstallInfo.assembly_mark}</h3>
               <button className="close-modal-btn" onClick={() => setShowInstallInfo(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '20px' }}>
-              <div className="install-info-row">
-                <span className="install-info-label">Detail:</span>
-                <span className="install-info-value">{showInstallInfo.assemblyMark}</span>
+            <div className="properties-modal-content" style={{ padding: '16px' }}>
+              <div className="install-info-grid">
+                <div className="install-info-item">
+                  <span className="install-info-icon">📅</span>
+                  <div className="install-info-data">
+                    <span className="install-info-label">Kuupäev</span>
+                    <span className="install-info-value">
+                      {new Date(showInstallInfo.installed_at).toLocaleDateString('et-EE', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+                <div className="install-info-item">
+                  <span className="install-info-icon">🕐</span>
+                  <div className="install-info-data">
+                    <span className="install-info-label">Kellaaeg</span>
+                    <span className="install-info-value">
+                      {new Date(showInstallInfo.installed_at).toLocaleTimeString('et-EE', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                </div>
+                <div className="install-info-item">
+                  <span className="install-info-icon">🔧</span>
+                  <div className="install-info-data">
+                    <span className="install-info-label">Meetod</span>
+                    <span className="install-info-value">{showInstallInfo.installation_method_name || 'Määramata'}</span>
+                  </div>
+                </div>
+                <div className="install-info-item">
+                  <span className="install-info-icon">👷</span>
+                  <div className="install-info-data">
+                    <span className="install-info-label">Meeskond</span>
+                    <span className="install-info-value">{showInstallInfo.team_members || showInstallInfo.installer_name || '-'}</span>
+                  </div>
+                </div>
+                <div className="install-info-item full-width">
+                  <span className="install-info-icon">👤</span>
+                  <div className="install-info-data">
+                    <span className="install-info-label">Kirje sisestas</span>
+                    <span className="install-info-value">{showInstallInfo.user_email}</span>
+                  </div>
+                </div>
+                {showInstallInfo.notes && (
+                  <div className="install-info-item full-width">
+                    <span className="install-info-icon">📝</span>
+                    <div className="install-info-data">
+                      <span className="install-info-label">Märkused</span>
+                      <span className="install-info-value">{showInstallInfo.notes}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="install-info-row">
-                <span className="install-info-label">Kuupäev:</span>
-                <span className="install-info-value">
-                  {new Date(showInstallInfo.installedAt).toLocaleDateString('et-EE', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
-                </span>
-              </div>
-              <div className="install-info-row">
-                <span className="install-info-label">Kellaaeg:</span>
-                <span className="install-info-value">
-                  {new Date(showInstallInfo.installedAt).toLocaleTimeString('et-EE', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </span>
-              </div>
-              <div className="install-info-row">
-                <span className="install-info-label">Paigaldaja:</span>
-                <span className="install-info-value">{showInstallInfo.userEmail}</span>
-              </div>
-              <button
-                className="btn-primary"
-                onClick={() => setShowInstallInfo(null)}
-                style={{ marginTop: '16px', width: '100%' }}
-              >
-                Sulge
-              </button>
             </div>
           </div>
         </div>
