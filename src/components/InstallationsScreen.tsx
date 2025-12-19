@@ -126,14 +126,22 @@ export default function InstallationsScreen({
   tcUserName,
   onBackToMenu
 }: InstallationsScreenProps) {
+  // Type for installed GUID details
+  type InstalledGuidInfo = {
+    installedAt: string;
+    userEmail: string;
+    assemblyMark: string;
+  };
+
   // State
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
   const [installations, setInstallations] = useState<Installation[]>([]);
   const [installationMethods, setInstallationMethods] = useState<InstallationMethod[]>([]);
-  const [installedGuids, setInstalledGuids] = useState<Set<string>>(new Set());
+  const [installedGuids, setInstalledGuids] = useState<Map<string, InstalledGuidInfo>>(new Map());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{assemblyMark: string; installedAt: string; userEmail: string}[] | null>(null);
 
   // Form state
   const [selectedMethodId, setSelectedMethodId] = useState<string>('');
@@ -402,17 +410,22 @@ export default function InstallationsScreen({
     try {
       const { data, error } = await supabase
         .from('installations')
-        .select('guid, guid_ifc')
+        .select('guid, guid_ifc, installed_at, user_email, assembly_mark')
         .eq('project_id', projectId);
 
       if (error) throw error;
 
-      const guids = new Set<string>();
+      const guidsMap = new Map<string, InstalledGuidInfo>();
       for (const item of data || []) {
-        if (item.guid) guids.add(item.guid);
-        if (item.guid_ifc) guids.add(item.guid_ifc);
+        const info: InstalledGuidInfo = {
+          installedAt: item.installed_at,
+          userEmail: item.user_email || 'Tundmatu',
+          assemblyMark: item.assembly_mark || 'Tundmatu'
+        };
+        if (item.guid) guidsMap.set(item.guid, info);
+        if (item.guid_ifc) guidsMap.set(item.guid_ifc, info);
       }
-      setInstalledGuids(guids);
+      setInstalledGuids(guidsMap);
     } catch (e) {
       console.error('Error loading installed GUIDs:', e);
     }
@@ -424,15 +437,32 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Filter out already installed objects (only if they have a GUID)
-    // Objects without GUID can always be saved (we can't track duplicates for them)
+    // Clear previous warning
+    setDuplicateWarning(null);
+
+    // Check for already installed objects and collect their details
+    const duplicates: {assemblyMark: string; installedAt: string; userEmail: string}[] = [];
     const newObjects = selectedObjects.filter(obj => {
       const guid = obj.guidIfc || obj.guid;
       // If no GUID, allow saving (can't check duplicates)
       if (!guid) return true;
-      // If has GUID, check if not already installed
-      return !installedGuids.has(guid);
+      // Check if already installed
+      const existingInfo = installedGuids.get(guid);
+      if (existingInfo) {
+        duplicates.push({
+          assemblyMark: obj.assemblyMark || existingInfo.assemblyMark,
+          installedAt: existingInfo.installedAt,
+          userEmail: existingInfo.userEmail
+        });
+        return false;
+      }
+      return true;
     });
+
+    // Show duplicate warning if there are duplicates
+    if (duplicates.length > 0) {
+      setDuplicateWarning(duplicates);
+    }
 
     if (newObjects.length === 0) {
       setMessage('Kõik valitud detailid on juba paigaldatud');
@@ -909,6 +939,51 @@ export default function InstallationsScreen({
       {message && (
         <div className="message-toast" onClick={() => setMessage(null)}>
           {message}
+        </div>
+      )}
+
+      {/* Duplicate warning modal */}
+      {duplicateWarning && duplicateWarning.length > 0 && (
+        <div className="properties-modal-overlay" onClick={() => setDuplicateWarning(null)}>
+          <div className="properties-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="properties-modal-header" style={{ background: '#ff9800' }}>
+              <h3>⚠️ Juba paigaldatud detailid</h3>
+              <button className="close-modal-btn" onClick={() => setDuplicateWarning(null)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="properties-modal-content" style={{ padding: '16px' }}>
+              <p style={{ marginBottom: '12px', color: '#666' }}>
+                Järgmised detailid on juba varem paigaldatud:
+              </p>
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {duplicateWarning.map((dup, idx) => (
+                  <div key={idx} style={{
+                    padding: '10px',
+                    marginBottom: '8px',
+                    background: '#fff3e0',
+                    borderRadius: '6px',
+                    border: '1px solid #ffcc80'
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{dup.assemblyMark}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      📅 {new Date(dup.installedAt).toLocaleDateString('et-EE')} {new Date(dup.installedAt).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      👤 {dup.userEmail}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button
+                className="btn-primary"
+                onClick={() => setDuplicateWarning(null)}
+                style={{ marginTop: '12px', width: '100%' }}
+              >
+                Selge
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
