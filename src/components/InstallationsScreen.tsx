@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye, FiList, FiInfo } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo } from 'react-icons/fi';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // GUID helper functions
@@ -154,6 +154,7 @@ export default function InstallationsScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [selectedInstallationIds, setSelectedInstallationIds] = useState<Set<string>>(new Set());
 
   // Property discovery state
   const [showProperties, setShowProperties] = useState(false);
@@ -856,9 +857,21 @@ export default function InstallationsScreen({
 
   const newObjectsCount = selectedObjects.length - alreadyInstalledCount;
 
+  // Toggle installation selection
+  const toggleInstallationSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newSelected = new Set(selectedInstallationIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedInstallationIds(newSelected);
+  };
+
   // Virtualization constants
-  const ITEM_HEIGHT = 56;
-  const MAX_VISIBLE_ITEMS = 8;
+  const ITEM_HEIGHT = 32;
+  const MAX_VISIBLE_ITEMS = 12;
 
   const renderDayGroup = (day: DayGroup) => {
     const listHeight = Math.min(day.items.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
@@ -866,37 +879,35 @@ export default function InstallationsScreen({
     const DayItemRow = ({ index, style }: ListChildComponentProps) => {
       const inst = day.items[index];
       const canDelete = isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase();
+      const isSelected = selectedInstallationIds.has(inst.id);
 
       return (
         <div style={style} className="installation-item" key={inst.id}>
+          <input
+            type="checkbox"
+            className="installation-item-checkbox"
+            checked={isSelected}
+            onChange={() => {}}
+            onClick={(e) => toggleInstallationSelect(inst.id, e)}
+          />
           <div className="installation-item-main" onClick={() => zoomToInstallation(inst)}>
             <div className="installation-item-mark">
               {inst.assembly_mark}
               {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
             </div>
-            <div className="installation-item-meta">
-              <span className="installation-installer">
-                <FiUser size={12} /> {inst.installer_name}
-              </span>
-              {inst.installation_method_name && (
-                <span className="installation-method">
-                  <FiTruck size={12} /> {inst.installation_method_name}
-                </span>
-              )}
-              <span className="installation-time">
-                {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </span>
-            </div>
           </div>
+          <span className="installation-time" style={{ fontSize: '10px', color: '#6a6e79' }}>
+            {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </span>
           <button
             className="installation-zoom-btn"
             onClick={() => zoomToInstallation(inst)}
-            title="Zoom elemendile"
+            title="Zoom"
           >
-            <FiZoomIn size={16} />
+            <FiZoomIn size={14} />
           </button>
           {canDelete && (
             <button
@@ -904,7 +915,7 @@ export default function InstallationsScreen({
               onClick={() => deleteInstallation(inst.id)}
               title="Kustuta"
             >
-              <FiTrash2 size={16} />
+              <FiTrash2 size={14} />
             </button>
           )}
         </div>
@@ -915,7 +926,7 @@ export default function InstallationsScreen({
       <div key={day.dayKey} className="installation-date-group">
         <div className="date-group-header" onClick={() => toggleDay(day.dayKey)}>
           <button className="date-group-toggle">
-            {expandedDays.has(day.dayKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+            {expandedDays.has(day.dayKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
           </button>
           <span className="date-label">{day.dayLabel}</span>
           <button
@@ -923,7 +934,7 @@ export default function InstallationsScreen({
             onClick={(e) => selectInstallations(day.items, e)}
             title="Vali need detailid mudelis"
           >
-            {day.items.length} detaili
+            {day.items.length}
           </button>
         </div>
         {expandedDays.has(day.dayKey) && (
@@ -996,9 +1007,9 @@ export default function InstallationsScreen({
               />
             </div>
 
-            <div className="form-row">
-              <label><FiTruck size={14} /> Paigaldusviis</label>
-              {installationMethods.length > 0 ? (
+            {installationMethods.length > 0 && (
+              <div className="form-row">
+                <label><FiTruck size={14} /> Paigaldusviis</label>
                 <select
                   value={selectedMethodId}
                   onChange={(e) => setSelectedMethodId(e.target.value)}
@@ -1011,10 +1022,8 @@ export default function InstallationsScreen({
                     </option>
                   ))}
                 </select>
-              ) : (
-                <span className="no-methods-inline">Pole seadistatud</span>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="form-row">
               <label><FiEdit2 size={14} /> Märkused</label>
@@ -1157,7 +1166,7 @@ export default function InstallationsScreen({
                 <div key={month.monthKey} className="installation-month-group">
                   <div className="month-group-header" onClick={() => toggleMonth(month.monthKey)}>
                     <button className="month-group-toggle">
-                      {expandedMonths.has(month.monthKey) ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+                      {expandedMonths.has(month.monthKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                     </button>
                     <span className="month-label">{month.monthLabel}</span>
                     <button
@@ -1165,7 +1174,7 @@ export default function InstallationsScreen({
                       onClick={(e) => selectInstallations(month.allItems, e)}
                       title="Vali need detailid mudelis"
                     >
-                      {month.allItems.length} detaili
+                      {month.allItems.length}
                     </button>
                   </div>
                   {expandedMonths.has(month.monthKey) && (
