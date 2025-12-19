@@ -352,6 +352,8 @@ export interface Installation {
   installation_method_id?: string;
   installation_method_name?: string;
   installed_at: string;
+  // Meeskond
+  team_members?: string;
   // Märkused
   notes?: string;
   // Metadata

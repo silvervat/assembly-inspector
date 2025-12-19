@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo } from 'react-icons/fi';
+import { supabase, TrimbleExUser, Installation } from '../supabase';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers } from 'react-icons/fi';
 
 // GUID helper functions
 function normalizeGuid(s: string): string {
@@ -135,7 +135,6 @@ export default function InstallationsScreen({
   // State
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
   const [installations, setInstallations] = useState<Installation[]>([]);
-  const [installationMethods, setInstallationMethods] = useState<InstallationMethod[]>([]);
   const [installedGuids, setInstalledGuids] = useState<Map<string, InstalledGuidInfo>>(new Map());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -143,9 +142,16 @@ export default function InstallationsScreen({
   const [duplicateWarning, setDuplicateWarning] = useState<{assemblyMark: string; installedAt: string; userEmail: string}[] | null>(null);
 
   // Form state
-  const [selectedMethodId, setSelectedMethodId] = useState<string>('');
   const [installDate, setInstallDate] = useState<string>(new Date().toISOString().slice(0, 16));
   const [notes, setNotes] = useState<string>('');
+
+  // Installation method (simple select)
+  const [installMethod, setInstallMethod] = useState<string>('Kraana');
+  const [customMethodDesc, setCustomMethodDesc] = useState<string>('');
+
+  // Team members
+  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [teamMemberInput, setTeamMemberInput] = useState<string>('');
 
   // List view state
   const [showList, setShowList] = useState(false);
@@ -200,9 +206,8 @@ export default function InstallationsScreen({
     }
   };
 
-  // Load installation methods and existing installations
+  // Load existing installations
   useEffect(() => {
-    loadInstallationMethods();
     loadInstallations();
     loadInstalledGuids();
 
@@ -427,27 +432,6 @@ export default function InstallationsScreen({
     return () => clearInterval(interval);
   }, [api, showList]);
 
-  const loadInstallationMethods = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('installation_methods')
-        .select('*')
-        .eq('project_id', projectId)
-        .eq('is_active', true)
-        .order('sort_order', { ascending: true });
-
-      if (error) throw error;
-      setInstallationMethods(data || []);
-
-      // Set default method if available
-      if (data && data.length > 0 && !selectedMethodId) {
-        setSelectedMethodId(data[0].id);
-      }
-    } catch (e) {
-      console.error('Error loading installation methods:', e);
-    }
-  };
-
   const loadInstallations = async () => {
     setLoading(true);
     try {
@@ -625,7 +609,11 @@ export default function InstallationsScreen({
     try {
       const installerName = tcUserName || user.name || user.email.split('@')[0];
       const userEmail = tcUserEmail || user.email;
-      const method = installationMethods.find(m => m.id === selectedMethodId);
+
+      // Determine method name
+      const methodName = installMethod === 'Muu' && customMethodDesc
+        ? `Muu: ${customMethodDesc}`
+        : installMethod;
 
       const installationsToSave = newObjects.map(obj => ({
         project_id: projectId,
@@ -644,10 +632,11 @@ export default function InstallationsScreen({
         object_type: obj.objectType,
         installer_name: installerName,
         user_email: userEmail.toLowerCase(),
-        installation_method_id: selectedMethodId || null,
-        installation_method_name: method?.name || null,
+        installation_method_id: null,
+        installation_method_name: methodName,
         installed_at: installDate,
-        notes: notes || null
+        notes: notes || null,
+        team_members: teamMembers.length > 0 ? teamMembers.join(', ') : null
       }));
 
       const { error } = await supabase
@@ -663,6 +652,8 @@ export default function InstallationsScreen({
       } else {
         setMessage(`${newObjects.length} detail(i) edukalt paigaldatud!`);
         setNotes('');
+        setTeamMembers([]);
+        setCustomMethodDesc('');
 
         // Color installed objects
         await colorInstalledObjects(newObjects);
@@ -1033,23 +1024,71 @@ export default function InstallationsScreen({
               />
             </div>
 
-            {installationMethods.length > 0 && (
+            <div className="form-row">
+              <label><FiTruck size={14} /> Paigaldus meetod</label>
+              <select
+                value={installMethod}
+                onChange={(e) => setInstallMethod(e.target.value)}
+                className="full-width-input"
+              >
+                <option value="Kraana">Kraana</option>
+                <option value="Upitaja">Upitaja</option>
+                <option value="Käsitsi">Käsitsi</option>
+                <option value="Muu">Muu</option>
+              </select>
+            </div>
+
+            {installMethod === 'Muu' && (
               <div className="form-row">
-                <label><FiTruck size={14} /> Paigaldusviis</label>
-                <select
-                  value={selectedMethodId}
-                  onChange={(e) => setSelectedMethodId(e.target.value)}
-                  className="full-width-input"
-                >
-                  <option value="">-- Vali --</option>
-                  {installationMethods.map(method => (
-                    <option key={method.id} value={method.id}>
-                      {method.name}
-                    </option>
-                  ))}
-                </select>
+                <label><FiEdit2 size={14} /> Kirjelda meetodit</label>
+                <textarea
+                  value={customMethodDesc}
+                  onChange={(e) => setCustomMethodDesc(e.target.value)}
+                  placeholder="Kuidas paigaldati..."
+                  className="full-width-textarea"
+                  rows={2}
+                />
               </div>
             )}
+
+            <div className="form-row">
+              <label><FiUsers size={14} /> Meeskond</label>
+              <div className="team-members-input">
+                {teamMembers.length > 0 && (
+                  <div className="team-chips">
+                    {teamMembers.map((member, idx) => (
+                      <span key={idx} className="team-chip">
+                        {member}
+                        <button
+                          type="button"
+                          onClick={() => setTeamMembers(teamMembers.filter((_, i) => i !== idx))}
+                          className="chip-remove"
+                        >
+                          <FiX size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={teamMemberInput}
+                  onChange={(e) => setTeamMemberInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && teamMemberInput.trim()) {
+                      e.preventDefault();
+                      const name = teamMemberInput.trim();
+                      if (!teamMembers.includes(name)) {
+                        setTeamMembers([...teamMembers, name]);
+                      }
+                      setTeamMemberInput('');
+                    }
+                  }}
+                  placeholder="Lisa meeskonna liige (Enter)"
+                  className="full-width-input"
+                />
+              </div>
+            </div>
 
             <div className="form-row">
               <label><FiEdit2 size={14} /> Märkused</label>
