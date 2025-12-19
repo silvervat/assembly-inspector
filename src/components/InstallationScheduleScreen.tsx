@@ -115,6 +115,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Ref for auto-scrolling to playing item
+  const playingItemRef = useRef<HTMLDivElement | null>(null);
+
   // Load schedule items
   const loadSchedule = useCallback(async () => {
     setLoading(true);
@@ -728,6 +731,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     const item = items[currentPlayIndex];
 
+    // Expand the date group containing the current item
+    if (collapsedDates.has(item.scheduled_date)) {
+      setCollapsedDates(prev => {
+        const next = new Set(prev);
+        next.delete(item.scheduled_date);
+        return next;
+      });
+    }
+
     const playNext = async () => {
       await selectInViewer(item);
       await colorItemGreen(item);
@@ -745,6 +757,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     };
   }, [isPlaying, currentPlayIndex, playbackSpeed, getAllItemsSorted]);
+
+  // Auto-scroll to playing item
+  useEffect(() => {
+    if (isPlaying && !isPaused && playingItemRef.current) {
+      playingItemRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [isPlaying, isPaused, currentPlayIndex]);
 
   // Toggle date collapse
   const toggleDateCollapse = (date: string) => {
@@ -1281,10 +1303,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                         const isItemSelected = selectedItemIds.has(item.id);
                         const allSorted = getAllItemsSorted();
 
+                        const isCurrentlyPlaying = isPlaying && allSorted[currentPlayIndex]?.id === item.id;
+
                         return (
                           <div
                             key={item.id}
-                            className={`schedule-item ${isPlaying && allSorted[currentPlayIndex]?.id === item.id ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''}`}
+                            ref={isCurrentlyPlaying ? playingItemRef : null}
+                            className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''}`}
                             draggable
                             onDragStart={(e) => handleDragStart(e, item)}
                             onDragEnd={handleDragEnd}
