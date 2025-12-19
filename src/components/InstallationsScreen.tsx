@@ -204,6 +204,12 @@ export default function InstallationsScreen({
     userEmail: string;
   } | null>(null);
 
+  // Day info modal state
+  const [showDayInfo, setShowDayInfo] = useState<DayGroup | null>(null);
+
+  // Month stats modal state
+  const [showMonthStats, setShowMonthStats] = useState<MonthGroup | null>(null);
+
   // Assembly selection state
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
 
@@ -1038,6 +1044,13 @@ export default function InstallationsScreen({
           >
             {day.items.length}
           </button>
+          <button
+            className="group-info-btn"
+            onClick={(e) => { e.stopPropagation(); setShowDayInfo(day); }}
+            title="Päeva info"
+          >
+            <FiInfo size={12} />
+          </button>
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
@@ -1383,6 +1396,13 @@ export default function InstallationsScreen({
                     >
                       {month.allItems.length}
                     </button>
+                    <button
+                      className="group-info-btn"
+                      onClick={(e) => { e.stopPropagation(); setShowMonthStats(month); }}
+                      title="Kuu statistika"
+                    >
+                      <FiInfo size={12} />
+                    </button>
                   </div>
                   {expandedMonths.has(month.monthKey) && (
                     <div className="month-group-days">
@@ -1550,6 +1570,190 @@ export default function InstallationsScreen({
                 <summary>📄 Raw JSON</summary>
                 <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
               </details>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Day Info Modal */}
+      {showDayInfo && (
+        <div className="properties-modal-overlay" onClick={() => setShowDayInfo(null)}>
+          <div className="properties-modal stats-modal" onClick={e => e.stopPropagation()}>
+            <div className="properties-modal-header">
+              <h3>Päeva info: {showDayInfo.dayLabel}</h3>
+              <button className="close-modal-btn" onClick={() => setShowDayInfo(null)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="properties-modal-content" style={{ padding: '16px' }}>
+              {(() => {
+                // Group by recorder (user_email) and time
+                const byRecorder = new Map<string, Installation[]>();
+                const byMethod = new Map<string, Installation[]>();
+                const byInstaller = new Map<string, Installation[]>();
+
+                showDayInfo.items.forEach(inst => {
+                  // By recorder
+                  const recorder = inst.user_email || 'Tundmatu';
+                  if (!byRecorder.has(recorder)) byRecorder.set(recorder, []);
+                  byRecorder.get(recorder)!.push(inst);
+
+                  // By method
+                  const method = inst.installation_method_name || 'Määramata';
+                  if (!byMethod.has(method)) byMethod.set(method, []);
+                  byMethod.get(method)!.push(inst);
+
+                  // By installer (from team_members or installer_name)
+                  const installers = inst.team_members
+                    ? inst.team_members.split(',').map(s => s.trim())
+                    : [inst.installer_name || 'Tundmatu'];
+                  installers.forEach(installer => {
+                    if (!byInstaller.has(installer)) byInstaller.set(installer, []);
+                    byInstaller.get(installer)!.push(inst);
+                  });
+                });
+
+                return (
+                  <>
+                    <div className="stats-section">
+                      <div className="stats-section-title">👤 Kirjed tegid:</div>
+                      {Array.from(byRecorder.entries()).map(([recorder, items]) => {
+                        const times = items.map(i => new Date(i.created_at || i.installed_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }));
+                        const uniqueTimes = [...new Set(times)].sort();
+                        return (
+                          <div key={recorder} className="stats-row">
+                            <span className="stats-name">{recorder.split('@')[0]}</span>
+                            <span className="stats-count">{items.length} tk</span>
+                            <span className="stats-times">{uniqueTimes.join(', ')}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="stats-section">
+                      <div className="stats-section-title">👷 Paigaldajad:</div>
+                      {Array.from(byInstaller.entries()).map(([installer, items]) => (
+                        <div key={installer} className="stats-row">
+                          <span className="stats-name">{installer}</span>
+                          <span className="stats-count">{items.length} tk</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="stats-section">
+                      <div className="stats-section-title">🔧 Paigaldusmeetodid:</div>
+                      {Array.from(byMethod.entries()).map(([method, items]) => (
+                        <div key={method} className="stats-row">
+                          <span className="stats-name">{method}</span>
+                          <span className="stats-count">{items.length} tk</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="stats-total">
+                      Kokku: <strong>{showDayInfo.items.length}</strong> detaili
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Month Stats Modal */}
+      {showMonthStats && (
+        <div className="properties-modal-overlay" onClick={() => setShowMonthStats(null)}>
+          <div className="properties-modal stats-modal" onClick={e => e.stopPropagation()}>
+            <div className="properties-modal-header" style={{ background: '#1976d2' }}>
+              <h3>Kuu statistika: {showMonthStats.monthLabel}</h3>
+              <button className="close-modal-btn" onClick={() => setShowMonthStats(null)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="properties-modal-content" style={{ padding: '16px' }}>
+              {(() => {
+                const byRecorder = new Map<string, number>();
+                const byInstaller = new Map<string, number>();
+                const byMethod = new Map<string, number>();
+                const workingDays = new Set<string>();
+
+                showMonthStats.allItems.forEach(inst => {
+                  // Count by recorder
+                  const recorder = inst.user_email || 'Tundmatu';
+                  byRecorder.set(recorder, (byRecorder.get(recorder) || 0) + 1);
+
+                  // Count by method
+                  const method = inst.installation_method_name || 'Määramata';
+                  byMethod.set(method, (byMethod.get(method) || 0) + 1);
+
+                  // Count by installer
+                  const installers = inst.team_members
+                    ? inst.team_members.split(',').map(s => s.trim())
+                    : [inst.installer_name || 'Tundmatu'];
+                  installers.forEach(installer => {
+                    byInstaller.set(installer, (byInstaller.get(installer) || 0) + 1);
+                  });
+
+                  // Working days
+                  workingDays.add(new Date(inst.installed_at).toDateString());
+                });
+
+                const sortedRecorders = Array.from(byRecorder.entries()).sort((a, b) => b[1] - a[1]);
+                const sortedInstallers = Array.from(byInstaller.entries()).sort((a, b) => b[1] - a[1]);
+                const sortedMethods = Array.from(byMethod.entries()).sort((a, b) => b[1] - a[1]);
+
+                return (
+                  <>
+                    <div className="stats-summary">
+                      <div className="stats-summary-item">
+                        <div className="stats-summary-value">{showMonthStats.allItems.length}</div>
+                        <div className="stats-summary-label">Detaili kokku</div>
+                      </div>
+                      <div className="stats-summary-item">
+                        <div className="stats-summary-value">{workingDays.size}</div>
+                        <div className="stats-summary-label">Tööpäeva</div>
+                      </div>
+                      <div className="stats-summary-item">
+                        <div className="stats-summary-value">{byInstaller.size}</div>
+                        <div className="stats-summary-label">Paigaldajat</div>
+                      </div>
+                    </div>
+
+                    <div className="stats-section">
+                      <div className="stats-section-title">👤 Kirjed tegid:</div>
+                      {sortedRecorders.map(([recorder, count]) => (
+                        <div key={recorder} className="stats-row">
+                          <span className="stats-name">{recorder.split('@')[0]}</span>
+                          <span className="stats-count">{count} tk</span>
+                          <span className="stats-percent">{Math.round(count / showMonthStats.allItems.length * 100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="stats-section">
+                      <div className="stats-section-title">👷 Paigaldajad (meeskond):</div>
+                      {sortedInstallers.map(([installer, count]) => (
+                        <div key={installer} className="stats-row">
+                          <span className="stats-name">{installer}</span>
+                          <span className="stats-count">{count} tk</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="stats-section">
+                      <div className="stats-section-title">🔧 Paigaldusmeetodid:</div>
+                      {sortedMethods.map(([method, count]) => (
+                        <div key={method} className="stats-row">
+                          <span className="stats-name">{method}</span>
+                          <span className="stats-count">{count} tk</span>
+                          <span className="stats-percent">{Math.round(count / showMonthStats.allItems.length * 100)}%</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
