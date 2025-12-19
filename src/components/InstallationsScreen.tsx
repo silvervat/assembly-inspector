@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2 } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye } from 'react-icons/fi';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // GUID helper functions
@@ -147,6 +147,10 @@ export default function InstallationsScreen({
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
 
+  // Property discovery state
+  const [showProperties, setShowProperties] = useState(false);
+  const [discoveredProperties, setDiscoveredProperties] = useState<any>(null);
+
   // Refs for debouncing
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -224,10 +228,20 @@ export default function InstallationsScreen({
               let castUnitPositionCode: string | undefined;
               let objectType: string | undefined;
 
+              // Check for direct product.name on objProps (Trimble structure)
+              if ((objProps as any).product?.name) {
+                productName = String((objProps as any).product.name);
+              }
+
               // Search all property sets
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
                 const propArray = pset.properties || [];
+
+                // Check for nested product.name directly on property set
+                if ((pset as any).product?.name && !productName) {
+                  productName = String((pset as any).product.name);
+                }
 
                 for (const prop of propArray) {
                   const propName = ((prop as any).name || '').toLowerCase();
@@ -240,13 +254,22 @@ export default function InstallationsScreen({
                     assemblyMark = String(propValue);
                   }
 
-                  // GUID detection
+                  // GUID detection - check standard guid fields
                   if (propName === 'guid' || propName === 'globalid') {
                     const val = String(propValue);
                     const guidType = classifyGuid(val);
                     if (guidType === 'IFC') guidIfc = normalizeGuid(val);
                     else if (guidType === 'MS') guidMs = normalizeGuid(val);
                     else guid = normalizeGuid(val);
+                  }
+
+                  // MS GUID from Reference Object property set
+                  if (setName.toLowerCase().includes('reference') && (propName === 'guid' || propName === 'id')) {
+                    const val = String(propValue);
+                    const guidType = classifyGuid(val);
+                    if (guidType === 'MS' && !guidMs) {
+                      guidMs = normalizeGuid(val);
+                    }
                   }
 
                   // Product name - check multiple possible set names
@@ -541,6 +564,26 @@ export default function InstallationsScreen({
     setExpandedDays(newExpanded);
   };
 
+  // Discover all properties for the first selected object
+  const discoverProperties = async () => {
+    if (selectedObjects.length === 0) {
+      setMessage('Vali esmalt detail mudelilt');
+      return;
+    }
+
+    const obj = selectedObjects[0];
+    try {
+      const props = await (api.viewer as any).getObjectProperties(obj.modelId, [obj.runtimeId], { includeHidden: true });
+      if (props && props.length > 0) {
+        setDiscoveredProperties(props[0]);
+        setShowProperties(true);
+      }
+    } catch (e) {
+      console.error('Error discovering properties:', e);
+      setMessage('Viga omaduste laadimisel');
+    }
+  };
+
   // Filter installations
   const filteredInstallations = installations.filter(inst => {
     // Filter by mode
@@ -744,38 +787,9 @@ export default function InstallationsScreen({
             </div>
           </div>
 
-          {/* Selected objects at bottom - compact */}
+          {/* Selected objects section - button at top, list below */}
           <div className="selected-objects-section">
-            {selectedObjects.length === 0 ? (
-              <div className="no-selection-compact">
-                <FiSearch size={16} />
-                <span>Vali mudelilt detail(id)</span>
-              </div>
-            ) : (
-              <>
-                <div className="selected-objects-header">
-                  <span>Valitud: </span>
-                  <span className="selected-marks">
-                    {selectedObjects.map((obj, idx) => {
-                      const guid = getObjectGuid(obj);
-                      const isInstalled = guid && installedGuids.has(guid);
-                      return (
-                        <span key={idx} className={`mark-tag ${isInstalled ? 'installed' : ''}`}>
-                          {obj.assemblyMark}
-                          {obj.productName && ` | ${obj.productName}`}
-                        </span>
-                      );
-                    })}
-                  </span>
-                </div>
-                {alreadyInstalledCount > 0 && (
-                  <div className="already-installed-note">
-                    {alreadyInstalledCount} juba paigaldatud
-                  </div>
-                )}
-              </>
-            )}
-
+            {/* Save button at top */}
             <button
               className="save-installation-btn"
               onClick={saveInstallation}
@@ -788,6 +802,43 @@ export default function InstallationsScreen({
                 </>
               )}
             </button>
+
+            {/* Selected details list below */}
+            {selectedObjects.length === 0 ? (
+              <div className="no-selection-compact">
+                <FiSearch size={16} />
+                <span>Vali mudelilt detail(id)</span>
+              </div>
+            ) : (
+              <div className="selected-objects-list">
+                <div className="selected-objects-title">
+                  <span>Valitud: {selectedObjects.length}</span>
+                  <button
+                    className="discover-props-btn"
+                    onClick={discoverProperties}
+                    title="Avasta propertised"
+                  >
+                    <FiEye size={14} />
+                  </button>
+                </div>
+                {selectedObjects.map((obj, idx) => {
+                  const guid = getObjectGuid(obj);
+                  const isInstalled = guid && installedGuids.has(guid);
+                  return (
+                    <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''}`}>
+                      <span className="object-mark">{obj.assemblyMark}</span>
+                      {obj.productName && <span className="object-product">{obj.productName}</span>}
+                      {isInstalled && <span className="installed-badge">✓</span>}
+                    </div>
+                  );
+                })}
+                {alreadyInstalledCount > 0 && (
+                  <div className="already-installed-note">
+                    {alreadyInstalledCount} juba paigaldatud
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -860,6 +911,23 @@ export default function InstallationsScreen({
       {message && (
         <div className="message-toast" onClick={() => setMessage(null)}>
           {message}
+        </div>
+      )}
+
+      {/* Properties Discovery Modal */}
+      {showProperties && discoveredProperties && (
+        <div className="properties-modal-overlay" onClick={() => setShowProperties(false)}>
+          <div className="properties-modal" onClick={e => e.stopPropagation()}>
+            <div className="properties-modal-header">
+              <h3>Avastatud propertised</h3>
+              <button className="close-modal-btn" onClick={() => setShowProperties(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="properties-modal-content">
+              <pre>{JSON.stringify(discoveredProperties, null, 2)}</pre>
+            </div>
+          </div>
         </div>
       )}
     </div>
