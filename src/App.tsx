@@ -5,6 +5,7 @@ import InspectorScreen from './components/InspectorScreen';
 import AdminScreen from './components/AdminScreen';
 import InspectionPlanScreen from './components/InspectionPlanScreen';
 import InstallationsScreen from './components/InstallationsScreen';
+import InstallationScheduleScreen from './components/InstallationScheduleScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -17,7 +18,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '2.9.108';
+export const APP_VERSION = '2.10.1';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -644,6 +645,23 @@ export default function App() {
           projectId={projectId}
           tcUserEmail={tcUser?.email || ''}
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
+          onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Paigaldusgraafiku ekraan
+  if (currentMode === 'schedule') {
+    return (
+      <>
+        <NavigationOverlay />
+        <InstallationScheduleScreen
+          api={api}
+          user={user}
+          projectId={projectId}
+          tcUserEmail={tcUser?.email || ''}
           onBackToMenu={handleBackToMenu}
         />
         <VersionFooter />

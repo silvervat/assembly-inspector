@@ -2569,6 +2569,50 @@ button.stat-toggle.off:hover {
   margin-bottom: var(--modus-spacing-md);
 }
 
+/* Compact admin tools menu */
+.admin-tools-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.admin-tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-md);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--modus-text-primary);
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.admin-tool-btn:hover:not(:disabled) {
+  background: var(--modus-bg-secondary);
+  border-color: var(--modus-primary);
+  color: var(--modus-primary);
+}
+
+.admin-tool-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-tool-btn svg {
+  flex-shrink: 0;
+  color: var(--modus-primary);
+}
+
+.admin-tool-btn span {
+  flex: 1;
+}
+
 .admin-tool-card {
   background: var(--modus-bg-primary);
   border: 1px solid var(--modus-border);
