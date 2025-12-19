@@ -1322,6 +1322,71 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                     return allBoxes;
                   })}
                 />
+                <FunctionButton
+                  name="Lisa mõõtjooned"
+                  result={functionResults["Lisa mõõtjooned"]}
+                  onClick={() => testFunction("Lisa mõõtjooned", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    // Get bounding box for selected object
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) continue;
+
+                      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                      for (const bbox of boundingBoxes) {
+                        const box = bbox.boundingBox;
+                        // Bounding box coordinates are in meters, convert to mm for markups
+                        const min = { x: box.min.x * 1000, y: box.min.y * 1000, z: box.min.z * 1000 };
+                        const max = { x: box.max.x * 1000, y: box.max.y * 1000, z: box.max.z * 1000 };
+
+                        // Create measurement markups for X, Y, Z dimensions
+                        const measurements: any[] = [
+                          // X dimension (width) - along bottom front edge
+                          {
+                            start: { positionX: min.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                            end: { positionX: max.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                            mainLineStart: { positionX: min.x, positionY: min.y, positionZ: min.z },
+                            mainLineEnd: { positionX: max.x, positionY: min.y, positionZ: min.z },
+                            color: { r: 255, g: 0, b: 0, a: 255 } // Red for X
+                          },
+                          // Y dimension (depth) - along bottom left edge
+                          {
+                            start: { positionX: min.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                            end: { positionX: min.x, positionY: max.y, positionZ: min.z, modelId, objectId: bbox.id },
+                            mainLineStart: { positionX: min.x, positionY: min.y, positionZ: min.z },
+                            mainLineEnd: { positionX: min.x, positionY: max.y, positionZ: min.z },
+                            color: { r: 0, g: 255, b: 0, a: 255 } // Green for Y
+                          },
+                          // Z dimension (height) - along front left vertical edge
+                          {
+                            start: { positionX: min.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                            end: { positionX: min.x, positionY: min.y, positionZ: max.z, modelId, objectId: bbox.id },
+                            mainLineStart: { positionX: min.x, positionY: min.y, positionZ: min.z },
+                            mainLineEnd: { positionX: min.x, positionY: min.y, positionZ: max.z },
+                            color: { r: 0, g: 0, b: 255, a: 255 } // Blue for Z
+                          }
+                        ];
+
+                        await api.markup.addMeasurementMarkups(measurements);
+
+                        const width = Math.abs(max.x - min.x);
+                        const depth = Math.abs(max.y - min.y);
+                        const height = Math.abs(max.z - min.z);
+                        return `Mõõtjooned lisatud:\nX (punane): ${width.toFixed(0)} mm\nY (roheline): ${depth.toFixed(0)} mm\nZ (sinine): ${height.toFixed(0)} mm`;
+                      }
+                    }
+                    return 'Mõõtjooneid ei õnnestunud lisada';
+                  })}
+                />
+                <FunctionButton
+                  name="Eemalda mõõtjooned"
+                  result={functionResults["Eemalda mõõtjooned"]}
+                  onClick={() => testFunction("Eemalda mõõtjooned", () => api.markup.removeMarkups(undefined))}
+                />
               </div>
             </div>
 
