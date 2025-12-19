@@ -125,6 +125,41 @@ function groupByMonthAndDay(inspections: InspectionItem[]): MonthGroup[] {
   return sortedMonths;
 }
 
+// Group inspections by product_name (for todo mode)
+interface ProductGroup {
+  productKey: string;
+  productLabel: string;
+  items: InspectionItem[];
+}
+
+function groupByProduct(inspections: InspectionItem[]): ProductGroup[] {
+  const productMap: Record<string, ProductGroup> = {};
+
+  for (const insp of inspections) {
+    const productKey = insp.product_name || '_unknown';
+    const productLabel = insp.product_name || 'Tundmatu';
+
+    if (!productMap[productKey]) {
+      productMap[productKey] = {
+        productKey,
+        productLabel,
+        items: []
+      };
+    }
+
+    productMap[productKey].items.push(insp);
+  }
+
+  // Sort by product name alphabetically, unknown last
+  const sortedProducts = Object.values(productMap).sort((a, b) => {
+    if (a.productKey === '_unknown') return 1;
+    if (b.productKey === '_unknown') return -1;
+    return a.productLabel.localeCompare(b.productLabel, 'et-EE');
+  });
+
+  return sortedProducts;
+}
+
 export default function InspectionList({
   inspections,
   mode,
@@ -142,6 +177,7 @@ export default function InspectionList({
 }: InspectionListProps) {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
   const [selectedInspection, setSelectedInspection] = useState<InspectionItem | null>(null);
   const [modalGallery, setModalGallery] = useState<{ photos: string[], currentIndex: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -417,6 +453,7 @@ export default function InspectionList({
 
   const monthGroups = groupByMonthAndDay(inspections);
   const hasMultipleMonths = monthGroups.length > 1;
+  const productGroups = groupByProduct(inspections);
 
   const toggleMonth = (monthKey: string) => {
     const newExpanded = new Set(expandedMonths);
@@ -436,6 +473,33 @@ export default function InspectionList({
       newExpanded.add(dayKey);
     }
     setExpandedDays(newExpanded);
+  };
+
+  const toggleProduct = (productKey: string) => {
+    const newExpanded = new Set(expandedProducts);
+    if (newExpanded.has(productKey)) {
+      newExpanded.delete(productKey);
+    } else {
+      newExpanded.add(productKey);
+    }
+    setExpandedProducts(newExpanded);
+  };
+
+  // Handle product click - select all items in product group
+  const handleProductClick = (product: ProductGroup) => {
+    setSelectedIds(new Set(product.items.map(item => item.id)));
+    onSelectGroup(product.items);
+    // Expand the product
+    if (!expandedProducts.has(product.productKey)) {
+      toggleProduct(product.productKey);
+    }
+  };
+
+  // Handle product zoom
+  const handleProductZoom = (e: React.MouseEvent, product: ProductGroup) => {
+    e.stopPropagation();
+    setSelectedIds(new Set(product.items.map(item => item.id)));
+    onZoomToGroup(product.items);
   };
 
   // Handle month click - select all items in month
@@ -506,6 +570,66 @@ export default function InspectionList({
     setEditMode(false);
     setEditedResults({});
   };
+
+  // Render product group (for todo mode)
+  const renderProductGroup = (product: ProductGroup) => (
+    <div key={product.productKey} className="inspection-date-group">
+      <div className="date-group-header">
+        <button
+          className="date-group-toggle"
+          onClick={() => toggleProduct(product.productKey)}
+        >
+          {expandedProducts.has(product.productKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+        </button>
+        <div
+          className="date-group-main"
+          onClick={() => handleProductClick(product)}
+        >
+          <span className="date-label">{product.productLabel}</span>
+          <span className="date-count">{product.items.length}</span>
+        </div>
+        <button
+          className="date-group-zoom-btn"
+          onClick={(e) => handleProductZoom(e, product)}
+          title="Märgista ja zoom kõik toote detailid"
+        >
+          <FiZoomIn size={16} />
+        </button>
+      </div>
+
+      {expandedProducts.has(product.productKey) && (
+        <div className="date-group-items">
+          {product.items.map(insp => (
+            <div
+              key={insp.id}
+              className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
+              onClick={() => handleInspectionClick(insp)}
+            >
+              <div className="inspection-item-main">
+                <span className="inspection-mark">
+                  {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
+                </span>
+              </div>
+              <button
+                className="inspection-info-btn"
+                onClick={(e) => handleShowDetail(e, insp)}
+                title="Näita detaile"
+              >
+                <FiInfo size={16} />
+              </button>
+              <button
+                className="inspection-zoom-btn"
+                onClick={(e) => handleZoom(e, insp)}
+                title="Zoom elemendile"
+              >
+                <FiZoomIn size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   // Render day group (used both with and without month grouping)
   const renderDayGroup = (day: DayGroup, indented: boolean = false) => (
@@ -581,7 +705,7 @@ export default function InspectionList({
     <div className="inspection-list-container">
       <div className="inspection-list-header">
         <h3>
-          {mode === 'mine' ? '🔴 Minu inspektsioonid' : '🟢 Kõik inspektsioonid'}
+          {mode === 'mine' ? '🔴 Minu inspektsioonid' : mode === 'todo' ? '🟡 Tegemata' : '🟢 Kõik inspektsioonid'}
           <span className="inspection-count">
             ({inspections.length}{totalCount > inspections.length ? ` / ${totalCount}` : ''})
           </span>
@@ -592,7 +716,10 @@ export default function InspectionList({
       </div>
 
       <div className="inspection-list-content">
-        {hasMultipleMonths ? (
+        {mode === 'todo' ? (
+          // Todo mode: Group by product_name
+          productGroups.map(product => renderProductGroup(product))
+        ) : hasMultipleMonths ? (
           // Multi-month view: Month -> Day -> Items
           monthGroups.map(month => (
             <div key={month.monthKey} className="inspection-month-group">
@@ -635,6 +762,8 @@ export default function InspectionList({
           <div className="inspection-list-empty">
             {mode === 'mine'
               ? 'Sul pole veel inspektsioone'
+              : mode === 'todo'
+              ? 'Tegemata üksusi pole'
               : 'Inspektsioone pole veel tehtud'}
           </div>
         )}
