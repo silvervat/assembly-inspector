@@ -207,6 +207,24 @@
   background: #b91c1c;
 }
 
+.pause-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  background: #f59e0b;
+  color: white;
+}
+
+.pause-btn:hover {
+  background: #d97706;
+}
+
 .speed-selector {
   display: flex;
   gap: 4px;
@@ -520,4 +538,217 @@
 .date-picker-item.current {
   background: #dbeafe;
   font-weight: 500;
+}
+
+/* Calendar Statistics */
+.calendar-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--modus-bg-primary);
+  border-bottom: 1px solid var(--modus-border);
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+}
+
+.calendar-stats strong {
+  color: var(--modus-text-primary);
+}
+
+.stat-divider {
+  color: #d1d5db;
+}
+
+.color-buttons {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+
+.color-by-date-btn, .reset-colors-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  background: var(--modus-bg-primary);
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+}
+
+.color-by-date-btn:hover:not(:disabled) {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #fcd34d;
+}
+
+.reset-colors-btn:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-primary);
+}
+
+.color-by-date-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Multi-select bar */
+.multi-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: #fef3c7;
+  border-bottom: 1px solid #fcd34d;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.multi-select-bar button {
+  padding: 4px 10px;
+  border: 1px solid #d97706;
+  border-radius: 4px;
+  background: white;
+  color: #d97706;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.multi-select-bar button:hover {
+  background: #d97706;
+  color: white;
+}
+
+.multi-select-bar .hint {
+  margin-left: auto;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* Multi-selected item */
+.schedule-item.multi-selected {
+  background: #fef9c3;
+  border-left: 3px solid #eab308;
+}
+
+.schedule-item.multi-selected:hover {
+  background: #fef08a;
+}
+
+/* Dragging state */
+.schedule-item.dragging {
+  opacity: 0.5;
+  background: #e5e7eb;
+}
+
+/* Item content layout */
+.item-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.item-mark {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-product {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Drag over date highlight */
+.date-group.drag-over {
+  border-color: #eab308;
+  background: #fefce8;
+  box-shadow: 0 0 0 2px rgba(234, 179, 8, 0.3);
+}
+
+/* Search bar */
+.schedule-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--modus-bg-primary);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.search-icon {
+  color: var(--modus-text-secondary);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 12px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: var(--modus-primary);
+  box-shadow: 0 0 0 2px rgba(0, 103, 177, 0.1);
+}
+
+.search-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--modus-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-clear:hover {
+  color: #dc2626;
+}
+
+.search-count {
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+}
+
+/* Date screenshot button */
+.date-screenshot-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  color: #9ca3af;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.date-header:hover .date-screenshot-btn {
+  opacity: 1;
+}
+
+.date-screenshot-btn:hover {
+  background: #dbeafe;
+  color: #2563eb;
 }
