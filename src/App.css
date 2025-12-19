@@ -7779,51 +7779,43 @@ button.stat-toggle.off:hover {
   color: var(--modus-primary);
 }
 
-/* Install Info Modal Grid */
+/* Install Info Modal Rows */
 .install-info-modal {
-  max-width: 380px;
+  max-width: 320px;
 }
 
-.install-info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.install-info-item {
+.install-info-rows {
   display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: var(--modus-bg-secondary);
-  border-radius: var(--modus-radius-sm);
+  flex-direction: column;
 }
 
-.install-info-item.full-width {
-  grid-column: 1 / -1;
+.install-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--modus-border-light);
 }
 
-.install-info-icon {
-  font-size: 16px;
+.install-info-row:last-child {
+  border-bottom: none;
+}
+
+.install-info-row.muted {
+  opacity: 0.7;
+}
+
+.install-info-row .install-info-label {
+  font-size: 12px;
+  color: var(--modus-text-secondary);
   flex-shrink: 0;
 }
 
-.install-info-data {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.install-info-label {
-  font-size: 10px;
-  color: var(--modus-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.install-info-value {
+.install-info-row .install-info-value {
   font-size: 13px;
   font-weight: 500;
   color: var(--modus-text-primary);
+  text-align: right;
   word-break: break-word;
 }
