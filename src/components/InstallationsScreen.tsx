@@ -790,11 +790,8 @@ export default function InstallationsScreen({
                 rows={2}
               />
             </div>
-          </div>
 
-          {/* Selected objects section - button at top, list below */}
-          <div className="selected-objects-section">
-            {/* Save button at top */}
+            {/* Save button right after form */}
             <button
               className="save-installation-btn"
               onClick={saveInstallation}
@@ -807,15 +804,17 @@ export default function InstallationsScreen({
                 </>
               )}
             </button>
+          </div>
 
-            {/* Selected details list below */}
+          {/* Selected objects list - separate section, page scrolls */}
+          <div className="selected-objects-section">
             {selectedObjects.length === 0 ? (
               <div className="no-selection-compact">
                 <FiSearch size={16} />
                 <span>Vali mudelilt detail(id)</span>
               </div>
             ) : (
-              <div className="selected-objects-list">
+              <>
                 <div className="selected-objects-title">
                   <span>Valitud: {selectedObjects.length}</span>
                   <button
@@ -826,21 +825,23 @@ export default function InstallationsScreen({
                     <FiEye size={14} />
                   </button>
                 </div>
-                {selectedObjects.map((obj, idx) => {
-                  const guid = getObjectGuid(obj);
-                  const isInstalled = guid && installedGuids.has(guid);
-                  return (
-                    <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''}`}>
-                      <span className="object-mark">{obj.assemblyMark}</span>
-                      {obj.productName && <span className="object-product">{obj.productName}</span>}
-                      {isInstalled && <span className="installed-badge">✓</span>}
-                      {/* Debug: show detected GUID */}
-                      <span className="debug-guid" style={{ fontSize: '9px', color: '#999', marginLeft: 'auto' }}>
-                        {guid ? guid.substring(0, 12) + '...' : 'no guid'}
-                      </span>
-                    </div>
-                  );
-                })}
+                <div className="selected-objects-list">
+                  {selectedObjects.map((obj, idx) => {
+                    const guid = getObjectGuid(obj);
+                    const isInstalled = guid && installedGuids.has(guid);
+                    return (
+                      <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''}`}>
+                        <span className="object-mark">{obj.assemblyMark}</span>
+                        {obj.productName && <span className="object-product">{obj.productName}</span>}
+                        {isInstalled && <span className="installed-badge">✓</span>}
+                        {/* Debug: show detected GUID */}
+                        <span className="debug-guid" style={{ fontSize: '9px', color: '#999', marginLeft: 'auto' }}>
+                          {guid ? guid.substring(0, 12) + '...' : 'no guid'}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
                 {/* Debug: show installedGuids count */}
                 <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
                   DB guids: {installedGuids.size}
@@ -850,7 +851,7 @@ export default function InstallationsScreen({
                     {alreadyInstalledCount} juba paigaldatud
                   </div>
                 )}
-              </div>
+              </>
             )}
           </div>
         </div>
