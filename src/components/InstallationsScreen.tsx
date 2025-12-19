@@ -408,10 +408,14 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Filter out already installed objects
+    // Filter out already installed objects (only if they have a GUID)
+    // Objects without GUID can always be saved (we can't track duplicates for them)
     const newObjects = selectedObjects.filter(obj => {
       const guid = obj.guidIfc || obj.guid;
-      return guid && !installedGuids.has(guid);
+      // If no GUID, allow saving (can't check duplicates)
+      if (!guid) return true;
+      // If has GUID, check if not already installed
+      return !installedGuids.has(guid);
     });
 
     if (newObjects.length === 0) {
