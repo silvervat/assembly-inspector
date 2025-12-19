@@ -3,7 +3,7 @@ import { TrimbleExUser, supabase } from '../supabase';
 import {
   FiSearch, FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
   FiShield, FiClipboard, FiBox, FiDroplet, FiZap, FiLayers,
-  FiGrid, FiSquare, FiMoreHorizontal, FiLoader
+  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiTruck
 } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 
@@ -18,7 +18,8 @@ export type InspectionMode =
   | 'eos2'
   | 'admin'
   | 'inspection_plan'
-  | 'inspection_type'; // New: for dynamic inspection types
+  | 'inspection_type'
+  | 'installations'; // Paigaldamiste süsteem
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -263,6 +264,23 @@ export default function MainMenu({
                 </button>
               );
             })}
+
+            {/* Paigaldamised - installations log */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('installations')}
+            >
+              <span className="menu-item-icon" style={{ color: 'var(--modus-info)' }}>
+                <FiTruck size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Paigaldamised</span>
+                <span className="menu-item-desc">Paigalduste päevik</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
 
             {/* Mitte vastavus - always visible but disabled for now */}
             <button
