@@ -1169,16 +1169,32 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="ALL White + Selection Green"
                   result={functionResults["ALL White + Selection Green"]}
                   onClick={() => testFunction("ALL White + Selection Green", async () => {
-                    // Step 1: Color ALL objects white
-                    await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
-                    // Step 2: Get selection
+                    // Step 1: RESET all colors first (required to allow new colors!)
+                    await api.viewer.setObjectState(undefined, { color: "reset" });
+                    // Step 2: Get selection BEFORE coloring all white
                     const sel = await api.viewer.getSelection();
-                    if (!sel || sel.length === 0) {
-                      return 'All white (no selection to color green)';
+                    // Step 3: Get all objects from all models
+                    const allModelObjects = await api.viewer.getObjects();
+                    if (!allModelObjects || allModelObjects.length === 0) {
+                      return 'No objects in model';
                     }
-                    // Step 3: Color selected objects green
-                    await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 34, g: 197, b: 94, a: 255 } });
-                    return `All white, ${sel.length} selected green`;
+                    // Step 4: Color ALL objects white (per model)
+                    for (const modelObj of allModelObjects) {
+                      const runtimeIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
+                      if (runtimeIds.length > 0) {
+                        await api.viewer.setObjectState(
+                          { modelObjectIds: [{ modelId: modelObj.modelId, objectRuntimeIds: runtimeIds }] },
+                          { color: { r: 240, g: 240, b: 240, a: 255 } }
+                        );
+                      }
+                    }
+                    // Step 5: Color selected objects green (overrides white)
+                    if (sel && sel.length > 0) {
+                      await api.viewer.setObjectState({ modelObjectIds: sel }, { color: { r: 34, g: 197, b: 94, a: 255 } });
+                      const totalSelected = sel.reduce((sum: number, s: any) => sum + (s.objectRuntimeIds?.length || 0), 0);
+                      return `All white, ${totalSelected} objects green`;
+                    }
+                    return 'All white (no selection)';
                   })}
                 />
                 <FunctionButton
