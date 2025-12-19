@@ -1023,56 +1023,22 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   name="Perspective"
                   result={functionResults["Perspective"]}
                   onClick={() => testFunction("Perspective", async () => {
-                    // Try multiple approaches
-                    // 1. Try setProjection if exists
-                    if ((api.viewer as any).setProjection) {
-                      return (api.viewer as any).setProjection('perspective');
-                    }
-                    // 2. Try setViewProjection if exists
-                    if ((api.viewer as any).setViewProjection) {
-                      return (api.viewer as any).setViewProjection('perspective');
-                    }
-                    // 3. Get current camera and recreate with perspective
+                    // NOTE: Trimble Connect API does not officially support changing projection type
+                    // This is experimental and may not work
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
-                    // 4. Set camera with projection
-                    await api.viewer.setCamera({
-                      position: pos,
-                      target: tgt,
-                      up: cam.up || [0, 0, 1],
-                      projection: 'perspective',
-                      projectionType: 'perspective'
-                    } as any, { animationTime: 0 });
-                    return 'Set perspective';
+                    console.log('Current camera for perspective:', cam);
+                    // Return info about current camera projection
+                    return `Kaamera info: projection=${cam.projection || 'N/A'}, type=${cam.type || 'N/A'}. Projektsiooni muutmine pole ametlikult toetatud.`;
                   })}
                 />
                 <FunctionButton
                   name="Orthographic"
                   result={functionResults["Orthographic"]}
                   onClick={() => testFunction("Orthographic", async () => {
-                    // Try multiple approaches
-                    // 1. Try setProjection if exists
-                    if ((api.viewer as any).setProjection) {
-                      return (api.viewer as any).setProjection('orthographic');
-                    }
-                    // 2. Try setViewProjection if exists
-                    if ((api.viewer as any).setViewProjection) {
-                      return (api.viewer as any).setViewProjection('orthographic');
-                    }
-                    // 3. Get current camera and recreate with ortho
+                    // NOTE: Trimble Connect API does not officially support changing projection type
                     const cam = await api.viewer.getCamera() as any;
-                    const pos = Array.isArray(cam.position) ? cam.position : [cam.position?.x || 0, cam.position?.y || 0, cam.position?.z || 0];
-                    const tgt = Array.isArray(cam.target) ? cam.target : [cam.target?.x || 0, cam.target?.y || 0, cam.target?.z || 0];
-                    // 4. Set camera with projection
-                    await api.viewer.setCamera({
-                      position: pos,
-                      target: tgt,
-                      up: cam.up || [0, 0, 1],
-                      projection: 'orthographic',
-                      projectionType: 'orthographic'
-                    } as any, { animationTime: 0 });
-                    return 'Set orthographic';
+                    console.log('Current camera for orthographic:', cam);
+                    return `Kaamera info: projection=${cam.projection || 'N/A'}, type=${cam.type || 'N/A'}. Projektsiooni muutmine pole ametlikult toetatud.`;
                   })}
                 />
                 <FunctionButton
