@@ -48,7 +48,8 @@ interface ObjectMetadata {
 interface ObjectData {
   modelId: string;
   runtimeId: number;
-  externalId?: string;
+  externalId?: string;  // IFC GUID from convertToObjectIds
+  guidMs?: string;      // MS GUID from Reference Object property set
   class?: string;
   propertySets: PropertySet[];
   metadata?: ObjectMetadata;
@@ -454,10 +455,32 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
             console.log('📦 Raw object properties:', safeStringify(objProps, 2));
             console.log('📦 Raw object metadata:', safeStringify(objMetadata, 2));
 
+            // Extract GUID (MS) from Reference Object property set
+            let guidMs: string | undefined;
+            for (const pset of propertySets) {
+              const setNameLower = pset.name.toLowerCase();
+              if (setNameLower.includes('reference') || setNameLower === 'reference object') {
+                // Look for GUID (MS) or GUID property
+                for (const [propName, propValue] of Object.entries(pset.properties)) {
+                  const propNameLower = propName.toLowerCase();
+                  if (propNameLower === 'guid (ms)' || propNameLower === 'guid' || propNameLower === 'guid_ms') {
+                    const val = String(propValue || '');
+                    // MS GUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+                    if (val.includes('-') && val.length >= 32) {
+                      guidMs = val;
+                      break;
+                    }
+                  }
+                }
+                if (guidMs) break;
+              }
+            }
+
             allObjects.push({
               modelId,
               runtimeId,
               externalId,
+              guidMs,
               class: rawProps.class,
               propertySets,
               metadata,
@@ -2002,10 +2025,20 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   <span className="object-id">Runtime ID: {obj.runtimeId}</span>
                 </div>
 
-                {obj.externalId && (
-                  <div className="object-guid">
-                    <span className="guid-label">GUID:</span>
-                    <code className="guid-value">{obj.externalId}</code>
+                {(obj.externalId || obj.guidMs) && (
+                  <div className="object-guids">
+                    {obj.externalId && (
+                      <div className="object-guid">
+                        <span className="guid-label">GUID (IFC):</span>
+                        <code className="guid-value">{obj.externalId}</code>
+                      </div>
+                    )}
+                    {obj.guidMs && (
+                      <div className="object-guid">
+                        <span className="guid-label">GUID (MS):</span>
+                        <code className="guid-value guid-ms">{obj.guidMs}</code>
+                      </div>
+                    )}
                   </div>
                 )}
 
