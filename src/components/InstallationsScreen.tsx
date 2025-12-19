@@ -171,6 +171,11 @@ export default function InstallationsScreen({
     loadInstallationMethods();
     loadInstallations();
     loadInstalledGuids();
+
+    // Cleanup: reset object colors when leaving the screen
+    return () => {
+      (api.viewer as any).resetObjectState?.().catch(() => {});
+    };
   }, [projectId]);
 
   // Selection checking function
@@ -426,8 +431,56 @@ export default function InstallationsScreen({
         if (item.guid_ifc) guidsMap.set(item.guid_ifc, info);
       }
       setInstalledGuids(guidsMap);
+
+      // Apply coloring after loading GUIDs
+      applyInstallationColoring(guidsMap);
     } catch (e) {
       console.error('Error loading installed GUIDs:', e);
+    }
+  };
+
+  // Apply coloring: all objects white, installed objects green
+  const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>) => {
+    try {
+      // First, set ALL objects to white/light gray
+      await api.viewer.setObjectState(undefined, { color: { r: 220, g: 220, b: 220, a: 255 } });
+
+      // Get all loaded models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      // Collect all installed GUIDs (IFC format)
+      const installedIfcGuids = Array.from(guidsMap.keys());
+      if (installedIfcGuids.length === 0) return;
+
+      // For each model, try to convert GUIDs to runtime IDs and color them green
+      for (const model of models) {
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, installedIfcGuids);
+
+          if (runtimeIds && runtimeIds.length > 0) {
+            // Filter out invalid runtime IDs (0 or undefined)
+            const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
+
+            if (validRuntimeIds.length > 0) {
+              const modelObjectIds = [{
+                modelId: model.id,
+                objectRuntimeIds: validRuntimeIds
+              }];
+
+              // Color installed objects green
+              await api.viewer.setObjectState(
+                { modelObjectIds },
+                { color: { r: 34, g: 197, b: 94, a: 255 } }
+              );
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not color installed objects for model ${model.id}:`, e);
+        }
+      }
+    } catch (e) {
+      console.error('Error applying installation coloring:', e);
     }
   };
 
