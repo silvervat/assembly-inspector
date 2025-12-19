@@ -1604,10 +1604,29 @@ export default function InstallationsScreen({
                 </div>
                 {(discoveredProperties as any).externalId && (
                   <div className="prop-info-row">
-                    <span className="prop-info-label">GUID:</span>
+                    <span className="prop-info-label">GUID (IFC):</span>
                     <code className="prop-info-guid">{(discoveredProperties as any).externalId}</code>
                   </div>
                 )}
+                {/* Extract and display GUID (MS) from Reference Object property set */}
+                {(() => {
+                  const props = (discoveredProperties as any).properties || [];
+                  const refObj = props.find((p: any) => p.set === 'Reference Object' || p.name === 'Reference Object');
+                  if (refObj?.properties) {
+                    const guidMs = refObj.properties.find((p: any) =>
+                      p.name === 'GUID (MS)' || p.name === 'GUID' || p.name?.toLowerCase() === 'guid_ms'
+                    );
+                    if (guidMs?.value || guidMs?.displayValue) {
+                      return (
+                        <div className="prop-info-row">
+                          <span className="prop-info-label">GUID (MS):</span>
+                          <code className="prop-info-guid guid-ms">{guidMs.displayValue || guidMs.value}</code>
+                        </div>
+                      );
+                    }
+                  }
+                  return null;
+                })()}
               </div>
 
               {/* Property Sets */}
