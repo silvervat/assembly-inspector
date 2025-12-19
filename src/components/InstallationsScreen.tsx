@@ -616,7 +616,7 @@ export default function InstallationsScreen({
     }
   };
 
-  // Apply coloring: all objects white, installed objects green
+  // Apply coloring: installed objects green (don't touch other objects)
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
@@ -629,9 +629,6 @@ export default function InstallationsScreen({
         }
         return;
       }
-
-      // First, set ALL objects to white/light gray
-      await api.viewer.setObjectState(undefined, { color: { r: 220, g: 220, b: 220, a: 255 } });
 
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
@@ -777,10 +774,7 @@ export default function InstallationsScreen({
         setNotes('');
         // Don't reset teamMembers and method - keep them for next installation
 
-        // Color installed objects
-        await colorInstalledObjects(newObjects);
-
-        // Reload data
+        // Reload data - this will also apply coloring via loadInstalledGuids
         await Promise.all([loadInstallations(), loadInstalledGuids()]);
 
         // Clear selection
@@ -793,27 +787,6 @@ export default function InstallationsScreen({
       setMessage('Viga paigalduse salvestamisel');
     } finally {
       setSaving(false);
-    }
-  };
-
-  const colorInstalledObjects = async (objects: SelectedObject[]) => {
-    try {
-      const colorByModel: Record<string, number[]> = {};
-      for (const obj of objects) {
-        if (!colorByModel[obj.modelId]) {
-          colorByModel[obj.modelId] = [];
-        }
-        colorByModel[obj.modelId].push(obj.runtimeId);
-      }
-
-      for (const [modelId, runtimeIds] of Object.entries(colorByModel)) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-          { color: '#4CAF50' } // Green color for installed
-        );
-      }
-    } catch (e) {
-      console.error('Error coloring objects:', e);
     }
   };
 

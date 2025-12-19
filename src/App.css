@@ -6302,6 +6302,8 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-direction: column;
   gap: var(--modus-spacing-md);
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .installations-menu {
