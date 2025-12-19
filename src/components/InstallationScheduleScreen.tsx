@@ -215,44 +215,76 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               let castUnitWeight: string | undefined;
               let positionCode: string | undefined;
 
-              if (objProps?.properties) {
-                for (const pset of objProps.properties) {
-                  if (!pset.properties) continue;
-                  const setName = ((pset as any).name || (pset as any).set || '').toLowerCase();
+              // Log full object properties for debugging
+              console.log('[Schedule] Full objProps for runtimeId', runtimeId, ':', objProps);
 
-                  for (const prop of pset.properties) {
+              // Get product name from top-level product object
+              const productObj = (objProps as any)?.product;
+              if (productObj?.name) {
+                productName = String(productObj.name);
+                console.log('[Schedule] Found product.name:', productName);
+              }
+
+              // Check if objProps.properties exists and is iterable
+              const propertiesList = objProps?.properties;
+              console.log('[Schedule] propertiesList type:', typeof propertiesList, Array.isArray(propertiesList), propertiesList);
+
+              if (propertiesList && Array.isArray(propertiesList)) {
+                for (const pset of propertiesList) {
+                  const setName = ((pset as any).name || (pset as any).set || '').toLowerCase();
+                  console.log('[Schedule] Processing property set:', setName);
+
+                  // Handle property set that has a properties array
+                  const psetProps = (pset as any).properties;
+                  if (!psetProps || !Array.isArray(psetProps)) {
+                    console.log('[Schedule] No properties array in pset, skipping');
+                    continue;
+                  }
+
+                  for (const prop of psetProps) {
                     const rawName = ((prop as any).name || '');
                     const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                     const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                    console.log('[Schedule] Property:', rawName, '=', propValue);
 
                     if (propValue === undefined || propValue === null || propValue === '') continue;
 
                     // Assembly/Cast unit Mark OR ASSEMBLY_POS
                     if (assemblyMark.startsWith('Object_')) {
+                      // Check various patterns for assembly mark
                       if (propName.includes('cast') && propName.includes('mark')) {
                         assemblyMark = String(propValue);
-                      } else if (propName === 'assembly_pos') {
+                        console.log('[Schedule] Found assembly mark (cast+mark):', assemblyMark);
+                      } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
                         assemblyMark = String(propValue);
+                        console.log('[Schedule] Found assembly mark (assembly_pos/mark):', assemblyMark);
+                      } else if (rawName.toLowerCase().includes('mark') && setName.includes('tekla')) {
+                        // Also check raw name for "Mark" in Tekla property sets
+                        assemblyMark = String(propValue);
+                        console.log('[Schedule] Found assembly mark (tekla+mark):', assemblyMark);
                       }
                     }
 
-                    // Product Name
-                    if (propName === 'name' && setName.includes('product')) {
+                    // Product Name from property set (fallback)
+                    if (!productName && propName === 'name' && setName.includes('product')) {
                       productName = String(propValue);
                     }
 
                     // Assembly/Cast unit weight
-                    if (propName.includes('cast') && propName.includes('weight')) {
+                    if (propName.includes('weight') && (propName.includes('cast') || setName.includes('tekla'))) {
                       castUnitWeight = String(propValue);
                     }
 
-                    // Assembly/Cast unit position code OR ASSEMBLY_POSITION_CODE
+                    // Assembly/Cast unit position code
                     if (propName.includes('position') && propName.includes('code')) {
                       if (!positionCode) positionCode = String(propValue);
                     }
                   }
                 }
               }
+
+              console.log('[Schedule] Final extracted values:', { assemblyMark, productName, castUnitWeight, positionCode });
 
               objects.push({
                 modelId,
@@ -477,6 +509,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       loadSchedule();
     } catch (e) {
       console.error('Error deleting item:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Delete multiple selected items
+  const deleteSelectedItems = async () => {
+    if (selectedItemIds.size === 0) return;
+
+    const confirmed = window.confirm(`Kustuta ${selectedItemIds.size} detaili graafikust?`);
+    if (!confirmed) return;
+
+    try {
+      for (const itemId of selectedItemIds) {
+        await supabase
+          .from('installation_schedule')
+          .delete()
+          .eq('id', itemId);
+      }
+      setSelectedItemIds(new Set());
+      setMessage(`${selectedItemIds.size} detaili kustutatud`);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error deleting items:', e);
       setMessage('Viga kustutamisel');
     }
   };
@@ -1421,6 +1476,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         <div className="multi-select-bar">
           <span>{selectedItemIds.size} detaili valitud</span>
           <button onClick={clearItemSelection}>Tühista</button>
+          <button className="delete-selected-btn" onClick={deleteSelectedItems}>
+            <FiTrash2 size={12} />
+            Kustuta
+          </button>
           <span className="hint">Lohista või vali 📅 kuupäeva muutmiseks</span>
         </div>
       )}
