@@ -622,7 +622,7 @@ export default function InstallationsScreen({
     }
   };
 
-  // Apply coloring: installed objects green (don't touch other objects)
+  // Apply coloring: all objects white, installed objects green
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
@@ -635,6 +635,9 @@ export default function InstallationsScreen({
         }
         return;
       }
+
+      // First, set ALL objects to white/light gray (not installed)
+      await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
 
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
@@ -1149,12 +1152,39 @@ export default function InstallationsScreen({
           <div className="installations-form-fields">
             <div className="form-row">
               <label><FiCalendar size={14} /> Kuupäev</label>
-              <input
-                type="datetime-local"
-                value={installDate}
-                onChange={(e) => setInstallDate(e.target.value)}
-                className="full-width-input"
-              />
+              <div className="date-input-wrapper">
+                <input
+                  type="datetime-local"
+                  value={installDate}
+                  onChange={(e) => {
+                    // Prevent future dates
+                    const selected = new Date(e.target.value);
+                    const now = new Date();
+                    if (selected > now) {
+                      setMessage('Tuleviku kuupäevad ei ole lubatud');
+                      return;
+                    }
+                    setInstallDate(e.target.value);
+                  }}
+                  max={getLocalDateTimeString()}
+                  className="full-width-input date-input-styled"
+                />
+                <div className="date-weekday">
+                  {(() => {
+                    const date = new Date(installDate);
+                    const weekdays = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
+                    const weekday = weekdays[date.getDay()];
+                    const today = new Date();
+                    const isToday = date.toDateString() === today.toDateString();
+                    return (
+                      <>
+                        <span className="weekday-name">{weekday}</span>
+                        {isToday && <span className="today-badge">Täna</span>}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
             </div>
 
             <div className="form-row">

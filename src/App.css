@@ -6401,6 +6401,43 @@ button.stat-toggle.off:hover {
   box-shadow: 0 0 0 3px rgba(0, 86, 162, 0.1);
 }
 
+/* Date input styling */
+.date-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.date-input-styled {
+  font-family: 'Roboto Mono', 'SF Mono', 'Monaco', monospace;
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+.date-weekday {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.weekday-name {
+  color: var(--modus-text-secondary);
+  font-weight: 500;
+}
+
+.today-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--modus-success);
+  color: white;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* Team members input */
 .team-members-input {
   display: flex;
@@ -7278,6 +7315,8 @@ button.stat-toggle.off:hover {
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .list-controls {
