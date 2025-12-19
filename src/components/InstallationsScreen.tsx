@@ -1506,70 +1506,53 @@ export default function InstallationsScreen({
       {showInstallInfo && (
         <div className="properties-modal-overlay" onClick={() => setShowInstallInfo(null)}>
           <div className="properties-modal install-info-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header" style={{ background: '#4CAF50' }}>
+            <div className="properties-modal-header" style={{ background: 'var(--modus-success)' }}>
               <h3>{showInstallInfo.assembly_mark}</h3>
               <button className="close-modal-btn" onClick={() => setShowInstallInfo(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
-              <div className="install-info-grid">
-                <div className="install-info-item">
-                  <span className="install-info-icon">📅</span>
-                  <div className="install-info-data">
-                    <span className="install-info-label">Kuupäev</span>
-                    <span className="install-info-value">
-                      {new Date(showInstallInfo.installed_at).toLocaleDateString('et-EE', {
-                        weekday: 'short',
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric'
-                      })}
-                    </span>
-                  </div>
+            <div className="properties-modal-content" style={{ padding: '12px 16px' }}>
+              <div className="install-info-rows">
+                <div className="install-info-row">
+                  <span className="install-info-label">Paigaldatud</span>
+                  <span className="install-info-value">
+                    {new Date(showInstallInfo.installed_at).toLocaleDateString('et-EE', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short'
+                    })} {new Date(showInstallInfo.installed_at).toLocaleTimeString('et-EE', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
                 </div>
-                <div className="install-info-item">
-                  <span className="install-info-icon">🕐</span>
-                  <div className="install-info-data">
-                    <span className="install-info-label">Kellaaeg</span>
-                    <span className="install-info-value">
-                      {new Date(showInstallInfo.installed_at).toLocaleTimeString('et-EE', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
+                <div className="install-info-row">
+                  <span className="install-info-label">Meetod</span>
+                  <span className="install-info-value">{showInstallInfo.installation_method_name || 'Määramata'}</span>
                 </div>
-                <div className="install-info-item">
-                  <span className="install-info-icon">🔧</span>
-                  <div className="install-info-data">
-                    <span className="install-info-label">Meetod</span>
-                    <span className="install-info-value">{showInstallInfo.installation_method_name || 'Määramata'}</span>
-                  </div>
-                </div>
-                <div className="install-info-item">
-                  <span className="install-info-icon">👷</span>
-                  <div className="install-info-data">
-                    <span className="install-info-label">Meeskond</span>
-                    <span className="install-info-value">{showInstallInfo.team_members || showInstallInfo.installer_name || '-'}</span>
-                  </div>
-                </div>
-                <div className="install-info-item full-width">
-                  <span className="install-info-icon">👤</span>
-                  <div className="install-info-data">
-                    <span className="install-info-label">Kirje sisestas</span>
-                    <span className="install-info-value">{showInstallInfo.user_email}</span>
-                  </div>
+                <div className="install-info-row">
+                  <span className="install-info-label">Meeskond</span>
+                  <span className="install-info-value">{showInstallInfo.team_members || showInstallInfo.installer_name || '-'}</span>
                 </div>
                 {showInstallInfo.notes && (
-                  <div className="install-info-item full-width">
-                    <span className="install-info-icon">📝</span>
-                    <div className="install-info-data">
-                      <span className="install-info-label">Märkused</span>
-                      <span className="install-info-value">{showInstallInfo.notes}</span>
-                    </div>
+                  <div className="install-info-row">
+                    <span className="install-info-label">Märkused</span>
+                    <span className="install-info-value">{showInstallInfo.notes}</span>
                   </div>
                 )}
+                <div className="install-info-row muted">
+                  <span className="install-info-label">Kirje sisestas</span>
+                  <span className="install-info-value">
+                    {showInstallInfo.user_email.split('@')[0]} · {new Date(showInstallInfo.created_at).toLocaleDateString('et-EE', {
+                      day: 'numeric',
+                      month: 'short'
+                    })} {new Date(showInstallInfo.created_at).toLocaleTimeString('et-EE', {
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
