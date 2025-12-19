@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 import { FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiInfo, FiChevronLeft, FiEdit2, FiSave, FiTrash2 } from 'react-icons/fi';
 import { supabase, InspectionResult, InspectionCheckpoint } from '../supabase';
 
@@ -571,135 +572,173 @@ export default function InspectionList({
     setEditedResults({});
   };
 
-  // Render product group (for todo mode)
-  const renderProductGroup = (product: ProductGroup) => (
-    <div key={product.productKey} className="inspection-date-group">
-      <div className="date-group-header">
-        <button
-          className="date-group-toggle"
-          onClick={() => toggleProduct(product.productKey)}
-        >
-          {expandedProducts.has(product.productKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
-        </button>
-        <div
-          className="date-group-main"
-          onClick={() => handleProductClick(product)}
-        >
-          <span className="date-label">{product.productLabel}</span>
-          <span className="date-count">{product.items.length}</span>
-        </div>
-        <button
-          className="date-group-zoom-btn"
-          onClick={(e) => handleProductZoom(e, product)}
-          title="Märgista ja zoom kõik toote detailid"
-        >
-          <FiZoomIn size={16} />
-        </button>
-      </div>
+  // Virtualization constants
+  const ITEM_HEIGHT = 44; // Height of each inspection item in pixels
+  const MAX_VISIBLE_ITEMS = 10; // Maximum items visible before scrolling
 
-      {expandedProducts.has(product.productKey) && (
-        <div className="date-group-items">
-          {product.items.map(insp => (
-            <div
-              key={insp.id}
-              className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
-              onClick={() => handleInspectionClick(insp)}
-            >
-              <div className="inspection-item-main">
-                <span className="inspection-mark">
-                  {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
-                </span>
-              </div>
-              <button
-                className="inspection-info-btn"
-                onClick={(e) => handleShowDetail(e, insp)}
-                title="Näita detaile"
-              >
-                <FiInfo size={16} />
-              </button>
-              <button
-                className="inspection-zoom-btn"
-                onClick={(e) => handleZoom(e, insp)}
-                title="Zoom elemendile"
-              >
-                <FiZoomIn size={16} />
-              </button>
-            </div>
-          ))}
+  // Render product group (for todo mode)
+  const renderProductGroup = (product: ProductGroup) => {
+    const listHeight = Math.min(product.items.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
+
+    const ProductItemRow = ({ index, style }: ListChildComponentProps) => {
+      const insp = product.items[index];
+      return (
+        <div
+          style={style}
+          key={insp.id}
+          className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
+          onClick={() => handleInspectionClick(insp)}
+        >
+          <div className="inspection-item-main">
+            <span className="inspection-mark">
+              {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
+            </span>
+          </div>
+          <button
+            className="inspection-info-btn"
+            onClick={(e) => handleShowDetail(e, insp)}
+            title="Näita detaile"
+          >
+            <FiInfo size={16} />
+          </button>
+          <button
+            className="inspection-zoom-btn"
+            onClick={(e) => handleZoom(e, insp)}
+            title="Zoom elemendile"
+          >
+            <FiZoomIn size={16} />
+          </button>
         </div>
-      )}
-    </div>
-  );
+      );
+    };
+
+    return (
+      <div key={product.productKey} className="inspection-date-group">
+        <div className="date-group-header">
+          <button
+            className="date-group-toggle"
+            onClick={() => toggleProduct(product.productKey)}
+          >
+            {expandedProducts.has(product.productKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+          </button>
+          <div
+            className="date-group-main"
+            onClick={() => handleProductClick(product)}
+          >
+            <span className="date-label">{product.productLabel}</span>
+            <span className="date-count">{product.items.length}</span>
+          </div>
+          <button
+            className="date-group-zoom-btn"
+            onClick={(e) => handleProductZoom(e, product)}
+            title="Märgista ja zoom kõik toote detailid"
+          >
+            <FiZoomIn size={16} />
+          </button>
+        </div>
+
+        {expandedProducts.has(product.productKey) && (
+          <div className="date-group-items">
+            <List
+              height={listHeight}
+              itemCount={product.items.length}
+              itemSize={ITEM_HEIGHT}
+              width="100%"
+            >
+              {ProductItemRow}
+            </List>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Render day group (used both with and without month grouping)
-  const renderDayGroup = (day: DayGroup, indented: boolean = false) => (
-    <div key={day.dayKey} className="inspection-date-group">
-      <div className={`date-group-header ${indented ? 'date-group-header-indented' : ''}`}>
-        <button
-          className="date-group-toggle"
-          onClick={() => toggleDay(day.dayKey)}
-        >
-          {expandedDays.has(day.dayKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
-        </button>
-        <div
-          className="date-group-main"
-          onClick={() => handleDayClick(day)}
-        >
-          <span className="date-label">{day.dayLabel}</span>
-          <span className="date-count">{day.items.length}</span>
-        </div>
-        <button
-          className="date-group-zoom-btn"
-          onClick={(e) => handleDayZoom(e, day)}
-          title="Märgista ja zoom kõik päeva detailid"
-        >
-          <FiZoomIn size={16} />
-        </button>
-      </div>
+  const renderDayGroup = (day: DayGroup, indented: boolean = false) => {
+    const listHeight = Math.min(day.items.length, MAX_VISIBLE_ITEMS) * ITEM_HEIGHT;
 
-      {expandedDays.has(day.dayKey) && (
-        <div className={`date-group-items ${indented ? 'date-group-items-indented' : ''}`}>
-          {day.items.map(insp => (
-            <div
-              key={insp.id}
-              className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
-              onClick={() => handleInspectionClick(insp)}
-            >
-              <div className="inspection-item-main">
-                <span className="inspection-mark">
-                  {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
-                  {insp.product_name && <span className="inspection-product"> | {insp.product_name}</span>}
-                </span>
-                {mode === 'all' && (
-                  <span className="inspection-inspector">{insp.inspector_name}</span>
-                )}
-              </div>
-              <div className="inspection-item-time">
-                {new Date(insp.inspected_at).toLocaleTimeString('et-EE', {
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </div>
-              <button
-                className="inspection-info-btn"
-                onClick={(e) => handleShowDetail(e, insp)}
-                title="Näita detaile"
-              >
-                <FiInfo size={16} />
-              </button>
-              <button
-                className="inspection-zoom-btn"
-                onClick={(e) => handleZoom(e, insp)}
-                title="Zoom elemendile"
-              >
-                <FiZoomIn size={16} />
-              </button>
-            </div>
-          ))}
+    const DayItemRow = ({ index, style }: ListChildComponentProps) => {
+      const insp = day.items[index];
+      return (
+        <div
+          style={style}
+          key={insp.id}
+          className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
+          onClick={() => handleInspectionClick(insp)}
+        >
+          <div className="inspection-item-main">
+            <span className="inspection-mark">
+              {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
+              {insp.product_name && <span className="inspection-product"> | {insp.product_name}</span>}
+            </span>
+            {mode === 'all' && (
+              <span className="inspection-inspector">{insp.inspector_name}</span>
+            )}
+          </div>
+          <div className="inspection-item-time">
+            {new Date(insp.inspected_at).toLocaleTimeString('et-EE', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </div>
+          <button
+            className="inspection-info-btn"
+            onClick={(e) => handleShowDetail(e, insp)}
+            title="Näita detaile"
+          >
+            <FiInfo size={16} />
+          </button>
+          <button
+            className="inspection-zoom-btn"
+            onClick={(e) => handleZoom(e, insp)}
+            title="Zoom elemendile"
+          >
+            <FiZoomIn size={16} />
+          </button>
         </div>
-      )}
-    </div>
-  );
+      );
+    };
+
+    return (
+      <div key={day.dayKey} className="inspection-date-group">
+        <div className={`date-group-header ${indented ? 'date-group-header-indented' : ''}`}>
+          <button
+            className="date-group-toggle"
+            onClick={() => toggleDay(day.dayKey)}
+          >
+            {expandedDays.has(day.dayKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+          </button>
+          <div
+            className="date-group-main"
+            onClick={() => handleDayClick(day)}
+          >
+            <span className="date-label">{day.dayLabel}</span>
+            <span className="date-count">{day.items.length}</span>
+          </div>
+          <button
+            className="date-group-zoom-btn"
+            onClick={(e) => handleDayZoom(e, day)}
+            title="Märgista ja zoom kõik päeva detailid"
+          >
+            <FiZoomIn size={16} />
+          </button>
+        </div>
+
+        {expandedDays.has(day.dayKey) && (
+          <div className={`date-group-items ${indented ? 'date-group-items-indented' : ''}`}>
+            <List
+              height={listHeight}
+              itemCount={day.items.length}
+              itemSize={ITEM_HEIGHT}
+              width="100%"
+            >
+              {DayItemRow}
+            </List>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="inspection-list-container">
