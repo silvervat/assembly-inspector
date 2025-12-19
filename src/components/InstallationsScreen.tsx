@@ -141,17 +141,49 @@ export default function InstallationsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{assemblyMark: string; installedAt: string; userEmail: string}[] | null>(null);
 
+  // Helper to get local datetime string for datetime-local input
+  const getLocalDateTimeString = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    const localDate = new Date(now.getTime() - offset * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
   // Form state
-  const [installDate, setInstallDate] = useState<string>(new Date().toISOString().slice(0, 16));
+  const [installDate, setInstallDate] = useState<string>(getLocalDateTimeString());
   const [notes, setNotes] = useState<string>('');
 
-  // Installation method (simple select)
-  const [installMethod, setInstallMethod] = useState<string>('Kraana');
-  const [customMethodDesc, setCustomMethodDesc] = useState<string>('');
+  // Installation methods (multi-select with checkboxes)
+  const INSTALL_METHODS = ['Kraana', 'Upitaja', 'Käsitsi', 'Muu'] as const;
+  const [selectedMethods, setSelectedMethods] = useState<Set<string>>(() => {
+    // Load from localStorage
+    const saved = localStorage.getItem(`install_methods_${projectId}`);
+    if (saved) {
+      try {
+        return new Set(JSON.parse(saved));
+      } catch { /* ignore */ }
+    }
+    return new Set(['Kraana']);
+  });
+  const [customMethodDesc, setCustomMethodDesc] = useState<string>(() => {
+    return localStorage.getItem(`install_custom_desc_${projectId}`) || '';
+  });
 
   // Team members
-  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [teamMembers, setTeamMembers] = useState<string[]>(() => {
+    // Load from localStorage
+    const saved = localStorage.getItem(`team_members_${projectId}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch { /* ignore */ }
+    }
+    return [];
+  });
   const [teamMemberInput, setTeamMemberInput] = useState<string>('');
+  const [knownTeamMembers, setKnownTeamMembers] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const teamInputRef = useRef<HTMLInputElement>(null);
 
   // List view state
   const [showList, setShowList] = useState(false);
@@ -237,6 +269,103 @@ export default function InstallationsScreen({
       return () => clearTimeout(timer);
     }
   }, [message]);
+
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(`install_methods_${projectId}`, JSON.stringify(Array.from(selectedMethods)));
+  }, [selectedMethods, projectId]);
+
+  useEffect(() => {
+    localStorage.setItem(`install_custom_desc_${projectId}`, customMethodDesc);
+  }, [customMethodDesc, projectId]);
+
+  useEffect(() => {
+    localStorage.setItem(`team_members_${projectId}`, JSON.stringify(teamMembers));
+  }, [teamMembers, projectId]);
+
+  // Load known team members from database
+  const loadKnownTeamMembers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('installations')
+        .select('team_members')
+        .eq('project_id', projectId)
+        .not('team_members', 'is', null);
+
+      if (error) throw error;
+
+      // Extract unique names from all team_members fields
+      const names = new Set<string>();
+      for (const item of data || []) {
+        if (item.team_members) {
+          item.team_members.split(',').forEach((name: string) => {
+            const trimmed = name.trim();
+            if (trimmed) names.add(trimmed);
+          });
+        }
+      }
+      setKnownTeamMembers(Array.from(names).sort());
+    } catch (e) {
+      console.error('Error loading known team members:', e);
+    }
+  };
+
+  // Load known team members on mount
+  useEffect(() => {
+    loadKnownTeamMembers();
+  }, [projectId]);
+
+  // Toggle installation method
+  const toggleMethod = (method: string) => {
+    const newMethods = new Set(selectedMethods);
+
+    if (method === 'Muu') {
+      // If selecting "Muu", clear all others
+      if (!newMethods.has('Muu')) {
+        newMethods.clear();
+        newMethods.add('Muu');
+      } else {
+        // If deselecting "Muu", just remove it
+        newMethods.delete('Muu');
+        if (newMethods.size === 0) newMethods.add('Kraana'); // Default
+      }
+    } else {
+      // If selecting non-Muu method, remove "Muu" if present
+      if (newMethods.has('Muu')) {
+        newMethods.delete('Muu');
+        setCustomMethodDesc('');
+      }
+
+      if (newMethods.has(method)) {
+        newMethods.delete(method);
+        // Ensure at least one method is selected
+        if (newMethods.size === 0) newMethods.add('Kraana');
+      } else {
+        newMethods.add(method);
+      }
+    }
+
+    setSelectedMethods(newMethods);
+  };
+
+  // Filter suggestions based on input
+  const filteredSuggestions = teamMemberInput.trim()
+    ? knownTeamMembers.filter(name =>
+        name.toLowerCase().includes(teamMemberInput.toLowerCase()) &&
+        !teamMembers.includes(name)
+      )
+    : [];
+
+  // Add team member
+  const addTeamMember = (name: string) => {
+    const trimmed = name.trim();
+    if (trimmed && !teamMembers.includes(trimmed)) {
+      setTeamMembers([...teamMembers, trimmed]);
+    }
+    setTeamMemberInput('');
+    setShowSuggestions(false);
+    teamInputRef.current?.focus();
+  };
 
   // Selection checking function
   const checkSelection = async () => {
@@ -488,17 +617,21 @@ export default function InstallationsScreen({
   };
 
   // Apply coloring: all objects white, installed objects green
-  const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>) => {
+  const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
-      // First, set ALL objects to white/light gray
-      await api.viewer.setObjectState(undefined, { color: { r: 220, g: 220, b: 220, a: 255 } });
-
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        console.log('No models loaded for coloring');
+        console.log('No models loaded for coloring, retry:', retryCount);
+        // Retry up to 5 times with increasing delay if models not yet loaded
+        if (retryCount < 5) {
+          setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
+        }
         return;
       }
+
+      // First, set ALL objects to white/light gray
+      await api.viewer.setObjectState(undefined, { color: { r: 220, g: 220, b: 220, a: 255 } });
 
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
@@ -552,6 +685,12 @@ export default function InstallationsScreen({
       return;
     }
 
+    // Validate team members
+    if (teamMembers.length === 0) {
+      setMessage('Lisa vähemalt üks meeskonna liige!');
+      return;
+    }
+
     // Clear previous warning
     setDuplicateWarning(null);
 
@@ -591,10 +730,13 @@ export default function InstallationsScreen({
       const installerName = tcUserName || user.name || user.email.split('@')[0];
       const userEmail = tcUserEmail || user.email;
 
-      // Determine method name
-      const methodName = installMethod === 'Muu' && customMethodDesc
-        ? `Muu: ${customMethodDesc}`
-        : installMethod;
+      // Determine method name from multi-select
+      let methodName: string;
+      if (selectedMethods.has('Muu') && customMethodDesc) {
+        methodName = `Muu: ${customMethodDesc}`;
+      } else {
+        methodName = Array.from(selectedMethods).join(', ');
+      }
 
       const installationsToSave = newObjects.map(obj => ({
         project_id: projectId,
@@ -633,8 +775,7 @@ export default function InstallationsScreen({
       } else {
         setMessage(`${newObjects.length} detail(i) edukalt paigaldatud!`);
         setNotes('');
-        setTeamMembers([]);
-        setCustomMethodDesc('');
+        // Don't reset teamMembers and method - keep them for next installation
 
         // Color installed objects
         await colorInstalledObjects(newObjects);
@@ -1032,19 +1173,21 @@ export default function InstallationsScreen({
 
             <div className="form-row">
               <label><FiTruck size={14} /> Paigaldus meetod</label>
-              <select
-                value={installMethod}
-                onChange={(e) => setInstallMethod(e.target.value)}
-                className="full-width-input"
-              >
-                <option value="Kraana">Kraana</option>
-                <option value="Upitaja">Upitaja</option>
-                <option value="Käsitsi">Käsitsi</option>
-                <option value="Muu">Muu</option>
-              </select>
+              <div className="method-checkboxes">
+                {INSTALL_METHODS.map(method => (
+                  <label key={method} className={`method-checkbox ${selectedMethods.has(method) ? 'checked' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={selectedMethods.has(method)}
+                      onChange={() => toggleMethod(method)}
+                    />
+                    <span>{method}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
-            {installMethod === 'Muu' && (
+            {selectedMethods.has('Muu') && (
               <div className="form-row">
                 <label><FiEdit2 size={14} /> Kirjelda meetodit</label>
                 <textarea
@@ -1058,7 +1201,7 @@ export default function InstallationsScreen({
             )}
 
             <div className="form-row">
-              <label><FiUsers size={14} /> Meeskond</label>
+              <label><FiUsers size={14} /> Meeskond <span className="required-indicator">*</span></label>
               <div className="team-members-input">
                 {teamMembers.length > 0 && (
                   <div className="team-chips">
@@ -1076,23 +1219,40 @@ export default function InstallationsScreen({
                     ))}
                   </div>
                 )}
-                <input
-                  type="text"
-                  value={teamMemberInput}
-                  onChange={(e) => setTeamMemberInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && teamMemberInput.trim()) {
-                      e.preventDefault();
-                      const name = teamMemberInput.trim();
-                      if (!teamMembers.includes(name)) {
-                        setTeamMembers([...teamMembers, name]);
+                <div className="team-input-wrapper">
+                  <input
+                    ref={teamInputRef}
+                    type="text"
+                    value={teamMemberInput}
+                    onChange={(e) => {
+                      setTeamMemberInput(e.target.value);
+                      setShowSuggestions(true);
+                    }}
+                    onFocus={() => setShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && teamMemberInput.trim()) {
+                        e.preventDefault();
+                        addTeamMember(teamMemberInput);
                       }
-                      setTeamMemberInput('');
-                    }
-                  }}
-                  placeholder="Lisa meeskonna liige (Enter)"
-                  className="full-width-input"
-                />
+                    }}
+                    placeholder="Lisa meeskonna liige (Enter)"
+                    className="full-width-input"
+                  />
+                  {showSuggestions && filteredSuggestions.length > 0 && (
+                    <div className="team-suggestions">
+                      {filteredSuggestions.slice(0, 5).map((name, idx) => (
+                        <div
+                          key={idx}
+                          className="team-suggestion-item"
+                          onMouseDown={() => addTeamMember(name)}
+                        >
+                          {name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1111,9 +1271,12 @@ export default function InstallationsScreen({
               <button
                 className="save-installation-btn"
                 onClick={saveInstallation}
-                disabled={saving || newObjectsCount === 0}
+                disabled={saving || newObjectsCount === 0 || teamMembers.length === 0}
               >
-                {saving ? 'Salvestan...' : <><FiPlus size={16} /> Salvesta paigaldus ({newObjectsCount})</>}
+                {saving ? 'Salvestan...' :
+                  teamMembers.length === 0 ? 'Lisa meeskonna liige' :
+                  <><FiPlus size={16} /> Salvesta paigaldus ({newObjectsCount})</>
+                }
               </button>
             </div>
           </div>

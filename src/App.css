@@ -6443,6 +6443,80 @@ button.stat-toggle.off:hover {
   background: rgba(255, 255, 255, 0.5);
 }
 
+/* Team input wrapper with suggestions */
+.team-input-wrapper {
+  position: relative;
+}
+
+.team-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-top: none;
+  border-radius: 0 0 var(--modus-radius-sm) var(--modus-radius-sm);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.team-suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.team-suggestion-item:hover {
+  background: var(--modus-primary-selected);
+}
+
+/* Required indicator */
+.required-indicator {
+  color: var(--modus-danger);
+  margin-left: 2px;
+}
+
+/* Method checkboxes */
+.method-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.method-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.method-checkbox:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.method-checkbox.checked {
+  background: var(--modus-primary-selected);
+  border-color: var(--modus-primary);
+  color: var(--modus-primary-dark);
+}
+
+.method-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--modus-primary);
+}
+
 .save-installation-btn {
   display: flex;
   align-items: center;
