@@ -1631,11 +1631,33 @@ export default function InstallationsScreen({
                 {/* Extract and display GUID (MS) from Reference Object property set */}
                 {(() => {
                   const props = (discoveredProperties as any).properties || [];
-                  const refObj = props.find((p: any) => p.set === 'Reference Object' || p.name === 'Reference Object');
+                  // Find Reference Object property set (case-insensitive)
+                  const refObj = props.find((p: any) => {
+                    const setName = (p.set || p.name || '').toLowerCase();
+                    return setName.includes('reference') && setName.includes('object');
+                  });
                   if (refObj?.properties) {
-                    const guidMs = refObj.properties.find((p: any) =>
-                      p.name === 'GUID (MS)' || p.name === 'GUID' || p.name?.toLowerCase() === 'guid_ms'
-                    );
+                    // Find GUID (MS) property (case-insensitive, multiple variants)
+                    const guidMs = refObj.properties.find((p: any) => {
+                      const propName = (p.name || '').toLowerCase();
+                      return propName === 'guid (ms)' || propName === 'guid' || propName === 'guid_ms' || propName === 'ms guid';
+                    });
+                    if (guidMs?.value || guidMs?.displayValue) {
+                      return (
+                        <div className="prop-info-row">
+                          <span className="prop-info-label">GUID (MS):</span>
+                          <code className="prop-info-guid guid-ms">{guidMs.displayValue || guidMs.value}</code>
+                        </div>
+                      );
+                    }
+                  }
+                  // Fallback: search ALL property sets for GUID (MS)
+                  for (const pset of props) {
+                    if (!pset.properties) continue;
+                    const guidMs = pset.properties.find((p: any) => {
+                      const propName = (p.name || '').toLowerCase();
+                      return propName === 'guid (ms)';
+                    });
                     if (guidMs?.value || guidMs?.displayValue) {
                       return (
                         <div className="prop-info-row">
