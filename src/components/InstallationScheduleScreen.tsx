@@ -1507,12 +1507,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               const isSelected = dateKey === selectedDate;
               const itemCount = itemsByDate[dateKey]?.length || 0;
               const dayColor = playbackSettings.colorEachDayDifferent && playbackDateColors[dateKey];
+              const isPlayingDate = isPlaying && currentPlaybackDate === dateKey;
 
               return (
                 <div
                   key={idx}
-                  className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''}`}
-                  onClick={() => setSelectedDate(dateKey)}
+                  className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
+                  onClick={() => {
+                    setSelectedDate(dateKey);
+                    if (itemCount > 0) selectDateInViewer(dateKey);
+                  }}
                   onDragOver={(e) => handleDragOver(e, dateKey)}
                   onDrop={(e) => handleDrop(e, dateKey)}
                 >

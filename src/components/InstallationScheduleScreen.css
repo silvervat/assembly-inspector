@@ -122,6 +122,20 @@
   outline-offset: -2px;
 }
 
+.calendar-day.playing {
+  animation: playingPulse 1s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+@keyframes playingPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
+  }
+}
+
 .calendar-day.has-items .day-number {
   font-weight: 600;
 }
