@@ -752,3 +752,27 @@
   background: #dbeafe;
   color: #2563eb;
 }
+
+/* Drag and drop reordering */
+.schedule-item-wrapper {
+  position: relative;
+}
+
+.drop-indicator {
+  height: 3px;
+  background: #2563eb;
+  border-radius: 2px;
+  margin: 2px 8px;
+  box-shadow: 0 0 4px rgba(37, 99, 235, 0.5);
+  animation: pulse-indicator 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-indicator {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.schedule-item.dragging {
+  opacity: 0.5;
+  background: #f3f4f6;
+}
