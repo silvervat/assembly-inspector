@@ -668,7 +668,7 @@ export default function InstallationsScreen({
     onBackToMenu();
   };
 
-  // Apply coloring: ALL objects white/gray, installed objects green
+  // Apply coloring: ALL objects light gray, installed objects green
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
@@ -682,25 +682,6 @@ export default function InstallationsScreen({
         return;
       }
 
-      // Step 1: Reset all colors first (required to allow new colors!)
-      await api.viewer.setObjectState(undefined, { color: "reset" });
-
-      // Step 2: Get all objects and color them light gray
-      const allModelObjects = await api.viewer.getObjects();
-      if (allModelObjects && allModelObjects.length > 0) {
-        for (const modelObj of allModelObjects) {
-          const runtimeIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
-          if (runtimeIds.length > 0) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId: modelObj.modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: 230, g: 230, b: 230, a: 255 } } // Light gray
-            );
-          }
-        }
-        console.log('Colored all objects light gray');
-      }
-
-      // Step 3: Color installed objects green (overrides gray)
       // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
       const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
         const guidType = classifyGuid(guid);
@@ -708,38 +689,61 @@ export default function InstallationsScreen({
       });
 
       console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length);
-      if (installedIfcGuids.length === 0) {
-        console.log('No IFC GUIDs to color green');
-        return;
-      }
 
-      // Clear previous colored objects tracking
-      coloredObjectsRef.current = new Map();
+      // Step 1: Reset all colors first (required to allow new colors!)
+      await api.viewer.setObjectState(undefined, { color: "reset" });
 
-      // For each model, convert GUIDs to runtime IDs and color them green
-      let totalColored = 0;
-      for (const model of models) {
-        try {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, installedIfcGuids);
+      // Step 2: Get all objects from all models
+      const allModelObjects = await api.viewer.getObjects();
 
-          if (runtimeIds && runtimeIds.length > 0) {
-            // Filter out invalid runtime IDs (0 or undefined)
-            const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
+      // Build map of model -> all runtime IDs
+      const allObjectsMap = new Map<string, number[]>();
+      // Build map of model -> installed runtime IDs
+      const installedObjectsMap = new Map<string, number[]>();
 
-            if (validRuntimeIds.length > 0) {
-              totalColored += validRuntimeIds.length;
-              // Track colored objects for later reset
-              coloredObjectsRef.current.set(model.id, validRuntimeIds);
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validRuntimeIds }] },
-                { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
-              );
+      for (const modelObj of allModelObjects || []) {
+        const modelId = modelObj.modelId;
+        const allIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
+        if (allIds.length > 0) {
+          allObjectsMap.set(modelId, allIds);
+        }
+
+        // Convert installed GUIDs to runtime IDs for this model
+        if (installedIfcGuids.length > 0) {
+          try {
+            const installedIds = await api.viewer.convertToObjectRuntimeIds(modelId, installedIfcGuids);
+            const validInstalledIds = (installedIds || []).filter((id: number) => id && id > 0);
+            if (validInstalledIds.length > 0) {
+              installedObjectsMap.set(modelId, validInstalledIds);
             }
+          } catch (e) {
+            console.warn(`Could not convert GUIDs for model ${modelId}:`, e);
           }
-        } catch (e) {
-          console.warn(`Could not color installed objects for model ${model.id}:`, e);
         }
       }
+
+      // Step 3: Color ALL objects light gray
+      for (const [modelId, allIds] of allObjectsMap.entries()) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: allIds }] },
+          { color: { r: 230, g: 230, b: 230, a: 255 } } // Light gray
+        );
+      }
+      console.log('Colored all objects light gray');
+
+      // Step 4: Color installed objects green (overrides gray)
+      coloredObjectsRef.current = new Map();
+      let totalColored = 0;
+
+      for (const [modelId, installedIds] of installedObjectsMap.entries()) {
+        totalColored += installedIds.length;
+        coloredObjectsRef.current.set(modelId, installedIds);
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: installedIds }] },
+          { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
+        );
+      }
+
       console.log('Colored', totalColored, 'installed objects green');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
@@ -1627,11 +1631,33 @@ export default function InstallationsScreen({
                 {/* Extract and display GUID (MS) from Reference Object property set */}
                 {(() => {
                   const props = (discoveredProperties as any).properties || [];
-                  const refObj = props.find((p: any) => p.set === 'Reference Object' || p.name === 'Reference Object');
+                  // Find Reference Object property set (case-insensitive)
+                  const refObj = props.find((p: any) => {
+                    const setName = (p.set || p.name || '').toLowerCase();
+                    return setName.includes('reference') && setName.includes('object');
+                  });
                   if (refObj?.properties) {
-                    const guidMs = refObj.properties.find((p: any) =>
-                      p.name === 'GUID (MS)' || p.name === 'GUID' || p.name?.toLowerCase() === 'guid_ms'
-                    );
+                    // Find GUID (MS) property (case-insensitive, multiple variants)
+                    const guidMs = refObj.properties.find((p: any) => {
+                      const propName = (p.name || '').toLowerCase();
+                      return propName === 'guid (ms)' || propName === 'guid' || propName === 'guid_ms' || propName === 'ms guid';
+                    });
+                    if (guidMs?.value || guidMs?.displayValue) {
+                      return (
+                        <div className="prop-info-row">
+                          <span className="prop-info-label">GUID (MS):</span>
+                          <code className="prop-info-guid guid-ms">{guidMs.displayValue || guidMs.value}</code>
+                        </div>
+                      );
+                    }
+                  }
+                  // Fallback: search ALL property sets for GUID (MS)
+                  for (const pset of props) {
+                    if (!pset.properties) continue;
+                    const guidMs = pset.properties.find((p: any) => {
+                      const propName = (p.name || '').toLowerCase();
+                      return propName === 'guid (ms)';
+                    });
                     if (guidMs?.value || guidMs?.displayValue) {
                       return (
                         <div className="prop-info-row">
