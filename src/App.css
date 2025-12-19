@@ -6276,7 +6276,180 @@ button.stat-toggle.off:hover {
   color: var(--modus-primary);
 }
 
-/* Compact Form View */
+/* Form View - New Layout */
+.installations-form-view {
+  flex: 1;
+  padding: var(--modus-spacing-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--modus-spacing-md);
+}
+
+.installations-menu {
+  display: flex;
+  flex-direction: column;
+  gap: var(--modus-spacing-xs);
+}
+
+.installations-menu-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-md);
+  font-size: 14px;
+  color: var(--modus-text-primary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.installations-menu-btn:hover {
+  background: var(--modus-bg-light);
+  border-color: var(--modus-primary);
+}
+
+.installations-menu-btn .menu-count {
+  margin-left: auto;
+  background: var(--modus-primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.installations-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--modus-spacing-sm);
+  background: white;
+  padding: var(--modus-spacing-md);
+  border-radius: var(--modus-radius-md);
+  border: 1px solid var(--modus-border);
+}
+
+.installations-form-fields .form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.installations-form-fields .form-row label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--modus-text-secondary);
+}
+
+.full-width-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-size: 14px;
+  background: white;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.full-width-input:focus {
+  outline: none;
+  border-color: var(--modus-primary);
+  box-shadow: 0 0 0 3px rgba(0, 86, 162, 0.1);
+}
+
+.full-width-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 60px;
+  background: white;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.full-width-textarea:focus {
+  outline: none;
+  border-color: var(--modus-primary);
+  box-shadow: 0 0 0 3px rgba(0, 86, 162, 0.1);
+}
+
+.save-installation-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--modus-spacing-sm);
+  padding: 12px 20px;
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.save-installation-btn:hover:not(:disabled) {
+  background: var(--modus-primary-dark);
+}
+
+.save-installation-btn:disabled {
+  background: var(--modus-border);
+  cursor: not-allowed;
+}
+
+/* Assembly Selection Warning */
+.assembly-selection-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--modus-spacing-md);
+  padding: var(--modus-spacing-sm) var(--modus-spacing-md);
+  background: #fff3e0;
+  border: 1px solid #ffcc80;
+  border-radius: var(--modus-radius-md);
+}
+
+.assembly-selection-warning .warning-content {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-sm);
+}
+
+.assembly-selection-warning .warning-icon {
+  font-size: 18px;
+}
+
+.assembly-selection-warning .warning-text {
+  font-size: 13px;
+  color: #e65100;
+}
+
+.enable-assembly-btn {
+  padding: 6px 12px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: var(--modus-radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.enable-assembly-btn:hover {
+  background: #f57c00;
+}
+
+/* Compact Form View (legacy) */
 .installations-form-compact {
   flex: 1;
   overflow-y: auto;
@@ -7071,6 +7244,25 @@ button.stat-toggle.off:hover {
   color: white;
   padding: 2px 8px;
   border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.installation-date-group .date-count.clickable:hover {
+  background: var(--modus-primary-dark);
+  transform: scale(1.05);
+}
+
+.month-count.clickable {
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.month-count.clickable:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
 }
 
 .installation-date-group .date-group-items {

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallationMethod } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiUser, FiEdit2, FiEye, FiList } from 'react-icons/fi';
 import { FixedSizeList as List, ListChildComponentProps } from 'react-window';
 
 // GUID helper functions
@@ -159,6 +159,9 @@ export default function InstallationsScreen({
   const [showProperties, setShowProperties] = useState(false);
   const [discoveredProperties, setDiscoveredProperties] = useState<any>(null);
 
+  // Assembly selection state
+  const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
+
   // Refs for debouncing
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -166,14 +169,51 @@ export default function InstallationsScreen({
 
   const isAdminOrModerator = user.role === 'admin' || user.role === 'moderator';
 
+  // Check assembly selection status
+  const checkAssemblySelection = async () => {
+    try {
+      const settings = await api.viewer.getSettings();
+      setAssemblySelectionEnabled(!!settings.assemblySelection);
+      return !!settings.assemblySelection;
+    } catch (e) {
+      console.warn('Could not get settings:', e);
+      return true; // Assume enabled if can't check
+    }
+  };
+
+  // Enable assembly selection
+  const enableAssemblySelection = async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+      setAssemblySelectionEnabled(true);
+      setMessage('Assembly Selection sisse lülitatud');
+    } catch (e) {
+      console.error('Failed to enable assembly selection:', e);
+      setMessage('Viga assembly selection sisse lülitamisel');
+    }
+  };
+
   // Load installation methods and existing installations
   useEffect(() => {
     loadInstallationMethods();
     loadInstallations();
     loadInstalledGuids();
 
-    // Cleanup: reset object colors when leaving the screen
+    // Enable assembly selection on mount
+    const initAssemblySelection = async () => {
+      const isEnabled = await checkAssemblySelection();
+      if (!isEnabled) {
+        await enableAssemblySelection();
+      }
+    };
+    initAssemblySelection();
+
+    // Poll assembly selection status
+    const pollInterval = setInterval(checkAssemblySelection, 2000);
+
+    // Cleanup: reset object colors and stop polling when leaving the screen
     return () => {
+      clearInterval(pollInterval);
       (api.viewer as any).resetObjectState?.().catch(() => {});
     };
   }, [projectId]);
@@ -485,6 +525,12 @@ export default function InstallationsScreen({
   };
 
   const saveInstallation = async () => {
+    // Check assembly selection first
+    if (!assemblySelectionEnabled) {
+      setMessage('Assembly Selection peab olema sisse lülitatud!');
+      return;
+    }
+
     if (selectedObjects.length === 0) {
       setMessage('Vali esmalt detail(id) mudelilt');
       return;
@@ -604,6 +650,59 @@ export default function InstallationsScreen({
       }
     } catch (e) {
       console.error('Error coloring objects:', e);
+    }
+  };
+
+  // Select multiple installations in the model
+  const selectInstallations = async (items: Installation[], e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+
+    try {
+      // Get unique GUIDs from installations
+      const guids = items
+        .map(item => item.guid_ifc || item.guid)
+        .filter((guid): guid is string => !!guid);
+
+      if (guids.length === 0) {
+        setMessage('Valitud detailidel pole GUID-e');
+        return;
+      }
+
+      // Get all loaded models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      // Build selection array
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+
+      for (const model of models) {
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guids);
+          if (runtimeIds && runtimeIds.length > 0) {
+            const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
+            if (validRuntimeIds.length > 0) {
+              modelObjectIds.push({
+                modelId: model.id,
+                objectRuntimeIds: validRuntimeIds
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not convert GUIDs for model ${model.id}:`, e);
+        }
+      }
+
+      if (modelObjectIds.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+        setMessage(`Valitud ${items.length} detaili`);
+      } else {
+        setMessage('Detaile ei leitud mudelist');
+      }
+    } catch (e) {
+      console.error('Error selecting installations:', e);
+      setMessage('Viga detailide valimisel');
     }
   };
 
@@ -783,7 +882,13 @@ export default function InstallationsScreen({
             {expandedDays.has(day.dayKey) ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
           </button>
           <span className="date-label">{day.dayLabel}</span>
-          <span className="date-count">{day.items.length} detaili</span>
+          <button
+            className="date-count clickable"
+            onClick={(e) => selectInstallations(day.items, e)}
+            title="Vali need detailid mudelis"
+          >
+            {day.items.length} detaili
+          </button>
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
@@ -810,26 +915,58 @@ export default function InstallationsScreen({
           <span>Menüü</span>
         </button>
         <span className="mode-title">Paigaldamised</span>
-        {/* Nimekiri button in header */}
-        <button
-          className={`header-list-btn ${showList ? 'active' : ''}`}
-          onClick={() => setShowList(!showList)}
-        >
-          {showList ? 'Vorm' : `Nimekiri (${installations.length})`}
-        </button>
       </div>
 
       {!showList ? (
-        /* Form View - compact */
-        <div className="installations-form-compact">
-          {/* Compact form */}
-          <div className="compact-form-row">
-            <div className="form-field-inline">
-              <label><FiTruck size={12} /> Paigaldusviis</label>
+        /* Form View */
+        <div className="installations-form-view">
+          {/* Menu with list button */}
+          <div className="installations-menu">
+            <button
+              className="installations-menu-btn"
+              onClick={() => setShowList(true)}
+            >
+              <FiList size={16} />
+              <span>Paigaldatud detailide nimekiri</span>
+              <span className="menu-count">{installations.length}</span>
+            </button>
+          </div>
+
+          {/* Assembly Selection Warning */}
+          {!assemblySelectionEnabled && (
+            <div className="assembly-selection-warning">
+              <div className="warning-content">
+                <span className="warning-icon">⚠️</span>
+                <span className="warning-text">Assembly Selection on välja lülitatud. Paigalduste salvestamiseks peab see olema sees.</span>
+              </div>
+              <button
+                className="enable-assembly-btn"
+                onClick={enableAssemblySelection}
+              >
+                Lülita sisse
+              </button>
+            </div>
+          )}
+
+          {/* Form fields - each on separate row */}
+          <div className="installations-form-fields">
+            <div className="form-row">
+              <label><FiCalendar size={14} /> Kuupäev</label>
+              <input
+                type="datetime-local"
+                value={installDate}
+                onChange={(e) => setInstallDate(e.target.value)}
+                className="full-width-input"
+              />
+            </div>
+
+            <div className="form-row">
+              <label><FiTruck size={14} /> Paigaldusviis</label>
               {installationMethods.length > 0 ? (
                 <select
                   value={selectedMethodId}
                   onChange={(e) => setSelectedMethodId(e.target.value)}
+                  className="full-width-input"
                 >
                   <option value="">-- Vali --</option>
                   {installationMethods.map(method => (
@@ -843,34 +980,26 @@ export default function InstallationsScreen({
               )}
             </div>
 
-            <div className="form-field-inline">
-              <label><FiCalendar size={12} /> Kuupäev</label>
-              <input
-                type="datetime-local"
-                value={installDate}
-                onChange={(e) => setInstallDate(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="compact-form-row">
-            <div className="form-field-inline flex-grow">
-              <label><FiEdit2 size={12} /> Märkused</label>
-              <input
-                type="text"
+            <div className="form-row">
+              <label><FiEdit2 size={14} /> Märkused</label>
+              <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Lisa märkused..."
+                className="full-width-textarea"
+                rows={2}
               />
             </div>
 
-            <button
-              className="save-installation-btn-compact"
-              onClick={saveInstallation}
-              disabled={saving || newObjectsCount === 0}
-            >
-              {saving ? '...' : <><FiPlus size={14} /> Salvesta ({newObjectsCount})</>}
-            </button>
+            <div className="form-row">
+              <button
+                className="save-installation-btn"
+                onClick={saveInstallation}
+                disabled={saving || newObjectsCount === 0}
+              >
+                {saving ? 'Salvestan...' : <><FiPlus size={16} /> Salvesta paigaldus ({newObjectsCount})</>}
+              </button>
+            </div>
           </div>
 
           {/* Selected objects list */}
@@ -974,7 +1103,13 @@ export default function InstallationsScreen({
                       {expandedMonths.has(month.monthKey) ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
                     </button>
                     <span className="month-label">{month.monthLabel}</span>
-                    <span className="month-count">{month.allItems.length} detaili</span>
+                    <button
+                      className="month-count clickable"
+                      onClick={(e) => selectInstallations(month.allItems, e)}
+                      title="Vali need detailid mudelis"
+                    >
+                      {month.allItems.length} detaili
+                    </button>
                   </div>
                   {expandedMonths.has(month.monthKey) && (
                     <div className="month-group-days">
