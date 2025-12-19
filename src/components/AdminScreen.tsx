@@ -1244,6 +1244,71 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
               </div>
             </div>
 
+            {/* MEASUREMENT section */}
+            <div className="function-section">
+              <h4>📏 Mõõtmine</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Automaatne mõõtmine"
+                  result={functionResults["Automaatne mõõtmine"]}
+                  onClick={() => testFunction("Automaatne mõõtmine", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    const results: string[] = [];
+
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+
+                      if (runtimeIds.length === 0) continue;
+
+                      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                      for (const bbox of boundingBoxes) {
+                        const box = bbox.boundingBox;
+                        // Calculate dimensions in meters (model units are typically mm)
+                        const width = Math.abs(box.max.x - box.min.x);
+                        const height = Math.abs(box.max.y - box.min.y);
+                        const depth = Math.abs(box.max.z - box.min.z);
+
+                        // Sort dimensions to show largest first
+                        const dims = [width, height, depth].sort((a, b) => b - a);
+
+                        results.push(`ID ${bbox.id}: ${dims[0].toFixed(0)} × ${dims[1].toFixed(0)} × ${dims[2].toFixed(0)} mm`);
+                      }
+                    }
+
+                    if (results.length === 0) return 'Bounding box andmeid ei leitud';
+                    return results.join('\n');
+                  })}
+                />
+                <FunctionButton
+                  name="Bounding Box (raw)"
+                  result={functionResults["Bounding Box (raw)"]}
+                  onClick={() => testFunction("Bounding Box (raw)", async () => {
+                    const sel = await api.viewer.getSelection();
+                    if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                    const allBoxes: any[] = [];
+
+                    for (const modelSel of sel) {
+                      const modelId = modelSel.modelId;
+                      const runtimeIds = modelSel.objectRuntimeIds || [];
+
+                      if (runtimeIds.length === 0) continue;
+
+                      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                      allBoxes.push(...boundingBoxes);
+                    }
+
+                    console.log('Bounding boxes:', allBoxes);
+                    return allBoxes;
+                  })}
+                />
+              </div>
+            </div>
+
             {/* SNAPSHOT section */}
             <div className="function-section">
               <h4>📸 Ekraanipilt</h4>
