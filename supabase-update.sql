@@ -199,6 +199,10 @@ CREATE TABLE IF NOT EXISTS installation_schedule (
 -- Add position_code column (v2.10.2)
 ALTER TABLE installation_schedule ADD COLUMN IF NOT EXISTS cast_unit_position_code TEXT;
 
+-- Add install_method column (v2.10.7)
+-- Values: 'crane', 'forklift', 'manual' or NULL
+ALTER TABLE installation_schedule ADD COLUMN IF NOT EXISTS install_method TEXT CHECK (install_method IS NULL OR install_method IN ('crane', 'forklift', 'manual'));
+
 -- Indexes for installation_schedule
 CREATE INDEX IF NOT EXISTS idx_schedule_project ON installation_schedule(project_id);
 CREATE INDEX IF NOT EXISTS idx_schedule_date ON installation_schedule(scheduled_date);

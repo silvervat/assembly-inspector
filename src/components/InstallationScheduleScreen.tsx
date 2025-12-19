@@ -132,6 +132,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
 
+  // Installation method for new items
+  const [selectedInstallMethod, setSelectedInstallMethod] = useState<'crane' | 'forklift' | 'manual' | null>(null);
+
   // Calendar collapsed state
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
@@ -437,6 +440,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           scheduled_date: date,
           sort_order: (itemsByDate[date]?.length || 0) + idx,
           status: 'planned',
+          install_method: selectedInstallMethod,
           created_by: tcUserEmail
         };
       });
@@ -1121,18 +1125,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     if (draggedItems.length === 0) return;
 
-    try {
-      const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
+    const draggedIds = new Set(draggedItems.map(i => i.id));
+    const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
+
+    // Optimistic update - update local state immediately
+    setScheduleItems(prev => {
+      let updated = [...prev];
 
       if (isSameDate && targetIndex !== undefined) {
         // Reordering within same date
-        const dateItems = [...(itemsByDate[targetDate] || [])];
-        const draggedIds = new Set(draggedItems.map(i => i.id));
-
-        // Remove dragged items from list
+        const dateItems = updated.filter(i => i.scheduled_date === targetDate);
+        const otherItems = updated.filter(i => i.scheduled_date !== targetDate);
         const remaining = dateItems.filter(i => !draggedIds.has(i.id));
 
-        // Adjust target index based on removed items
+        // Adjust target index
         let adjustedIndex = targetIndex;
         for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
           if (draggedIds.has(dateItems[i].id)) {
@@ -1142,36 +1148,68 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
 
         // Insert dragged items at new position
+        const newDateItems = [
+          ...remaining.slice(0, adjustedIndex),
+          ...draggedItems,
+          ...remaining.slice(adjustedIndex)
+        ].map((item, idx) => ({ ...item, sort_order: idx }));
+
+        updated = [...otherItems, ...newDateItems];
+      } else {
+        // Moving to different date - update scheduled_date
+        updated = updated.map(item =>
+          draggedIds.has(item.id)
+            ? { ...item, scheduled_date: targetDate }
+            : item
+        );
+      }
+
+      return updated;
+    });
+
+    setDraggedItems([]);
+    setSelectedItemIds(new Set());
+
+    // Background database update (no await to prevent blocking)
+    try {
+      if (isSameDate && targetIndex !== undefined) {
+        const dateItems = [...(itemsByDate[targetDate] || [])];
+        const remaining = dateItems.filter(i => !draggedIds.has(i.id));
+        let adjustedIndex = targetIndex;
+        for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
+          if (draggedIds.has(dateItems[i].id)) {
+            adjustedIndex--;
+          }
+        }
+        adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
         const newOrder = [
           ...remaining.slice(0, adjustedIndex),
           ...draggedItems,
           ...remaining.slice(adjustedIndex)
         ];
 
-        // Update sort_order for all items in this date
         for (let i = 0; i < newOrder.length; i++) {
-          await supabase
+          supabase
             .from('installation_schedule')
             .update({ sort_order: i, updated_by: tcUserEmail })
-            .eq('id', newOrder[i].id);
+            .eq('id', newOrder[i].id)
+            .then();
         }
       } else {
-        // Moving to different date
         for (const item of draggedItems) {
           if (item.scheduled_date !== targetDate) {
-            await supabase
+            supabase
               .from('installation_schedule')
               .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
-              .eq('id', item.id);
+              .eq('id', item.id)
+              .then();
           }
         }
       }
-
-      setDraggedItems([]);
-      setSelectedItemIds(new Set());
-      loadSchedule();
     } catch (e) {
-      console.error('Error moving items:', e);
+      console.error('Error saving to database:', e);
+      // Reload to sync with database on error
+      loadSchedule();
     }
   };
 
@@ -1533,6 +1571,30 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {selectedObjects.length > 0 && (
         <div className="selection-info">
           <span>Valitud mudelis: {selectedObjects.length}</span>
+          <div className="install-method-selector">
+            <span>Paigaldus:</span>
+            <button
+              className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
+              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
+              title="Kraana"
+            >
+              <img src="/icons/crane.png" alt="Kraana" />
+            </button>
+            <button
+              className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
+              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
+              title="Tõstuk"
+            >
+              <img src="/icons/forklift.png" alt="Tõstuk" />
+            </button>
+            <button
+              className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
+              onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
+              title="Käsitsi"
+            >
+              <img src="/icons/muscle.png" alt="Käsitsi" />
+            </button>
+          </div>
           {selectedDate && (
             <button
               className="btn-primary"
@@ -1765,9 +1827,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               <FiMove size={10} />
                             </div>
                             <div className="item-content">
-                              <span className="item-mark">{item.assembly_mark}</span>
+                              <div className="item-main-row">
+                                <span className="item-mark">{item.assembly_mark}</span>
+                                {(item as any).cast_unit_weight && (
+                                  <span className="item-weight">{(item as any).cast_unit_weight} kg</span>
+                                )}
+                              </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
+                            {(item as any).install_method && (
+                              <img
+                                src={`/icons/${(item as any).install_method}.png`}
+                                alt={(item as any).install_method}
+                                className="item-install-icon"
+                                title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                              />
+                            )}
                             <div className="item-actions">
                               <button
                                 className="item-action-btn"
