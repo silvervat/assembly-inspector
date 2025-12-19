@@ -264,16 +264,8 @@ export default function InstallationsScreen({
     return () => {
       clearInterval(pollInterval);
       // Reset colors when component unmounts (backup to handleBackToMenu)
-      const coloredObjects = coloredObjectsRef.current;
-      if (coloredObjects.size > 0) {
-        for (const [modelId, runtimeIds] of coloredObjects.entries()) {
-          api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            { color: undefined }
-          ).catch(() => {});
-        }
-        coloredObjectsRef.current = new Map();
-      }
+      (api.viewer as any).resetObjectState?.().catch(() => {});
+      coloredObjectsRef.current = new Map();
     };
   }, [projectId]);
 
@@ -642,12 +634,22 @@ export default function InstallationsScreen({
 
       console.log('Resetting colors for', coloredObjects.size, 'models');
 
-      // Reset colors by setting state to undefined (removes color override)
+      // Try using resetObjectState first (resets ALL object states)
+      try {
+        await (api.viewer as any).resetObjectState();
+        console.log('resetObjectState succeeded');
+        coloredObjectsRef.current = new Map();
+        return;
+      } catch (e) {
+        console.log('resetObjectState not available, trying setObjectState with null');
+      }
+
+      // Fallback: reset colors by setting state to null (clears color override)
       for (const [modelId, runtimeIds] of coloredObjects.entries()) {
         try {
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            { color: undefined }
+            null as any
           );
         } catch (e) {
           console.warn(`Could not reset colors for model ${modelId}:`, e);
