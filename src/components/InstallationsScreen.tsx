@@ -273,7 +273,8 @@ export default function InstallationsScreen({
     return () => {
       clearInterval(pollInterval);
       // Reset colors when component unmounts (backup to handleBackToMenu)
-      (api.viewer as any).resetObjectState?.().catch(() => {});
+      // Use official API: setObjectState(undefined, { color: "reset" })
+      api.viewer.setObjectState(undefined, { color: "reset" }).catch(() => {});
       coloredObjectsRef.current = new Map();
     };
   }, [projectId]);
@@ -635,41 +636,29 @@ export default function InstallationsScreen({
   // Reset colors on all colored objects (call before leaving the screen)
   const resetColors = async () => {
     try {
+      console.log('Resetting all object colors...');
+
+      // Use the official API: setObjectState with undefined selector resets ALL objects
+      // Using "reset" as color value restores original colors
+      await api.viewer.setObjectState(undefined, { color: "reset" });
+
+      console.log('Colors reset successfully via setObjectState(undefined, { color: "reset" })');
+      coloredObjectsRef.current = new Map();
+    } catch (e) {
+      console.error('Error resetting colors:', e);
+      // Fallback: try to reset specific colored objects
       const coloredObjects = coloredObjectsRef.current;
-      if (coloredObjects.size === 0) {
-        console.log('No colored objects to reset');
-        return;
-      }
-
-      console.log('Resetting colors for', coloredObjects.size, 'models');
-
-      // Try using resetObjectState first (resets ALL object states)
-      try {
-        await (api.viewer as any).resetObjectState();
-        console.log('resetObjectState succeeded');
-        coloredObjectsRef.current = new Map();
-        return;
-      } catch (e) {
-        console.log('resetObjectState not available, trying setObjectState with null');
-      }
-
-      // Fallback: reset colors by setting state to null (clears color override)
       for (const [modelId, runtimeIds] of coloredObjects.entries()) {
         try {
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            null as any
+            { color: "reset" }
           );
-        } catch (e) {
-          console.warn(`Could not reset colors for model ${modelId}:`, e);
+        } catch (err) {
+          console.warn(`Could not reset colors for model ${modelId}:`, err);
         }
       }
-
-      // Clear the ref
       coloredObjectsRef.current = new Map();
-      console.log('Colors reset successfully');
-    } catch (e) {
-      console.error('Error resetting colors:', e);
     }
   };
 
