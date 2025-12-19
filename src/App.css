@@ -6845,7 +6845,10 @@ button.stat-toggle.off:hover {
 .installation-date-group .date-count {
   margin-left: auto;
   font-size: var(--modus-font-size-xs);
-  color: var(--modus-text-secondary);
+  background: var(--modus-primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 10px;
 }
 
 .installation-date-group .date-group-items {
