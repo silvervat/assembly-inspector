@@ -1506,6 +1506,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               const isToday = dateKey === today;
               const isSelected = dateKey === selectedDate;
               const itemCount = itemsByDate[dateKey]?.length || 0;
+              const dayColor = playbackSettings.colorEachDayDifferent && playbackDateColors[dateKey];
 
               return (
                 <div
@@ -1516,7 +1517,17 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   onDrop={(e) => handleDrop(e, dateKey)}
                 >
                   <span className="day-number">{date.getDate()}</span>
-                  {itemCount > 0 && <span className="day-count">{itemCount}</span>}
+                  {itemCount > 0 && (
+                    <span
+                      className="day-count"
+                      style={dayColor ? {
+                        backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
+                        color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
+                      } : undefined}
+                    >
+                      {itemCount}
+                    </span>
+                  )}
                 </div>
               );
             })}
