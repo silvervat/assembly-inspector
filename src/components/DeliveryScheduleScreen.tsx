@@ -118,8 +118,16 @@ const RESOURCE_TYPES: ResourceConfig[] = [
 ];
 
 // ============================================
-// DURATION OPTIONS
+// TIME AND DURATION OPTIONS
 // ============================================
+
+// Kellaaja valikud: 6:30 - 19:00 (30 min sammuga)
+const TIME_OPTIONS = [
+  '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
+  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00',
+  '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+  '17:00', '17:30', '18:00', '18:30', '19:00'
+];
 
 const DURATION_OPTIONS = [
   { value: 30, label: '30 min' },
@@ -340,6 +348,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'nr', label: 'Nr', enabled: true },
     { id: 'date', label: 'Kuupäev', enabled: true },
     { id: 'day', label: 'Päev', enabled: true },
+    { id: 'time', label: 'Kellaaeg', enabled: true },
+    { id: 'duration', label: 'Kestus', enabled: true },
     { id: 'vehicle', label: 'Veok', enabled: true },
     { id: 'factory', label: 'Tehas', enabled: true },
     { id: 'mark', label: 'Assembly Mark', enabled: true },
@@ -350,6 +360,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'crane', label: 'Kraana', enabled: true },
     { id: 'telescopic', label: 'Teleskoop', enabled: true },
     { id: 'manual', label: 'Käsitsi', enabled: true },
+    { id: 'poomtostuk', label: 'Poomtõstuk', enabled: true },
     { id: 'taasnik', label: 'Taasnik', enabled: true },
     { id: 'keevitaja', label: 'Keevitaja', enabled: true },
     { id: 'guid_ms', label: 'GUID (MS)', enabled: true },
@@ -1115,10 +1126,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const row: any[] = [];
 
         enabledColumns.forEach(col => {
+          // Detaili-taseme meetodid, kui on; muidu veoki omad
+          const itemMethods = item.unload_methods || vehicle?.unload_methods;
+
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
             case 'date': row.push(item.scheduled_date); break;
             case 'day': row.push(WEEKDAY_NAMES[new Date(item.scheduled_date).getDay()]); break;
+            case 'time': row.push(vehicle?.unload_start_time || '08:00'); break;
+            case 'duration': {
+              const mins = vehicle?.unload_duration_minutes || 90;
+              const hours = mins / 60;
+              row.push(hours === Math.floor(hours) ? `${hours}h` : `${hours.toFixed(1)}h`);
+              break;
+            }
             case 'vehicle': row.push(vehicle?.vehicle_code || ''); break;
             case 'factory': row.push(factory?.factory_name || ''); break;
             case 'mark': row.push(item.assembly_mark); break;
@@ -1126,9 +1147,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             case 'product': row.push(item.product_name || ''); break;
             case 'weight': row.push(item.cast_unit_weight || ''); break;
             case 'status': row.push(ITEM_STATUS_CONFIG[item.status]?.label || item.status); break;
-            case 'crane': row.push(vehicle?.unload_methods?.crane || ''); break;
-            case 'telescopic': row.push(vehicle?.unload_methods?.telescopic || ''); break;
-            case 'manual': row.push(vehicle?.unload_methods?.manual || ''); break;
+            case 'crane': row.push(itemMethods?.crane || ''); break;
+            case 'telescopic': row.push(itemMethods?.telescopic || ''); break;
+            case 'manual': row.push(itemMethods?.manual || ''); break;
+            case 'poomtostuk': row.push(itemMethods?.poomtostuk || ''); break;
             case 'taasnik': row.push(vehicle?.resources?.taasnik || ''); break;
             case 'keevitaja': row.push(vehicle?.resources?.keevitaja || ''); break;
             case 'guid_ms': row.push(item.guid_ms || ''); break;
@@ -2347,12 +2369,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="form-row">
                 <div className="form-group">
                   <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
-                  <input
-                    type="time"
+                  <select
                     value={vehicleStartTime}
                     onChange={(e) => setVehicleStartTime(e.target.value)}
-                    className="time-input"
-                  />
+                  >
+                    {TIME_OPTIONS.map(time => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="form-group">
                   <label>Kestus</label>

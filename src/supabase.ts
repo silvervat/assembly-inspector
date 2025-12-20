@@ -606,6 +606,7 @@ export interface DeliveryItem {
   scheduled_date: string;            // Planeeritud kuupäev
   sort_order: number;
   status: DeliveryItemStatus;
+  unload_methods?: UnloadMethods;    // Detaili-taseme mahalaadimise meetodid
   notes?: string;
   created_at: string;
   created_by: string;
