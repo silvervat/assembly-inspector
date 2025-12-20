@@ -2531,8 +2531,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
-                            {/* Resources section */}
+                            {/* Unload methods + Resources section */}
                             <div className="vehicle-resources-section">
+                              {UNLOAD_METHODS.map(method => {
+                                const count = vehicle?.unload_methods?.[method.key];
+                                if (!count) return null;
+                                return (
+                                  <span
+                                    key={method.key}
+                                    className="method-badge"
+                                    style={{ backgroundColor: method.bgColor }}
+                                    title={method.label}
+                                  >
+                                    <img src={`/icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
+                                    <span className="method-count">{count}</span>
+                                  </span>
+                                );
+                              })}
                               {RESOURCE_TYPES.map(res => {
                                 const count = vehicle?.resources?.[res.key];
                                 if (!count) return null;
@@ -2543,23 +2558,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     style={{ backgroundColor: res.bgColor }}
                                     title={res.label}
                                   >
-                                    <img src={`/icons/${res.icon}`} alt="" />
+                                    <img src={`/icons/${res.icon}`} alt="" style={{ filter: res.filterCss }} />
                                     <span className="resource-count">{count}</span>
                                   </span>
                                 );
                               })}
                             </div>
-
-                          <button
-                            className="vehicle-select-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (vehicle) handleVehicleClick(vehicle);
-                            }}
-                            title="Vali veoki detailid mudelis"
-                          >
-                            <FiPackage />
-                          </button>
                           <button
                             className="vehicle-comment-btn"
                             onClick={(e) => {
@@ -2655,38 +2659,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
-                                    <div className="item-checkbox">
-                                      <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => {
-                                          setSelectedItemIds(prev => {
-                                            const next = new Set(prev);
-                                            if (next.has(item.id)) {
-                                              next.delete(item.id);
-                                            } else {
-                                              next.add(item.id);
-                                            }
-                                            return next;
-                                          });
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
-                                    </div>
+                                    <input
+                                      type="checkbox"
+                                      className="item-checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {
+                                        setSelectedItemIds(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(item.id)) {
+                                            next.delete(item.id);
+                                          } else {
+                                            next.add(item.id);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
 
-                                    {/* Item info section - two rows */}
-                                    <div className="item-info-section">
+                                    {/* Mark + Product */}
+                                    <div className="item-info">
                                       <span className="item-mark">{item.assembly_mark}</span>
-                                      <span className="item-product">{item.product_name || '-'}</span>
+                                      {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
 
-                                    {/* Item weight section */}
-                                    <div className="item-weight-section">
-                                      <span className="weight-primary">{weightInfo?.kg || '-'}</span>
-                                    </div>
+                                    {/* Weight */}
+                                    <span className="item-weight">{weightInfo?.kg || '-'}</span>
 
-                                    {/* Item resources section */}
-                                    <div className="item-resources-section">
+                                    {/* Dimensions placeholder - TODO: add later */}
+                                    <span className="item-dimensions"></span>
+
+                                    {/* Resources */}
+                                    <div className="item-resources">
                                       {item.unload_methods && UNLOAD_METHODS.map(method => {
                                         const count = (item.unload_methods as Record<string, number>)?.[method.key];
                                         if (!count) return null;
@@ -2704,30 +2708,31 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       })}
                                     </div>
 
-                                    {/* Comment button */}
-                                    <button
-                                      className="item-comment-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openCommentModal('item', item.id);
-                                      }}
-                                      title="Kommentaarid"
-                                    >
-                                      <FiMessageSquare size={13} />
-                                      {getItemCommentCount(item.id) > 0 && (
-                                        <span className="comment-badge">{getItemCommentCount(item.id)}</span>
-                                      )}
-                                    </button>
-
-                                    <button
-                                      className="item-menu-btn"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setItemMenuId(itemMenuId === item.id ? null : item.id);
-                                      }}
-                                    >
-                                      <FiMoreVertical />
-                                    </button>
+                                    {/* Comment + Menu */}
+                                    <div className="item-actions">
+                                      <button
+                                        className="item-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openCommentModal('item', item.id);
+                                        }}
+                                        title="Kommentaarid"
+                                      >
+                                        <FiMessageSquare size={12} />
+                                        {getItemCommentCount(item.id) > 0 && (
+                                          <span className="badge">{getItemCommentCount(item.id)}</span>
+                                        )}
+                                      </button>
+                                      <button
+                                        className="item-btn"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setItemMenuId(itemMenuId === item.id ? null : item.id);
+                                        }}
+                                      >
+                                        <FiMoreVertical size={12} />
+                                      </button>
+                                    </div>
 
                                   {/* Item menu */}
                                   {itemMenuId === item.id && (
@@ -2916,28 +2921,50 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
-                                    <div className="item-checkbox">
-                                      <input
-                                        type="checkbox"
-                                        checked={isSelected}
-                                        onChange={() => {
-                                          setSelectedItemIds(prev => {
-                                            const next = new Set(prev);
-                                            if (next.has(item.id)) {
-                                              next.delete(item.id);
-                                            } else {
-                                              next.add(item.id);
-                                            }
-                                            return next;
-                                          });
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                      />
+                                    <input
+                                      type="checkbox"
+                                      className="item-checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {
+                                        setSelectedItemIds(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(item.id)) {
+                                            next.delete(item.id);
+                                          } else {
+                                            next.add(item.id);
+                                          }
+                                          return next;
+                                        });
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <div className="item-info">
+                                      <span className="item-mark">{item.assembly_mark}</span>
+                                      {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
-                                    <span className="item-mark">{item.assembly_mark}</span>
-                                    <span className="item-product">{item.product_name || '-'}</span>
-                                    <span className="item-position">{item.cast_unit_position_code || '-'}</span>
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
+                                    <span className="item-dimensions"></span>
+                                    <div className="item-resources">
+                                      {item.unload_methods && UNLOAD_METHODS.map(method => {
+                                        const count = (item.unload_methods as Record<string, number>)?.[method.key];
+                                        if (!count) return null;
+                                        return (
+                                          <span key={method.key} className="resource-badge" style={{ backgroundColor: method.bgColor }} title={method.label}>
+                                            <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
+                                            {count > 1 && <span className="resource-count">{count}</span>}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                    <div className="item-actions">
+                                      <button className="item-btn" onClick={(e) => { e.stopPropagation(); openCommentModal('item', item.id); }} title="Kommentaarid">
+                                        <FiMessageSquare size={12} />
+                                        {getItemCommentCount(item.id) > 0 && <span className="badge">{getItemCommentCount(item.id)}</span>}
+                                      </button>
+                                      <button className="item-btn" onClick={(e) => { e.stopPropagation(); setItemMenuId(itemMenuId === item.id ? null : item.id); }}>
+                                        <FiMoreVertical size={12} />
+                                      </button>
+                                    </div>
                                   </div>
                                   {showDropAfter && <div className="drop-indicator" />}
                                 </div>
