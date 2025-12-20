@@ -684,6 +684,68 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Select multiple items in viewer by their IDs
+  const selectItemsByIdsInViewer = async (itemIds: Set<string>) => {
+    if (itemIds.size === 0) {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      return;
+    }
+
+    try {
+      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      const models = await api.viewer.getModels();
+
+      for (const itemId of itemIds) {
+        const item = scheduleItems.find(i => i.id === itemId);
+        if (!item) continue;
+
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!guidIfc) continue;
+
+        // Try with stored model_id first
+        if (item.model_id) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            const existing = modelObjects.find(m => m.modelId === item.model_id);
+            if (existing) {
+              existing.objectRuntimeIds.push(...runtimeIds);
+            } else {
+              modelObjects.push({ modelId: item.model_id, objectRuntimeIds: [...runtimeIds] });
+            }
+            continue;
+          }
+        }
+
+        // Fallback: try all loaded models
+        if (models && models.length > 0) {
+          for (const model of models) {
+            try {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                const existing = modelObjects.find(m => m.modelId === model.id);
+                if (existing) {
+                  existing.objectRuntimeIds.push(...runtimeIds);
+                } else {
+                  modelObjects.push({ modelId: model.id, objectRuntimeIds: [...runtimeIds] });
+                }
+                break;
+              }
+            } catch {
+              // Try next model
+            }
+          }
+        }
+      }
+
+      if (modelObjects.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+      }
+    } catch (e) {
+      console.error('Error selecting items in viewer:', e);
+    }
+  };
+
   // Screenshot all items for a date - select, zoom, capture, download
   const screenshotDate = async (date: string) => {
     const items = itemsByDate[date];
@@ -1244,6 +1306,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     });
   };
 
+  // Toggle all dates collapsed/expanded
+  const toggleAllCollapsed = () => {
+    const allDates = Object.keys(itemsByDate);
+    const allCollapsed = allDates.length > 0 && allDates.every(d => collapsedDates.has(d));
+
+    if (allCollapsed) {
+      // Expand all
+      setCollapsedDates(new Set());
+    } else {
+      // Collapse all
+      setCollapsedDates(new Set(allDates));
+    }
+  };
+
+  // Check if all dates are collapsed
+  const allDatesCollapsed = Object.keys(itemsByDate).length > 0 &&
+    Object.keys(itemsByDate).every(d => collapsedDates.has(d));
+
   // Multi-select item click handler
   const handleItemClick = (e: React.MouseEvent, item: ScheduleItem, allSortedItems: ScheduleItem[]) => {
     e.stopPropagation();
@@ -1313,11 +1393,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           // Not all selected -> add all
           dateItemIds.forEach(id => next.add(id));
         }
+        // Select in viewer
+        selectItemsByIdsInViewer(next);
         return next;
       });
     } else {
       // Normal click: select only this date's items
-      setSelectedItemIds(new Set(dateItemIds));
+      const newSelection = new Set(dateItemIds);
+      setSelectedItemIds(newSelection);
+      selectItemsByIdsInViewer(newSelection);
     }
   };
 
@@ -2270,6 +2354,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
       {/* Search bar */}
       <div className="schedule-search">
+        <button
+          className="collapse-all-btn"
+          onClick={toggleAllCollapsed}
+          title={allDatesCollapsed ? "Ava kõik" : "Sulge kõik"}
+        >
+          {allDatesCollapsed ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+        </button>
         <FiSearch size={14} className="search-icon" />
         <input
           type="text"

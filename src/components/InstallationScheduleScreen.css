@@ -867,6 +867,25 @@
   border-bottom: 1px solid var(--modus-border);
 }
 
+.collapse-all-btn {
+  background: none;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--modus-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.collapse-all-btn:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-primary);
+  border-color: var(--modus-primary);
+}
+
 .search-icon {
   color: var(--modus-text-secondary);
   flex-shrink: 0;
