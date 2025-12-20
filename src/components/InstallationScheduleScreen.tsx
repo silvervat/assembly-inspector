@@ -1354,12 +1354,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           .from('installation_schedule')
           .update({
             install_method: method,
-            install_method_count: 1,
+            install_method_count: method ? 1 : null,
             updated_by: tcUserEmail
           })
           .eq('id', itemId);
       }
-      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'tühi';
+      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'eemaldatud';
       setMessage(`${selectedItemIds.size} detaili paigaldusviis: ${methodLabel}`);
       loadSchedule();
     } catch (e) {
