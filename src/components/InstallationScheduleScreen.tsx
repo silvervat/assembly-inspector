@@ -1866,10 +1866,32 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     XLSX.utils.book_append_sheet(wb, ws1, 'Graafik');
 
+    // Calculate equipment statistics - count days that need each method
+    const daysWithCrane = new Set<string>();
+    const daysWithForklift = new Set<string>();
+    const daysWithManual = new Set<string>();
+
+    sortedItems.forEach(item => {
+      if (item.install_method === 'crane') {
+        daysWithCrane.add(item.scheduled_date);
+      } else if (item.install_method === 'forklift') {
+        daysWithForklift.add(item.scheduled_date);
+      } else if (item.install_method === 'manual') {
+        daysWithManual.add(item.scheduled_date);
+      }
+    });
+
+    // Add equipment statistics to summary
+    summaryData.push([]); // Empty row
+    summaryData.push(['Tehnika statistika', '', '', '', '']);
+    summaryData.push(['Kraana päevi', '', daysWithCrane.size, '', '']);
+    summaryData.push(['Tõstuki päevi', '', daysWithForklift.size, '', '']);
+    summaryData.push(['Käsitsi päevi', '', daysWithManual.size, '', '']);
+
     // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
     ws2['!cols'] = [
-      { wch: 12 },
+      { wch: 16 },
       { wch: 12 },
       { wch: 10 },
       { wch: 12 },
@@ -1884,7 +1906,17 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     }
 
-    // Add autofilter to summary header
+    // Style the statistics section header
+    const statsHeaderRow = sortedDates.length + 2; // After data + empty row
+    const statsHeaderRef = XLSX.utils.encode_cell({ r: statsHeaderRow, c: 0 });
+    if (ws2[statsHeaderRef]) {
+      ws2[statsHeaderRef].s = {
+        font: { bold: true },
+        border: thinBorder
+      };
+    }
+
+    // Add autofilter to summary header (only for main data)
     ws2['!autofilter'] = { ref: `A1:E${sortedDates.length + 1}` };
 
     // Apply styles to summary rows - only date column (column 0) gets color
