@@ -509,3 +509,195 @@ CREATE INDEX idx_inspections_inspector ON inspections(inspector_id);
 -- Storage bucket fotodele
 INSERT INTO storage.buckets (id, name, public) VALUES ('inspection-photos', 'inspection-photos', true);
 */
+
+// ============================================
+// TARNE GRAAFIK (Delivery Schedule v3.0.0)
+// ============================================
+
+// Tehased
+export interface DeliveryFactory {
+  id: string;
+  project_id: string;
+  factory_name: string;              // "Obornik", "Solid"
+  factory_code: string;              // "OPO", "SOL" (lühend veokite jaoks)
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  created_by: string;
+}
+
+// Veoki staatused
+export type DeliveryVehicleStatus =
+  | 'planned'      // Planeeritud
+  | 'loading'      // Laadimisel tehases
+  | 'transit'      // Teel
+  | 'arrived'      // Kohale jõudnud
+  | 'unloading'    // Mahalaadimisel
+  | 'completed'    // Lõpetatud
+  | 'cancelled';   // Tühistatud
+
+// Mahalaadimise meetodid
+export interface UnloadMethods {
+  crane?: number;      // Kraana
+  telescopic?: number; // Teleskooplaadur
+  manual?: number;     // Käsitsi
+}
+
+// Ressursid (töötajad)
+export interface DeliveryResources {
+  taasnik?: number;    // Taasnikud
+  keevitaja?: number;  // Keevitajad
+}
+
+// Veokid
+export interface DeliveryVehicle {
+  id: string;
+  project_id: string;
+  factory_id: string;
+  vehicle_number: number;            // 1, 2, 3...
+  vehicle_code: string;              // "OPO1", "OPO2" (genereeritakse automaatselt)
+  scheduled_date: string;            // Mis kuupäeval see veok tuleb
+  unload_methods?: UnloadMethods;    // Mahalaadimise meetodid
+  resources?: DeliveryResources;     // Ressursid (töötajad)
+  status: DeliveryVehicleStatus;
+  item_count: number;                // Arvutatakse triggeriga
+  total_weight: number;              // Arvutatakse triggeriga
+  notes?: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by?: string;
+  // Joined data
+  factory?: DeliveryFactory;
+}
+
+// Detaili staatused
+export type DeliveryItemStatus =
+  | 'planned'      // Planeeritud
+  | 'loaded'       // Peale laetud
+  | 'in_transit'   // Teel
+  | 'delivered'    // Kohale toimetatud
+  | 'cancelled';   // Tühistatud
+
+// Tarne detailid
+export interface DeliveryItem {
+  id: string;
+  project_id: string;
+  vehicle_id?: string;
+  // Trimble Connect identifikaatorid
+  model_id?: string;
+  guid: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_runtime_id?: number;
+  trimble_product_id?: string;       // Trimble Connect Product ID
+  // Detaili info
+  assembly_mark: string;
+  product_name?: string;
+  file_name?: string;
+  cast_unit_weight?: string;
+  cast_unit_position_code?: string;
+  // Tarne info
+  scheduled_date: string;            // Planeeritud kuupäev
+  sort_order: number;
+  status: DeliveryItemStatus;
+  notes?: string;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by?: string;
+  // Joined data (laaditakse eraldi päringuga)
+  vehicle?: DeliveryVehicle;
+}
+
+// Muudatuste tüübid
+export type DeliveryHistoryChangeType =
+  | 'created'           // Esmakordselt lisatud
+  | 'date_changed'      // Kuupäev muutus
+  | 'vehicle_changed'   // Veok muutus
+  | 'status_changed'    // Staatus muutus
+  | 'removed'           // Eemaldatud koormast
+  | 'daily_snapshot';   // Päevalõpu hetktõmmis
+
+// Ajalugu
+export interface DeliveryHistory {
+  id: string;
+  project_id: string;
+  item_id: string;
+  vehicle_id?: string;
+  change_type: DeliveryHistoryChangeType;
+  // Vana väärtus
+  old_date?: string;
+  old_vehicle_id?: string;
+  old_vehicle_code?: string;
+  old_status?: string;
+  // Uus väärtus
+  new_date?: string;
+  new_vehicle_id?: string;
+  new_vehicle_code?: string;
+  new_status?: string;
+  // Meta
+  change_reason?: string;
+  changed_by: string;
+  changed_at: string;
+  is_snapshot: boolean;
+  snapshot_date?: string;
+  // Joined data
+  item?: DeliveryItem;
+}
+
+// Kommentaarid
+export interface DeliveryComment {
+  id: string;
+  project_id: string;
+  delivery_item_id?: string;
+  vehicle_id?: string;
+  delivery_date?: string;
+  comment_text: string;
+  created_by: string;
+  created_by_name?: string;
+  created_at: string;
+}
+
+// Päevade kokkuvõte (vaade)
+export interface DeliveryDailySummary {
+  project_id: string;
+  scheduled_date: string;
+  vehicle_count: number;
+  item_count: number;
+  total_weight: number;
+}
+
+// Tehaste kokkuvõte (vaade)
+export interface DeliveryFactorySummary {
+  project_id: string;
+  factory_name: string;
+  factory_code: string;
+  vehicle_count: number;
+  item_count: number;
+  total_weight: number;
+}
+
+// Detailide grupeerimise abiliidid
+
+// Päeva järgi grupeeritud veokid
+export interface DeliveryDateGroup {
+  date: string;
+  vehicles: DeliveryVehicle[];
+  itemCount: number;
+  totalWeight: number;
+}
+
+// Veoki järgi grupeeritud detailid
+export interface DeliveryVehicleGroup {
+  vehicle: DeliveryVehicle;
+  items: DeliveryItem[];
+}
+
+// Tehase järgi grupeeritud veokid
+export interface DeliveryFactoryGroup {
+  factory: DeliveryFactory;
+  vehicles: DeliveryVehicle[];
+  itemCount: number;
+  totalWeight: number;
+}
