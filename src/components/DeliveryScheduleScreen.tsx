@@ -2195,7 +2195,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''}`}>
+                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''}`}>
                           {/* Vehicle header */}
                           <div
                             className="vehicle-header"
@@ -2361,7 +2361,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <div key={item.id} className="delivery-item-wrapper">
                                   {showDropBefore && <div className="drop-indicator" />}
                                   <div
-                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                                     draggable
                                     onDragStart={(e) => handleItemDragStart(e, item)}
                                     onDragEnd={handleDragEnd}

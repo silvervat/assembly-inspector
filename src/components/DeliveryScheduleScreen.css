@@ -503,7 +503,11 @@
   background: #fafafa;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
-  overflow: hidden;
+  position: relative;
+}
+
+.delivery-vehicle-group.menu-open {
+  z-index: 100;
 }
 
 .delivery-vehicle-group.factory-vehicle {
@@ -517,6 +521,7 @@
   padding: 10px 12px;
   cursor: pointer;
   transition: background 0.15s;
+  position: relative;
 }
 
 .vehicle-header:hover {
@@ -629,6 +634,7 @@
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
   transition: background 0.1s;
+  position: relative;
 }
 
 .delivery-item:last-child {
@@ -646,6 +652,10 @@
 .delivery-item.active {
   background: #dbeafe;
   border-left: 3px solid var(--modus-primary, #0063a3);
+}
+
+.delivery-item.menu-open {
+  z-index: 100;
 }
 
 .delivery-item .item-checkbox {
@@ -770,7 +780,7 @@
   position: absolute;
   right: 8px;
   top: 100%;
-  z-index: 100;
+  z-index: 1000;
   min-width: 160px;
   background: white;
   border-radius: 8px;
@@ -811,7 +821,8 @@
 }
 
 .vehicle-context-menu {
-  right: 40px;
+  right: 12px;
+  top: 44px;
 }
 
 .item-context-menu {
