@@ -208,8 +208,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [methodDefaults, setMethodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
   const [hoveredMethod, setHoveredMethod] = useState<InstallMethodType | null>(null);
 
-  // Context menu for install method (legacy - will be removed)
-  const [installMethodContextMenu, setInstallMethodContextMenu] = useState<{ x: number; y: number; method: InstallMethodType } | null>(null);
+  // Context menu for list item icons
   const [listItemContextMenu, setListItemContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null);
 
   // Calendar collapsed state
@@ -254,7 +253,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   ]);
 
   // Assembly selection state
-  const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
+  const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
 
   // Generate date colors when setting is enabled or items change
@@ -1902,19 +1901,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     return {};
   };
 
-  // Format all methods for display (e.g., "Kraana: 2, Monteerija: 4")
-  const formatMethodsForExcel = (item: ScheduleItem): string => {
-    const methods = getItemMethods(item);
-    const parts: string[] = [];
-    for (const [key, count] of Object.entries(methods)) {
-      const config = INSTALL_METHODS.find(m => m.key === key);
-      if (config && count) {
-        parts.push(`${config.label}: ${count}`);
-      }
-    }
-    return parts.join(', ');
-  };
-
   // Get method count for a specific method type
   const getMethodCountForItem = (item: ScheduleItem, methodKey: InstallMethodType): number => {
     const methods = getItemMethods(item);
@@ -2943,34 +2929,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         )}
       </div>
 
-      {/* Context menu for install method buttons */}
-      {installMethodContextMenu && (
-        <div
-          className="context-menu"
-          style={{ top: installMethodContextMenu.y, left: installMethodContextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            className="context-menu-item"
-            onClick={() => {
-              setSelectedInstallMethodCount(1);
-              setInstallMethodContextMenu(null);
-            }}
-          >
-            x1 (üks)
-          </div>
-          <div
-            className="context-menu-item"
-            onClick={() => {
-              setSelectedInstallMethodCount(2);
-              setInstallMethodContextMenu(null);
-            }}
-          >
-            x2 (kaks)
-          </div>
-        </div>
-      )}
-
       {/* Context menu for list item icons */}
       {listItemContextMenu && (
         <div
@@ -2994,11 +2952,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       )}
 
       {/* Click outside to close context menus */}
-      {(installMethodContextMenu || listItemContextMenu || itemMenuId || datePickerItemId) && (
+      {(listItemContextMenu || itemMenuId || datePickerItemId) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
-            setInstallMethodContextMenu(null);
             setListItemContextMenu(null);
             setItemMenuId(null);
             setDatePickerItemId(null);
