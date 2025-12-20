@@ -953,6 +953,10 @@
   opacity: 1;
 }
 
+.date-header:hover .date-percentage {
+  display: none;
+}
+
 .date-screenshot-btn:hover {
   background: #dbeafe;
   color: #2563eb;
