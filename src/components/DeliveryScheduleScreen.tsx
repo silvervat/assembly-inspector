@@ -3147,41 +3147,54 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   ))}
                 </select>
               </div>
-              <div className="form-group">
-                <label>Veok</label>
-                <div className="vehicle-select">
-                  <select
-                    value={addModalVehicleId}
-                    onChange={(e) => {
-                      setAddModalVehicleId(e.target.value);
-                      setAddModalNewVehicle(false);
-                    }}
-                    disabled={!addModalFactoryId}
-                  >
-                    <option value="">Vali olemasolev veok...</option>
-                    {vehicles
-                      .filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate)
-                      .map(v => (
-                        <option key={v.id} value={v.id}>
-                          {v.vehicle_code} ({v.item_count} tk)
-                        </option>
-                      ))}
-                  </select>
-                  <span className="or-divider">või</span>
-                  <label className="new-vehicle-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={addModalNewVehicle}
-                      onChange={(e) => {
-                        setAddModalNewVehicle(e.target.checked);
-                        if (e.target.checked) setAddModalVehicleId('');
-                      }}
-                      disabled={!addModalFactoryId}
-                    />
-                    Uus veok
-                  </label>
-                </div>
-              </div>
+              {(() => {
+                const dateVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate);
+                const hasVehicles = dateVehicles.length > 0;
+
+                return hasVehicles ? (
+                  <div className="form-group">
+                    <label>Veok</label>
+                    <div className="vehicle-select">
+                      <select
+                        value={addModalVehicleId}
+                        onChange={(e) => {
+                          setAddModalVehicleId(e.target.value);
+                          setAddModalNewVehicle(false);
+                        }}
+                        disabled={!addModalFactoryId}
+                      >
+                        <option value="">Vali olemasolev veok...</option>
+                        {dateVehicles.map(v => (
+                          <option key={v.id} value={v.id}>
+                            {v.vehicle_code} ({v.item_count} tk)
+                          </option>
+                        ))}
+                      </select>
+                      <span className="or-divider">või</span>
+                      <label className="new-vehicle-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={addModalNewVehicle}
+                          onChange={(e) => {
+                            setAddModalNewVehicle(e.target.checked);
+                            if (e.target.checked) setAddModalVehicleId('');
+                          }}
+                          disabled={!addModalFactoryId}
+                        />
+                        Uus veok
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label>Veok</label>
+                    <div className="auto-new-vehicle-notice">
+                      <FiTruck size={16} />
+                      <span>Sellel kuupäeval pole veokeid. Uus veok luuakse automaatselt.</span>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="form-group">
                 <label>Kommentaar (lisatakse igale detailile)</label>
                 <textarea
@@ -3213,11 +3226,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!addModalFactoryId || (!addModalVehicleId && !addModalNewVehicle) || saving}
+                disabled={!addModalFactoryId || saving}
                 onClick={async () => {
+                  const dateVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate);
+                  const needsNewVehicle = addModalNewVehicle || dateVehicles.length === 0;
                   let vehicleId = addModalVehicleId;
 
-                  if (addModalNewVehicle) {
+                  if (needsNewVehicle) {
                     const newVehicle = await createVehicle(addModalFactoryId, addModalDate);
                     if (!newVehicle) {
                       setMessage('Veoki loomine ebaõnnestus');
@@ -3233,6 +3248,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       setAddModalComment('');
                       return;
                     }
+                  }
+
+                  if (!vehicleId) {
+                    setMessage('Vali veok');
+                    return;
                   }
 
                   await addItemsToVehicle(vehicleId, addModalDate, addModalComment);

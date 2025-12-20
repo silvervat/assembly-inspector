@@ -1370,6 +1370,22 @@
   font-size: 13px;
 }
 
+.auto-new-vehicle-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  color: #1e40af;
+  font-size: 13px;
+}
+
+.auto-new-vehicle-notice svg {
+  flex-shrink: 0;
+}
+
 .selected-objects-preview {
   margin-top: 16px;
   padding: 12px;
