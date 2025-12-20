@@ -1216,22 +1216,52 @@
 .install-method-btn img {
   width: 18px;
   height: 18px;
-  opacity: 0.5;
-  filter: grayscale(100%);
+  opacity: 0.85;
 }
 
-.install-method-btn:hover {
-  border-color: var(--modus-primary);
-  background: #f0f7ff;
+/* Crane - blue */
+.install-method-btn.method-crane img {
+  filter: invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%);
 }
 
-.install-method-btn:hover img {
-  opacity: 0.8;
+.install-method-btn.method-crane:hover {
+  background: #dbeafe;
+  border-color: #3b82f6;
 }
 
-.install-method-btn.active {
-  border-color: var(--modus-primary);
-  background: var(--modus-primary);
+.install-method-btn.method-crane.active {
+  border-color: #2563eb;
+  background: #2563eb;
+}
+
+/* Forklift - red */
+.install-method-btn.method-forklift img {
+  filter: invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%);
+}
+
+.install-method-btn.method-forklift:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.install-method-btn.method-forklift.active {
+  border-color: #dc2626;
+  background: #dc2626;
+}
+
+/* Manual - green */
+.install-method-btn.method-manual img {
+  filter: invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%);
+}
+
+.install-method-btn.method-manual:hover {
+  background: #dcfce7;
+  border-color: #22c55e;
+}
+
+.install-method-btn.method-manual.active {
+  border-color: #16a34a;
+  background: #16a34a;
 }
 
 .install-method-btn.active img {

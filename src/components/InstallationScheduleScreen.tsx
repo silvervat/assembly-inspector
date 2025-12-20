@@ -2087,7 +2087,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <div className="install-method-selector">
                   <span>Paigaldus:</span>
                   <button
-                    className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
+                    className={`install-method-btn method-crane ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
                     onClick={() => {
                       if (selectedInstallMethod === 'crane') {
                         setSelectedInstallMethod(null);
@@ -2109,7 +2109,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     )}
                   </button>
                   <button
-                    className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
+                    className={`install-method-btn method-forklift ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
                     onClick={() => {
                       if (selectedInstallMethod === 'forklift') {
                         setSelectedInstallMethod(null);
@@ -2131,7 +2131,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     )}
                   </button>
                   <button
-                    className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
+                    className={`install-method-btn method-manual ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
                     onClick={() => {
                       if (selectedInstallMethod === 'manual') {
                         setSelectedInstallMethod(null);
