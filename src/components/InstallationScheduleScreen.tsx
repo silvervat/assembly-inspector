@@ -96,15 +96,12 @@ const getTextColor = (r: number, g: number, b: number): string => {
   return luminance > 0.5 ? '000000' : 'FFFFFF';
 };
 
-// Format weight - convert to tons if >= 1000 kg
+// Format weight - show in kg, CSS will hide if no space
 const formatWeight = (weight: string | number | null | undefined): string => {
   if (!weight) return '';
   const kg = typeof weight === 'string' ? parseFloat(weight) : weight;
   if (isNaN(kg)) return '';
-  if (kg >= 1000) {
-    return `${(kg / 1000).toFixed(1)}t`;
-  }
-  return `${Math.round(kg)}`;
+  return `${Math.round(kg)} kg`;
 };
 
 // ============================================
@@ -211,8 +208,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [methodDefaults, setMethodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
   const [hoveredMethod, setHoveredMethod] = useState<InstallMethodType | null>(null);
 
-  // Context menu for install method (legacy - will be removed)
-  const [installMethodContextMenu, setInstallMethodContextMenu] = useState<{ x: number; y: number; method: InstallMethodType } | null>(null);
+  // Context menu for list item icons
   const [listItemContextMenu, setListItemContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null);
 
   // Calendar collapsed state
@@ -255,6 +251,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     { id: 'guid_ifc', label: 'GUID (IFC)', enabled: false },
     { id: 'percentage', label: 'Kumulatiivne %', enabled: true }
   ]);
+
+  // Assembly selection state
+  const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
 
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
@@ -326,6 +326,32 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Ref for auto-scrolling to playing item
   const playingItemRef = useRef<HTMLDivElement | null>(null);
 
+  // Refs for date groups (for scrolling when calendar date is clicked)
+  const dateGroupRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Scroll to date in list and expand if collapsed
+  const scrollToDateInList = useCallback((dateStr: string) => {
+    // First expand the date if it's collapsed
+    if (collapsedDates.has(dateStr)) {
+      setCollapsedDates(prev => {
+        const next = new Set(prev);
+        next.delete(dateStr);
+        return next;
+      });
+    }
+
+    // Scroll to the date group after a short delay (to allow expansion)
+    setTimeout(() => {
+      const dateGroup = dateGroupRefs.current[dateStr];
+      if (dateGroup) {
+        dateGroup.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        });
+      }
+    }, 50);
+  }, [collapsedDates]);
+
   // Load schedule items
   const loadSchedule = useCallback(async () => {
     setLoading(true);
@@ -375,6 +401,50 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     };
     fetchProjectName();
   }, [api]);
+
+  // Check and enable assembly selection mode
+  const checkAssemblySelection = useCallback(async () => {
+    try {
+      const settings = await api.viewer.getSettings();
+      const enabled = !!settings.assemblySelection;
+      setAssemblySelectionEnabled(enabled);
+      if (!enabled) {
+        setShowAssemblyModal(true);
+      }
+    } catch (e) {
+      console.error('Failed to get viewer settings:', e);
+    }
+  }, [api]);
+
+  // Enable assembly selection mode
+  const enableAssemblySelection = useCallback(async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+      setAssemblySelectionEnabled(true);
+      setShowAssemblyModal(false);
+    } catch (e) {
+      console.error('Failed to enable assembly selection:', e);
+    }
+  }, [api]);
+
+  // Check assembly selection on mount and poll periodically
+  useEffect(() => {
+    // Enable assembly selection immediately on mount
+    const initAssemblySelection = async () => {
+      try {
+        await (api.viewer as any).setSettings?.({ assemblySelection: true });
+        setAssemblySelectionEnabled(true);
+      } catch (e) {
+        console.error('Failed to enable assembly selection on mount:', e);
+      }
+    };
+    initAssemblySelection();
+
+    // Poll every 3 seconds to check if user disabled it
+    const interval = setInterval(checkAssemblySelection, 3000);
+
+    return () => clearInterval(interval);
+  }, [api, checkAssemblySelection]);
 
   // Listen to selection changes from model
   useEffect(() => {
@@ -1831,19 +1901,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     return {};
   };
 
-  // Format all methods for display (e.g., "Kraana: 2, Monteerija: 4")
-  const formatMethodsForExcel = (item: ScheduleItem): string => {
-    const methods = getItemMethods(item);
-    const parts: string[] = [];
-    for (const [key, count] of Object.entries(methods)) {
-      const config = INSTALL_METHODS.find(m => m.key === key);
-      if (config && count) {
-        parts.push(`${config.label}: ${count}`);
-      }
-    }
-    return parts.join(', ');
-  };
-
   // Get method count for a specific method type
   const getMethodCountForItem = (item: ScheduleItem, methodKey: InstallMethodType): number => {
     const methods = getItemMethods(item);
@@ -2195,7 +2252,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateKey);
-                      if (itemCount > 0) selectDateInViewer(dateKey);
+                      if (itemCount > 0) {
+                        selectDateInViewer(dateKey);
+                        scrollToDateInList(dateKey);
+                      }
                     }}
                     onDragOver={(e) => handleDragOver(e, dateKey)}
                     onDrop={(e) => handleDrop(e, dateKey)}
@@ -2659,7 +2719,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               return (
                 <div
                   key={date}
-                  className={`date-group ${dragOverDate === date ? 'drag-over' : ''}`}
+                  ref={(el) => { dateGroupRefs.current[date] = el; }}
+                  className={`date-group ${dragOverDate === date ? 'drag-over' : ''} ${selectedDate === date ? 'selected' : ''}`}
                   onDragOver={(e) => handleDragOver(e, date)}
                   onDrop={(e) => handleDrop(e, date)}
                 >
@@ -2868,34 +2929,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         )}
       </div>
 
-      {/* Context menu for install method buttons */}
-      {installMethodContextMenu && (
-        <div
-          className="context-menu"
-          style={{ top: installMethodContextMenu.y, left: installMethodContextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div
-            className="context-menu-item"
-            onClick={() => {
-              setSelectedInstallMethodCount(1);
-              setInstallMethodContextMenu(null);
-            }}
-          >
-            x1 (üks)
-          </div>
-          <div
-            className="context-menu-item"
-            onClick={() => {
-              setSelectedInstallMethodCount(2);
-              setInstallMethodContextMenu(null);
-            }}
-          >
-            x2 (kaks)
-          </div>
-        </div>
-      )}
-
       {/* Context menu for list item icons */}
       {listItemContextMenu && (
         <div
@@ -2919,16 +2952,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       )}
 
       {/* Click outside to close context menus */}
-      {(installMethodContextMenu || listItemContextMenu || itemMenuId || datePickerItemId) && (
+      {(listItemContextMenu || itemMenuId || datePickerItemId) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
-            setInstallMethodContextMenu(null);
             setListItemContextMenu(null);
             setItemMenuId(null);
             setDatePickerItemId(null);
           }}
         />
+      )}
+
+      {/* Assembly Selection Required Modal */}
+      {showAssemblyModal && (
+        <div className="modal-overlay">
+          <div className="settings-modal compact assembly-modal">
+            <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
+              <p style={{ marginBottom: '16px', color: '#374151' }}>
+                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+              </p>
+              <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
+                Paigaldusgraafiku kasutamiseks peab Assembly Selection olema sisse lülitatud.
+              </p>
+              <button
+                className="assembly-enable-btn"
+                onClick={enableAssemblySelection}
+              >
+                Lülita Assembly Selection sisse
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
