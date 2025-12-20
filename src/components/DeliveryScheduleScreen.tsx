@@ -313,6 +313,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [collapsedVehicles, setCollapsedVehicles] = useState<Set<string>>(new Set());
   const [collapsedFactories, setCollapsedFactories] = useState<Set<string>>(new Set());
 
+  // Newly created vehicle highlight
+  const [newlyCreatedVehicleId, setNewlyCreatedVehicleId] = useState<string | null>(null);
+
   // Multi-select
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
@@ -448,6 +451,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Inline editing state for vehicle list
   const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
   const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | null>(null);
+
+  // Assembly selection mode
+  const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
 
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
@@ -793,6 +800,54 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [api]);
+
+  // ============================================
+  // ASSEMBLY SELECTION MODE
+  // ============================================
+
+  // Check if assembly selection is enabled
+  const checkAssemblySelection = useCallback(async () => {
+    try {
+      const settings = await api.viewer.getSettings();
+      const enabled = !!settings.assemblySelection;
+      setAssemblySelectionEnabled(enabled);
+      if (!enabled) {
+        setShowAssemblyModal(true);
+      }
+    } catch (e) {
+      console.error('Failed to get viewer settings:', e);
+    }
+  }, [api]);
+
+  // Enable assembly selection mode
+  const enableAssemblySelection = useCallback(async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+      setAssemblySelectionEnabled(true);
+      setShowAssemblyModal(false);
+    } catch (e) {
+      console.error('Failed to enable assembly selection:', e);
+    }
+  }, [api]);
+
+  // Enable assembly selection on mount and poll periodically
+  useEffect(() => {
+    // Enable assembly selection immediately on mount
+    const initAssemblySelection = async () => {
+      try {
+        await (api.viewer as any).setSettings?.({ assemblySelection: true });
+        setAssemblySelectionEnabled(true);
+      } catch (e) {
+        console.error('Failed to enable assembly selection on mount:', e);
+      }
+    };
+    initAssemblySelection();
+
+    // Poll every 3 seconds to check if user disabled it
+    const interval = setInterval(checkAssemblySelection, 3000);
+
+    return () => clearInterval(interval);
+  }, [api, checkAssemblySelection]);
 
   // ============================================
   // MODEL SELECTION HANDLING
@@ -2617,10 +2672,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''}`}>
+                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
                             className="vehicle-header"
+                            data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
                             onDragEnd={handleDragEnd}
@@ -3101,10 +3157,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
 
                     return (
-                      <div key={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''}`}>
+                      <div key={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                         {/* Vehicle header */}
                         <div
                           className="vehicle-header"
+                          data-vehicle-id={vehicleId}
                           draggable
                           onDragStart={(e) => handleVehicleDragStart(e, vehicle)}
                           onDragEnd={handleDragEnd}
@@ -3418,8 +3475,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           </div>
         )}
 
-        {/* Search below calendar */}
+        {/* Search below calendar with collapse button */}
         <div className="list-search-box">
+          <button
+            className="collapse-all-btn"
+            onClick={() => {
+              // Toggle all dates and vehicles
+              const allDates = Object.keys(itemsByDateAndVehicle);
+              const allVehicleIds = vehicles.map(v => v.id);
+              const allCollapsed = allDates.every(d => collapsedDates.has(d));
+
+              if (allCollapsed) {
+                // Expand all
+                setCollapsedDates(new Set());
+                setCollapsedVehicles(new Set());
+              } else {
+                // Collapse all
+                setCollapsedDates(new Set(allDates));
+                setCollapsedVehicles(new Set(allVehicleIds));
+              }
+            }}
+            title={collapsedDates.size > 0 ? 'Ava kõik' : 'Sulge kõik'}
+          >
+            {collapsedDates.size > 0 ? <FiChevronDown /> : <FiChevronUp />}
+          </button>
           <FiSearch />
           <input
             type="text"
@@ -3717,6 +3796,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     }
                     await loadVehicles();
                     vehicleId = newVehicle.id;
+
+                    // Expand the date group if collapsed
+                    setCollapsedDates(prev => {
+                      const next = new Set(prev);
+                      next.delete(addModalDate);
+                      return next;
+                    });
+
+                    // Highlight and scroll to new vehicle
+                    setNewlyCreatedVehicleId(newVehicle.id);
+                    setTimeout(() => {
+                      const vehicleEl = document.querySelector(`[data-vehicle-id="${newVehicle.id}"]`);
+                      if (vehicleEl) {
+                        vehicleEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                      // Clear highlight after animation
+                      setTimeout(() => setNewlyCreatedVehicleId(null), 2000);
+                    }, 100);
 
                     // If no items selected, just close modal after creating vehicle
                     if (selectedObjects.length === 0) {
@@ -4511,6 +4608,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             setDateMenuId(null);
           }}
         />
+      )}
+
+      {/* Assembly selection modal */}
+      {showAssemblyModal && (
+        <div className="modal-overlay">
+          <div className="settings-modal compact assembly-modal">
+            <div className="modal-body" style={{ textAlign: 'center', padding: '24px' }}>
+              <p style={{ marginBottom: '16px', color: '#374151' }}>
+                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+              </p>
+              <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
+                Tarnegraafiku kasutamiseks peab Assembly Selection olema sisse lülitatud.
+              </p>
+              <button
+                className="assembly-enable-btn"
+                onClick={enableAssemblySelection}
+              >
+                Lülita Assembly Selection sisse
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
