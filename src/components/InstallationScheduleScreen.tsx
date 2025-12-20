@@ -599,22 +599,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
-  // Delete multiple selected items
+  // Delete multiple selected items - batch delete for performance
   const deleteSelectedItems = async () => {
     if (selectedItemIds.size === 0) return;
 
     const confirmed = window.confirm(`Kustuta ${selectedItemIds.size} detaili graafikust?`);
     if (!confirmed) return;
 
+    const count = selectedItemIds.size;
     try {
-      for (const itemId of selectedItemIds) {
-        await supabase
-          .from('installation_schedule')
-          .delete()
-          .eq('id', itemId);
-      }
+      const { error } = await supabase
+        .from('installation_schedule')
+        .delete()
+        .in('id', [...selectedItemIds]);
+
+      if (error) throw error;
+
       setSelectedItemIds(new Set());
-      setMessage(`${selectedItemIds.size} detaili kustutatud`);
+      setMessage(`${count} detaili kustutatud`);
       loadSchedule();
     } catch (e) {
       console.error('Error deleting items:', e);
@@ -1405,20 +1407,30 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
-  // Move multiple items to date
+  // Move multiple items to date - batch update for performance
   const moveSelectedItemsToDate = async (targetDate: string) => {
     if (selectedItemIds.size === 0) return;
 
+    // Filter out items already on target date
+    const itemsToMove = [...selectedItemIds].filter(itemId => {
+      const item = scheduleItems.find(i => i.id === itemId);
+      return item && item.scheduled_date !== targetDate;
+    });
+
+    if (itemsToMove.length === 0) {
+      setSelectedItemIds(new Set());
+      setDatePickerItemId(null);
+      return;
+    }
+
     try {
-      for (const itemId of selectedItemIds) {
-        const item = scheduleItems.find(i => i.id === itemId);
-        if (item && item.scheduled_date !== targetDate) {
-          await supabase
-            .from('installation_schedule')
-            .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
-            .eq('id', itemId);
-        }
-      }
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
+        .in('id', itemsToMove);
+
+      if (error) throw error;
+
       setSelectedItemIds(new Set());
       setDatePickerItemId(null);
       loadSchedule();
@@ -1428,23 +1440,25 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
-  // Update install method for selected items
+  // Update install method for selected items - batch update for performance
   const updateSelectedItemsMethod = async (method: 'crane' | 'forklift' | 'manual' | null) => {
     if (selectedItemIds.size === 0) return;
 
+    const count = selectedItemIds.size;
     try {
-      for (const itemId of selectedItemIds) {
-        await supabase
-          .from('installation_schedule')
-          .update({
-            install_method: method,
-            install_method_count: method ? 1 : null,
-            updated_by: tcUserEmail
-          })
-          .eq('id', itemId);
-      }
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({
+          install_method: method,
+          install_method_count: method ? 1 : null,
+          updated_by: tcUserEmail
+        })
+        .in('id', [...selectedItemIds]);
+
+      if (error) throw error;
+
       const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'eemaldatud';
-      setMessage(`${selectedItemIds.size} detaili paigaldusviis: ${methodLabel}`);
+      setMessage(`${count} detaili paigaldusviis: ${methodLabel}`);
       loadSchedule();
     } catch (e) {
       console.error('Error updating install method:', e);
