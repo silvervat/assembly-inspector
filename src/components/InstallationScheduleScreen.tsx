@@ -959,6 +959,32 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Highlight already scheduled items from selection in red
+  const highlightScheduledItemsRed = async (scheduledObjects: { obj: SelectedObject; date: string }[]) => {
+    try {
+      // First reset colors
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Color the scheduled items red
+      for (const { obj } of scheduledObjects) {
+        const modelId = obj.modelId;
+        const guidIfc = obj.guidIfc || obj.guid;
+        if (modelId && guidIfc) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: 220, g: 38, b: 38, a: 255 } } // Red color
+            );
+          }
+        }
+      }
+      setMessage(`${scheduledObjects.length} juba planeeritud detaili värvitud punaseks`);
+    } catch (e) {
+      console.error('Error highlighting scheduled items:', e);
+    }
+  };
+
   const startPlayback = async () => {
     await api.viewer.setObjectState(undefined, { color: 'reset' });
 
@@ -1227,6 +1253,30 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Update install method for selected items
+  const updateSelectedItemsMethod = async (method: 'crane' | 'forklift' | 'manual' | null) => {
+    if (selectedItemIds.size === 0) return;
+
+    try {
+      for (const itemId of selectedItemIds) {
+        await supabase
+          .from('installation_schedule')
+          .update({
+            install_method: method,
+            install_method_count: 1,
+            updated_by: tcUserEmail
+          })
+          .eq('id', itemId);
+      }
+      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'tühi';
+      setMessage(`${selectedItemIds.size} detaili paigaldusviis: ${methodLabel}`);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error updating install method:', e);
+      setMessage('Viga paigaldusviisi muutmisel');
+    }
+  };
+
   // Drag handlers with multi-select support
   const handleDragStart = (e: React.DragEvent, item: ScheduleItem) => {
     setIsDragging(true);
@@ -1416,7 +1466,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     if (!method) return '';
     const labels: Record<string, string> = {
       crane: 'Kraana',
-      forklift: 'Tõstuk',
+      forklift: 'Teleskooplaadur',
       manual: 'Käsitsi'
     };
     const label = labels[method] || method;
@@ -1773,12 +1823,41 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {selectedItemIds.size > 0 && (
         <div className="multi-select-bar">
           <span>{selectedItemIds.size} valitud</span>
+          <div className="multi-select-methods">
+            <button
+              className="method-btn"
+              onClick={() => updateSelectedItemsMethod('crane')}
+              title="Kraana"
+            >
+              <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
+            </button>
+            <button
+              className="method-btn"
+              onClick={() => updateSelectedItemsMethod('forklift')}
+              title="Teleskooplaadur"
+            >
+              <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
+            </button>
+            <button
+              className="method-btn"
+              onClick={() => updateSelectedItemsMethod('manual')}
+              title="Käsitsi"
+            >
+              <img src={`${import.meta.env.BASE_URL}icons/manual.png`} alt="Käsitsi" />
+            </button>
+            <button
+              className="method-btn clear"
+              onClick={() => updateSelectedItemsMethod(null)}
+              title="Eemalda paigaldusviis"
+            >
+              <FiX size={12} />
+            </button>
+          </div>
           <button onClick={clearItemSelection}>Tühista</button>
           <button className="delete-selected-btn" onClick={deleteSelectedItems}>
             <FiTrash2 size={12} />
             Kustuta
           </button>
-          <span className="hint">Ctrl+klõps päeval valib päeva</span>
         </div>
       )}
 
@@ -1800,11 +1879,19 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
             <div className="selection-info-row">
               <span>Valitud mudelis: {selectedObjects.length}</span>
               {allScheduled ? (
-                <span className="already-scheduled-info">
+                <span
+                  className="already-scheduled-info clickable"
+                  onClick={() => highlightScheduledItemsRed(scheduledInfo)}
+                  title="Klõpsa, et värvida punaseks"
+                >
                   ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
                 </span>
               ) : someScheduled ? (
-                <span className="partially-scheduled-info">
+                <span
+                  className="partially-scheduled-info clickable"
+                  onClick={() => highlightScheduledItemsRed(scheduledInfo)}
+                  title="Klõpsa, et värvida punaseks"
+                >
                   ⚠ {scheduledInfo.length} juba planeeritud
                 </span>
               ) : (
@@ -1847,9 +1934,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       setSelectedInstallMethod('forklift');
                       setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'forklift' });
                     }}
-                    title="Tõstuk (parem klõps = x2)"
+                    title="Teleskooplaadur (parem klõps = x2)"
                   >
-                    <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Tõstuk" />
+                    <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
                     {selectedInstallMethod === 'forklift' && selectedInstallMethodCount > 1 && (
                       <span className="method-count-badge">x{selectedInstallMethodCount}</span>
                     )}
@@ -2236,14 +2323,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                   src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                   alt={item.install_method}
                                   className="item-install-icon"
-                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                 />
                                 {(item.install_method_count ?? 1) > 1 && (
                                   <img
                                     src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                     alt={item.install_method}
                                     className="item-install-icon"
-                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                   />
                                 )}
                               </div>

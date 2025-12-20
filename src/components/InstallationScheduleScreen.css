@@ -236,6 +236,22 @@
   font-weight: 500;
 }
 
+.already-scheduled-info.clickable,
+.partially-scheduled-info.clickable {
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.already-scheduled-info.clickable:hover {
+  background: #bbf7d0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.partially-scheduled-info.clickable:hover {
+  background: #fde68a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 .selection-info .add-to-date-btn {
   width: 100%;
   justify-content: center;
@@ -721,6 +737,51 @@
   margin-left: auto;
   font-size: 11px;
   opacity: 0.8;
+}
+
+.multi-select-methods {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.multi-select-methods .method-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+.multi-select-methods .method-btn img {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.multi-select-methods .method-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.multi-select-methods .method-btn:hover img {
+  opacity: 1;
+}
+
+.multi-select-methods .method-btn.clear {
+  color: #9ca3af;
+}
+
+.multi-select-methods .method-btn.clear:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
 /* Multi-selected item */
