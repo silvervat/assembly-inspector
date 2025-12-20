@@ -798,36 +798,75 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     return colors;
   };
 
-  // Color all items by their scheduled date
-  const colorByDate = async () => {
-    try {
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
+  // Toggle color by date mode (on/off)
+  const toggleColorByDate = async () => {
+    const newValue = !playbackSettings.colorEachDayDifferent;
+    setPlaybackSettings(prev => ({
+      ...prev,
+      colorEachDayDifferent: newValue,
+      colorPreviousDayBlack: newValue ? false : prev.colorPreviousDayBlack
+    }));
 
-      const dates = Object.keys(itemsByDate);
-      if (dates.length === 0) return;
+    if (newValue) {
+      // Turning ON - color all items by date
+      try {
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-      const dateColors = generateDateColors(dates);
+        const dates = Object.keys(itemsByDate);
+        if (dates.length === 0) return;
 
-      for (const [date, items] of Object.entries(itemsByDate)) {
-        const color = dateColors[date];
-        if (!color) continue;
+        const dateColors = generateDateColors(dates);
+        setPlaybackDateColors(dateColors);
 
-        for (const item of items) {
-          const modelId = item.model_id;
-          const guidIfc = item.guid_ifc || item.guid;
-          if (!modelId || !guidIfc) continue;
+        // Get all loaded models for fallback
+        const models = await api.viewer.getModels();
 
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-          if (!runtimeIds || runtimeIds.length === 0) continue;
+        for (const [date, items] of Object.entries(itemsByDate)) {
+          const color = dateColors[date];
+          if (!color) continue;
 
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            { color: { ...color, a: 255 } }
-          );
+          for (const item of items) {
+            const guidIfc = item.guid_ifc || item.guid;
+            if (!guidIfc) continue;
+
+            // Try with stored model_id first
+            if (item.model_id) {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
+                  { color: { ...color, a: 255 } }
+                );
+                continue;
+              }
+            }
+
+            // Fallback: try all loaded models
+            if (models && models.length > 0) {
+              for (const model of models) {
+                try {
+                  const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+                  if (runtimeIds && runtimeIds.length > 0) {
+                    await api.viewer.setObjectState(
+                      { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
+                      { color: { ...color, a: 255 } }
+                    );
+                    break;
+                  }
+                } catch {
+                  // Try next model
+                }
+              }
+            }
+          }
         }
+      } catch (e) {
+        console.error('Error coloring by date:', e);
       }
-    } catch (e) {
-      console.error('Error coloring by date:', e);
+    } else {
+      // Turning OFF - reset colors
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+      setPlaybackDateColors({});
     }
   };
 
@@ -1161,6 +1200,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
       // Update current playback date
       setCurrentPlaybackDate(item.scheduled_date);
+
+      // Auto-switch calendar month to keep playback date visible
+      const itemDate = new Date(item.scheduled_date);
+      if (itemDate.getMonth() !== currentMonth.getMonth() || itemDate.getFullYear() !== currentMonth.getFullYear()) {
+        setCurrentMonth(new Date(itemDate.getFullYear(), itemDate.getMonth(), 1));
+      }
 
       playbackRef.current = setTimeout(() => {
         setCurrentPlayIndex(prev => prev + 1);
@@ -1848,10 +1893,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         )}
         <div className="color-buttons">
           <button
-            className="color-by-date-btn"
-            onClick={colorByDate}
+            className={`color-by-date-btn${playbackSettings.colorEachDayDifferent ? ' active' : ''}`}
+            onClick={toggleColorByDate}
             disabled={scheduleItems.length === 0}
-            title="Värvi päevade kaupa"
+            title={playbackSettings.colorEachDayDifferent ? "Lülita värvimine välja" : "Värvi päevade kaupa"}
           >
             <FiDroplet size={14} />
           </button>

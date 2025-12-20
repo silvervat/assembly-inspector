@@ -682,6 +682,17 @@
   border-color: #fcd34d;
 }
 
+.color-by-date-btn.active {
+  background: #fef3c7;
+  color: #d97706;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+
+.color-by-date-btn.active:hover {
+  background: #fde68a;
+}
+
 .reset-colors-btn:hover {
   background: var(--modus-bg-secondary);
   color: var(--modus-primary);
