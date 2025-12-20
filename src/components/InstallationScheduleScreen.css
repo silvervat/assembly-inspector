@@ -263,16 +263,16 @@
 
 .method-selector-wrapper {
   position: relative;
-  padding-bottom: 8px; /* Space for dropdown hover area */
+  padding-bottom: 6px; /* Space for dropdown - matches horizontal gap */
 }
 
 .method-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -290,26 +290,25 @@
 }
 
 .method-icon-btn img {
-  width: 22px;
-  height: 22px;
+  width: 16px;
+  height: 16px;
 }
 
 .method-icon-btn .method-count-badge {
   position: absolute;
-  bottom: -4px;
+  top: -4px;
   right: -4px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 9px;
+  font-weight: 600;
   color: white;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 8px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  border: 1px solid rgba(255, 255, 255, 0.5);
 }
 
 /* Quantity dropdown on hover */

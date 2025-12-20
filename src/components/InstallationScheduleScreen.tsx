@@ -1038,6 +1038,46 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Select items from multiple dates in viewer
+  const selectMultipleDatesInViewer = async (dates: Set<string>) => {
+    if (dates.size === 0) {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      return;
+    }
+
+    try {
+      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+
+      for (const date of dates) {
+        const items = itemsByDate[date];
+        if (!items) continue;
+
+        for (const item of items) {
+          const modelId = item.model_id;
+          const guidIfc = item.guid_ifc || item.guid;
+          if (!modelId || !guidIfc) continue;
+
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (!runtimeIds || runtimeIds.length === 0) continue;
+
+          const existing = modelObjects.find(m => m.modelId === modelId);
+          if (existing) {
+            existing.objectRuntimeIds.push(...runtimeIds);
+          } else {
+            modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
+          }
+        }
+      }
+
+      if (modelObjects.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+      }
+    } catch (e) {
+      console.error('Error selecting multiple date items:', e);
+    }
+  };
+
   // Select multiple items in viewer by their IDs
   const selectItemsByIdsInViewer = async (itemIds: Set<string>) => {
     if (itemIds.size === 0) {
@@ -2702,24 +2742,25 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     onClick={(e) => {
                       if (e.ctrlKey || e.metaKey) {
                         // Ctrl+click: toggle date in multi-selection
-                        setSelectedDates(prev => {
-                          const next = new Set(prev);
-                          if (next.has(dateKey)) {
-                            next.delete(dateKey);
-                          } else {
-                            next.add(dateKey);
-                          }
-                          return next;
-                        });
+                        const newSelectedDates = new Set(selectedDates);
+                        if (newSelectedDates.has(dateKey)) {
+                          newSelectedDates.delete(dateKey);
+                        } else {
+                          newSelectedDates.add(dateKey);
+                        }
+                        setSelectedDates(newSelectedDates);
                         setSelectedDate(dateKey);
+                        // Select all items from all selected dates in viewer
+                        selectMultipleDatesInViewer(newSelectedDates);
+                        scrollToDateInList(dateKey);
                       } else {
                         // Normal click: select only this date
                         setSelectedDate(dateKey);
                         setSelectedDates(new Set([dateKey]));
-                      }
-                      if (itemCount > 0) {
-                        selectDateInViewer(dateKey);
-                        scrollToDateInList(dateKey);
+                        if (itemCount > 0) {
+                          selectDateInViewer(dateKey);
+                          scrollToDateInList(dateKey);
+                        }
                       }
                     }}
                     onDragOver={(e) => handleDragOver(e, dateKey)}
@@ -2775,8 +2816,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         </div>
       </div>
 
-      {/* Multi-select bar */}
-      {selectedItemIds.size > 0 && (
+      {/* Multi-select bar - hide during playback */}
+      {selectedItemIds.size > 0 && !isPlaying && (
         <div className="multi-select-bar">
           <div className="multi-select-header">
             <span className="multi-select-count">{selectedItemIds.size} valitud</span>
