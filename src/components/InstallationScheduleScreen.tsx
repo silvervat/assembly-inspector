@@ -6,7 +6,7 @@ import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp
+  FiSettings, FiChevronUp, FiMoreVertical
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -129,6 +129,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   // Date picker for moving items
   const [datePickerItemId, setDatePickerItemId] = useState<string | null>(null);
+
+  // Item menu state (three-dot menu)
+  const [itemMenuId, setItemMenuId] = useState<string | null>(null);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -2628,38 +2631,70 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                 )}
                               </div>
                             )}
-                            <div className="item-actions">
-                              <button
-                                className="item-action-btn"
-                                onClick={(e) => { e.stopPropagation(); reorderItem(item.id, 'up'); }}
-                                disabled={idx === 0}
-                                title="Liiguta üles"
-                              >
-                                <FiArrowUp size={10} />
-                              </button>
-                              <button
-                                className="item-action-btn"
-                                onClick={(e) => { e.stopPropagation(); reorderItem(item.id, 'down'); }}
-                                disabled={idx === items.length - 1}
-                                title="Liiguta alla"
-                              >
-                                <FiArrowDown size={10} />
-                              </button>
-                              <button
-                                className="item-action-btn calendar-btn"
-                                onClick={(e) => { e.stopPropagation(); setDatePickerItemId(datePickerItemId === item.id ? null : item.id); }}
-                                title="Muuda kuupäeva"
-                              >
-                                <FiCalendar size={10} />
-                              </button>
-                              <button
-                                className="item-action-btn delete-btn"
-                                onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                title="Kustuta"
-                              >
-                                <FiTrash2 size={10} />
-                              </button>
-                            </div>
+                            {/* Three-dot menu button */}
+                            <button
+                              className="item-menu-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setItemMenuId(itemMenuId === item.id ? null : item.id);
+                                setDatePickerItemId(null);
+                              }}
+                              title="Menüü"
+                            >
+                              <FiMoreVertical size={14} />
+                            </button>
+
+                            {/* Item dropdown menu */}
+                            {itemMenuId === item.id && (
+                              <div className="item-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className={`item-menu-option ${idx === 0 ? 'disabled' : ''}`}
+                                  onClick={() => {
+                                    if (idx > 0) {
+                                      reorderItem(item.id, 'up');
+                                      setItemMenuId(null);
+                                    }
+                                  }}
+                                  disabled={idx === 0}
+                                >
+                                  <FiArrowUp size={12} />
+                                  <span>Liiguta üles</span>
+                                </button>
+                                <button
+                                  className={`item-menu-option ${idx === items.length - 1 ? 'disabled' : ''}`}
+                                  onClick={() => {
+                                    if (idx < items.length - 1) {
+                                      reorderItem(item.id, 'down');
+                                      setItemMenuId(null);
+                                    }
+                                  }}
+                                  disabled={idx === items.length - 1}
+                                >
+                                  <FiArrowDown size={12} />
+                                  <span>Liiguta alla</span>
+                                </button>
+                                <button
+                                  className="item-menu-option"
+                                  onClick={() => {
+                                    setItemMenuId(null);
+                                    setDatePickerItemId(item.id);
+                                  }}
+                                >
+                                  <FiCalendar size={12} />
+                                  <span>Muuda kuupäeva</span>
+                                </button>
+                                <button
+                                  className="item-menu-option delete"
+                                  onClick={() => {
+                                    deleteItem(item.id);
+                                    setItemMenuId(null);
+                                  }}
+                                >
+                                  <FiTrash2 size={12} />
+                                  <span>Kustuta</span>
+                                </button>
+                              </div>
+                            )}
 
                             {/* Date picker dropdown */}
                             {datePickerItemId === item.id && (
@@ -2744,12 +2779,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       )}
 
       {/* Click outside to close context menus */}
-      {(installMethodContextMenu || listItemContextMenu) && (
+      {(installMethodContextMenu || listItemContextMenu || itemMenuId || datePickerItemId) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
             setInstallMethodContextMenu(null);
             setListItemContextMenu(null);
+            setItemMenuId(null);
+            setDatePickerItemId(null);
           }}
         />
       )}
