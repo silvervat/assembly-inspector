@@ -236,8 +236,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
     colorEachDayDifferent: false,  // Option 3: Color each day different color (disables option 1)
     progressiveReveal: false,      // Option 4: Hide scheduled items at start, reveal one by one
-    hideEntireModel: false         // Option 5: Hide ENTIRE model at start, build up from scratch
+    hideEntireModel: false,        // Option 5: Hide ENTIRE model at start, build up from scratch
+    showDayOverview: false         // Option 6: Show day overview after each day completes
   });
+
+  // Day overview state - tracks if we're showing day overview
+  const [showingDayOverview, setShowingDayOverview] = useState(false);
 
   // Track current playback day for coloring
   const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
@@ -1494,6 +1498,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   };
 
   const startPlayback = async () => {
+    // Clear all selections first
+    setSelectedItemIds(new Set());
+    setLastClickedId(null);
+    await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
     await api.viewer.setObjectState(undefined, { color: 'reset' });
 
     // Generate colors for each day if needed
@@ -1557,21 +1566,53 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Day overview function - show all day items selected and zoomed
+  const showDayOverviewFor = async (date: string) => {
+    const dateItems = itemsByDate[date];
+    if (!dateItems || dateItems.length === 0) return;
+
+    setShowingDayOverview(true);
+
+    // Select all items of this date in the list
+    const dateItemIds = new Set(dateItems.map(item => item.id));
+    setSelectedItemIds(dateItemIds);
+
+    // Select all items in viewer and zoom out to show them
+    await selectDateInViewer(date);
+
+    // Wait for the overview display (2.5 seconds)
+    await new Promise(resolve => setTimeout(resolve, 2500));
+
+    // Clear list selection
+    setSelectedItemIds(new Set());
+    setShowingDayOverview(false);
+  };
+
   // Playback effect
   useEffect(() => {
-    if (!isPlaying || isPaused) return;
+    if (!isPlaying || isPaused || showingDayOverview) return;
 
     const items = getAllItemsSorted();
+
+    // End of playback
     if (currentPlayIndex >= items.length) {
-      setIsPlaying(false);
-      setIsPaused(false);
-      setCurrentPlaybackDate(null);
-      // Reset visibility if progressive reveal or hide entire model was enabled
-      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
-        api.viewer.setObjectState(undefined, { visible: 'reset' });
-      }
-      // Zoom out at end
-      zoomToAllItems();
+      const endPlayback = async () => {
+        // Show day overview for the last day if enabled
+        if (playbackSettings.showDayOverview && currentPlaybackDate) {
+          await showDayOverviewFor(currentPlaybackDate);
+        }
+
+        setIsPlaying(false);
+        setIsPaused(false);
+        setCurrentPlaybackDate(null);
+        // Reset visibility if progressive reveal or hide entire model was enabled
+        if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+          api.viewer.setObjectState(undefined, { visible: 'reset' });
+        }
+        // Zoom out at end
+        zoomToAllItems();
+      };
+      endPlayback();
       return;
     }
 
@@ -1587,17 +1628,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     const playNext = async () => {
-      // Progressive reveal / hide entire model: show the item first
-      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
-        await showItem(item);
-      }
-
-      // Check if we've moved to a new day
+      // Check if we've moved to a new day - show day overview for completed day
       if (currentPlaybackDate && currentPlaybackDate !== item.scheduled_date) {
+        // Show day overview for the completed day if enabled
+        if (playbackSettings.showDayOverview) {
+          await showDayOverviewFor(currentPlaybackDate);
+        }
+
         // Option 1: Color previous day black (only if option 3 is not enabled)
         if (playbackSettings.colorPreviousDayBlack && !playbackSettings.colorEachDayDifferent) {
           await colorDateItems(currentPlaybackDate, { r: 40, g: 40, b: 40 });
         }
+      }
+
+      // Progressive reveal / hide entire model: show the item first
+      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+        await showItem(item);
       }
 
       // Option 3: Color items with their day's color
@@ -1642,7 +1688,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors]);
+  }, [isPlaying, isPaused, showingDayOverview, currentPlayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors]);
 
   // Auto-scroll to playing item
   useEffect(() => {
@@ -3298,6 +3344,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <div className="setting-text">
                   <span>Ehita nullist</span>
                   <small>Peida KOGU mudel, ehita graafiku järgi</small>
+                </div>
+              </label>
+
+              <div className="setting-divider" />
+
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.showDayOverview}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, showDayOverview: e.target.checked }))}
+                />
+                <div className="setting-text">
+                  <span>Päeva ülevaade</span>
+                  <small>Päeva lõpus näita kõiki detaile korraga</small>
                 </div>
               </label>
             </div>
