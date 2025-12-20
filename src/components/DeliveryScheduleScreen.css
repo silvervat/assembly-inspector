@@ -923,6 +923,12 @@
   overflow: hidden;
 }
 
+.delivery-item .item-info.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
 .delivery-item .item-mark {
   font-weight: 600;
   font-size: 12px;
@@ -938,6 +944,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Item separator */
+.delivery-item + .delivery-item-wrapper .delivery-item,
+.delivery-item-wrapper + .delivery-item-wrapper .delivery-item {
+  border-top: 1px solid #f3f4f6;
 }
 
 /* Item weight */

@@ -776,6 +776,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     loadAllData();
   }, [loadAllData]);
 
+  // ESC key to cancel all selections
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Clear all item selections
+        setSelectedItemIds(new Set());
+        setLastClickedId(null);
+        setActiveItemId(null);
+
+        // Also clear viewer selection
+        api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [api]);
+
   // ============================================
   // MODEL SELECTION HANDLING
   // ============================================
@@ -2267,8 +2285,31 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   const handleVehicleClick = async (vehicle: DeliveryVehicle) => {
-    // Select all items in vehicle
+    // Get all items in vehicle
     const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+    const vehicleItemIds = vehicleItems.map(i => i.id);
+
+    // Check if all items are already selected
+    const allSelected = vehicleItemIds.length > 0 && vehicleItemIds.every(id => selectedItemIds.has(id));
+
+    // Toggle selection in list
+    if (allSelected) {
+      // Deselect all items in this vehicle
+      setSelectedItemIds(prev => {
+        const next = new Set(prev);
+        vehicleItemIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      // Select all items in this vehicle
+      setSelectedItemIds(prev => {
+        const next = new Set(prev);
+        vehicleItemIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+
+    // Also select in 3D viewer
     const runtimeIds: number[] = [];
     let modelId = '';
 
@@ -2279,7 +2320,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     });
 
-    if (runtimeIds.length > 0 && modelId) {
+    if (runtimeIds.length > 0 && modelId && !allSelected) {
       try {
         await api.viewer.setSelection({
           modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
@@ -2287,6 +2328,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
       } catch (e) {
         console.error('Error selecting vehicle items:', e);
+      }
+    } else if (allSelected) {
+      // Clear viewer selection when deselecting
+      try {
+        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      } catch (e) {
+        console.error('Error clearing selection:', e);
       }
     }
   };
@@ -2844,22 +2892,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       type="checkbox"
                                       className="item-checkbox"
                                       checked={isSelected}
-                                      onChange={() => {
-                                        setSelectedItemIds(prev => {
-                                          const next = new Set(prev);
-                                          if (next.has(item.id)) {
-                                            next.delete(item.id);
-                                          } else {
-                                            next.add(item.id);
+                                      onChange={() => {}}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Shift+click for range selection
+                                        if (e.shiftKey && lastClickedId) {
+                                          const allItems = items.filter(i => i.vehicle_id === item.vehicle_id);
+                                          const lastIdx = allItems.findIndex(i => i.id === lastClickedId);
+                                          const currentIdx = allItems.findIndex(i => i.id === item.id);
+
+                                          if (lastIdx >= 0 && currentIdx >= 0) {
+                                            const start = Math.min(lastIdx, currentIdx);
+                                            const end = Math.max(lastIdx, currentIdx);
+                                            const rangeIds = allItems.slice(start, end + 1).map(i => i.id);
+
+                                            setSelectedItemIds(prev => {
+                                              const next = new Set(prev);
+                                              rangeIds.forEach(id => next.add(id));
+                                              return next;
+                                            });
                                           }
-                                          return next;
-                                        });
+                                        } else {
+                                          // Normal toggle
+                                          setSelectedItemIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(item.id)) {
+                                              next.delete(item.id);
+                                            } else {
+                                              next.add(item.id);
+                                            }
+                                            return next;
+                                          });
+                                        }
+                                        setLastClickedId(item.id);
                                       }}
-                                      onClick={(e) => e.stopPropagation()}
                                     />
 
-                                    {/* Mark + Product */}
-                                    <div className="item-info">
+                                    {/* Mark + Product on same line */}
+                                    <div className="item-info inline">
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
@@ -3126,20 +3196,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       type="checkbox"
                                       className="item-checkbox"
                                       checked={isSelected}
-                                      onChange={() => {
-                                        setSelectedItemIds(prev => {
-                                          const next = new Set(prev);
-                                          if (next.has(item.id)) {
-                                            next.delete(item.id);
-                                          } else {
-                                            next.add(item.id);
+                                      onChange={() => {}}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (e.shiftKey && lastClickedId) {
+                                          const allItems = items.filter(i => i.vehicle_id === item.vehicle_id);
+                                          const lastIdx = allItems.findIndex(i => i.id === lastClickedId);
+                                          const currentIdx = allItems.findIndex(i => i.id === item.id);
+
+                                          if (lastIdx >= 0 && currentIdx >= 0) {
+                                            const start = Math.min(lastIdx, currentIdx);
+                                            const end = Math.max(lastIdx, currentIdx);
+                                            const rangeIds = allItems.slice(start, end + 1).map(i => i.id);
+
+                                            setSelectedItemIds(prev => {
+                                              const next = new Set(prev);
+                                              rangeIds.forEach(id => next.add(id));
+                                              return next;
+                                            });
                                           }
-                                          return next;
-                                        });
+                                        } else {
+                                          setSelectedItemIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(item.id)) {
+                                              next.delete(item.id);
+                                            } else {
+                                              next.add(item.id);
+                                            }
+                                            return next;
+                                          });
+                                        }
+                                        setLastClickedId(item.id);
                                       }}
-                                      onClick={(e) => e.stopPropagation()}
                                     />
-                                    <div className="item-info">
+                                    <div className="item-info inline">
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
