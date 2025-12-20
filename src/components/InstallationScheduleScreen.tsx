@@ -2816,8 +2816,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         </div>
       </div>
 
-      {/* Multi-select bar */}
-      {selectedItemIds.size > 0 && (
+      {/* Multi-select bar - hide during playback */}
+      {selectedItemIds.size > 0 && !isPlaying && (
         <div className="multi-select-bar">
           <div className="multi-select-header">
             <span className="multi-select-count">{selectedItemIds.size} valitud</span>
