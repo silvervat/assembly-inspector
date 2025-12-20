@@ -8,7 +8,7 @@ import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
-  FiRefreshCw, FiPause, FiSearch,
+  FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock
 } from 'react-icons/fi';
@@ -391,6 +391,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [showFactoryModal, setShowFactoryModal] = useState(false);
   const [newFactoryName, setNewFactoryName] = useState('');
   const [newFactoryCode, setNewFactoryCode] = useState('');
+  const [editingFactoryId, setEditingFactoryId] = useState<string | null>(null);
+  const [editFactoryName, setEditFactoryName] = useState('');
+  const [editFactoryCode, setEditFactoryCode] = useState('');
 
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
@@ -739,6 +742,80 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateFactory = async () => {
+    if (!editingFactoryId || !editFactoryName.trim() || !editFactoryCode.trim()) {
+      setMessage('Sisesta tehase nimi ja kood');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_delivery_factories')
+        .update({
+          factory_name: editFactoryName.trim(),
+          factory_code: editFactoryCode.trim().toUpperCase()
+        })
+        .eq('id', editingFactoryId);
+
+      if (error) throw error;
+
+      setMessage('Tehas uuendatud');
+      setEditingFactoryId(null);
+      setEditFactoryName('');
+      setEditFactoryCode('');
+      await loadFactories();
+    } catch (e: any) {
+      console.error('Error updating factory:', e);
+      setMessage('Viga tehase uuendamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteFactory = async (factoryId: string) => {
+    // Check if factory has vehicles
+    const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
+    if (factoryVehicles.length > 0) {
+      setMessage(`Ei saa kustutada - tehasel on ${factoryVehicles.length} veoki(t)`);
+      return;
+    }
+
+    if (!confirm('Kas oled kindel, et soovid tehase kustutada?')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_delivery_factories')
+        .delete()
+        .eq('id', factoryId);
+
+      if (error) throw error;
+
+      setMessage('Tehas kustutatud');
+      await loadFactories();
+    } catch (e: any) {
+      console.error('Error deleting factory:', e);
+      setMessage('Viga tehase kustutamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEditFactory = (factory: DeliveryFactory) => {
+    setEditingFactoryId(factory.id);
+    setEditFactoryName(factory.factory_name);
+    setEditFactoryCode(factory.factory_code);
+  };
+
+  const cancelEditFactory = () => {
+    setEditingFactoryId(null);
+    setEditFactoryName('');
+    setEditFactoryCode('');
   };
 
   // ============================================
@@ -2803,8 +2880,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="factory-list">
                 {factories.map(f => (
                   <div key={f.id} className="factory-list-item">
-                    <span className="factory-name">{f.factory_name}</span>
-                    <span className="factory-code">({f.factory_code})</span>
+                    {editingFactoryId === f.id ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editFactoryName}
+                          onChange={(e) => setEditFactoryName(e.target.value)}
+                          placeholder="Nimi"
+                          className="factory-edit-input"
+                        />
+                        <input
+                          type="text"
+                          value={editFactoryCode}
+                          onChange={(e) => setEditFactoryCode(e.target.value.toUpperCase())}
+                          placeholder="Kood"
+                          maxLength={5}
+                          className="factory-edit-input factory-code-input"
+                        />
+                        <button className="icon-btn save-btn" onClick={updateFactory} disabled={saving}>
+                          <FiCheck />
+                        </button>
+                        <button className="icon-btn cancel-btn" onClick={cancelEditFactory}>
+                          <FiX />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="factory-name">{f.factory_name}</span>
+                        <span className="factory-code">({f.factory_code})</span>
+                        <div className="factory-actions">
+                          <button className="icon-btn" onClick={() => startEditFactory(f)} title="Muuda">
+                            <FiEdit2 />
+                          </button>
+                          <button className="icon-btn delete-btn" onClick={() => deleteFactory(f.id)} title="Kustuta">
+                            <FiTrash2 />
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>

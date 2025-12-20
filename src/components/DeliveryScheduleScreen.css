@@ -1221,6 +1221,62 @@
   font-size: 13px;
 }
 
+.factory-list-item .factory-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.factory-list-item .icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.factory-list-item .icon-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.factory-list-item .icon-btn.delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.factory-list-item .icon-btn.save-btn {
+  color: #10b981;
+}
+
+.factory-list-item .icon-btn.save-btn:hover {
+  background: #d1fae5;
+}
+
+.factory-list-item .icon-btn.cancel-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.factory-list-item .factory-edit-input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.factory-list-item .factory-code-input {
+  max-width: 70px;
+  flex: 0;
+}
+
 .add-factory-form h4 {
   margin: 0 0 10px 0;
   font-size: 14px;
