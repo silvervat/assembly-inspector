@@ -167,6 +167,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
   const [playbackDateColors, setPlaybackDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
+  // Export settings
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportColumns, setExportColumns] = useState([
+    { id: 'nr', label: 'Nr', enabled: true },
+    { id: 'date', label: 'Kuupäev', enabled: true },
+    { id: 'day', label: 'Päev', enabled: true },
+    { id: 'mark', label: 'Assembly Mark', enabled: true },
+    { id: 'position', label: 'Position Code', enabled: true },
+    { id: 'product', label: 'Toode', enabled: true },
+    { id: 'weight', label: 'Kaal (kg)', enabled: true },
+    { id: 'method', label: 'Paigaldusviis', enabled: true },
+    { id: 'guid_ms', label: 'GUID (MS)', enabled: false },
+    { id: 'guid_ifc', label: 'GUID (IFC)', enabled: false },
+    { id: 'percentage', label: 'Kumulatiivne %', enabled: true }
+  ]);
+
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
     if (playbackSettings.colorEachDayDifferent) {
@@ -943,6 +959,32 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Highlight already scheduled items from selection in red
+  const highlightScheduledItemsRed = async (scheduledObjects: { obj: SelectedObject; date: string }[]) => {
+    try {
+      // First reset colors
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Color the scheduled items red
+      for (const { obj } of scheduledObjects) {
+        const modelId = obj.modelId;
+        const guidIfc = obj.guidIfc || obj.guid;
+        if (modelId && guidIfc) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: 220, g: 38, b: 38, a: 255 } } // Red color
+            );
+          }
+        }
+      }
+      setMessage(`${scheduledObjects.length} juba planeeritud detaili värvitud punaseks`);
+    } catch (e) {
+      console.error('Error highlighting scheduled items:', e);
+    }
+  };
+
   const startPlayback = async () => {
     await api.viewer.setObjectState(undefined, { color: 'reset' });
 
@@ -1157,6 +1199,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setLastClickedId(null);
   };
 
+  // Select all items in current filtered list
+  const selectAllItems = () => {
+    const ids = new Set(filteredItems.map(item => item.id));
+    setSelectedItemIds(ids);
+  };
+
+  // Select/toggle all items in a date group (Ctrl+click on date header)
+  const toggleDateSelection = (date: string, addToSelection: boolean) => {
+    const dateItems = itemsByDate[date] || [];
+    const dateItemIds = dateItems.map(item => item.id);
+
+    if (addToSelection) {
+      // Ctrl+click: add/remove all items from this date
+      setSelectedItemIds(prev => {
+        const next = new Set(prev);
+        const allSelected = dateItemIds.every(id => prev.has(id));
+        if (allSelected) {
+          // All selected -> remove all
+          dateItemIds.forEach(id => next.delete(id));
+        } else {
+          // Not all selected -> add all
+          dateItemIds.forEach(id => next.add(id));
+        }
+        return next;
+      });
+    } else {
+      // Normal click: select only this date's items
+      setSelectedItemIds(new Set(dateItemIds));
+    }
+  };
+
   // Move multiple items to date
   const moveSelectedItemsToDate = async (targetDate: string) => {
     if (selectedItemIds.size === 0) return;
@@ -1177,6 +1250,30 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     } catch (e) {
       console.error('Error moving items:', e);
       setMessage('Viga detailide liigutamisel');
+    }
+  };
+
+  // Update install method for selected items
+  const updateSelectedItemsMethod = async (method: 'crane' | 'forklift' | 'manual' | null) => {
+    if (selectedItemIds.size === 0) return;
+
+    try {
+      for (const itemId of selectedItemIds) {
+        await supabase
+          .from('installation_schedule')
+          .update({
+            install_method: method,
+            install_method_count: 1,
+            updated_by: tcUserEmail
+          })
+          .eq('id', itemId);
+      }
+      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'tühi';
+      setMessage(`${selectedItemIds.size} detaili paigaldusviis: ${methodLabel}`);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error updating install method:', e);
+      setMessage('Viga paigaldusviisi muutmisel');
     }
   };
 
@@ -1364,6 +1461,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   const dateStats = getDateStats();
 
+  // Get install method label
+  const getInstallMethodLabel = (method: string | null | undefined, count: number | undefined): string => {
+    if (!method) return '';
+    const labels: Record<string, string> = {
+      crane: 'Kraana',
+      forklift: 'Teleskooplaadur',
+      manual: 'Käsitsi'
+    };
+    const label = labels[method] || method;
+    return count && count > 1 ? `${label} x${count}` : label;
+  };
+
+  // Column width mapping
+  const columnWidths: Record<string, number> = {
+    nr: 5, date: 12, day: 12, mark: 20, position: 15,
+    product: 25, weight: 12, method: 14, guid_ms: 40, guid_ifc: 25, percentage: 12
+  };
+
   // Export to real Excel .xlsx file with date-based colors
   const exportToExcel = () => {
     const sortedItems = getAllItemsSorted();
@@ -1373,6 +1488,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setMessage('Graafik on tühi, pole midagi eksportida');
       return;
     }
+
+    // Get enabled columns in order
+    const enabledCols = exportColumns.filter(c => c.enabled);
 
     // Generate colors for each date (same as model coloring)
     const dates = Object.keys(itemsByDate);
@@ -1386,19 +1504,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       right: { style: 'thin', color: { rgb: 'CCCCCC' } }
     };
 
-    // Main data sheet
-    const mainData: any[][] = [[
-      'Nr',
-      'Kuupäev',
-      'Päev',
-      'Assembly Mark',
-      'Position Code',
-      'Toode',
-      'Kaal (kg)',
-      'GUID (MS)',
-      'GUID (IFC)',
-      'Kumulatiivne %'
-    ]];
+    // Main data sheet - header row from enabled columns
+    const mainData: any[][] = [enabledCols.map(c => c.label)];
+
+    // Find date column index for coloring
+    const dateColIndex = enabledCols.findIndex(c => c.id === 'date');
 
     let cumulative = 0;
     sortedItems.forEach((item, index) => {
@@ -1408,18 +1518,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
       const weekday = WEEKDAY_NAMES[date.getDay()];
 
-      mainData.push([
-        index + 1,
-        dateFormatted,
-        weekday,
-        item.assembly_mark || '',
-        item.cast_unit_position_code || '',
-        item.product_name || '',
-        item.cast_unit_weight || '',
-        item.guid_ms || '',
-        item.guid_ifc || item.guid || '',
-        `${percentage}%`
-      ]);
+      // Build row based on enabled columns
+      const row = enabledCols.map(col => {
+        switch (col.id) {
+          case 'nr': return index + 1;
+          case 'date': return dateFormatted;
+          case 'day': return weekday;
+          case 'mark': return item.assembly_mark || '';
+          case 'position': return item.cast_unit_position_code || '';
+          case 'product': return item.product_name || '';
+          case 'weight': return item.cast_unit_weight || '';
+          case 'method': return getInstallMethodLabel(item.install_method, item.install_method_count);
+          case 'guid_ms': return item.guid_ms || '';
+          case 'guid_ifc': return item.guid_ifc || item.guid || '';
+          case 'percentage': return `${percentage}%`;
+          default: return '';
+        }
+      });
+      mainData.push(row);
     });
 
     // Summary sheet
@@ -1448,19 +1564,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     const ws1 = XLSX.utils.aoa_to_sheet(mainData);
 
-    // Set column widths
-    ws1['!cols'] = [
-      { wch: 5 },   // Nr
-      { wch: 12 },  // Kuupäev
-      { wch: 12 },  // Päev
-      { wch: 20 },  // Assembly Mark
-      { wch: 15 },  // Position Code
-      { wch: 25 },  // Toode
-      { wch: 12 },  // Kaal
-      { wch: 40 },  // GUID MS
-      { wch: 25 },  // GUID IFC
-      { wch: 12 }   // %
-    ];
+    // Set column widths based on enabled columns
+    ws1['!cols'] = enabledCols.map(c => ({ wch: columnWidths[c.id] || 12 }));
 
     // Apply header style with border
     const headerStyle = {
@@ -1469,7 +1574,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       alignment: { horizontal: 'center' },
       border: thinBorder
     };
-    for (let c = 0; c < 10; c++) {
+    for (let c = 0; c < enabledCols.length; c++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c });
       if (ws1[cellRef]) {
         ws1[cellRef].s = headerStyle;
@@ -1477,17 +1582,18 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     // Add autofilter to header row
-    ws1['!autofilter'] = { ref: `A1:J${sortedItems.length + 1}` };
+    const lastCol = String.fromCharCode(65 + enabledCols.length - 1);
+    ws1['!autofilter'] = { ref: `A1:${lastCol}${sortedItems.length + 1}` };
 
-    // Apply styles to data rows - only date column (column 1) gets color
+    // Apply styles to data rows - only date column gets color
     sortedItems.forEach((item, index) => {
       const rowIndex = index + 1; // +1 for header row
       const color = dateColors[item.scheduled_date];
 
-      for (let c = 0; c < 10; c++) {
+      for (let c = 0; c < enabledCols.length; c++) {
         const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
         if (ws1[cellRef]) {
-          if (c === 1 && color) {
+          if (c === dateColIndex && color) {
             // Date column - apply color
             const bgColor = rgbToHex(color.r, color.g, color.b);
             const textColor = getTextColor(color.r, color.g, color.b);
@@ -1560,6 +1666,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       : 'projekt';
     const dateStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `${safeProjectName}_paigaldusgraafik_${dateStr}.xlsx`);
+    setShowExportModal(false);
+  };
+
+  // Toggle export column
+  const toggleExportColumn = (id: string) => {
+    setExportColumns(prev => prev.map(c =>
+      c.id === id ? { ...c, enabled: !c.enabled } : c
+    ));
+  };
+
+  // Move export column up/down
+  const moveExportColumn = (id: string, direction: 'up' | 'down') => {
+    setExportColumns(prev => {
+      const idx = prev.findIndex(c => c.id === id);
+      if (idx === -1) return prev;
+      if (direction === 'up' && idx === 0) return prev;
+      if (direction === 'down' && idx === prev.length - 1) return prev;
+
+      const newCols = [...prev];
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [newCols[idx], newCols[swapIdx]] = [newCols[swapIdx], newCols[idx]];
+      return newCols;
+    });
   };
 
   // Generate date picker options (next 60 days)
@@ -1693,13 +1822,42 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {/* Multi-select bar */}
       {selectedItemIds.size > 0 && (
         <div className="multi-select-bar">
-          <span>{selectedItemIds.size} detaili valitud</span>
+          <span>{selectedItemIds.size} valitud</span>
+          <div className="multi-select-methods">
+            <button
+              className="method-btn"
+              onClick={() => updateSelectedItemsMethod('crane')}
+              title="Kraana"
+            >
+              <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
+            </button>
+            <button
+              className="method-btn"
+              onClick={() => updateSelectedItemsMethod('forklift')}
+              title="Teleskooplaadur"
+            >
+              <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
+            </button>
+            <button
+              className="method-btn"
+              onClick={() => updateSelectedItemsMethod('manual')}
+              title="Käsitsi"
+            >
+              <img src={`${import.meta.env.BASE_URL}icons/manual.png`} alt="Käsitsi" />
+            </button>
+            <button
+              className="method-btn clear"
+              onClick={() => updateSelectedItemsMethod(null)}
+              title="Eemalda paigaldusviis"
+            >
+              <FiX size={12} />
+            </button>
+          </div>
           <button onClick={clearItemSelection}>Tühista</button>
           <button className="delete-selected-btn" onClick={deleteSelectedItems}>
             <FiTrash2 size={12} />
             Kustuta
           </button>
-          <span className="hint">Lohista või vali 📅 kuupäeva muutmiseks</span>
         </div>
       )}
 
@@ -1721,11 +1879,19 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
             <div className="selection-info-row">
               <span>Valitud mudelis: {selectedObjects.length}</span>
               {allScheduled ? (
-                <span className="already-scheduled-info">
+                <span
+                  className="already-scheduled-info clickable"
+                  onClick={() => highlightScheduledItemsRed(scheduledInfo)}
+                  title="Klõpsa, et värvida punaseks"
+                >
                   ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
                 </span>
               ) : someScheduled ? (
-                <span className="partially-scheduled-info">
+                <span
+                  className="partially-scheduled-info clickable"
+                  onClick={() => highlightScheduledItemsRed(scheduledInfo)}
+                  title="Klõpsa, et värvida punaseks"
+                >
                   ⚠ {scheduledInfo.length} juba planeeritud
                 </span>
               ) : (
@@ -1768,9 +1934,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       setSelectedInstallMethod('forklift');
                       setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'forklift' });
                     }}
-                    title="Tõstuk (parem klõps = x2)"
+                    title="Teleskooplaadur (parem klõps = x2)"
                   >
-                    <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Tõstuk" />
+                    <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
                     {selectedInstallMethod === 'forklift' && selectedInstallMethodCount > 1 && (
                       <span className="method-count-badge">x{selectedInstallMethodCount}</span>
                     )}
@@ -1869,13 +2035,62 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
         <button
           className="export-btn"
-          onClick={exportToExcel}
+          onClick={() => setShowExportModal(true)}
           disabled={scheduleItems.length === 0}
           title="Ekspordi Excel"
         >
           <FiDownload size={16} />
         </button>
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
+          <div className="settings-modal export-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Ekspordi Excel</h3>
+              <button onClick={() => setShowExportModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="export-columns-header">
+                <span>Veerud ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
+              </div>
+              <div className="export-columns-list">
+                {exportColumns.map((col, idx) => (
+                  <div key={col.id} className="export-column-item">
+                    <input
+                      type="checkbox"
+                      checked={col.enabled}
+                      onChange={() => toggleExportColumn(col.id)}
+                    />
+                    <span className={col.enabled ? '' : 'disabled'}>{col.label}</span>
+                    <div className="column-order-btns">
+                      <button
+                        onClick={() => moveExportColumn(col.id, 'up')}
+                        disabled={idx === 0}
+                        title="Liiguta üles"
+                      >
+                        <FiArrowUp size={12} />
+                      </button>
+                      <button
+                        onClick={() => moveExportColumn(col.id, 'down')}
+                        disabled={idx === exportColumns.length - 1}
+                        title="Liiguta alla"
+                      >
+                        <FiArrowDown size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="export-download-btn" onClick={exportToExcel}>
+                <FiDownload size={14} />
+                Lae alla ({filteredItems.length} rida)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (
@@ -1977,9 +2192,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
             <FiX size={14} />
           </button>
         )}
-        {searchQuery && (
-          <span className="search-count">{filteredItems.length} / {scheduleItems.length}</span>
+        {filteredItems.length > 0 && (
+          <button
+            className="select-all-btn"
+            onClick={selectAllItems}
+            title="Vali kõik listis olevad detailid"
+          >
+            Vali kõik
+          </button>
         )}
+        <span className="search-count">{filteredItems.length}</span>
       </div>
 
       {/* Schedule List by Date */}
@@ -2017,7 +2239,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 >
                   <div
                     className="date-header"
-                    onClick={() => selectDateInViewer(date)}
+                    onClick={(e) => {
+                      if (e.ctrlKey || e.metaKey) {
+                        // Ctrl+click: select all items in this date
+                        toggleDateSelection(date, true);
+                      } else {
+                        // Normal click: select in viewer
+                        selectDateInViewer(date);
+                      }
+                    }}
                   >
                     <button
                       className="collapse-btn"
@@ -2093,14 +2323,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                   src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                   alt={item.install_method}
                                   className="item-install-icon"
-                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                 />
                                 {(item.install_method_count ?? 1) > 1 && (
                                   <img
                                     src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                     alt={item.install_method}
                                     className="item-install-icon"
-                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                   />
                                 )}
                               </div>
