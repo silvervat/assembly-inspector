@@ -1431,3 +1431,107 @@
   flex-basis: 100%;
   color: #374151;
 }
+
+/* ============================================
+   DRAG AND DROP
+   ============================================ */
+
+/* Item wrapper for drop indicators */
+.delivery-item-wrapper {
+  position: relative;
+}
+
+/* Drop indicator line */
+.drop-indicator {
+  height: 3px;
+  background: #2563eb;
+  border-radius: 2px;
+  margin: 2px 8px;
+  box-shadow: 0 0 4px rgba(37, 99, 235, 0.5);
+  animation: pulse-indicator 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-indicator {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Drag handle for items */
+.item-drag-handle {
+  cursor: grab;
+  color: #d1d5db;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.item-drag-handle:hover {
+  color: #6b7280;
+}
+
+.item-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Drag handle for vehicles */
+.vehicle-drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.vehicle-drag-handle:hover {
+  color: #4b5563;
+}
+
+.vehicle-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Item being dragged */
+.delivery-item.dragging {
+  opacity: 0.5;
+  background: #e5e7eb;
+}
+
+/* Vehicle being dragged */
+.delivery-vehicle-group.dragging {
+  opacity: 0.5;
+}
+
+.delivery-vehicle-group.dragging .vehicle-header {
+  background: #e5e7eb;
+}
+
+/* Vehicle items container when drag over */
+.vehicle-items.drag-over {
+  background: #fef3c7;
+  border: 2px dashed #f59e0b;
+  border-radius: 6px;
+  margin: 4px 0;
+}
+
+/* Date group when vehicle is dragged over */
+.delivery-date-group.drag-over {
+  background: #fef3c7;
+  border: 2px dashed #f59e0b;
+  border-radius: 8px;
+}
+
+.delivery-date-group.drag-over .date-header {
+  background: #fef08a;
+}
+
+/* Selected items highlight */
+.delivery-item.selected {
+  background: #fef08a;
+  border-left: 3px solid #eab308;
+}
+
+.delivery-item.selected:hover {
+  background: #fde047;
+}

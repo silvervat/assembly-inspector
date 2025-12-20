@@ -305,6 +305,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
 
+  // Drag and drop
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedItems, setDraggedItems] = useState<DeliveryItem[]>([]);
+  const [draggedVehicle, setDraggedVehicle] = useState<DeliveryVehicle | null>(null);
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const [dragOverVehicleId, setDragOverVehicleId] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
   // Search
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -1094,6 +1102,243 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // DRAG AND DROP HANDLERS
+  // ============================================
+
+  // Item drag start
+  const handleItemDragStart = (e: React.DragEvent, item: DeliveryItem) => {
+    setIsDragging(true);
+
+    // If dragging a selected item, drag all selected items
+    if (selectedItemIds.has(item.id)) {
+      const itemsToDrag = items.filter(i => selectedItemIds.has(i.id));
+      setDraggedItems(itemsToDrag);
+      e.dataTransfer.setData('text/plain', `${itemsToDrag.length} detaili`);
+    } else {
+      // Dragging unselected item - just drag that one
+      setDraggedItems([item]);
+      e.dataTransfer.setData('text/plain', item.assembly_mark);
+    }
+
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  // Vehicle drag start
+  const handleVehicleDragStart = (e: React.DragEvent, vehicle: DeliveryVehicle) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    setDraggedVehicle(vehicle);
+    setDraggedItems([]);
+    e.dataTransfer.setData('text/plain', vehicle.vehicle_code);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    setDraggedItems([]);
+    setDraggedVehicle(null);
+    setDragOverDate(null);
+    setDragOverVehicleId(null);
+    setDragOverIndex(null);
+  };
+
+  // Drag over a date group
+  const handleDateDragOver = (e: React.DragEvent, date: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDate(date);
+  };
+
+  // Drag over a vehicle
+  const handleVehicleDragOver = (e: React.DragEvent, vehicleId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverVehicleId(vehicleId);
+  };
+
+  // Drag over specific item (for reordering)
+  const handleItemDragOver = (e: React.DragEvent, vehicleId: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverVehicleId(vehicleId);
+
+    // Determine if dropping above or below based on mouse position
+    const rect = (e.target as HTMLElement).closest('.delivery-item')?.getBoundingClientRect();
+    if (rect) {
+      const midY = rect.top + rect.height / 2;
+      const dropIndex = e.clientY < midY ? index : index + 1;
+      setDragOverIndex(dropIndex);
+    }
+  };
+
+  // Drop items onto a vehicle
+  const handleItemDrop = async (e: React.DragEvent, targetVehicleId: string, targetIndex?: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverDate(null);
+    setDragOverVehicleId(null);
+    setDragOverIndex(null);
+    setIsDragging(false);
+
+    if (draggedItems.length === 0) return;
+
+    const targetVehicle = getVehicle(targetVehicleId);
+    if (!targetVehicle) return;
+
+    const draggedIds = new Set(draggedItems.map(i => i.id));
+    const isSameVehicle = draggedItems.every(item => item.vehicle_id === targetVehicleId);
+
+    // Optimistic update
+    setItems(prev => {
+      let updated = [...prev];
+
+      if (isSameVehicle && targetIndex !== undefined) {
+        // Reordering within same vehicle
+        const vehicleItems = updated.filter(i => i.vehicle_id === targetVehicleId);
+        const otherItems = updated.filter(i => i.vehicle_id !== targetVehicleId);
+        const remaining = vehicleItems.filter(i => !draggedIds.has(i.id));
+
+        // Adjust target index
+        let adjustedIndex = targetIndex;
+        for (let i = 0; i < targetIndex && i < vehicleItems.length; i++) {
+          if (draggedIds.has(vehicleItems[i].id)) {
+            adjustedIndex--;
+          }
+        }
+        adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
+
+        // Insert dragged items at new position
+        const newVehicleItems = [
+          ...remaining.slice(0, adjustedIndex),
+          ...draggedItems,
+          ...remaining.slice(adjustedIndex)
+        ].map((item, idx) => ({ ...item, sort_order: idx }));
+
+        updated = [...otherItems, ...newVehicleItems];
+      } else {
+        // Moving to different vehicle
+        updated = updated.map(item =>
+          draggedIds.has(item.id)
+            ? { ...item, vehicle_id: targetVehicleId, scheduled_date: targetVehicle.scheduled_date }
+            : item
+        );
+      }
+
+      return updated;
+    });
+
+    setDraggedItems([]);
+    setSelectedItemIds(new Set());
+
+    // Background database update
+    try {
+      if (isSameVehicle && targetIndex !== undefined) {
+        // Reordering - update sort_order
+        const vehicleItems = items.filter(i => i.vehicle_id === targetVehicleId);
+        const remaining = vehicleItems.filter(i => !draggedIds.has(i.id));
+        let adjustedIndex = targetIndex;
+        for (let i = 0; i < targetIndex && i < vehicleItems.length; i++) {
+          if (draggedIds.has(vehicleItems[i].id)) {
+            adjustedIndex--;
+          }
+        }
+        adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
+        const newOrder = [
+          ...remaining.slice(0, adjustedIndex),
+          ...draggedItems,
+          ...remaining.slice(adjustedIndex)
+        ];
+
+        for (let i = 0; i < newOrder.length; i++) {
+          supabase
+            .from('trimble_delivery_items')
+            .update({ sort_order: i, updated_by: tcUserEmail })
+            .eq('id', newOrder[i].id)
+            .then();
+        }
+      } else {
+        // Moving to different vehicle
+        for (const item of draggedItems) {
+          if (item.vehicle_id !== targetVehicleId) {
+            supabase
+              .from('trimble_delivery_items')
+              .update({
+                vehicle_id: targetVehicleId,
+                scheduled_date: targetVehicle.scheduled_date,
+                updated_by: tcUserEmail
+              })
+              .eq('id', item.id)
+              .then();
+          }
+        }
+      }
+
+      // Reload to sync counts
+      setTimeout(() => {
+        loadVehicles();
+      }, 500);
+    } catch (e) {
+      console.error('Error saving drag changes:', e);
+      loadItems();
+    }
+  };
+
+  // Drop vehicle onto a date (move vehicle to new date)
+  const handleVehicleDrop = async (e: React.DragEvent, targetDate: string) => {
+    e.preventDefault();
+    setDragOverDate(null);
+    setDragOverVehicleId(null);
+    setIsDragging(false);
+
+    if (!draggedVehicle) return;
+    if (draggedVehicle.scheduled_date === targetDate) return;
+
+    const vehicleId = draggedVehicle.id;
+    const oldDate = draggedVehicle.scheduled_date;
+
+    // Optimistic update
+    setVehicles(prev => prev.map(v =>
+      v.id === vehicleId ? { ...v, scheduled_date: targetDate } : v
+    ));
+    setItems(prev => prev.map(i =>
+      i.vehicle_id === vehicleId ? { ...i, scheduled_date: targetDate } : i
+    ));
+
+    setDraggedVehicle(null);
+
+    // Background database update
+    try {
+      // Update vehicle date
+      await supabase
+        .from('trimble_delivery_vehicles')
+        .update({
+          scheduled_date: targetDate,
+          updated_by: tcUserEmail,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vehicleId);
+
+      // Update all items in this vehicle
+      await supabase
+        .from('trimble_delivery_items')
+        .update({
+          scheduled_date: targetDate,
+          updated_by: tcUserEmail,
+          updated_at: new Date().toISOString()
+        })
+        .eq('vehicle_id', vehicleId);
+
+      setMessage(`Veok tõstetud: ${oldDate} → ${targetDate}`);
+    } catch (e) {
+      console.error('Error moving vehicle:', e);
+      setMessage('Viga veoki tõstmisel');
+      loadAllData();
+    }
+  };
+
+  // ============================================
   // HISTORY
   // ============================================
 
@@ -1725,7 +1970,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const isCollapsed = collapsedDates.has(date);
 
           return (
-            <div key={date} id={`date-group-${date}`} className="delivery-date-group">
+            <div
+              key={date}
+              id={`date-group-${date}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''}`}
+              onDragOver={(e) => handleDateDragOver(e, date)}
+              onDrop={(e) => handleVehicleDrop(e, date)}
+            >
               {/* Date header */}
               <div
                 className="date-header"
@@ -1802,11 +2053,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const isVehicleCollapsed = collapsedVehicles.has(vehicleId);
                     const statusConfig = vehicle ? VEHICLE_STATUS_CONFIG[vehicle.status] : null;
 
+                    const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
+
                     return (
-                      <div key={vehicleId} className="delivery-vehicle-group">
+                      <div key={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''}`}>
                         {/* Vehicle header */}
                         <div
                           className="vehicle-header"
+                          draggable={!!vehicle}
+                          onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
+                          onDragEnd={handleDragEnd}
                           onClick={() => {
                             setCollapsedVehicles(prev => {
                               const next = new Set(prev);
@@ -1819,6 +2075,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             });
                           }}
                         >
+                          <span className="vehicle-drag-handle">
+                            <FiMove />
+                          </span>
                           <span className="collapse-icon">
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
@@ -1943,41 +2202,56 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         )}
 
                         {/* Items in this vehicle */}
-                        {!isVehicleCollapsed && (
-                          <div className="vehicle-items">
-                            {vehicleItems.map(item => {
+                        {!isVehicleCollapsed && vehicle && (
+                          <div
+                            className={`vehicle-items ${dragOverVehicleId === vehicle.id && draggedItems.length > 0 ? 'drag-over' : ''}`}
+                            onDragOver={(e) => handleVehicleDragOver(e, vehicle.id)}
+                            onDrop={(e) => handleItemDrop(e, vehicle.id, dragOverIndex ?? undefined)}
+                          >
+                            {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
                               const isActive = activeItemId === item.id;
                               const weightInfo = formatWeight(item.cast_unit_weight);
+                              const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
+                              const showDropBefore = dragOverVehicleId === vehicle.id && dragOverIndex === idx;
+                              const showDropAfter = dragOverVehicleId === vehicle.id && dragOverIndex === idx + 1 && idx === vehicleItems.length - 1;
 
                               return (
-                                <div
-                                  key={item.id}
-                                  className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''}`}
-                                  onClick={(e) => handleItemClick(item, e)}
-                                >
-                                  <div className="item-checkbox">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => {
-                                        setSelectedItemIds(prev => {
-                                          const next = new Set(prev);
-                                          if (next.has(item.id)) {
-                                            next.delete(item.id);
-                                          } else {
-                                            next.add(item.id);
-                                          }
-                                          return next;
-                                        });
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </div>
-                                  <span className="item-mark">{item.assembly_mark}</span>
-                                  <span className="item-product">{item.product_name || '-'}</span>
-                                  <span className="item-position">{item.cast_unit_position_code || '-'}</span>
-                                  <span className="item-weight">{weightInfo?.kg || '-'}</span>
+                                <div key={item.id} className="delivery-item-wrapper">
+                                  {showDropBefore && <div className="drop-indicator" />}
+                                  <div
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                                    draggable
+                                    onDragStart={(e) => handleItemDragStart(e, item)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
+                                    onClick={(e) => handleItemClick(item, e)}
+                                  >
+                                    <div className="item-drag-handle">
+                                      <FiMove />
+                                    </div>
+                                    <div className="item-checkbox">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          setSelectedItemIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(item.id)) {
+                                              next.delete(item.id);
+                                            } else {
+                                              next.add(item.id);
+                                            }
+                                            return next;
+                                          });
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </div>
+                                    <span className="item-mark">{item.assembly_mark}</span>
+                                    <span className="item-product">{item.product_name || '-'}</span>
+                                    <span className="item-position">{item.cast_unit_position_code || '-'}</span>
+                                    <span className="item-weight">{weightInfo?.kg || '-'}</span>
                                   <button
                                     className="item-menu-btn"
                                     onClick={(e) => {
@@ -2008,6 +2282,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       </button>
                                     </div>
                                   )}
+                                  </div>
+                                  {showDropAfter && <div className="drop-indicator" />}
                                 </div>
                               );
                             })}
@@ -2091,12 +2367,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     );
                     const isVehicleCollapsed = collapsedVehicles.has(vehicleId);
                     const statusConfig = VEHICLE_STATUS_CONFIG[vehicle.status];
+                    const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
 
                     return (
-                      <div key={vehicleId} className="delivery-vehicle-group factory-vehicle">
+                      <div key={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''}`}>
                         {/* Vehicle header */}
                         <div
                           className="vehicle-header"
+                          draggable
+                          onDragStart={(e) => handleVehicleDragStart(e, vehicle)}
+                          onDragEnd={handleDragEnd}
                           onClick={() => {
                             setCollapsedVehicles(prev => {
                               const next = new Set(prev);
@@ -2109,6 +2389,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             });
                           }}
                         >
+                          <span className="vehicle-drag-handle">
+                            <FiMove />
+                          </span>
                           <span className="collapse-icon">
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
@@ -2131,39 +2414,56 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                         {/* Items grouped by date */}
                         {!isVehicleCollapsed && vehicleItems.length > 0 && (
-                          <div className="vehicle-items">
-                            {vehicleItems.map(item => {
+                          <div
+                            className={`vehicle-items ${dragOverVehicleId === vehicle.id && draggedItems.length > 0 ? 'drag-over' : ''}`}
+                            onDragOver={(e) => handleVehicleDragOver(e, vehicle.id)}
+                            onDrop={(e) => handleItemDrop(e, vehicle.id, dragOverIndex ?? undefined)}
+                          >
+                            {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
                               const weightInfo = formatWeight(item.cast_unit_weight);
+                              const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
+                              const showDropBefore = dragOverVehicleId === vehicle.id && dragOverIndex === idx;
+                              const showDropAfter = dragOverVehicleId === vehicle.id && dragOverIndex === idx + 1 && idx === vehicleItems.length - 1;
 
                               return (
-                                <div
-                                  key={item.id}
-                                  className={`delivery-item ${isSelected ? 'selected' : ''}`}
-                                  onClick={(e) => handleItemClick(item, e)}
-                                >
-                                  <div className="item-checkbox">
-                                    <input
-                                      type="checkbox"
-                                      checked={isSelected}
-                                      onChange={() => {
-                                        setSelectedItemIds(prev => {
-                                          const next = new Set(prev);
-                                          if (next.has(item.id)) {
-                                            next.delete(item.id);
-                                          } else {
-                                            next.add(item.id);
-                                          }
-                                          return next;
-                                        });
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
+                                <div key={item.id} className="delivery-item-wrapper">
+                                  {showDropBefore && <div className="drop-indicator" />}
+                                  <div
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                                    draggable
+                                    onDragStart={(e) => handleItemDragStart(e, item)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
+                                    onClick={(e) => handleItemClick(item, e)}
+                                  >
+                                    <div className="item-drag-handle">
+                                      <FiMove />
+                                    </div>
+                                    <div className="item-checkbox">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {
+                                          setSelectedItemIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(item.id)) {
+                                              next.delete(item.id);
+                                            } else {
+                                              next.add(item.id);
+                                            }
+                                            return next;
+                                          });
+                                        }}
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </div>
+                                    <span className="item-mark">{item.assembly_mark}</span>
+                                    <span className="item-product">{item.product_name || '-'}</span>
+                                    <span className="item-position">{item.cast_unit_position_code || '-'}</span>
+                                    <span className="item-weight">{weightInfo?.kg || '-'}</span>
                                   </div>
-                                  <span className="item-mark">{item.assembly_mark}</span>
-                                  <span className="item-product">{item.product_name || '-'}</span>
-                                  <span className="item-position">{item.cast_unit_position_code || '-'}</span>
-                                  <span className="item-weight">{weightInfo?.kg || '-'}</span>
+                                  {showDropAfter && <div className="drop-indicator" />}
                                 </div>
                               );
                             })}
