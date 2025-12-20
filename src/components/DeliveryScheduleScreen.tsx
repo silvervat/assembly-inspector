@@ -330,6 +330,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [addModalFactoryId, setAddModalFactoryId] = useState<string>('');
   const [addModalVehicleId, setAddModalVehicleId] = useState<string>('');
   const [addModalNewVehicle, setAddModalNewVehicle] = useState(false);
+  const [addModalComment, setAddModalComment] = useState<string>('');
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -339,6 +340,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleStartTime, setVehicleStartTime] = useState<string>('');
   const [vehicleDuration, setVehicleDuration] = useState<number>(0);
   const [vehicleType, setVehicleType] = useState<string>('haagis');
+  const [vehicleNewComment, setVehicleNewComment] = useState<string>('');
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -865,7 +867,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ITEM OPERATIONS
   // ============================================
 
-  const addItemsToVehicle = async (vehicleId: string, date: string) => {
+  const addItemsToVehicle = async (vehicleId: string, date: string, comment?: string) => {
     if (selectedObjects.length === 0) {
       setMessage('Vali mudelist detailid');
       return;
@@ -898,15 +900,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         created_by: tcUserEmail
       }));
 
-      const { error } = await supabase
+      const { data: insertedItems, error } = await supabase
         .from('trimble_delivery_items')
-        .insert(newItems);
+        .insert(newItems)
+        .select();
 
       if (error) throw error;
 
-      await Promise.all([loadItems(), loadVehicles()]);
+      // Add comment to each item if provided
+      if (comment && comment.trim() && insertedItems && insertedItems.length > 0) {
+        const itemComments = insertedItems.map(item => ({
+          trimble_project_id: projectId,
+          delivery_item_id: item.id,
+          vehicle_id: vehicleId,
+          comment_text: comment.trim(),
+          created_by: tcUserEmail,
+          created_by_name: tcUserEmail.split('@')[0]
+        }));
+
+        await supabase
+          .from('trimble_delivery_comments')
+          .insert(itemComments);
+      }
+
+      await Promise.all([loadItems(), loadVehicles(), loadComments()]);
       setMessage(`${newItems.length} detaili lisatud veokisse ${vehicle?.vehicle_code || ''}`);
       setShowAddModal(false);
+      setAddModalComment(''); // Clear comment
 
       // Clear selection
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -1814,6 +1834,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setVehicleStartTime(vehicle.unload_start_time || '');
                               setVehicleDuration(vehicle.unload_duration_minutes || 0);
                               setVehicleType(vehicle.vehicle_type || 'haagis');
+                              setVehicleNewComment('');
                               setShowVehicleModal(true);
                               setVehicleMenuId(null);
                             }}>
@@ -2315,6 +2336,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </label>
                 </div>
               </div>
+              <div className="form-group">
+                <label>Kommentaar (lisatakse igale detailile)</label>
+                <textarea
+                  value={addModalComment}
+                  onChange={(e) => setAddModalComment(e.target.value)}
+                  placeholder="Nt: Eriprojekt, kiire tarne, kontrolli mõõte..."
+                  rows={2}
+                />
+              </div>
               <div className="selected-objects-preview">
                 <h4>Lisatavad detailid ({selectedObjects.length})</h4>
                 <div className="objects-list">
@@ -2351,7 +2381,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     vehicleId = newVehicle.id;
                   }
 
-                  await addItemsToVehicle(vehicleId, addModalDate);
+                  await addItemsToVehicle(vehicleId, addModalDate, addModalComment);
                 }}
               >
                 {saving ? 'Lisan...' : 'Lisa'}
@@ -2502,8 +2532,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     ...editingVehicle,
                     notes: e.target.value
                   })}
-                  rows={3}
+                  rows={2}
                 />
+              </div>
+
+              <div className="form-section">
+                <h4>Kommentaarid</h4>
+                <div className="vehicle-comments-list">
+                  {comments
+                    .filter(c => c.vehicle_id === editingVehicle.id && !c.delivery_item_id)
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .slice(0, 5)
+                    .map(c => (
+                      <div key={c.id} className="comment-item">
+                        <span className="comment-author">{c.created_by_name || c.created_by.split('@')[0]}</span>
+                        <span className="comment-date">{new Date(c.created_at).toLocaleDateString('et-EE')}</span>
+                        <span className="comment-text">{c.comment_text}</span>
+                      </div>
+                    ))}
+                </div>
+                <div className="form-group">
+                  <label>Lisa uus kommentaar</label>
+                  <textarea
+                    value={vehicleNewComment}
+                    onChange={(e) => setVehicleNewComment(e.target.value)}
+                    placeholder="Kirjuta kommentaar veokile..."
+                    rows={2}
+                  />
+                </div>
               </div>
             </div>
             <div className="modal-footer">
@@ -2523,6 +2579,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     unload_duration_minutes: vehicleDuration || undefined,
                     notes: editingVehicle.notes
                   });
+
+                  // Add new comment if provided
+                  if (vehicleNewComment.trim()) {
+                    await supabase
+                      .from('trimble_delivery_comments')
+                      .insert({
+                        trimble_project_id: projectId,
+                        vehicle_id: editingVehicle.id,
+                        comment_text: vehicleNewComment.trim(),
+                        created_by: tcUserEmail,
+                        created_by_name: tcUserEmail.split('@')[0]
+                      });
+                    await loadComments();
+                  }
+
                   setShowVehicleModal(false);
                 }}
               >
