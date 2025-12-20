@@ -1940,7 +1940,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredItemId(itemId);
       setTooltipPosition({ x: rect.right + 8, y: rect.top });
-    }, 400);
+    }, 750);
   };
 
   const handleItemMouseLeave = () => {
