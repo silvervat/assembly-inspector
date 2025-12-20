@@ -1250,3 +1250,97 @@
 .setting-option-compact input:disabled + .setting-text {
   opacity: 0.5;
 }
+
+/* Export Modal */
+.settings-modal.export-modal {
+  max-width: 320px;
+}
+
+.export-columns-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--modus-text-secondary);
+  margin-bottom: 8px;
+}
+
+.export-columns-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.export-column-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.export-column-item:last-child {
+  border-bottom: none;
+}
+
+.export-column-item input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+.export-column-item span {
+  flex: 1;
+  font-size: 12px;
+}
+
+.export-column-item span.disabled {
+  opacity: 0.5;
+}
+
+.column-order-btns {
+  display: flex;
+  gap: 2px;
+}
+
+.column-order-btns button {
+  background: none;
+  border: 1px solid #e5e7eb;
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.column-order-btns button:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: var(--modus-text-secondary);
+}
+
+.column-order-btns button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.export-download-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.export-download-btn:hover {
+  background: var(--modus-primary-dark);
+}

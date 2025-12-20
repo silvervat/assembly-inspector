@@ -167,6 +167,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
   const [playbackDateColors, setPlaybackDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
+  // Export settings
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportColumns, setExportColumns] = useState([
+    { id: 'nr', label: 'Nr', enabled: true },
+    { id: 'date', label: 'Kuupäev', enabled: true },
+    { id: 'day', label: 'Päev', enabled: true },
+    { id: 'mark', label: 'Assembly Mark', enabled: true },
+    { id: 'position', label: 'Position Code', enabled: true },
+    { id: 'product', label: 'Toode', enabled: true },
+    { id: 'weight', label: 'Kaal (kg)', enabled: true },
+    { id: 'method', label: 'Paigaldusviis', enabled: true },
+    { id: 'guid_ms', label: 'GUID (MS)', enabled: false },
+    { id: 'guid_ifc', label: 'GUID (IFC)', enabled: false },
+    { id: 'percentage', label: 'Kumulatiivne %', enabled: true }
+  ]);
+
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
     if (playbackSettings.colorEachDayDifferent) {
@@ -1395,6 +1411,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   const dateStats = getDateStats();
 
+  // Get install method label
+  const getInstallMethodLabel = (method: string | null | undefined, count: number | undefined): string => {
+    if (!method) return '';
+    const labels: Record<string, string> = {
+      crane: 'Kraana',
+      forklift: 'Tõstuk',
+      manual: 'Käsitsi'
+    };
+    const label = labels[method] || method;
+    return count && count > 1 ? `${label} x${count}` : label;
+  };
+
+  // Column width mapping
+  const columnWidths: Record<string, number> = {
+    nr: 5, date: 12, day: 12, mark: 20, position: 15,
+    product: 25, weight: 12, method: 14, guid_ms: 40, guid_ifc: 25, percentage: 12
+  };
+
   // Export to real Excel .xlsx file with date-based colors
   const exportToExcel = () => {
     const sortedItems = getAllItemsSorted();
@@ -1404,6 +1438,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setMessage('Graafik on tühi, pole midagi eksportida');
       return;
     }
+
+    // Get enabled columns in order
+    const enabledCols = exportColumns.filter(c => c.enabled);
 
     // Generate colors for each date (same as model coloring)
     const dates = Object.keys(itemsByDate);
@@ -1417,19 +1454,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       right: { style: 'thin', color: { rgb: 'CCCCCC' } }
     };
 
-    // Main data sheet
-    const mainData: any[][] = [[
-      'Nr',
-      'Kuupäev',
-      'Päev',
-      'Assembly Mark',
-      'Position Code',
-      'Toode',
-      'Kaal (kg)',
-      'GUID (MS)',
-      'GUID (IFC)',
-      'Kumulatiivne %'
-    ]];
+    // Main data sheet - header row from enabled columns
+    const mainData: any[][] = [enabledCols.map(c => c.label)];
+
+    // Find date column index for coloring
+    const dateColIndex = enabledCols.findIndex(c => c.id === 'date');
 
     let cumulative = 0;
     sortedItems.forEach((item, index) => {
@@ -1439,18 +1468,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       const dateFormatted = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
       const weekday = WEEKDAY_NAMES[date.getDay()];
 
-      mainData.push([
-        index + 1,
-        dateFormatted,
-        weekday,
-        item.assembly_mark || '',
-        item.cast_unit_position_code || '',
-        item.product_name || '',
-        item.cast_unit_weight || '',
-        item.guid_ms || '',
-        item.guid_ifc || item.guid || '',
-        `${percentage}%`
-      ]);
+      // Build row based on enabled columns
+      const row = enabledCols.map(col => {
+        switch (col.id) {
+          case 'nr': return index + 1;
+          case 'date': return dateFormatted;
+          case 'day': return weekday;
+          case 'mark': return item.assembly_mark || '';
+          case 'position': return item.cast_unit_position_code || '';
+          case 'product': return item.product_name || '';
+          case 'weight': return item.cast_unit_weight || '';
+          case 'method': return getInstallMethodLabel(item.install_method, item.install_method_count);
+          case 'guid_ms': return item.guid_ms || '';
+          case 'guid_ifc': return item.guid_ifc || item.guid || '';
+          case 'percentage': return `${percentage}%`;
+          default: return '';
+        }
+      });
+      mainData.push(row);
     });
 
     // Summary sheet
@@ -1479,19 +1514,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     const ws1 = XLSX.utils.aoa_to_sheet(mainData);
 
-    // Set column widths
-    ws1['!cols'] = [
-      { wch: 5 },   // Nr
-      { wch: 12 },  // Kuupäev
-      { wch: 12 },  // Päev
-      { wch: 20 },  // Assembly Mark
-      { wch: 15 },  // Position Code
-      { wch: 25 },  // Toode
-      { wch: 12 },  // Kaal
-      { wch: 40 },  // GUID MS
-      { wch: 25 },  // GUID IFC
-      { wch: 12 }   // %
-    ];
+    // Set column widths based on enabled columns
+    ws1['!cols'] = enabledCols.map(c => ({ wch: columnWidths[c.id] || 12 }));
 
     // Apply header style with border
     const headerStyle = {
@@ -1500,7 +1524,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       alignment: { horizontal: 'center' },
       border: thinBorder
     };
-    for (let c = 0; c < 10; c++) {
+    for (let c = 0; c < enabledCols.length; c++) {
       const cellRef = XLSX.utils.encode_cell({ r: 0, c });
       if (ws1[cellRef]) {
         ws1[cellRef].s = headerStyle;
@@ -1508,17 +1532,18 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     // Add autofilter to header row
-    ws1['!autofilter'] = { ref: `A1:J${sortedItems.length + 1}` };
+    const lastCol = String.fromCharCode(65 + enabledCols.length - 1);
+    ws1['!autofilter'] = { ref: `A1:${lastCol}${sortedItems.length + 1}` };
 
-    // Apply styles to data rows - only date column (column 1) gets color
+    // Apply styles to data rows - only date column gets color
     sortedItems.forEach((item, index) => {
       const rowIndex = index + 1; // +1 for header row
       const color = dateColors[item.scheduled_date];
 
-      for (let c = 0; c < 10; c++) {
+      for (let c = 0; c < enabledCols.length; c++) {
         const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c });
         if (ws1[cellRef]) {
-          if (c === 1 && color) {
+          if (c === dateColIndex && color) {
             // Date column - apply color
             const bgColor = rgbToHex(color.r, color.g, color.b);
             const textColor = getTextColor(color.r, color.g, color.b);
@@ -1591,6 +1616,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       : 'projekt';
     const dateStr = new Date().toISOString().split('T')[0];
     XLSX.writeFile(wb, `${safeProjectName}_paigaldusgraafik_${dateStr}.xlsx`);
+    setShowExportModal(false);
+  };
+
+  // Toggle export column
+  const toggleExportColumn = (id: string) => {
+    setExportColumns(prev => prev.map(c =>
+      c.id === id ? { ...c, enabled: !c.enabled } : c
+    ));
+  };
+
+  // Move export column up/down
+  const moveExportColumn = (id: string, direction: 'up' | 'down') => {
+    setExportColumns(prev => {
+      const idx = prev.findIndex(c => c.id === id);
+      if (idx === -1) return prev;
+      if (direction === 'up' && idx === 0) return prev;
+      if (direction === 'down' && idx === prev.length - 1) return prev;
+
+      const newCols = [...prev];
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      [newCols[idx], newCols[swapIdx]] = [newCols[swapIdx], newCols[idx]];
+      return newCols;
+    });
   };
 
   // Generate date picker options (next 60 days)
@@ -1900,13 +1948,62 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
         <button
           className="export-btn"
-          onClick={exportToExcel}
+          onClick={() => setShowExportModal(true)}
           disabled={scheduleItems.length === 0}
           title="Ekspordi Excel"
         >
           <FiDownload size={16} />
         </button>
       </div>
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
+          <div className="settings-modal export-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Ekspordi Excel</h3>
+              <button onClick={() => setShowExportModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="export-columns-header">
+                <span>Veerud ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
+              </div>
+              <div className="export-columns-list">
+                {exportColumns.map((col, idx) => (
+                  <div key={col.id} className="export-column-item">
+                    <input
+                      type="checkbox"
+                      checked={col.enabled}
+                      onChange={() => toggleExportColumn(col.id)}
+                    />
+                    <span className={col.enabled ? '' : 'disabled'}>{col.label}</span>
+                    <div className="column-order-btns">
+                      <button
+                        onClick={() => moveExportColumn(col.id, 'up')}
+                        disabled={idx === 0}
+                        title="Liiguta üles"
+                      >
+                        <FiArrowUp size={12} />
+                      </button>
+                      <button
+                        onClick={() => moveExportColumn(col.id, 'down')}
+                        disabled={idx === exportColumns.length - 1}
+                        title="Liiguta alla"
+                      >
+                        <FiArrowDown size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <button className="export-download-btn" onClick={exportToExcel}>
+                <FiDownload size={14} />
+                Lae alla ({filteredItems.length} rida)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (
