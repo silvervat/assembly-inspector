@@ -1885,13 +1885,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     summaryData.push([]); // Empty row
     summaryData.push(['Tehnika statistika', '', '', '', '']);
     summaryData.push(['Kraana päevi', '', daysWithCrane.size, '', '']);
-    summaryData.push(['Tõstuki päevi', '', daysWithForklift.size, '', '']);
+    summaryData.push(['Teleskooplaaduri päevi', '', daysWithForklift.size, '', '']);
     summaryData.push(['Käsitsi päevi', '', daysWithManual.size, '', '']);
 
     // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
     ws2['!cols'] = [
-      { wch: 16 },
+      { wch: 22 },
       { wch: 12 },
       { wch: 10 },
       { wch: 12 },
