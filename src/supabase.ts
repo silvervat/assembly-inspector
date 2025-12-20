@@ -397,6 +397,21 @@ export interface InstallerStats {
 
 export type ScheduleItemStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
 
+// Installation method types
+export type InstallMethodType = 'crane' | 'forklift' | 'manual' | 'poomtostuk' | 'kaartostuk' | 'troppija' | 'monteerija' | 'keevitaja';
+
+// Install methods with counts (JSONB in database)
+export interface InstallMethods {
+  crane?: number;
+  forklift?: number;
+  manual?: number;
+  poomtostuk?: number;
+  kaartostuk?: number;
+  troppija?: number;
+  monteerija?: number;
+  keevitaja?: number;
+}
+
 export interface ScheduleItem {
   id: string;
   project_id: string;
@@ -416,9 +431,11 @@ export interface ScheduleItem {
   scheduled_date: string;
   sort_order: number;
   notes?: string;
-  // Paigaldusviis
+  // Paigaldusviis (legacy - deprecated)
   install_method?: 'crane' | 'forklift' | 'manual' | null;
   install_method_count?: number;
+  // Paigaldusviisid (uus JSONB formaat)
+  install_methods?: InstallMethods | null;
   // Staatus
   status: ScheduleItemStatus;
   // Audit väljad
