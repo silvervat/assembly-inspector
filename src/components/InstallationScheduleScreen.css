@@ -531,6 +531,12 @@
   border: 1px solid var(--modus-border);
 }
 
+/* Allow dropdown menu to overflow when open */
+.date-group:has(.menu-open) {
+  overflow: visible;
+  z-index: 200;
+}
+
 .date-group.drag-over {
   border-color: var(--modus-primary);
   box-shadow: 0 0 0 2px rgba(0, 103, 177, 0.2);
