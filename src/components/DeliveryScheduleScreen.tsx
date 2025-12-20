@@ -85,14 +85,16 @@ interface UnloadMethodConfig {
   icon: string;
   bgColor: string;
   activeBgColor: string;
+  filterCss: string;
   maxCount: number;
   defaultCount: number;
 }
 
 const UNLOAD_METHODS: UnloadMethodConfig[] = [
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', maxCount: 4, defaultCount: 1 },
-  { key: 'telescopic', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', maxCount: 4, defaultCount: 1 },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', maxCount: 1, defaultCount: 0 }
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
+  { key: 'telescopic', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 2, defaultCount: 1 }
 ];
 
 // ============================================
@@ -105,13 +107,50 @@ interface ResourceConfig {
   icon: string;
   bgColor: string;
   activeBgColor: string;
+  filterCss: string;
   maxCount: number;
   defaultCount: number;
 }
 
 const RESOURCE_TYPES: ResourceConfig[] = [
-  { key: 'taasnik', label: 'Taasnik', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', maxCount: 8, defaultCount: 2 },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', maxCount: 5, defaultCount: 1 }
+  { key: 'taasnik', label: 'Taasnik', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 8, defaultCount: 2 },
+  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1 }
+];
+
+// ============================================
+// VEHICLE TYPE CONFIG
+// ============================================
+
+const VEHICLE_TYPES = [
+  { key: 'haagis', label: 'Haagis' },
+  { key: 'kinni', label: 'Täiesti kinni' },
+  { key: 'lahti', label: 'Lahti haagis' },
+  { key: 'extralong', label: 'Ekstra pikk haagis' }
+];
+
+// ============================================
+// TIME AND DURATION OPTIONS
+// ============================================
+
+// Kellaaja valikud: tühi + 6:30 - 19:00 (30 min sammuga)
+const TIME_OPTIONS = [
+  '', // Tühi - kellaaeg pole veel teada
+  '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
+  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00',
+  '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
+  '17:00', '17:30', '18:00', '18:30', '19:00'
+];
+
+const DURATION_OPTIONS = [
+  { value: 0, label: '-' },  // Kestus pole veel teada
+  { value: 30, label: '30 min' },
+  { value: 60, label: '1 tund' },
+  { value: 90, label: '1.5 tundi' },
+  { value: 120, label: '2 tundi' },
+  { value: 150, label: '2.5 tundi' },
+  { value: 180, label: '3 tundi' },
+  { value: 210, label: '3.5 tundi' },
+  { value: 240, label: '4 tundi' }
 ];
 
 // ============================================
@@ -291,12 +330,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [addModalFactoryId, setAddModalFactoryId] = useState<string>('');
   const [addModalVehicleId, setAddModalVehicleId] = useState<string>('');
   const [addModalNewVehicle, setAddModalNewVehicle] = useState(false);
+  const [addModalComment, setAddModalComment] = useState<string>('');
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<DeliveryVehicle | null>(null);
   const [vehicleUnloadMethods, setVehicleUnloadMethods] = useState<UnloadMethods>({});
   const [vehicleResources, setVehicleResources] = useState<DeliveryResources>({});
+  const [vehicleStartTime, setVehicleStartTime] = useState<string>('');
+  const [vehicleDuration, setVehicleDuration] = useState<number>(0);
+  const [vehicleType, setVehicleType] = useState<string>('haagis');
+  const [vehicleNewComment, setVehicleNewComment] = useState<string>('');
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -320,7 +364,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'nr', label: 'Nr', enabled: true },
     { id: 'date', label: 'Kuupäev', enabled: true },
     { id: 'day', label: 'Päev', enabled: true },
+    { id: 'time', label: 'Kellaaeg', enabled: true },
+    { id: 'duration', label: 'Kestus', enabled: true },
     { id: 'vehicle', label: 'Veok', enabled: true },
+    { id: 'vehicle_type', label: 'Veoki tüüp', enabled: true },
     { id: 'factory', label: 'Tehas', enabled: true },
     { id: 'mark', label: 'Assembly Mark', enabled: true },
     { id: 'position', label: 'Position Code', enabled: true },
@@ -330,6 +377,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'crane', label: 'Kraana', enabled: true },
     { id: 'telescopic', label: 'Teleskoop', enabled: true },
     { id: 'manual', label: 'Käsitsi', enabled: true },
+    { id: 'poomtostuk', label: 'Poomtõstuk', enabled: true },
     { id: 'taasnik', label: 'Taasnik', enabled: true },
     { id: 'keevitaja', label: 'Keevitaja', enabled: true },
     { id: 'guid_ms', label: 'GUID (MS)', enabled: true },
@@ -819,7 +867,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ITEM OPERATIONS
   // ============================================
 
-  const addItemsToVehicle = async (vehicleId: string, date: string) => {
+  const addItemsToVehicle = async (vehicleId: string, date: string, comment?: string) => {
     if (selectedObjects.length === 0) {
       setMessage('Vali mudelist detailid');
       return;
@@ -852,15 +900,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         created_by: tcUserEmail
       }));
 
-      const { error } = await supabase
+      const { data: insertedItems, error } = await supabase
         .from('trimble_delivery_items')
-        .insert(newItems);
+        .insert(newItems)
+        .select();
 
       if (error) throw error;
 
-      await Promise.all([loadItems(), loadVehicles()]);
+      // Add comment to each item if provided
+      if (comment && comment.trim() && insertedItems && insertedItems.length > 0) {
+        const itemComments = insertedItems.map(item => ({
+          trimble_project_id: projectId,
+          delivery_item_id: item.id,
+          vehicle_id: vehicleId,
+          comment_text: comment.trim(),
+          created_by: tcUserEmail,
+          created_by_name: tcUserEmail.split('@')[0]
+        }));
+
+        await supabase
+          .from('trimble_delivery_comments')
+          .insert(itemComments);
+      }
+
+      await Promise.all([loadItems(), loadVehicles(), loadComments()]);
       setMessage(`${newItems.length} detaili lisatud veokisse ${vehicle?.vehicle_code || ''}`);
       setShowAddModal(false);
+      setAddModalComment(''); // Clear comment
 
       // Clear selection
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -1095,20 +1161,36 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const row: any[] = [];
 
         enabledColumns.forEach(col => {
+          // Detaili-taseme meetodid, kui on; muidu veoki omad
+          const itemMethods = item.unload_methods || vehicle?.unload_methods;
+
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
             case 'date': row.push(item.scheduled_date); break;
             case 'day': row.push(WEEKDAY_NAMES[new Date(item.scheduled_date).getDay()]); break;
+            case 'time': row.push(vehicle?.unload_start_time || '08:00'); break;
+            case 'duration': {
+              const mins = vehicle?.unload_duration_minutes || 90;
+              const hours = mins / 60;
+              row.push(hours === Math.floor(hours) ? `${hours}h` : `${hours.toFixed(1)}h`);
+              break;
+            }
             case 'vehicle': row.push(vehicle?.vehicle_code || ''); break;
+            case 'vehicle_type': {
+              const typeLabel = VEHICLE_TYPES.find(t => t.key === vehicle?.vehicle_type)?.label || vehicle?.vehicle_type || '';
+              row.push(typeLabel);
+              break;
+            }
             case 'factory': row.push(factory?.factory_name || ''); break;
             case 'mark': row.push(item.assembly_mark); break;
             case 'position': row.push(item.cast_unit_position_code || ''); break;
             case 'product': row.push(item.product_name || ''); break;
             case 'weight': row.push(item.cast_unit_weight || ''); break;
             case 'status': row.push(ITEM_STATUS_CONFIG[item.status]?.label || item.status); break;
-            case 'crane': row.push(vehicle?.unload_methods?.crane || ''); break;
-            case 'telescopic': row.push(vehicle?.unload_methods?.telescopic || ''); break;
-            case 'manual': row.push(vehicle?.unload_methods?.manual || ''); break;
+            case 'crane': row.push(itemMethods?.crane || ''); break;
+            case 'telescopic': row.push(itemMethods?.telescopic || ''); break;
+            case 'manual': row.push(itemMethods?.manual || ''); break;
+            case 'poomtostuk': row.push(itemMethods?.poomtostuk || ''); break;
             case 'taasnik': row.push(vehicle?.resources?.taasnik || ''); break;
             case 'keevitaja': row.push(vehicle?.resources?.keevitaja || ''); break;
             case 'guid_ms': row.push(item.guid_ms || ''); break;
@@ -1749,6 +1831,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setEditingVehicle(vehicle);
                               setVehicleUnloadMethods(vehicle.unload_methods || {});
                               setVehicleResources(vehicle.resources || {});
+                              setVehicleStartTime(vehicle.unload_start_time || '');
+                              setVehicleDuration(vehicle.unload_duration_minutes || 0);
+                              setVehicleType(vehicle.vehicle_type || 'haagis');
+                              setVehicleNewComment('');
                               setShowVehicleModal(true);
                               setVehicleMenuId(null);
                             }}>
@@ -2250,6 +2336,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </label>
                 </div>
               </div>
+              <div className="form-group">
+                <label>Kommentaar (lisatakse igale detailile)</label>
+                <textarea
+                  value={addModalComment}
+                  onChange={(e) => setAddModalComment(e.target.value)}
+                  placeholder="Nt: Eriprojekt, kiire tarne, kontrolli mõõte..."
+                  rows={2}
+                />
+              </div>
               <div className="selected-objects-preview">
                 <h4>Lisatavad detailid ({selectedObjects.length})</h4>
                 <div className="objects-list">
@@ -2286,7 +2381,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     vehicleId = newVehicle.id;
                   }
 
-                  await addItemsToVehicle(vehicleId, addModalDate);
+                  await addItemsToVehicle(vehicleId, addModalDate, addModalComment);
                 }}
               >
                 {saving ? 'Lisan...' : 'Lisa'}
@@ -2320,6 +2415,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <option key={key} value={key}>{config.label}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label><FiTruck style={{ marginRight: 4 }} />Veoki tüüp</label>
+                  <select
+                    value={vehicleType}
+                    onChange={(e) => setVehicleType(e.target.value)}
+                  >
+                    {VEHICLE_TYPES.map(type => (
+                      <option key={type.key} value={type.key}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
+                  <select
+                    value={vehicleStartTime}
+                    onChange={(e) => setVehicleStartTime(e.target.value)}
+                  >
+                    {TIME_OPTIONS.map(time => (
+                      <option key={time || 'empty'} value={time}>{time || '- Pole teada -'}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Kestus</label>
+                  <select
+                    value={vehicleDuration}
+                    onChange={(e) => setVehicleDuration(Number(e.target.value))}
+                  >
+                    {DURATION_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div className="form-section">
@@ -2398,8 +2532,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     ...editingVehicle,
                     notes: e.target.value
                   })}
-                  rows={3}
+                  rows={2}
                 />
+              </div>
+
+              <div className="form-section">
+                <h4>Kommentaarid</h4>
+                <div className="vehicle-comments-list">
+                  {comments
+                    .filter(c => c.vehicle_id === editingVehicle.id && !c.delivery_item_id)
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .slice(0, 5)
+                    .map(c => (
+                      <div key={c.id} className="comment-item">
+                        <span className="comment-author">{c.created_by_name || c.created_by.split('@')[0]}</span>
+                        <span className="comment-date">{new Date(c.created_at).toLocaleDateString('et-EE')}</span>
+                        <span className="comment-text">{c.comment_text}</span>
+                      </div>
+                    ))}
+                </div>
+                <div className="form-group">
+                  <label>Lisa uus kommentaar</label>
+                  <textarea
+                    value={vehicleNewComment}
+                    onChange={(e) => setVehicleNewComment(e.target.value)}
+                    placeholder="Kirjuta kommentaar veokile..."
+                    rows={2}
+                  />
+                </div>
               </div>
             </div>
             <div className="modal-footer">
@@ -2412,10 +2572,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 onClick={async () => {
                   await updateVehicle(editingVehicle.id, {
                     status: editingVehicle.status,
+                    vehicle_type: vehicleType as any,
                     unload_methods: vehicleUnloadMethods,
                     resources: vehicleResources,
+                    unload_start_time: vehicleStartTime || undefined,
+                    unload_duration_minutes: vehicleDuration || undefined,
                     notes: editingVehicle.notes
                   });
+
+                  // Add new comment if provided
+                  if (vehicleNewComment.trim()) {
+                    await supabase
+                      .from('trimble_delivery_comments')
+                      .insert({
+                        trimble_project_id: projectId,
+                        vehicle_id: editingVehicle.id,
+                        comment_text: vehicleNewComment.trim(),
+                        created_by: tcUserEmail,
+                        created_by_name: tcUserEmail.split('@')[0]
+                      });
+                    await loadComments();
+                  }
+
                   setShowVehicleModal(false);
                 }}
               >

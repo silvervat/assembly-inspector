@@ -536,11 +536,19 @@ export type DeliveryVehicleStatus =
   | 'completed'    // Lõpetatud
   | 'cancelled';   // Tühistatud
 
+// Veoki tüübid
+export type DeliveryVehicleType =
+  | 'kinni'        // Täiesti kinni (kinnine kast)
+  | 'haagis'       // Tavaline haagis
+  | 'lahti'        // Lahti haagis (avatud)
+  | 'extralong';   // Ekstra pikk haagis
+
 // Mahalaadimise meetodid
 export interface UnloadMethods {
   crane?: number;      // Kraana
   telescopic?: number; // Teleskooplaadur
   manual?: number;     // Käsitsi
+  poomtostuk?: number; // Poomtõstuk
 }
 
 // Ressursid (töötajad)
@@ -556,12 +564,17 @@ export interface DeliveryVehicle {
   factory_id: string;
   vehicle_number: number;            // 1, 2, 3...
   vehicle_code: string;              // "OPO1", "OPO2" (genereeritakse automaatselt)
+  vehicle_type?: DeliveryVehicleType; // Veoki tüüp (kinni, haagis, lahti, extralong)
   scheduled_date: string;            // Mis kuupäeval see veok tuleb
   unload_methods?: UnloadMethods;    // Mahalaadimise meetodid
   resources?: DeliveryResources;     // Ressursid (töötajad)
   status: DeliveryVehicleStatus;
   item_count: number;                // Arvutatakse triggeriga
   total_weight: number;              // Arvutatakse triggeriga
+  // Kellaaeg ja kestus
+  unload_start_time?: string;        // Mahalaadimise algusaeg (HH:MM)
+  unload_duration_minutes?: number;  // Kestus minutites (default 90 = 1.5h)
+  sort_order?: number;               // Järjekord päeva sees
   notes?: string;
   created_at: string;
   created_by: string;
@@ -601,6 +614,7 @@ export interface DeliveryItem {
   scheduled_date: string;            // Planeeritud kuupäev
   sort_order: number;
   status: DeliveryItemStatus;
+  unload_methods?: UnloadMethods;    // Detaili-taseme mahalaadimise meetodid
   notes?: string;
   created_at: string;
   created_by: string;
