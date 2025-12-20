@@ -96,6 +96,17 @@ const getTextColor = (r: number, g: number, b: number): string => {
   return luminance > 0.5 ? '000000' : 'FFFFFF';
 };
 
+// Format weight - convert to tons if >= 1000 kg
+const formatWeight = (weight: string | number | null | undefined): string => {
+  if (!weight) return '';
+  const kg = typeof weight === 'string' ? parseFloat(weight) : weight;
+  if (isNaN(kg)) return '';
+  if (kg >= 1000) {
+    return `${(kg / 1000).toFixed(1)}t`;
+  }
+  return `${Math.round(kg)}`;
+};
+
 export default function InstallationScheduleScreen({ api, projectId, user: _user, tcUserEmail, onBackToMenu }: Props) {
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -2555,7 +2566,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               <div className="item-main-row">
                                 <span className="item-mark">{item.assembly_mark}</span>
                                 {item.cast_unit_weight && (
-                                  <span className="item-weight">{item.cast_unit_weight} kg</span>
+                                  <span className="item-weight">{formatWeight(item.cast_unit_weight)}</span>
                                 )}
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}

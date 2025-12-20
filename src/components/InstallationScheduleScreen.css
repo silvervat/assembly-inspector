@@ -1274,12 +1274,15 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 8px;
+  gap: 4px;
+  overflow: hidden;
 }
 
 .item-main-row .item-mark {
-  flex: 1;
-  min-width: 0;
+  flex-shrink: 1;
+  min-width: 40px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .item-weight {
