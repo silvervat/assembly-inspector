@@ -1707,9 +1707,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           }
         }
 
-        // Select all day items in viewer
+        // Select all day items in viewer and list
         await selectDateInViewer(currentDate);
+        const dayItemIds = new Set(dateItems.map(item => item.id));
+        setSelectedItemIds(dayItemIds);
         setCurrentPlaybackDate(currentDate);
+
+        // Scroll list to current date
+        scrollToDateInList(currentDate);
 
         // Auto-switch calendar month
         const dateObj = new Date(currentDate);
@@ -1837,7 +1842,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, isPaused, showingDayOverview, currentPlayIndex, currentDayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors, itemsByDate]);
+  }, [isPlaying, isPaused, showingDayOverview, currentPlayIndex, currentDayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors, itemsByDate, scrollToDateInList, collapsedDates, currentMonth]);
 
   // Auto-scroll to playing item
   useEffect(() => {
@@ -3539,7 +3544,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <input
                   type="checkbox"
                   checked={playbackSettings.playByDay}
-                  onChange={e => setPlaybackSettings(prev => ({ ...prev, playByDay: e.target.checked }))}
+                  disabled={playbackSettings.showDayOverview}
+                  onChange={e => setPlaybackSettings(prev => ({
+                    ...prev,
+                    playByDay: e.target.checked,
+                    showDayOverview: e.target.checked ? false : prev.showDayOverview
+                  }))}
                 />
                 <div className="setting-text">
                   <span>Päevade kaupa</span>
@@ -3553,7 +3563,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <input
                   type="checkbox"
                   checked={playbackSettings.showDayOverview}
-                  onChange={e => setPlaybackSettings(prev => ({ ...prev, showDayOverview: e.target.checked }))}
+                  disabled={playbackSettings.playByDay}
+                  onChange={e => setPlaybackSettings(prev => ({
+                    ...prev,
+                    showDayOverview: e.target.checked,
+                    playByDay: e.target.checked ? false : prev.playByDay
+                  }))}
                 />
                 <div className="setting-text">
                   <span>Päeva ülevaade</span>
@@ -3723,6 +3738,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
                               className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                              title={`Detail: ${item.assembly_mark}  |  Kaal: ${item.cast_unit_weight || '-'}  |  Asukoht: ${item.cast_unit_position_code || '-'}  |  Toode: ${item.product_name || '-'}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
