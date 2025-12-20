@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
-import { supabase, ScheduleItem, TrimbleExUser } from '../supabase';
+import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp
+  FiSettings, FiChevronUp, FiMoreVertical
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -107,6 +107,56 @@ const formatWeight = (weight: string | number | null | undefined): string => {
   return `${Math.round(kg)}`;
 };
 
+// ============================================
+// PAIGALDUSVIISID - Installation Methods Config
+// ============================================
+
+interface MethodConfig {
+  key: InstallMethodType;
+  label: string;
+  icon: string;
+  bgColor: string;       // Background color for icon
+  filterCss: string;     // CSS filter for icon coloring
+  maxCount: number;
+  defaultCount: number;
+}
+
+const INSTALL_METHODS: MethodConfig[] = [
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2 },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#fef3c7', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
+  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#d1fae5', filterCss: 'invert(35%) sepia(50%) saturate(700%) hue-rotate(130deg) brightness(85%)', maxCount: 4, defaultCount: 1 },
+  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', filterCss: 'invert(55%) sepia(40%) saturate(600%) hue-rotate(130deg) brightness(90%)', maxCount: 15, defaultCount: 1 },
+  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1 },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#dcfce7', filterCss: 'invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+];
+
+// Load default counts from localStorage
+const loadDefaultCounts = (): Record<InstallMethodType, number> => {
+  try {
+    const saved = localStorage.getItem('installMethodDefaults');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('Failed to load install method defaults:', e);
+  }
+  // Return default values from config
+  const defaults: Record<string, number> = {};
+  INSTALL_METHODS.forEach(m => { defaults[m.key] = m.defaultCount; });
+  return defaults as Record<InstallMethodType, number>;
+};
+
+// Save default counts to localStorage
+const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
+  try {
+    localStorage.setItem('installMethodDefaults', JSON.stringify(defaults));
+  } catch (e) {
+    console.warn('Failed to save install method defaults:', e);
+  }
+};
+
 export default function InstallationScheduleScreen({ api, projectId, user: _user, tcUserEmail, onBackToMenu }: Props) {
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -129,6 +179,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   // Date picker for moving items
   const [datePickerItemId, setDatePickerItemId] = useState<string | null>(null);
+
+  // Item menu state (three-dot menu)
+  const [itemMenuId, setItemMenuId] = useState<string | null>(null);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -153,12 +206,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
 
-  // Installation method for new items
-  const [selectedInstallMethod, setSelectedInstallMethod] = useState<'crane' | 'forklift' | 'manual' | null>(null);
-  const [selectedInstallMethodCount, setSelectedInstallMethodCount] = useState<number>(1);
+  // Installation methods for new items (multiple methods with counts)
+  const [selectedInstallMethods, setSelectedInstallMethods] = useState<InstallMethods>({});
+  const [methodDefaults, setMethodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
+  const [hoveredMethod, setHoveredMethod] = useState<InstallMethodType | null>(null);
 
-  // Context menu for install method
-  const [installMethodContextMenu, setInstallMethodContextMenu] = useState<{ x: number; y: number; method: 'crane' | 'forklift' | 'manual' } | null>(null);
+  // Context menu for install method (legacy - will be removed)
+  const [installMethodContextMenu, setInstallMethodContextMenu] = useState<{ x: number; y: number; method: InstallMethodType } | null>(null);
   const [listItemContextMenu, setListItemContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null);
 
   // Calendar collapsed state
@@ -188,7 +242,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     { id: 'position', label: 'Position Code', enabled: true },
     { id: 'product', label: 'Toode', enabled: true },
     { id: 'weight', label: 'Kaal (kg)', enabled: true },
-    { id: 'method', label: 'Paigaldusviis', enabled: true },
+    // Individual method columns
+    { id: 'crane', label: 'Kraana', enabled: true },
+    { id: 'forklift', label: 'Telesk.', enabled: true },
+    { id: 'poomtostuk', label: 'Poomtõstuk', enabled: true },
+    { id: 'kaartostuk', label: 'Käärtõstuk', enabled: true },
+    { id: 'troppija', label: 'Troppija', enabled: true },
+    { id: 'monteerija', label: 'Monteerija', enabled: true },
+    { id: 'keevitaja', label: 'Keevitaja', enabled: true },
+    { id: 'manual', label: 'Käsitsi', enabled: true },
     { id: 'guid_ms', label: 'GUID (MS)', enabled: false },
     { id: 'guid_ifc', label: 'GUID (IFC)', enabled: false },
     { id: 'percentage', label: 'Kumulatiivne %', enabled: true }
@@ -518,6 +580,47 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     return `${year}-${month}-${day}`;
   };
 
+  // Toggle install method on/off
+  const toggleInstallMethod = (method: InstallMethodType) => {
+    setSelectedInstallMethods(prev => {
+      const newMethods = { ...prev };
+      if (newMethods[method]) {
+        // Remove method
+        delete newMethods[method];
+      } else {
+        // Add method with default count
+        newMethods[method] = methodDefaults[method] || INSTALL_METHODS.find(m => m.key === method)?.defaultCount || 1;
+      }
+      return newMethods;
+    });
+  };
+
+  // Set count for a method
+  const setMethodCount = (method: InstallMethodType, count: number) => {
+    const config = INSTALL_METHODS.find(m => m.key === method);
+    if (!config) return;
+
+    // Ensure count is within bounds
+    const validCount = Math.max(1, Math.min(count, config.maxCount));
+
+    setSelectedInstallMethods(prev => ({
+      ...prev,
+      [method]: validCount
+    }));
+
+    // Update default for this method
+    setMethodDefaults(prev => {
+      const newDefaults = { ...prev, [method]: validCount };
+      saveDefaultCounts(newDefaults);
+      return newDefaults;
+    });
+  };
+
+  // Get method config by key
+  const getMethodConfig = (key: InstallMethodType): MethodConfig | undefined => {
+    return INSTALL_METHODS.find(m => m.key === key);
+  };
+
   // Add selected objects to date
   const addToDate = async (date: string) => {
     if (selectedObjects.length === 0) {
@@ -538,6 +641,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       const newItems = selectedObjects.map((obj, idx) => {
         const guidMs = obj.guidIfc ? ifcToMsGuid(obj.guidIfc) : undefined;
 
+        // Prepare install_methods - only include methods with counts > 0
+        const methods = Object.keys(selectedInstallMethods).length > 0 ? selectedInstallMethods : null;
+
         return {
           project_id: projectId,
           model_id: obj.modelId,
@@ -552,8 +658,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           scheduled_date: date,
           sort_order: (itemsByDate[date]?.length || 0) + idx,
           status: 'planned',
-          install_method: selectedInstallMethod,
-          install_method_count: selectedInstallMethod ? selectedInstallMethodCount : null,
+          install_methods: methods,
           created_by: tcUserEmail
         };
       });
@@ -1715,22 +1820,43 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   const dateStats = getDateStats();
 
-  // Get install method label
-  const getInstallMethodLabel = (method: string | null | undefined, count: number | undefined): string => {
-    if (!method) return '';
-    const labels: Record<string, string> = {
-      crane: 'Kraana',
-      forklift: 'Teleskooplaadur',
-      manual: 'Käsitsi'
-    };
-    const label = labels[method] || method;
-    return count && count > 1 ? `${label} x${count}` : label;
+  // Get all methods from an item (supports both legacy and new format)
+  const getItemMethods = (item: ScheduleItem): InstallMethods => {
+    if (item.install_methods && Object.keys(item.install_methods).length > 0) {
+      return item.install_methods;
+    }
+    if (item.install_method) {
+      return { [item.install_method]: item.install_method_count || 1 } as InstallMethods;
+    }
+    return {};
   };
 
-  // Column width mapping
+  // Format all methods for display (e.g., "Kraana: 2, Monteerija: 4")
+  const formatMethodsForExcel = (item: ScheduleItem): string => {
+    const methods = getItemMethods(item);
+    const parts: string[] = [];
+    for (const [key, count] of Object.entries(methods)) {
+      const config = INSTALL_METHODS.find(m => m.key === key);
+      if (config && count) {
+        parts.push(`${config.label}: ${count}`);
+      }
+    }
+    return parts.join(', ');
+  };
+
+  // Get method count for a specific method type
+  const getMethodCountForItem = (item: ScheduleItem, methodKey: InstallMethodType): number => {
+    const methods = getItemMethods(item);
+    return methods[methodKey] || 0;
+  };
+
+  // Column width mapping - include new method columns
   const columnWidths: Record<string, number> = {
     nr: 5, date: 12, day: 12, mark: 20, position: 15,
-    product: 25, weight: 12, method: 14, guid_ms: 40, guid_ifc: 25, percentage: 12
+    product: 25, weight: 12, method: 30,
+    crane: 8, forklift: 8, poomtostuk: 10, kaartostuk: 10,
+    troppija: 8, monteerija: 10, keevitaja: 9, manual: 8,
+    guid_ms: 40, guid_ifc: 25, percentage: 12
   };
 
   // Export to real Excel .xlsx file with date-based colors
@@ -1782,7 +1908,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           case 'position': return item.cast_unit_position_code || '';
           case 'product': return item.product_name || '';
           case 'weight': return item.cast_unit_weight || '';
-          case 'method': return getInstallMethodLabel(item.install_method, item.install_method_count);
+          // Method columns - show count or empty
+          case 'crane': return getMethodCountForItem(item, 'crane') || '';
+          case 'forklift': return getMethodCountForItem(item, 'forklift') || '';
+          case 'poomtostuk': return getMethodCountForItem(item, 'poomtostuk') || '';
+          case 'kaartostuk': return getMethodCountForItem(item, 'kaartostuk') || '';
+          case 'troppija': return getMethodCountForItem(item, 'troppija') || '';
+          case 'monteerija': return getMethodCountForItem(item, 'monteerija') || '';
+          case 'keevitaja': return getMethodCountForItem(item, 'keevitaja') || '';
+          case 'manual': return getMethodCountForItem(item, 'manual') || '';
           case 'guid_ms': return item.guid_ms || '';
           case 'guid_ifc': return item.guid_ifc || item.guid || '';
           case 'percentage': return `${percentage}%`;
@@ -1866,10 +2000,43 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     XLSX.utils.book_append_sheet(wb, ws1, 'Graafik');
 
+    // Calculate equipment statistics - count days that need each method
+    const daysWithMethod: Record<InstallMethodType, Set<string>> = {
+      crane: new Set(),
+      forklift: new Set(),
+      manual: new Set(),
+      poomtostuk: new Set(),
+      kaartostuk: new Set(),
+      troppija: new Set(),
+      monteerija: new Set(),
+      keevitaja: new Set(),
+    };
+
+    sortedItems.forEach(item => {
+      const methods = getItemMethods(item);
+      for (const [key, count] of Object.entries(methods)) {
+        if (count && count > 0 && daysWithMethod[key as InstallMethodType]) {
+          daysWithMethod[key as InstallMethodType].add(item.scheduled_date);
+        }
+      }
+    });
+
+    // Add equipment statistics to summary
+    summaryData.push([]); // Empty row
+    summaryData.push(['Tehnika statistika', '', '', '', '']);
+    summaryData.push(['Kraana päevi', '', daysWithMethod.crane.size, '', '']);
+    summaryData.push(['Teleskooplaaduri päevi', '', daysWithMethod.forklift.size, '', '']);
+    summaryData.push(['Poomtõstuki päevi', '', daysWithMethod.poomtostuk.size, '', '']);
+    summaryData.push(['Käärtõstuki päevi', '', daysWithMethod.kaartostuk.size, '', '']);
+    summaryData.push(['Troppijaid päevi', '', daysWithMethod.troppija.size, '', '']);
+    summaryData.push(['Monteerijaid päevi', '', daysWithMethod.monteerija.size, '', '']);
+    summaryData.push(['Keevitajaid päevi', '', daysWithMethod.keevitaja.size, '', '']);
+    summaryData.push(['Käsitsi päevi', '', daysWithMethod.manual.size, '', '']);
+
     // Summary sheet
     const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
     ws2['!cols'] = [
-      { wch: 12 },
+      { wch: 22 },
       { wch: 12 },
       { wch: 10 },
       { wch: 12 },
@@ -1884,7 +2051,17 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     }
 
-    // Add autofilter to summary header
+    // Style the statistics section header
+    const statsHeaderRow = sortedDates.length + 2; // After data + empty row
+    const statsHeaderRef = XLSX.utils.encode_cell({ r: statsHeaderRow, c: 0 });
+    if (ws2[statsHeaderRef]) {
+      ws2[statsHeaderRef].s = {
+        font: { bold: true },
+        border: thinBorder
+      };
+    }
+
+    // Add autofilter to summary header (only for main data)
     ws2['!autofilter'] = { ref: `A1:E${sortedDates.length + 1}` };
 
     // Apply styles to summary rows - only date column (column 0) gets color
@@ -2130,9 +2307,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
         return (
           <div className="selection-info">
+            {/* First row: selection count and status */}
             <div className="selection-info-row">
-              <span>Valitud mudelis: {selectedObjects.length}</span>
-              {allScheduled ? (
+              <span>Valitud mudelis: <strong>{selectedObjects.length}</strong></span>
+              {allScheduled && (
                 <span
                   className="already-scheduled-info clickable"
                   onClick={() => highlightScheduledItemsRed(scheduledInfo)}
@@ -2140,7 +2318,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 >
                   ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
                 </span>
-              ) : someScheduled ? (
+              )}
+              {someScheduled && (
                 <span
                   className="partially-scheduled-info clickable"
                   onClick={() => highlightScheduledItemsRed(scheduledInfo)}
@@ -2148,78 +2327,64 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 >
                   ⚠ {scheduledInfo.length} juba planeeritud
                 </span>
-              ) : (
-                <div className="install-method-selector">
-                  <span>Paigaldus:</span>
-                  <button
-                    className={`install-method-btn method-crane ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (selectedInstallMethod === 'crane') {
-                        setSelectedInstallMethod(null);
-                        setSelectedInstallMethodCount(1);
-                      } else {
-                        setSelectedInstallMethod('crane');
-                      }
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setSelectedInstallMethod('crane');
-                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'crane' });
-                    }}
-                    title="Kraana (parem klõps = x2)"
-                  >
-                    <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
-                    {selectedInstallMethod === 'crane' && selectedInstallMethodCount > 1 && (
-                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
-                    )}
-                  </button>
-                  <button
-                    className={`install-method-btn method-forklift ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (selectedInstallMethod === 'forklift') {
-                        setSelectedInstallMethod(null);
-                        setSelectedInstallMethodCount(1);
-                      } else {
-                        setSelectedInstallMethod('forklift');
-                      }
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setSelectedInstallMethod('forklift');
-                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'forklift' });
-                    }}
-                    title="Teleskooplaadur (parem klõps = x2)"
-                  >
-                    <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
-                    {selectedInstallMethod === 'forklift' && selectedInstallMethodCount > 1 && (
-                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
-                    )}
-                  </button>
-                  <button
-                    className={`install-method-btn method-manual ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
-                    onClick={() => {
-                      if (selectedInstallMethod === 'manual') {
-                        setSelectedInstallMethod(null);
-                        setSelectedInstallMethodCount(1);
-                      } else {
-                        setSelectedInstallMethod('manual');
-                      }
-                    }}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setSelectedInstallMethod('manual');
-                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'manual' });
-                    }}
-                    title="Käsitsi (parem klõps = x2)"
-                  >
-                    <img src={`${import.meta.env.BASE_URL}icons/manual.png`} alt="Käsitsi" />
-                    {selectedInstallMethod === 'manual' && selectedInstallMethodCount > 1 && (
-                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
-                    )}
-                  </button>
-                </div>
               )}
             </div>
+
+            {/* Second row: method icons (only when not all scheduled) */}
+            {!allScheduled && (
+              <div className="install-methods-row">
+                {INSTALL_METHODS.map(method => {
+                  const isActive = !!selectedInstallMethods[method.key];
+                  const count = selectedInstallMethods[method.key] || 0;
+                  const isHovered = hoveredMethod === method.key && isActive;
+
+                  return (
+                    <div
+                      key={method.key}
+                      className="method-selector-wrapper"
+                      onMouseEnter={() => setHoveredMethod(method.key)}
+                      onMouseLeave={() => setHoveredMethod(null)}
+                    >
+                      <button
+                        className={`method-icon-btn ${isActive ? 'active' : ''}`}
+                        style={{ backgroundColor: isActive ? method.bgColor : undefined }}
+                        onClick={() => toggleInstallMethod(method.key)}
+                        title={method.label}
+                      >
+                        <img
+                          src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                          alt={method.label}
+                          style={{ filter: method.filterCss }}
+                        />
+                        {isActive && count > 0 && (
+                          <span className="method-count-badge">{count}</span>
+                        )}
+                      </button>
+
+                      {/* Hover quantity selector */}
+                      {isHovered && (
+                        <div className="method-qty-dropdown">
+                          {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                            <button
+                              key={num}
+                              className={`qty-btn ${count === num ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMethodCount(method.key, num);
+                              }}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Third row: add button */}
             {!allScheduled && selectedDate && (
               <button
                 className="btn-primary add-to-date-btn"
@@ -2571,63 +2736,105 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
-                            {item.install_method && (
-                              <div
-                                className="item-install-icons"
-                                onContextMenu={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setListItemContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
-                                }}
-                              >
-                                <img
-                                  src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
-                                  alt={item.install_method}
-                                  className={`item-install-icon method-${item.install_method}`}
-                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
-                                />
-                                {(item.install_method_count ?? 1) > 1 && (
-                                  <img
-                                    src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
-                                    alt={item.install_method}
-                                    className={`item-install-icon method-${item.install_method}`}
-                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
-                                  />
-                                )}
+                            {/* Display all install methods with badges */}
+                            {(() => {
+                              // Get methods - support both legacy and new format
+                              const methods: InstallMethods = item.install_methods ||
+                                (item.install_method ? { [item.install_method]: item.install_method_count || 1 } : {});
+                              const methodKeys = Object.keys(methods) as InstallMethodType[];
+
+                              if (methodKeys.length === 0) return null;
+
+                              return (
+                                <div className="item-methods-display">
+                                  {methodKeys.map(key => {
+                                    const config = getMethodConfig(key);
+                                    if (!config) return null;
+                                    const count = methods[key] || 0;
+
+                                    return (
+                                      <div
+                                        key={key}
+                                        className="item-method-badge"
+                                        style={{ backgroundColor: config.bgColor }}
+                                        title={`${config.label}: ${count}`}
+                                      >
+                                        <img
+                                          src={`${import.meta.env.BASE_URL}icons/${config.icon}`}
+                                          alt={config.label}
+                                          style={{ filter: config.filterCss }}
+                                        />
+                                        {count > 0 && <span className="badge-count">{count}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                            {/* Three-dot menu button */}
+                            <button
+                              className="item-menu-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setItemMenuId(itemMenuId === item.id ? null : item.id);
+                                setDatePickerItemId(null);
+                              }}
+                              title="Menüü"
+                            >
+                              <FiMoreVertical size={14} />
+                            </button>
+
+                            {/* Item dropdown menu */}
+                            {itemMenuId === item.id && (
+                              <div className="item-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  className={`item-menu-option ${idx === 0 ? 'disabled' : ''}`}
+                                  onClick={() => {
+                                    if (idx > 0) {
+                                      reorderItem(item.id, 'up');
+                                      setItemMenuId(null);
+                                    }
+                                  }}
+                                  disabled={idx === 0}
+                                >
+                                  <FiArrowUp size={12} />
+                                  <span>Liiguta üles</span>
+                                </button>
+                                <button
+                                  className={`item-menu-option ${idx === items.length - 1 ? 'disabled' : ''}`}
+                                  onClick={() => {
+                                    if (idx < items.length - 1) {
+                                      reorderItem(item.id, 'down');
+                                      setItemMenuId(null);
+                                    }
+                                  }}
+                                  disabled={idx === items.length - 1}
+                                >
+                                  <FiArrowDown size={12} />
+                                  <span>Liiguta alla</span>
+                                </button>
+                                <button
+                                  className="item-menu-option"
+                                  onClick={() => {
+                                    setItemMenuId(null);
+                                    setDatePickerItemId(item.id);
+                                  }}
+                                >
+                                  <FiCalendar size={12} />
+                                  <span>Muuda kuupäeva</span>
+                                </button>
+                                <button
+                                  className="item-menu-option delete"
+                                  onClick={() => {
+                                    deleteItem(item.id);
+                                    setItemMenuId(null);
+                                  }}
+                                >
+                                  <FiTrash2 size={12} />
+                                  <span>Kustuta</span>
+                                </button>
                               </div>
                             )}
-                            <div className="item-actions">
-                              <button
-                                className="item-action-btn"
-                                onClick={(e) => { e.stopPropagation(); reorderItem(item.id, 'up'); }}
-                                disabled={idx === 0}
-                                title="Liiguta üles"
-                              >
-                                <FiArrowUp size={10} />
-                              </button>
-                              <button
-                                className="item-action-btn"
-                                onClick={(e) => { e.stopPropagation(); reorderItem(item.id, 'down'); }}
-                                disabled={idx === items.length - 1}
-                                title="Liiguta alla"
-                              >
-                                <FiArrowDown size={10} />
-                              </button>
-                              <button
-                                className="item-action-btn calendar-btn"
-                                onClick={(e) => { e.stopPropagation(); setDatePickerItemId(datePickerItemId === item.id ? null : item.id); }}
-                                title="Muuda kuupäeva"
-                              >
-                                <FiCalendar size={10} />
-                              </button>
-                              <button
-                                className="item-action-btn delete-btn"
-                                onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                                title="Kustuta"
-                              >
-                                <FiTrash2 size={10} />
-                              </button>
-                            </div>
 
                             {/* Date picker dropdown */}
                             {datePickerItemId === item.id && (
@@ -2712,12 +2919,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       )}
 
       {/* Click outside to close context menus */}
-      {(installMethodContextMenu || listItemContextMenu) && (
+      {(installMethodContextMenu || listItemContextMenu || itemMenuId || datePickerItemId) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
             setInstallMethodContextMenu(null);
             setListItemContextMenu(null);
+            setItemMenuId(null);
+            setDatePickerItemId(null);
           }}
         />
       )}
