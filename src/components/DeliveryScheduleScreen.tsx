@@ -363,6 +363,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleDuration, setVehicleDuration] = useState<number>(0);
   const [vehicleType, setVehicleType] = useState<string>('haagis');
   const [vehicleNewComment, setVehicleNewComment] = useState<string>('');
+  const [hoveredMethod, setHoveredMethod] = useState<string | null>(null);
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -438,6 +439,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [itemEditStatus, setItemEditStatus] = useState<string>('planned');
   const [itemEditUnloadMethods, setItemEditUnloadMethods] = useState<UnloadMethods>({});
   const [itemEditNotes, setItemEditNotes] = useState<string>('');
+
+  // Inline editing state for vehicle list
+  const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
+  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | null>(null);
 
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
@@ -1140,6 +1145,78 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
   void moveVehicleToDate; // Suppress unused warning
+
+  // ============================================
+  // INLINE VEHICLE EDIT
+  // ============================================
+
+  const updateVehicleInline = async (vehicleId: string, field: string, value: string | number | null) => {
+    setSaving(true);
+    try {
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+        updated_by: tcUserEmail
+      };
+
+      if (field === 'time') {
+        updateData.unload_start_time = value || null;
+      } else if (field === 'duration') {
+        updateData.unload_duration_minutes = value || null;
+      } else if (field === 'status') {
+        updateData.status = value;
+      }
+
+      const { error } = await supabase
+        .from('trimble_delivery_vehicles')
+        .update(updateData)
+        .eq('id', vehicleId);
+
+      if (error) throw error;
+
+      // Update local state
+      setVehicles(prev => prev.map(v =>
+        v.id === vehicleId ? { ...v, ...updateData } : v
+      ));
+
+      setInlineEditVehicleId(null);
+      setInlineEditField(null);
+    } catch (e: any) {
+      console.error('Error updating vehicle:', e);
+      setMessage('Viga salvestamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================
+  // UNLOAD METHOD TOGGLE
+  // ============================================
+
+  // Toggle unload method on/off (click on icon)
+  const toggleUnloadMethod = (methodKey: keyof UnloadMethods) => {
+    setVehicleUnloadMethods(prev => {
+      const newMethods = { ...prev };
+      if (newMethods[methodKey]) {
+        // Remove method (second click)
+        delete newMethods[methodKey];
+      } else {
+        // Add method with default count (first click)
+        const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
+        newMethods[methodKey] = methodConfig?.defaultCount || 1;
+      }
+      return newMethods;
+    });
+  };
+
+  // Set specific count for a method
+  const setUnloadMethodCount = (methodKey: keyof UnloadMethods, count: number) => {
+    const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
+    if (!methodConfig) return;
+    setVehicleUnloadMethods(prev => ({
+      ...prev,
+      [methodKey]: Math.min(count, methodConfig.maxCount)
+    }));
+  };
 
   // ============================================
   // ITEM OPERATIONS
@@ -2467,10 +2544,66 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
-                            {/* Time section */}
+                            {/* Time section - inline editable */}
                             <div className="vehicle-time-section">
-                              <span className="time-primary">{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
-                              <span className="time-secondary">{formatDuration(vehicle?.unload_duration_minutes)}</span>
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
+                                <select
+                                  className="inline-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'time', e.target.value);
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {TIME_OPTIONS.map(time => (
+                                    <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="time-primary clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('time');
+                                  }}
+                                  title="Klikka muutmiseks"
+                                >{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
+                              )}
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'duration' ? (
+                                <select
+                                  className="inline-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.unload_duration_minutes || 60}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'duration', Number(e.target.value));
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {DURATION_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="time-secondary clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('duration');
+                                  }}
+                                  title="Klikka muutmiseks"
+                                >{formatDuration(vehicle?.unload_duration_minutes)}</span>
+                              )}
                             </div>
 
                             <FiTruck className="vehicle-icon" />
@@ -2485,10 +2618,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 }}
                                 title="Märgista mudelis"
                               >{vehicle?.vehicle_code || 'Määramata'}</span>
-                              {statusConfig && (
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
+                                <select
+                                  className="inline-select status-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.status || 'planned'}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'status', e.target.value);
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
+                                    <option key={key} value={key}>{config.label}</option>
+                                  ))}
+                                </select>
+                              ) : statusConfig && (
                                 <span
-                                  className="status-badge"
+                                  className="status-badge clickable"
                                   style={{ backgroundColor: statusConfig.bgColor, color: statusConfig.color }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('status');
+                                  }}
+                                  title="Klikka muutmiseks"
                                 >
                                   {statusConfig.label}
                                 </span>
@@ -3368,32 +3525,52 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               <div className="form-section">
                 <h4>Mahalaadimise ressursid</h4>
-                <div className="methods-grid">
+                <div className="method-selectors">
                   {UNLOAD_METHODS.map(method => {
                     const count = vehicleUnloadMethods[method.key] || 0;
+                    const isActive = count > 0;
+                    const isHovered = hoveredMethod === method.key;
+
                     return (
-                      <div key={method.key} className="method-item">
-                        <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
-                        <span>{method.label}</span>
-                        <div className="method-counter">
-                          <button
-                            onClick={() => setVehicleUnloadMethods(prev => ({
-                              ...prev,
-                              [method.key]: Math.max(0, (prev[method.key] || 0) - 1)
-                            }))}
-                          >
-                            -
-                          </button>
-                          <span>{count}</span>
-                          <button
-                            onClick={() => setVehicleUnloadMethods(prev => ({
-                              ...prev,
-                              [method.key]: Math.min(method.maxCount, (prev[method.key] || 0) + 1)
-                            }))}
-                          >
-                            +
-                          </button>
-                        </div>
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredMethod(method.key)}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                      >
+                        <button
+                          className={`method-selector ${isActive ? 'active' : ''}`}
+                          style={{
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                          }}
+                          onClick={() => toggleUnloadMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span className="method-badge">{count}</span>
+                          )}
+                        </button>
+                        {isHovered && isActive && (
+                          <div className="method-qty-dropdown">
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                className={`qty-btn ${count === num ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUnloadMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
