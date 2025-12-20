@@ -1418,10 +1418,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       if (item.model_id) {
         const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
         if (runtimeIds && runtimeIds.length > 0) {
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
-            { visible: true }
-          );
+          const modelObjectIds = { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] };
+          // First reset visibility (clears blanket hide state from hideEntireModel)
+          await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
+          // Then explicitly set to visible
+          await api.viewer.setObjectState(modelObjectIds, { visible: true });
           return;
         }
       }
@@ -1434,10 +1435,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         try {
           const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
           if (runtimeIds && runtimeIds.length > 0) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
-              { visible: true }
-            );
+            const modelObjectIds = { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] };
+            // First reset visibility (clears blanket hide state from hideEntireModel)
+            await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
+            // Then explicitly set to visible
+            await api.viewer.setObjectState(modelObjectIds, { visible: true });
             return; // Found and shown, stop searching
           }
         } catch {
@@ -1631,15 +1633,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     const playNext = async () => {
       // Check if we've moved to a new day - show day overview for completed day
-      if (currentPlaybackDate && currentPlaybackDate !== item.scheduled_date) {
+      const previousDate = currentPlaybackDate;
+      const isNewDay = previousDate && previousDate !== item.scheduled_date;
+
+      if (isNewDay) {
+        // Update current playback date BEFORE showing overview
+        // This prevents double-showing when useEffect re-runs after overview completes
+        setCurrentPlaybackDate(item.scheduled_date);
+
         // Show day overview for the completed day if enabled
         if (playbackSettings.showDayOverview) {
-          await showDayOverviewFor(currentPlaybackDate);
+          await showDayOverviewFor(previousDate);
         }
 
         // Option 1: Color previous day black (only if option 3 is not enabled)
         if (playbackSettings.colorPreviousDayBlack && !playbackSettings.colorEachDayDifferent) {
-          await colorDateItems(currentPlaybackDate, { r: 40, g: 40, b: 40 });
+          await colorDateItems(previousDate, { r: 40, g: 40, b: 40 });
         }
       }
 
@@ -1669,8 +1678,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
       await selectInViewer(item);
 
-      // Update current playback date
-      setCurrentPlaybackDate(item.scheduled_date);
+      // Update current playback date (if not already updated above for new day)
+      if (!isNewDay) {
+        setCurrentPlaybackDate(item.scheduled_date);
+      }
 
       // Auto-switch calendar month to keep playback date visible
       const itemDate = new Date(item.scheduled_date);
