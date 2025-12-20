@@ -439,6 +439,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
 
+  // Comment modal state
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentModalTarget, setCommentModalTarget] = useState<{ type: 'item' | 'vehicle'; id: string } | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
+
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -528,6 +534,80 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const getVehicleCommentCount = useCallback((vehicleId: string): number => {
     return comments.filter(c => c.vehicle_id === vehicleId && !c.delivery_item_id).length;
   }, [comments]);
+
+  // Get comments for item or vehicle
+  const getCommentsFor = useCallback((type: 'item' | 'vehicle', id: string): DeliveryComment[] => {
+    if (type === 'item') {
+      return comments.filter(c => c.delivery_item_id === id);
+    }
+    return comments.filter(c => c.vehicle_id === id && !c.delivery_item_id);
+  }, [comments]);
+
+  // Open comment modal
+  const openCommentModal = (type: 'item' | 'vehicle', id: string) => {
+    setCommentModalTarget({ type, id });
+    setNewCommentText('');
+    setShowCommentModal(true);
+  };
+
+  // Add comment
+  const addComment = async () => {
+    if (!commentModalTarget || !newCommentText.trim()) return;
+
+    setSavingComment(true);
+    try {
+      const commentData: Record<string, unknown> = {
+        trimble_project_id: projectId,
+        comment_text: newCommentText.trim(),
+        created_by: tcUserEmail
+      };
+
+      if (commentModalTarget.type === 'item') {
+        const item = items.find(i => i.id === commentModalTarget.id);
+        if (item) {
+          commentData.delivery_item_id = commentModalTarget.id;
+          commentData.vehicle_id = item.vehicle_id;
+        }
+      } else {
+        commentData.vehicle_id = commentModalTarget.id;
+      }
+
+      const { error } = await supabase
+        .from('trimble_delivery_comments')
+        .insert(commentData);
+
+      if (error) throw error;
+
+      setNewCommentText('');
+      await loadComments();
+    } catch (e) {
+      console.error('Error adding comment:', e);
+    } finally {
+      setSavingComment(false);
+    }
+  };
+
+  // Delete comment
+  const deleteComment = async (commentId: string) => {
+    const comment = comments.find(c => c.id === commentId);
+    if (!comment) return;
+
+    // Only owner can delete
+    const isOwner = comment.created_by === tcUserEmail;
+    if (!isOwner) return;
+
+    try {
+      const { error } = await supabase
+        .from('trimble_delivery_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+      await loadComments();
+    } catch (e) {
+      console.error('Error deleting comment:', e);
+    }
+  };
 
   // Stats
   const totalItems = items.length;
@@ -2395,14 +2475,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             onClick={(e) => {
                               e.stopPropagation();
                               if (vehicle) {
-                                setEditingVehicle(vehicle);
-                                setVehicleUnloadMethods(vehicle.unload_methods || {});
-                                setVehicleResources(vehicle.resources || {});
-                                setVehicleStartTime(vehicle.unload_start_time || '');
-                                setVehicleDuration(vehicle.unload_duration_minutes || 0);
-                                setVehicleType(vehicle.vehicle_type || 'haagis');
-                                setVehicleNewComment('');
-                                setShowVehicleModal(true);
+                                openCommentModal('vehicle', vehicle.id);
                               }
                             }}
                             title="Kommentaarid"
@@ -2547,7 +2620,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       className="item-comment-btn"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        // TODO: Open item comment modal
+                                        openCommentModal('item', item.id);
                                       }}
                                       title="Kommentaarid"
                                     >
@@ -2832,22 +2905,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       {/* Toolbar */}
       <div className="delivery-toolbar">
-        {/* Selected items actions */}
-        {selectedItemIds.size > 0 && (
-          <div className="batch-actions">
-            <span>{selectedItemIds.size} valitud</span>
-            <button onClick={() => setShowMoveModal(true)}>
-              <FiMove /> Tõsta
-            </button>
-            <button className="danger" onClick={deleteSelectedItems}>
-              <FiTrash2 /> Kustuta
-            </button>
-            <button onClick={() => setSelectedItemIds(new Set())}>
-              <FiX /> Tühista
-            </button>
-          </div>
-        )}
-
         {/* Playback controls */}
         <div className="playback-controls">
           {!isPlaying ? (
@@ -2905,20 +2962,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {/* Calendar */}
         {renderCalendar()}
 
-        {/* Selected objects info - between calendar and search */}
-        {selectedObjects.length > 0 && (
-          <div className="selection-bar">
-            <span className="selection-count">{selectedObjects.length} detaili valitud</span>
-            <span className="selection-hint">Vali kalendrist kuupäev koorma planeerimiseks</span>
-            <button
-              className="add-btn primary"
-              onClick={() => {
-                setAddModalDate(selectedDate || formatDateForDB(new Date()));
-                setShowAddModal(true);
-              }}
-            >
-              <FiPlus /> Lisa veokisse
-            </button>
+        {/* Selection bars - between calendar and search */}
+        {(selectedObjects.length > 0 || selectedItemIds.size > 0) && (
+          <div className="selection-bars">
+            {/* Selected objects from model */}
+            {selectedObjects.length > 0 && (
+              <div className="selection-bar model-selection">
+                <span className="selection-count">{selectedObjects.length} valitud</span>
+                <button
+                  className="add-btn primary"
+                  onClick={() => {
+                    setAddModalDate(selectedDate || formatDateForDB(new Date()));
+                    setShowAddModal(true);
+                  }}
+                >
+                  <FiPlus /> Lisa veokisse
+                </button>
+              </div>
+            )}
+
+            {/* Selected items from list */}
+            {selectedItemIds.size > 0 && (
+              <div className="selection-bar item-selection">
+                <span className="selection-count">{selectedItemIds.size} valitud</span>
+                <button onClick={() => setShowMoveModal(true)}>
+                  <FiMove /> Tõsta
+                </button>
+                <button className="danger" onClick={deleteSelectedItems}>
+                  <FiTrash2 /> Kustuta
+                </button>
+                <button onClick={() => setSelectedItemIds(new Set())}>
+                  <FiX /> Tühista
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -3607,6 +3684,83 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <button className="cancel-btn" onClick={() => setShowSettingsModal(false)}>
                 Sulge
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Comment Modal */}
+      {showCommentModal && commentModalTarget && (
+        <div className="modal-overlay" onClick={() => setShowCommentModal(false)}>
+          <div className="comment-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>
+                {commentModalTarget.type === 'item'
+                  ? (() => {
+                      const item = items.find(i => i.id === commentModalTarget.id);
+                      return `Kommentaarid: ${item?.assembly_mark || '...'}`;
+                    })()
+                  : (() => {
+                      const vehicle = vehicles.find(v => v.id === commentModalTarget.id);
+                      return `Kommentaarid: ${vehicle?.vehicle_code || '...'}`;
+                    })()
+                }
+              </h3>
+              <button onClick={() => setShowCommentModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="comment-modal-body">
+              {/* Existing comments */}
+              <div className="comments-list">
+                {getCommentsFor(commentModalTarget.type, commentModalTarget.id).length === 0 ? (
+                  <div className="no-comments">Kommentaare pole</div>
+                ) : (
+                  getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
+                    const isOwner = comment.created_by === tcUserEmail;
+                    return (
+                      <div key={comment.id} className="comment-item">
+                        <div className="comment-header">
+                          <div className="comment-author-info">
+                            <span className="comment-author">{comment.created_by}</span>
+                          </div>
+                          <span className="comment-date">
+                            {new Date(comment.created_at).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {' '}
+                            {new Date(comment.created_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {isOwner && (
+                            <button
+                              className="comment-delete-btn"
+                              onClick={() => deleteComment(comment.id)}
+                              title="Kustuta kommentaar"
+                            >
+                              <FiTrash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="comment-text">{comment.comment_text}</div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Add new comment */}
+              <div className="add-comment-section">
+                <textarea
+                  value={newCommentText}
+                  onChange={e => setNewCommentText(e.target.value)}
+                  placeholder="Lisa kommentaar..."
+                  rows={3}
+                  className="comment-textarea"
+                />
+                <button
+                  className="add-comment-btn"
+                  onClick={addComment}
+                  disabled={!newCommentText.trim() || savingComment}
+                >
+                  {savingComment ? 'Salvestan...' : 'Lisa kommentaar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
