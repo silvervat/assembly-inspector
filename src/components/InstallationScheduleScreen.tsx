@@ -1157,6 +1157,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setLastClickedId(null);
   };
 
+  // Select all items in current filtered list
+  const selectAllItems = () => {
+    const ids = new Set(filteredItems.map(item => item.id));
+    setSelectedItemIds(ids);
+  };
+
+  // Select/toggle all items in a date group (Ctrl+click on date header)
+  const toggleDateSelection = (date: string, addToSelection: boolean) => {
+    const dateItems = itemsByDate[date] || [];
+    const dateItemIds = dateItems.map(item => item.id);
+
+    if (addToSelection) {
+      // Ctrl+click: add/remove all items from this date
+      setSelectedItemIds(prev => {
+        const next = new Set(prev);
+        const allSelected = dateItemIds.every(id => prev.has(id));
+        if (allSelected) {
+          // All selected -> remove all
+          dateItemIds.forEach(id => next.delete(id));
+        } else {
+          // Not all selected -> add all
+          dateItemIds.forEach(id => next.add(id));
+        }
+        return next;
+      });
+    } else {
+      // Normal click: select only this date's items
+      setSelectedItemIds(new Set(dateItemIds));
+    }
+  };
+
   // Move multiple items to date
   const moveSelectedItemsToDate = async (targetDate: string) => {
     if (selectedItemIds.size === 0) return;
@@ -1693,13 +1724,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {/* Multi-select bar */}
       {selectedItemIds.size > 0 && (
         <div className="multi-select-bar">
-          <span>{selectedItemIds.size} detaili valitud</span>
+          <span>{selectedItemIds.size} valitud</span>
           <button onClick={clearItemSelection}>Tühista</button>
           <button className="delete-selected-btn" onClick={deleteSelectedItems}>
             <FiTrash2 size={12} />
             Kustuta
           </button>
-          <span className="hint">Lohista või vali 📅 kuupäeva muutmiseks</span>
+          <span className="hint">Ctrl+klõps päeval valib päeva</span>
         </div>
       )}
 
@@ -1977,9 +2008,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
             <FiX size={14} />
           </button>
         )}
-        {searchQuery && (
-          <span className="search-count">{filteredItems.length} / {scheduleItems.length}</span>
+        {filteredItems.length > 0 && (
+          <button
+            className="select-all-btn"
+            onClick={selectAllItems}
+            title="Vali kõik listis olevad detailid"
+          >
+            Vali kõik
+          </button>
         )}
+        <span className="search-count">{filteredItems.length}</span>
       </div>
 
       {/* Schedule List by Date */}
@@ -2017,7 +2055,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 >
                   <div
                     className="date-header"
-                    onClick={() => selectDateInViewer(date)}
+                    onClick={(e) => {
+                      if (e.ctrlKey || e.metaKey) {
+                        // Ctrl+click: select all items in this date
+                        toggleDateSelection(date, true);
+                      } else {
+                        // Normal click: select in viewer
+                        selectDateInViewer(date);
+                      }
+                    }}
                   >
                     <button
                       className="collapse-btn"

@@ -829,6 +829,25 @@
   background: #f3f4f6;
   padding: 2px 6px;
   border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.select-all-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+}
+
+.select-all-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
 }
 
 /* Date screenshot button */
