@@ -175,6 +175,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
 
   // Selection state from model
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
@@ -236,8 +237,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
     colorEachDayDifferent: false,  // Option 3: Color each day different color (disables option 1)
     progressiveReveal: false,      // Option 4: Hide scheduled items at start, reveal one by one
-    hideEntireModel: false         // Option 5: Hide ENTIRE model at start, build up from scratch
+    hideEntireModel: false,        // Option 5: Hide ENTIRE model at start, build up from scratch
+    showDayOverview: false,        // Option 6: Show day overview after each day completes
+    dayOverviewDuration: 2500      // Duration in ms for day overview display
   });
+
+  // Day overview state - tracks if we're showing day overview
+  const [showingDayOverview, setShowingDayOverview] = useState(false);
 
   // Track current playback day for coloring
   const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
@@ -1494,6 +1500,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   };
 
   const startPlayback = async () => {
+    // Clear all selections first
+    setSelectedItemIds(new Set());
+    setLastClickedId(null);
+    await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
     await api.viewer.setObjectState(undefined, { color: 'reset' });
 
     // Generate colors for each day if needed
@@ -1557,21 +1568,53 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
+  // Day overview function - show all day items selected and zoomed
+  const showDayOverviewFor = async (date: string) => {
+    const dateItems = itemsByDate[date];
+    if (!dateItems || dateItems.length === 0) return;
+
+    setShowingDayOverview(true);
+
+    // Select all items of this date in the list
+    const dateItemIds = new Set(dateItems.map(item => item.id));
+    setSelectedItemIds(dateItemIds);
+
+    // Select all items in viewer and zoom out to show them
+    await selectDateInViewer(date);
+
+    // Wait for the overview display (configurable duration)
+    await new Promise(resolve => setTimeout(resolve, playbackSettings.dayOverviewDuration));
+
+    // Clear list selection
+    setSelectedItemIds(new Set());
+    setShowingDayOverview(false);
+  };
+
   // Playback effect
   useEffect(() => {
-    if (!isPlaying || isPaused) return;
+    if (!isPlaying || isPaused || showingDayOverview) return;
 
     const items = getAllItemsSorted();
+
+    // End of playback
     if (currentPlayIndex >= items.length) {
-      setIsPlaying(false);
-      setIsPaused(false);
-      setCurrentPlaybackDate(null);
-      // Reset visibility if progressive reveal or hide entire model was enabled
-      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
-        api.viewer.setObjectState(undefined, { visible: 'reset' });
-      }
-      // Zoom out at end
-      zoomToAllItems();
+      const endPlayback = async () => {
+        // Show day overview for the last day if enabled
+        if (playbackSettings.showDayOverview && currentPlaybackDate) {
+          await showDayOverviewFor(currentPlaybackDate);
+        }
+
+        setIsPlaying(false);
+        setIsPaused(false);
+        setCurrentPlaybackDate(null);
+        // Reset visibility if progressive reveal or hide entire model was enabled
+        if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+          api.viewer.setObjectState(undefined, { visible: 'reset' });
+        }
+        // Zoom out at end
+        zoomToAllItems();
+      };
+      endPlayback();
       return;
     }
 
@@ -1587,17 +1630,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     const playNext = async () => {
-      // Progressive reveal / hide entire model: show the item first
-      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
-        await showItem(item);
-      }
-
-      // Check if we've moved to a new day
+      // Check if we've moved to a new day - show day overview for completed day
       if (currentPlaybackDate && currentPlaybackDate !== item.scheduled_date) {
+        // Show day overview for the completed day if enabled
+        if (playbackSettings.showDayOverview) {
+          await showDayOverviewFor(currentPlaybackDate);
+        }
+
         // Option 1: Color previous day black (only if option 3 is not enabled)
         if (playbackSettings.colorPreviousDayBlack && !playbackSettings.colorEachDayDifferent) {
           await colorDateItems(currentPlaybackDate, { r: 40, g: 40, b: 40 });
         }
+      }
+
+      // Progressive reveal / hide entire model: show the item first
+      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+        await showItem(item);
       }
 
       // Option 3: Color items with their day's color
@@ -1642,7 +1690,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors]);
+  }, [isPlaying, isPaused, showingDayOverview, currentPlayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors]);
 
   // Auto-scroll to playing item
   useEffect(() => {
@@ -1773,6 +1821,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         if (selectedObjects.length > 0) {
           api.viewer.setSelection({ modelObjectIds: [] }, 'set');
         }
+        // Clear calendar multi-selection
+        if (selectedDates.size > 1) {
+          setSelectedDates(new Set());
+        }
         // Close any open menus/modals
         setItemMenuId(null);
         setDatePickerItemId(null);
@@ -1782,7 +1834,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItemIds.size, selectedObjects.length, api]);
+  }, [selectedItemIds.size, selectedObjects.length, selectedDates.size, api]);
 
   // Select all items in current filtered list
   const selectAllItems = () => {
@@ -2635,9 +2687,25 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   )}
                   <div
                     key={idx}
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
-                    onClick={() => {
-                      setSelectedDate(dateKey);
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected || selectedDates.has(dateKey) ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
+                    onClick={(e) => {
+                      if (e.ctrlKey || e.metaKey) {
+                        // Ctrl+click: toggle date in multi-selection
+                        setSelectedDates(prev => {
+                          const next = new Set(prev);
+                          if (next.has(dateKey)) {
+                            next.delete(dateKey);
+                          } else {
+                            next.add(dateKey);
+                          }
+                          return next;
+                        });
+                        setSelectedDate(dateKey);
+                      } else {
+                        // Normal click: select only this date
+                        setSelectedDate(dateKey);
+                        setSelectedDates(new Set([dateKey]));
+                      }
                       if (itemCount > 0) {
                         selectDateInViewer(dateKey);
                         scrollToDateInList(dateKey);
@@ -2744,11 +2812,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       <span className="method-badge">{count}</span>
                     )}
                   </button>
-                  {isActive && isHovered && (
-                    <div className="method-count-popup">
-                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count - 1); }} disabled={count <= 1}>−</button>
-                      <span>{count}</span>
-                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count + 1); }} disabled={count >= method.maxCount}>+</button>
+                  {isHovered && isActive && (
+                    <div className="method-qty-dropdown">
+                      {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                        <button
+                          key={num}
+                          className={`qty-btn ${count === num ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBatchMethodCount(method.key, num);
+                          }}
+                        >
+                          {num}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -2786,11 +2863,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       <span className="method-badge">{count}</span>
                     )}
                   </button>
-                  {isActive && isHovered && (
-                    <div className="method-count-popup">
-                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count - 1); }} disabled={count <= 1}>−</button>
-                      <span>{count}</span>
-                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count + 1); }} disabled={count >= method.maxCount}>+</button>
+                  {isHovered && isActive && (
+                    <div className="method-qty-dropdown">
+                      {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                        <button
+                          key={num}
+                          className={`qty-btn ${count === num ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setBatchMethodCount(method.key, num);
+                          }}
+                        >
+                          {num}
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -3300,6 +3386,38 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   <small>Peida KOGU mudel, ehita graafiku järgi</small>
                 </div>
               </label>
+
+              <div className="setting-divider" />
+
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.showDayOverview}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, showDayOverview: e.target.checked }))}
+                />
+                <div className="setting-text">
+                  <span>Päeva ülevaade</span>
+                  <small>Päeva lõpus näita kõiki detaile korraga</small>
+                </div>
+              </label>
+
+              {playbackSettings.showDayOverview && (
+                <div className="setting-duration">
+                  <span>Ülevaate kestus:</span>
+                  <select
+                    value={playbackSettings.dayOverviewDuration}
+                    onChange={e => setPlaybackSettings(prev => ({ ...prev, dayOverviewDuration: Number(e.target.value) }))}
+                  >
+                    <option value={1000}>1 sek</option>
+                    <option value={1500}>1.5 sek</option>
+                    <option value={2000}>2 sek</option>
+                    <option value={2500}>2.5 sek</option>
+                    <option value={3000}>3 sek</option>
+                    <option value={4000}>4 sek</option>
+                    <option value={5000}>5 sek</option>
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         </div>

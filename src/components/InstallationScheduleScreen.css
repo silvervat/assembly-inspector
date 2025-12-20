@@ -257,7 +257,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 4px 6px 4px 0; /* Right padding for badge overflow */
+  padding: 4px 6px 4px 6px; /* Padding for badge overflow on both sides */
 }
 
 .method-selector-wrapper {
@@ -815,7 +815,7 @@
   position: absolute;
   top: 100%;
   right: 4px;
-  z-index: 100;
+  z-index: 500;
   background: white;
   border: 1px solid var(--modus-border);
   border-radius: 6px;
@@ -1045,7 +1045,7 @@
 }
 
 .multi-select-bar .batch-methods {
-  padding: 2px 6px 2px 8px;
+  padding: 2px 6px 8px 6px; /* Bottom padding for dropdown, left/right for badges */
 }
 
 .multi-select-bar .batch-methods .method-selector {
@@ -1716,6 +1716,27 @@
   height: 1px;
   background: #d1d5db;
   margin: 4px 0;
+}
+
+.setting-duration {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #374151;
+  background: #f9fafb;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.setting-duration select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 .setting-option-compact input:disabled + .setting-text {
