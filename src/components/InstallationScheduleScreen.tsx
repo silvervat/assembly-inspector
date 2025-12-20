@@ -472,6 +472,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         comment_text: newCommentText.trim(),
         created_by: tcUserEmail,
         created_by_name: user?.name || tcUserEmail,
+        created_by_role: user?.role,
       };
 
       if (commentModalTarget.type === 'item') {
@@ -1045,15 +1046,41 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Delete item
+  // Delete item (also deletes associated comments, and date comments if day becomes empty)
   const deleteItem = async (itemId: string) => {
     try {
+      // Get the item's date before deleting
+      const item = scheduleItems.find(i => i.id === itemId);
+      const itemDate = item?.scheduled_date;
+
+      // First delete any comments for this item
+      await supabase
+        .from('schedule_comments')
+        .delete()
+        .eq('schedule_item_id', itemId);
+
+      // Then delete the item
       const { error } = await supabase
         .from('installation_schedule')
         .delete()
         .eq('id', itemId);
 
       if (error) throw error;
+
+      // Check if this date has any remaining items
+      if (itemDate) {
+        const remainingItems = scheduleItems.filter(i => i.id !== itemId && i.scheduled_date === itemDate);
+        if (remainingItems.length === 0) {
+          // No more items on this date - delete date comments too
+          await supabase
+            .from('schedule_comments')
+            .delete()
+            .eq('project_id', projectId)
+            .eq('schedule_date', itemDate);
+        }
+      }
+
+      await loadComments(); // Refresh comments
       loadSchedule();
     } catch (e) {
       console.error('Error deleting item:', e);
@@ -1077,7 +1104,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Delete multiple selected items - batch delete for performance
+  // Delete multiple selected items - batch delete for performance (also deletes associated comments)
   const deleteSelectedItems = async () => {
     if (selectedItemIds.size === 0) return;
 
@@ -1085,16 +1112,52 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     if (!confirmed) return;
 
     const count = selectedItemIds.size;
+    const itemIds = [...selectedItemIds];
+    const itemIdSet = new Set(itemIds);
+
+    // Find dates that will have no items after deletion
+    const affectedDates = new Set<string>();
+    for (const itemId of itemIds) {
+      const item = scheduleItems.find(i => i.id === itemId);
+      if (item) affectedDates.add(item.scheduled_date);
+    }
+
+    // Check which dates will be empty after deletion
+    const datesToCleanup: string[] = [];
+    for (const date of affectedDates) {
+      const remainingItems = scheduleItems.filter(i => !itemIdSet.has(i.id) && i.scheduled_date === date);
+      if (remainingItems.length === 0) {
+        datesToCleanup.push(date);
+      }
+    }
+
     try {
+      // First delete any comments for these items
+      await supabase
+        .from('schedule_comments')
+        .delete()
+        .in('schedule_item_id', itemIds);
+
+      // Delete date comments for dates that will be empty
+      if (datesToCleanup.length > 0) {
+        await supabase
+          .from('schedule_comments')
+          .delete()
+          .eq('project_id', projectId)
+          .in('schedule_date', datesToCleanup);
+      }
+
+      // Then delete the items
       const { error } = await supabase
         .from('installation_schedule')
         .delete()
-        .in('id', [...selectedItemIds]);
+        .in('id', itemIds);
 
       if (error) throw error;
 
       setSelectedItemIds(new Set());
       setMessage(`${count} detaili kustutatud`);
+      await loadComments(); // Refresh comments
       loadSchedule();
     } catch (e) {
       console.error('Error deleting items:', e);
@@ -2462,7 +2525,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             return itemComments.map(c => {
               const date = new Date(c.created_at);
               const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
-              return `[${c.created_by_name || c.created_by} ${dateStr}]: ${c.comment_text}`;
+              const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+              return `[${c.created_by_name || c.created_by} ${dateStr} ${timeStr}]: ${c.comment_text}`;
             }).join(' | ');
           }
           default: return '';
@@ -4182,7 +4246,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             <div className="modal-header">
               <h3>
                 {commentModalTarget.type === 'item'
-                  ? `Kommentaarid: ${scheduleItems.find(i => i.id === commentModalTarget.id)?.assembly_mark || ''}`
+                  ? (() => {
+                      const item = scheduleItems.find(i => i.id === commentModalTarget.id);
+                      const itemDate = item ? new Date(item.scheduled_date).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+                      return `Kommentaarid: ${item?.assembly_mark || ''} (${itemDate})`;
+                    })()
                   : `Kommentaarid: ${new Date(commentModalTarget.id).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
                 }
               </h3>
@@ -4199,10 +4267,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     const isOwner = comment.created_by === tcUserEmail;
                     const canDelete = isAdmin || isOwner;
 
+                    const roleLabels: Record<string, string> = {
+                      admin: 'Admin',
+                      inspector: 'Inspektor',
+                      viewer: 'Vaatleja'
+                    };
+
                     return (
                       <div key={comment.id} className="comment-item">
                         <div className="comment-header">
-                          <span className="comment-author">{comment.created_by_name || comment.created_by}</span>
+                          <div className="comment-author-info">
+                            <span className="comment-author">{comment.created_by_name || comment.created_by}</span>
+                            {comment.created_by_role && (
+                              <span className="comment-role">{roleLabels[comment.created_by_role] || comment.created_by_role}</span>
+                            )}
+                          </div>
                           <span className="comment-date">
                             {new Date(comment.created_at).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                             {' '}

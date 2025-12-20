@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS schedule_comments (
   comment_text TEXT NOT NULL,
   created_by TEXT NOT NULL,
   created_by_name TEXT,
+  created_by_role TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
   -- Either schedule_item_id OR schedule_date should be set, not both

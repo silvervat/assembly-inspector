@@ -464,6 +464,7 @@ export interface ScheduleComment {
   comment_text: string;
   created_by: string;                 // User email
   created_by_name?: string;           // User display name
+  created_by_role?: string;           // User role (admin, inspector, viewer)
   created_at: string;
 }
 
