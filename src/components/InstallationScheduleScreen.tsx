@@ -150,7 +150,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     colorPreviousDayBlack: false,  // Option 1: Color previous day black when new day starts
     colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
     colorEachDayDifferent: false,  // Option 3: Color each day different color (disables option 1)
-    progressiveReveal: false       // Option 4: Hide all items at start, reveal one by one
+    progressiveReveal: false,      // Option 4: Hide scheduled items at start, reveal one by one
+    hideEntireModel: false         // Option 5: Hide ENTIRE model at start, build up from scratch
   });
 
   // Track current playback day for coloring
@@ -943,8 +944,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setPlaybackDateColors(colors);
     }
 
-    // Progressive reveal: hide all items first
-    if (playbackSettings.progressiveReveal) {
+    // Hide entire model (build from scratch)
+    if (playbackSettings.hideEntireModel) {
+      await api.viewer.setObjectState(undefined, { visible: false }); // Hide everything
+    }
+    // Progressive reveal: hide only scheduled items
+    else if (playbackSettings.progressiveReveal) {
       await api.viewer.setObjectState(undefined, { visible: 'reset' }); // First show all
       await hideAllItems(); // Then hide only scheduled items
     }
@@ -987,8 +992,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       clearTimeout(playbackRef.current);
       playbackRef.current = null;
     }
-    // Reset visibility if progressive reveal was enabled
-    if (playbackSettings.progressiveReveal) {
+    // Reset visibility if progressive reveal or hide entire model was enabled
+    if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
       await api.viewer.setObjectState(undefined, { visible: 'reset' });
     }
   };
@@ -1002,8 +1007,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setIsPlaying(false);
       setIsPaused(false);
       setCurrentPlaybackDate(null);
-      // Reset visibility if progressive reveal was enabled
-      if (playbackSettings.progressiveReveal) {
+      // Reset visibility if progressive reveal or hide entire model was enabled
+      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
         api.viewer.setObjectState(undefined, { visible: 'reset' });
       }
       // Zoom out at end
@@ -1023,8 +1028,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     const playNext = async () => {
-      // Progressive reveal: show the item first
-      if (playbackSettings.progressiveReveal) {
+      // Progressive reveal / hide entire model: show the item first
+      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
         await showItem(item);
       }
 
@@ -1856,32 +1861,38 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-          <div className="settings-modal" onClick={e => e.stopPropagation()}>
+          <div className="settings-modal compact" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Mängimise seaded</h3>
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
-              <label className="setting-option">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorAllWhiteAtStart}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorAllWhiteAtStart: e.target.checked }))}
                 />
-                <span>Värvi kõik detailid valgeks enne mängimist</span>
+                <div className="setting-text">
+                  <span>Värvi valgeks</span>
+                  <small>Kõik detailid valgeks enne mängimist</small>
+                </div>
               </label>
 
-              <label className="setting-option">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorPreviousDayBlack}
                   disabled={playbackSettings.colorEachDayDifferent}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorPreviousDayBlack: e.target.checked }))}
                 />
-                <span>Värvi eelmine päev mustaks uue päeva alguses</span>
+                <div className="setting-text">
+                  <span>Eelmine päev mustaks</span>
+                  <small>Uue päeva alguses</small>
+                </div>
               </label>
 
-              <label className="setting-option">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorEachDayDifferent}
@@ -1891,18 +1902,41 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     colorPreviousDayBlack: e.target.checked ? false : prev.colorPreviousDayBlack
                   }))}
                 />
-                <span>Värvi iga päev erineva värviga</span>
-                <small>(tühistab eelmise päeva mustaks värvimise)</small>
+                <div className="setting-text">
+                  <span>Iga päev erinev värv</span>
+                  <small>Tühistab eelmise päeva mustaks</small>
+                </div>
               </label>
 
-              <label className="setting-option">
+              <div className="setting-divider" />
+
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.progressiveReveal}
+                  disabled={playbackSettings.hideEntireModel}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, progressiveReveal: e.target.checked }))}
                 />
-                <span>Järk-järguline esitus</span>
-                <small>(peida kõik detailid alguses, kuva järjest)</small>
+                <div className="setting-text">
+                  <span>Järk-järguline esitus</span>
+                  <small>Peida graafiku detailid, kuva järjest</small>
+                </div>
+              </label>
+
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.hideEntireModel}
+                  onChange={e => setPlaybackSettings(prev => ({
+                    ...prev,
+                    hideEntireModel: e.target.checked,
+                    progressiveReveal: e.target.checked ? false : prev.progressiveReveal
+                  }))}
+                />
+                <div className="setting-text">
+                  <span>Ehita nullist</span>
+                  <small>Peida KOGU mudel, ehita graafiku järgi</small>
+                </div>
               </label>
             </div>
           </div>

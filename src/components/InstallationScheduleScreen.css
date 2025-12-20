@@ -1148,3 +1148,59 @@
   bottom: 0;
   z-index: 1000;
 }
+
+/* Compact settings modal */
+.settings-modal.compact {
+  max-width: 280px;
+}
+
+.settings-modal.compact .modal-body {
+  padding: 12px;
+}
+
+.setting-option-compact {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+}
+
+.setting-option-compact:last-child {
+  border-bottom: none;
+}
+
+.setting-option-compact input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.setting-text span {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.setting-text small {
+  font-size: 10px;
+  color: var(--modus-text-secondary);
+}
+
+.setting-divider {
+  height: 1px;
+  background: #d1d5db;
+  margin: 4px 0;
+}
+
+.setting-option-compact input:disabled + .setting-text {
+  opacity: 0.5;
+}
