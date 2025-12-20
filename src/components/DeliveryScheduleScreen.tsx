@@ -440,6 +440,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [itemEditUnloadMethods, setItemEditUnloadMethods] = useState<UnloadMethods>({});
   const [itemEditNotes, setItemEditNotes] = useState<string>('');
 
+  // Inline editing state for vehicle list
+  const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
+  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | null>(null);
+
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -1141,6 +1145,48 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
   void moveVehicleToDate; // Suppress unused warning
+
+  // ============================================
+  // INLINE VEHICLE EDIT
+  // ============================================
+
+  const updateVehicleInline = async (vehicleId: string, field: string, value: string | number | null) => {
+    setSaving(true);
+    try {
+      const updateData: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+        updated_by: tcUserEmail
+      };
+
+      if (field === 'time') {
+        updateData.unload_start_time = value || null;
+      } else if (field === 'duration') {
+        updateData.unload_duration_minutes = value || null;
+      } else if (field === 'status') {
+        updateData.status = value;
+      }
+
+      const { error } = await supabase
+        .from('trimble_delivery_vehicles')
+        .update(updateData)
+        .eq('id', vehicleId);
+
+      if (error) throw error;
+
+      // Update local state
+      setVehicles(prev => prev.map(v =>
+        v.id === vehicleId ? { ...v, ...updateData } : v
+      ));
+
+      setInlineEditVehicleId(null);
+      setInlineEditField(null);
+    } catch (e: any) {
+      console.error('Error updating vehicle:', e);
+      setMessage('Viga salvestamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // ============================================
   // UNLOAD METHOD TOGGLE
@@ -2498,10 +2544,66 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
-                            {/* Time section */}
+                            {/* Time section - inline editable */}
                             <div className="vehicle-time-section">
-                              <span className="time-primary">{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
-                              <span className="time-secondary">{formatDuration(vehicle?.unload_duration_minutes)}</span>
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
+                                <select
+                                  className="inline-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'time', e.target.value);
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {TIME_OPTIONS.map(time => (
+                                    <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="time-primary clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('time');
+                                  }}
+                                  title="Klikka muutmiseks"
+                                >{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
+                              )}
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'duration' ? (
+                                <select
+                                  className="inline-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.unload_duration_minutes || 60}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'duration', Number(e.target.value));
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {DURATION_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="time-secondary clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('duration');
+                                  }}
+                                  title="Klikka muutmiseks"
+                                >{formatDuration(vehicle?.unload_duration_minutes)}</span>
+                              )}
                             </div>
 
                             <FiTruck className="vehicle-icon" />
@@ -2516,10 +2618,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 }}
                                 title="Märgista mudelis"
                               >{vehicle?.vehicle_code || 'Määramata'}</span>
-                              {statusConfig && (
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
+                                <select
+                                  className="inline-select status-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.status || 'planned'}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'status', e.target.value);
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
+                                    <option key={key} value={key}>{config.label}</option>
+                                  ))}
+                                </select>
+                              ) : statusConfig && (
                                 <span
-                                  className="status-badge"
+                                  className="status-badge clickable"
                                   style={{ backgroundColor: statusConfig.bgColor, color: statusConfig.color }}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('status');
+                                  }}
+                                  title="Klikka muutmiseks"
                                 >
                                   {statusConfig.label}
                                 </span>
