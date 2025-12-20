@@ -831,7 +831,7 @@
   position: absolute;
   top: 100%;
   right: 4px;
-  z-index: 500;
+  z-index: 1001;
   background: white;
   border: 1px solid var(--modus-border);
   border-radius: 6px;
