@@ -6,7 +6,7 @@ import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp, FiMoreVertical, FiCopy
+  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -252,16 +252,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     // Individual method columns
     { id: 'crane', label: 'Kraana', enabled: true },
     { id: 'forklift', label: 'Telesk.', enabled: true },
-    { id: 'poomtostuk', label: 'Poomtõstuk', enabled: true },
+    { id: 'poomtostuk', label: 'Korvtõstuk', enabled: true },
     { id: 'kaartostuk', label: 'Käärtõstuk', enabled: true },
     { id: 'troppija', label: 'Troppija', enabled: true },
     { id: 'monteerija', label: 'Monteerija', enabled: true },
     { id: 'keevitaja', label: 'Keevitaja', enabled: true },
     { id: 'manual', label: 'Käsitsi', enabled: true },
-    { id: 'guid_ms', label: 'GUID (MS)', enabled: false },
-    { id: 'guid_ifc', label: 'GUID (IFC)', enabled: false },
+    { id: 'guid_ms', label: 'GUID (MS)', enabled: true },
+    { id: 'guid_ifc', label: 'GUID (IFC)', enabled: true },
     { id: 'percentage', label: 'Kumulatiivne %', enabled: true }
   ]);
+
+  // Import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importData, setImportData] = useState<any[] | null>(null);
+  const [importMode, setImportMode] = useState<'overwrite' | 'replace'>('overwrite');
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: number; errors: string[]; warnings: string[] } | null>(null);
 
   // Assembly selection state
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
@@ -2203,6 +2211,246 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     });
   };
 
+  // Handle Excel file selection for import
+  const handleImportFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setImportResult(null);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+
+      // Get first sheet (main data)
+      const sheetName = wb.SheetNames[0];
+      const sheet = wb.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+      if (data.length < 2) {
+        setImportResult({ success: 0, errors: ['Excel fail on tühi või puuduvad andmed'], warnings: [] });
+        return;
+      }
+
+      // Parse header row to find columns
+      const header = data[0] as string[];
+      const colMap: Record<string, number> = {};
+      header.forEach((h, i) => {
+        const headerLower = (h || '').toString().toLowerCase().trim();
+        if (headerLower.includes('kuupäev') || headerLower === 'date') colMap.date = i;
+        if (headerLower.includes('assembly') || headerLower.includes('mark')) colMap.mark = i;
+        if (headerLower === 'guid (ms)' || headerLower === 'guid_ms') colMap.guid_ms = i;
+        if (headerLower === 'guid (ifc)' || headerLower === 'guid_ifc') colMap.guid_ifc = i;
+        if (headerLower.includes('kaal') || headerLower === 'weight') colMap.weight = i;
+        if (headerLower.includes('position') || headerLower.includes('kood')) colMap.position = i;
+        if (headerLower.includes('toode') || headerLower === 'product') colMap.product = i;
+        // Method columns
+        if (headerLower === 'kraana' || headerLower === 'crane') colMap.crane = i;
+        if (headerLower.includes('telesk') || headerLower === 'forklift') colMap.forklift = i;
+        if (headerLower.includes('korv') || headerLower.includes('poom')) colMap.poomtostuk = i;
+        if (headerLower.includes('käär')) colMap.kaartostuk = i;
+        if (headerLower.includes('tropp')) colMap.troppija = i;
+        if (headerLower.includes('monteer')) colMap.monteerija = i;
+        if (headerLower.includes('keevit')) colMap.keevitaja = i;
+        if (headerLower.includes('käsitsi') || headerLower === 'manual') colMap.manual = i;
+      });
+
+      // Validate required columns
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      if (colMap.guid_ms === undefined && colMap.guid_ifc === undefined) {
+        errors.push('Puudub GUID veerg (GUID (MS) või GUID (IFC)) - seda on vaja elementide tuvastamiseks');
+      }
+      if (colMap.date === undefined) {
+        errors.push('Puudub kuupäeva veerg');
+      }
+
+      if (errors.length > 0) {
+        setImportResult({ success: 0, errors, warnings });
+        return;
+      }
+
+      // Parse data rows
+      const parsedRows: any[] = [];
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length === 0) continue;
+
+        const guidMs = colMap.guid_ms !== undefined ? row[colMap.guid_ms] : null;
+        const guidIfc = colMap.guid_ifc !== undefined ? row[colMap.guid_ifc] : null;
+        const dateVal = colMap.date !== undefined ? row[colMap.date] : null;
+
+        if (!guidMs && !guidIfc) {
+          warnings.push(`Rida ${i + 1}: Puudub GUID, jäetakse vahele`);
+          continue;
+        }
+
+        // Parse date - support multiple formats
+        let scheduledDate: string | null = null;
+        if (dateVal) {
+          if (typeof dateVal === 'number') {
+            // Excel serial date
+            const date = new Date((dateVal - 25569) * 86400000);
+            scheduledDate = formatDateKey(date);
+          } else if (typeof dateVal === 'string') {
+            // Try DD.MM.YY or DD.MM.YYYY format
+            const parts = dateVal.split('.');
+            if (parts.length === 3) {
+              let year = parseInt(parts[2]);
+              if (year < 100) year += 2000;
+              const month = parseInt(parts[1]) - 1;
+              const day = parseInt(parts[0]);
+              const date = new Date(year, month, day);
+              if (!isNaN(date.getTime())) {
+                scheduledDate = formatDateKey(date);
+              }
+            }
+          }
+        }
+
+        if (!scheduledDate) {
+          warnings.push(`Rida ${i + 1}: Vigane kuupäev "${dateVal}", jäetakse vahele`);
+          continue;
+        }
+
+        // Parse methods
+        const methods: InstallMethods = {};
+        if (colMap.crane !== undefined && row[colMap.crane]) methods.crane = parseInt(row[colMap.crane]) || 0;
+        if (colMap.forklift !== undefined && row[colMap.forklift]) methods.forklift = parseInt(row[colMap.forklift]) || 0;
+        if (colMap.poomtostuk !== undefined && row[colMap.poomtostuk]) methods.poomtostuk = parseInt(row[colMap.poomtostuk]) || 0;
+        if (colMap.kaartostuk !== undefined && row[colMap.kaartostuk]) methods.kaartostuk = parseInt(row[colMap.kaartostuk]) || 0;
+        if (colMap.troppija !== undefined && row[colMap.troppija]) methods.troppija = parseInt(row[colMap.troppija]) || 0;
+        if (colMap.monteerija !== undefined && row[colMap.monteerija]) methods.monteerija = parseInt(row[colMap.monteerija]) || 0;
+        if (colMap.keevitaja !== undefined && row[colMap.keevitaja]) methods.keevitaja = parseInt(row[colMap.keevitaja]) || 0;
+        if (colMap.manual !== undefined && row[colMap.manual]) methods.manual = parseInt(row[colMap.manual]) || 0;
+
+        parsedRows.push({
+          rowNum: i + 1,
+          guid_ms: guidMs?.toString() || null,
+          guid_ifc: guidIfc?.toString() || null,
+          scheduled_date: scheduledDate,
+          assembly_mark: colMap.mark !== undefined ? row[colMap.mark]?.toString() || '' : '',
+          cast_unit_weight: colMap.weight !== undefined ? row[colMap.weight]?.toString() || null : null,
+          cast_unit_position_code: colMap.position !== undefined ? row[colMap.position]?.toString() || null : null,
+          product_name: colMap.product !== undefined ? row[colMap.product]?.toString() || null : null,
+          install_methods: Object.keys(methods).length > 0 ? methods : null
+        });
+      }
+
+      if (parsedRows.length === 0) {
+        errors.push('Ühtegi kehtivat rida ei leitud');
+        setImportResult({ success: 0, errors, warnings });
+        return;
+      }
+
+      setImportData(parsedRows);
+      setImportResult({ success: parsedRows.length, errors, warnings });
+      setShowImportModal(true);
+    } catch (err) {
+      console.error('Error parsing Excel:', err);
+      setImportResult({ success: 0, errors: ['Exceli faili töötlemisel tekkis viga'], warnings: [] });
+    }
+
+    // Reset file input
+    e.target.value = '';
+  };
+
+  // Execute import
+  const executeImport = async () => {
+    if (!importData || importData.length === 0) return;
+
+    setImporting(true);
+    const errors: string[] = [];
+    let successCount = 0;
+
+    try {
+      if (importMode === 'replace') {
+        // Delete all existing items for this project
+        const { error: deleteError } = await supabase
+          .from('installation_schedule')
+          .delete()
+          .eq('project_id', projectId);
+
+        if (deleteError) {
+          errors.push(`Olemasolevate kirjete kustutamine ebaõnnestus: ${deleteError.message}`);
+          setImportResult(prev => ({ ...prev!, errors: [...(prev?.errors || []), ...errors] }));
+          setImporting(false);
+          return;
+        }
+      }
+
+      // Process each row
+      for (const row of importData) {
+        const guidIdentifier = row.guid_ms || row.guid_ifc;
+
+        if (importMode === 'overwrite') {
+          // Check if item exists by GUID
+          const { data: existing } = await supabase
+            .from('installation_schedule')
+            .select('id')
+            .eq('project_id', projectId)
+            .or(`guid_ms.eq.${row.guid_ms},guid_ifc.eq.${row.guid_ifc},guid.eq.${row.guid_ifc}`)
+            .maybeSingle();
+
+          if (existing) {
+            // Update existing
+            const { error: updateError } = await supabase
+              .from('installation_schedule')
+              .update({
+                scheduled_date: row.scheduled_date,
+                install_methods: row.install_methods,
+                updated_by: tcUserEmail
+              })
+              .eq('id', existing.id);
+
+            if (updateError) {
+              errors.push(`Rida ${row.rowNum}: Uuendamine ebaõnnestus (${guidIdentifier})`);
+            } else {
+              successCount++;
+            }
+          } else {
+            // Insert new - need model info from existing schedule or skip
+            errors.push(`Rida ${row.rowNum}: Elementi ei leitud graafikus (${guidIdentifier}) - lisa enne mudelist`);
+          }
+        } else {
+          // Replace mode - insert all as new (need to have model info)
+          // For replace mode, we can only insert if we have all required info
+          // Since we deleted all, we need model_id which we don't have from Excel
+          errors.push(`Rida ${row.rowNum}: Elemendi ${guidIdentifier} lisamine vajab mudeli infot - kasuta "Kirjuta üle" režiimi`);
+        }
+      }
+
+      // Reload schedule
+      await loadSchedule();
+
+      setImportResult({
+        success: successCount,
+        errors,
+        warnings: importResult?.warnings || []
+      });
+
+      if (successCount > 0) {
+        setMessage(`Import õnnestus: ${successCount} kirjet uuendatud`);
+      }
+    } catch (err) {
+      console.error('Import error:', err);
+      errors.push('Impordi käigus tekkis viga');
+      setImportResult(prev => ({ ...prev!, errors: [...(prev?.errors || []), ...errors] }));
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // Close import modal
+  const closeImportModal = () => {
+    setShowImportModal(false);
+    setImportFile(null);
+    setImportData(null);
+    setImportResult(null);
+  };
+
   // Generate date picker options (next 60 days)
   const getDatePickerDates = () => {
     const dates: string[] = [];
@@ -2614,17 +2862,17 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         </button>
       </div>
 
-      {/* Export Modal */}
+      {/* Export/Import Modal */}
       {showExportModal && (
         <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
           <div className="settings-modal export-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Ekspordi Excel</h3>
+              <h3>Ekspordi / Impordi Excel</h3>
               <button onClick={() => setShowExportModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
               <div className="export-columns-header">
-                <span>Veerud ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
+                <span>Ekspordi veerud ({exportColumns.filter(c => c.enabled).length}/{exportColumns.length})</span>
               </div>
               <div className="export-columns-list">
                 {exportColumns.map((col, idx) => (
@@ -2656,8 +2904,135 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               </div>
               <button className="export-download-btn" onClick={exportToExcel}>
                 <FiDownload size={14} />
-                Lae alla ({filteredItems.length} rida)
+                Ekspordi ({filteredItems.length} rida)
               </button>
+
+              <div className="import-section">
+                <div className="import-divider">
+                  <span>või</span>
+                </div>
+                <label className="import-file-btn">
+                  <FiUpload size={14} />
+                  Impordi Excelist
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleImportFileSelect}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+                <p className="import-hint">
+                  Impordi võimaldab uuendada kuupäevi ja ressursse GUID põhjal
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Options Modal */}
+      {showImportModal && importData && (
+        <div className="modal-overlay" onClick={closeImportModal}>
+          <div className="settings-modal import-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Impordi Excelist</h3>
+              <button onClick={closeImportModal}><FiX size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {/* File info */}
+              <div className="import-file-info">
+                <strong>{importFile?.name}</strong>
+                <span>{importData.length} kehtivat rida</span>
+              </div>
+
+              {/* Warnings */}
+              {importResult?.warnings && importResult.warnings.length > 0 && (
+                <div className="import-warnings">
+                  <div className="warning-header">
+                    <FiAlertCircle size={14} />
+                    <span>Hoiatused ({importResult.warnings.length})</span>
+                  </div>
+                  <div className="warning-list">
+                    {importResult.warnings.slice(0, 5).map((w, i) => (
+                      <div key={i} className="warning-item">{w}</div>
+                    ))}
+                    {importResult.warnings.length > 5 && (
+                      <div className="warning-item">...ja {importResult.warnings.length - 5} veel</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Import mode selection */}
+              <div className="import-mode-section">
+                <label className="import-mode-option">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    checked={importMode === 'overwrite'}
+                    onChange={() => setImportMode('overwrite')}
+                  />
+                  <div>
+                    <strong>Kirjuta olemasolevad üle</strong>
+                    <span>Uuendab graafikus olevate elementide kuupäevi ja ressursse</span>
+                  </div>
+                </label>
+                <label className="import-mode-option">
+                  <input
+                    type="radio"
+                    name="importMode"
+                    checked={importMode === 'replace'}
+                    onChange={() => setImportMode('replace')}
+                  />
+                  <div>
+                    <strong>Kustuta kõik ja asenda</strong>
+                    <span>Kustutab kõik olemasolevad kirjed ja impordib uued</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Import result after execution */}
+              {importing ? (
+                <div className="import-progress">
+                  <FiRefreshCw size={16} className="spinning" />
+                  <span>Impordin...</span>
+                </div>
+              ) : importResult && importResult.errors.length > 0 && importResult.success > 0 ? (
+                <div className="import-result">
+                  <div className="import-success">
+                    <FiCheckCircle size={14} />
+                    <span>{importResult.success} kirjet uuendatud</span>
+                  </div>
+                  <div className="import-errors">
+                    <div className="error-header">
+                      <FiAlertCircle size={14} />
+                      <span>Vead ({importResult.errors.length})</span>
+                    </div>
+                    <div className="error-list">
+                      {importResult.errors.slice(0, 5).map((e, i) => (
+                        <div key={i} className="error-item">{e}</div>
+                      ))}
+                      {importResult.errors.length > 5 && (
+                        <div className="error-item">...ja {importResult.errors.length - 5} veel</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Action buttons */}
+              <div className="import-actions">
+                <button className="btn-secondary" onClick={closeImportModal}>
+                  Tühista
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={executeImport}
+                  disabled={importing || (importResult?.success === 0 && importResult?.errors.length > 0)}
+                >
+                  {importing ? 'Impordin...' : 'Impordi'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
