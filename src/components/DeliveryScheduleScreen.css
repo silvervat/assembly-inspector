@@ -1420,8 +1420,36 @@
   flex: 1;
 }
 
+.form-row .form-group.half {
+  flex: 0 0 calc(50% - 5px);
+}
+
 .form-row input {
   flex: 1;
+}
+
+.new-vehicle-settings {
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.new-vehicle-settings .form-row {
+  margin-bottom: 10px;
+}
+
+.new-vehicle-settings .form-section.compact {
+  margin: 0;
+  padding: 0;
+}
+
+.new-vehicle-settings .form-section.compact label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
 }
 
 .time-input {
@@ -2231,6 +2259,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: center;
 }
 
 .method-selector-wrapper {

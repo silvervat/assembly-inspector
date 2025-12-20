@@ -55,15 +55,15 @@ const PLAYBACK_SPEEDS = [
 // Estonian weekday names
 const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
 
-// Vehicle status labels and colors
+// Vehicle status labels and colors - solid backgrounds with white text for better readability
 const VEHICLE_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
-  planned: { label: 'Planeeritud', color: '#6b7280', bgColor: '#f3f4f6' },
-  loading: { label: 'Laadimisel', color: '#f59e0b', bgColor: '#fef3c7' },
-  transit: { label: 'Teel', color: '#3b82f6', bgColor: '#dbeafe' },
-  arrived: { label: 'Kohal', color: '#8b5cf6', bgColor: '#ede9fe' },
-  unloading: { label: 'Mahalaadimas', color: '#ec4899', bgColor: '#fce7f3' },
-  completed: { label: 'Lõpetatud', color: '#10b981', bgColor: '#d1fae5' },
-  cancelled: { label: 'Tühistatud', color: '#ef4444', bgColor: '#fee2e2' }
+  planned: { label: 'Planeeritud', color: '#ffffff', bgColor: '#6b7280' },
+  loading: { label: 'Laadimisel', color: '#ffffff', bgColor: '#f59e0b' },
+  transit: { label: 'Teel', color: '#ffffff', bgColor: '#3b82f6' },
+  arrived: { label: 'Kohal', color: '#ffffff', bgColor: '#8b5cf6' },
+  unloading: { label: 'Mahalaadimas', color: '#ffffff', bgColor: '#ec4899' },
+  completed: { label: 'Lõpetatud', color: '#ffffff', bgColor: '#10b981' },
+  cancelled: { label: 'Tühistatud', color: '#ffffff', bgColor: '#ef4444' }
 };
 
 // Item status labels
@@ -353,6 +353,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [addModalNewVehicle, setAddModalNewVehicle] = useState(false);
   const [addModalComment, setAddModalComment] = useState<string>('');
   const [addModalCustomCode, setAddModalCustomCode] = useState<string>('');
+  // New vehicle settings in add modal
+  const [addModalStartTime, setAddModalStartTime] = useState<string>('');
+  const [addModalDuration, setAddModalDuration] = useState<number>(60);
+  const [addModalUnloadMethods, setAddModalUnloadMethods] = useState<UnloadMethods>({});
+  const [addModalHoveredMethod, setAddModalHoveredMethod] = useState<string | null>(null);
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -1009,7 +1014,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // VEHICLE OPERATIONS
   // ============================================
 
-  const createVehicle = async (factoryId: string, date: string, customCode?: string): Promise<DeliveryVehicle | null> => {
+  interface VehicleSettings {
+    startTime?: string;
+    duration?: number;
+    unloadMethods?: UnloadMethods;
+  }
+
+  const createVehicle = async (factoryId: string, date: string, customCode?: string, settings?: VehicleSettings): Promise<DeliveryVehicle | null> => {
     try {
       const factory = getFactory(factoryId);
       if (!factory) throw new Error('Tehas ei leitud');
@@ -1036,17 +1047,31 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return null;
       }
 
+      // Prepare insert data with optional settings
+      const insertData: Record<string, unknown> = {
+        trimble_project_id: projectId,
+        factory_id: factoryId,
+        vehicle_number: vehicleNumber,
+        vehicle_code: vehicleCode,
+        scheduled_date: date,
+        status: 'planned',
+        created_by: tcUserEmail
+      };
+
+      // Add optional settings
+      if (settings?.startTime) {
+        insertData.unload_start_time = settings.startTime;
+      }
+      if (settings?.duration && settings.duration > 0) {
+        insertData.unload_duration_minutes = settings.duration;
+      }
+      if (settings?.unloadMethods && Object.keys(settings.unloadMethods).length > 0) {
+        insertData.unload_methods = settings.unloadMethods;
+      }
+
       const { data, error } = await supabase
         .from('trimble_delivery_vehicles')
-        .insert({
-          trimble_project_id: projectId,
-          factory_id: factoryId,
-          vehicle_number: vehicleNumber,
-          vehicle_code: vehicleCode,
-          scheduled_date: date,
-          status: 'planned',
-          created_by: tcUserEmail
-        })
+        .insert(insertData)
         .select()
         .single();
 
@@ -1213,6 +1238,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
     if (!methodConfig) return;
     setVehicleUnloadMethods(prev => ({
+      ...prev,
+      [methodKey]: Math.min(count, methodConfig.maxCount)
+    }));
+  };
+
+  // Toggle unload method for add modal
+  const toggleAddModalUnloadMethod = (methodKey: keyof UnloadMethods) => {
+    setAddModalUnloadMethods(prev => {
+      const newMethods = { ...prev };
+      if (newMethods[methodKey]) {
+        delete newMethods[methodKey];
+      } else {
+        const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
+        newMethods[methodKey] = methodConfig?.defaultCount || 1;
+      }
+      return newMethods;
+    });
+  };
+
+  // Set specific count for add modal
+  const setAddModalUnloadMethodCount = (methodKey: keyof UnloadMethods, count: number) => {
+    const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
+    if (!methodConfig) return;
+    setAddModalUnloadMethods(prev => ({
       ...prev,
       [methodKey]: Math.min(count, methodConfig.maxCount)
     }));
@@ -2622,7 +2671,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     setInlineEditField('duration');
                                   }}
                                   title="Klikka muutmiseks"
-                                >{formatDuration(vehicle?.unload_duration_minutes)}</span>
+                                >{vehicle?.unload_duration_minutes ? formatDuration(vehicle.unload_duration_minutes) : '-'}</span>
                               )}
                             </div>
 
@@ -3413,6 +3462,97 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </div>
                 );
               })()}
+              {/* Vehicle settings for new vehicles */}
+              {(() => {
+                const dateVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate);
+                const showVehicleSettings = addModalNewVehicle || dateVehicles.length === 0;
+
+                if (!showVehicleSettings || !addModalFactoryId) return null;
+
+                return (
+                  <div className="new-vehicle-settings">
+                    <div className="form-row">
+                      <div className="form-group half">
+                        <label>Algusaeg</label>
+                        <select
+                          value={addModalStartTime}
+                          onChange={(e) => setAddModalStartTime(e.target.value)}
+                        >
+                          {TIME_OPTIONS.map(time => (
+                            <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group half">
+                        <label>Kestus</label>
+                        <select
+                          value={addModalDuration}
+                          onChange={(e) => setAddModalDuration(Number(e.target.value))}
+                        >
+                          {DURATION_OPTIONS.map(opt => (
+                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="form-section compact">
+                      <label>Mahalaadimise ressursid</label>
+                      <div className="method-selectors">
+                        {UNLOAD_METHODS.map(method => {
+                          const count = addModalUnloadMethods[method.key] || 0;
+                          const isActive = count > 0;
+                          const isHovered = addModalHoveredMethod === method.key;
+
+                          return (
+                            <div
+                              key={method.key}
+                              className="method-selector-wrapper"
+                              onMouseEnter={() => setAddModalHoveredMethod(method.key)}
+                              onMouseLeave={() => setAddModalHoveredMethod(null)}
+                            >
+                              <button
+                                type="button"
+                                className={`method-selector ${isActive ? 'active' : ''}`}
+                                style={{
+                                  backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                                }}
+                                onClick={() => toggleAddModalUnloadMethod(method.key)}
+                                title={method.label}
+                              >
+                                <img
+                                  src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                                  alt={method.label}
+                                  style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                                />
+                                {isActive && count > 0 && (
+                                  <span className="method-badge">{count}</span>
+                                )}
+                              </button>
+                              {isActive && isHovered && (
+                                <div className="method-qty-dropdown">
+                                  {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(n => (
+                                    <button
+                                      key={n}
+                                      type="button"
+                                      className={`qty-option ${n === count ? 'active' : ''}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAddModalUnloadMethodCount(method.key, n);
+                                      }}
+                                    >
+                                      {n}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="form-group">
                 <label>Kommentaar (lisatakse igale detailile)</label>
                 <textarea
@@ -3442,6 +3582,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <button className="cancel-btn" onClick={() => {
                 setShowAddModal(false);
                 setAddModalCustomCode('');
+                setAddModalStartTime('');
+                setAddModalDuration(60);
+                setAddModalUnloadMethods({});
               }}>
                 Tühista
               </button>
@@ -3465,7 +3608,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       }
                     }
 
-                    const newVehicle = await createVehicle(addModalFactoryId, addModalDate, customCode || undefined);
+                    // Build vehicle settings
+                    const vehicleSettings: VehicleSettings = {};
+                    if (addModalStartTime) {
+                      vehicleSettings.startTime = addModalStartTime;
+                    }
+                    if (addModalDuration > 0) {
+                      vehicleSettings.duration = addModalDuration;
+                    }
+                    if (Object.keys(addModalUnloadMethods).length > 0) {
+                      vehicleSettings.unloadMethods = addModalUnloadMethods;
+                    }
+
+                    const newVehicle = await createVehicle(addModalFactoryId, addModalDate, customCode || undefined, vehicleSettings);
                     if (!newVehicle) {
                       // Error message is set in createVehicle
                       return;
@@ -3479,6 +3634,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       setShowAddModal(false);
                       setAddModalComment('');
                       setAddModalCustomCode('');
+                      setAddModalStartTime('');
+                      setAddModalDuration(60);
+                      setAddModalUnloadMethods({});
                       return;
                     }
                   }
@@ -3490,6 +3648,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   await addItemsToVehicle(vehicleId, addModalDate, addModalComment);
                   setAddModalCustomCode('');
+                  setAddModalStartTime('');
+                  setAddModalDuration(60);
+                  setAddModalUnloadMethods({});
                 }}
               >
                 {saving ? 'Lisan...' : 'Lisa'}
@@ -4064,7 +4225,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     })()
                   : (() => {
                       const vehicle = vehicles.find(v => v.id === commentModalTarget.id);
-                      return `Kommentaarid: ${vehicle?.vehicle_code || '...'}`;
+                      const dateStr = vehicle?.scheduled_date ? formatDateShort(vehicle.scheduled_date) : '';
+                      const timeStr = vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '';
+                      const info = [dateStr, timeStr].filter(Boolean).join(' ');
+                      return `Kommentaarid: ${vehicle?.vehicle_code || '...'}${info ? ` (${info})` : ''}`;
                     })()
                 }
               </h3>
