@@ -416,6 +416,9 @@ export interface ScheduleItem {
   scheduled_date: string;
   sort_order: number;
   notes?: string;
+  // Paigaldusviis
+  install_method?: 'crane' | 'forklift' | 'manual' | null;
+  install_method_count?: number;
   // Staatus
   status: ScheduleItemStatus;
   // Audit väljad

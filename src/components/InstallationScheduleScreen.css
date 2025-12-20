@@ -59,7 +59,7 @@
 .schedule-calendar {
   background: var(--modus-bg-primary);
   border-bottom: 1px solid var(--modus-border);
-  padding: 12px;
+  padding: 8px 10px;
 }
 
 .calendar-header {
@@ -91,15 +91,34 @@
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 1px;
+}
+
+.calendar-grid.with-weeks {
+  grid-template-columns: 26px repeat(7, 1fr);
+}
+
+.calendar-week-header {
+  /* Empty cell above week numbers */
+}
+
+.calendar-week-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--modus-text-secondary);
+  opacity: 0.7;
 }
 
 .calendar-day-name {
   text-align: center;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--modus-text-secondary);
-  padding: 4px 0;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
 .calendar-day {
@@ -108,11 +127,12 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  border-radius: 4px;
+  font-size: 11px;
+  border-radius: 3px;
   cursor: pointer;
   position: relative;
-  min-height: 32px;
+  min-height: 26px;
+  border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
 .calendar-day:hover {
@@ -156,19 +176,19 @@
 }
 
 .day-number {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .day-count {
   position: absolute;
-  bottom: 2px;
-  right: 2px;
-  font-size: 9px;
+  bottom: 1px;
+  right: 1px;
+  font-size: 8px;
   background: var(--modus-primary);
   color: white;
   border-radius: 50%;
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -784,24 +804,31 @@
 }
 
 .search-clear {
-  background: none;
+  background: #f3f4f6;
   border: none;
   cursor: pointer;
   padding: 4px;
-  color: var(--modus-text-secondary);
+  color: #6b7280;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
 }
 
 .search-clear:hover {
+  background: #fee2e2;
   color: #dc2626;
 }
 
 .search-count {
-  font-size: 11px;
-  color: var(--modus-text-secondary);
+  font-size: 10px;
+  color: #6b7280;
   white-space: nowrap;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 10px;
 }
 
 /* Date screenshot button */
@@ -1089,5 +1116,118 @@
   opacity: 0.6;
   filter: grayscale(100%);
   flex-shrink: 0;
+}
+
+.item-install-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   margin-right: 4px;
+  cursor: pointer;
+}
+
+/* Method count badge on selection buttons */
+.method-count-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  font-size: 8px;
+  font-weight: 600;
+  background: var(--modus-primary);
+  color: white;
+  padding: 0 3px;
+  border-radius: 3px;
+  line-height: 1.2;
+}
+
+.install-method-btn {
+  position: relative;
+}
+
+/* Context menu */
+.context-menu {
+  position: fixed;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
+  min-width: 100px;
+  overflow: hidden;
+}
+
+.context-menu-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.context-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.context-menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+/* Compact settings modal */
+.settings-modal.compact {
+  max-width: 280px;
+}
+
+.settings-modal.compact .modal-body {
+  padding: 12px;
+}
+
+.setting-option-compact {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+}
+
+.setting-option-compact:last-child {
+  border-bottom: none;
+}
+
+.setting-option-compact input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.setting-text span {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.setting-text small {
+  font-size: 10px;
+  color: var(--modus-text-secondary);
+}
+
+.setting-divider {
+  height: 1px;
+  background: #d1d5db;
+  margin: 4px 0;
+}
+
+.setting-option-compact input:disabled + .setting-text {
+  opacity: 0.5;
 }

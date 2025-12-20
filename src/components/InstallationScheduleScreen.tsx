@@ -75,6 +75,15 @@ const formatDateEstonian = (dateStr: string): string => {
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
+// Get ISO week number (W01, W02, etc.)
+const getISOWeek = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
 // RGB to hex color
 const rgbToHex = (r: number, g: number, b: number): string => {
   return ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
@@ -135,6 +144,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
   // Installation method for new items
   const [selectedInstallMethod, setSelectedInstallMethod] = useState<'crane' | 'forklift' | 'manual' | null>(null);
+  const [selectedInstallMethodCount, setSelectedInstallMethodCount] = useState<number>(1);
+
+  // Context menu for install method
+  const [installMethodContextMenu, setInstallMethodContextMenu] = useState<{ x: number; y: number; method: 'crane' | 'forklift' | 'manual' } | null>(null);
+  const [listItemContextMenu, setListItemContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null);
 
   // Calendar collapsed state
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
@@ -145,7 +159,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     colorPreviousDayBlack: false,  // Option 1: Color previous day black when new day starts
     colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
     colorEachDayDifferent: false,  // Option 3: Color each day different color (disables option 1)
-    progressiveReveal: false       // Option 4: Hide all items at start, reveal one by one
+    progressiveReveal: false,      // Option 4: Hide scheduled items at start, reveal one by one
+    hideEntireModel: false         // Option 5: Hide ENTIRE model at start, build up from scratch
   });
 
   // Track current playback day for coloring
@@ -457,6 +472,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           sort_order: (itemsByDate[date]?.length || 0) + idx,
           status: 'planned',
           install_method: selectedInstallMethod,
+          install_method_count: selectedInstallMethod ? selectedInstallMethodCount : null,
           created_by: tcUserEmail
         };
       });
@@ -548,6 +564,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     } catch (e) {
       console.error('Error deleting item:', e);
       setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Update install method count for an item
+  const updateItemInstallMethodCount = async (itemId: string, count: number) => {
+    try {
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({ install_method_count: count })
+        .eq('id', itemId);
+
+      if (error) throw error;
+      loadSchedule();
+      setListItemContextMenu(null);
+    } catch (e) {
+      console.error('Error updating install method count:', e);
     }
   };
 
@@ -921,8 +953,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setPlaybackDateColors(colors);
     }
 
-    // Progressive reveal: hide all items first
-    if (playbackSettings.progressiveReveal) {
+    // Hide entire model (build from scratch)
+    if (playbackSettings.hideEntireModel) {
+      await api.viewer.setObjectState(undefined, { visible: false }); // Hide everything
+    }
+    // Progressive reveal: hide only scheduled items
+    else if (playbackSettings.progressiveReveal) {
       await api.viewer.setObjectState(undefined, { visible: 'reset' }); // First show all
       await hideAllItems(); // Then hide only scheduled items
     }
@@ -965,8 +1001,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       clearTimeout(playbackRef.current);
       playbackRef.current = null;
     }
-    // Reset visibility if progressive reveal was enabled
-    if (playbackSettings.progressiveReveal) {
+    // Reset visibility if progressive reveal or hide entire model was enabled
+    if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
       await api.viewer.setObjectState(undefined, { visible: 'reset' });
     }
   };
@@ -980,8 +1016,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setIsPlaying(false);
       setIsPaused(false);
       setCurrentPlaybackDate(null);
-      // Reset visibility if progressive reveal was enabled
-      if (playbackSettings.progressiveReveal) {
+      // Reset visibility if progressive reveal or hide entire model was enabled
+      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
         api.viewer.setObjectState(undefined, { visible: 'reset' });
       }
       // Zoom out at end
@@ -1001,8 +1037,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
 
     const playNext = async () => {
-      // Progressive reveal: show the item first
-      if (playbackSettings.progressiveReveal) {
+      // Progressive reveal / hide entire model: show the item first
+      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
         await showItem(item);
       }
 
@@ -1571,7 +1607,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         </div>
 
         {!calendarCollapsed && (
-          <div className="calendar-grid">
+          <div className="calendar-grid with-weeks">
+            <div className="calendar-week-header"></div>
             {dayNames.map(day => (
               <div key={day} className="calendar-day-name">{day}</div>
             ))}
@@ -1583,31 +1620,40 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               const itemCount = itemsByDate[dateKey]?.length || 0;
               const dayColor = playbackSettings.colorEachDayDifferent && playbackDateColors[dateKey];
               const isPlayingDate = isPlaying && currentPlaybackDate === dateKey;
+              const isStartOfWeek = idx % 7 === 0;
+              const weekNum = getISOWeek(date);
 
               return (
-                <div
-                  key={idx}
-                  className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
-                  onClick={() => {
-                    setSelectedDate(dateKey);
-                    if (itemCount > 0) selectDateInViewer(dateKey);
-                  }}
-                  onDragOver={(e) => handleDragOver(e, dateKey)}
-                  onDrop={(e) => handleDrop(e, dateKey)}
-                >
-                  <span className="day-number">{date.getDate()}</span>
-                  {itemCount > 0 && (
-                    <span
-                      className="day-count"
-                      style={dayColor ? {
-                        backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
-                        color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
-                      } : undefined}
-                    >
-                      {itemCount}
-                    </span>
+                <>
+                  {isStartOfWeek && (
+                    <div key={`week-${idx}`} className="calendar-week-num">
+                      W{String(weekNum).padStart(2, '0')}
+                    </div>
                   )}
-                </div>
+                  <div
+                    key={idx}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
+                    onClick={() => {
+                      setSelectedDate(dateKey);
+                      if (itemCount > 0) selectDateInViewer(dateKey);
+                    }}
+                    onDragOver={(e) => handleDragOver(e, dateKey)}
+                    onDrop={(e) => handleDrop(e, dateKey)}
+                  >
+                    <span className="day-number">{date.getDate()}</span>
+                    {itemCount > 0 && (
+                      <span
+                        className="day-count"
+                        style={dayColor ? {
+                          backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
+                          color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
+                        } : undefined}
+                      >
+                        {itemCount}
+                      </span>
+                    )}
+                  </div>
+                </>
               );
             })}
           </div>
@@ -1687,24 +1733,69 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   <span>Paigaldus:</span>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
-                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'crane' ? null : 'crane')}
-                    title="Kraana"
+                    onClick={() => {
+                      if (selectedInstallMethod === 'crane') {
+                        setSelectedInstallMethod(null);
+                        setSelectedInstallMethodCount(1);
+                      } else {
+                        setSelectedInstallMethod('crane');
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedInstallMethod('crane');
+                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'crane' });
+                    }}
+                    title="Kraana (parem klõps = x2)"
                   >
                     <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
+                    {selectedInstallMethod === 'crane' && selectedInstallMethodCount > 1 && (
+                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
+                    )}
                   </button>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
-                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'forklift' ? null : 'forklift')}
-                    title="Tõstuk"
+                    onClick={() => {
+                      if (selectedInstallMethod === 'forklift') {
+                        setSelectedInstallMethod(null);
+                        setSelectedInstallMethodCount(1);
+                      } else {
+                        setSelectedInstallMethod('forklift');
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedInstallMethod('forklift');
+                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'forklift' });
+                    }}
+                    title="Tõstuk (parem klõps = x2)"
                   >
                     <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Tõstuk" />
+                    {selectedInstallMethod === 'forklift' && selectedInstallMethodCount > 1 && (
+                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
+                    )}
                   </button>
                   <button
                     className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
-                    onClick={() => setSelectedInstallMethod(selectedInstallMethod === 'manual' ? null : 'manual')}
-                    title="Käsitsi"
+                    onClick={() => {
+                      if (selectedInstallMethod === 'manual') {
+                        setSelectedInstallMethod(null);
+                        setSelectedInstallMethodCount(1);
+                      } else {
+                        setSelectedInstallMethod('manual');
+                      }
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelectedInstallMethod('manual');
+                      setInstallMethodContextMenu({ x: e.clientX, y: e.clientY, method: 'manual' });
+                    }}
+                    title="Käsitsi (parem klõps = x2)"
                   >
                     <img src={`${import.meta.env.BASE_URL}icons/muscle.png`} alt="Käsitsi" />
+                    {selectedInstallMethod === 'manual' && selectedInstallMethodCount > 1 && (
+                      <span className="method-count-badge">x{selectedInstallMethodCount}</span>
+                    )}
                   </button>
                 </div>
               )}
@@ -1789,32 +1880,38 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-          <div className="settings-modal" onClick={e => e.stopPropagation()}>
+          <div className="settings-modal compact" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Mängimise seaded</h3>
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
-              <label className="setting-option">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorAllWhiteAtStart}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorAllWhiteAtStart: e.target.checked }))}
                 />
-                <span>Värvi kõik detailid valgeks enne mängimist</span>
+                <div className="setting-text">
+                  <span>Värvi valgeks</span>
+                  <small>Kõik detailid valgeks enne mängimist</small>
+                </div>
               </label>
 
-              <label className="setting-option">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorPreviousDayBlack}
                   disabled={playbackSettings.colorEachDayDifferent}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, colorPreviousDayBlack: e.target.checked }))}
                 />
-                <span>Värvi eelmine päev mustaks uue päeva alguses</span>
+                <div className="setting-text">
+                  <span>Eelmine päev mustaks</span>
+                  <small>Uue päeva alguses</small>
+                </div>
               </label>
 
-              <label className="setting-option">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorEachDayDifferent}
@@ -1824,18 +1921,41 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     colorPreviousDayBlack: e.target.checked ? false : prev.colorPreviousDayBlack
                   }))}
                 />
-                <span>Värvi iga päev erineva värviga</span>
-                <small>(tühistab eelmise päeva mustaks värvimise)</small>
+                <div className="setting-text">
+                  <span>Iga päev erinev värv</span>
+                  <small>Tühistab eelmise päeva mustaks</small>
+                </div>
               </label>
 
-              <label className="setting-option">
+              <div className="setting-divider" />
+
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.progressiveReveal}
+                  disabled={playbackSettings.hideEntireModel}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, progressiveReveal: e.target.checked }))}
                 />
-                <span>Järk-järguline esitus</span>
-                <small>(peida kõik detailid alguses, kuva järjest)</small>
+                <div className="setting-text">
+                  <span>Järk-järguline esitus</span>
+                  <small>Peida graafiku detailid, kuva järjest</small>
+                </div>
+              </label>
+
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.hideEntireModel}
+                  onChange={e => setPlaybackSettings(prev => ({
+                    ...prev,
+                    hideEntireModel: e.target.checked,
+                    progressiveReveal: e.target.checked ? false : prev.progressiveReveal
+                  }))}
+                />
+                <div className="setting-text">
+                  <span>Ehita nullist</span>
+                  <small>Peida KOGU mudel, ehita graafiku järgi</small>
+                </div>
               </label>
             </div>
           </div>
@@ -1954,19 +2074,36 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             <div className="item-content">
                               <div className="item-main-row">
                                 <span className="item-mark">{item.assembly_mark}</span>
-                                {(item as any).cast_unit_weight && (
-                                  <span className="item-weight">{(item as any).cast_unit_weight} kg</span>
+                                {item.cast_unit_weight && (
+                                  <span className="item-weight">{item.cast_unit_weight} kg</span>
                                 )}
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
-                            {(item as any).install_method && (
-                              <img
-                                src={`${import.meta.env.BASE_URL}icons/${(item as any).install_method}.png`}
-                                alt={(item as any).install_method}
-                                className="item-install-icon"
-                                title={(item as any).install_method === 'crane' ? 'Kraana' : (item as any).install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
-                              />
+                            {item.install_method && (
+                              <div
+                                className="item-install-icons"
+                                onContextMenu={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setListItemContextMenu({ x: e.clientX, y: e.clientY, itemId: item.id });
+                                }}
+                              >
+                                <img
+                                  src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
+                                  alt={item.install_method}
+                                  className="item-install-icon"
+                                  title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                />
+                                {(item.install_method_count ?? 1) > 1 && (
+                                  <img
+                                    src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
+                                    alt={item.install_method}
+                                    className="item-install-icon"
+                                    title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Tõstuk' : 'Käsitsi'}
+                                  />
+                                )}
+                              </div>
                             )}
                             <div className="item-actions">
                               <button
@@ -2032,6 +2169,67 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
             })
         )}
       </div>
+
+      {/* Context menu for install method buttons */}
+      {installMethodContextMenu && (
+        <div
+          className="context-menu"
+          style={{ top: installMethodContextMenu.y, left: installMethodContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              setSelectedInstallMethodCount(1);
+              setInstallMethodContextMenu(null);
+            }}
+          >
+            x1 (üks)
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => {
+              setSelectedInstallMethodCount(2);
+              setInstallMethodContextMenu(null);
+            }}
+          >
+            x2 (kaks)
+          </div>
+        </div>
+      )}
+
+      {/* Context menu for list item icons */}
+      {listItemContextMenu && (
+        <div
+          className="context-menu"
+          style={{ top: listItemContextMenu.y, left: listItemContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            className="context-menu-item"
+            onClick={() => updateItemInstallMethodCount(listItemContextMenu.itemId, 1)}
+          >
+            x1 (üks)
+          </div>
+          <div
+            className="context-menu-item"
+            onClick={() => updateItemInstallMethodCount(listItemContextMenu.itemId, 2)}
+          >
+            x2 (kaks)
+          </div>
+        </div>
+      )}
+
+      {/* Click outside to close context menus */}
+      {(installMethodContextMenu || listItemContextMenu) && (
+        <div
+          className="context-menu-backdrop"
+          onClick={() => {
+            setInstallMethodContextMenu(null);
+            setListItemContextMenu(null);
+          }}
+        />
+      )}
     </div>
   );
 }
