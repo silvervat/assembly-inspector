@@ -581,6 +581,13 @@
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.date-label:hover {
+  color: var(--modus-primary);
+  text-decoration: underline;
 }
 
 .date-header-spacer {
@@ -2331,9 +2338,21 @@
   font-size: 12px;
 }
 
+.comment-author-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
 .comment-author {
   font-weight: 600;
   color: #374151;
+}
+
+.comment-role {
+  font-size: 10px;
+  color: #9ca3af;
+  font-weight: 400;
 }
 
 .comment-date {
