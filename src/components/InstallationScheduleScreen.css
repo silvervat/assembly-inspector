@@ -2035,3 +2035,91 @@
 .assembly-enable-btn:hover {
   color: var(--modus-primary-dark);
 }
+
+/* Item Hover Tooltip */
+.item-tooltip {
+  background: #1f2937;
+  color: white;
+  padding: 12px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  min-width: 180px;
+  max-width: 280px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: tooltipFadeIn 0.15s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tooltip-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.tooltip-row:last-child {
+  margin-bottom: 0;
+}
+
+.tooltip-label {
+  color: #9ca3af;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tooltip-value {
+  color: white;
+  font-weight: 500;
+}
+
+.tooltip-methods {
+  margin-top: 4px;
+}
+
+.tooltip-methods .tooltip-label {
+  margin-bottom: 6px;
+  display: block;
+}
+
+.tooltip-method-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tooltip-method-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.tooltip-method-item img {
+  width: 16px;
+  height: 16px;
+}
+
+.tooltip-method-item span {
+  color: #e5e7eb;
+  font-size: 11px;
+}
+
+.tooltip-method-count {
+  margin-left: auto;
+  color: #9ca3af;
+  font-size: 11px;
+}
