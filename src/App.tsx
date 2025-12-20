@@ -18,7 +18,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '2.18.6';
+export const APP_VERSION = '2.19.0';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -142,9 +142,6 @@ export default function App() {
               console.log('Super admin authenticated:', superAdminUser);
               setUser(superAdminUser);
 
-              // Laadi inspekteeritud detailid ja värvi mustaks
-              await loadInspectedAssemblies(connected, project.id);
-
               // Kontrolli kas on EOS2-st navigeerimise päring
               await checkPendingNavigation(connected);
             } else if (dbError || !dbUser) {
@@ -156,9 +153,6 @@ export default function App() {
             } else {
               console.log('User authenticated:', dbUser);
               setUser(dbUser);
-
-              // Laadi inspekteeritud detailid ja värvi mustaks
-              await loadInspectedAssemblies(connected, project.id);
 
               // Kontrolli kas on EOS2-st navigeerimise päring
               await checkPendingNavigation(connected);
@@ -220,69 +214,6 @@ export default function App() {
         setNavigationStatus('');
         setIsNavigating(false);
       }, 3000);
-    }
-  };
-
-  // Laadi inspekteeritud detailid ja värvi mustaks (kasutab checkpoint tulemusi)
-  const loadInspectedAssemblies = async (
-    apiInstance: WorkspaceAPI.WorkspaceAPI,
-    projId: string
-  ) => {
-    try {
-      // Get unique plan_item_ids from inspection_results
-      const { data: results, error: resultsError } = await supabase
-        .from('inspection_results')
-        .select('plan_item_id')
-        .eq('project_id', projId);
-
-      if (resultsError) throw resultsError;
-
-      if (!results || results.length === 0) {
-        console.log('No inspected assemblies found');
-        return;
-      }
-
-      // Get unique plan_item_ids
-      const planItemIds = [...new Set(results.map(r => r.plan_item_id).filter(Boolean))];
-      if (planItemIds.length === 0) return;
-
-      // Get model_id and object_runtime_id from plan items
-      const { data: planItems, error: planError } = await supabase
-        .from('inspection_plan_items')
-        .select('model_id, object_runtime_id')
-        .in('id', planItemIds);
-
-      if (planError) throw planError;
-
-      if (planItems && planItems.length > 0) {
-        console.log(`Found ${planItems.length} inspected assemblies`);
-
-        // Grupeeri model_id järgi
-        const byModel: Record<string, number[]> = {};
-        for (const item of planItems) {
-          if (!item.object_runtime_id) continue;
-          if (!byModel[item.model_id]) {
-            byModel[item.model_id] = [];
-          }
-          byModel[item.model_id].push(item.object_runtime_id);
-        }
-
-        // Koonda kõik mudelid ühte selectorisse - ÜKS API kutse
-        const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
-          modelId,
-          objectRuntimeIds: runtimeIds
-        }));
-
-        if (modelObjectIds.length > 0) {
-          await apiInstance.viewer.setObjectState(
-            { modelObjectIds },
-            { color: { r: 0, g: 0, b: 0, a: 255 } }
-          );
-          console.log('Inspected assemblies painted black');
-        }
-      }
-    } catch (e: any) {
-      console.error('Failed to load inspections:', e);
     }
   };
 

@@ -197,6 +197,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [isPaused, setIsPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(800);
   const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
+  const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
 
   // Multi-select state
@@ -239,7 +240,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     progressiveReveal: false,      // Option 4: Hide scheduled items at start, reveal one by one
     hideEntireModel: false,        // Option 5: Hide ENTIRE model at start, build up from scratch
     showDayOverview: false,        // Option 6: Show day overview after each day completes
-    dayOverviewDuration: 2500      // Duration in ms for day overview display
+    dayOverviewDuration: 2500,     // Duration in ms for day overview display
+    playByDay: false               // Option 7: Play day by day instead of item by item
   });
 
   // Day overview state - tracks if we're showing day overview
@@ -1582,6 +1584,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setIsPlaying(true);
       setIsPaused(false);
       setCurrentPlayIndex(0);
+      setCurrentDayIndex(0);
     }, 800);
   };
 
@@ -1632,10 +1635,103 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setShowingDayOverview(false);
   };
 
-  // Playback effect
+  // Playback effect - handles both item-by-item and day-by-day modes
   useEffect(() => {
     if (!isPlaying || isPaused || showingDayOverview) return;
 
+    // Day-by-day playback mode
+    if (playbackSettings.playByDay) {
+      const sortedDates = Object.keys(itemsByDate).sort();
+
+      // End of playback
+      if (currentDayIndex >= sortedDates.length) {
+        const endPlayback = async () => {
+          setIsPlaying(false);
+          setIsPaused(false);
+          setCurrentPlaybackDate(null);
+          if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+            api.viewer.setObjectState(undefined, { visible: 'reset' });
+          }
+          zoomToAllItems();
+        };
+        endPlayback();
+        return;
+      }
+
+      const currentDate = sortedDates[currentDayIndex];
+      const dateItems = itemsByDate[currentDate] || [];
+
+      // Expand the date group
+      if (collapsedDates.has(currentDate)) {
+        setCollapsedDates(prev => {
+          const next = new Set(prev);
+          next.delete(currentDate);
+          return next;
+        });
+      }
+
+      const playNextDay = async () => {
+        // Color previous day black if enabled
+        if (currentDayIndex > 0 && playbackSettings.colorPreviousDayBlack && !playbackSettings.colorEachDayDifferent) {
+          const prevDate = sortedDates[currentDayIndex - 1];
+          await colorDateItems(prevDate, { r: 40, g: 40, b: 40 });
+        }
+
+        // Show all items of this day (progressive reveal / hide entire model)
+        if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+          for (const item of dateItems) {
+            await showItem(item);
+          }
+        }
+
+        // Color all items of this day
+        if (playbackSettings.colorEachDayDifferent && playbackDateColors[currentDate]) {
+          const dayColor = playbackDateColors[currentDate];
+          for (const item of dateItems) {
+            const modelId = item.model_id;
+            const guidIfc = item.guid_ifc || item.guid;
+            if (modelId && guidIfc) {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                  { color: { ...dayColor, a: 255 } }
+                );
+              }
+            }
+          }
+        } else {
+          // Color all day items green
+          for (const item of dateItems) {
+            await colorItemGreen(item);
+          }
+        }
+
+        // Select all day items in viewer
+        await selectDateInViewer(currentDate);
+        setCurrentPlaybackDate(currentDate);
+
+        // Auto-switch calendar month
+        const dateObj = new Date(currentDate);
+        if (dateObj.getMonth() !== currentMonth.getMonth() || dateObj.getFullYear() !== currentMonth.getFullYear()) {
+          setCurrentMonth(new Date(dateObj.getFullYear(), dateObj.getMonth(), 1));
+        }
+
+        playbackRef.current = setTimeout(() => {
+          setCurrentDayIndex(prev => prev + 1);
+        }, playbackSpeed * 2); // Longer delay for day-by-day
+      };
+
+      playNextDay();
+
+      return () => {
+        if (playbackRef.current) {
+          clearTimeout(playbackRef.current);
+        }
+      };
+    }
+
+    // Item-by-item playback mode (original behavior)
     const items = getAllItemsSorted();
 
     // End of playback
@@ -1741,7 +1837,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         clearTimeout(playbackRef.current);
       }
     };
-  }, [isPlaying, isPaused, showingDayOverview, currentPlayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors]);
+  }, [isPlaying, isPaused, showingDayOverview, currentPlayIndex, currentDayIndex, playbackSpeed, getAllItemsSorted, currentPlaybackDate, playbackSettings, playbackDateColors, itemsByDate]);
 
   // Auto-scroll to playing item
   useEffect(() => {
@@ -3436,6 +3532,18 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <div className="setting-text">
                   <span>Ehita nullist</span>
                   <small>Peida KOGU mudel, ehita graafiku järgi</small>
+                </div>
+              </label>
+
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.playByDay}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, playByDay: e.target.checked }))}
+                />
+                <div className="setting-text">
+                  <span>Päevade kaupa</span>
+                  <small>Mängi päev korraga, mitte detail haaval</small>
                 </div>
               </label>
 
