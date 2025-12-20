@@ -517,7 +517,7 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('inspection-photos', 'ins
 // Tehased
 export interface DeliveryFactory {
   id: string;
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   factory_name: string;              // "Obornik", "Solid"
   factory_code: string;              // "OPO", "SOL" (lühend veokite jaoks)
   is_active: boolean;
@@ -552,7 +552,7 @@ export interface DeliveryResources {
 // Veokid
 export interface DeliveryVehicle {
   id: string;
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   factory_id: string;
   vehicle_number: number;            // 1, 2, 3...
   vehicle_code: string;              // "OPO1", "OPO2" (genereeritakse automaatselt)
@@ -582,7 +582,7 @@ export type DeliveryItemStatus =
 // Tarne detailid
 export interface DeliveryItem {
   id: string;
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   vehicle_id?: string;
   // Trimble Connect identifikaatorid
   model_id?: string;
@@ -622,7 +622,7 @@ export type DeliveryHistoryChangeType =
 // Ajalugu
 export interface DeliveryHistory {
   id: string;
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   item_id: string;
   vehicle_id?: string;
   change_type: DeliveryHistoryChangeType;
@@ -649,7 +649,7 @@ export interface DeliveryHistory {
 // Kommentaarid
 export interface DeliveryComment {
   id: string;
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   delivery_item_id?: string;
   vehicle_id?: string;
   delivery_date?: string;
@@ -661,7 +661,7 @@ export interface DeliveryComment {
 
 // Päevade kokkuvõte (vaade)
 export interface DeliveryDailySummary {
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   scheduled_date: string;
   vehicle_count: number;
   item_count: number;
@@ -670,7 +670,7 @@ export interface DeliveryDailySummary {
 
 // Tehaste kokkuvõte (vaade)
 export interface DeliveryFactorySummary {
-  project_id: string;
+  trimble_project_id: string;        // Trimble Connect project ID
   factory_name: string;
   factory_code: string;
   vehicle_count: number;
