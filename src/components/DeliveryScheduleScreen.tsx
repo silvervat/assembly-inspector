@@ -449,7 +449,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const { data, error } = await supabase
         .from('trimble_delivery_factories')
         .select('*')
-        .eq('project_id', projectId)
+        .eq('trimble_project_id', projectId)
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
 
@@ -465,7 +465,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const { data, error } = await supabase
         .from('trimble_delivery_vehicles')
         .select('*, factory:trimble_delivery_factories(*)')
-        .eq('project_id', projectId)
+        .eq('trimble_project_id', projectId)
         .order('scheduled_date', { ascending: true })
         .order('vehicle_code', { ascending: true });
 
@@ -481,7 +481,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const { data, error } = await supabase
         .from('trimble_delivery_items')
         .select('*')
-        .eq('project_id', projectId)
+        .eq('trimble_project_id', projectId)
         .order('scheduled_date', { ascending: true })
         .order('sort_order', { ascending: true });
 
@@ -497,7 +497,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const { data, error } = await supabase
         .from('trimble_delivery_comments')
         .select('*')
-        .eq('project_id', projectId)
+        .eq('trimble_project_id', projectId)
         .order('created_at', { ascending: true });
 
       if (error) throw error;
@@ -672,7 +672,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const { error } = await supabase
         .from('trimble_delivery_factories')
         .insert({
-          project_id: projectId,
+          trimble_project_id: projectId,
           factory_name: newFactoryName.trim(),
           factory_code: newFactoryCode.trim().toUpperCase(),
           sort_order: factories.length,
@@ -711,7 +711,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const { data, error } = await supabase
         .from('trimble_delivery_vehicles')
         .insert({
-          project_id: projectId,
+          trimble_project_id: projectId,
           factory_id: factoryId,
           vehicle_number: nextNumber,
           vehicle_code: `${factory.factory_code}${nextNumber}`,
@@ -834,7 +834,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       let maxSort = vehicleItems.reduce((max, i) => Math.max(max, i.sort_order), 0);
 
       const newItems = selectedObjects.map((obj, idx) => ({
-        project_id: projectId,
+        trimble_project_id: projectId,
         vehicle_id: vehicleId,
         model_id: obj.modelId,
         guid: obj.guid || obj.guidIfc || '',
@@ -1028,7 +1028,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Try to find objects in model and add them
       // For now, create items with just the GUID
       const newItems = guids.map((guid, idx) => ({
-        project_id: projectId,
+        trimble_project_id: projectId,
         vehicle_id: vehicle!.id,
         guid: guid,
         guid_ifc: guid.length === 22 ? guid : '',
