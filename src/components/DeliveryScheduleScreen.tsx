@@ -367,6 +367,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [addModalVehicleId, setAddModalVehicleId] = useState<string>('');
   const [addModalNewVehicle, setAddModalNewVehicle] = useState(false);
   const [addModalComment, setAddModalComment] = useState<string>('');
+  const [addModalCustomCode, setAddModalCustomCode] = useState<string>('');
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -1018,24 +1019,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // VEHICLE OPERATIONS
   // ============================================
 
-  const createVehicle = async (factoryId: string, date: string): Promise<DeliveryVehicle | null> => {
+  const createVehicle = async (factoryId: string, date: string, customCode?: string): Promise<DeliveryVehicle | null> => {
     try {
       const factory = getFactory(factoryId);
       if (!factory) throw new Error('Tehas ei leitud');
 
-      // Get next vehicle number for this factory and date
-      const existingVehicles = vehicles.filter(
-        v => v.factory_id === factoryId && v.scheduled_date === date
-      );
-      const nextNumber = existingVehicles.length + 1;
+      let vehicleCode = customCode;
+      let vehicleNumber = 1;
+
+      if (!vehicleCode) {
+        // Get max vehicle number for this factory across ALL dates (not just current date)
+        const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
+        const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
+        vehicleNumber = maxNumber + 1;
+        vehicleCode = `${factory.factory_code}${vehicleNumber}`;
+      } else if (customCode) {
+        // Extract number from custom code if possible
+        const numMatch = customCode.match(/\d+$/);
+        vehicleNumber = numMatch ? parseInt(numMatch[0], 10) : 1;
+      }
+
+      // Check if this vehicle code already exists in the project
+      const existingWithCode = vehicles.find(v => v.vehicle_code === vehicleCode);
+      if (existingWithCode) {
+        setMessage(`Veok koodiga "${vehicleCode}" on juba olemas!`);
+        return null;
+      }
 
       const { data, error } = await supabase
         .from('trimble_delivery_vehicles')
         .insert({
           trimble_project_id: projectId,
           factory_id: factoryId,
-          vehicle_number: nextNumber,
-          vehicle_code: `${factory.factory_code}${nextNumber}`,
+          vehicle_number: vehicleNumber,
+          vehicle_code: vehicleCode,
           scheduled_date: date,
           status: 'planned',
           created_by: tcUserEmail
@@ -1045,8 +1062,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
       return data;
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error creating vehicle:', e);
+      if (e.code === '23505') {
+        setMessage('Veok selle koodiga on juba olemas!');
+      }
       return null;
     }
   };
@@ -2473,18 +2493,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               });
                             }}
                           >
-                            <span className="vehicle-drag-handle">
-                              <FiMove />
-                            </span>
                             <span className="collapse-icon">
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
                             {/* Time section */}
                             <div className="vehicle-time-section">
-                              <span className="time-primary">{vehicle?.unload_start_time || '--:--'}</span>
+                              <span className="time-primary">{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
                               <span className="time-secondary">{formatDuration(vehicle?.unload_duration_minutes)}</span>
                             </div>
+
+                            <FiTruck className="vehicle-icon" />
 
                             {/* Vehicle title section */}
                             <div className="vehicle-title-section">
@@ -2574,7 +2593,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setEditingVehicle(vehicle);
                               setVehicleUnloadMethods(vehicle.unload_methods || {});
                               setVehicleResources(vehicle.resources || {});
-                              setVehicleStartTime(vehicle.unload_start_time || '');
+                              // Strip seconds from time if present (DB returns "08:00:00", we need "08:00")
+                              const startTime = vehicle.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '';
+                              setVehicleStartTime(startTime);
                               setVehicleDuration(vehicle.unload_duration_minutes || 0);
                               setVehicleType(vehicle.vehicle_type || 'haagis');
                               setVehicleNewComment('');
@@ -2634,9 +2655,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
-                                    <div className="item-drag-handle">
-                                      <FiMove />
-                                    </div>
                                     <div className="item-checkbox">
                                       <input
                                         type="checkbox"
@@ -2846,9 +2864,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             });
                           }}
                         >
-                          <span className="vehicle-drag-handle">
-                            <FiMove />
-                          </span>
                           <span className="collapse-icon">
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
@@ -2901,9 +2916,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
-                                    <div className="item-drag-handle">
-                                      <FiMove />
-                                    </div>
                                     <div className="item-checkbox">
                                       <input
                                         type="checkbox"
@@ -3187,10 +3199,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </div>
                 ) : (
                   <div className="form-group">
-                    <label>Veok</label>
-                    <div className="auto-new-vehicle-notice">
-                      <FiTruck size={16} />
-                      <span>Sellel kuupäeval pole veokeid. Uus veok luuakse automaatselt.</span>
+                    <label>Uus veok</label>
+                    <div className="new-vehicle-input-section">
+                      <div className="new-vehicle-info">
+                        <FiTruck size={14} />
+                        <span>Sellel kuupäeval pole veokeid</span>
+                      </div>
+                      <input
+                        type="text"
+                        value={addModalCustomCode || (() => {
+                          const factory = factories.find(f => f.id === addModalFactoryId);
+                          if (!factory) return '';
+                          const factoryVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId);
+                          const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
+                          return `${factory.factory_code}${maxNumber + 1}`;
+                        })()}
+                        onChange={(e) => setAddModalCustomCode(e.target.value.toUpperCase())}
+                        placeholder="Nt: OBO1"
+                        className="vehicle-code-input"
+                      />
                     </div>
                   </div>
                 );
@@ -3221,7 +3248,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             </div>
             <div className="modal-footer">
-              <button className="cancel-btn" onClick={() => setShowAddModal(false)}>
+              <button className="cancel-btn" onClick={() => {
+                setShowAddModal(false);
+                setAddModalCustomCode('');
+              }}>
                 Tühista
               </button>
               <button
@@ -3233,9 +3263,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   let vehicleId = addModalVehicleId;
 
                   if (needsNewVehicle) {
-                    const newVehicle = await createVehicle(addModalFactoryId, addModalDate);
+                    // Get custom code or generate one
+                    let customCode = addModalCustomCode;
+                    if (!customCode && dateVehicles.length === 0) {
+                      const factory = factories.find(f => f.id === addModalFactoryId);
+                      if (factory) {
+                        const factoryVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId);
+                        const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
+                        customCode = `${factory.factory_code}${maxNumber + 1}`;
+                      }
+                    }
+
+                    const newVehicle = await createVehicle(addModalFactoryId, addModalDate, customCode || undefined);
                     if (!newVehicle) {
-                      setMessage('Veoki loomine ebaõnnestus');
+                      // Error message is set in createVehicle
                       return;
                     }
                     await loadVehicles();
@@ -3246,6 +3287,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       setMessage(`Veok ${newVehicle.vehicle_code} loodud`);
                       setShowAddModal(false);
                       setAddModalComment('');
+                      setAddModalCustomCode('');
                       return;
                     }
                   }
@@ -3256,6 +3298,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
 
                   await addItemsToVehicle(vehicleId, addModalDate, addModalComment);
+                  setAddModalCustomCode('');
                 }}
               >
                 {saving ? 'Lisan...' : 'Lisa'}
