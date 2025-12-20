@@ -118,20 +118,26 @@ interface MethodConfig {
   label: string;
   icon: string;
   bgColor: string;       // Background color for icon
-  filterCss: string;     // CSS filter for icon coloring
+  activeBgColor: string; // Darker background when active
+  filterCss: string;     // CSS filter for icon coloring (inactive)
   maxCount: number;
   defaultCount: number;
+  category: 'machine' | 'labor';
 }
 
+// Machines row: Kraana, Teleskooplaadur, Käsitsi, Korvtõstuk (poomtostuk), Käärtõstuk
+// Labor row: Troppija, Monteerija, Keevitaja
 const INSTALL_METHODS: MethodConfig[] = [
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
-  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2 },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#fef3c7', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
-  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#d1fae5', filterCss: 'invert(35%) sepia(50%) saturate(700%) hue-rotate(130deg) brightness(85%)', maxCount: 4, defaultCount: 1 },
-  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', filterCss: 'invert(55%) sepia(40%) saturate(600%) hue-rotate(130deg) brightness(90%)', maxCount: 15, defaultCount: 1 },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1 },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#dcfce7', filterCss: 'invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  // Machines
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#dcfce7', activeBgColor: '#22c55e', filterCss: 'invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  // Labor
+  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#d1fae5', activeBgColor: '#10b981', filterCss: 'invert(35%) sepia(50%) saturate(700%) hue-rotate(130deg) brightness(85%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#14b8a6', filterCss: 'invert(55%) sepia(40%) saturate(600%) hue-rotate(130deg) brightness(90%)', maxCount: 15, defaultCount: 1, category: 'labor' },
+  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
 ];
 
 // Load default counts from localStorage
@@ -2408,58 +2414,126 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               )}
             </div>
 
-            {/* Second row: method icons (only when not all scheduled) */}
+            {/* Method icons in two rows: machines and labor */}
             {!allScheduled && (
-              <div className="install-methods-row">
-                {INSTALL_METHODS.map(method => {
-                  const isActive = !!selectedInstallMethods[method.key];
-                  const count = selectedInstallMethods[method.key] || 0;
-                  const isHovered = hoveredMethod === method.key && isActive;
+              <>
+                {/* Row 1: Machines */}
+                <div className="install-methods-row">
+                  {INSTALL_METHODS.filter(m => m.category === 'machine').map(method => {
+                    const isActive = !!selectedInstallMethods[method.key];
+                    const count = selectedInstallMethods[method.key] || 0;
+                    const isHovered = hoveredMethod === method.key;
 
-                  return (
-                    <div
-                      key={method.key}
-                      className="method-selector-wrapper"
-                      onMouseEnter={() => setHoveredMethod(method.key)}
-                      onMouseLeave={() => setHoveredMethod(null)}
-                    >
-                      <button
-                        className={`method-icon-btn ${isActive ? 'active' : ''}`}
-                        style={{ backgroundColor: isActive ? method.bgColor : undefined }}
-                        onClick={() => toggleInstallMethod(method.key)}
-                        title={method.label}
+                    return (
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredMethod(method.key)}
+                        onMouseLeave={() => setHoveredMethod(null)}
                       >
-                        <img
-                          src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                          alt={method.label}
-                          style={{ filter: method.filterCss }}
-                        />
-                        {isActive && count > 0 && (
-                          <span className="method-count-badge">{count}</span>
-                        )}
-                      </button>
-
-                      {/* Hover quantity selector */}
-                      {isHovered && (
-                        <div className="method-qty-dropdown">
-                          {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
-                            <button
-                              key={num}
-                              className={`qty-btn ${count === num ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMethodCount(method.key, num);
-                              }}
+                        <button
+                          className={`method-icon-btn ${isActive ? 'active' : ''}`}
+                          style={{
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                          }}
+                          onClick={() => toggleInstallMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span
+                              className="method-count-badge"
+                              style={{ backgroundColor: `${method.activeBgColor}dd` }}
                             >
-                              {num}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Quantity selector dropdown */}
+                        {isHovered && isActive && (
+                          <div className="method-qty-dropdown">
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                className={`qty-btn ${count === num ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Row 2: Labor */}
+                <div className="install-methods-row">
+                  {INSTALL_METHODS.filter(m => m.category === 'labor').map(method => {
+                    const isActive = !!selectedInstallMethods[method.key];
+                    const count = selectedInstallMethods[method.key] || 0;
+                    const isHovered = hoveredMethod === method.key;
+
+                    return (
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredMethod(method.key)}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                      >
+                        <button
+                          className={`method-icon-btn ${isActive ? 'active' : ''}`}
+                          style={{
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                          }}
+                          onClick={() => toggleInstallMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span
+                              className="method-count-badge"
+                              style={{ backgroundColor: `${method.activeBgColor}dd` }}
+                            >
+                              {count}
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Quantity selector dropdown */}
+                        {isHovered && isActive && (
+                          <div className="method-qty-dropdown">
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                className={`qty-btn ${count === num ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
             )}
 
             {/* Third row: add button */}
@@ -2811,7 +2885,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             {showDropBefore && <div className="drop-indicator" />}
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
-                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''}`}
+                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
@@ -2859,15 +2933,22 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                       <div
                                         key={key}
                                         className="item-method-badge"
-                                        style={{ backgroundColor: config.bgColor }}
+                                        style={{ backgroundColor: config.activeBgColor }}
                                         title={`${config.label}: ${count}`}
                                       >
                                         <img
                                           src={`${import.meta.env.BASE_URL}icons/${config.icon}`}
                                           alt={config.label}
-                                          style={{ filter: config.filterCss }}
+                                          style={{ filter: 'brightness(0) invert(1)' }}
                                         />
-                                        {count > 0 && <span className="badge-count">{count}</span>}
+                                        {count > 0 && (
+                                          <span
+                                            className="badge-count"
+                                            style={{ backgroundColor: `${config.activeBgColor}cc` }}
+                                          >
+                                            {count}
+                                          </span>
+                                        )}
                                       </div>
                                     );
                                   })}
