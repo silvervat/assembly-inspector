@@ -1197,7 +1197,13 @@
 .item-main-row {
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
+}
+
+.item-main-row .item-mark {
+  flex: 1;
+  min-width: 0;
 }
 
 .item-weight {
@@ -1207,6 +1213,7 @@
   padding: 1px 4px;
   border-radius: 3px;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Installation method icon on item */
