@@ -99,26 +99,6 @@ const UNLOAD_METHODS: UnloadMethodConfig[] = [
 ];
 
 // ============================================
-// RESOURCE CONFIG
-// ============================================
-
-interface ResourceConfig {
-  key: keyof DeliveryResources;
-  label: string;
-  icon: string;
-  bgColor: string;
-  activeBgColor: string;
-  filterCss: string;
-  maxCount: number;
-  defaultCount: number;
-}
-
-const RESOURCE_TYPES: ResourceConfig[] = [
-  { key: 'taasnik', label: 'Taasnik', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 8, defaultCount: 2 },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1 }
-];
-
-// ============================================
 // VEHICLE TYPE CONFIG
 // ============================================
 
@@ -144,14 +124,19 @@ const TIME_OPTIONS = [
 
 const DURATION_OPTIONS = [
   { value: 0, label: '-' },  // Kestus pole veel teada
-  { value: 30, label: '30 min' },
-  { value: 60, label: '1 tund' },
-  { value: 90, label: '1.5 tundi' },
-  { value: 120, label: '2 tundi' },
-  { value: 150, label: '2.5 tundi' },
-  { value: 180, label: '3 tundi' },
-  { value: 210, label: '3.5 tundi' },
-  { value: 240, label: '4 tundi' }
+  { value: 15, label: '0.25h' },
+  { value: 30, label: '0.5h' },
+  { value: 45, label: '0.75h' },
+  { value: 60, label: '1h' },
+  { value: 75, label: '1.25h' },
+  { value: 90, label: '1.5h' },
+  { value: 105, label: '1.75h' },
+  { value: 120, label: '2h' },
+  { value: 150, label: '2.5h' },
+  { value: 180, label: '3h' },
+  { value: 240, label: '4h' },
+  { value: 300, label: '5h' },
+  { value: 360, label: '6h' }
 ];
 
 // ============================================
@@ -2395,25 +2380,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <span className="stats-secondary">{timeRange || 'Aeg määramata'}</span>
                 </div>
 
-                {/* Resources section */}
-                <div className="date-resources-section">
-                  {RESOURCE_TYPES.map(res => {
-                    const count = dateResources[res.key];
-                    if (!count) return null;
-                    return (
-                      <span
-                        key={res.key}
-                        className="resource-badge"
-                        style={{ backgroundColor: res.bgColor }}
-                        title={res.label}
-                      >
-                        <img src={`/icons/${res.icon}`} alt="" />
-                        <span className="resource-count">{count}</span>
-                      </span>
-                    );
-                  })}
-                </div>
-
                 <button
                   className="date-menu-btn"
                   onClick={(e) => {
@@ -2535,7 +2501,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
-                            {/* Unload methods + Resources section */}
+                            {/* Unload methods section */}
                             <div className="vehicle-resources-section">
                               {UNLOAD_METHODS.map(method => {
                                 const count = vehicle?.unload_methods?.[method.key];
@@ -2549,21 +2515,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   >
                                     <img src={`/icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
                                     <span className="method-count">{count}</span>
-                                  </span>
-                                );
-                              })}
-                              {RESOURCE_TYPES.map(res => {
-                                const count = vehicle?.resources?.[res.key];
-                                if (!count) return null;
-                                return (
-                                  <span
-                                    key={res.key}
-                                    className="resource-badge"
-                                    style={{ backgroundColor: res.bgColor }}
-                                    title={res.label}
-                                  >
-                                    <img src={`/icons/${res.icon}`} alt="" style={{ filter: res.filterCss }} />
-                                    <span className="resource-count">{count}</span>
                                   </span>
                                 );
                               })}
@@ -2604,7 +2555,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               // Strip seconds from time if present (DB returns "08:00:00", we need "08:00")
                               const startTime = vehicle.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '';
                               setVehicleStartTime(startTime);
-                              setVehicleDuration(vehicle.unload_duration_minutes || 0);
+                              setVehicleDuration(vehicle.unload_duration_minutes || 60);
                               setVehicleType(vehicle.vehicle_type || 'haagis');
                               setVehicleNewComment('');
                               setShowVehicleModal(true);
@@ -3000,11 +2951,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <FiArrowLeft />
         </button>
         <h1>Tarne graafik</h1>
-        <div className="header-stats">
-          <span>{totalItems} tk</span>
-          <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
-          <span>{vehicles.length} veokid</span>
-        </div>
         <div className="header-actions">
           <button
             className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}
@@ -3022,6 +2968,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           </button>
         </div>
       </header>
+
+      {/* Stats bar - compact summary */}
+      <div className="delivery-stats-bar">
+        <span>{totalItems} tk</span>
+        <span className="separator">•</span>
+        <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
+        <span className="separator">•</span>
+        <span>{vehicles.length} veokit</span>
+      </div>
 
       {/* Toolbar */}
       <div className="delivery-toolbar">
@@ -3358,22 +3313,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
             </div>
             <div className="modal-body">
-              <div className="form-group">
-                <label>Staatus</label>
-                <select
-                  value={editingVehicle.status}
-                  onChange={(e) => setEditingVehicle({
-                    ...editingVehicle,
-                    status: e.target.value as any
-                  })}
-                >
-                  {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
-                    <option key={key} value={key}>{config.label}</option>
-                  ))}
-                </select>
-              </div>
-
               <div className="form-row">
+                <div className="form-group">
+                  <label>Staatus</label>
+                  <select
+                    value={editingVehicle.status}
+                    onChange={(e) => setEditingVehicle({
+                      ...editingVehicle,
+                      status: e.target.value as any
+                    })}
+                  >
+                    {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="form-group">
                   <label><FiTruck style={{ marginRight: 4 }} />Veoki tüüp</label>
                   <select
