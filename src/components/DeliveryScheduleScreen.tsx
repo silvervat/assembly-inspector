@@ -210,6 +210,32 @@ const formatWeight = (weight: string | number | null | undefined): { kg: string;
   };
 };
 
+// Format duration in minutes to display string
+const formatDuration = (minutes: number | null | undefined): string => {
+  if (!minutes) return '';
+  if (minutes < 60) return `${minutes}min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}min`;
+};
+
+// Get day name only
+const getDayName = (dateStr: string): string => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return WEEKDAY_NAMES[date.getDay()];
+};
+
+// Format date as DD.MM.YY only (without day name)
+const formatDateShort = (dateStr: string): string => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const dayStr = String(day).padStart(2, '0');
+  const monthStr = String(month).padStart(2, '0');
+  const yearStr = String(year).slice(-2);
+  return `${dayStr}.${monthStr}.${yearStr}`;
+};
+
 // Format date for DB (YYYY-MM-DD)
 const formatDateForDB = (date: Date): string => {
   const year = date.getFullYear();
@@ -2103,10 +2129,29 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {sortedDates.map(date => {
           const dateVehicles = itemsByDateAndVehicle[date] || {};
           const dateItemCount = Object.values(dateVehicles).reduce((sum, vItems) => sum + vItems.length, 0);
-          const dateWeight = Object.values(dateVehicles)
-            .flat()
-            .reduce((sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0);
           const isCollapsed = collapsedDates.has(date);
+
+          // Calculate time range for date
+          const dateVehicleList = vehicles.filter(v => v.scheduled_date === date);
+          const vehicleTimes = dateVehicleList
+            .filter(v => v.unload_start_time)
+            .map(v => v.unload_start_time!)
+            .sort();
+          const firstTime = vehicleTimes[0] || '';
+          const lastTime = vehicleTimes[vehicleTimes.length - 1] || '';
+          const timeRange = firstTime && lastTime
+            ? (firstTime === lastTime ? firstTime : `${firstTime}-${lastTime}`)
+            : '';
+
+          // Aggregate resources for the date
+          const dateResources: Record<string, number> = {};
+          dateVehicleList.forEach(v => {
+            if (v.resources) {
+              Object.entries(v.resources).forEach(([key, count]) => {
+                dateResources[key] = (dateResources[key] || 0) + (count as number);
+              });
+            }
+          });
 
           return (
             <div
@@ -2116,7 +2161,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
-              {/* Date header */}
+              {/* Date header - new two-row layout */}
               <div
                 className="date-header"
                 onClick={() => {
@@ -2134,16 +2179,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <span className="collapse-icon">
                   {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                 </span>
-                <span className="date-text">{formatDateEstonian(date)}</span>
-                <span className="date-week">N{getISOWeek(new Date(date))}</span>
-                <span className="date-stats">
-                  <span className="vehicle-badge">
-                    <FiTruck size={12} />
-                    {Object.keys(dateVehicles).length}
-                  </span>
-                  <span className="item-badge">{dateItemCount} tk</span>
-                  <span className="weight-badge">{formatWeight(dateWeight)?.kg || '0 kg'}</span>
-                </span>
+
+                {/* Date section */}
+                <div className="date-info-section">
+                  <span className="date-primary">{formatDateShort(date)}</span>
+                  <span className="date-secondary">{getDayName(date)}</span>
+                </div>
+
+                {/* Week and vehicles section */}
+                <div className="date-week-section">
+                  <span className="week-primary">N{getISOWeek(new Date(date))}</span>
+                  <span className="week-secondary">{dateVehicleList.length} veoki{dateVehicleList.length !== 1 ? 't' : ''}</span>
+                </div>
+
+                {/* Stats section */}
+                <div className="date-stats-section">
+                  <span className="stats-primary">{dateItemCount} detaili</span>
+                  <span className="stats-secondary">{timeRange || 'Aeg määramata'}</span>
+                </div>
+
+                {/* Resources section */}
+                <div className="date-resources-section">
+                  {RESOURCE_TYPES.map(res => {
+                    const count = dateResources[res.key];
+                    if (!count) return null;
+                    return (
+                      <span
+                        key={res.key}
+                        className="resource-badge"
+                        style={{ backgroundColor: res.bgColor }}
+                        title={res.label}
+                      >
+                        <img src={`/icons/${res.icon}`} alt="" />
+                        <span className="resource-count">{count}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+
                 <button
                   className="date-menu-btn"
                   onClick={(e) => {
@@ -2194,7 +2267,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     }))
                     .sort((a, b) => (a.vehicle?.sort_order || 0) - (b.vehicle?.sort_order || 0))
                     .map(({ vehicleId, vehicleItems, vehicle }, vehicleIndex, sortedVehicles) => {
-                    const factory = vehicle ? getFactory(vehicle.factory_id) : null;
                     const vehicleWeight = vehicleItems.reduce(
                       (sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0
                     );
@@ -2209,7 +2281,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
                         <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''}`}>
-                          {/* Vehicle header */}
+                          {/* Vehicle header - new two-row layout */}
                           <div
                             className="vehicle-header"
                             draggable={!!vehicle}
@@ -2234,56 +2306,43 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <span className="collapse-icon">
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
-                            <FiTruck className="vehicle-icon" />
-                            <span
-                              className="vehicle-code clickable"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (vehicle) handleVehicleClick(vehicle);
-                              }}
-                              title="Märgista mudelis"
-                            >{vehicle?.vehicle_code || 'Määramata'}</span>
-                            <span className="vehicle-time">{vehicle?.unload_start_time || ''}</span>
-                            <span className="factory-name">{factory?.factory_name || ''}</span>
-                          <span className="vehicle-stats">
-                            <span className="item-badge">{vehicleItems.length} tk</span>
-                            <span className="weight-badge">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
-                          </span>
-                          {statusConfig && (
-                            <span
-                              className="status-badge"
-                              style={{ backgroundColor: statusConfig.bgColor, color: statusConfig.color }}
-                            >
-                              {statusConfig.label}
-                            </span>
-                          )}
 
-                          {/* Unload methods display */}
-                          {vehicle?.unload_methods && (
-                            <div className="vehicle-methods">
-                              {UNLOAD_METHODS.map(method => {
-                                const count = vehicle.unload_methods?.[method.key];
-                                if (!count) return null;
-                                return (
-                                  <span
-                                    key={method.key}
-                                    className="method-badge"
-                                    style={{ backgroundColor: method.bgColor }}
-                                    title={method.label}
-                                  >
-                                    <img src={`/icons/${method.icon}`} alt="" />
-                                    {count > 1 && <span className="method-count">{count}</span>}
-                                  </span>
-                                );
-                              })}
+                            {/* Time section */}
+                            <div className="vehicle-time-section">
+                              <span className="time-primary">{vehicle?.unload_start_time || '--:--'}</span>
+                              <span className="time-secondary">{formatDuration(vehicle?.unload_duration_minutes)}</span>
                             </div>
-                          )}
 
-                          {/* Resources display */}
-                          {vehicle?.resources && (
-                            <div className="vehicle-resources">
+                            {/* Vehicle title section */}
+                            <div className="vehicle-title-section">
+                              <span
+                                className="vehicle-code clickable"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (vehicle) handleVehicleClick(vehicle);
+                                }}
+                                title="Märgista mudelis"
+                              >{vehicle?.vehicle_code || 'Määramata'}</span>
+                              {statusConfig && (
+                                <span
+                                  className="status-badge"
+                                  style={{ backgroundColor: statusConfig.bgColor, color: statusConfig.color }}
+                                >
+                                  {statusConfig.label}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Stats section */}
+                            <div className="vehicle-stats-section">
+                              <span className="stats-primary">{vehicleItems.length} detaili</span>
+                              <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
+                            </div>
+
+                            {/* Resources section */}
+                            <div className="vehicle-resources-section">
                               {RESOURCE_TYPES.map(res => {
-                                const count = vehicle.resources?.[res.key];
+                                const count = vehicle?.resources?.[res.key];
                                 if (!count) return null;
                                 return (
                                   <span
@@ -2293,12 +2352,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     title={res.label}
                                   >
                                     <img src={`/icons/${res.icon}`} alt="" />
-                                    {count > 1 && <span className="resource-count">{count}</span>}
+                                    <span className="resource-count">{count}</span>
                                   </span>
                                 );
                               })}
                             </div>
-                          )}
 
                           <button
                             className="vehicle-select-btn"
