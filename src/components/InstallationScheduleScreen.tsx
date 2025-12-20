@@ -599,22 +599,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
-  // Delete multiple selected items
+  // Delete multiple selected items - batch delete for performance
   const deleteSelectedItems = async () => {
     if (selectedItemIds.size === 0) return;
 
     const confirmed = window.confirm(`Kustuta ${selectedItemIds.size} detaili graafikust?`);
     if (!confirmed) return;
 
+    const count = selectedItemIds.size;
     try {
-      for (const itemId of selectedItemIds) {
-        await supabase
-          .from('installation_schedule')
-          .delete()
-          .eq('id', itemId);
-      }
+      const { error } = await supabase
+        .from('installation_schedule')
+        .delete()
+        .in('id', [...selectedItemIds]);
+
+      if (error) throw error;
+
       setSelectedItemIds(new Set());
-      setMessage(`${selectedItemIds.size} detaili kustutatud`);
+      setMessage(`${count} detaili kustutatud`);
       loadSchedule();
     } catch (e) {
       console.error('Error deleting items:', e);
@@ -681,6 +683,68 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       }
     } catch (e) {
       console.error('Error selecting date items:', e);
+    }
+  };
+
+  // Select multiple items in viewer by their IDs
+  const selectItemsByIdsInViewer = async (itemIds: Set<string>) => {
+    if (itemIds.size === 0) {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      return;
+    }
+
+    try {
+      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      const models = await api.viewer.getModels();
+
+      for (const itemId of itemIds) {
+        const item = scheduleItems.find(i => i.id === itemId);
+        if (!item) continue;
+
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!guidIfc) continue;
+
+        // Try with stored model_id first
+        if (item.model_id) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            const existing = modelObjects.find(m => m.modelId === item.model_id);
+            if (existing) {
+              existing.objectRuntimeIds.push(...runtimeIds);
+            } else {
+              modelObjects.push({ modelId: item.model_id, objectRuntimeIds: [...runtimeIds] });
+            }
+            continue;
+          }
+        }
+
+        // Fallback: try all loaded models
+        if (models && models.length > 0) {
+          for (const model of models) {
+            try {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                const existing = modelObjects.find(m => m.modelId === model.id);
+                if (existing) {
+                  existing.objectRuntimeIds.push(...runtimeIds);
+                } else {
+                  modelObjects.push({ modelId: model.id, objectRuntimeIds: [...runtimeIds] });
+                }
+                break;
+              }
+            } catch {
+              // Try next model
+            }
+          }
+        }
+      }
+
+      if (modelObjects.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+      }
+    } catch (e) {
+      console.error('Error selecting items in viewer:', e);
     }
   };
 
@@ -1244,6 +1308,24 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     });
   };
 
+  // Toggle all dates collapsed/expanded
+  const toggleAllCollapsed = () => {
+    const allDates = Object.keys(itemsByDate);
+    const allCollapsed = allDates.length > 0 && allDates.every(d => collapsedDates.has(d));
+
+    if (allCollapsed) {
+      // Expand all
+      setCollapsedDates(new Set());
+    } else {
+      // Collapse all
+      setCollapsedDates(new Set(allDates));
+    }
+  };
+
+  // Check if all dates are collapsed
+  const allDatesCollapsed = Object.keys(itemsByDate).length > 0 &&
+    Object.keys(itemsByDate).every(d => collapsedDates.has(d));
+
   // Multi-select item click handler
   const handleItemClick = (e: React.MouseEvent, item: ScheduleItem, allSortedItems: ScheduleItem[]) => {
     e.stopPropagation();
@@ -1313,28 +1395,42 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           // Not all selected -> add all
           dateItemIds.forEach(id => next.add(id));
         }
+        // Select in viewer
+        selectItemsByIdsInViewer(next);
         return next;
       });
     } else {
       // Normal click: select only this date's items
-      setSelectedItemIds(new Set(dateItemIds));
+      const newSelection = new Set(dateItemIds);
+      setSelectedItemIds(newSelection);
+      selectItemsByIdsInViewer(newSelection);
     }
   };
 
-  // Move multiple items to date
+  // Move multiple items to date - batch update for performance
   const moveSelectedItemsToDate = async (targetDate: string) => {
     if (selectedItemIds.size === 0) return;
 
+    // Filter out items already on target date
+    const itemsToMove = [...selectedItemIds].filter(itemId => {
+      const item = scheduleItems.find(i => i.id === itemId);
+      return item && item.scheduled_date !== targetDate;
+    });
+
+    if (itemsToMove.length === 0) {
+      setSelectedItemIds(new Set());
+      setDatePickerItemId(null);
+      return;
+    }
+
     try {
-      for (const itemId of selectedItemIds) {
-        const item = scheduleItems.find(i => i.id === itemId);
-        if (item && item.scheduled_date !== targetDate) {
-          await supabase
-            .from('installation_schedule')
-            .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
-            .eq('id', itemId);
-        }
-      }
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
+        .in('id', itemsToMove);
+
+      if (error) throw error;
+
       setSelectedItemIds(new Set());
       setDatePickerItemId(null);
       loadSchedule();
@@ -1344,23 +1440,25 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
-  // Update install method for selected items
+  // Update install method for selected items - batch update for performance
   const updateSelectedItemsMethod = async (method: 'crane' | 'forklift' | 'manual' | null) => {
     if (selectedItemIds.size === 0) return;
 
+    const count = selectedItemIds.size;
     try {
-      for (const itemId of selectedItemIds) {
-        await supabase
-          .from('installation_schedule')
-          .update({
-            install_method: method,
-            install_method_count: 1,
-            updated_by: tcUserEmail
-          })
-          .eq('id', itemId);
-      }
-      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'tühi';
-      setMessage(`${selectedItemIds.size} detaili paigaldusviis: ${methodLabel}`);
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({
+          install_method: method,
+          install_method_count: method ? 1 : null,
+          updated_by: tcUserEmail
+        })
+        .in('id', [...selectedItemIds]);
+
+      if (error) throw error;
+
+      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'eemaldatud';
+      setMessage(`${count} detaili paigaldusviis: ${methodLabel}`);
       loadSchedule();
     } catch (e) {
       console.error('Error updating install method:', e);
@@ -1916,21 +2014,21 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           <span>{selectedItemIds.size} valitud</span>
           <div className="multi-select-methods">
             <button
-              className="method-btn"
+              className="method-btn method-crane"
               onClick={() => updateSelectedItemsMethod('crane')}
               title="Kraana"
             >
               <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
             </button>
             <button
-              className="method-btn"
+              className="method-btn method-forklift"
               onClick={() => updateSelectedItemsMethod('forklift')}
               title="Teleskooplaadur"
             >
               <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
             </button>
             <button
-              className="method-btn"
+              className="method-btn method-manual"
               onClick={() => updateSelectedItemsMethod('manual')}
               title="Käsitsi"
             >
@@ -2270,6 +2368,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
       {/* Search bar */}
       <div className="schedule-search">
+        <button
+          className="collapse-all-btn"
+          onClick={toggleAllCollapsed}
+          title={allDatesCollapsed ? "Ava kõik" : "Sulge kõik"}
+        >
+          {allDatesCollapsed ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+        </button>
         <FiSearch size={14} className="search-icon" />
         <input
           type="text"
@@ -2413,14 +2518,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                 <img
                                   src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                   alt={item.install_method}
-                                  className="item-install-icon"
+                                  className={`item-install-icon method-${item.install_method}`}
                                   title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                 />
                                 {(item.install_method_count ?? 1) > 1 && (
                                   <img
                                     src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                     alt={item.install_method}
-                                    className="item-install-icon"
+                                    className={`item-install-icon method-${item.install_method}`}
                                     title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                   />
                                 )}
