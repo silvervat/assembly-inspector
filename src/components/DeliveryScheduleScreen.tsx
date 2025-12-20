@@ -445,6 +445,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [newCommentText, setNewCommentText] = useState('');
   const [savingComment, setSavingComment] = useState(false);
 
+  // Item edit modal state
+  const [showItemEditModal, setShowItemEditModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<DeliveryItem | null>(null);
+  const [itemEditVehicleId, setItemEditVehicleId] = useState<string>('');
+  const [itemEditStatus, setItemEditStatus] = useState<string>('planned');
+  const [itemEditUnloadMethods, setItemEditUnloadMethods] = useState<UnloadMethods>({});
+  const [itemEditNotes, setItemEditNotes] = useState<string>('');
+
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -606,6 +614,69 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       await loadComments();
     } catch (e) {
       console.error('Error deleting comment:', e);
+    }
+  };
+
+  // Open item edit modal
+  const openItemEditModal = (item: DeliveryItem) => {
+    setEditingItem(item);
+    setItemEditVehicleId(item.vehicle_id || '');
+    setItemEditStatus(item.status);
+    setItemEditUnloadMethods(item.unload_methods || {});
+    setItemEditNotes(item.notes || '');
+    setShowItemEditModal(true);
+  };
+
+  // Save item edit
+  const saveItemEdit = async () => {
+    if (!editingItem) return;
+
+    setSaving(true);
+    try {
+      // Prepare unload_methods - only include methods with counts > 0
+      const methods: UnloadMethods = {};
+      Object.entries(itemEditUnloadMethods).forEach(([key, value]) => {
+        if (value && value > 0) {
+          methods[key as keyof UnloadMethods] = value;
+        }
+      });
+
+      const updates: Record<string, unknown> = {
+        status: itemEditStatus,
+        unload_methods: Object.keys(methods).length > 0 ? methods : null,
+        notes: itemEditNotes || null,
+        updated_by: tcUserEmail,
+        updated_at: new Date().toISOString()
+      };
+
+      // Check if vehicle changed
+      if (itemEditVehicleId !== (editingItem.vehicle_id || '')) {
+        if (itemEditVehicleId) {
+          const newVehicle = vehicles.find(v => v.id === itemEditVehicleId);
+          if (newVehicle) {
+            updates.vehicle_id = itemEditVehicleId;
+            updates.scheduled_date = newVehicle.scheduled_date;
+          }
+        } else {
+          updates.vehicle_id = null;
+        }
+      }
+
+      const { error } = await supabase
+        .from('trimble_delivery_items')
+        .update(updates)
+        .eq('id', editingItem.id);
+
+      if (error) throw error;
+
+      setMessage('Muudatused salvestatud');
+      setShowItemEditModal(false);
+      await loadItems();
+    } catch (e: any) {
+      console.error('Error saving item:', e);
+      setMessage('Viga salvestamisel: ' + e.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -2608,7 +2679,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                             style={{ backgroundColor: method.bgColor }}
                                             title={method.label}
                                           >
-                                            <img src={`/icons/${method.icon}`} alt="" />
+                                            <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
                                             {count > 1 && <span className="resource-count">{count}</span>}
                                           </span>
                                         );
@@ -2643,6 +2714,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   {/* Item menu */}
                                   {itemMenuId === item.id && (
                                     <div className="context-menu item-context-menu">
+                                      <button onClick={() => {
+                                        openItemEditModal(item);
+                                        setItemMenuId(null);
+                                      }}>
+                                        <FiEdit2 /> Muuda
+                                      </button>
                                       <button onClick={() => {
                                         loadHistory(item.id);
                                         setItemMenuId(null);
@@ -3070,41 +3147,54 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   ))}
                 </select>
               </div>
-              <div className="form-group">
-                <label>Veok</label>
-                <div className="vehicle-select">
-                  <select
-                    value={addModalVehicleId}
-                    onChange={(e) => {
-                      setAddModalVehicleId(e.target.value);
-                      setAddModalNewVehicle(false);
-                    }}
-                    disabled={!addModalFactoryId}
-                  >
-                    <option value="">Vali olemasolev veok...</option>
-                    {vehicles
-                      .filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate)
-                      .map(v => (
-                        <option key={v.id} value={v.id}>
-                          {v.vehicle_code} ({v.item_count} tk)
-                        </option>
-                      ))}
-                  </select>
-                  <span className="or-divider">või</span>
-                  <label className="new-vehicle-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={addModalNewVehicle}
-                      onChange={(e) => {
-                        setAddModalNewVehicle(e.target.checked);
-                        if (e.target.checked) setAddModalVehicleId('');
-                      }}
-                      disabled={!addModalFactoryId}
-                    />
-                    Uus veok
-                  </label>
-                </div>
-              </div>
+              {(() => {
+                const dateVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate);
+                const hasVehicles = dateVehicles.length > 0;
+
+                return hasVehicles ? (
+                  <div className="form-group">
+                    <label>Veok</label>
+                    <div className="vehicle-select">
+                      <select
+                        value={addModalVehicleId}
+                        onChange={(e) => {
+                          setAddModalVehicleId(e.target.value);
+                          setAddModalNewVehicle(false);
+                        }}
+                        disabled={!addModalFactoryId}
+                      >
+                        <option value="">Vali olemasolev veok...</option>
+                        {dateVehicles.map(v => (
+                          <option key={v.id} value={v.id}>
+                            {v.vehicle_code} ({v.item_count} tk)
+                          </option>
+                        ))}
+                      </select>
+                      <span className="or-divider">või</span>
+                      <label className="new-vehicle-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={addModalNewVehicle}
+                          onChange={(e) => {
+                            setAddModalNewVehicle(e.target.checked);
+                            if (e.target.checked) setAddModalVehicleId('');
+                          }}
+                          disabled={!addModalFactoryId}
+                        />
+                        Uus veok
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label>Veok</label>
+                    <div className="auto-new-vehicle-notice">
+                      <FiTruck size={16} />
+                      <span>Sellel kuupäeval pole veokeid. Uus veok luuakse automaatselt.</span>
+                    </div>
+                  </div>
+                );
+              })()}
               <div className="form-group">
                 <label>Kommentaar (lisatakse igale detailile)</label>
                 <textarea
@@ -3136,11 +3226,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!addModalFactoryId || (!addModalVehicleId && !addModalNewVehicle) || saving}
+                disabled={!addModalFactoryId || saving}
                 onClick={async () => {
+                  const dateVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId && v.scheduled_date === addModalDate);
+                  const needsNewVehicle = addModalNewVehicle || dateVehicles.length === 0;
                   let vehicleId = addModalVehicleId;
 
-                  if (addModalNewVehicle) {
+                  if (needsNewVehicle) {
                     const newVehicle = await createVehicle(addModalFactoryId, addModalDate);
                     if (!newVehicle) {
                       setMessage('Veoki loomine ebaõnnestus');
@@ -3156,6 +3248,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       setAddModalComment('');
                       return;
                     }
+                  }
+
+                  if (!vehicleId) {
+                    setMessage('Vali veok');
+                    return;
                   }
 
                   await addItemsToVehicle(vehicleId, addModalDate, addModalComment);
@@ -3240,7 +3337,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const count = vehicleUnloadMethods[method.key] || 0;
                     return (
                       <div key={method.key} className="method-item">
-                        <img src={`/icons/${method.icon}`} alt="" />
+                        <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
                         <span>{method.label}</span>
                         <div className="method-counter">
                           <button
@@ -3761,6 +3858,125 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   {savingComment ? 'Salvestan...' : 'Lisa kommentaar'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item Edit Modal */}
+      {showItemEditModal && editingItem && (
+        <div className="modal-overlay" onClick={() => setShowItemEditModal(false)}>
+          <div className="modal item-edit-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Muuda detaili: {editingItem.assembly_mark}</h2>
+              <button className="close-btn" onClick={() => setShowItemEditModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-row">
+                <div className="form-group">
+                  <label><FiTruck style={{ marginRight: 4 }} />Veok</label>
+                  <select
+                    value={itemEditVehicleId}
+                    onChange={(e) => setItemEditVehicleId(e.target.value)}
+                  >
+                    <option value="">- Pole määratud -</option>
+                    {vehicles
+                      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date) || a.vehicle_code.localeCompare(b.vehicle_code))
+                      .map(v => (
+                        <option key={v.id} value={v.id}>
+                          {formatDateShort(v.scheduled_date)} - {v.vehicle_code}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label><FiPackage style={{ marginRight: 4 }} />Staatus</label>
+                  <select
+                    value={itemEditStatus}
+                    onChange={(e) => setItemEditStatus(e.target.value)}
+                  >
+                    {Object.entries(ITEM_STATUS_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Mahalaadimise ressursid</h4>
+                <div className="methods-grid">
+                  {UNLOAD_METHODS.map(method => {
+                    const count = itemEditUnloadMethods[method.key] || 0;
+                    return (
+                      <div key={method.key} className="method-item">
+                        <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
+                        <span>{method.label}</span>
+                        <div className="method-counter">
+                          <button
+                            onClick={() => setItemEditUnloadMethods(prev => ({
+                              ...prev,
+                              [method.key]: Math.max(0, (prev[method.key] || 0) - 1)
+                            }))}
+                          >
+                            -
+                          </button>
+                          <span>{count}</span>
+                          <button
+                            onClick={() => setItemEditUnloadMethods(prev => ({
+                              ...prev,
+                              [method.key]: Math.min(method.maxCount, (prev[method.key] || 0) + 1)
+                            }))}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Märkused</label>
+                <textarea
+                  value={itemEditNotes}
+                  onChange={(e) => setItemEditNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Lisa märkused..."
+                />
+              </div>
+
+              <div className="item-info-section">
+                <h4>Detaili info</h4>
+                <div className="info-grid">
+                  <div className="info-row">
+                    <span className="info-label">Toode:</span>
+                    <span className="info-value">{editingItem.product_name || '-'}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Kaal:</span>
+                    <span className="info-value">{editingItem.cast_unit_weight ? `${Math.round(parseFloat(editingItem.cast_unit_weight))} kg` : '-'}</span>
+                  </div>
+                  <div className="info-row">
+                    <span className="info-label">Positsioon:</span>
+                    <span className="info-value">{editingItem.cast_unit_position_code || '-'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowItemEditModal(false)}>
+                Tühista
+              </button>
+              <button
+                className="submit-btn primary"
+                disabled={saving}
+                onClick={saveItemEdit}
+              >
+                {saving ? 'Salvestan...' : 'Salvesta'}
+              </button>
             </div>
           </div>
         </div>
