@@ -257,7 +257,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 4px 6px 4px 6px; /* Padding for badge overflow on both sides */
+  padding: 6px 10px 6px 10px; /* Padding for badge and dropdown overflow */
+  overflow: visible;
 }
 
 .method-selector-wrapper {
@@ -347,12 +348,19 @@
 .method-qty-dropdown .qty-btn:hover {
   background: #f3f4f6;
   border-color: #93c5fd;
+  color: #1f2937;
 }
 
 .method-qty-dropdown .qty-btn.active {
   background: #3b82f6;
   color: white;
   border-color: #3b82f6;
+}
+
+.method-qty-dropdown .qty-btn.active:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
 }
 
 .selection-info .add-to-date-btn {
@@ -572,7 +580,10 @@
 .date-label {
   font-weight: 600;
   white-space: nowrap;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 60px;
+  flex-shrink: 1;
 }
 
 .date-header-spacer {
@@ -978,8 +989,8 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 12px;
-  background: #fef3c7;
-  border-bottom: 1px solid #fcd34d;
+  background: #fefdf8;
+  border-bottom: 1px solid #fde68a;
   font-size: 12px;
   color: #92400e;
 }
@@ -1045,7 +1056,8 @@
 }
 
 .multi-select-bar .batch-methods {
-  padding: 2px 6px 8px 6px; /* Bottom padding for dropdown, left/right for badges */
+  padding: 6px 10px 12px 10px; /* Extra padding for badges and dropdown overflow */
+  overflow: visible;
 }
 
 .multi-select-bar .batch-methods .method-selector {
