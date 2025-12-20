@@ -19,8 +19,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--modus-primary-darker, #0a3a67);
   flex-shrink: 0;
 }
 
@@ -31,22 +30,22 @@
   width: 36px;
   height: 36px;
   border: none;
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   cursor: pointer;
-  color: #374151;
+  color: white;
   transition: all 0.15s;
 }
 
 .delivery-header .back-btn:hover {
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .delivery-header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: white;
 }
 
 .delivery-header .header-stats {
@@ -54,12 +53,12 @@
   gap: 12px;
   margin-left: auto;
   font-size: 13px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .delivery-header .header-stats span {
   padding: 4px 8px;
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
 
@@ -75,20 +74,21 @@
   width: 36px;
   height: 36px;
   border: none;
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   cursor: pointer;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   transition: all 0.15s;
 }
 
 .delivery-header .view-toggle-btn:hover {
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
 }
 
 .delivery-header .view-toggle-btn.active {
-  background: var(--modus-primary, #0063a3);
-  color: white;
+  background: white;
+  color: var(--modus-primary-darker, #0a3a67);
 }
 
 /* ============================================
@@ -222,143 +222,208 @@
 }
 
 /* ============================================
-   CALENDAR
+   CALENDAR (matches InstallationScheduleScreen)
    ============================================ */
 
-.delivery-calendar {
-  width: 280px;
-  background: white;
-  border-right: 1px solid #e5e7eb;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
+.schedule-calendar {
+  background: var(--modus-bg-primary, white);
+  border-bottom: 1px solid var(--modus-border, #e5e7eb);
+  padding: 8px 10px;
 }
 
-.delivery-calendar.collapsed {
-  height: auto;
+.schedule-calendar.collapsed {
+  padding: 8px 12px;
 }
 
-.delivery-calendar .calendar-header {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid #e5e7eb;
+.schedule-calendar.collapsed .calendar-header {
+  margin-bottom: 0;
 }
 
-.delivery-calendar .calendar-title {
-  flex: 1;
-  text-align: center;
-  font-weight: 600;
-  font-size: 14px;
-  text-transform: capitalize;
+.schedule-calendar.collapsed .calendar-header button:first-child,
+.schedule-calendar.collapsed .calendar-header button:last-child {
+  visibility: hidden;
 }
 
-.delivery-calendar .calendar-nav,
-.delivery-calendar .calendar-collapse-btn {
+.calendar-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.calendar-header button {
+  background: none;
   border: none;
-  background: #f3f4f6;
-  border-radius: 6px;
   cursor: pointer;
-  color: #374151;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--modus-text-secondary, #6b7280);
 }
 
-.delivery-calendar .calendar-nav:hover,
-.delivery-calendar .calendar-collapse-btn:hover {
-  background: #e5e7eb;
+.calendar-header button:hover {
+  background: var(--modus-bg-secondary, #f3f4f6);
+  color: var(--modus-primary, #0063a3);
 }
 
-.delivery-calendar .calendar-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  padding: 8px 12px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.delivery-calendar .weekday {
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #9ca3af;
-}
-
-.delivery-calendar .calendar-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  padding: 8px 12px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.delivery-calendar-day {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4px 2px;
-  min-height: 44px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.delivery-calendar-day:hover {
-  background: #f3f4f6;
-}
-
-.delivery-calendar-day.empty {
+.calendar-header button:disabled {
+  opacity: 0.3;
   cursor: default;
 }
 
-.delivery-calendar-day.today {
-  background: #dbeafe;
-}
-
-.delivery-calendar-day.selected {
-  background: var(--modus-primary, #0063a3);
-  color: white;
-}
-
-.delivery-calendar-day.has-items {
+.calendar-month {
   font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.delivery-calendar-day .day-number {
-  font-size: 13px;
+.calendar-collapse-btn {
+  background: none !important;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--modus-text-secondary, #6b7280);
 }
 
-.delivery-calendar-day .day-stats {
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.calendar-grid.with-weeks {
+  grid-template-columns: 26px repeat(7, 1fr);
+}
+
+.calendar-week-header {
+  /* Empty cell above week numbers */
+}
+
+.calendar-week-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--modus-text-secondary, #6b7280);
+  opacity: 0.7;
+}
+
+.calendar-day-name {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--modus-text-secondary, #6b7280);
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.calendar-day {
+  aspect-ratio: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 9px;
-  margin-top: 2px;
-  color: #6b7280;
+  justify-content: center;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  min-height: 26px;
+  border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
-.delivery-calendar-day.selected .day-stats {
-  color: rgba(255, 255, 255, 0.8);
+.calendar-day:hover {
+  background: var(--modus-bg-secondary, #f3f4f6);
 }
 
-.delivery-calendar-day .vehicle-count {
-  font-size: 10px;
+.calendar-day.other-month {
+  opacity: 0.3;
 }
 
-.delivery-calendar-day .item-count {
+.calendar-day.today {
   background: var(--modus-primary, #0063a3);
   color: white;
-  padding: 1px 4px;
-  border-radius: 8px;
-  font-size: 9px;
 }
 
-.delivery-calendar-day.selected .item-count {
+.calendar-day.today:hover {
+  background: var(--modus-primary-dark, #004d80);
+}
+
+.calendar-day.selected {
+  outline: 2px solid var(--modus-primary, #0063a3);
+  outline-offset: -2px;
+}
+
+.calendar-day.has-items {
+  font-weight: 600;
+}
+
+.calendar-day .day-number {
+  font-size: 11px;
+}
+
+.calendar-day .day-count {
+  font-size: 8px;
+  padding: 0 3px;
+  border-radius: 6px;
+  background: var(--modus-primary, #0063a3);
+  color: white;
+  min-width: 14px;
+  text-align: center;
+  margin-top: 1px;
+}
+
+.calendar-day.today .day-count {
   background: white;
   color: var(--modus-primary, #0063a3);
+}
+
+/* ============================================
+   LIST SEARCH BOX (below calendar)
+   ============================================ */
+
+.list-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.list-search-box input {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #f9fafb;
+}
+
+.list-search-box input:focus {
+  border-color: var(--modus-primary, #0063a3);
+  background: white;
+}
+
+.list-search-box .clear-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #d1d5db;
+  border-radius: 50%;
+  cursor: pointer;
+  color: white;
+  font-size: 12px;
+}
+
+.list-search-box .clear-search:hover {
+  background: #9ca3af;
 }
 
 /* ============================================
@@ -410,8 +475,8 @@
 .date-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 10px 16px;
   background: linear-gradient(to right, #f8fafc, #f1f5f9);
   cursor: pointer;
   border-bottom: 1px solid #e5e7eb;
@@ -427,50 +492,70 @@
   flex-shrink: 0;
 }
 
-.date-header .date-text {
+/* Date info section - two rows */
+.date-info-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 70px;
+}
+
+.date-info-section .date-primary {
   font-weight: 600;
   font-size: 14px;
   color: #111827;
 }
 
-.date-header .date-week {
-  font-size: 12px;
+.date-info-section .date-secondary {
+  font-size: 11px;
   color: #6b7280;
-  padding: 2px 6px;
-  background: #e5e7eb;
-  border-radius: 4px;
+  text-transform: lowercase;
 }
 
-.date-header .date-stats {
+/* Week section - two rows */
+.date-week-section {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  font-size: 12px;
+  flex-direction: column;
+  min-width: 60px;
 }
 
-.date-header .vehicle-badge {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  background: #dbeafe;
+.date-week-section .week-primary {
+  font-weight: 600;
+  font-size: 13px;
   color: #1e40af;
-  border-radius: 12px;
+  background: #dbeafe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  width: fit-content;
 }
 
-.date-header .item-badge {
-  padding: 3px 8px;
-  background: #d1fae5;
-  color: #047857;
-  border-radius: 12px;
+.date-week-section .week-secondary {
+  font-size: 11px;
+  color: #6b7280;
 }
 
-.date-header .weight-badge {
-  padding: 3px 8px;
-  background: #f3f4f6;
-  color: #4b5563;
-  border-radius: 12px;
+/* Stats section - two rows */
+.date-stats-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.date-stats-section .stats-primary {
+  font-weight: 500;
+  font-size: 13px;
+  color: #111827;
+}
+
+.date-stats-section .stats-secondary {
+  font-size: 11px;
+  color: #059669;
+}
+
+/* Resources section for date */
+.date-resources-section {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
 }
 
 .date-header .date-menu-btn {
@@ -503,7 +588,11 @@
   background: #fafafa;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
-  overflow: hidden;
+  position: relative;
+}
+
+.delivery-vehicle-group.menu-open {
+  z-index: 100;
 }
 
 .delivery-vehicle-group.factory-vehicle {
@@ -513,10 +602,11 @@
 .vehicle-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 8px 12px;
   cursor: pointer;
   transition: background 0.15s;
+  position: relative;
 }
 
 .vehicle-header:hover {
@@ -528,49 +618,79 @@
   flex-shrink: 0;
 }
 
-.vehicle-header .vehicle-icon {
-  color: #6b7280;
-  flex-shrink: 0;
+/* Vehicle time section - two rows */
+.vehicle-time-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 50px;
+  align-items: center;
 }
 
-.vehicle-header .vehicle-code {
+.vehicle-time-section .time-primary {
   font-weight: 600;
   font-size: 14px;
+  color: #059669;
+}
+
+.vehicle-time-section .time-secondary {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+/* Vehicle title section */
+.vehicle-title-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 80px;
+}
+
+.vehicle-title-section .vehicle-code {
+  font-weight: 700;
+  font-size: 15px;
   color: #111827;
 }
 
-.vehicle-header .factory-name {
-  font-size: 12px;
-  color: #6b7280;
+.vehicle-title-section .vehicle-code.clickable {
+  cursor: pointer;
+  transition: all 0.15s;
 }
 
-.vehicle-header .vehicle-date {
-  font-size: 12px;
-  color: #6b7280;
-  padding: 2px 6px;
-  background: #e5e7eb;
-  border-radius: 4px;
+.vehicle-title-section .vehicle-code.clickable:hover {
+  color: #1e40af;
+  text-decoration: underline;
 }
 
-.vehicle-header .vehicle-stats {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: auto;
-  font-size: 11px;
-}
-
-.vehicle-header .status-badge {
-  padding: 3px 8px;
-  border-radius: 12px;
-  font-size: 11px;
+.vehicle-title-section .status-badge {
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 10px;
   font-weight: 500;
+  width: fit-content;
 }
 
-.vehicle-header .vehicle-methods,
-.vehicle-header .vehicle-resources {
+/* Vehicle stats section - two rows */
+.vehicle-stats-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.vehicle-stats-section .stats-primary {
+  font-weight: 500;
+  font-size: 13px;
+  color: #111827;
+}
+
+.vehicle-stats-section .stats-secondary {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Vehicle resources section */
+.vehicle-resources-section {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .vehicle-header .method-badge,
@@ -595,6 +715,7 @@
 }
 
 .vehicle-header .vehicle-select-btn,
+.vehicle-header .vehicle-comment-btn,
 .vehicle-header .vehicle-menu-btn {
   display: flex;
   align-items: center;
@@ -606,11 +727,17 @@
   border-radius: 6px;
   cursor: pointer;
   color: #6b7280;
+  position: relative;
 }
 
 .vehicle-header .vehicle-select-btn:hover,
+.vehicle-header .vehicle-comment-btn:hover,
 .vehicle-header .vehicle-menu-btn:hover {
   background: #e5e7eb;
+}
+
+.vehicle-header .vehicle-comment-btn:hover {
+  color: var(--modus-primary, #0063a3);
 }
 
 .vehicle-items {
@@ -629,6 +756,7 @@
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
   transition: background 0.1s;
+  position: relative;
 }
 
 .delivery-item:last-child {
@@ -648,6 +776,10 @@
   border-left: 3px solid var(--modus-primary, #0063a3);
 }
 
+.delivery-item.menu-open {
+  z-index: 100;
+}
+
 .delivery-item .item-checkbox {
   flex-shrink: 0;
 }
@@ -658,30 +790,98 @@
   cursor: pointer;
 }
 
-.delivery-item .item-mark {
-  font-weight: 500;
-  font-size: 13px;
-  color: #111827;
-  min-width: 120px;
-}
-
-.delivery-item .item-product {
-  font-size: 12px;
-  color: #6b7280;
+/* Item info section - two rows */
+.item-info-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
   flex: 1;
 }
 
-.delivery-item .item-position {
-  font-size: 12px;
-  color: #6b7280;
-  min-width: 80px;
+.item-info-section .item-mark {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
 }
 
-.delivery-item .item-weight {
-  font-size: 12px;
-  color: #374151;
-  min-width: 70px;
+.item-info-section .item-product {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Item weight section */
+.item-weight-section {
+  min-width: 60px;
   text-align: right;
+}
+
+.item-weight-section .weight-primary {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Item resources section */
+.item-resources-section {
+  display: flex;
+  gap: 4px;
+}
+
+.item-resources-section .resource-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+.item-resources-section .resource-badge img {
+  width: 14px;
+  height: 14px;
+}
+
+.item-resources-section .resource-count {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* Item comment button */
+.item-comment-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: all 0.15s;
+}
+
+.item-comment-btn:hover {
+  background: #f3f4f6;
+  color: var(--modus-primary, #0063a3);
+}
+
+/* Comment badge */
+.comment-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--modus-primary, #0063a3);
+  color: white;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delivery-item .item-menu-btn {
@@ -699,7 +899,8 @@
   transition: opacity 0.15s;
 }
 
-.delivery-item:hover .item-menu-btn {
+.delivery-item:hover .item-menu-btn,
+.delivery-item:hover .item-comment-btn {
   opacity: 1;
 }
 
@@ -770,7 +971,7 @@
   position: absolute;
   right: 8px;
   top: 100%;
-  z-index: 100;
+  z-index: 1000;
   min-width: 160px;
   background: white;
   border-radius: 8px;
@@ -811,7 +1012,8 @@
 }
 
 .vehicle-context-menu {
-  right: 40px;
+  right: 12px;
+  top: 44px;
 }
 
 .item-context-menu {
@@ -1363,10 +1565,8 @@
     flex-direction: column;
   }
 
-  .delivery-calendar {
+  .schedule-calendar {
     width: 100%;
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
   }
 
   .delivery-toolbar {
