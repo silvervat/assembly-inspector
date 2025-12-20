@@ -196,6 +196,60 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   }, [playbackSettings.colorEachDayDifferent, scheduleItems]);
 
+  // Apply colors to model when colorEachDayDifferent is enabled and items change
+  useEffect(() => {
+    if (!playbackSettings.colorEachDayDifferent || Object.keys(playbackDateColors).length === 0) return;
+    if (scheduleItems.length === 0) return;
+
+    const applyColorsToModel = async () => {
+      try {
+        const models = await api.viewer.getModels();
+
+        for (const item of scheduleItems) {
+          const color = playbackDateColors[item.scheduled_date];
+          if (!color) continue;
+
+          const guidIfc = item.guid_ifc || item.guid;
+          if (!guidIfc) continue;
+
+          // Try with stored model_id first
+          if (item.model_id) {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+            if (runtimeIds && runtimeIds.length > 0) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
+                { color: { ...color, a: 255 } }
+              );
+              continue;
+            }
+          }
+
+          // Fallback: try all loaded models
+          if (models && models.length > 0) {
+            for (const model of models) {
+              try {
+                const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+                if (runtimeIds && runtimeIds.length > 0) {
+                  await api.viewer.setObjectState(
+                    { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
+                    { color: { ...color, a: 255 } }
+                  );
+                  break;
+                }
+              } catch {
+                // Try next model
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error applying colors to model:', e);
+      }
+    };
+
+    applyColorsToModel();
+  }, [playbackDateColors, scheduleItems]);
+
   // Ref for auto-scrolling to playing item
   const playingItemRef = useRef<HTMLDivElement | null>(null);
 
@@ -2147,7 +2201,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     }}
                     title="Käsitsi (parem klõps = x2)"
                   >
-                    <img src={`${import.meta.env.BASE_URL}icons/muscle.png`} alt="Käsitsi" />
+                    <img src={`${import.meta.env.BASE_URL}icons/manual.png`} alt="Käsitsi" />
                     {selectedInstallMethod === 'manual' && selectedInstallMethodCount > 1 && (
                       <span className="method-count-badge">x{selectedInstallMethodCount}</span>
                     )}
