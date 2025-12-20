@@ -363,6 +363,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleDuration, setVehicleDuration] = useState<number>(0);
   const [vehicleType, setVehicleType] = useState<string>('haagis');
   const [vehicleNewComment, setVehicleNewComment] = useState<string>('');
+  const [hoveredMethod, setHoveredMethod] = useState<string | null>(null);
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -1140,6 +1141,36 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
   void moveVehicleToDate; // Suppress unused warning
+
+  // ============================================
+  // UNLOAD METHOD TOGGLE
+  // ============================================
+
+  // Toggle unload method on/off (click on icon)
+  const toggleUnloadMethod = (methodKey: keyof UnloadMethods) => {
+    setVehicleUnloadMethods(prev => {
+      const newMethods = { ...prev };
+      if (newMethods[methodKey]) {
+        // Remove method (second click)
+        delete newMethods[methodKey];
+      } else {
+        // Add method with default count (first click)
+        const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
+        newMethods[methodKey] = methodConfig?.defaultCount || 1;
+      }
+      return newMethods;
+    });
+  };
+
+  // Set specific count for a method
+  const setUnloadMethodCount = (methodKey: keyof UnloadMethods, count: number) => {
+    const methodConfig = UNLOAD_METHODS.find(m => m.key === methodKey);
+    if (!methodConfig) return;
+    setVehicleUnloadMethods(prev => ({
+      ...prev,
+      [methodKey]: Math.min(count, methodConfig.maxCount)
+    }));
+  };
 
   // ============================================
   // ITEM OPERATIONS
@@ -3368,32 +3399,52 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               <div className="form-section">
                 <h4>Mahalaadimise ressursid</h4>
-                <div className="methods-grid">
+                <div className="method-selectors">
                   {UNLOAD_METHODS.map(method => {
                     const count = vehicleUnloadMethods[method.key] || 0;
+                    const isActive = count > 0;
+                    const isHovered = hoveredMethod === method.key;
+
                     return (
-                      <div key={method.key} className="method-item">
-                        <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
-                        <span>{method.label}</span>
-                        <div className="method-counter">
-                          <button
-                            onClick={() => setVehicleUnloadMethods(prev => ({
-                              ...prev,
-                              [method.key]: Math.max(0, (prev[method.key] || 0) - 1)
-                            }))}
-                          >
-                            -
-                          </button>
-                          <span>{count}</span>
-                          <button
-                            onClick={() => setVehicleUnloadMethods(prev => ({
-                              ...prev,
-                              [method.key]: Math.min(method.maxCount, (prev[method.key] || 0) + 1)
-                            }))}
-                          >
-                            +
-                          </button>
-                        </div>
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredMethod(method.key)}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                      >
+                        <button
+                          className={`method-selector ${isActive ? 'active' : ''}`}
+                          style={{
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                          }}
+                          onClick={() => toggleUnloadMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span className="method-badge">{count}</span>
+                          )}
+                        </button>
+                        {isHovered && isActive && (
+                          <div className="method-qty-dropdown">
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                className={`qty-btn ${count === num ? 'active' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setUnloadMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
