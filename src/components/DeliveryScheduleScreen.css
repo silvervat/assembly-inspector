@@ -609,6 +609,20 @@
   color: #111827;
 }
 
+.vehicle-header .vehicle-code.clickable {
+  cursor: pointer;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.vehicle-header .vehicle-code.clickable:hover {
+  background: #dbeafe;
+  color: #1e40af;
+  text-decoration: underline;
+}
+
 .vehicle-header .factory-name {
   font-size: 12px;
   color: #6b7280;

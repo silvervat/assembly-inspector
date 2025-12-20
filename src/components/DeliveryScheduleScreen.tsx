@@ -2235,7 +2235,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
                             <FiTruck className="vehicle-icon" />
-                            <span className="vehicle-code">{vehicle?.vehicle_code || 'Määramata'}</span>
+                            <span
+                              className="vehicle-code clickable"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (vehicle) handleVehicleClick(vehicle);
+                              }}
+                              title="Märgista mudelis"
+                            >{vehicle?.vehicle_code || 'Määramata'}</span>
                             <span className="vehicle-time">{vehicle?.unload_start_time || ''}</span>
                             <span className="factory-name">{factory?.factory_name || ''}</span>
                           <span className="vehicle-stats">
@@ -2552,7 +2559,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
                           <FiTruck className="vehicle-icon" />
-                          <span className="vehicle-code">{vehicle.vehicle_code}</span>
+                          <span
+                            className="vehicle-code clickable"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleVehicleClick(vehicle);
+                            }}
+                            title="Märgista mudelis"
+                          >{vehicle.vehicle_code}</span>
                           <span className="vehicle-date">{formatDateEstonian(vehicle.scheduled_date)}</span>
                           <span className="vehicle-stats">
                             <span className="item-badge">{vehicleItems.length} tk</span>
