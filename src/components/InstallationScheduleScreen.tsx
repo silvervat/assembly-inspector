@@ -1760,6 +1760,30 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     };
   }, []);
 
+  // ESC key handler to cancel all selections
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Clear list selections
+        if (selectedItemIds.size > 0) {
+          setSelectedItemIds(new Set());
+          setLastClickedId(null);
+        }
+        // Clear model selection
+        if (selectedObjects.length > 0) {
+          api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+        }
+        // Close any open menus/modals
+        setItemMenuId(null);
+        setDatePickerItemId(null);
+        setHoveredItemId(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedItemIds.size, selectedObjects.length, api]);
+
   // Select all items in current filtered list
   const selectAllItems = () => {
     const ids = new Set(filteredItems.map(item => item.id));
@@ -2936,7 +2960,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               </>
             )}
 
-            {/* Third row: add button */}
+            {/* Third row: add button or hint */}
             {!allScheduled && selectedDate && (
               <button
                 className="btn-primary add-to-date-btn"
@@ -2946,6 +2970,12 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <FiPlus size={14} />
                 Lisa {formatDateEstonian(selectedDate)}
               </button>
+            )}
+            {!allScheduled && !selectedDate && (
+              <span className="select-date-hint">
+                <FiCalendar size={12} />
+                Vali kuupäev lisamiseks
+              </span>
             )}
           </div>
         );
