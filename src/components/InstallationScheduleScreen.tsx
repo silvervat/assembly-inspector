@@ -287,11 +287,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
 
-  // Hover tooltip state
-  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
     if (playbackSettings.colorEachDayDifferent) {
@@ -1930,35 +1925,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setSelectedItemIds(new Set());
     setLastClickedId(null);
   };
-
-  // Item hover handlers for tooltip
-  const handleItemMouseEnter = (e: React.MouseEvent, itemId: string) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-    }
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHoveredItemId(itemId);
-      setTooltipPosition({ x: rect.left, y: rect.bottom + 4 });
-    }, 500); // 0.5 second delay
-  };
-
-  const handleItemMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    setHoveredItemId(null);
-  };
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) {
-        clearTimeout(hoverTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // ESC key handler to cancel all selections
   useEffect(() => {
@@ -3738,15 +3704,29 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
                               className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
-                              title={`Detail: ${item.assembly_mark}  |  Kaal: ${item.cast_unit_weight || '-'}  |  Asukoht: ${item.cast_unit_position_code || '-'}  |  Toode: ${item.product_name || '-'}`}
+                              title={(() => {
+                                const weight = item.cast_unit_weight;
+                                const weightNum = weight ? (typeof weight === 'string' ? parseFloat(weight) : weight) : null;
+                                const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : '-';
+                                const methods = item.install_methods as InstallMethods | null;
+                                const methodsStr = methods && Object.keys(methods).length > 0
+                                  ? Object.entries(methods)
+                                      .filter(([, count]) => count && count > 0)
+                                      .map(([key, count]) => {
+                                        const cfg = INSTALL_METHODS.find(m => m.key === key);
+                                        return cfg ? `${cfg.label} ×${count}` : null;
+                                      })
+                                      .filter(Boolean)
+                                      .join(', ')
+                                  : null;
+                                return `Detaili nimetus: ${item.assembly_mark}  |  Kaal: ${weightStr}  |  Asukoht: ${item.cast_unit_position_code || '-'}  |  Toode: ${item.product_name || '-'}${methodsStr ? `  |  Ressursid: ${methodsStr}` : ''}`;
+                              })()}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
                               onDragOver={(e) => handleItemDragOver(e, date, idx)}
                               onDrop={(e) => handleDrop(e, date, dragOverIndex ?? undefined)}
                               onClick={(e) => handleItemClick(e, item, allSorted)}
-                              onMouseEnter={(e) => handleItemMouseEnter(e, item.id)}
-                              onMouseLeave={handleItemMouseLeave}
                             >
                             <span className="item-index">{idx + 1}</span>
                             <div className="item-drag-handle">
@@ -3940,61 +3920,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           }}
         />
       )}
-
-      {/* Item Hover Tooltip */}
-      {hoveredItemId && (() => {
-        const item = scheduleItems.find(i => i.id === hoveredItemId);
-        if (!item) return null;
-        const methods = item.install_methods as InstallMethods | null;
-        const weight = item.cast_unit_weight;
-        const weightNum = weight ? (typeof weight === 'string' ? parseFloat(weight) : weight) : null;
-        const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : null;
-
-        return (
-          <div
-            className="item-tooltip"
-            style={{
-              position: 'fixed',
-              left: Math.min(tooltipPosition.x, window.innerWidth - 220),
-              top: Math.min(tooltipPosition.y, window.innerHeight - 150),
-              zIndex: 9999,
-            }}
-          >
-            <div className="tooltip-row">
-              <span className="tooltip-label">Detaili nimetus:</span>
-              <span className="tooltip-value">{item.assembly_mark}</span>
-            </div>
-            {weightStr && (
-              <div className="tooltip-row">
-                <span className="tooltip-label">Kaal:</span>
-                <span className="tooltip-value">{weightStr}</span>
-              </div>
-            )}
-            {methods && Object.keys(methods).length > 0 && (
-              <div className="tooltip-methods">
-                <span className="tooltip-label">Paigalduse ressursid:</span>
-                <div className="tooltip-method-list">
-                  {Object.entries(methods).map(([key, count]) => {
-                    const cfg = INSTALL_METHODS.find(m => m.key === key);
-                    if (!cfg || !count) return null;
-                    return (
-                      <div key={key} className="tooltip-method-item">
-                        <img
-                          src={`${import.meta.env.BASE_URL}icons/${cfg.icon}`}
-                          alt={cfg.label}
-                          style={{ filter: cfg.filterCss }}
-                        />
-                        <span>{cfg.label}</span>
-                        <span className="tooltip-method-count">× {count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Assembly Selection Required Modal */}
       {showAssemblyModal && (
