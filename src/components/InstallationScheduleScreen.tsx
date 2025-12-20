@@ -898,18 +898,42 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Hide all scheduled items
   const hideAllItems = async () => {
     try {
+      // Get all loaded models once for fallback
+      const models = await api.viewer.getModels();
+
       for (const item of scheduleItems) {
-        const modelId = item.model_id;
         const guidIfc = item.guid_ifc || item.guid;
-        if (!modelId || !guidIfc) continue;
+        if (!guidIfc) continue;
 
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
+        // Try with stored model_id first
+        if (item.model_id) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
+              { visible: false }
+            );
+            continue;
+          }
+        }
 
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-          { visible: false }
-        );
+        // Fallback: try all loaded models
+        if (models && models.length > 0) {
+          for (const model of models) {
+            try {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
+                  { visible: false }
+                );
+                break; // Found and hidden, stop searching models
+              }
+            } catch {
+              // Try next model
+            }
+          }
+        }
       }
     } catch (e) {
       console.error('Error hiding all items:', e);
@@ -919,17 +943,39 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Show a specific item (make visible)
   const showItem = async (item: ScheduleItem) => {
     try {
-      const modelId = item.model_id;
       const guidIfc = item.guid_ifc || item.guid;
-      if (!modelId || !guidIfc) return;
+      if (!guidIfc) return;
 
-      const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-      if (!runtimeIds || runtimeIds.length === 0) return;
+      // If model_id is available, use it directly
+      if (item.model_id) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+        if (runtimeIds && runtimeIds.length > 0) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
+            { visible: true }
+          );
+          return;
+        }
+      }
 
-      await api.viewer.setObjectState(
-        { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-        { visible: true }
-      );
+      // Fallback: try all loaded models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      for (const model of models) {
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
+              { visible: true }
+            );
+            return; // Found and shown, stop searching
+          }
+        } catch {
+          // Try next model
+        }
+      }
     } catch (e) {
       console.error('Error showing item:', e);
     }
