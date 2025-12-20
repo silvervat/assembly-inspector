@@ -20,7 +20,8 @@ export type InspectionMode =
   | 'inspection_plan'
   | 'inspection_type'
   | 'installations' // Paigaldamiste süsteem
-  | 'schedule'; // Paigaldusgraafik
+  | 'schedule' // Paigaldusgraafik
+  | 'delivery_schedule'; // Tarne graafik
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -294,6 +295,23 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Paigaldusgraafik</span>
                 <span className="menu-item-desc">Planeeri ja esitle paigaldusi</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Tarne graafik - delivery schedule */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('delivery_schedule')}
+            >
+              <span className="menu-item-icon" style={{ color: '#059669' }}>
+                <FiTruck size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Tarne graafik</span>
+                <span className="menu-item-desc">Planeeri ja jälgi tarneid veokite kaupa</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
