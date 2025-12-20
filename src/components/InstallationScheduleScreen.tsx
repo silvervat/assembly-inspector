@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
-import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType } from '../supabase';
+import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck
+  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
+  FiMessageSquare
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -272,7 +273,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     { id: 'manual', label: 'Käsitsi', enabled: true },
     { id: 'guid_ms', label: 'GUID (MS)', enabled: true },
     { id: 'guid_ifc', label: 'GUID (IFC)', enabled: true },
-    { id: 'percentage', label: 'Kumulatiivne %', enabled: true }
+    { id: 'percentage', label: 'Kumulatiivne %', enabled: true },
+    { id: 'comments', label: 'Kommentaarid', enabled: true }
   ]);
 
   // Import state
@@ -291,6 +293,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Comments state
+  const [comments, setComments] = useState<ScheduleComment[]>([]);
+  const [showCommentModal, setShowCommentModal] = useState(false);
+  const [commentModalTarget, setCommentModalTarget] = useState<{ type: 'item' | 'date'; id: string } | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [savingComment, setSavingComment] = useState(false);
 
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
@@ -412,6 +421,114 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
+
+  // Load comments
+  const loadComments = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('schedule_comments')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setComments(data || []);
+    } catch (e) {
+      console.error('Error loading comments:', e);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
+
+  // Get comment count for item or date
+  const getCommentCount = useCallback((type: 'item' | 'date', id: string): number => {
+    if (type === 'item') {
+      return comments.filter(c => c.schedule_item_id === id).length;
+    } else {
+      return comments.filter(c => c.schedule_date === id).length;
+    }
+  }, [comments]);
+
+  // Get comments for item or date
+  const getCommentsFor = useCallback((type: 'item' | 'date', id: string): ScheduleComment[] => {
+    if (type === 'item') {
+      return comments.filter(c => c.schedule_item_id === id);
+    } else {
+      return comments.filter(c => c.schedule_date === id);
+    }
+  }, [comments]);
+
+  // Add comment
+  const addComment = async () => {
+    if (!commentModalTarget || !newCommentText.trim()) return;
+
+    setSavingComment(true);
+    try {
+      const commentData: Partial<ScheduleComment> = {
+        project_id: projectId,
+        comment_text: newCommentText.trim(),
+        created_by: userEmail,
+        created_by_name: userName,
+      };
+
+      if (commentModalTarget.type === 'item') {
+        commentData.schedule_item_id = commentModalTarget.id;
+      } else {
+        commentData.schedule_date = commentModalTarget.id;
+      }
+
+      const { error } = await supabase
+        .from('schedule_comments')
+        .insert(commentData);
+
+      if (error) throw error;
+
+      setNewCommentText('');
+      await loadComments();
+    } catch (e) {
+      console.error('Error adding comment:', e);
+      setMessage('Viga kommentaari lisamisel');
+    } finally {
+      setSavingComment(false);
+    }
+  };
+
+  // Delete comment
+  const deleteComment = async (commentId: string) => {
+    const comment = comments.find(c => c.id === commentId);
+    if (!comment) return;
+
+    // Check permission: admin can delete all, others only their own
+    const isAdmin = currentUser?.role === 'admin';
+    const isOwner = comment.created_by === userEmail;
+
+    if (!isAdmin && !isOwner) {
+      setMessage('Sul pole õigust seda kommentaari kustutada');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('schedule_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+      await loadComments();
+    } catch (e) {
+      console.error('Error deleting comment:', e);
+      setMessage('Viga kommentaari kustutamisel');
+    }
+  };
+
+  // Open comment modal
+  const openCommentModal = (type: 'item' | 'date', id: string) => {
+    setCommentModalTarget({ type, id });
+    setNewCommentText('');
+    setShowCommentModal(true);
+  };
 
   // Auto-dismiss success messages after 2 seconds
   useEffect(() => {
@@ -633,7 +750,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     };
   }, [api, scheduleItems]);
 
-  // Filter items by search query
+  // Filter items by search query (includes comments search)
   const filteredItems = searchQuery.trim() === ''
     ? scheduleItems
     : scheduleItems.filter(item => {
@@ -642,7 +759,13 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         const guidIfc = (item.guid_ifc || '').toLowerCase();
         const guidMs = (item.guid_ms || '').toLowerCase();
         const guid = (item.guid || '').toLowerCase();
-        return mark.includes(query) || guidIfc.includes(query) || guidMs.includes(query) || guid.includes(query);
+        // Also search in comments for this item
+        const itemComments = comments.filter(c => c.schedule_item_id === item.id);
+        const hasMatchingComment = itemComments.some(c =>
+          c.comment_text.toLowerCase().includes(query) ||
+          (c.created_by_name || '').toLowerCase().includes(query)
+        );
+        return mark.includes(query) || guidIfc.includes(query) || guidMs.includes(query) || guid.includes(query) || hasMatchingComment;
       });
 
   // Group items by date (uses filtered items)
@@ -1939,8 +2062,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredItemId(itemId);
-      setTooltipPosition({ x: rect.left, y: rect.bottom + 4 });
-    }, 500); // 0.5 second delay
+      setTooltipPosition({ x: rect.right + 8, y: rect.top });
+    }, 750);
   };
 
   const handleItemMouseLeave = () => {
@@ -2263,7 +2386,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     product: 25, weight: 12, method: 30,
     crane: 8, forklift: 8, poomtostuk: 10, kaartostuk: 10,
     troppija: 8, monteerija: 10, keevitaja: 9, manual: 8,
-    guid_ms: 40, guid_ifc: 25, percentage: 12
+    guid_ms: 40, guid_ifc: 25, percentage: 12, comments: 50
   };
 
   // Export to real Excel .xlsx file with date-based colors
@@ -2327,6 +2450,15 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           case 'guid_ms': return item.guid_ms || '';
           case 'guid_ifc': return item.guid_ifc || item.guid || '';
           case 'percentage': return `${percentage}%`;
+          case 'comments': {
+            const itemComments = comments.filter(c => c.schedule_item_id === item.id);
+            if (itemComments.length === 0) return '';
+            return itemComments.map(c => {
+              const date = new Date(c.created_at);
+              const dateStr = `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getFullYear()).slice(-2)}`;
+              return `[${c.created_by_name || c.created_by} ${dateStr}]: ${c.comment_text}`;
+            }).join(' | ');
+          }
           default: return '';
         }
       });
@@ -3715,6 +3847,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       </div>
                     </span>
                     <button
+                      className="date-comment-btn"
+                      onClick={(e) => { e.stopPropagation(); openCommentModal('date', date); }}
+                      title="Päeva kommentaarid"
+                    >
+                      <FiMessageSquare size={13} />
+                      {getCommentCount('date', date) > 0 && (
+                        <span className="comment-badge">{getCommentCount('date', date)}</span>
+                      )}
+                    </button>
+                    <button
                       className="date-menu-btn"
                       onClick={(e) => { e.stopPropagation(); /* TODO: date menu */ }}
                       title="Rohkem valikuid"
@@ -3738,7 +3880,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
                               className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
-                              title={`Detail: ${item.assembly_mark}  |  Kaal: ${item.cast_unit_weight || '-'}  |  Asukoht: ${item.cast_unit_position_code || '-'}  |  Toode: ${item.product_name || '-'}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
@@ -3810,6 +3951,20 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                 </div>
                               );
                             })()}
+                            {/* Comment button */}
+                            <button
+                              className="item-comment-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openCommentModal('item', item.id);
+                              }}
+                              title="Kommentaarid"
+                            >
+                              <FiMessageSquare size={13} />
+                              {getCommentCount('item', item.id) > 0 && (
+                                <span className="comment-badge">{getCommentCount('item', item.id)}</span>
+                              )}
+                            </button>
                             {/* Three-dot menu button */}
                             <button
                               className="item-menu-btn"
@@ -3948,31 +4103,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         const methods = item.install_methods as InstallMethods | null;
         const weight = item.cast_unit_weight;
         const weightNum = weight ? (typeof weight === 'string' ? parseFloat(weight) : weight) : null;
-        const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : null;
+        const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : '-';
 
         return (
           <div
             className="item-tooltip"
             style={{
               position: 'fixed',
-              left: Math.min(tooltipPosition.x, window.innerWidth - 220),
-              top: Math.min(tooltipPosition.y, window.innerHeight - 150),
+              left: Math.min(tooltipPosition.x, window.innerWidth - 280),
+              top: Math.min(tooltipPosition.y, window.innerHeight - 250),
               zIndex: 9999,
             }}
           >
             <div className="tooltip-row">
-              <span className="tooltip-label">Detaili nimetus:</span>
+              <span className="tooltip-label">Detail:</span>
               <span className="tooltip-value">{item.assembly_mark}</span>
             </div>
-            {weightStr && (
-              <div className="tooltip-row">
-                <span className="tooltip-label">Kaal:</span>
-                <span className="tooltip-value">{weightStr}</span>
-              </div>
-            )}
+            <div className="tooltip-row">
+              <span className="tooltip-label">Kaal:</span>
+              <span className="tooltip-value">{weightStr}</span>
+            </div>
+            <div className="tooltip-row">
+              <span className="tooltip-label">Asukoht:</span>
+              <span className="tooltip-value">{item.cast_unit_position_code || '-'}</span>
+            </div>
+            <div className="tooltip-row">
+              <span className="tooltip-label">Toote nimetus:</span>
+              <span className="tooltip-value">{item.product_name || '-'}</span>
+            </div>
             {methods && Object.keys(methods).length > 0 && (
               <div className="tooltip-methods">
-                <span className="tooltip-label">Paigalduse ressursid:</span>
+                <span className="tooltip-methods-label">Paigalduse ressursid:</span>
                 <div className="tooltip-method-list">
                   {Object.entries(methods).map(([key, count]) => {
                     const cfg = INSTALL_METHODS.find(m => m.key === key);
@@ -3995,6 +4156,78 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           </div>
         );
       })()}
+
+      {/* Comment Modal */}
+      {showCommentModal && commentModalTarget && (
+        <div className="modal-overlay" onClick={() => setShowCommentModal(false)}>
+          <div className="comment-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>
+                {commentModalTarget.type === 'item'
+                  ? `Kommentaarid: ${scheduleItems.find(i => i.id === commentModalTarget.id)?.assembly_mark || ''}`
+                  : `Kommentaarid: ${new Date(commentModalTarget.id).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+                }
+              </h3>
+              <button onClick={() => setShowCommentModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="comment-modal-body">
+              {/* Existing comments */}
+              <div className="comments-list">
+                {getCommentsFor(commentModalTarget.type, commentModalTarget.id).length === 0 ? (
+                  <div className="no-comments">Kommentaare pole</div>
+                ) : (
+                  getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
+                    const isAdmin = currentUser?.role === 'admin';
+                    const isOwner = comment.created_by === userEmail;
+                    const canDelete = isAdmin || isOwner;
+
+                    return (
+                      <div key={comment.id} className="comment-item">
+                        <div className="comment-header">
+                          <span className="comment-author">{comment.created_by_name || comment.created_by}</span>
+                          <span className="comment-date">
+                            {new Date(comment.created_at).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                            {' '}
+                            {new Date(comment.created_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {canDelete && (
+                            <button
+                              className="comment-delete-btn"
+                              onClick={() => deleteComment(comment.id)}
+                              title="Kustuta"
+                            >
+                              <FiTrash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                        <div className="comment-text">{comment.comment_text}</div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Add new comment */}
+              <div className="add-comment-section">
+                <textarea
+                  value={newCommentText}
+                  onChange={e => setNewCommentText(e.target.value)}
+                  placeholder="Lisa kommentaar..."
+                  rows={3}
+                  className="comment-textarea"
+                />
+                <button
+                  className="add-comment-btn"
+                  onClick={addComment}
+                  disabled={!newCommentText.trim() || savingComment}
+                >
+                  {savingComment ? 'Salvestan...' : 'Lisa kommentaar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Assembly Selection Required Modal */}
       {showAssemblyModal && (

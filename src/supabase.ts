@@ -455,6 +455,18 @@ export interface ScheduleItemHistory {
   changed_at: string;
 }
 
+// Schedule comments - for both items and dates
+export interface ScheduleComment {
+  id: string;
+  project_id: string;
+  schedule_item_id?: string | null;  // For item comments
+  schedule_date?: string | null;      // For date/day comments
+  comment_text: string;
+  created_by: string;                 // User email
+  created_by_name?: string;           // User display name
+  created_at: string;
+}
+
 // Päevade kaupa grupeeritud kirjed
 export interface ScheduleByDate {
   date: string;
