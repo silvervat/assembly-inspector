@@ -312,6 +312,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [dragOverVehicleId, setDragOverVehicleId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [dragOverVehicleIndex, setDragOverVehicleIndex] = useState<number | null>(null);
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -1140,6 +1141,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setDragOverDate(null);
     setDragOverVehicleId(null);
     setDragOverIndex(null);
+    setDragOverVehicleIndex(null);
   };
 
   // Drag over a date group
@@ -1149,7 +1151,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setDragOverDate(date);
   };
 
-  // Drag over a vehicle
+  // Drag over a vehicle header (for reordering vehicles within date)
+  const handleVehicleHeaderDragOver = (e: React.DragEvent, date: string, vehicleIndex: number) => {
+    if (!draggedVehicle) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDate(date);
+
+    // Determine if dropping above or below based on mouse position
+    const rect = (e.target as HTMLElement).closest('.vehicle-header')?.getBoundingClientRect();
+    if (rect) {
+      const midY = rect.top + rect.height / 2;
+      const dropIndex = e.clientY < midY ? vehicleIndex : vehicleIndex + 1;
+      setDragOverVehicleIndex(dropIndex);
+    }
+  };
+
+  // Drag over a vehicle (for dropping items)
   const handleVehicleDragOver = (e: React.DragEvent, vehicleId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1285,56 +1304,163 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Drop vehicle onto a date (move vehicle to new date)
+  // Helper: Add minutes to time string (HH:MM)
+  const addMinutesToTime = (timeStr: string, minutes: number): string => {
+    const [hours, mins] = timeStr.split(':').map(Number);
+    const totalMinutes = hours * 60 + mins + minutes;
+    const newHours = Math.floor(totalMinutes / 60) % 24;
+    const newMins = totalMinutes % 60;
+    return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
+  };
+
+  // Recalculate vehicle times after reordering
+  const recalculateVehicleTimes = async (dateVehicles: DeliveryVehicle[]) => {
+    if (dateVehicles.length === 0) return;
+
+    // Sort by sort_order
+    const sorted = [...dateVehicles].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+    // First vehicle keeps its time, or use default 08:00
+    let currentTime = sorted[0].unload_start_time || '08:00';
+
+    const updates: { id: string; time: string; sort_order: number }[] = [];
+
+    for (let i = 0; i < sorted.length; i++) {
+      const vehicle = sorted[i];
+      const newTime = i === 0 ? currentTime : currentTime;
+
+      updates.push({
+        id: vehicle.id,
+        time: newTime,
+        sort_order: i
+      });
+
+      // Calculate end time for next vehicle
+      const duration = vehicle.unload_duration_minutes || 90; // default 1.5h
+      currentTime = addMinutesToTime(newTime, duration);
+    }
+
+    // Optimistic update
+    setVehicles(prev => prev.map(v => {
+      const update = updates.find(u => u.id === v.id);
+      if (update) {
+        return { ...v, unload_start_time: update.time, sort_order: update.sort_order };
+      }
+      return v;
+    }));
+
+    // Background database update
+    for (const update of updates) {
+      supabase
+        .from('trimble_delivery_vehicles')
+        .update({
+          unload_start_time: update.time,
+          sort_order: update.sort_order,
+          updated_by: tcUserEmail
+        })
+        .eq('id', update.id)
+        .then();
+    }
+  };
+
+  // Drop vehicle onto a date (move or reorder)
   const handleVehicleDrop = async (e: React.DragEvent, targetDate: string) => {
     e.preventDefault();
+    const dropIndex = dragOverVehicleIndex;
     setDragOverDate(null);
     setDragOverVehicleId(null);
+    setDragOverVehicleIndex(null);
     setIsDragging(false);
 
     if (!draggedVehicle) return;
-    if (draggedVehicle.scheduled_date === targetDate) return;
 
     const vehicleId = draggedVehicle.id;
-    const oldDate = draggedVehicle.scheduled_date;
+    const isSameDate = draggedVehicle.scheduled_date === targetDate;
 
-    // Optimistic update
-    setVehicles(prev => prev.map(v =>
-      v.id === vehicleId ? { ...v, scheduled_date: targetDate } : v
-    ));
-    setItems(prev => prev.map(i =>
-      i.vehicle_id === vehicleId ? { ...i, scheduled_date: targetDate } : i
-    ));
+    if (isSameDate) {
+      // Reordering within same date
+      if (dropIndex === null || dropIndex === undefined) return;
 
-    setDraggedVehicle(null);
+      const dateVehicles = vehicles
+        .filter(v => v.scheduled_date === targetDate)
+        .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-    // Background database update
-    try {
-      // Update vehicle date
-      await supabase
-        .from('trimble_delivery_vehicles')
-        .update({
-          scheduled_date: targetDate,
-          updated_by: tcUserEmail,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', vehicleId);
+      const currentIndex = dateVehicles.findIndex(v => v.id === vehicleId);
+      if (currentIndex === -1) return;
+      if (currentIndex === dropIndex || currentIndex + 1 === dropIndex) return;
 
-      // Update all items in this vehicle
-      await supabase
-        .from('trimble_delivery_items')
-        .update({
-          scheduled_date: targetDate,
-          updated_by: tcUserEmail,
-          updated_at: new Date().toISOString()
-        })
-        .eq('vehicle_id', vehicleId);
+      // Remove from current position and insert at new position
+      const remaining = dateVehicles.filter(v => v.id !== vehicleId);
+      let adjustedIndex = dropIndex;
+      if (currentIndex < dropIndex) {
+        adjustedIndex--;
+      }
+      adjustedIndex = Math.max(0, Math.min(adjustedIndex, remaining.length));
 
-      setMessage(`Veok tõstetud: ${oldDate} → ${targetDate}`);
-    } catch (e) {
-      console.error('Error moving vehicle:', e);
-      setMessage('Viga veoki tõstmisel');
-      loadAllData();
+      const newOrder = [
+        ...remaining.slice(0, adjustedIndex),
+        draggedVehicle,
+        ...remaining.slice(adjustedIndex)
+      ];
+
+      // Update sort_order and recalculate times
+      const updatedVehicles = newOrder.map((v, idx) => ({ ...v, sort_order: idx }));
+
+      setDraggedVehicle(null);
+      await recalculateVehicleTimes(updatedVehicles);
+      setMessage('Veokite järjekord ja kellaajad uuendatud');
+
+    } else {
+      // Moving to different date
+      const oldDate = draggedVehicle.scheduled_date;
+
+      // Optimistic update
+      setVehicles(prev => prev.map(v =>
+        v.id === vehicleId ? { ...v, scheduled_date: targetDate } : v
+      ));
+      setItems(prev => prev.map(i =>
+        i.vehicle_id === vehicleId ? { ...i, scheduled_date: targetDate } : i
+      ));
+
+      setDraggedVehicle(null);
+
+      // Background database update
+      try {
+        await supabase
+          .from('trimble_delivery_vehicles')
+          .update({
+            scheduled_date: targetDate,
+            updated_by: tcUserEmail,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', vehicleId);
+
+        await supabase
+          .from('trimble_delivery_items')
+          .update({
+            scheduled_date: targetDate,
+            updated_by: tcUserEmail,
+            updated_at: new Date().toISOString()
+          })
+          .eq('vehicle_id', vehicleId);
+
+        // Recalculate times for both dates
+        const oldDateVehicles = vehicles.filter(v => v.scheduled_date === oldDate && v.id !== vehicleId);
+        const newDateVehicles = [...vehicles.filter(v => v.scheduled_date === targetDate), { ...draggedVehicle, scheduled_date: targetDate }];
+
+        if (oldDateVehicles.length > 0) {
+          await recalculateVehicleTimes(oldDateVehicles);
+        }
+        if (newDateVehicles.length > 0) {
+          await recalculateVehicleTimes(newDateVehicles);
+        }
+
+        setMessage(`Veok tõstetud: ${oldDate} → ${targetDate}`);
+      } catch (e) {
+        console.error('Error moving vehicle:', e);
+        setMessage('Viga veoki tõstmisel');
+        loadAllData();
+      }
     }
   };
 
@@ -2043,9 +2169,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               {/* Vehicles in this date */}
               {!isCollapsed && (
-                <div className="date-vehicles">
-                  {Object.entries(dateVehicles).map(([vehicleId, vehicleItems]) => {
-                    const vehicle = getVehicle(vehicleId);
+                <div
+                  className="date-vehicles"
+                  onDrop={(e) => handleVehicleDrop(e, date)}
+                >
+                  {Object.entries(dateVehicles)
+                    .map(([vehicleId, vehicleItems]) => ({
+                      vehicleId,
+                      vehicleItems,
+                      vehicle: getVehicle(vehicleId)
+                    }))
+                    .sort((a, b) => (a.vehicle?.sort_order || 0) - (b.vehicle?.sort_order || 0))
+                    .map(({ vehicleId, vehicleItems, vehicle }, vehicleIndex, sortedVehicles) => {
                     const factory = vehicle ? getFactory(vehicle.factory_id) : null;
                     const vehicleWeight = vehicleItems.reduce(
                       (sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0
@@ -2054,36 +2189,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const statusConfig = vehicle ? VEHICLE_STATUS_CONFIG[vehicle.status] : null;
 
                     const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
+                    const showDropBefore = dragOverDate === date && dragOverVehicleIndex === vehicleIndex && draggedVehicle;
+                    const showDropAfter = dragOverDate === date && dragOverVehicleIndex === vehicleIndex + 1 && vehicleIndex === sortedVehicles.length - 1 && draggedVehicle;
 
                     return (
-                      <div key={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''}`}>
-                        {/* Vehicle header */}
-                        <div
-                          className="vehicle-header"
-                          draggable={!!vehicle}
-                          onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
-                          onDragEnd={handleDragEnd}
-                          onClick={() => {
-                            setCollapsedVehicles(prev => {
-                              const next = new Set(prev);
-                              if (next.has(vehicleId)) {
-                                next.delete(vehicleId);
-                              } else {
-                                next.add(vehicleId);
-                              }
-                              return next;
-                            });
-                          }}
-                        >
-                          <span className="vehicle-drag-handle">
-                            <FiMove />
-                          </span>
-                          <span className="collapse-icon">
-                            {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
-                          </span>
-                          <FiTruck className="vehicle-icon" />
-                          <span className="vehicle-code">{vehicle?.vehicle_code || 'Määramata'}</span>
-                          <span className="factory-name">{factory?.factory_name || ''}</span>
+                      <div key={vehicleId} className="delivery-vehicle-wrapper">
+                        {showDropBefore && <div className="vehicle-drop-indicator" />}
+                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''}`}>
+                          {/* Vehicle header */}
+                          <div
+                            className="vehicle-header"
+                            draggable={!!vehicle}
+                            onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleVehicleHeaderDragOver(e, date, vehicleIndex)}
+                            onClick={() => {
+                              setCollapsedVehicles(prev => {
+                                const next = new Set(prev);
+                                if (next.has(vehicleId)) {
+                                  next.delete(vehicleId);
+                                } else {
+                                  next.add(vehicleId);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            <span className="vehicle-drag-handle">
+                              <FiMove />
+                            </span>
+                            <span className="collapse-icon">
+                              {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
+                            </span>
+                            <FiTruck className="vehicle-icon" />
+                            <span className="vehicle-code">{vehicle?.vehicle_code || 'Määramata'}</span>
+                            <span className="vehicle-time">{vehicle?.unload_start_time || ''}</span>
+                            <span className="factory-name">{factory?.factory_name || ''}</span>
                           <span className="vehicle-stats">
                             <span className="item-badge">{vehicleItems.length} tk</span>
                             <span className="weight-badge">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
@@ -2289,6 +2430,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             })}
                           </div>
                         )}
+                        </div>
+                        {showDropAfter && <div className="vehicle-drop-indicator" />}
                       </div>
                     );
                   })}
