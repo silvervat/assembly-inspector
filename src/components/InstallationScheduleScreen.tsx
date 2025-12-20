@@ -469,12 +469,24 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setSavingComment(true);
     try {
       // Build comment data - only include fields that exist in the database
-      // Use Trimble Connect user name (tcUserName) if available, fall back to database user name
+      // Use Trimble Connect user name if available and not empty
+      // Skip generic database names like "Super Admin", "Admin" etc - prefer email
+      const genericNames = ['super admin', 'admin', 'administrator'];
+      const dbName = user?.name?.toLowerCase() || '';
+      const isGenericName = genericNames.some(g => dbName.includes(g));
+
+      let displayName = tcUserEmail; // Default to email
+      if (tcUserName && tcUserName.trim()) {
+        displayName = tcUserName.trim();
+      } else if (user?.name && !isGenericName) {
+        displayName = user.name;
+      }
+
       const commentData: Record<string, unknown> = {
         project_id: projectId,
         comment_text: newCommentText.trim(),
         created_by: tcUserEmail,
-        created_by_name: tcUserName || user?.name || tcUserEmail,
+        created_by_name: displayName,
       };
 
       // Add role if available (column might not exist in older databases)
