@@ -16,6 +16,7 @@ interface Props {
   projectId: string;
   user: TrimbleExUser;
   tcUserEmail: string;
+  tcUserName?: string;
   onBackToMenu: () => void;
 }
 
@@ -166,7 +167,7 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
   }
 };
 
-export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, onBackToMenu }: Props) {
+export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu }: Props) {
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -467,13 +468,31 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     setSavingComment(true);
     try {
-      const commentData: Partial<ScheduleComment> = {
+      // Build comment data - only include fields that exist in the database
+      // Use Trimble Connect user name if available and not empty
+      // Skip generic database names like "Super Admin", "Admin" etc - prefer email
+      const genericNames = ['super admin', 'admin', 'administrator'];
+      const dbName = user?.name?.toLowerCase() || '';
+      const isGenericName = genericNames.some(g => dbName.includes(g));
+
+      let displayName = tcUserEmail; // Default to email
+      if (tcUserName && tcUserName.trim()) {
+        displayName = tcUserName.trim();
+      } else if (user?.name && !isGenericName) {
+        displayName = user.name;
+      }
+
+      const commentData: Record<string, unknown> = {
         project_id: projectId,
         comment_text: newCommentText.trim(),
         created_by: tcUserEmail,
-        created_by_name: user?.name || tcUserEmail,
-        created_by_role: user?.role,
+        created_by_name: displayName,
       };
+
+      // Add role if available (column might not exist in older databases)
+      if (user?.role) {
+        commentData.created_by_role = user.role;
+      }
 
       if (commentModalTarget.type === 'item') {
         commentData.schedule_item_id = commentModalTarget.id;
@@ -485,7 +504,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .from('schedule_comments')
         .insert(commentData);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Insert error:', error);
+        // If role column doesn't exist, retry without it
+        if (error.message?.includes('created_by_role')) {
+          delete commentData.created_by_role;
+          const { error: retryError } = await supabase
+            .from('schedule_comments')
+            .insert(commentData);
+          if (retryError) throw retryError;
+        } else {
+          throw error;
+        }
+      }
 
       setNewCommentText('');
       await loadComments();

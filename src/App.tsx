@@ -593,6 +593,7 @@ export default function App() {
           user={user}
           projectId={projectId}
           tcUserEmail={tcUser?.email || ''}
+          tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
         />
         <VersionFooter />
