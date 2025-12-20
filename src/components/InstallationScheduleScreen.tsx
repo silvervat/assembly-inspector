@@ -3947,31 +3947,37 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         const methods = item.install_methods as InstallMethods | null;
         const weight = item.cast_unit_weight;
         const weightNum = weight ? (typeof weight === 'string' ? parseFloat(weight) : weight) : null;
-        const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : null;
+        const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : '-';
 
         return (
           <div
             className="item-tooltip"
             style={{
               position: 'fixed',
-              left: Math.min(tooltipPosition.x, window.innerWidth - 220),
-              top: Math.min(tooltipPosition.y, window.innerHeight - 200),
+              left: Math.min(tooltipPosition.x, window.innerWidth - 280),
+              top: Math.min(tooltipPosition.y, window.innerHeight - 250),
               zIndex: 9999,
             }}
           >
             <div className="tooltip-row">
-              <span className="tooltip-label">DETAILI NIMETUS:</span>
+              <span className="tooltip-label">Detail:</span>
               <span className="tooltip-value">{item.assembly_mark}</span>
             </div>
-            {weightStr && (
-              <div className="tooltip-row">
-                <span className="tooltip-label">KAAL:</span>
-                <span className="tooltip-value">{weightStr}</span>
-              </div>
-            )}
+            <div className="tooltip-row">
+              <span className="tooltip-label">Kaal:</span>
+              <span className="tooltip-value">{weightStr}</span>
+            </div>
+            <div className="tooltip-row">
+              <span className="tooltip-label">Asukoht:</span>
+              <span className="tooltip-value">{item.cast_unit_position_code || '-'}</span>
+            </div>
+            <div className="tooltip-row">
+              <span className="tooltip-label">Toote nimetus:</span>
+              <span className="tooltip-value">{item.product_name || '-'}</span>
+            </div>
             {methods && Object.keys(methods).length > 0 && (
               <div className="tooltip-methods">
-                <span className="tooltip-methods-label">PAIGALDUSE RESSURSID:</span>
+                <span className="tooltip-methods-label">Paigalduse ressursid:</span>
                 <div className="tooltip-method-list">
                   {Object.entries(methods).map(([key, count]) => {
                     const cfg = INSTALL_METHODS.find(m => m.key === key);

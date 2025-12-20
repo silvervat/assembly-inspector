@@ -2133,7 +2133,10 @@
 }
 
 .tooltip-row {
-  margin-bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
 .tooltip-row:last-child {
@@ -2142,17 +2145,15 @@
 
 .tooltip-label {
   color: #6b7280;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.5px;
-  display: block;
-  margin-bottom: 2px;
+  white-space: nowrap;
 }
 
 .tooltip-value {
   color: #1f2937;
-  font-weight: 700;
-  font-size: 15px;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 .tooltip-methods {
@@ -2163,9 +2164,8 @@
 
 .tooltip-methods-label {
   color: #6b7280;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.5px;
   display: block;
   margin-bottom: 8px;
 }
