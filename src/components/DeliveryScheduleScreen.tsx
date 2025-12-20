@@ -2529,6 +2529,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             onDragEnd={handleDragEnd}
                             onDragOver={(e) => handleVehicleHeaderDragOver(e, date, vehicleIndex)}
                             onClick={() => {
+                              const wasCollapsed = collapsedVehicles.has(vehicleId);
+
+                              // Toggle collapsed state
                               setCollapsedVehicles(prev => {
                                 const next = new Set(prev);
                                 if (next.has(vehicleId)) {
@@ -2538,6 +2541,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 }
                                 return next;
                               });
+
+                              // Select/deselect all items in this vehicle
+                              if (wasCollapsed) {
+                                // Expanding: select all items
+                                setSelectedItemIds(prev => {
+                                  const next = new Set(prev);
+                                  vehicleItems.forEach(item => next.add(item.id));
+                                  return next;
+                                });
+                              } else {
+                                // Collapsing: deselect all items
+                                setSelectedItemIds(prev => {
+                                  const next = new Set(prev);
+                                  vehicleItems.forEach(item => next.delete(item.id));
+                                  return next;
+                                });
+                              }
                             }}
                           >
                             <span className="collapse-icon">
@@ -2970,6 +2990,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           onDragStart={(e) => handleVehicleDragStart(e, vehicle)}
                           onDragEnd={handleDragEnd}
                           onClick={() => {
+                            const wasCollapsed = collapsedVehicles.has(vehicleId);
+
+                            // Toggle collapsed state
                             setCollapsedVehicles(prev => {
                               const next = new Set(prev);
                               if (next.has(vehicleId)) {
@@ -2979,6 +3002,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               }
                               return next;
                             });
+
+                            // Select/deselect all items in this vehicle
+                            if (wasCollapsed) {
+                              // Expanding: select all items
+                              setSelectedItemIds(prev => {
+                                const next = new Set(prev);
+                                vehicleItems.forEach(item => next.add(item.id));
+                                return next;
+                              });
+                            } else {
+                              // Collapsing: deselect all items
+                              setSelectedItemIds(prev => {
+                                const next = new Set(prev);
+                                vehicleItems.forEach(item => next.delete(item.id));
+                                return next;
+                              });
+                            }
                           }}
                         >
                           <span className="collapse-icon">
