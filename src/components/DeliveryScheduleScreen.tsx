@@ -1985,88 +1985,101 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // CALENDAR RENDERING
   // ============================================
 
-  const renderCalendar = () => {
+  const getDaysInMonth = () => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const startDayOfWeek = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1; // Monday = 0
 
-    const days: JSX.Element[] = [];
+    const days: Date[] = [];
 
-    // Empty cells for days before month starts
-    for (let i = 0; i < startDayOfWeek; i++) {
-      days.push(<div key={`empty-${i}`} className="delivery-calendar-day empty"></div>);
+    // Get start of week (Monday) for first day
+    const startDate = new Date(firstDay);
+    const dayOfWeek = startDate.getDay();
+    const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Monday = 0
+    startDate.setDate(startDate.getDate() - diff);
+
+    // Get 6 weeks of days (42 days)
+    for (let i = 0; i < 42; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      days.push(date);
     }
 
-    // Days of the month
-    for (let day = 1; day <= lastDay.getDate(); day++) {
-      const date = new Date(year, month, day);
-      const dateStr = formatDateForDB(date);
-      const dayItems = items.filter(i => i.scheduled_date === dateStr);
-      const dayVehicles = new Set(dayItems.map(i => i.vehicle_id)).size;
-      const isToday = dateStr === formatDateForDB(new Date());
-      const isSelected = dateStr === selectedDate;
+    return days;
+  };
 
-      days.push(
-        <div
-          key={dateStr}
-          className={`delivery-calendar-day ${dayItems.length > 0 ? 'has-items' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
-          onClick={() => {
-            setSelectedDate(dateStr);
-            // Scroll to date in list
-            const element = document.getElementById(`date-group-${dateStr}`);
-            if (element) {
-              element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }}
-        >
-          <span className="day-number">{day}</span>
-          {dayItems.length > 0 && (
-            <div className="day-stats">
-              <span className="vehicle-count">{dayVehicles}🚛</span>
-              <span className="item-count">{dayItems.length}</span>
-            </div>
-          )}
-        </div>
-      );
-    }
+  const getVehicleCountByDate = (dateStr: string) => {
+    return vehicles.filter(v => v.scheduled_date === dateStr).length;
+  };
+
+  const renderCalendar = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const todayStr = formatDateForDB(new Date());
+    const dayNames = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+    const monthNames = [
+      'Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni',
+      'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'
+    ];
 
     return (
-      <div className={`delivery-calendar ${calendarCollapsed ? 'collapsed' : ''}`}>
+      <div className={`schedule-calendar ${calendarCollapsed ? 'collapsed' : ''}`}>
         <div className="calendar-header">
-          <button
-            className="calendar-nav"
-            onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
-          >
-            <FiChevronLeft />
+          <button onClick={() => setCurrentMonth(new Date(year, month - 1, 1))} disabled={calendarCollapsed}>
+            <FiChevronLeft size={20} />
           </button>
-          <span className="calendar-title">
-            {currentMonth.toLocaleString('et-EE', { month: 'long', year: 'numeric' })}
+          <span className="calendar-month" onClick={() => setCalendarCollapsed(!calendarCollapsed)}>
+            {monthNames[month]} {year}
+            <button className="calendar-collapse-btn" title={calendarCollapsed ? 'Ava kalender' : 'Sulge kalender'}>
+              {calendarCollapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={16} />}
+            </button>
           </span>
-          <button
-            className="calendar-nav"
-            onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
-          >
-            <FiChevronRight />
-          </button>
-          <button
-            className="calendar-collapse-btn"
-            onClick={() => setCalendarCollapsed(!calendarCollapsed)}
-            title={calendarCollapsed ? 'Näita kalendrit' : 'Peida kalender'}
-          >
-            {calendarCollapsed ? <FiChevronDown /> : <FiChevronUp />}
+          <button onClick={() => setCurrentMonth(new Date(year, month + 1, 1))} disabled={calendarCollapsed}>
+            <FiChevronRight size={20} />
           </button>
         </div>
+
         {!calendarCollapsed && (
-          <>
-            <div className="calendar-weekdays">
-              {['E', 'T', 'K', 'N', 'R', 'L', 'P'].map(d => (
-                <div key={d} className="weekday">{d}</div>
-              ))}
-            </div>
-            <div className="calendar-days">{days}</div>
-          </>
+          <div className="calendar-grid with-weeks">
+            <div className="calendar-week-header"></div>
+            {dayNames.map(day => (
+              <div key={day} className="calendar-day-name">{day}</div>
+            ))}
+            {getDaysInMonth().map((date, idx) => {
+              const dateStr = formatDateForDB(date);
+              const isCurrentMonth = date.getMonth() === month;
+              const isToday = dateStr === todayStr;
+              const isSelected = dateStr === selectedDate;
+              const vehicleCount = getVehicleCountByDate(dateStr);
+              const isStartOfWeek = idx % 7 === 0;
+              const weekNum = getISOWeek(date);
+
+              return (
+                <span key={idx} style={{ display: 'contents' }}>
+                  {isStartOfWeek && (
+                    <div className="calendar-week-num">
+                      N{String(weekNum).padStart(2, '0')}
+                    </div>
+                  )}
+                  <div
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''}`}
+                    onClick={() => {
+                      setSelectedDate(dateStr);
+                      const element = document.getElementById(`date-group-${dateStr}`);
+                      if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }
+                    }}
+                  >
+                    <span className="day-number">{date.getDate()}</span>
+                    {vehicleCount > 0 && (
+                      <span className="day-count">{vehicleCount}</span>
+                    )}
+                  </div>
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
     );
@@ -2661,22 +2674,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       {/* Toolbar */}
       <div className="delivery-toolbar">
-        {/* Search */}
-        <div className="search-box">
-          <FiSearch />
-          <input
-            type="text"
-            placeholder="Otsi..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="clear-search" onClick={() => setSearchQuery('')}>
-              <FiX />
-            </button>
-          )}
-        </div>
-
         {/* Selected objects info */}
         {selectedObjects.length > 0 && (
           <div className="selection-info">
@@ -2765,6 +2762,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       <div className="delivery-content">
         {/* Calendar */}
         {renderCalendar()}
+
+        {/* Search below calendar */}
+        <div className="list-search-box">
+          <FiSearch />
+          <input
+            type="text"
+            placeholder="Otsi..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button className="clear-search" onClick={() => setSearchQuery('')}>
+              <FiX />
+            </button>
+          )}
+        </div>
 
         {/* List */}
         {loading ? (
@@ -2899,6 +2912,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     }
                     await loadVehicles();
                     vehicleId = newVehicle.id;
+
+                    // If no items selected, just close modal after creating vehicle
+                    if (selectedObjects.length === 0) {
+                      setMessage(`Veok ${newVehicle.vehicle_code} loodud`);
+                      setShowAddModal(false);
+                      setAddModalComment('');
+                      return;
+                    }
                   }
 
                   await addItemsToVehicle(vehicleId, addModalDate, addModalComment);

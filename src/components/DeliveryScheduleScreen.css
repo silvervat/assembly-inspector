@@ -19,8 +19,7 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
+  background: var(--modus-primary-darker, #0a3a67);
   flex-shrink: 0;
 }
 
@@ -31,22 +30,22 @@
   width: 36px;
   height: 36px;
   border: none;
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   cursor: pointer;
-  color: #374151;
+  color: white;
   transition: all 0.15s;
 }
 
 .delivery-header .back-btn:hover {
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .delivery-header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: white;
 }
 
 .delivery-header .header-stats {
@@ -54,12 +53,12 @@
   gap: 12px;
   margin-left: auto;
   font-size: 13px;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .delivery-header .header-stats span {
   padding: 4px 8px;
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 4px;
 }
 
@@ -75,20 +74,21 @@
   width: 36px;
   height: 36px;
   border: none;
-  background: #f3f4f6;
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   cursor: pointer;
-  color: #6b7280;
+  color: rgba(255, 255, 255, 0.7);
   transition: all 0.15s;
 }
 
 .delivery-header .view-toggle-btn:hover {
-  background: #e5e7eb;
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
 }
 
 .delivery-header .view-toggle-btn.active {
-  background: var(--modus-primary, #0063a3);
-  color: white;
+  background: white;
+  color: var(--modus-primary-darker, #0a3a67);
 }
 
 /* ============================================
@@ -222,143 +222,208 @@
 }
 
 /* ============================================
-   CALENDAR
+   CALENDAR (matches InstallationScheduleScreen)
    ============================================ */
 
-.delivery-calendar {
-  width: 280px;
-  background: white;
-  border-right: 1px solid #e5e7eb;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
+.schedule-calendar {
+  background: var(--modus-bg-primary, white);
+  border-bottom: 1px solid var(--modus-border, #e5e7eb);
+  padding: 8px 10px;
 }
 
-.delivery-calendar.collapsed {
-  height: auto;
+.schedule-calendar.collapsed {
+  padding: 8px 12px;
 }
 
-.delivery-calendar .calendar-header {
-  display: flex;
-  align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid #e5e7eb;
+.schedule-calendar.collapsed .calendar-header {
+  margin-bottom: 0;
 }
 
-.delivery-calendar .calendar-title {
-  flex: 1;
-  text-align: center;
-  font-weight: 600;
-  font-size: 14px;
-  text-transform: capitalize;
+.schedule-calendar.collapsed .calendar-header button:first-child,
+.schedule-calendar.collapsed .calendar-header button:last-child {
+  visibility: hidden;
 }
 
-.delivery-calendar .calendar-nav,
-.delivery-calendar .calendar-collapse-btn {
+.calendar-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.calendar-header button {
+  background: none;
   border: none;
-  background: #f3f4f6;
-  border-radius: 6px;
   cursor: pointer;
-  color: #374151;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--modus-text-secondary, #6b7280);
 }
 
-.delivery-calendar .calendar-nav:hover,
-.delivery-calendar .calendar-collapse-btn:hover {
-  background: #e5e7eb;
+.calendar-header button:hover {
+  background: var(--modus-bg-secondary, #f3f4f6);
+  color: var(--modus-primary, #0063a3);
 }
 
-.delivery-calendar .calendar-weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  padding: 8px 12px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.delivery-calendar .weekday {
-  text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #9ca3af;
-}
-
-.delivery-calendar .calendar-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  padding: 8px 12px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.delivery-calendar-day {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 4px 2px;
-  min-height: 44px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.delivery-calendar-day:hover {
-  background: #f3f4f6;
-}
-
-.delivery-calendar-day.empty {
+.calendar-header button:disabled {
+  opacity: 0.3;
   cursor: default;
 }
 
-.delivery-calendar-day.today {
-  background: #dbeafe;
-}
-
-.delivery-calendar-day.selected {
-  background: var(--modus-primary, #0063a3);
-  color: white;
-}
-
-.delivery-calendar-day.has-items {
+.calendar-month {
   font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
-.delivery-calendar-day .day-number {
-  font-size: 13px;
+.calendar-collapse-btn {
+  background: none !important;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--modus-text-secondary, #6b7280);
 }
 
-.delivery-calendar-day .day-stats {
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 1px;
+}
+
+.calendar-grid.with-weeks {
+  grid-template-columns: 26px repeat(7, 1fr);
+}
+
+.calendar-week-header {
+  /* Empty cell above week numbers */
+}
+
+.calendar-week-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--modus-text-secondary, #6b7280);
+  opacity: 0.7;
+}
+
+.calendar-day-name {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--modus-text-secondary, #6b7280);
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.calendar-day {
+  aspect-ratio: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 9px;
-  margin-top: 2px;
-  color: #6b7280;
+  justify-content: center;
+  font-size: 11px;
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  min-height: 26px;
+  border: 1px solid rgba(0, 0, 0, 0.03);
 }
 
-.delivery-calendar-day.selected .day-stats {
-  color: rgba(255, 255, 255, 0.8);
+.calendar-day:hover {
+  background: var(--modus-bg-secondary, #f3f4f6);
 }
 
-.delivery-calendar-day .vehicle-count {
-  font-size: 10px;
+.calendar-day.other-month {
+  opacity: 0.3;
 }
 
-.delivery-calendar-day .item-count {
+.calendar-day.today {
   background: var(--modus-primary, #0063a3);
   color: white;
-  padding: 1px 4px;
-  border-radius: 8px;
-  font-size: 9px;
 }
 
-.delivery-calendar-day.selected .item-count {
+.calendar-day.today:hover {
+  background: var(--modus-primary-dark, #004d80);
+}
+
+.calendar-day.selected {
+  outline: 2px solid var(--modus-primary, #0063a3);
+  outline-offset: -2px;
+}
+
+.calendar-day.has-items {
+  font-weight: 600;
+}
+
+.calendar-day .day-number {
+  font-size: 11px;
+}
+
+.calendar-day .day-count {
+  font-size: 8px;
+  padding: 0 3px;
+  border-radius: 6px;
+  background: var(--modus-primary, #0063a3);
+  color: white;
+  min-width: 14px;
+  text-align: center;
+  margin-top: 1px;
+}
+
+.calendar-day.today .day-count {
   background: white;
   color: var(--modus-primary, #0063a3);
+}
+
+/* ============================================
+   LIST SEARCH BOX (below calendar)
+   ============================================ */
+
+.list-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.list-search-box input {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  background: #f9fafb;
+}
+
+.list-search-box input:focus {
+  border-color: var(--modus-primary, #0063a3);
+  background: white;
+}
+
+.list-search-box .clear-search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #d1d5db;
+  border-radius: 50%;
+  cursor: pointer;
+  color: white;
+  font-size: 12px;
+}
+
+.list-search-box .clear-search:hover {
+  background: #9ca3af;
 }
 
 /* ============================================
@@ -1374,10 +1439,8 @@
     flex-direction: column;
   }
 
-  .delivery-calendar {
+  .schedule-calendar {
     width: 100%;
-    border-right: none;
-    border-bottom: 1px solid #e5e7eb;
   }
 
   .delivery-toolbar {
