@@ -96,6 +96,17 @@ const getTextColor = (r: number, g: number, b: number): string => {
   return luminance > 0.5 ? '000000' : 'FFFFFF';
 };
 
+// Format weight - convert to tons if >= 1000 kg
+const formatWeight = (weight: string | number | null | undefined): string => {
+  if (!weight) return '';
+  const kg = typeof weight === 'string' ? parseFloat(weight) : weight;
+  if (isNaN(kg)) return '';
+  if (kg >= 1000) {
+    return `${(kg / 1000).toFixed(1)}t`;
+  }
+  return `${Math.round(kg)}`;
+};
+
 export default function InstallationScheduleScreen({ api, projectId, user: _user, tcUserEmail, onBackToMenu }: Props) {
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
@@ -195,6 +206,60 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       setPlaybackDateColors({});
     }
   }, [playbackSettings.colorEachDayDifferent, scheduleItems]);
+
+  // Apply colors to model when colorEachDayDifferent is enabled and items change
+  useEffect(() => {
+    if (!playbackSettings.colorEachDayDifferent || Object.keys(playbackDateColors).length === 0) return;
+    if (scheduleItems.length === 0) return;
+
+    const applyColorsToModel = async () => {
+      try {
+        const models = await api.viewer.getModels();
+
+        for (const item of scheduleItems) {
+          const color = playbackDateColors[item.scheduled_date];
+          if (!color) continue;
+
+          const guidIfc = item.guid_ifc || item.guid;
+          if (!guidIfc) continue;
+
+          // Try with stored model_id first
+          if (item.model_id) {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
+            if (runtimeIds && runtimeIds.length > 0) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
+                { color: { ...color, a: 255 } }
+              );
+              continue;
+            }
+          }
+
+          // Fallback: try all loaded models
+          if (models && models.length > 0) {
+            for (const model of models) {
+              try {
+                const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+                if (runtimeIds && runtimeIds.length > 0) {
+                  await api.viewer.setObjectState(
+                    { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
+                    { color: { ...color, a: 255 } }
+                  );
+                  break;
+                }
+              } catch {
+                // Try next model
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error applying colors to model:', e);
+      }
+    };
+
+    applyColorsToModel();
+  }, [playbackDateColors, scheduleItems]);
 
   // Ref for auto-scrolling to playing item
   const playingItemRef = useRef<HTMLDivElement | null>(null);
@@ -2087,7 +2152,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 <div className="install-method-selector">
                   <span>Paigaldus:</span>
                   <button
-                    className={`install-method-btn ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
+                    className={`install-method-btn method-crane ${selectedInstallMethod === 'crane' ? 'active' : ''}`}
                     onClick={() => {
                       if (selectedInstallMethod === 'crane') {
                         setSelectedInstallMethod(null);
@@ -2109,7 +2174,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     )}
                   </button>
                   <button
-                    className={`install-method-btn ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
+                    className={`install-method-btn method-forklift ${selectedInstallMethod === 'forklift' ? 'active' : ''}`}
                     onClick={() => {
                       if (selectedInstallMethod === 'forklift') {
                         setSelectedInstallMethod(null);
@@ -2131,7 +2196,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     )}
                   </button>
                   <button
-                    className={`install-method-btn ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
+                    className={`install-method-btn method-manual ${selectedInstallMethod === 'manual' ? 'active' : ''}`}
                     onClick={() => {
                       if (selectedInstallMethod === 'manual') {
                         setSelectedInstallMethod(null);
@@ -2147,7 +2212,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     }}
                     title="Käsitsi (parem klõps = x2)"
                   >
-                    <img src={`${import.meta.env.BASE_URL}icons/muscle.png`} alt="Käsitsi" />
+                    <img src={`${import.meta.env.BASE_URL}icons/manual.png`} alt="Käsitsi" />
                     {selectedInstallMethod === 'manual' && selectedInstallMethodCount > 1 && (
                       <span className="method-count-badge">x{selectedInstallMethodCount}</span>
                     )}
@@ -2501,7 +2566,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               <div className="item-main-row">
                                 <span className="item-mark">{item.assembly_mark}</span>
                                 {item.cast_unit_weight && (
-                                  <span className="item-weight">{item.cast_unit_weight} kg</span>
+                                  <span className="item-weight">{formatWeight(item.cast_unit_weight)}</span>
                                 )}
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
