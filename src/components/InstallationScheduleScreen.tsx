@@ -166,7 +166,7 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
   }
 };
 
-export default function InstallationScheduleScreen({ api, projectId, user: _user, tcUserEmail, onBackToMenu }: Props) {
+export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, onBackToMenu }: Props) {
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -242,7 +242,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     hideEntireModel: false,        // Option 5: Hide ENTIRE model at start, build up from scratch
     showDayOverview: false,        // Option 6: Show day overview after each day completes
     dayOverviewDuration: 2500,     // Duration in ms for day overview display
-    playByDay: false               // Option 7: Play day by day instead of item by item
+    playByDay: false,              // Option 7: Play day by day instead of item by item
+    disableZoom: false             // Option 8: Don't zoom to items during playback
   });
 
   // Day overview state - tracks if we're showing day overview
@@ -469,8 +470,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       const commentData: Partial<ScheduleComment> = {
         project_id: projectId,
         comment_text: newCommentText.trim(),
-        created_by: userEmail,
-        created_by_name: userName,
+        created_by: tcUserEmail,
+        created_by_name: user?.name || tcUserEmail,
       };
 
       if (commentModalTarget.type === 'item') {
@@ -501,8 +502,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     if (!comment) return;
 
     // Check permission: admin can delete all, others only their own
-    const isAdmin = currentUser?.role === 'admin';
-    const isOwner = comment.created_by === userEmail;
+    const isAdmin = user?.role === 'admin';
+    const isOwner = comment.created_by === tcUserEmail;
 
     if (!isAdmin && !isOwner) {
       setMessage('Sul pole õigust seda kommentaari kustutada');
@@ -1102,7 +1103,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   };
 
   // Select and zoom to item in viewer
-  const selectInViewer = async (item: ScheduleItem) => {
+  const selectInViewer = async (item: ScheduleItem, skipZoom: boolean = false) => {
     try {
       const modelId = item.model_id;
       const guidIfc = item.guid_ifc || item.guid;
@@ -1121,7 +1122,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       await api.viewer.setSelection({
         modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
       }, 'set');
-      await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+
+      if (!skipZoom) {
+        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+      }
 
       setActiveItemId(item.id);
     } catch (e) {
@@ -1130,7 +1134,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   };
 
   // Select and zoom to all items for a date
-  const selectDateInViewer = async (date: string) => {
+  const selectDateInViewer = async (date: string, skipZoom: boolean = false) => {
     const items = itemsByDate[date];
     if (!items || items.length === 0) return;
 
@@ -1156,7 +1160,9 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
 
       if (modelObjects.length > 0) {
         await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
-        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+        if (!skipZoom) {
+          await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+        }
       }
     } catch (e) {
       console.error('Error selecting date items:', e);
@@ -1831,7 +1837,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         }
 
         // Select all day items in viewer and list
-        await selectDateInViewer(currentDate);
+        await selectDateInViewer(currentDate, playbackSettings.disableZoom);
         const dayItemIds = new Set(dateItems.map(item => item.id));
         setSelectedItemIds(dayItemIds);
         setCurrentPlaybackDate(currentDate);
@@ -1940,7 +1946,7 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         await colorItemGreen(item);
       }
 
-      await selectInViewer(item);
+      await selectInViewer(item, playbackSettings.disableZoom);
 
       // Update current playback date (if not already updated above for new day)
       if (!isNewDay) {
@@ -3689,6 +3695,18 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                 </div>
               </label>
 
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.disableZoom}
+                  onChange={e => setPlaybackSettings(prev => ({ ...prev, disableZoom: e.target.checked }))}
+                />
+                <div className="setting-text">
+                  <span>Ilma zoomita</span>
+                  <small>Ära zoomi detailide juurde, ainult märgi ja värvi</small>
+                </div>
+              </label>
+
               <div className="setting-divider" />
 
               <label className="setting-option-compact">
@@ -4177,8 +4195,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                   <div className="no-comments">Kommentaare pole</div>
                 ) : (
                   getCommentsFor(commentModalTarget.type, commentModalTarget.id).map(comment => {
-                    const isAdmin = currentUser?.role === 'admin';
-                    const isOwner = comment.created_by === userEmail;
+                    const isAdmin = user?.role === 'admin';
+                    const isOwner = comment.created_by === tcUserEmail;
                     const canDelete = isAdmin || isOwner;
 
                     return (
