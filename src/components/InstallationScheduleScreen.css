@@ -579,14 +579,12 @@
 .date-label {
   font-weight: 600;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 60px;
-  flex-shrink: 1;
+  flex-shrink: 0;
 }
 
 .date-header-spacer {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 4px;
 }
 
 .date-count {
