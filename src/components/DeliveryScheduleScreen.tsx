@@ -3144,7 +3144,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="form-section">
-                <h4>Mahalaadimise meetodid</h4>
+                <h4>Mahalaadimise ressursid</h4>
                 <div className="methods-grid">
                   {UNLOAD_METHODS.map(method => {
                     const count = vehicleUnloadMethods[method.key] || 0;
@@ -3166,40 +3166,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             onClick={() => setVehicleUnloadMethods(prev => ({
                               ...prev,
                               [method.key]: Math.min(method.maxCount, (prev[method.key] || 0) + 1)
-                            }))}
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="form-section">
-                <h4>Ressursid (töötajad)</h4>
-                <div className="methods-grid">
-                  {RESOURCE_TYPES.map(res => {
-                    const count = vehicleResources[res.key] || 0;
-                    return (
-                      <div key={res.key} className="method-item">
-                        <img src={`/icons/${res.icon}`} alt="" />
-                        <span>{res.label}</span>
-                        <div className="method-counter">
-                          <button
-                            onClick={() => setVehicleResources(prev => ({
-                              ...prev,
-                              [res.key]: Math.max(0, (prev[res.key] || 0) - 1)
-                            }))}
-                          >
-                            -
-                          </button>
-                          <span>{count}</span>
-                          <button
-                            onClick={() => setVehicleResources(prev => ({
-                              ...prev,
-                              [res.key]: Math.min(res.maxCount, (prev[res.key] || 0) + 1)
                             }))}
                           >
                             +
