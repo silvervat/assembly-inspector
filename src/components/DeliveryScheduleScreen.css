@@ -885,68 +885,124 @@
   z-index: 100;
 }
 
+/* Item checkbox */
 .delivery-item .item-checkbox {
   flex-shrink: 0;
-}
-
-.delivery-item .item-checkbox input {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   cursor: pointer;
 }
 
-/* Item info section - two rows */
-.item-info-section {
+/* Item info - mark + product */
+.delivery-item .item-info {
   display: flex;
   flex-direction: column;
-  min-width: 140px;
+  min-width: 100px;
   flex: 1;
+  overflow: hidden;
 }
 
-.item-info-section .item-mark {
+.delivery-item .item-mark {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.item-info-section .item-product {
+.delivery-item .item-product {
+  font-size: 10px;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Item weight */
+.delivery-item .item-weight {
+  min-width: 50px;
   font-size: 11px;
-  color: #6b7280;
-}
-
-/* Item weight section */
-.item-weight-section {
-  min-width: 60px;
+  font-weight: 500;
+  color: #374151;
   text-align: right;
 }
 
-.item-weight-section .weight-primary {
-  font-size: 12px;
-  font-weight: 500;
+/* Item dimensions - placeholder for future */
+.delivery-item .item-dimensions {
+  min-width: 60px;
+  font-size: 10px;
+  color: #9ca3af;
+}
+
+/* Item resources */
+.delivery-item .item-resources {
+  display: flex;
+  gap: 3px;
+  min-width: 60px;
+}
+
+/* Item actions - comment + menu */
+.delivery-item .item-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.delivery-item .item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  position: relative;
+}
+
+.delivery-item .item-btn:hover {
+  background: #e5e7eb;
   color: #374151;
 }
 
-/* Item resources section */
-.item-resources-section {
+.delivery-item .item-btn .badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 12px;
+  height: 12px;
+  font-size: 8px;
+  font-weight: 600;
+  background: var(--modus-primary, #0063a3);
+  color: white;
+  border-radius: 50%;
   display: flex;
-  gap: 4px;
+  align-items: center;
+  justify-content: center;
 }
 
+.item-resources .resource-badge,
 .item-resources-section .resource-badge {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 3px 5px;
-  border-radius: 4px;
+  padding: 2px 4px;
+  border-radius: 3px;
 }
 
+.item-resources .resource-badge img,
 .item-resources-section .resource-badge img {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
+.item-resources .resource-count,
 .item-resources-section .resource-count {
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 600;
 }
 
