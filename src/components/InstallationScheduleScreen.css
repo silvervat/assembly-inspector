@@ -784,16 +784,37 @@
 .multi-select-methods .method-btn img {
   width: 16px;
   height: 16px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
-.multi-select-methods .method-btn:hover {
+/* Crane - blue */
+.multi-select-methods .method-btn.method-crane img {
+  filter: invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%);
+}
+
+.multi-select-methods .method-btn.method-crane:hover {
   background: #dbeafe;
-  border-color: #93c5fd;
+  border-color: #3b82f6;
 }
 
-.multi-select-methods .method-btn:hover img {
-  opacity: 1;
+/* Forklift - red */
+.multi-select-methods .method-btn.method-forklift img {
+  filter: invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%);
+}
+
+.multi-select-methods .method-btn.method-forklift:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+/* Manual - green */
+.multi-select-methods .method-btn.method-manual img {
+  filter: invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%);
+}
+
+.multi-select-methods .method-btn.method-manual:hover {
+  background: #dcfce7;
+  border-color: #22c55e;
 }
 
 .multi-select-methods .method-btn.clear {
@@ -801,9 +822,9 @@
 }
 
 .multi-select-methods .method-btn.clear:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #dc2626;
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #6b7280;
 }
 
 /* Multi-selected item */
@@ -1245,9 +1266,23 @@
 .item-install-icon {
   width: 16px;
   height: 16px;
-  opacity: 0.6;
-  filter: grayscale(100%);
+  opacity: 0.85;
   flex-shrink: 0;
+}
+
+/* Crane - blue */
+.item-install-icon.method-crane {
+  filter: invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%);
+}
+
+/* Forklift/Telehandler - red (Manitou) */
+.item-install-icon.method-forklift {
+  filter: invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%);
+}
+
+/* Manual - green */
+.item-install-icon.method-manual {
+  filter: invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%);
 }
 
 .item-install-icons {

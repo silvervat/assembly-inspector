@@ -2000,21 +2000,21 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           <span>{selectedItemIds.size} valitud</span>
           <div className="multi-select-methods">
             <button
-              className="method-btn"
+              className="method-btn method-crane"
               onClick={() => updateSelectedItemsMethod('crane')}
               title="Kraana"
             >
               <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
             </button>
             <button
-              className="method-btn"
+              className="method-btn method-forklift"
               onClick={() => updateSelectedItemsMethod('forklift')}
               title="Teleskooplaadur"
             >
               <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
             </button>
             <button
-              className="method-btn"
+              className="method-btn method-manual"
               onClick={() => updateSelectedItemsMethod('manual')}
               title="Käsitsi"
             >
@@ -2504,14 +2504,14 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                                 <img
                                   src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                   alt={item.install_method}
-                                  className="item-install-icon"
+                                  className={`item-install-icon method-${item.install_method}`}
                                   title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                 />
                                 {(item.install_method_count ?? 1) > 1 && (
                                   <img
                                     src={`${import.meta.env.BASE_URL}icons/${item.install_method}.png`}
                                     alt={item.install_method}
-                                    className="item-install-icon"
+                                    className={`item-install-icon method-${item.install_method}`}
                                     title={item.install_method === 'crane' ? 'Kraana' : item.install_method === 'forklift' ? 'Teleskooplaadur' : 'Käsitsi'}
                                   />
                                 )}
