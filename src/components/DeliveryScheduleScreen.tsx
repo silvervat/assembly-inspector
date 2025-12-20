@@ -2098,12 +2098,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   )}
                   <div
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''}`}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${selectedObjects.length > 0 ? 'can-drop' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateStr);
-                      const element = document.getElementById(`date-group-${dateStr}`);
-                      if (element) {
-                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                      // If items are selected from model, open add modal
+                      if (selectedObjects.length > 0) {
+                        setAddModalDate(dateStr);
+                        setAddModalFactoryId(factories[0]?.id || '');
+                        setAddModalVehicleId('');
+                        setAddModalNewVehicle(vehicleCount === 0); // Auto-check "new vehicle" if no vehicles on this date
+                        setAddModalComment('');
+                        setShowAddModal(true);
+                      } else {
+                        // Just scroll to date group
+                        const element = document.getElementById(`date-group-${dateStr}`);
+                        if (element) {
+                          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
                       }
                     }}
                   >
@@ -2820,22 +2832,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       {/* Toolbar */}
       <div className="delivery-toolbar">
-        {/* Selected objects info */}
-        {selectedObjects.length > 0 && (
-          <div className="selection-info">
-            <span>{selectedObjects.length} valitud</span>
-            <button
-              className="add-btn primary"
-              onClick={() => {
-                setAddModalDate(selectedDate || formatDateForDB(new Date()));
-                setShowAddModal(true);
-              }}
-            >
-              <FiPlus /> Lisa veokisse
-            </button>
-          </div>
-        )}
-
         {/* Selected items actions */}
         {selectedItemIds.size > 0 && (
           <div className="batch-actions">
@@ -2908,6 +2904,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       <div className="delivery-content">
         {/* Calendar */}
         {renderCalendar()}
+
+        {/* Selected objects info - between calendar and search */}
+        {selectedObjects.length > 0 && (
+          <div className="selection-bar">
+            <span className="selection-count">{selectedObjects.length} detaili valitud</span>
+            <span className="selection-hint">Vali kalendrist kuupäev koorma planeerimiseks</span>
+            <button
+              className="add-btn primary"
+              onClick={() => {
+                setAddModalDate(selectedDate || formatDateForDB(new Date()));
+                setShowAddModal(true);
+              }}
+            >
+              <FiPlus /> Lisa veokisse
+            </button>
+          </div>
+        )}
 
         {/* Search below calendar */}
         <div className="list-search-box">

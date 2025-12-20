@@ -380,6 +380,63 @@
   color: var(--modus-primary, #0063a3);
 }
 
+/* Calendar day when items are selected - ready to drop */
+.calendar-day.can-drop {
+  cursor: copy;
+  border: 2px dashed #3b82f6;
+}
+
+.calendar-day.can-drop:hover {
+  background: #dbeafe;
+  border-color: #1d4ed8;
+}
+
+/* ============================================
+   SELECTION BAR (between calendar and search)
+   ============================================ */
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+}
+
+.selection-bar .selection-count {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1e40af;
+}
+
+.selection-bar .selection-hint {
+  font-size: 12px;
+  color: #3b82f6;
+  flex: 1;
+}
+
+.selection-bar .add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.selection-bar .add-btn.primary {
+  background: var(--modus-primary, #0063a3);
+  color: white;
+}
+
+.selection-bar .add-btn.primary:hover {
+  background: var(--modus-primary-dark, #004d80);
+}
+
 /* ============================================
    LIST SEARCH BOX (below calendar)
    ============================================ */
