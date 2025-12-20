@@ -2096,16 +2096,17 @@
   color: var(--modus-primary-dark);
 }
 
-/* Item Hover Tooltip */
+/* Item Hover Tooltip - Trimble theme */
 .item-tooltip {
-  background: #1f2937;
-  color: white;
+  background: white;
+  color: #252a2e;
   padding: 12px 14px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 12px;
   min-width: 180px;
   max-width: 280px;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  border: 1px solid #d0d5dd;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   pointer-events: none;
   animation: tooltipFadeIn 0.15s ease-out;
 }
@@ -2133,19 +2134,21 @@
 }
 
 .tooltip-label {
-  color: #9ca3af;
+  color: #6b7280;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .tooltip-value {
-  color: white;
-  font-weight: 500;
+  color: #252a2e;
+  font-weight: 600;
 }
 
 .tooltip-methods {
   margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
 }
 
 .tooltip-methods .tooltip-label {
@@ -2156,16 +2159,17 @@
 .tooltip-method-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .tooltip-method-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.1);
+  padding: 5px 8px;
+  background: #f3f4f6;
   border-radius: 4px;
+  border-left: 3px solid var(--modus-primary);
 }
 
 .tooltip-method-item img {
@@ -2174,12 +2178,13 @@
 }
 
 .tooltip-method-item span {
-  color: #e5e7eb;
+  color: #374151;
   font-size: 11px;
 }
 
 .tooltip-method-count {
   margin-left: auto;
-  color: #9ca3af;
+  color: var(--modus-primary);
   font-size: 11px;
+  font-weight: 600;
 }
