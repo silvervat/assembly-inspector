@@ -1400,6 +1400,35 @@
   flex-shrink: 0;
 }
 
+.new-vehicle-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.new-vehicle-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.vehicle-code-input {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  width: 120px;
+}
+
+.vehicle-code-input:focus {
+  outline: none;
+  border-color: var(--modus-primary, #0063a3);
+}
+
 .selected-objects-preview {
   margin-top: 16px;
   padding: 12px;
