@@ -6,7 +6,7 @@ import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp, FiMoreVertical
+  FiSettings, FiChevronUp, FiMoreVertical, FiCopy
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -96,12 +96,17 @@ const getTextColor = (r: number, g: number, b: number): string => {
   return luminance > 0.5 ? '000000' : 'FFFFFF';
 };
 
-// Format weight - show in kg, CSS will hide if no space
-const formatWeight = (weight: string | number | null | undefined): string => {
-  if (!weight) return '';
-  const kg = typeof weight === 'string' ? parseFloat(weight) : weight;
-  if (isNaN(kg)) return '';
-  return `${Math.round(kg)} kg`;
+// Format weight - returns both kg and tons for tiered display
+const formatWeight = (weight: string | number | null | undefined): { kg: string; tons: string } | null => {
+  if (!weight) return null;
+  const kgValue = typeof weight === 'string' ? parseFloat(weight) : weight;
+  if (isNaN(kgValue)) return null;
+  const roundedKg = Math.round(kgValue);
+  const tons = kgValue / 1000;
+  return {
+    kg: `${roundedKg} kg`,
+    tons: `${tons >= 10 ? Math.round(tons) : tons.toFixed(1)} t`
+  };
 };
 
 // ============================================
@@ -1041,6 +1046,19 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     } catch (e) {
       console.error('Error taking screenshot:', e);
       setMessage('Viga pildistamisel');
+    }
+  };
+
+  // Copy all assembly marks for a date to clipboard
+  const copyDateMarksToClipboard = async (date: string) => {
+    const dateItems = scheduleItems.filter(item => item.scheduled_date === date);
+    const marks = dateItems.map(item => item.assembly_mark).join('\n');
+    try {
+      await navigator.clipboard.writeText(marks);
+      setMessage(`${dateItems.length} marki kopeeritud`);
+    } catch (e) {
+      console.error('Error copying to clipboard:', e);
+      setMessage('Viga kopeerimisel');
     }
   };
 
@@ -2751,14 +2769,31 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                       />
                     )}
                     <span className="date-label">{formatDateEstonian(date)}</span>
+                    <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
-                    {stats && <span className="date-percentage">{stats.dailyPercentage}% | {stats.percentage}%</span>}
+                    <span className="date-stats-wrapper">
+                      {stats && <span className="date-percentage">{stats.dailyPercentage}% | {stats.percentage}%</span>}
+                      <button
+                        className="date-screenshot-btn"
+                        onClick={(e) => { e.stopPropagation(); screenshotDate(date); }}
+                        title="Tee pilt kõigist päeva detailidest"
+                      >
+                        <FiCamera size={12} />
+                      </button>
+                    </span>
                     <button
-                      className="date-screenshot-btn"
-                      onClick={(e) => { e.stopPropagation(); screenshotDate(date); }}
-                      title="Tee pilt kõigist päeva detailidest"
+                      className="date-copy-btn"
+                      onClick={(e) => { e.stopPropagation(); copyDateMarksToClipboard(date); }}
+                      title="Kopeeri kõik markid clipboardi"
                     >
-                      <FiCamera size={12} />
+                      <FiCopy size={12} />
+                    </button>
+                    <button
+                      className="date-menu-btn"
+                      onClick={(e) => { e.stopPropagation(); /* TODO: date menu */ }}
+                      title="Rohkem valikuid"
+                    >
+                      <FiMoreVertical size={14} />
                     </button>
                   </div>
 
@@ -2791,9 +2826,16 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                             <div className="item-content">
                               <div className="item-main-row">
                                 <span className="item-mark">{item.assembly_mark}</span>
-                                {item.cast_unit_weight && (
-                                  <span className="item-weight">{formatWeight(item.cast_unit_weight)}</span>
-                                )}
+                                {(() => {
+                                  const weight = formatWeight(item.cast_unit_weight);
+                                  if (!weight) return null;
+                                  return (
+                                    <span className="item-weight">
+                                      <span className="weight-kg">{weight.kg}</span>
+                                      <span className="weight-t">{weight.tons}</span>
+                                    </span>
+                                  );
+                                })()}
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
