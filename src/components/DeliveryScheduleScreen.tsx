@@ -2473,18 +2473,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               });
                             }}
                           >
-                            <span className="vehicle-drag-handle">
-                              <FiMove />
-                            </span>
                             <span className="collapse-icon">
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
                             {/* Time section */}
                             <div className="vehicle-time-section">
-                              <span className="time-primary">{vehicle?.unload_start_time || '--:--'}</span>
+                              <span className="time-primary">{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
                               <span className="time-secondary">{formatDuration(vehicle?.unload_duration_minutes)}</span>
                             </div>
+
+                            <FiTruck className="vehicle-icon" />
 
                             {/* Vehicle title section */}
                             <div className="vehicle-title-section">
@@ -2574,7 +2573,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setEditingVehicle(vehicle);
                               setVehicleUnloadMethods(vehicle.unload_methods || {});
                               setVehicleResources(vehicle.resources || {});
-                              setVehicleStartTime(vehicle.unload_start_time || '');
+                              // Strip seconds from time if present (DB returns "08:00:00", we need "08:00")
+                              const startTime = vehicle.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '';
+                              setVehicleStartTime(startTime);
                               setVehicleDuration(vehicle.unload_duration_minutes || 0);
                               setVehicleType(vehicle.vehicle_type || 'haagis');
                               setVehicleNewComment('');
@@ -2634,9 +2635,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
-                                    <div className="item-drag-handle">
-                                      <FiMove />
-                                    </div>
                                     <div className="item-checkbox">
                                       <input
                                         type="checkbox"
@@ -2846,9 +2844,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             });
                           }}
                         >
-                          <span className="vehicle-drag-handle">
-                            <FiMove />
-                          </span>
                           <span className="collapse-icon">
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
@@ -2901,9 +2896,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
-                                    <div className="item-drag-handle">
-                                      <FiMove />
-                                    </div>
                                     <div className="item-checkbox">
                                       <input
                                         type="checkbox"
