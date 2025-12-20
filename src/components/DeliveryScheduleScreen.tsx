@@ -1161,8 +1161,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   const addItemsToVehicle = async (vehicleId: string, date: string, comment?: string) => {
-    if (selectedObjects.length === 0) {
-      setMessage('Vali mudelist detailid');
+    // Filter out objects that are already in the items list
+    const existingGuids = new Set(items.map(item => item.guid));
+    const objectsToAdd = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+
+    if (objectsToAdd.length === 0) {
+      setMessage('Kõik valitud detailid on juba graafikus');
       return;
     }
 
@@ -1174,7 +1178,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const vehicleItems = items.filter(i => i.vehicle_id === vehicleId);
       let maxSort = vehicleItems.reduce((max, i) => Math.max(max, i.sort_order), 0);
 
-      const newItems = selectedObjects.map((obj, idx) => ({
+      const newItems = objectsToAdd.map((obj, idx) => ({
         trimble_project_id: projectId,
         vehicle_id: vehicleId,
         model_id: obj.modelId,
@@ -2269,7 +2273,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   )}
                   <div
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${selectedObjects.length > 0 ? 'can-drop' : ''}`}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateStr);
 
@@ -3081,21 +3085,29 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {/* Selection bars - between calendar and search */}
         {(selectedObjects.length > 0 || selectedItemIds.size > 0) && (
           <div className="selection-bars">
-            {/* Selected objects from model */}
-            {selectedObjects.length > 0 && (
-              <div className="selection-bar model-selection">
-                <span className="selection-count">{selectedObjects.length} valitud</span>
-                <button
-                  className="add-btn primary"
-                  onClick={() => {
-                    setAddModalDate(selectedDate || formatDateForDB(new Date()));
-                    setShowAddModal(true);
-                  }}
-                >
-                  <FiPlus /> Lisa veokisse
-                </button>
-              </div>
-            )}
+            {/* Selected objects from model - only show if not already in list */}
+            {(() => {
+              // Filter out objects that are already in items list
+              const existingGuids = new Set(items.map(item => item.guid));
+              const newObjects = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+
+              if (newObjects.length === 0) return null;
+
+              return (
+                <div className="selection-bar model-selection">
+                  <span className="selection-count">{newObjects.length} valitud</span>
+                  <button
+                    className="add-btn primary"
+                    onClick={() => {
+                      setAddModalDate(selectedDate || formatDateForDB(new Date()));
+                      setShowAddModal(true);
+                    }}
+                  >
+                    <FiPlus /> Lisa veokisse
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Selected items from list */}
             {selectedItemIds.size > 0 && (
