@@ -118,11 +118,23 @@ const RESOURCE_TYPES: ResourceConfig[] = [
 ];
 
 // ============================================
+// VEHICLE TYPE CONFIG
+// ============================================
+
+const VEHICLE_TYPES = [
+  { key: 'haagis', label: 'Haagis' },
+  { key: 'kinni', label: 'Täiesti kinni' },
+  { key: 'lahti', label: 'Lahti haagis' },
+  { key: 'extralong', label: 'Ekstra pikk haagis' }
+];
+
+// ============================================
 // TIME AND DURATION OPTIONS
 // ============================================
 
-// Kellaaja valikud: 6:30 - 19:00 (30 min sammuga)
+// Kellaaja valikud: tühi + 6:30 - 19:00 (30 min sammuga)
 const TIME_OPTIONS = [
+  '', // Tühi - kellaaeg pole veel teada
   '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
   '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00',
   '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
@@ -130,6 +142,7 @@ const TIME_OPTIONS = [
 ];
 
 const DURATION_OPTIONS = [
+  { value: 0, label: '-' },  // Kestus pole veel teada
   { value: 30, label: '30 min' },
   { value: 60, label: '1 tund' },
   { value: 90, label: '1.5 tundi' },
@@ -323,8 +336,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [editingVehicle, setEditingVehicle] = useState<DeliveryVehicle | null>(null);
   const [vehicleUnloadMethods, setVehicleUnloadMethods] = useState<UnloadMethods>({});
   const [vehicleResources, setVehicleResources] = useState<DeliveryResources>({});
-  const [vehicleStartTime, setVehicleStartTime] = useState<string>('08:00');
-  const [vehicleDuration, setVehicleDuration] = useState<number>(90);
+  const [vehicleStartTime, setVehicleStartTime] = useState<string>('');
+  const [vehicleDuration, setVehicleDuration] = useState<number>(0);
+  const [vehicleType, setVehicleType] = useState<string>('haagis');
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -351,6 +365,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'time', label: 'Kellaaeg', enabled: true },
     { id: 'duration', label: 'Kestus', enabled: true },
     { id: 'vehicle', label: 'Veok', enabled: true },
+    { id: 'vehicle_type', label: 'Veoki tüüp', enabled: true },
     { id: 'factory', label: 'Tehas', enabled: true },
     { id: 'mark', label: 'Assembly Mark', enabled: true },
     { id: 'position', label: 'Position Code', enabled: true },
@@ -1141,6 +1156,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               break;
             }
             case 'vehicle': row.push(vehicle?.vehicle_code || ''); break;
+            case 'vehicle_type': {
+              const typeLabel = VEHICLE_TYPES.find(t => t.key === vehicle?.vehicle_type)?.label || vehicle?.vehicle_type || '';
+              row.push(typeLabel);
+              break;
+            }
             case 'factory': row.push(factory?.factory_name || ''); break;
             case 'mark': row.push(item.assembly_mark); break;
             case 'position': row.push(item.cast_unit_position_code || ''); break;
@@ -1791,8 +1811,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setEditingVehicle(vehicle);
                               setVehicleUnloadMethods(vehicle.unload_methods || {});
                               setVehicleResources(vehicle.resources || {});
-                              setVehicleStartTime(vehicle.unload_start_time || '08:00');
-                              setVehicleDuration(vehicle.unload_duration_minutes || 90);
+                              setVehicleStartTime(vehicle.unload_start_time || '');
+                              setVehicleDuration(vehicle.unload_duration_minutes || 0);
+                              setVehicleType(vehicle.vehicle_type || 'haagis');
                               setShowVehicleModal(true);
                               setVehicleMenuId(null);
                             }}>
@@ -2368,13 +2389,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               <div className="form-row">
                 <div className="form-group">
+                  <label><FiTruck style={{ marginRight: 4 }} />Veoki tüüp</label>
+                  <select
+                    value={vehicleType}
+                    onChange={(e) => setVehicleType(e.target.value)}
+                  >
+                    {VEHICLE_TYPES.map(type => (
+                      <option key={type.key} value={type.key}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
                   <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
                   <select
                     value={vehicleStartTime}
                     onChange={(e) => setVehicleStartTime(e.target.value)}
                   >
                     {TIME_OPTIONS.map(time => (
-                      <option key={time} value={time}>{time}</option>
+                      <option key={time || 'empty'} value={time}>{time || '- Pole teada -'}</option>
                     ))}
                   </select>
                 </div>
@@ -2481,10 +2516,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 onClick={async () => {
                   await updateVehicle(editingVehicle.id, {
                     status: editingVehicle.status,
+                    vehicle_type: vehicleType as any,
                     unload_methods: vehicleUnloadMethods,
                     resources: vehicleResources,
-                    unload_start_time: vehicleStartTime,
-                    unload_duration_minutes: vehicleDuration,
+                    unload_start_time: vehicleStartTime || undefined,
+                    unload_duration_minutes: vehicleDuration || undefined,
                     notes: editingVehicle.notes
                   });
                   setShowVehicleModal(false);

@@ -536,6 +536,13 @@ export type DeliveryVehicleStatus =
   | 'completed'    // Lõpetatud
   | 'cancelled';   // Tühistatud
 
+// Veoki tüübid
+export type DeliveryVehicleType =
+  | 'kinni'        // Täiesti kinni (kinnine kast)
+  | 'haagis'       // Tavaline haagis
+  | 'lahti'        // Lahti haagis (avatud)
+  | 'extralong';   // Ekstra pikk haagis
+
 // Mahalaadimise meetodid
 export interface UnloadMethods {
   crane?: number;      // Kraana
@@ -557,6 +564,7 @@ export interface DeliveryVehicle {
   factory_id: string;
   vehicle_number: number;            // 1, 2, 3...
   vehicle_code: string;              // "OPO1", "OPO2" (genereeritakse automaatselt)
+  vehicle_type?: DeliveryVehicleType; // Veoki tüüp (kinni, haagis, lahti, extralong)
   scheduled_date: string;            // Mis kuupäeval see veok tuleb
   unload_methods?: UnloadMethods;    // Mahalaadimise meetodid
   resources?: DeliveryResources;     // Ressursid (töötajad)
