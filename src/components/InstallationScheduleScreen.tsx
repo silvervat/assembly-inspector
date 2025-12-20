@@ -131,12 +131,12 @@ const INSTALL_METHODS: MethodConfig[] = [
   // Machines
   { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#dcfce7', activeBgColor: '#22c55e', filterCss: 'invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   // Labor
-  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#d1fae5', activeBgColor: '#10b981', filterCss: 'invert(35%) sepia(50%) saturate(700%) hue-rotate(130deg) brightness(85%)', maxCount: 4, defaultCount: 1, category: 'labor' },
-  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#14b8a6', filterCss: 'invert(55%) sepia(40%) saturate(600%) hue-rotate(130deg) brightness(90%)', maxCount: 15, defaultCount: 1, category: 'labor' },
+  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
   { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
 ];
 
@@ -278,6 +278,11 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   // Assembly selection state
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
+
+  // Hover tooltip state
+  const [hoveredItemId, setHoveredItemId] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
@@ -1725,6 +1730,35 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     setSelectedItemIds(new Set());
     setLastClickedId(null);
   };
+
+  // Item hover handlers for tooltip
+  const handleItemMouseEnter = (e: React.MouseEvent, itemId: string) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredItemId(itemId);
+      setTooltipPosition({ x: rect.left, y: rect.bottom + 4 });
+    }, 500); // 0.5 second delay
+  };
+
+  const handleItemMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setHoveredItemId(null);
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Select all items in current filtered list
   const selectAllItems = () => {
@@ -3387,6 +3421,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                               onDragOver={(e) => handleItemDragOver(e, date, idx)}
                               onDrop={(e) => handleDrop(e, date, dragOverIndex ?? undefined)}
                               onClick={(e) => handleItemClick(e, item, allSorted)}
+                              onMouseEnter={(e) => handleItemMouseEnter(e, item.id)}
+                              onMouseLeave={handleItemMouseLeave}
                             >
                             <span className="item-index">{idx + 1}</span>
                             <div className="item-drag-handle">
@@ -3580,6 +3616,61 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
           }}
         />
       )}
+
+      {/* Item Hover Tooltip */}
+      {hoveredItemId && (() => {
+        const item = scheduleItems.find(i => i.id === hoveredItemId);
+        if (!item) return null;
+        const methods = item.install_methods as InstallMethods | null;
+        const weight = item.cast_unit_weight;
+        const weightNum = weight ? (typeof weight === 'string' ? parseFloat(weight) : weight) : null;
+        const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : null;
+
+        return (
+          <div
+            className="item-tooltip"
+            style={{
+              position: 'fixed',
+              left: Math.min(tooltipPosition.x, window.innerWidth - 220),
+              top: Math.min(tooltipPosition.y, window.innerHeight - 150),
+              zIndex: 9999,
+            }}
+          >
+            <div className="tooltip-row">
+              <span className="tooltip-label">Detaili nimetus:</span>
+              <span className="tooltip-value">{item.assembly_mark}</span>
+            </div>
+            {weightStr && (
+              <div className="tooltip-row">
+                <span className="tooltip-label">Kaal:</span>
+                <span className="tooltip-value">{weightStr}</span>
+              </div>
+            )}
+            {methods && Object.keys(methods).length > 0 && (
+              <div className="tooltip-methods">
+                <span className="tooltip-label">Paigalduse ressursid:</span>
+                <div className="tooltip-method-list">
+                  {Object.entries(methods).map(([key, count]) => {
+                    const cfg = INSTALL_METHODS.find(m => m.key === key);
+                    if (!cfg || !count) return null;
+                    return (
+                      <div key={key} className="tooltip-method-item">
+                        <img
+                          src={`${import.meta.env.BASE_URL}icons/${cfg.icon}`}
+                          alt={cfg.label}
+                          style={{ filter: cfg.filterCss }}
+                        />
+                        <span>{cfg.label}</span>
+                        <span className="tooltip-method-count">× {count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Assembly Selection Required Modal */}
       {showAssemblyModal && (
