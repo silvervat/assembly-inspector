@@ -85,14 +85,16 @@ interface UnloadMethodConfig {
   icon: string;
   bgColor: string;
   activeBgColor: string;
+  filterCss: string;
   maxCount: number;
   defaultCount: number;
 }
 
 const UNLOAD_METHODS: UnloadMethodConfig[] = [
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', maxCount: 4, defaultCount: 1 },
-  { key: 'telescopic', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', maxCount: 4, defaultCount: 1 },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', maxCount: 1, defaultCount: 0 }
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
+  { key: 'telescopic', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
+  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 2, defaultCount: 1 }
 ];
 
 // ============================================
@@ -105,13 +107,29 @@ interface ResourceConfig {
   icon: string;
   bgColor: string;
   activeBgColor: string;
+  filterCss: string;
   maxCount: number;
   defaultCount: number;
 }
 
 const RESOURCE_TYPES: ResourceConfig[] = [
-  { key: 'taasnik', label: 'Taasnik', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', maxCount: 8, defaultCount: 2 },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', maxCount: 5, defaultCount: 1 }
+  { key: 'taasnik', label: 'Taasnik', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 8, defaultCount: 2 },
+  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1 }
+];
+
+// ============================================
+// DURATION OPTIONS
+// ============================================
+
+const DURATION_OPTIONS = [
+  { value: 30, label: '30 min' },
+  { value: 60, label: '1 tund' },
+  { value: 90, label: '1.5 tundi' },
+  { value: 120, label: '2 tundi' },
+  { value: 150, label: '2.5 tundi' },
+  { value: 180, label: '3 tundi' },
+  { value: 210, label: '3.5 tundi' },
+  { value: 240, label: '4 tundi' }
 ];
 
 // ============================================
@@ -297,6 +315,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [editingVehicle, setEditingVehicle] = useState<DeliveryVehicle | null>(null);
   const [vehicleUnloadMethods, setVehicleUnloadMethods] = useState<UnloadMethods>({});
   const [vehicleResources, setVehicleResources] = useState<DeliveryResources>({});
+  const [vehicleStartTime, setVehicleStartTime] = useState<string>('08:00');
+  const [vehicleDuration, setVehicleDuration] = useState<number>(90);
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -1749,6 +1769,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setEditingVehicle(vehicle);
                               setVehicleUnloadMethods(vehicle.unload_methods || {});
                               setVehicleResources(vehicle.resources || {});
+                              setVehicleStartTime(vehicle.unload_start_time || '08:00');
+                              setVehicleDuration(vehicle.unload_duration_minutes || 90);
                               setShowVehicleModal(true);
                               setVehicleMenuId(null);
                             }}>
@@ -2322,6 +2344,29 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 </select>
               </div>
 
+              <div className="form-row">
+                <div className="form-group">
+                  <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
+                  <input
+                    type="time"
+                    value={vehicleStartTime}
+                    onChange={(e) => setVehicleStartTime(e.target.value)}
+                    className="time-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Kestus</label>
+                  <select
+                    value={vehicleDuration}
+                    onChange={(e) => setVehicleDuration(Number(e.target.value))}
+                  >
+                    {DURATION_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div className="form-section">
                 <h4>Mahalaadimise meetodid</h4>
                 <div className="methods-grid">
@@ -2414,6 +2459,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     status: editingVehicle.status,
                     unload_methods: vehicleUnloadMethods,
                     resources: vehicleResources,
+                    unload_start_time: vehicleStartTime,
+                    unload_duration_minutes: vehicleDuration,
                     notes: editingVehicle.notes
                   });
                   setShowVehicleModal(false);

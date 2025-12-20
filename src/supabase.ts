@@ -541,6 +541,7 @@ export interface UnloadMethods {
   crane?: number;      // Kraana
   telescopic?: number; // Teleskooplaadur
   manual?: number;     // Käsitsi
+  poomtostuk?: number; // Poomtõstuk
 }
 
 // Ressursid (töötajad)
@@ -562,6 +563,10 @@ export interface DeliveryVehicle {
   status: DeliveryVehicleStatus;
   item_count: number;                // Arvutatakse triggeriga
   total_weight: number;              // Arvutatakse triggeriga
+  // Kellaaeg ja kestus
+  unload_start_time?: string;        // Mahalaadimise algusaeg (HH:MM)
+  unload_duration_minutes?: number;  // Kestus minutites (default 90 = 1.5h)
+  sort_order?: number;               // Järjekord päeva sees
   notes?: string;
   created_at: string;
   created_by: string;
