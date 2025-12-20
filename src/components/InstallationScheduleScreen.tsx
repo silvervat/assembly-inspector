@@ -6,7 +6,7 @@ import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle
+  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -105,7 +105,7 @@ const formatWeight = (weight: string | number | null | undefined): { kg: string;
   const tons = kgValue / 1000;
   return {
     kg: `${roundedKg} kg`,
-    tons: `${tons >= 10 ? Math.round(tons) : tons.toFixed(1)} t`
+    tons: `${tons >= 10 ? Math.round(tons) : tons.toFixed(1)}t` // No space before t
   };
 };
 
@@ -218,6 +218,10 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const [selectedInstallMethods, setSelectedInstallMethods] = useState<InstallMethods>({});
   const [methodDefaults, setMethodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
   const [hoveredMethod, setHoveredMethod] = useState<InstallMethodType | null>(null);
+
+  // Batch install methods for selected items in list
+  const [batchInstallMethods, setBatchInstallMethods] = useState<InstallMethods>({});
+  const [batchHoveredMethod, setBatchHoveredMethod] = useState<InstallMethodType | null>(null);
 
   // Context menu for list item icons
   const [listItemContextMenu, setListItemContextMenu] = useState<{ x: number; y: number; itemId: string } | null>(null);
@@ -709,6 +713,84 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
   const getMethodConfig = (key: InstallMethodType): MethodConfig | undefined => {
     return INSTALL_METHODS.find(m => m.key === key);
   };
+
+  // Toggle batch method on/off for selected list items
+  const toggleBatchMethod = (method: InstallMethodType) => {
+    setBatchInstallMethods(prev => {
+      const newMethods = { ...prev };
+      if (newMethods[method]) {
+        delete newMethods[method];
+      } else {
+        newMethods[method] = methodDefaults[method] || 1;
+      }
+      return newMethods;
+    });
+  };
+
+  // Set count for batch method
+  const setBatchMethodCount = (method: InstallMethodType, count: number) => {
+    const config = INSTALL_METHODS.find(m => m.key === method);
+    if (!config) return;
+    const validCount = Math.max(1, Math.min(count, config.maxCount));
+    setBatchInstallMethods(prev => ({
+      ...prev,
+      [method]: validCount
+    }));
+    // Update default for this method
+    setMethodDefaults(prev => {
+      const newDefaults = { ...prev, [method]: validCount };
+      saveDefaultCounts(newDefaults);
+      return newDefaults;
+    });
+  };
+
+  // Apply batch methods to all selected items
+  const applyBatchMethodsToSelected = async () => {
+    if (selectedItemIds.size === 0) return;
+
+    const count = selectedItemIds.size;
+    const methods = Object.keys(batchInstallMethods).length > 0 ? batchInstallMethods : null;
+
+    try {
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({
+          install_methods: methods,
+          updated_by: tcUserEmail
+        })
+        .in('id', [...selectedItemIds]);
+
+      if (error) throw error;
+
+      const methodLabels = Object.entries(batchInstallMethods)
+        .map(([key, val]) => {
+          const cfg = INSTALL_METHODS.find(m => m.key === key);
+          return cfg ? `${cfg.label} (${val})` : key;
+        })
+        .join(', ') || 'tühjendatud';
+
+      setMessage(`${count} detaili ressursid: ${methodLabels}`);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error updating batch methods:', e);
+      setMessage('Viga ressursside muutmisel');
+    }
+  };
+
+  // Initialize batch methods from first selected item when selection changes
+  useEffect(() => {
+    if (selectedItemIds.size > 0) {
+      const firstId = [...selectedItemIds][0];
+      const firstItem = scheduleItems.find(item => item.id === firstId);
+      if (firstItem?.install_methods) {
+        setBatchInstallMethods(firstItem.install_methods as InstallMethods);
+      } else {
+        setBatchInstallMethods({});
+      }
+    } else {
+      setBatchInstallMethods({});
+    }
+  }, [selectedItemIds]);
 
   // Add selected objects to date
   const addToDate = async (date: string) => {
@@ -1712,32 +1794,6 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
     }
   };
 
-  // Update install method for selected items - batch update for performance
-  const updateSelectedItemsMethod = async (method: 'crane' | 'forklift' | 'manual' | null) => {
-    if (selectedItemIds.size === 0) return;
-
-    const count = selectedItemIds.size;
-    try {
-      const { error } = await supabase
-        .from('installation_schedule')
-        .update({
-          install_method: method,
-          install_method_count: method ? 1 : null,
-          updated_by: tcUserEmail
-        })
-        .in('id', [...selectedItemIds]);
-
-      if (error) throw error;
-
-      const methodLabel = method === 'crane' ? 'Kraana' : method === 'forklift' ? 'Teleskooplaadur' : method === 'manual' ? 'Käsitsi' : 'eemaldatud';
-      setMessage(`${count} detaili paigaldusviis: ${methodLabel}`);
-      loadSchedule();
-    } catch (e) {
-      console.error('Error updating install method:', e);
-      setMessage('Viga paigaldusviisi muutmisel');
-    }
-  };
-
   // Drag handlers with multi-select support
   const handleDragStart = (e: React.DragEvent, item: ScheduleItem) => {
     setIsDragging(true);
@@ -2585,42 +2641,104 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
       {/* Multi-select bar */}
       {selectedItemIds.size > 0 && (
         <div className="multi-select-bar">
-          <span>{selectedItemIds.size} valitud</span>
-          <div className="multi-select-methods">
-            <button
-              className="method-btn method-crane"
-              onClick={() => updateSelectedItemsMethod('crane')}
-              title="Kraana"
-            >
-              <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" />
-            </button>
-            <button
-              className="method-btn method-forklift"
-              onClick={() => updateSelectedItemsMethod('forklift')}
-              title="Teleskooplaadur"
-            >
-              <img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" />
-            </button>
-            <button
-              className="method-btn method-manual"
-              onClick={() => updateSelectedItemsMethod('manual')}
-              title="Käsitsi"
-            >
-              <img src={`${import.meta.env.BASE_URL}icons/manual.png`} alt="Käsitsi" />
-            </button>
-            <button
-              className="method-btn clear"
-              onClick={() => updateSelectedItemsMethod(null)}
-              title="Eemalda paigaldusviis"
-            >
-              <FiX size={12} />
-            </button>
+          <div className="multi-select-header">
+            <span className="multi-select-count">{selectedItemIds.size} valitud</span>
+            <div className="multi-select-actions">
+              <button className="apply-batch-btn" onClick={applyBatchMethodsToSelected} title="Rakenda ressursid">
+                <FiCheck size={12} />
+                Rakenda
+              </button>
+              <button onClick={clearItemSelection}>Tühista</button>
+              <button className="delete-selected-btn" onClick={deleteSelectedItems}>
+                <FiTrash2 size={12} />
+                Kustuta
+              </button>
+            </div>
           </div>
-          <button onClick={clearItemSelection}>Tühista</button>
-          <button className="delete-selected-btn" onClick={deleteSelectedItems}>
-            <FiTrash2 size={12} />
-            Kustuta
-          </button>
+          {/* Row 1: Machines */}
+          <div className="install-methods-row batch-methods">
+            {INSTALL_METHODS.filter(m => m.category === 'machine').map(method => {
+              const isActive = !!batchInstallMethods[method.key];
+              const count = batchInstallMethods[method.key] || 0;
+              const isHovered = batchHoveredMethod === method.key;
+
+              return (
+                <div
+                  key={method.key}
+                  className="method-selector-wrapper"
+                  onMouseEnter={() => setBatchHoveredMethod(method.key)}
+                  onMouseLeave={() => setBatchHoveredMethod(null)}
+                >
+                  <button
+                    className={`method-selector ${isActive ? 'active' : ''}`}
+                    style={{
+                      backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                    }}
+                    onClick={() => toggleBatchMethod(method.key)}
+                    title={method.label}
+                  >
+                    <img
+                      src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                      alt={method.label}
+                      style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                    />
+                    {isActive && count > 0 && (
+                      <span className="method-badge">{count}</span>
+                    )}
+                  </button>
+                  {isActive && isHovered && (
+                    <div className="method-count-popup">
+                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count - 1); }} disabled={count <= 1}>−</button>
+                      <span>{count}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count + 1); }} disabled={count >= method.maxCount}>+</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {/* Row 2: Labor */}
+          <div className="install-methods-row batch-methods">
+            {INSTALL_METHODS.filter(m => m.category === 'labor').map(method => {
+              const isActive = !!batchInstallMethods[method.key];
+              const count = batchInstallMethods[method.key] || 0;
+              const isHovered = batchHoveredMethod === method.key;
+
+              return (
+                <div
+                  key={method.key}
+                  className="method-selector-wrapper"
+                  onMouseEnter={() => setBatchHoveredMethod(method.key)}
+                  onMouseLeave={() => setBatchHoveredMethod(null)}
+                >
+                  <button
+                    className={`method-selector ${isActive ? 'active' : ''}`}
+                    style={{
+                      backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                    }}
+                    onClick={() => toggleBatchMethod(method.key)}
+                    title={method.label}
+                  >
+                    <img
+                      src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                      alt={method.label}
+                      style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                    />
+                    {isActive && count > 0 && (
+                      <span className="method-badge">{count}</span>
+                    )}
+                  </button>
+                  {isActive && isHovered && (
+                    <div className="method-count-popup">
+                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count - 1); }} disabled={count <= 1}>−</button>
+                      <span>{count}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setBatchMethodCount(method.key, count + 1); }} disabled={count >= method.maxCount}>+</button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -3222,21 +3340,23 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
                     <span className="date-count">{items.length} tk</span>
                     <span className="date-stats-wrapper">
                       {stats && <span className="date-percentage">{stats.dailyPercentage}% | {stats.percentage}%</span>}
-                      <button
-                        className="date-screenshot-btn"
-                        onClick={(e) => { e.stopPropagation(); screenshotDate(date); }}
-                        title="Tee pilt kõigist päeva detailidest"
-                      >
-                        <FiCamera size={12} />
-                      </button>
+                      <div className="date-hover-btns">
+                        <button
+                          className="date-screenshot-btn"
+                          onClick={(e) => { e.stopPropagation(); screenshotDate(date); }}
+                          title="Tee pilt kõigist päeva detailidest"
+                        >
+                          <FiCamera size={12} />
+                        </button>
+                        <button
+                          className="date-copy-btn"
+                          onClick={(e) => { e.stopPropagation(); copyDateMarksToClipboard(date); }}
+                          title="Kopeeri kõik markid clipboardi"
+                        >
+                          <FiCopy size={12} />
+                        </button>
+                      </div>
                     </span>
-                    <button
-                      className="date-copy-btn"
-                      onClick={(e) => { e.stopPropagation(); copyDateMarksToClipboard(date); }}
-                      title="Kopeeri kõik markid clipboardi"
-                    >
-                      <FiCopy size={12} />
-                    </button>
                     <button
                       className="date-menu-btn"
                       onClick={(e) => { e.stopPropagation(); /* TODO: date menu */ }}

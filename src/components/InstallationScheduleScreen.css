@@ -257,7 +257,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 4px 0;
+  padding: 4px 6px 4px 0; /* Right padding for badge overflow */
 }
 
 .method-selector-wrapper {
@@ -576,15 +576,15 @@
   color: var(--modus-text-secondary);
   flex-shrink: 0;
   white-space: nowrap;
-  min-width: 36px;
-  text-align: right;
+  margin-right: 4px;
 }
 
-/* Stats wrapper - shows % by default, camera on hover */
+/* Stats wrapper - shows % by default, buttons on hover */
 .date-stats-wrapper {
   position: relative;
-  min-width: 70px;
-  text-align: right;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .date-stats-wrapper .date-percentage {
@@ -592,13 +592,17 @@
   font-weight: 500;
   color: var(--modus-text-secondary);
   white-space: nowrap;
+  transition: opacity 0.15s;
 }
 
-.date-stats-wrapper .date-screenshot-btn {
+/* Hover buttons container - hidden by default */
+.date-hover-btns {
   position: absolute;
   top: 50%;
   right: 0;
   transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -607,12 +611,31 @@
   opacity: 0;
 }
 
-.date-header:hover .date-stats-wrapper .date-screenshot-btn {
+.date-header:hover .date-hover-btns {
   opacity: 1;
 }
 
-/* Copy and menu buttons */
-.date-copy-btn,
+/* Screenshot and copy buttons */
+.date-screenshot-btn,
+.date-copy-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--modus-text-secondary);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.date-screenshot-btn:hover,
+.date-copy-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--modus-primary);
+}
+
+/* Menu button - always visible */
 .date-menu-btn {
   background: none;
   border: none;
@@ -627,27 +650,9 @@
   opacity: 0.6;
 }
 
-.date-copy-btn:hover,
 .date-menu-btn:hover {
   background: rgba(0, 0, 0, 0.06);
   opacity: 1;
-}
-
-.date-screenshot-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px;
-  color: var(--modus-text-secondary);
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.date-screenshot-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: var(--modus-primary);
 }
 
 /* Schedule Item - compact rows */
@@ -961,13 +966,30 @@
 /* Multi-select bar */
 .multi-select-bar {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 12px;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
   background: #fef3c7;
   border-bottom: 1px solid #fcd34d;
   font-size: 12px;
   color: #92400e;
+}
+
+.multi-select-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.multi-select-count {
+  font-weight: 600;
+}
+
+.multi-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .multi-select-bar button {
@@ -985,6 +1007,20 @@
   color: white;
 }
 
+.multi-select-bar .apply-batch-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #dcfce7;
+  color: #16a34a;
+  border-color: #16a34a;
+}
+
+.multi-select-bar .apply-batch-btn:hover {
+  background: #16a34a;
+  color: white;
+}
+
 .multi-select-bar .delete-selected-btn {
   display: flex;
   align-items: center;
@@ -999,76 +1035,13 @@
   color: white;
 }
 
-.multi-select-bar .hint {
-  margin-left: auto;
-  font-size: 11px;
-  opacity: 0.8;
+.multi-select-bar .batch-methods {
+  padding: 2px 6px 2px 0;
 }
 
-.multi-select-methods {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-}
-
-.multi-select-methods .method-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  padding: 4px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: white;
-  cursor: pointer;
-}
-
-.multi-select-methods .method-btn img {
-  width: 16px;
-  height: 16px;
-  opacity: 0.85;
-}
-
-/* Crane - blue */
-.multi-select-methods .method-btn.method-crane img {
-  filter: invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%);
-}
-
-.multi-select-methods .method-btn.method-crane:hover {
-  background: #dbeafe;
-  border-color: #3b82f6;
-}
-
-/* Forklift - red */
-.multi-select-methods .method-btn.method-forklift img {
-  filter: invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%);
-}
-
-.multi-select-methods .method-btn.method-forklift:hover {
-  background: #fee2e2;
-  border-color: #ef4444;
-}
-
-/* Manual - green */
-.multi-select-methods .method-btn.method-manual img {
-  filter: invert(40%) sepia(90%) saturate(800%) hue-rotate(80deg) brightness(90%);
-}
-
-.multi-select-methods .method-btn.method-manual:hover {
-  background: #dcfce7;
-  border-color: #22c55e;
-}
-
-.multi-select-methods .method-btn.clear {
-  color: #9ca3af;
-}
-
-.multi-select-methods .method-btn.clear:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-  color: #6b7280;
+.multi-select-bar .batch-methods .method-selector {
+  width: 28px;
+  height: 28px;
 }
 
 /* Multi-selected item */
@@ -1512,20 +1485,23 @@
   min-width: 0;
 }
 
-/* kg shown by default, shrinks first */
+/* kg shown by default */
 .item-weight .weight-kg {
-  flex: 0 99 auto;
   white-space: nowrap;
-  overflow: hidden;
-  min-width: 0;
 }
 
-/* tons overlays kg - visible when kg shrinks away */
+/* tons hidden by default, shown via JS when space is limited */
 .item-weight .weight-t {
-  flex: 0 0 auto;
-  white-space: nowrap;
-  margin-left: -100%;
-  background: #f3f4f6;
+  display: none;
+}
+
+/* When weight container has .show-tons class, hide kg and show tons */
+.item-weight.show-tons .weight-kg {
+  display: none;
+}
+
+.item-weight.show-tons .weight-t {
+  display: inline;
 }
 
 /* Installation method icon on item */
