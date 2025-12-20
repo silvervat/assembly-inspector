@@ -75,6 +75,15 @@ const formatDateEstonian = (dateStr: string): string => {
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
+// Get ISO week number (W01, W02, etc.)
+const getISOWeek = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
 // RGB to hex color
 const rgbToHex = (r: number, g: number, b: number): string => {
   return ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
@@ -1598,7 +1607,8 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
         </div>
 
         {!calendarCollapsed && (
-          <div className="calendar-grid">
+          <div className="calendar-grid with-weeks">
+            <div className="calendar-week-header"></div>
             {dayNames.map(day => (
               <div key={day} className="calendar-day-name">{day}</div>
             ))}
@@ -1610,31 +1620,40 @@ export default function InstallationScheduleScreen({ api, projectId, user: _user
               const itemCount = itemsByDate[dateKey]?.length || 0;
               const dayColor = playbackSettings.colorEachDayDifferent && playbackDateColors[dateKey];
               const isPlayingDate = isPlaying && currentPlaybackDate === dateKey;
+              const isStartOfWeek = idx % 7 === 0;
+              const weekNum = getISOWeek(date);
 
               return (
-                <div
-                  key={idx}
-                  className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
-                  onClick={() => {
-                    setSelectedDate(dateKey);
-                    if (itemCount > 0) selectDateInViewer(dateKey);
-                  }}
-                  onDragOver={(e) => handleDragOver(e, dateKey)}
-                  onDrop={(e) => handleDrop(e, dateKey)}
-                >
-                  <span className="day-number">{date.getDate()}</span>
-                  {itemCount > 0 && (
-                    <span
-                      className="day-count"
-                      style={dayColor ? {
-                        backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
-                        color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
-                      } : undefined}
-                    >
-                      {itemCount}
-                    </span>
+                <>
+                  {isStartOfWeek && (
+                    <div key={`week-${idx}`} className="calendar-week-num">
+                      W{String(weekNum).padStart(2, '0')}
+                    </div>
                   )}
-                </div>
+                  <div
+                    key={idx}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${itemCount > 0 ? 'has-items' : ''} ${isPlayingDate ? 'playing' : ''}`}
+                    onClick={() => {
+                      setSelectedDate(dateKey);
+                      if (itemCount > 0) selectDateInViewer(dateKey);
+                    }}
+                    onDragOver={(e) => handleDragOver(e, dateKey)}
+                    onDrop={(e) => handleDrop(e, dateKey)}
+                  >
+                    <span className="day-number">{date.getDate()}</span>
+                    {itemCount > 0 && (
+                      <span
+                        className="day-count"
+                        style={dayColor ? {
+                          backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
+                          color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
+                        } : undefined}
+                      >
+                        {itemCount}
+                      </span>
+                    )}
+                  </div>
+                </>
               );
             })}
           </div>
