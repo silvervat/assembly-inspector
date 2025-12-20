@@ -715,6 +715,7 @@
 }
 
 .vehicle-header .vehicle-select-btn,
+.vehicle-header .vehicle-comment-btn,
 .vehicle-header .vehicle-menu-btn {
   display: flex;
   align-items: center;
@@ -726,11 +727,17 @@
   border-radius: 6px;
   cursor: pointer;
   color: #6b7280;
+  position: relative;
 }
 
 .vehicle-header .vehicle-select-btn:hover,
+.vehicle-header .vehicle-comment-btn:hover,
 .vehicle-header .vehicle-menu-btn:hover {
   background: #e5e7eb;
+}
+
+.vehicle-header .vehicle-comment-btn:hover {
+  color: var(--modus-primary, #0063a3);
 }
 
 .vehicle-items {
@@ -783,30 +790,98 @@
   cursor: pointer;
 }
 
-.delivery-item .item-mark {
-  font-weight: 500;
-  font-size: 13px;
-  color: #111827;
-  min-width: 120px;
-}
-
-.delivery-item .item-product {
-  font-size: 12px;
-  color: #6b7280;
+/* Item info section - two rows */
+.item-info-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
   flex: 1;
 }
 
-.delivery-item .item-position {
-  font-size: 12px;
-  color: #6b7280;
-  min-width: 80px;
+.item-info-section .item-mark {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
 }
 
-.delivery-item .item-weight {
-  font-size: 12px;
-  color: #374151;
-  min-width: 70px;
+.item-info-section .item-product {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Item weight section */
+.item-weight-section {
+  min-width: 60px;
   text-align: right;
+}
+
+.item-weight-section .weight-primary {
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+}
+
+/* Item resources section */
+.item-resources-section {
+  display: flex;
+  gap: 4px;
+}
+
+.item-resources-section .resource-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 5px;
+  border-radius: 4px;
+}
+
+.item-resources-section .resource-badge img {
+  width: 14px;
+  height: 14px;
+}
+
+.item-resources-section .resource-count {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+/* Item comment button */
+.item-comment-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  transition: all 0.15s;
+}
+
+.item-comment-btn:hover {
+  background: #f3f4f6;
+  color: var(--modus-primary, #0063a3);
+}
+
+/* Comment badge */
+.comment-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  font-size: 9px;
+  font-weight: 600;
+  background: var(--modus-primary, #0063a3);
+  color: white;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .delivery-item .item-menu-btn {
@@ -824,7 +899,8 @@
   transition: opacity 0.15s;
 }
 
-.delivery-item:hover .item-menu-btn {
+.delivery-item:hover .item-menu-btn,
+.delivery-item:hover .item-comment-btn {
   opacity: 1;
 }
 

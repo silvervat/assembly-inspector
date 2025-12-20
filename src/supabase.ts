@@ -549,6 +549,7 @@ export interface UnloadMethods {
   telescopic?: number; // Teleskooplaadur
   manual?: number;     // Käsitsi
   poomtostuk?: number; // Poomtõstuk
+  toojoud?: number;    // Tööjõud (monteerija)
 }
 
 // Ressursid (töötajad)

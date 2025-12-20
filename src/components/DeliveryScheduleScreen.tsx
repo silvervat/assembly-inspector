@@ -10,7 +10,7 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
-  FiTruck, FiPackage, FiLayers, FiClock
+  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -94,7 +94,8 @@ const UNLOAD_METHODS: UnloadMethodConfig[] = [
   { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1 },
   { key: 'telescopic', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
   { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1 },
-  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 2, defaultCount: 1 }
+  { key: 'poomtostuk', label: 'Poomtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 2, defaultCount: 1 },
+  { key: 'toojoud', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1 }
 ];
 
 // ============================================
@@ -518,6 +519,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const getFactory = useCallback((factoryId: string): DeliveryFactory | undefined => {
     return factories.find(f => f.id === factoryId);
   }, [factories]);
+
+  // Get comment count for item or vehicle
+  const getItemCommentCount = useCallback((itemId: string): number => {
+    return comments.filter(c => c.delivery_item_id === itemId).length;
+  }, [comments]);
+
+  const getVehicleCommentCount = useCallback((vehicleId: string): number => {
+    return comments.filter(c => c.vehicle_id === vehicleId && !c.delivery_item_id).length;
+  }, [comments]);
 
   // Stats
   const totalItems = items.length;
@@ -2369,6 +2379,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <FiPackage />
                           </button>
                           <button
+                            className="vehicle-comment-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (vehicle) {
+                                setEditingVehicle(vehicle);
+                                setVehicleUnloadMethods(vehicle.unload_methods || {});
+                                setVehicleResources(vehicle.resources || {});
+                                setVehicleStartTime(vehicle.unload_start_time || '');
+                                setVehicleDuration(vehicle.unload_duration_minutes || 0);
+                                setVehicleType(vehicle.vehicle_type || 'haagis');
+                                setVehicleNewComment('');
+                                setShowVehicleModal(true);
+                              }
+                            }}
+                            title="Kommentaarid"
+                          >
+                            <FiMessageSquare size={13} />
+                            {getVehicleCommentCount(vehicleId) > 0 && (
+                              <span className="comment-badge">{getVehicleCommentCount(vehicleId)}</span>
+                            )}
+                          </button>
+                          <button
                             className="vehicle-menu-btn"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -2467,19 +2499,61 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         onClick={(e) => e.stopPropagation()}
                                       />
                                     </div>
-                                    <span className="item-mark">{item.assembly_mark}</span>
-                                    <span className="item-product">{item.product_name || '-'}</span>
-                                    <span className="item-position">{item.cast_unit_position_code || '-'}</span>
-                                    <span className="item-weight">{weightInfo?.kg || '-'}</span>
-                                  <button
-                                    className="item-menu-btn"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setItemMenuId(itemMenuId === item.id ? null : item.id);
-                                    }}
-                                  >
-                                    <FiMoreVertical />
-                                  </button>
+
+                                    {/* Item info section - two rows */}
+                                    <div className="item-info-section">
+                                      <span className="item-mark">{item.assembly_mark}</span>
+                                      <span className="item-product">{item.product_name || '-'}</span>
+                                    </div>
+
+                                    {/* Item weight section */}
+                                    <div className="item-weight-section">
+                                      <span className="weight-primary">{weightInfo?.kg || '-'}</span>
+                                    </div>
+
+                                    {/* Item resources section */}
+                                    <div className="item-resources-section">
+                                      {item.unload_methods && UNLOAD_METHODS.map(method => {
+                                        const count = (item.unload_methods as Record<string, number>)?.[method.key];
+                                        if (!count) return null;
+                                        return (
+                                          <span
+                                            key={method.key}
+                                            className="resource-badge"
+                                            style={{ backgroundColor: method.bgColor }}
+                                            title={method.label}
+                                          >
+                                            <img src={`/icons/${method.icon}`} alt="" />
+                                            {count > 1 && <span className="resource-count">{count}</span>}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {/* Comment button */}
+                                    <button
+                                      className="item-comment-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // TODO: Open item comment modal
+                                      }}
+                                      title="Kommentaarid"
+                                    >
+                                      <FiMessageSquare size={13} />
+                                      {getItemCommentCount(item.id) > 0 && (
+                                        <span className="comment-badge">{getItemCommentCount(item.id)}</span>
+                                      )}
+                                    </button>
+
+                                    <button
+                                      className="item-menu-btn"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setItemMenuId(itemMenuId === item.id ? null : item.id);
+                                      }}
+                                    >
+                                      <FiMoreVertical />
+                                    </button>
 
                                   {/* Item menu */}
                                   {itemMenuId === item.id && (
