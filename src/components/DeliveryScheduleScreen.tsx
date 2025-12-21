@@ -4779,7 +4779,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 23: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -4920,7 +4920,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 24: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with cursor-based pagination (more reliable than offset)
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let lastId = -1;
       let page = 0;
@@ -5026,7 +5026,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 25: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -5186,7 +5186,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Step 2: Get remaining objects from Supabase with pagination
       // Use smaller page size and explicit ordering for reliable pagination
       setTestStatus('Approach 26: Loen ülejäänud detailid Supabasest...');
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
