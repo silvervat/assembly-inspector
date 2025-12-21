@@ -395,6 +395,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [importText, setImportText] = useState('');
   const [importFactoryId, setImportFactoryId] = useState<string>('');
   const [importing, setImporting] = useState(false);
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1975,6 +1976,78 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // IMPORT
   // ============================================
 
+  // Handle file import (Excel/CSV)
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = event.target?.result;
+          let guids: string[] = [];
+
+          if (file.name.endsWith('.csv')) {
+            // Parse CSV
+            const text = data as string;
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            // Skip header if it looks like a header
+            const startIdx = lines[0]?.toLowerCase().includes('guid') ? 1 : 0;
+            guids = lines.slice(startIdx).map(line => {
+              const parts = line.split(/[,;\t]/);
+              return parts[0].trim().replace(/"/g, '');
+            }).filter(g => g && g.length > 10);
+          } else {
+            // Parse Excel
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+
+            // Find GUID column
+            const headerRow = jsonData[0] || [];
+            let guidColIdx = headerRow.findIndex(h =>
+              typeof h === 'string' && (h.toLowerCase().includes('guid') || h.toLowerCase().includes('ms_guid'))
+            );
+            if (guidColIdx === -1) guidColIdx = 0; // Use first column if no GUID header found
+
+            guids = jsonData.slice(1).map(row => {
+              const val = row[guidColIdx];
+              return typeof val === 'string' ? val.trim() : '';
+            }).filter(g => g && g.length > 10);
+          }
+
+          if (guids.length === 0) {
+            setMessage('Failis ei leitud GUID-e');
+            return;
+          }
+
+          // Set the import text with GUIDs
+          setImportText(guids.join('\n'));
+          setMessage(`${guids.length} GUID-i leitud failist`);
+        } catch (err: any) {
+          console.error('File parse error:', err);
+          setMessage('Viga faili lugemisel: ' + err.message);
+        }
+      };
+
+      if (file.name.endsWith('.csv')) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsBinaryString(file);
+      }
+    } catch (err: any) {
+      console.error('File read error:', err);
+      setMessage('Viga faili avamisel: ' + err.message);
+    }
+
+    // Clear file input
+    if (importFileRef.current) {
+      importFileRef.current.value = '';
+    }
+  };
+
   const handleImport = async () => {
     if (!importText.trim()) {
       setMessage('Kleebi GUID-id tekstiväljale');
@@ -2194,7 +2267,35 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       XLSX.utils.book_append_sheet(wb, ws, 'Tarne graafik');
 
-      // Summary sheet
+      // Summary sheet - prepare vehicle list
+      const sortedVehicles = [...vehicles].sort((a, b) => {
+        if (a.scheduled_date !== b.scheduled_date) {
+          return (a.scheduled_date || '').localeCompare(b.scheduled_date || '');
+        }
+        return (a.unload_start_time || '99:99').localeCompare(b.unload_start_time || '99:99');
+      });
+
+      const vehicleRows = sortedVehicles.map(v => {
+        const vehicleItems = items.filter(i => i.vehicle_id === v.id);
+        const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
+        const resources = UNLOAD_METHODS
+          .filter(m => v.unload_methods?.[m.key])
+          .map(m => `${m.label}: ${v.unload_methods?.[m.key]}`)
+          .join(', ') || '-';
+        const durationStr = v.unload_duration_minutes ? `${(v.unload_duration_minutes / 60).toFixed(1)}h` : '-';
+
+        return [
+          v.vehicle_code,
+          v.scheduled_date || '-',
+          v.unload_start_time || '-',
+          durationStr,
+          vehicleItems.length,
+          Math.round(vehicleWeight),
+          resources,
+          VEHICLE_STATUS_CONFIG[v.status]?.label || v.status
+        ];
+      });
+
       const summaryData = [
         ['Kokkuvõte'],
         [],
@@ -2210,7 +2311,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const dateVehicles = new Set(dateItems.map(i => i.vehicle_id)).size;
           const dateWeight = dateItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
           return [date, dateVehicles, dateItems.length, Math.round(dateWeight)];
-        })
+        }),
+        [],
+        ['Veokite nimekiri'],
+        ['Veok', 'Kuupäev', 'Aeg', 'Kestus', 'Detaile', 'Kaal (kg)', 'Ressursid', 'Staatus'],
+        ...vehicleRows
       ];
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
@@ -3159,6 +3264,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             }}>
                               <FiClock /> Ajalugu
                             </button>
+                            {/* Add selected model items to this vehicle */}
+                            {selectedObjects.length > 0 && (() => {
+                              const existingGuids = new Set(items.map(i => i.guid));
+                              const newObjects = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+                              return newObjects.length > 0 ? (
+                                <button onClick={async () => {
+                                  setVehicleMenuId(null);
+                                  await addItemsToVehicle(vehicle.id, vehicle.scheduled_date);
+                                }}>
+                                  <FiPlus /> Lisa {newObjects.length} valitud
+                                </button>
+                              ) : null;
+                            })()}
                             <button
                               className="danger"
                               onClick={() => {
@@ -4629,12 +4747,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Kleebi GUID-id (üks rea kohta)</label>
+                <label>Lae fail (Excel või CSV)</label>
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileImport}
+                  style={{ marginBottom: 8 }}
+                />
+              </div>
+              <div className="form-group">
+                <label>või kleebi GUID-id (üks rea kohta)</label>
                 <textarea
                   value={importText}
                   onChange={(e) => setImportText(e.target.value)}
-                  rows={10}
-                  placeholder="Kleebi siia GUID-id Excelist..."
+                  rows={8}
+                  placeholder="Kleebi siia GUID-id..."
                 />
               </div>
               <div className="form-group">
