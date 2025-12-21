@@ -4694,8 +4694,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     setTestStatus(`Saving ${selectedObjects.length} model-selected objects...`);
     try {
+      // Deduplicate by runtimeId before saving
+      const seen = new Set<string>();
+      const uniqueObjects = selectedObjects.filter(obj => {
+        const key = `${obj.modelId}_${obj.runtimeId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
       // Build records from model selection
-      const records = selectedObjects.map(obj => ({
+      const records = uniqueObjects.map(obj => ({
         trimble_project_id: projectId,
         model_id: obj.modelId,
         object_runtime_id: obj.runtimeId,
@@ -4705,19 +4714,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         product_name: obj.productName
       }));
 
-      // Use upsert to avoid duplicates
+      // Use upsert to avoid duplicates (updates existing, inserts new)
       const { error } = await supabase
         .from('trimble_model_objects')
         .upsert(records, {
           onConflict: 'trimble_project_id,model_id,object_runtime_id',
-          ignoreDuplicates: false
+          ignoreDuplicates: true  // Skip if already exists
         });
 
       if (error) {
         console.error('Insert error:', error);
         setTestStatus(`Error: ${error.message}`);
       } else {
-        setTestStatus(`Saved ${selectedObjects.length} objects: ${selectedObjects.map(o => o.assemblyMark).join(', ')}`);
+        const marks = uniqueObjects.map(o => o.assemblyMark).slice(0, 5).join(', ');
+        const more = uniqueObjects.length > 5 ? ` (+${uniqueObjects.length - 5} veel)` : '';
+        setTestStatus(`Saved ${uniqueObjects.length} objects: ${marks}${more}`);
       }
     } catch (e: any) {
       setTestStatus(`Save error: ${e.message}`);
