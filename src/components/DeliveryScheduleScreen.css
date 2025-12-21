@@ -234,21 +234,17 @@
   position: relative;
 }
 
-.color-menu-wrapper .color-icon {
-  font-size: 14px;
-}
-
 .color-dropdown {
   position: absolute;
   top: 100%;
-  left: 0;
+  right: 0;
   z-index: 1000;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 4px 0;
-  min-width: 160px;
+  min-width: 180px;
   margin-top: 4px;
 }
 
@@ -267,6 +263,11 @@
   border-radius: 0;
 }
 
+.color-dropdown button span {
+  flex: 1;
+  text-align: left;
+}
+
 .color-dropdown button:hover {
   background: #f3f4f6;
 }
@@ -278,6 +279,7 @@
 
 .color-dropdown button svg:last-child {
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .delivery-toolbar select {
@@ -741,25 +743,28 @@
 }
 
 .date-input-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
 }
 
 .date-input-wrapper input[type="date"] {
   flex: 1;
+  padding-right: 28px;
 }
 
 .clear-date-btn {
+  position: absolute;
+  right: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 16px;
+  height: 16px;
   border: none;
   background: #ef4444;
   color: white;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -937,19 +942,25 @@
   flex-shrink: 0;
 }
 
-/* Date info section - two rows */
+/* Date info section - with optional color indicator on left */
 .date-info-section {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
   min-width: 70px;
 }
 
 .date-info-section .color-indicator {
   width: 12px;
-  height: 12px;
+  height: 36px;
   border-radius: 3px;
-  margin-bottom: 2px;
   flex-shrink: 0;
+}
+
+.date-info-section .date-text-wrapper {
+  display: flex;
+  flex-direction: column;
 }
 
 .date-info-section .date-primary {
@@ -1188,8 +1199,7 @@
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color {
-  padding: 4px;
-  margin-left: 4px;
+  border-radius: 6px;
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon {
@@ -1210,10 +1220,7 @@
   transition: all 0.15s;
 }
 
-.vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon.clickable {
-  padding: 2px;
-  margin: 0;
-}
+/* When vehicle has color, keep same padding/margin as normal */
 
 .vehicle-header .vehicle-icon.clickable:hover {
   background: rgba(59, 130, 246, 0.15);
@@ -2000,6 +2007,141 @@
 
 .form-row .form-group.half {
   flex: 0 0 calc(50% - 5px);
+}
+
+/* Date Calendar Wrapper for Add Modal */
+.date-calendar-wrapper {
+  position: relative;
+}
+
+.date-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.date-toggle-btn:hover {
+  border-color: #9ca3af;
+}
+
+.date-toggle-btn span:first-of-type {
+  flex: 1;
+  text-align: left;
+}
+
+.mini-calendar {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  margin-top: 4px;
+  padding: 10px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mini-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.mini-calendar-header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.mini-calendar-header button:hover {
+  background: #e5e7eb;
+}
+
+.mini-calendar-header span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mini-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.mini-day-name {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 4px 0;
+}
+
+.mini-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mini-day:hover {
+  background: #f3f4f6;
+}
+
+.mini-day.other-month {
+  opacity: 0.3;
+}
+
+.mini-day.selected {
+  background: var(--modus-primary, #0063a3);
+  color: white;
+}
+
+.mini-day .day-num {
+  font-size: 12px;
+}
+
+.mini-day .day-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: #22c55e;
+  color: white;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mini-day.selected .day-badge {
+  background: white;
+  color: var(--modus-primary, #0063a3);
 }
 
 .form-row input {

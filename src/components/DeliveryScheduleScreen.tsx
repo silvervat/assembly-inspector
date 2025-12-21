@@ -11,7 +11,7 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
-  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare
+  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -55,6 +55,15 @@ const PLAYBACK_SPEEDS = [
 
 // Estonian weekday names
 const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
+
+// Short day names for calendar
+const DAY_NAMES = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+
+// Estonian month names
+const MONTH_NAMES = [
+  'Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni',
+  'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'
+];
 
 // Vehicle status labels and colors - solid backgrounds with white text for better readability
 const VEHICLE_STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: string }> = {
@@ -392,6 +401,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [addModalDuration, setAddModalDuration] = useState<number>(60);
   const [addModalUnloadMethods, setAddModalUnloadMethods] = useState<UnloadMethods>({});
   const [addModalHoveredMethod, setAddModalHoveredMethod] = useState<string | null>(null);
+  // Add modal calendar
+  const [addModalCalendarExpanded, setAddModalCalendarExpanded] = useState(false);
+  const [addModalCalendarMonth, setAddModalCalendarMonth] = useState<Date>(new Date());
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -2338,7 +2350,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       });
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Tarne graafik');
+      XLSX.utils.book_append_sheet(wb, ws, 'Tarnegraafik');
 
       // Summary sheet - prepare vehicle list
       const sortedVehicles = [...vehicles].sort((a, b) => {
@@ -3080,6 +3092,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // CALENDAR RENDERING
   // ============================================
 
+  // Helper to get days for any month
+  const getDaysForMonth = (monthDate: Date) => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days: Date[] = [];
+    const startDate = new Date(firstDay);
+    const dayOfWeek = startDate.getDay();
+    const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startDate.setDate(startDate.getDate() - diff);
+    const endDate = new Date(lastDay);
+    const lastDayOfWeek = endDate.getDay();
+    const endDiff = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+    endDate.setDate(endDate.getDate() + endDiff);
+    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    for (let i = 0; i < totalDays; i++) {
+      const date = new Date(startDate);
+      date.setDate(startDate.getDate() + i);
+      days.push(date);
+    }
+    return days;
+  };
+
   const getDaysInMonth = () => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
@@ -3276,8 +3312,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   next.delete(v.id);
                                   return next;
                                 });
-                                // Set as active vehicle
-                                setActiveVehicleId(v.id);
+                                // Select vehicle items in model (don't activate edit mode)
+                                handleVehicleClick(v);
                                 // Scroll to vehicle after a small delay for DOM update
                                 setTimeout(() => {
                                   const vehicleEl = document.querySelector(`[data-vehicle-id="${v.id}"]`);
@@ -3331,7 +3367,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {sortedDates.length === 0 && !loading && (
           <div className="empty-state">
             <FiPackage size={48} />
-            <p>Tarne graafik on tühi</p>
+            <p>Tarnegraafik on tühi</p>
             <p className="hint">Vali mudelist detailid ja lisa need veokitesse</p>
           </div>
         )}
@@ -3420,8 +3456,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       style={{ backgroundColor: `rgb(${dateColors[date].r}, ${dateColors[date].g}, ${dateColors[date].b})` }}
                     />
                   )}
-                  <span className="date-primary">{isUnassignedDate ? 'MÄÄRAMATA' : formatDateShort(date)}</span>
-                  {!isUnassignedDate && <span className="date-secondary">{getDayName(date)}</span>}
+                  <div className="date-text-wrapper">
+                    <span className="date-primary">{isUnassignedDate ? 'MÄÄRAMATA' : formatDateShort(date)}</span>
+                    {!isUnassignedDate && <span className="date-secondary">{getDayName(date)}</span>}
+                  </div>
                 </div>
 
                 {/* Vehicles and week section */}
@@ -4251,7 +4289,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <button className="back-btn" onClick={onBackToMenu}>
           <FiArrowLeft />
         </button>
-        <h1>Tarne graafik</h1>
+        <h1>Tarnegraafik</h1>
         <div className="header-actions">
           <button
             className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}
@@ -4334,7 +4372,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             onMouseLeave={() => setShowColorMenu(false)}
           >
             <button className={colorMode !== 'none' ? 'active' : ''}>
-              <span className="color-icon">🎨</span> Värvi
+              <FiDroplet /> Värvi
             </button>
             {showColorMenu && (
               <div className="color-dropdown">
@@ -4342,14 +4380,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   className={colorMode === 'vehicle' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'vehicle' ? 'none' : 'vehicle')}
                 >
-                  <FiTruck /> Veokite kaupa
+                  <FiTruck /> <span>Veokite kaupa</span>
                   {colorMode === 'vehicle' && <FiCheck />}
                 </button>
                 <button
                   className={colorMode === 'date' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'date' ? 'none' : 'date')}
                 >
-                  <FiCalendar /> Kuupäevade kaupa
+                  <FiCalendar /> <span>Kuupäevade kaupa</span>
                   {colorMode === 'date' && <FiCheck />}
                 </button>
               </div>
@@ -4596,9 +4634,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               if (newObjects.length === 0) return null;
 
+              const newObjectsWeight = newObjects.reduce(
+                (sum, obj) => sum + (parseFloat(obj.castUnitWeight || '0') || 0), 0
+              );
+
               return (
                 <div className="selection-bar model-selection">
-                  <span className="selection-count">{newObjects.length} valitud</span>
+                  <span className="selection-count">{newObjects.length} valitud | {Math.round(newObjectsWeight)} kg</span>
                   <button
                     className="add-btn primary"
                     onClick={() => {
@@ -4613,9 +4655,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             })()}
 
             {/* Selected items from list */}
-            {selectedItemIds.size > 0 && (
+            {selectedItemIds.size > 0 && (() => {
+              const selectedItemsWeight = items
+                .filter(item => selectedItemIds.has(item.id))
+                .reduce((sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0);
+              return (
               <div className="selection-bar item-selection">
-                <span className="selection-count">{selectedItemIds.size} valitud</span>
+                <span className="selection-count">{selectedItemIds.size} valitud | {Math.round(selectedItemsWeight)} kg</span>
                 <button onClick={() => setShowMoveModal(true)}>
                   <FiMove /> Tõsta
                 </button>
@@ -4626,7 +4672,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <FiX /> Tühista
                 </button>
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -4635,15 +4682,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <button
             className="collapse-all-btn"
             onClick={() => {
-              // Toggle all dates and vehicles
+              // Toggle all dates (but keep vehicle item lists collapsed when expanding)
               const allDates = Object.keys(itemsByDateAndVehicle);
               const allVehicleIds = vehicles.map(v => v.id);
               const allCollapsed = allDates.every(d => collapsedDates.has(d));
 
               if (allCollapsed) {
-                // Expand all
+                // Expand all dates, but keep vehicle item lists collapsed
                 setCollapsedDates(new Set());
-                setCollapsedVehicles(new Set());
+                setCollapsedVehicles(new Set(allVehicleIds));
               } else {
                 // Collapse all
                 setCollapsedDates(new Set(allDates));
@@ -4701,11 +4748,56 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div className="modal-body">
               <div className="form-group">
                 <label>Kuupäev</label>
-                <input
-                  type="date"
-                  value={addModalDate}
-                  onChange={(e) => setAddModalDate(e.target.value)}
-                />
+                <div className="date-calendar-wrapper">
+                  <button
+                    type="button"
+                    className="date-toggle-btn"
+                    onClick={() => setAddModalCalendarExpanded(!addModalCalendarExpanded)}
+                  >
+                    <FiCalendar />
+                    <span>{formatDateDisplay(addModalDate)}</span>
+                    {addModalCalendarExpanded ? <FiChevronUp /> : <FiChevronDown />}
+                  </button>
+                  {addModalCalendarExpanded && (
+                    <div className="mini-calendar">
+                      <div className="mini-calendar-header">
+                        <button type="button" onClick={() => {
+                          const prev = new Date(addModalCalendarMonth);
+                          prev.setMonth(prev.getMonth() - 1);
+                          setAddModalCalendarMonth(prev);
+                        }}><FiChevronLeft /></button>
+                        <span>{MONTH_NAMES[addModalCalendarMonth.getMonth()]} {addModalCalendarMonth.getFullYear()}</span>
+                        <button type="button" onClick={() => {
+                          const next = new Date(addModalCalendarMonth);
+                          next.setMonth(next.getMonth() + 1);
+                          setAddModalCalendarMonth(next);
+                        }}><FiChevronRight /></button>
+                      </div>
+                      <div className="mini-calendar-grid">
+                        {DAY_NAMES.map(d => <div key={d} className="mini-day-name">{d}</div>)}
+                        {getDaysForMonth(addModalCalendarMonth).map((date, idx) => {
+                          const dateStr = formatDateForDB(date);
+                          const isCurrentMonth = date.getMonth() === addModalCalendarMonth.getMonth();
+                          const isSelected = dateStr === addModalDate;
+                          const vehicleCount = vehicles.filter(v => v.scheduled_date === dateStr).length;
+                          return (
+                            <div
+                              key={idx}
+                              className={`mini-day ${!isCurrentMonth ? 'other-month' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-vehicles' : ''}`}
+                              onClick={() => {
+                                setAddModalDate(dateStr);
+                                setAddModalCalendarExpanded(false);
+                              }}
+                            >
+                              <span className="day-num">{date.getDate()}</span>
+                              {vehicleCount > 0 && <span className="day-badge">{vehicleCount}</span>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="form-group">
                 <label>Tehas *</label>
@@ -4740,11 +4832,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         disabled={!addModalFactoryId}
                       >
                         <option value="">Vali olemasolev veok...</option>
-                        {dateVehicles.map(v => (
+                        {dateVehicles.map(v => {
+                          const vehicleItems = items.filter(i => i.vehicle_id === v.id);
+                          const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
+                          return (
                           <option key={v.id} value={v.id}>
-                            {v.vehicle_code} ({v.item_count} tk)
+                            {v.vehicle_code} ({vehicleItems.length} tk | {Math.round(vehicleWeight)} kg)
                           </option>
-                        ))}
+                          );
+                        })}
                       </select>
                       <span className="or-divider">või</span>
                       <label className="new-vehicle-checkbox">

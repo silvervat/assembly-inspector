@@ -511,7 +511,7 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('inspection-photos', 'ins
 */
 
 // ============================================
-// TARNE GRAAFIK (Delivery Schedule v3.0.0)
+// TARNEGRAAFIK (Delivery Schedule v3.0.0)
 // ============================================
 
 // Tehased

@@ -112,7 +112,7 @@ export default function InspectorScreen({
       inspection_type: 'Inspektsioon',
       installations: 'Paigaldamised',
       schedule: 'Paigaldusgraafik',
-      delivery_schedule: 'Tarne graafik'
+      delivery_schedule: 'Tarnegraafik'
     };
     return titles[mode] || mode;
   };
