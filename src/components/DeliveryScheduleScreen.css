@@ -382,6 +382,17 @@
   font-weight: 600;
 }
 
+/* Highlight dates that contain items matching the selected model objects */
+.calendar-day.has-selected-item {
+  background: #fef3c7 !important;
+  border: 2px solid #f59e0b !important;
+  border-radius: 6px;
+}
+
+.calendar-day.has-selected-item .day-count {
+  background: #f59e0b;
+}
+
 .calendar-day .day-number {
   font-size: 11px;
 }
