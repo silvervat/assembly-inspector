@@ -4533,7 +4533,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       const modelId = entitiesResult[0].modelId;
       const entities = entitiesResult[0].entityForModel || [];
-      const allIds: number[] = entities.map((e: any) => e.id || e);
+
+      // Extract IDs properly - entities can be objects with 'id' property or just numbers
+      const allIds: number[] = [];
+      for (const e of entities) {
+        if (typeof e === 'number') {
+          allIds.push(e);
+        } else if (typeof e === 'object' && e !== null && typeof e.id === 'number') {
+          allIds.push(e.id);
+        }
+      }
+
+      if (allIds.length === 0) {
+        setTestStatus('No valid IDs found in entities');
+        console.log('Entity sample:', entities.slice(0, 3));
+        return;
+      }
 
       setTestStatus(`Found ${allIds.length} objects. Saving to Supabase...`);
 
@@ -4572,6 +4587,48 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } catch (e: any) {
       setTestStatus(`Scan error: ${e.message}`);
       console.error('Scan error:', e);
+    }
+  };
+
+  // Save only schedule items to Supabase (faster alternative)
+  const saveScheduleItemsToSupabase = async () => {
+    setTestStatus('Saving schedule items to Supabase...');
+    try {
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id);
+
+      if (validItems.length === 0) {
+        setTestStatus('No valid items in schedule');
+        return;
+      }
+
+      // Delete existing records for this project
+      await supabase
+        .from('trimble_model_objects')
+        .delete()
+        .eq('trimble_project_id', projectId);
+
+      // Insert schedule items
+      const records = validItems.map(item => ({
+        trimble_project_id: projectId,
+        model_id: item.model_id!,
+        object_runtime_id: item.object_runtime_id!,
+        assembly_mark: item.assembly_mark,
+        product_name: item.product_name
+      }));
+
+      const { error } = await supabase
+        .from('trimble_model_objects')
+        .insert(records);
+
+      if (error) {
+        console.error('Insert error:', error);
+        setTestStatus(`Error: ${error.message}`);
+      } else {
+        setTestStatus(`Saved ${validItems.length} schedule items to Supabase!`);
+      }
+    } catch (e: any) {
+      setTestStatus(`Save error: ${e.message}`);
+      console.error('Save error:', e);
     }
   };
 
@@ -8115,13 +8172,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <h3 style={{ marginTop: '20px' }}>Supabase põhine värvimine</h3>
                 <p className="test-description">Salvesta kõik objektid Supabase'i ja kasuta värvimiseks</p>
 
-                <button onClick={scanAndSaveModelObjects} className="test-btn highlight" style={{ borderColor: '#8b5cf6', marginBottom: '12px' }}>
-                  <span className="test-btn-num">💾</span>
-                  <div className="test-btn-content">
-                    <strong>Scan & Save to Supabase</strong>
-                    <span>Skaneerib kõik mudeli objektid ja salvestab Supabase'i</span>
-                  </div>
-                </button>
+                <div className="test-buttons" style={{ marginBottom: '12px' }}>
+                  <button onClick={scanAndSaveModelObjects} className="test-btn highlight" style={{ borderColor: '#8b5cf6' }}>
+                    <span className="test-btn-num">💾</span>
+                    <div className="test-btn-content">
+                      <strong>Scan All → Supabase</strong>
+                      <span>Skaneerib KÕIK mudeli objektid (~183k)</span>
+                    </div>
+                  </button>
+
+                  <button onClick={saveScheduleItemsToSupabase} className="test-btn highlight" style={{ borderColor: '#10b981' }}>
+                    <span className="test-btn-num">📋</span>
+                    <div className="test-btn-content">
+                      <strong>Schedule → Supabase</strong>
+                      <span>Salvestab ainult graafiku detailid (kiire!)</span>
+                    </div>
+                  </button>
+                </div>
 
                 <div className="test-buttons">
                   <button onClick={testApproach23} className="test-btn highlight" style={{ borderColor: '#10b981' }}>
