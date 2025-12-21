@@ -2478,7 +2478,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           </button>
         </div>
 
-        {!calendarCollapsed && (
+        {!calendarCollapsed && (() => {
+          // Find dates that contain selected model objects
+          const selectedGuids = new Set(selectedObjects.map(obj => obj.guid).filter(Boolean));
+          const datesWithSelectedItems = new Set<string>();
+          if (selectedGuids.size > 0) {
+            items.forEach(item => {
+              if (selectedGuids.has(item.guid)) {
+                const vehicle = vehicles.find(v => v.id === item.vehicle_id);
+                if (vehicle?.scheduled_date) {
+                  datesWithSelectedItems.add(vehicle.scheduled_date);
+                }
+              }
+            });
+          }
+
+          return (
           <div className="calendar-grid with-weeks">
             <div className="calendar-week-header"></div>
             {dayNames.map(day => (
@@ -2492,6 +2507,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               const vehicleCount = getVehicleCountByDate(dateStr);
               const isStartOfWeek = idx % 7 === 0;
               const weekNum = getISOWeek(date);
+              const hasSelectedItem = datesWithSelectedItems.has(dateStr);
 
               return (
                 <span key={idx} style={{ display: 'contents' }}>
@@ -2501,7 +2517,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   )}
                   <div
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''}`}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem ? 'has-selected-item' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateStr);
 
@@ -2531,7 +2547,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               );
             })}
           </div>
-        )}
+          );
+        })()}
       </div>
     );
   };
@@ -2765,32 +2782,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               )}
                             </div>
 
-                            {/* Stats section */}
-                            <div className="vehicle-stats-section">
-                              <span className="stats-primary">{vehicleItems.length} detaili</span>
-                              <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
-                            </div>
-
-                            {/* Unload methods section */}
-                            <div className="vehicle-resources-section">
-                              {UNLOAD_METHODS.map(method => {
-                                const count = vehicle?.unload_methods?.[method.key];
-                                if (!count) return null;
-                                return (
-                                  <span
-                                    key={method.key}
-                                    className="method-badge"
-                                    style={{ backgroundColor: method.bgColor }}
-                                    title={method.label}
-                                  >
-                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
-                                    <span className="method-count">{count}</span>
-                                  </span>
-                                );
-                              })}
-                            </div>
-
-                            {/* Time section - RIGHT side */}
+                            {/* Time section - after vehicle code */}
                             <div className="vehicle-time-section">
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
                                 <select
@@ -2851,6 +2843,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 >{vehicle?.unload_duration_minutes ? formatDuration(vehicle.unload_duration_minutes) : '-'}</span>
                               )}
                             </div>
+
+                            {/* Stats section */}
+                            <div className="vehicle-stats-section">
+                              <span className="stats-primary">{vehicleItems.length} detaili</span>
+                              <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
+                            </div>
+
+                            {/* Unload methods section */}
+                            <div className="vehicle-resources-section">
+                              {UNLOAD_METHODS.map(method => {
+                                const count = vehicle?.unload_methods?.[method.key];
+                                if (!count) return null;
+                                return (
+                                  <span
+                                    key={method.key}
+                                    className="method-badge"
+                                    style={{ backgroundColor: method.bgColor }}
+                                    title={method.label}
+                                  >
+                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
+                                    <span className="method-count">{count}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+
                           <button
                             className="vehicle-comment-btn"
                             onClick={(e) => {
