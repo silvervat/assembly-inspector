@@ -4053,6 +4053,201 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Approach 16: RED FIRST, then gray
+  const testApproach16 = async () => {
+    setTestStatus('Approach 16: RED first, then gray...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Get entities
+      const entitiesResult = await viewer.getEntities();
+      if (!entitiesResult?.length) {
+        setTestStatus('Approach 16: No entities');
+        return;
+      }
+
+      const firstModel = entitiesResult[0];
+      const modelId = firstModel.modelId;
+      const entitiesArray = firstModel.entityForModel || [];
+
+      let allIds: number[] = entitiesArray.map((e: any) =>
+        e.objectRuntimeId ?? e.runtimeId ?? e.id ?? e
+      ).filter((id: any) => typeof id === 'number');
+
+      if (allIds.length === 0 && entitiesArray.length > 0 && typeof entitiesArray[0] === 'number') {
+        allIds = [...entitiesArray];
+      }
+
+      // Get selection
+      const selection = await api.viewer.getSelection();
+      const selectedIds = new Set<number>();
+      if (selection?.length) {
+        for (const sel of selection) {
+          sel.objectRuntimeIds?.forEach((id: number) => selectedIds.add(id));
+        }
+      }
+
+      const grayIds = allIds.filter(id => !selectedIds.has(id));
+      const redIds = Array.from(selectedIds);
+
+      console.log(`Approach 16: Total=${allIds.length}, Gray=${grayIds.length}, Red=${redIds.length}`);
+
+      // Step 1: Reset
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Step 2: Color RED FIRST
+      if (redIds.length > 0) {
+        setTestStatus(`Approach 16: Coloring ${redIds.length} red first...`);
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      // Step 3: Color gray (after red)
+      if (grayIds.length > 0) {
+        setTestStatus(`Approach 16: Coloring ${grayIds.length} gray...`);
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 16: Done! Red=${redIds.length}, Gray=${grayIds.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 16: Error - ${e.message}`);
+      console.error('Approach 16 error:', e);
+    }
+  };
+
+  // Approach 17: Use setOpacity for ghosting instead of color
+  const testApproach17 = async () => {
+    setTestStatus('Approach 17: Using setOpacity for others...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Get entities
+      const entitiesResult = await viewer.getEntities();
+      if (!entitiesResult?.length) {
+        setTestStatus('Approach 17: No entities');
+        return;
+      }
+
+      const firstModel = entitiesResult[0];
+      const modelId = firstModel.modelId;
+      const entitiesArray = firstModel.entityForModel || [];
+
+      let allIds: number[] = entitiesArray.map((e: any) =>
+        e.objectRuntimeId ?? e.runtimeId ?? e.id ?? e
+      ).filter((id: any) => typeof id === 'number');
+
+      if (allIds.length === 0 && typeof entitiesArray[0] === 'number') {
+        allIds = [...entitiesArray];
+      }
+
+      // Get selection
+      const selection = await api.viewer.getSelection();
+      const selectedIds = new Set<number>();
+      if (selection?.length) {
+        for (const sel of selection) {
+          sel.objectRuntimeIds?.forEach((id: number) => selectedIds.add(id));
+        }
+      }
+
+      const grayIds = allIds.filter(id => !selectedIds.has(id));
+      const redIds = Array.from(selectedIds);
+
+      // Reset
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Try setOpacity for gray items (ghosting)
+      if (viewer.setOpacity && grayIds.length > 0) {
+        setTestStatus(`Approach 17: Setting opacity for ${grayIds.length} objects...`);
+        await viewer.setOpacity(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          0.2
+        );
+      }
+
+      // Color selected red
+      if (redIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 17: Done! Opacity set for ${grayIds.length}, Red=${redIds.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 17: Error - ${e.message}`);
+      console.error('Approach 17 error:', e);
+    }
+  };
+
+  // Approach 18: Batch gray coloring in chunks
+  const testApproach18 = async () => {
+    setTestStatus('Approach 18: Batched gray coloring...');
+    try {
+      const viewer = api.viewer as any;
+
+      const entitiesResult = await viewer.getEntities();
+      if (!entitiesResult?.length) {
+        setTestStatus('Approach 18: No entities');
+        return;
+      }
+
+      const firstModel = entitiesResult[0];
+      const modelId = firstModel.modelId;
+      const entitiesArray = firstModel.entityForModel || [];
+
+      let allIds: number[] = entitiesArray.map((e: any) =>
+        e.objectRuntimeId ?? e.runtimeId ?? e.id ?? e
+      ).filter((id: any) => typeof id === 'number');
+
+      if (allIds.length === 0 && typeof entitiesArray[0] === 'number') {
+        allIds = [...entitiesArray];
+      }
+
+      const selection = await api.viewer.getSelection();
+      const selectedIds = new Set<number>();
+      if (selection?.length) {
+        for (const sel of selection) {
+          sel.objectRuntimeIds?.forEach((id: number) => selectedIds.add(id));
+        }
+      }
+
+      const grayIds = allIds.filter(id => !selectedIds.has(id));
+      const redIds = Array.from(selectedIds);
+
+      // Reset
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Color red first
+      if (redIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      // Color gray in batches of 10000
+      const BATCH_SIZE = 10000;
+      for (let i = 0; i < grayIds.length; i += BATCH_SIZE) {
+        const batch = grayIds.slice(i, i + BATCH_SIZE);
+        setTestStatus(`Approach 18: Gray batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(grayIds.length/BATCH_SIZE)}...`);
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 18: Done! Red=${redIds.length}, Gray=${grayIds.length} (batched)`);
+    } catch (e: any) {
+      setTestStatus(`Approach 18: Error - ${e.message}`);
+      console.error('Approach 18 error:', e);
+    }
+  };
+
   // Reset colors
   const testReset = async () => {
     setTestStatus('Resetting colors...');
@@ -7299,6 +7494,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>⭐ getEntities()</strong>
                       <span>Kasutab getEntities(modelId) kõigi objektide saamiseks</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach16} className="test-btn highlight">
+                    <span className="test-btn-num">16</span>
+                    <div className="test-btn-content">
+                      <strong>🔴 RED first → then Gray</strong>
+                      <span>Värvib esmalt valitud punaseks, SIIS teised halliks</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach17} className="test-btn highlight">
+                    <span className="test-btn-num">17</span>
+                    <div className="test-btn-content">
+                      <strong>👻 setOpacity (Ghosting)</strong>
+                      <span>Kasutab setOpacity() teiste läbipaistvaks tegemiseks</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach18} className="test-btn highlight">
+                    <span className="test-btn-num">18</span>
+                    <div className="test-btn-content">
+                      <strong>📦 Batched Gray</strong>
+                      <span>Red first, siis hallid 10000 kaupa partiidena</span>
                     </div>
                   </button>
                 </div>
