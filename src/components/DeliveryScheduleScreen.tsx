@@ -3060,7 +3060,71 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       setColorMode(mode);
+      setMessage('Värvin... Loen Supabasest...');
 
+      // Step 1: Fetch ALL objects from Supabase with pagination
+      const PAGE_SIZE = 5000;
+      const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let lastId = -1;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .gt('object_runtime_id', lastId)
+          .order('object_runtime_id', { ascending: true })
+          .limit(PAGE_SIZE);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          setMessage('Viga Supabase lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        allModelObjects.push(...data);
+        lastId = data[data.length - 1].object_runtime_id;
+
+        setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
+
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      console.log(`Total fetched for coloring: ${allModelObjects.length}`);
+
+      // Step 2: Get schedule item IDs
+      const scheduleRuntimeIds = new Set(
+        items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
+      );
+
+      // Step 3: Color non-schedule items WHITE first
+      const whiteByModel: Record<string, number[]> = {};
+      for (const obj of allModelObjects) {
+        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
+          if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
+          whiteByModel[obj.model_id].push(obj.object_runtime_id);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+        }
+      }
+
+      // Step 4: Color schedule items by vehicle or date
       if (mode === 'vehicle') {
         // Generate colors for each vehicle
         const vehicleIds = vehicles.map(v => v.id);
@@ -3069,6 +3133,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setDateColors({});
 
         // Apply colors to items in model
+        let coloredCount = 0;
         for (const vehicle of vehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
           if (vehicleItems.length === 0) continue;
@@ -3076,63 +3141,65 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const color = colors[vehicle.id];
           if (!color) continue;
 
-          // Get runtime IDs for this vehicle's items
-          const runtimeIds = vehicleItems
-            .filter(i => i.object_runtime_id)
-            .map(i => i.object_runtime_id as number);
+          // Group by model
+          const byModel: Record<string, number[]> = {};
+          for (const item of vehicleItems) {
+            if (item.model_id && item.object_runtime_id) {
+              if (!byModel[item.model_id]) byModel[item.model_id] = [];
+              byModel[item.model_id].push(item.object_runtime_id);
+            }
+          }
 
-          if (runtimeIds.length === 0) continue;
-
-          const modelId = vehicleItems[0]?.model_id;
-          if (!modelId) continue;
-
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-          );
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin veokid... ${coloredCount}/${scheduleRuntimeIds.size}`);
+          }
         }
       } else if (mode === 'date') {
         // Generate colors for each date
-        const dates = [...new Set(items.map(i => i.scheduled_date).filter((d): d is string => d !== null))].sort();
+        const dates = [...new Set(
+          vehicles.map(v => v.scheduled_date).filter((d): d is string => d !== null)
+        )].sort();
         const colors = generateColorsForKeys(dates);
         setDateColors(colors);
         setVehicleColors({});
 
-        // Apply colors to items in model
+        // Apply colors by date
+        let coloredCount = 0;
         for (const date of dates) {
-          const dateItems = items.filter(i => i.scheduled_date === date);
-          if (dateItems.length === 0) continue;
-
+          const dateVehicles = vehicles.filter(v => v.scheduled_date === date);
           const color = colors[date];
           if (!color) continue;
 
-          // Get runtime IDs for this date's items
-          const runtimeIds = dateItems
-            .filter(i => i.object_runtime_id)
-            .map(i => i.object_runtime_id as number);
+          for (const vehicle of dateVehicles) {
+            const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
 
-          if (runtimeIds.length === 0) continue;
+            // Group by model
+            const byModel: Record<string, number[]> = {};
+            for (const item of vehicleItems) {
+              if (item.model_id && item.object_runtime_id) {
+                if (!byModel[item.model_id]) byModel[item.model_id] = [];
+                byModel[item.model_id].push(item.object_runtime_id);
+              }
+            }
 
-          // Group by model
-          const modelIds = [...new Set(dateItems.map(i => i.model_id).filter((m): m is string => !!m))];
-
-          for (const modelId of modelIds) {
-            const modelItems = dateItems.filter(i => i.model_id === modelId);
-            const modelRuntimeIds = modelItems
-              .filter(i => i.object_runtime_id)
-              .map(i => i.object_runtime_id as number);
-
-            if (modelRuntimeIds.length === 0) continue;
-
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: modelRuntimeIds }] },
-              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-            );
+            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+              );
+              coloredCount += runtimeIds.length;
+              setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleRuntimeIds.size}`);
+            }
           }
         }
       }
 
-      setMessage(mode === 'vehicle' ? 'Värvitud veokite kaupa' : 'Värvitud kuupäevade kaupa');
+      setMessage(`✓ Värvitud! Valged=${whiteCount}, Värvilised=${scheduleRuntimeIds.size}`);
     } catch (e) {
       console.error('Error applying color mode:', e);
       setMessage('Viga värvimisel');
