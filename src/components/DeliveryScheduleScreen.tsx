@@ -444,9 +444,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [showFactoryModal, setShowFactoryModal] = useState(false);
   const [newFactoryName, setNewFactoryName] = useState('');
   const [newFactoryCode, setNewFactoryCode] = useState('');
+  const [newFactorySeparator, setNewFactorySeparator] = useState('.');
   const [editingFactoryId, setEditingFactoryId] = useState<string | null>(null);
   const [editFactoryName, setEditFactoryName] = useState('');
   const [editFactoryCode, setEditFactoryCode] = useState('');
+  const [editFactorySeparator, setEditFactorySeparator] = useState('.');
 
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
@@ -1094,6 +1096,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           trimble_project_id: projectId,
           factory_name: newFactoryName.trim(),
           factory_code: newFactoryCode.trim().toUpperCase(),
+          vehicle_separator: newFactorySeparator,
           sort_order: factories.length,
           created_by: tcUserEmail
         });
@@ -1103,6 +1106,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage('Tehas lisatud');
       setNewFactoryName('');
       setNewFactoryCode('');
+      setNewFactorySeparator('.');
       await loadFactories();
     } catch (e: any) {
       console.error('Error creating factory:', e);
@@ -1120,20 +1124,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     setSaving(true);
     try {
+      const oldFactory = factories.find(f => f.id === editingFactoryId);
+      const newCode = editFactoryCode.trim().toUpperCase();
+      const newSeparator = editFactorySeparator;
+
+      // Update factory
       const { error } = await supabase
         .from('trimble_delivery_factories')
         .update({
           factory_name: editFactoryName.trim(),
-          factory_code: editFactoryCode.trim().toUpperCase()
+          factory_code: newCode,
+          vehicle_separator: newSeparator
         })
         .eq('id', editingFactoryId);
 
       if (error) throw error;
 
+      // Update all vehicle codes if factory code or separator changed
+      if (oldFactory && (oldFactory.factory_code !== newCode || (oldFactory.vehicle_separator || '') !== newSeparator)) {
+        const factoryVehicles = vehicles.filter(v => v.factory_id === editingFactoryId);
+
+        for (const vehicle of factoryVehicles) {
+          const newVehicleCode = `${newCode}${newSeparator}${vehicle.vehicle_number}`;
+          await supabase
+            .from('trimble_delivery_vehicles')
+            .update({ vehicle_code: newVehicleCode })
+            .eq('id', vehicle.id);
+        }
+
+        await loadVehicles();
+      }
+
       setMessage('Tehas uuendatud');
       setEditingFactoryId(null);
       setEditFactoryName('');
       setEditFactoryCode('');
+      setEditFactorySeparator('.');
       await loadFactories();
     } catch (e: any) {
       console.error('Error updating factory:', e);
@@ -1178,12 +1204,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setEditingFactoryId(factory.id);
     setEditFactoryName(factory.factory_name);
     setEditFactoryCode(factory.factory_code);
+    setEditFactorySeparator(factory.vehicle_separator || '.');
   };
 
   const cancelEditFactory = () => {
     setEditingFactoryId(null);
     setEditFactoryName('');
     setEditFactoryCode('');
+    setEditFactorySeparator('.');
   };
 
   // ============================================
@@ -1203,13 +1231,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       let vehicleCode = customCode;
       let vehicleNumber = 1;
+      const separator = factory.vehicle_separator || '';
 
       if (!vehicleCode) {
         // Get max vehicle number for this factory across ALL dates (not just current date)
         const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
         const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
         vehicleNumber = maxNumber + 1;
-        vehicleCode = `${factory.factory_code}${vehicleNumber}`;
+        vehicleCode = `${factory.factory_code}${separator}${vehicleNumber}`;
       } else if (customCode) {
         // Extract number from custom code if possible
         const numMatch = customCode.match(/\d+$/);
@@ -2708,6 +2737,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // SELECT DATE ITEMS IN MODEL
+  // ============================================
+
+  const selectDateItemsInModel = async (date: string) => {
+    // Get all items for this date
+    const dateVehicles = itemsByDateAndVehicle[date] || {};
+    const dateItems = Object.values(dateVehicles).flat();
+
+    if (dateItems.length === 0) return;
+
+    // Group by model_id
+    const byModel: Record<string, number[]> = {};
+    for (const item of dateItems) {
+      if (item.model_id && item.object_runtime_id) {
+        if (!byModel[item.model_id]) {
+          byModel[item.model_id] = [];
+        }
+        byModel[item.model_id].push(item.object_runtime_id);
+      }
+    }
+
+    // Select in viewer
+    const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
+      modelId,
+      objectRuntimeIds
+    }));
+
+    if (modelObjectIds.length > 0) {
+      try {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+      } catch (e) {
+        console.error('Error selecting date items:', e);
+      }
+    }
+  };
+
+  // ============================================
   // RENDER
   // ============================================
 
@@ -2848,11 +2915,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         setAddModalComment('');
                         setShowAddModal(true);
                       } else {
-                        // Just scroll to date group
+                        // Scroll to date group
                         const element = document.getElementById(`date-group-${dateStr}`);
                         if (element) {
                           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
+
+                        // Expand date group (but not vehicles)
+                        setCollapsedDates(prev => {
+                          const next = new Set(prev);
+                          next.delete(dateStr);
+                          return next;
+                        });
+
+                        // Select all items for this date in the model
+                        selectDateItemsInModel(dateStr);
                       }
                     }}
                   >
@@ -2958,8 +3035,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                 </span>
 
-                {/* Date section */}
-                <div className="date-info-section">
+                {/* Date section - clickable to select items in model */}
+                <div
+                  className="date-info-section clickable"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectDateItemsInModel(date);
+                  }}
+                  title="Märgista mudelis"
+                >
                   <span className="date-primary">{formatDateShort(date)}</span>
                   <span className="date-secondary">{getDayName(date)}</span>
                 </div>
@@ -2993,38 +3077,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 >
                   <FiMoreVertical />
                 </button>
-              </div>
 
-              {/* Date menu */}
-              {dateMenuId === date && (
-                <div className={`context-menu date-context-menu ${menuFlipUp ? 'flip-up' : ''}`}>
-                  <button onClick={() => {
-                    setAddModalDate(date);
-                    setShowAddModal(true);
-                    setDateMenuId(null);
-                  }}>
-                    <FiPlus /> Lisa veok
-                  </button>
-                  <button onClick={() => {
-                    exportDateToExcel(date);
-                    setDateMenuId(null);
-                  }}>
-                    <FiDownload /> Ekspordi Excel
-                  </button>
-                  <button onClick={() => {
-                    // Copy all marks
-                    const marks = Object.values(dateVehicles)
-                      .flat()
-                      .map(i => i.assembly_mark)
-                      .join('\n');
-                    navigator.clipboard.writeText(marks);
-                    setMessage('Märgid kopeeritud');
-                    setDateMenuId(null);
-                  }}>
-                    <FiCopy /> Kopeeri märgid
-                  </button>
-                </div>
-              )}
+                {/* Date menu - inside date-header for correct positioning */}
+                {dateMenuId === date && (
+                  <div className={`context-menu date-context-menu ${menuFlipUp ? 'flip-up' : ''}`}>
+                    <button onClick={() => {
+                      setAddModalDate(date);
+                      setShowAddModal(true);
+                      setDateMenuId(null);
+                    }}>
+                      <FiPlus /> Lisa veok
+                    </button>
+                    <button onClick={() => {
+                      exportDateToExcel(date);
+                      setDateMenuId(null);
+                    }}>
+                      <FiDownload /> Ekspordi Excel
+                    </button>
+                    <button onClick={() => {
+                      // Copy all marks
+                      const marks = Object.values(dateVehicles)
+                        .flat()
+                        .map(i => i.assembly_mark)
+                        .join('\n');
+                      navigator.clipboard.writeText(marks);
+                      setMessage('Märgid kopeeritud');
+                      setDateMenuId(null);
+                    }}>
+                      <FiCopy /> Kopeeri märgid
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Vehicles in this date */}
               {!isCollapsed && (
@@ -3056,7 +3140,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''} ${!isVehicleCollapsed ? 'expanded' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
@@ -3202,52 +3286,55 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
-                            {/* Unload methods section */}
-                            <div className="vehicle-resources-section">
-                              {UNLOAD_METHODS.map(method => {
-                                const count = vehicle?.unload_methods?.[method.key];
-                                if (!count) return null;
-                                return (
-                                  <div
-                                    key={method.key}
-                                    className="vehicle-method-badge"
-                                    style={{ backgroundColor: method.activeBgColor }}
-                                    title={`${method.label}: ${count}`}
-                                  >
-                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
-                                    {count > 1 && (
-                                      <span className="badge-count">{count}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                            {/* Actions row - resources and buttons */}
+                            <div className="vehicle-actions-row">
+                              {/* Unload methods section */}
+                              <div className="vehicle-resources-section">
+                                {UNLOAD_METHODS.map(method => {
+                                  const count = vehicle?.unload_methods?.[method.key];
+                                  if (!count) return null;
+                                  return (
+                                    <div
+                                      key={method.key}
+                                      className="vehicle-method-badge"
+                                      style={{ backgroundColor: method.activeBgColor }}
+                                      title={`${method.label}: ${count}`}
+                                    >
+                                      <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
+                                      {count > 1 && (
+                                        <span className="badge-count">{count}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
 
-                          <button
-                            className="vehicle-comment-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (vehicle) {
-                                openCommentModal('vehicle', vehicle.id);
-                              }
-                            }}
-                            title="Kommentaarid"
-                          >
-                            <FiMessageSquare size={13} />
-                            {getVehicleCommentCount(vehicleId) > 0 && (
-                              <span className="comment-badge">{getVehicleCommentCount(vehicleId)}</span>
-                            )}
-                          </button>
-                          <button
-                            className="vehicle-menu-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVehicleMenuId(vehicleMenuId === vehicleId ? null : vehicleId);
-                            }}
-                          >
-                            <FiMoreVertical />
-                          </button>
-                        </div>
+                              <button
+                                className="vehicle-comment-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (vehicle) {
+                                    openCommentModal('vehicle', vehicle.id);
+                                  }
+                                }}
+                                title="Kommentaarid"
+                              >
+                                <FiMessageSquare size={13} />
+                                {getVehicleCommentCount(vehicleId) > 0 && (
+                                  <span className="comment-badge">{getVehicleCommentCount(vehicleId)}</span>
+                                )}
+                              </button>
+                              <button
+                                className="vehicle-menu-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVehicleMenuId(vehicleMenuId === vehicleId ? null : vehicleId);
+                                }}
+                              >
+                                <FiMoreVertical />
+                              </button>
+                            </div>
+                          </div>
 
                         {/* Vehicle menu */}
                         {vehicleMenuId === vehicleId && vehicle && (
@@ -4244,10 +4331,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           if (!factory) return '';
                           const factoryVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId);
                           const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
-                          return `${factory.factory_code}${maxNumber + 1}`;
+                          const sep = factory.vehicle_separator || '';
+                          return `${factory.factory_code}${sep}${maxNumber + 1}`;
                         })()}
                         onChange={(e) => setAddModalCustomCode(e.target.value.toUpperCase())}
-                        placeholder="Nt: OBO1"
+                        placeholder="Nt: OBO.1"
                         className="vehicle-code-input"
                       />
                     </div>
@@ -4396,7 +4484,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       if (factory) {
                         const factoryVehicles = vehicles.filter(v => v.factory_id === addModalFactoryId);
                         const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
-                        customCode = `${factory.factory_code}${maxNumber + 1}`;
+                        const sep = factory.vehicle_separator || '';
+                        customCode = `${factory.factory_code}${sep}${maxNumber + 1}`;
                       }
                     }
 
@@ -4906,6 +4995,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           maxLength={5}
                           className="factory-edit-input factory-code-input"
                         />
+                        <select
+                          value={editFactorySeparator}
+                          onChange={(e) => setEditFactorySeparator(e.target.value)}
+                          className="factory-separator-select"
+                          title="Eraldaja"
+                        >
+                          <option value="">tühi</option>
+                          <option value=".">.</option>
+                          <option value=",">,</option>
+                          <option value="|">|</option>
+                        </select>
+                        <span className="separator-preview" title="Näidis">{editFactoryCode}{editFactorySeparator}1</span>
                         <button className="icon-btn save-btn" onClick={updateFactory} disabled={saving}>
                           <FiCheck />
                         </button>
@@ -4916,7 +5017,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     ) : (
                       <>
                         <span className="factory-name">{f.factory_name}</span>
-                        <span className="factory-code">({f.factory_code})</span>
+                        <span className="factory-code">({f.factory_code}{f.vehicle_separator || ''}#)</span>
                         <div className="factory-actions">
                           <button className="icon-btn" onClick={() => startEditFactory(f)} title="Muuda">
                             <FiEdit2 />
@@ -4946,6 +5047,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     onChange={(e) => setNewFactoryCode(e.target.value.toUpperCase())}
                     maxLength={5}
                   />
+                  <select
+                    value={newFactorySeparator}
+                    onChange={(e) => setNewFactorySeparator(e.target.value)}
+                    className="factory-separator-select"
+                    title="Eraldaja"
+                  >
+                    <option value="">tühi</option>
+                    <option value=".">.</option>
+                    <option value=",">,</option>
+                    <option value="|">|</option>
+                  </select>
                   <button
                     className="add-btn"
                     onClick={createFactory}
@@ -4954,6 +5066,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <FiPlus />
                   </button>
                 </div>
+                {newFactoryCode && (
+                  <div className="separator-preview-row">
+                    Näidis: <span className="separator-preview">{newFactoryCode}{newFactorySeparator}1</span>
+                  </div>
+                )}
               </div>
             </div>
             <div className="modal-footer">

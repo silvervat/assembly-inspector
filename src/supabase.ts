@@ -520,6 +520,7 @@ export interface DeliveryFactory {
   trimble_project_id: string;        // Trimble Connect project ID
   factory_name: string;              // "Obornik", "Solid"
   factory_code: string;              // "OPO", "SOL" (lühend veokite jaoks)
+  vehicle_separator: string;         // Eraldaja koodi ja numbri vahel: "." | "," | "|" | ""
   is_active: boolean;
   sort_order: number;
   created_at: string;
