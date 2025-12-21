@@ -1146,14 +1146,37 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     };
   }, [api]);
 
-  // Clear model selection when schedule items are selected
+  // Sync schedule selection to model viewer
   useEffect(() => {
     if (selectedItemIds.size > 0) {
       setSelectedObjects([]);
-      // Also clear viewer selection to avoid visual confusion
+
+      // Select these items in the viewer
+      const selectedItems = items.filter(item => selectedItemIds.has(item.id));
+      const byModel: Record<string, number[]> = {};
+
+      for (const item of selectedItems) {
+        if (item.model_id && item.object_runtime_id) {
+          if (!byModel[item.model_id]) byModel[item.model_id] = [];
+          byModel[item.model_id].push(item.object_runtime_id);
+        }
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
+        modelId,
+        objectRuntimeIds
+      }));
+
+      if (modelObjectIds.length > 0) {
+        api.viewer.setSelection({ modelObjectIds }, 'set').catch(() => {});
+      } else {
+        api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
+      }
+    } else {
+      // Clear viewer selection when nothing is selected in schedule
       api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
     }
-  }, [selectedItemIds, api]);
+  }, [selectedItemIds, api, items]);
 
   // ============================================
   // FACTORY OPERATIONS
