@@ -2542,11 +2542,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const dateItemCount = Object.values(dateVehicles).reduce((sum, vItems) => sum + vItems.length, 0);
           const isCollapsed = collapsedDates.has(date);
 
-          // Calculate time range for date
+          // Calculate time range for date (without seconds)
           const dateVehicleList = vehicles.filter(v => v.scheduled_date === date);
           const vehicleTimes = dateVehicleList
             .filter(v => v.unload_start_time)
-            .map(v => v.unload_start_time!)
+            .map(v => v.unload_start_time!.slice(0, 5))
             .sort();
           const firstTime = vehicleTimes[0] || '';
           const lastTime = vehicleTimes[vehicleTimes.length - 1] || '';
@@ -2717,71 +2717,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
-                            {/* Time section - inline editable */}
-                            <div className="vehicle-time-section">
-                              {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
-                                <select
-                                  className="inline-select"
-                                  autoFocus
-                                  defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
-                                  onChange={(e) => {
-                                    updateVehicleInline(vehicleId, 'time', e.target.value);
-                                  }}
-                                  onBlur={() => {
-                                    setInlineEditVehicleId(null);
-                                    setInlineEditField(null);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {TIME_OPTIONS.map(time => (
-                                    <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span
-                                  className="time-primary clickable"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setInlineEditVehicleId(vehicleId);
-                                    setInlineEditField('time');
-                                  }}
-                                  title="Klikka muutmiseks"
-                                >{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
-                              )}
-                              {inlineEditVehicleId === vehicleId && inlineEditField === 'duration' ? (
-                                <select
-                                  className="inline-select"
-                                  autoFocus
-                                  defaultValue={vehicle?.unload_duration_minutes || 60}
-                                  onChange={(e) => {
-                                    updateVehicleInline(vehicleId, 'duration', Number(e.target.value));
-                                  }}
-                                  onBlur={() => {
-                                    setInlineEditVehicleId(null);
-                                    setInlineEditField(null);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {DURATION_OPTIONS.map(opt => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                  ))}
-                                </select>
-                              ) : (
-                                <span
-                                  className="time-secondary clickable"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setInlineEditVehicleId(vehicleId);
-                                    setInlineEditField('duration');
-                                  }}
-                                  title="Klikka muutmiseks"
-                                >{vehicle?.unload_duration_minutes ? formatDuration(vehicle.unload_duration_minutes) : '-'}</span>
-                              )}
-                            </div>
-
                             <FiTruck className="vehicle-icon" />
 
-                            {/* Vehicle title section */}
+                            {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
                               <span
                                 className="vehicle-code clickable"
@@ -2843,11 +2781,73 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     style={{ backgroundColor: method.bgColor }}
                                     title={method.label}
                                   >
-                                    <img src={`/icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
+                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
                                     <span className="method-count">{count}</span>
                                   </span>
                                 );
                               })}
+                            </div>
+
+                            {/* Time section - RIGHT side */}
+                            <div className="vehicle-time-section">
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
+                                <select
+                                  className="inline-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'time', e.target.value);
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {TIME_OPTIONS.map(time => (
+                                    <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="time-primary clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('time');
+                                  }}
+                                  title="Klikka muutmiseks"
+                                >{vehicle?.unload_start_time ? vehicle.unload_start_time.slice(0, 5) : '--:--'}</span>
+                              )}
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'duration' ? (
+                                <select
+                                  className="inline-select"
+                                  autoFocus
+                                  defaultValue={vehicle?.unload_duration_minutes || 60}
+                                  onChange={(e) => {
+                                    updateVehicleInline(vehicleId, 'duration', Number(e.target.value));
+                                  }}
+                                  onBlur={() => {
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {DURATION_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="time-secondary clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('duration');
+                                  }}
+                                  title="Klikka muutmiseks"
+                                >{vehicle?.unload_duration_minutes ? formatDuration(vehicle.unload_duration_minutes) : '-'}</span>
+                              )}
                             </div>
                           <button
                             className="vehicle-comment-btn"
