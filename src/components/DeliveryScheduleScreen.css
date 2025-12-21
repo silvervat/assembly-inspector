@@ -1188,6 +1188,12 @@
   border-left: 3px solid #3b82f6;
 }
 
+.vehicle-header.drop-target {
+  background: #dcfce7;
+  border: 2px dashed #22c55e;
+  border-left: 3px solid #22c55e;
+}
+
 .vehicle-header .collapse-icon {
   color: #9ca3af;
   flex-shrink: 0;

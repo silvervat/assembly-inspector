@@ -1723,22 +1723,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverDate(date);
+
+    // When dragging items over a date, auto-expand to show vehicles
+    if (draggedItems.length > 0) {
+      setCollapsedDates(prev => {
+        if (prev.has(date)) {
+          const next = new Set(prev);
+          next.delete(date);
+          return next;
+        }
+        return prev;
+      });
+    }
   };
 
-  // Drag over a vehicle header (for reordering vehicles within date)
-  const handleVehicleHeaderDragOver = (e: React.DragEvent, date: string, vehicleIndex: number) => {
-    if (!draggedVehicle) return;
+  // Drag over a vehicle header (for reordering vehicles within date, or dropping items)
+  const handleVehicleHeaderDragOver = (e: React.DragEvent, date: string, vehicleIndex: number, vehicleId?: string) => {
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setDragOverDate(date);
 
-    // Determine if dropping above or below based on mouse position
-    const rect = (e.target as HTMLElement).closest('.vehicle-header')?.getBoundingClientRect();
-    if (rect) {
-      const midY = rect.top + rect.height / 2;
-      const dropIndex = e.clientY < midY ? vehicleIndex : vehicleIndex + 1;
-      setDragOverVehicleIndex(dropIndex);
+    // If dragging a vehicle, handle vehicle reordering
+    if (draggedVehicle) {
+      const rect = (e.target as HTMLElement).closest('.vehicle-header')?.getBoundingClientRect();
+      if (rect) {
+        const midY = rect.top + rect.height / 2;
+        const dropIndex = e.clientY < midY ? vehicleIndex : vehicleIndex + 1;
+        setDragOverVehicleIndex(dropIndex);
+      }
+    }
+
+    // If dragging items, set vehicle as drop target
+    if (draggedItems.length > 0 && vehicleId) {
+      setDragOverVehicleId(vehicleId);
     }
   };
 
@@ -4182,12 +4200,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''} ${!isVehicleCollapsed ? 'expanded' : ''}`}
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''} ${!isVehicleCollapsed ? 'expanded' : ''} ${dragOverVehicleId === vehicleId && draggedItems.length > 0 ? 'drop-target' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
                             onDragEnd={handleDragEnd}
-                            onDragOver={(e) => handleVehicleHeaderDragOver(e, date, vehicleIndex)}
+                            onDragOver={(e) => handleVehicleHeaderDragOver(e, date, vehicleIndex, vehicleId)}
+                            onDrop={(e) => {
+                              if (draggedItems.length > 0 && vehicle) {
+                                // Drop items at end of vehicle's list
+                                handleItemDrop(e, vehicle.id, undefined);
+                              }
+                            }}
                           >
                             <span
                               className="collapse-icon clickable"
@@ -4721,11 +4745,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       <div key={vehicleId} data-vehicle-id={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                         {/* Vehicle header */}
                         <div
-                          className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
+                          className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${dragOverVehicleId === vehicleId && draggedItems.length > 0 ? 'drop-target' : ''}`}
                           data-vehicle-id={vehicleId}
                           draggable
                           onDragStart={(e) => handleVehicleDragStart(e, vehicle)}
                           onDragEnd={handleDragEnd}
+                          onDragOver={(e) => {
+                            if (draggedItems.length > 0) {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.dataTransfer.dropEffect = 'move';
+                              setDragOverVehicleId(vehicleId);
+                            }
+                          }}
+                          onDrop={(e) => {
+                            if (draggedItems.length > 0) {
+                              handleItemDrop(e, vehicle.id, undefined);
+                            }
+                          }}
                         >
                           <span
                             className="collapse-icon clickable"
