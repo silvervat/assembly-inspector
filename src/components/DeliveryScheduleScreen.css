@@ -3513,6 +3513,21 @@
   opacity: 0.5;
 }
 
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
 .setting-divider {
   height: 1px;
   background: #e5e7eb;
