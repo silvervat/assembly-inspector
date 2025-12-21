@@ -4590,6 +4590,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Check Supabase record count
+  const checkSupabaseCount = async () => {
+    setTestStatus('Checking Supabase record count...');
+    try {
+      const { count, error } = await supabase
+        .from('trimble_model_objects')
+        .select('*', { count: 'exact', head: true })
+        .eq('trimble_project_id', projectId);
+
+      if (error) {
+        setTestStatus(`Error: ${error.message}`);
+      } else {
+        setTestStatus(`Supabase: ${count?.toLocaleString() || 0} kirjet`);
+      }
+    } catch (e: any) {
+      setTestStatus(`Error: ${e.message}`);
+    }
+  };
+
+  // Delete all Supabase records for this project
+  const deleteAllSupabaseRecords = async () => {
+    setTestStatus('Deleting all records...');
+    try {
+      const { error } = await supabase
+        .from('trimble_model_objects')
+        .delete()
+        .eq('trimble_project_id', projectId);
+
+      if (error) {
+        setTestStatus(`Error: ${error.message}`);
+      } else {
+        setTestStatus('Kõik kirjed kustutatud!');
+      }
+    } catch (e: any) {
+      setTestStatus(`Error: ${e.message}`);
+    }
+  };
+
   // Save only schedule items to Supabase (faster alternative)
   const saveScheduleItemsToSupabase = async () => {
     setTestStatus('Saving schedule items to Supabase...');
@@ -8186,6 +8224,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>Schedule → Supabase</strong>
                       <span>Salvestab ainult graafiku detailid (kiire!)</span>
+                    </div>
+                  </button>
+
+                  <button onClick={checkSupabaseCount} className="test-btn" style={{ borderColor: '#6b7280' }}>
+                    <span className="test-btn-num">🔢</span>
+                    <div className="test-btn-content">
+                      <strong>Loe kirjeid</strong>
+                      <span>Näitab mitu kirjet tabelis on</span>
+                    </div>
+                  </button>
+
+                  <button onClick={deleteAllSupabaseRecords} className="test-btn" style={{ borderColor: '#ef4444' }}>
+                    <span className="test-btn-num">🗑️</span>
+                    <div className="test-btn-content">
+                      <strong>Kustuta kõik</strong>
+                      <span>Kustutab kõik kirjed tabelist</span>
                     </div>
                   </button>
                 </div>
