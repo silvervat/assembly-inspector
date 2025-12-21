@@ -4757,18 +4757,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Approach 23: Color using Supabase data - white for all, then color schedule items
   const testApproach23 = async () => {
-    setTestStatus('Approach 23: Using Supabase data...');
+    setTestStatus('Approach 23: Loen andmeid Supabasest...');
     try {
-      // Get all model objects from Supabase
-      const { data: modelObjects, error } = await supabase
-        .from('trimble_model_objects')
-        .select('model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId);
+      // Fetch ALL data with pagination (Supabase default limit is 1000)
+      const PAGE_SIZE = 10000;
+      const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-      if (error || !modelObjects?.length) {
+      while (hasMore) {
+        setTestStatus(`Approach 23: Loen andmeid... ${modelObjects.length} kirjet`);
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          setTestStatus(`Approach 23: Supabase error - ${error.message}`);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          modelObjects.push(...data);
+          offset += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (modelObjects.length === 0) {
         setTestStatus('Approach 23: No Supabase data. Run "Scan & Save" first!');
         return;
       }
+
+      setTestStatus(`Approach 23: Loetud ${modelObjects.length} kirjet, alustan värvimist...`);
 
       // Reset first
       await api.viewer.setObjectState(undefined, { color: 'reset' });
@@ -4859,20 +4883,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Approach 24: Color with delay between batches
+  // Approach 24: Color with delay between batches (with pagination for large datasets)
   const testApproach24 = async () => {
-    setTestStatus('Approach 24: Using delays between batches...');
+    setTestStatus('Approach 24: Loen andmeid Supabasest...');
     try {
-      const { data: modelObjects, error } = await supabase
-        .from('trimble_model_objects')
-        .select('model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId);
+      // Fetch ALL data with pagination (Supabase default limit is 1000)
+      const PAGE_SIZE = 10000;
+      const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-      if (error || !modelObjects?.length) {
+      while (hasMore) {
+        setTestStatus(`Approach 24: Loen andmeid... ${allModelObjects.length} kirjet`);
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          setTestStatus(`Approach 24: Supabase error - ${error.message}`);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          allModelObjects.push(...data);
+          offset += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allModelObjects.length === 0) {
         setTestStatus('Approach 24: No Supabase data. Run "Scan & Save" first!');
         return;
       }
 
+      setTestStatus(`Approach 24: Loetud ${allModelObjects.length} kirjet, alustan värvimist...`);
       await api.viewer.setObjectState(undefined, { color: 'reset' });
 
       const scheduleIds = new Set(
@@ -4881,7 +4929,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Group non-schedule items by model
       const whiteByModel: Record<string, number[]> = {};
-      for (const obj of modelObjects) {
+      for (const obj of allModelObjects) {
         if (!scheduleIds.has(obj.object_runtime_id)) {
           if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
           whiteByModel[obj.model_id].push(obj.object_runtime_id);
@@ -4889,9 +4937,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       // Color with delays
-      const BATCH_SIZE = 2000;
-      const DELAY_MS = 100;
+      const BATCH_SIZE = 5000;
+      const DELAY_MS = 50;
       let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
 
       for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
@@ -4901,7 +4950,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             { color: { r: 200, g: 200, b: 200, a: 255 } }
           );
           whiteCount += batch.length;
-          setTestStatus(`Approach 24: Gray ${whiteCount}...`);
+          setTestStatus(`Approach 24: Hall ${whiteCount}/${totalWhite}...`);
 
           // Delay between batches
           await new Promise(resolve => setTimeout(resolve, DELAY_MS));
@@ -4923,7 +4972,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         );
       }
 
-      setTestStatus(`Approach 24: Done! Gray=${whiteCount}, Red=${validItems.length}`);
+      setTestStatus(`✓ Approach 24: Hall=${whiteCount}, Punane=${validItems.length}`);
     } catch (e: any) {
       setTestStatus(`Approach 24: Error - ${e.message}`);
       console.error('Approach 24 error:', e);
@@ -4932,18 +4981,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Approach 25: Use object state with transparency
   const testApproach25 = async () => {
-    setTestStatus('Approach 25: Transparent non-schedule items...');
+    setTestStatus('Approach 25: Loen andmeid Supabasest...');
     try {
-      const { data: modelObjects, error } = await supabase
-        .from('trimble_model_objects')
-        .select('model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId);
+      // Fetch ALL data with pagination
+      const PAGE_SIZE = 10000;
+      const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-      if (error || !modelObjects?.length) {
+      while (hasMore) {
+        setTestStatus(`Approach 25: Loen andmeid... ${modelObjects.length} kirjet`);
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          setTestStatus(`Approach 25: Supabase error - ${error.message}`);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          modelObjects.push(...data);
+          offset += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (modelObjects.length === 0) {
         setTestStatus('Approach 25: No Supabase data. Run "Scan & Save" first!');
         return;
       }
 
+      setTestStatus(`Approach 25: Loetud ${modelObjects.length} kirjet, alustan värvimist...`);
       await api.viewer.setObjectState(undefined, { color: 'reset' });
 
       const scheduleIds = new Set(
@@ -5055,17 +5128,41 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      // Step 2: Get remaining objects from Supabase
+      // Step 2: Get remaining objects from Supabase with pagination
       setTestStatus('Approach 26: Loen ülejäänud detailid Supabasest...');
-      const { data: modelObjects, error } = await supabase
-        .from('trimble_model_objects')
-        .select('model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId);
+      const PAGE_SIZE = 10000;
+      const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-      if (error || !modelObjects?.length) {
+      while (hasMore) {
+        setTestStatus(`Approach 26: Loen Supabasest... ${modelObjects.length} kirjet`);
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          setTestStatus(`Approach 26: Supabase error - ${error.message}`);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          modelObjects.push(...data);
+          offset += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (modelObjects.length === 0) {
         setTestStatus(`Approach 26: Veokid värvitud (${scheduleColoredCount}), aga Supabase tühi!`);
         return;
       }
+
+      setTestStatus(`Approach 26: Loetud ${modelObjects.length} kirjet, värvin halli...`);
 
       // Filter to only non-colored objects
       const grayByModel: Record<string, number[]> = {};
