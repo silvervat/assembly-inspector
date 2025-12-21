@@ -229,14 +229,24 @@
   color: #1d4ed8;
 }
 
-/* Color menu dropdown */
-.color-menu-wrapper {
+/* Dropdown menu wrapper (for Import-Export, Värvi, etc.) */
+.dropdown-menu-wrapper {
   position: relative;
 }
 
-.color-dropdown {
+.dropdown-menu-wrapper::after {
+  /* Invisible bridge to prevent menu from closing when moving mouse */
+  content: '';
   position: absolute;
   top: 100%;
+  left: 0;
+  right: 0;
+  height: 8px;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
   right: 0;
   z-index: 1000;
   background: white;
@@ -245,15 +255,14 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 4px 0;
   min-width: 180px;
-  margin-top: 4px;
 }
 
-.color-dropdown button {
+.dropdown-menu button {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: none;
   background: none;
   font-size: 13px;
@@ -263,21 +272,21 @@
   border-radius: 0;
 }
 
-.color-dropdown button span {
+.dropdown-menu button span {
   flex: 1;
   text-align: left;
 }
 
-.color-dropdown button:hover {
+.dropdown-menu button:hover {
   background: #f3f4f6;
 }
 
-.color-dropdown button.active {
+.dropdown-menu button.active {
   background: #dbeafe;
   color: #1d4ed8;
 }
 
-.color-dropdown button svg:last-child {
+.dropdown-menu button svg:last-child {
   margin-left: auto;
   flex-shrink: 0;
 }
