@@ -1022,12 +1022,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // MODEL SELECTION HANDLING
   // ============================================
 
+  // Flag to prevent concurrent selection requests
+  const selectionInProgressRef = useRef(false);
+
   useEffect(() => {
     const handleSelectionChange = async () => {
+      // Skip if already processing
+      if (selectionInProgressRef.current) return;
+      selectionInProgressRef.current = true;
+
       try {
         const selection = await api.viewer.getSelection();
         if (!selection?.length) {
           setSelectedObjects([]);
+          selectionInProgressRef.current = false;
           return;
         }
 
@@ -1119,8 +1127,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         setSelectedObjects(objects);
-      } catch (e) {
-        console.error('Error handling selection:', e);
+      } catch (e: any) {
+        // Silently ignore timeout errors (they're not critical)
+        if (!e?.message?.includes('timed out')) {
+          console.error('Error handling selection:', e);
+        }
+      } finally {
+        selectionInProgressRef.current = false;
       }
     };
 
@@ -1133,8 +1146,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.warn('Could not add selection listener:', e);
     }
 
-    // Fallback polling
-    const interval = setInterval(handleSelectionChange, 2000);
+    // Fallback polling - increased to 5 seconds to reduce API load
+    const interval = setInterval(handleSelectionChange, 5000);
 
     return () => {
       clearInterval(interval);
