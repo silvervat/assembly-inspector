@@ -1022,12 +1022,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // MODEL SELECTION HANDLING
   // ============================================
 
+  // Flag to prevent concurrent selection requests
+  const selectionInProgressRef = useRef(false);
+
   useEffect(() => {
     const handleSelectionChange = async () => {
+      // Skip if already processing
+      if (selectionInProgressRef.current) return;
+      selectionInProgressRef.current = true;
+
       try {
         const selection = await api.viewer.getSelection();
         if (!selection?.length) {
           setSelectedObjects([]);
+          selectionInProgressRef.current = false;
           return;
         }
 
@@ -1119,8 +1127,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         setSelectedObjects(objects);
-      } catch (e) {
-        console.error('Error handling selection:', e);
+      } catch (e: any) {
+        // Silently ignore timeout errors (they're not critical)
+        if (!e?.message?.includes('timed out')) {
+          console.error('Error handling selection:', e);
+        }
+      } finally {
+        selectionInProgressRef.current = false;
       }
     };
 
@@ -1133,8 +1146,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.warn('Could not add selection listener:', e);
     }
 
-    // Fallback polling
-    const interval = setInterval(handleSelectionChange, 2000);
+    // Fallback polling - increased to 5 seconds to reduce API load
+    const interval = setInterval(handleSelectionChange, 5000);
 
     return () => {
       clearInterval(interval);
@@ -4679,10 +4692,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return;
     }
 
-    setTestStatus(`Saving ${selectedObjects.length} model-selected objects...`);
+    const BATCH_SIZE = 1000;
+
+    setTestStatus(`Preparing ${selectedObjects.length} model-selected objects...`);
     try {
+      // Deduplicate by runtimeId before saving
+      const seen = new Set<string>();
+      const uniqueObjects = selectedObjects.filter(obj => {
+        const key = `${obj.modelId}_${obj.runtimeId}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
       // Build records from model selection
-      const records = selectedObjects.map(obj => ({
+      const records = uniqueObjects.map(obj => ({
         trimble_project_id: projectId,
         model_id: obj.modelId,
         object_runtime_id: obj.runtimeId,
@@ -4692,19 +4716,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         product_name: obj.productName
       }));
 
-      // Use upsert to avoid duplicates
-      const { error } = await supabase
-        .from('trimble_model_objects')
-        .upsert(records, {
-          onConflict: 'trimble_project_id,model_id,object_runtime_id',
-          ignoreDuplicates: false
-        });
+      // Send in batches to avoid overloading Supabase
+      const totalBatches = Math.ceil(records.length / BATCH_SIZE);
+      let savedCount = 0;
+      let errorCount = 0;
 
-      if (error) {
-        console.error('Insert error:', error);
-        setTestStatus(`Error: ${error.message}`);
+      for (let i = 0; i < records.length; i += BATCH_SIZE) {
+        const batch = records.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+
+        setTestStatus(`Saving batch ${batchNum}/${totalBatches} (${savedCount}/${records.length})...`);
+
+        const { error } = await supabase
+          .from('trimble_model_objects')
+          .upsert(batch, {
+            onConflict: 'trimble_project_id,model_id,object_runtime_id',
+            ignoreDuplicates: true  // Skip if already exists
+          });
+
+        if (error) {
+          console.error(`Batch ${batchNum} error:`, error);
+          errorCount += batch.length;
+        } else {
+          savedCount += batch.length;
+        }
+      }
+
+      if (errorCount > 0) {
+        setTestStatus(`Saved ${savedCount}/${records.length} objects (${errorCount} errors)`);
       } else {
-        setTestStatus(`Saved ${selectedObjects.length} objects: ${selectedObjects.map(o => o.assemblyMark).join(', ')}`);
+        const marks = uniqueObjects.map(o => o.assemblyMark).slice(0, 5).join(', ');
+        const more = uniqueObjects.length > 5 ? ` (+${uniqueObjects.length - 5} veel)` : '';
+        setTestStatus(`✓ Saved ${savedCount} objects: ${marks}${more}`);
       }
     } catch (e: any) {
       setTestStatus(`Save error: ${e.message}`);
