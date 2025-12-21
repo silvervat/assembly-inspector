@@ -451,6 +451,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'comments', label: 'Kommentaarid', enabled: true }
   ]);
 
+  // Color mode for model visualization
+  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date'>('none');
+  const [showColorMenu, setShowColorMenu] = useState(false);
+  const [vehicleColors, setVehicleColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+  const [dateColors, setDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+
   // Factory management modal
   const [showFactoryModal, setShowFactoryModal] = useState(false);
   const [newFactoryName, setNewFactoryName] = useState('');
@@ -2399,6 +2405,133 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Export single vehicle to Excel
+  const exportVehicleToExcel = (vehicleId: string) => {
+    try {
+      const vehicle = getVehicle(vehicleId);
+      if (!vehicle) return;
+
+      const factory = getFactory(vehicle.factory_id);
+      const vehicleItems = items.filter(i => i.vehicle_id === vehicleId).sort((a, b) => a.sort_order - b.sort_order);
+
+      // Build resource string
+      const resourceParts: string[] = [];
+      if (vehicle.unload_methods) {
+        UNLOAD_METHODS.forEach(method => {
+          const count = vehicle.unload_methods?.[method.key];
+          if (count) {
+            resourceParts.push(`${method.label}: ${count}`);
+          }
+        });
+      }
+      const resourceStr = resourceParts.join(', ') || 'Pole määratud';
+
+      // Duration string
+      const durationMins = vehicle.unload_duration_minutes || 0;
+      const durationStr = durationMins > 0 ? `${(durationMins / 60).toFixed(1)}h` : '-';
+
+      // Headers for vehicle info section
+      const vehicleInfoRows = [
+        ['VEOK', vehicle.vehicle_code],
+        ['Tehas', factory?.factory_name || '-'],
+        ['Kuupäev', vehicle.scheduled_date ? formatDateDisplay(vehicle.scheduled_date) : 'MÄÄRAMATA'],
+        ['Kellaaeg', vehicle.unload_start_time?.slice(0, 5) || '-'],
+        ['Kestus', durationStr],
+        ['Ressursid', resourceStr],
+        ['Detailide arv', vehicleItems.length],
+        ['Kogukaal', `${vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0).toFixed(0)} kg`],
+        [], // Empty row
+      ];
+
+      // Data headers
+      const dataHeaders = ['Nr', 'Märk', 'Toode', 'Kaal (kg)', 'Teleskoop', 'Mitu korda / Kus veel'];
+
+      // Data rows
+      const dataRows = vehicleItems.map((item, idx) => {
+        const seqInfo = itemSequences.get(item.id);
+        const telescopicCount = (item.unload_methods as Record<string, number>)?.telescopic ||
+          (vehicle.unload_methods as Record<string, number>)?.telescopic || 0;
+
+        let duplicateInfo = '';
+        if (seqInfo && seqInfo.total > 1) {
+          duplicateInfo = `${seqInfo.seq}/${seqInfo.total}`;
+          if (seqInfo.otherLocations.length > 0) {
+            const otherVehicles = seqInfo.otherLocations
+              .filter(loc => loc.vehicleId !== vehicleId)
+              .map(loc => loc.vehicleCode)
+              .join(', ');
+            if (otherVehicles) {
+              duplicateInfo += ` (${otherVehicles})`;
+            }
+          }
+        }
+
+        return [
+          idx + 1,
+          item.assembly_mark,
+          item.product_name || '',
+          item.cast_unit_weight || '',
+          telescopicCount > 0 ? telescopicCount : '',
+          duplicateInfo
+        ];
+      });
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const wsData = [...vehicleInfoRows, dataHeaders, ...dataRows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Style vehicle info header (first column bold)
+      vehicleInfoRows.forEach((row, rowIdx) => {
+        if (row.length === 2) {
+          const cellRef = XLSX.utils.encode_cell({ r: rowIdx, c: 0 });
+          if (ws[cellRef]) {
+            ws[cellRef].s = { font: { bold: true } };
+          }
+        }
+      });
+
+      // Style data header row
+      const headerRowIdx = vehicleInfoRows.length;
+      const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '0a3a67' } },
+        alignment: { horizontal: 'center' }
+      };
+
+      dataHeaders.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: headerRowIdx, c: idx });
+        if (!ws[cellRef]) ws[cellRef] = { v: dataHeaders[idx] };
+        ws[cellRef].s = headerStyle;
+      });
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 5 },   // Nr
+        { wch: 18 },  // Märk
+        { wch: 25 },  // Toode
+        { wch: 10 },  // Kaal
+        { wch: 10 },  // Teleskoop
+        { wch: 25 }   // Mitu korda / Kus veel
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Veok');
+      XLSX.writeFile(wb, `${vehicle.vehicle_code}_${vehicle.scheduled_date || 'määramata'}.xlsx`);
+      setMessage('Veok eksporditud');
+    } catch (e: any) {
+      console.error('Error exporting vehicle:', e);
+      setMessage('Viga eksportimisel: ' + e.message);
+    }
+  };
+
+  // Copy vehicle items list to clipboard
+  const copyVehicleItemsList = (vehicleId: string) => {
+    const vehicleItems = items.filter(i => i.vehicle_id === vehicleId).sort((a, b) => a.sort_order - b.sort_order);
+    const marks = vehicleItems.map(i => i.assembly_mark).join('\n');
+    navigator.clipboard.writeText(marks);
+    setMessage(`${vehicleItems.length} märki kopeeritud`);
+  };
+
   // Export single date to Excel
   const exportDateToExcel = (date: string) => {
     try {
@@ -2646,6 +2779,137 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     };
   }, []);
+
+  // ============================================
+  // COLOR MODE - Color items in model by vehicle or date
+  // ============================================
+
+  // Generate colors using golden ratio for good distribution
+  const generateColorsForKeys = (keys: string[]): Record<string, { r: number; g: number; b: number }> => {
+    const colors: Record<string, { r: number; g: number; b: number }> = {};
+    const goldenRatio = 0.618033988749895;
+    let hue = 0;
+
+    keys.forEach(key => {
+      hue = (hue + goldenRatio) % 1;
+      // HSL to RGB with good saturation and brightness
+      const h = hue * 360;
+      const s = 0.7;
+      const l = 0.55;
+
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+      const m = l - c / 2;
+
+      let r = 0, g = 0, b = 0;
+      if (h < 60) { r = c; g = x; }
+      else if (h < 120) { r = x; g = c; }
+      else if (h < 180) { g = c; b = x; }
+      else if (h < 240) { g = x; b = c; }
+      else if (h < 300) { r = x; b = c; }
+      else { r = c; b = x; }
+
+      colors[key] = {
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255)
+      };
+    });
+
+    return colors;
+  };
+
+  const applyColorMode = async (mode: 'none' | 'vehicle' | 'date') => {
+    try {
+      // Reset colors first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      if (mode === 'none') {
+        setColorMode('none');
+        setVehicleColors({});
+        setDateColors({});
+        return;
+      }
+
+      setColorMode(mode);
+
+      if (mode === 'vehicle') {
+        // Generate colors for each vehicle
+        const vehicleIds = vehicles.map(v => v.id);
+        const colors = generateColorsForKeys(vehicleIds);
+        setVehicleColors(colors);
+        setDateColors({});
+
+        // Apply colors to items in model
+        for (const vehicle of vehicles) {
+          const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+          if (vehicleItems.length === 0) continue;
+
+          const color = colors[vehicle.id];
+          if (!color) continue;
+
+          // Get runtime IDs for this vehicle's items
+          const runtimeIds = vehicleItems
+            .filter(i => i.object_runtime_id)
+            .map(i => i.object_runtime_id as number);
+
+          if (runtimeIds.length === 0) continue;
+
+          const modelId = vehicleItems[0]?.model_id;
+          if (!modelId) continue;
+
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+          );
+        }
+      } else if (mode === 'date') {
+        // Generate colors for each date
+        const dates = [...new Set(items.map(i => i.scheduled_date).filter((d): d is string => d !== null))].sort();
+        const colors = generateColorsForKeys(dates);
+        setDateColors(colors);
+        setVehicleColors({});
+
+        // Apply colors to items in model
+        for (const date of dates) {
+          const dateItems = items.filter(i => i.scheduled_date === date);
+          if (dateItems.length === 0) continue;
+
+          const color = colors[date];
+          if (!color) continue;
+
+          // Get runtime IDs for this date's items
+          const runtimeIds = dateItems
+            .filter(i => i.object_runtime_id)
+            .map(i => i.object_runtime_id as number);
+
+          if (runtimeIds.length === 0) continue;
+
+          // Group by model
+          const modelIds = [...new Set(dateItems.map(i => i.model_id).filter((m): m is string => !!m))];
+
+          for (const modelId of modelIds) {
+            const modelItems = dateItems.filter(i => i.model_id === modelId);
+            const modelRuntimeIds = modelItems
+              .filter(i => i.object_runtime_id)
+              .map(i => i.object_runtime_id as number);
+
+            if (modelRuntimeIds.length === 0) continue;
+
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: modelRuntimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+          }
+        }
+      }
+
+      setMessage(mode === 'vehicle' ? 'Värvitud veokite kaupa' : 'Värvitud kuupäevade kaupa');
+    } catch (e) {
+      console.error('Error applying color mode:', e);
+      setMessage('Viga värvimisel');
+    }
+  };
 
   // ============================================
   // ITEM CLICK HANDLING
@@ -3150,6 +3414,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }}
                   title="Märgista mudelis"
                 >
+                  {colorMode === 'date' && dateColors[date] && (
+                    <span
+                      className="color-indicator"
+                      style={{ backgroundColor: `rgb(${dateColors[date].r}, ${dateColors[date].g}, ${dateColors[date].b})` }}
+                    />
+                  )}
                   <span className="date-primary">{isUnassignedDate ? 'MÄÄRAMATA' : formatDateShort(date)}</span>
                   {!isUnassignedDate && <span className="date-secondary">{getDayName(date)}</span>}
                 </div>
@@ -3271,14 +3541,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
-                            <FiTruck
-                              className={`vehicle-icon clickable ${activeVehicleId === vehicleId ? 'active' : ''}`}
-                              onClick={() => {
-                                setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
-                                setActiveItemId(null);
-                              }}
-                              title="Muuda veoki seadeid"
-                            />
+                            <span
+                              className={`vehicle-icon-wrapper ${colorMode === 'vehicle' && vehicleColors[vehicleId] ? 'has-color' : ''}`}
+                              style={colorMode === 'vehicle' && vehicleColors[vehicleId] ? {
+                                backgroundColor: `rgb(${vehicleColors[vehicleId].r}, ${vehicleColors[vehicleId].g}, ${vehicleColors[vehicleId].b})`
+                              } : undefined}
+                            >
+                              <FiTruck
+                                className={`vehicle-icon clickable ${activeVehicleId === vehicleId ? 'active' : ''}`}
+                                onClick={() => {
+                                  setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
+                                  setActiveItemId(null);
+                                }}
+                                title="Muuda veoki seadeid"
+                              />
+                            </span>
 
                             {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
@@ -3464,6 +3741,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               setVehicleMenuId(null);
                             }}>
                               <FiMove /> Tõsta kuupäeva
+                            </button>
+                            <button onClick={() => {
+                              copyVehicleItemsList(vehicleId);
+                              setVehicleMenuId(null);
+                            }}>
+                              <FiCopy /> Kopeeri nimekiri
+                            </button>
+                            <button onClick={() => {
+                              exportVehicleToExcel(vehicleId);
+                              setVehicleMenuId(null);
+                            }}>
+                              <FiDownload /> Ekspordi Excel
                             </button>
                             <button onClick={() => {
                               loadHistory(vehicle.id);
@@ -4039,6 +4328,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <button onClick={() => setShowExportModal(true)}>
             <FiDownload /> Eksport
           </button>
+          <div
+            className="color-menu-wrapper"
+            onMouseEnter={() => setShowColorMenu(true)}
+            onMouseLeave={() => setShowColorMenu(false)}
+          >
+            <button className={colorMode !== 'none' ? 'active' : ''}>
+              <span className="color-icon">🎨</span> Värvi
+            </button>
+            {showColorMenu && (
+              <div className="color-dropdown">
+                <button
+                  className={colorMode === 'vehicle' ? 'active' : ''}
+                  onClick={() => applyColorMode(colorMode === 'vehicle' ? 'none' : 'vehicle')}
+                >
+                  <FiTruck /> Veokite kaupa
+                  {colorMode === 'vehicle' && <FiCheck />}
+                </button>
+                <button
+                  className={colorMode === 'date' ? 'active' : ''}
+                  onClick={() => applyColorMode(colorMode === 'date' ? 'none' : 'date')}
+                >
+                  <FiCalendar /> Kuupäevade kaupa
+                  {colorMode === 'date' && <FiCheck />}
+                </button>
+              </div>
+            )}
+          </div>
           <button onClick={loadAllData}>
             <FiRefreshCw />
           </button>

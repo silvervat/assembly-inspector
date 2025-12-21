@@ -224,6 +224,62 @@
   background: #fee2e2;
 }
 
+.delivery-toolbar button.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+/* Color menu dropdown */
+.color-menu-wrapper {
+  position: relative;
+}
+
+.color-menu-wrapper .color-icon {
+  font-size: 14px;
+}
+
+.color-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px 0;
+  min-width: 160px;
+  margin-top: 4px;
+}
+
+.color-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 0;
+}
+
+.color-dropdown button:hover {
+  background: #f3f4f6;
+}
+
+.color-dropdown button.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.color-dropdown button svg:last-child {
+  margin-left: auto;
+}
+
 .delivery-toolbar select {
   padding: 8px 12px;
   border: 1px solid #d1d5db;
@@ -888,6 +944,14 @@
   min-width: 70px;
 }
 
+.date-info-section .color-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-bottom: 2px;
+  flex-shrink: 0;
+}
+
 .date-info-section .date-primary {
   font-weight: 700;
   font-size: 16px;
@@ -1114,6 +1178,24 @@
   margin-left: 4px;
 }
 
+.vehicle-header .vehicle-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.vehicle-header .vehicle-icon-wrapper.has-color {
+  padding: 4px;
+  margin-left: 4px;
+}
+
+.vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon {
+  color: white;
+}
+
 .vehicle-header .vehicle-icon {
   color: #9ca3af;
   flex-shrink: 0;
@@ -1126,6 +1208,11 @@
   margin: -6px;
   border-radius: 6px;
   transition: all 0.15s;
+}
+
+.vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon.clickable {
+  padding: 2px;
+  margin: 0;
 }
 
 .vehicle-header .vehicle-icon.clickable:hover {
