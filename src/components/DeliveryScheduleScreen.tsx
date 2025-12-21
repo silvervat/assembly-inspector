@@ -2932,9 +2932,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // TEST FUNCTIONS - Others Gray + Selection Red
   // ============================================
 
-  // Approach 1: Reset all, then gray all, then red for selected
+  // Approach 1: First RED for selected, THEN gray for others (reverse order)
   const testApproach1 = async () => {
-    setTestStatus('Approach 1: Running...');
+    setTestStatus('Approach 1: Running... (Red first, then Gray)');
     try {
       const selection = await api.viewer.getSelection();
       const selectedRuntimeIds = new Set<number>();
@@ -2952,10 +2952,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Step 1: Reset all colors
       await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-      // Step 2: Set ALL objects to gray (using undefined selector = all objects)
-      await api.viewer.setObjectState(undefined, { color: { r: 128, g: 128, b: 128, a: 255 } });
-
-      // Step 3: Set selected objects to red
+      // Step 2: First set selected to RED
       if (modelId && selectedRuntimeIds.size > 0) {
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: Array.from(selectedRuntimeIds) }] },
@@ -2963,26 +2960,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         );
       }
 
-      setTestStatus(`Approach 1: Done! Selected ${selectedRuntimeIds.size} objects`);
+      // Step 3: Then set ALL to gray (selected should keep red?)
+      await api.viewer.setObjectState(undefined, { color: { r: 128, g: 128, b: 128, a: 255 } });
+
+      setTestStatus(`Approach 1: Done! Red first, then gray all. Selected: ${selectedRuntimeIds.size}`);
     } catch (e: any) {
       setTestStatus(`Approach 1: Error - ${e.message}`);
       console.error('Test Approach 1 error:', e);
     }
   };
 
-  // Approach 2: Get all item IDs, filter non-selected, apply separately
+  // Approach 2: Only color items from our schedule list (not all model objects)
   const testApproach2 = async () => {
-    setTestStatus('Approach 2: Running...');
+    setTestStatus('Approach 2: Running... (Only schedule items)');
     try {
       const selection = await api.viewer.getSelection();
       const selectedRuntimeIds = new Set<number>();
-      let modelId: string | null = null;
 
       if (selection?.length) {
         for (const sel of selection) {
           if (sel.objectRuntimeIds?.length) {
             sel.objectRuntimeIds.forEach(id => selectedRuntimeIds.add(id));
-            if (!modelId) modelId = sel.modelId;
           }
         }
       }
@@ -3027,50 +3025,146 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      setTestStatus(`Approach 2: Done! Gray: ${allItemRuntimeIds.length - selectedRuntimeIds.size}, Red: ${selectedRuntimeIds.size}`);
+      setTestStatus(`Approach 2: Done! Schedule items only. Gray: ${allItemRuntimeIds.length - selectedRuntimeIds.size}, Red: ${selectedRuntimeIds.size}`);
     } catch (e: any) {
       setTestStatus(`Approach 2: Error - ${e.message}`);
       console.error('Test Approach 2 error:', e);
     }
   };
 
-  // Approach 3: Use transparency for non-selected + red for selected
+  // Approach 3: Single batch - collect all IDs first, then one call per color
   const testApproach3 = async () => {
-    setTestStatus('Approach 3: Running...');
+    setTestStatus('Approach 3: Running... (Batch by color)');
     try {
       const selection = await api.viewer.getSelection();
       const selectedRuntimeIds = new Set<number>();
-      let modelId: string | null = null;
+      let primaryModelId: string | null = null;
 
       if (selection?.length) {
         for (const sel of selection) {
           if (sel.objectRuntimeIds?.length) {
             sel.objectRuntimeIds.forEach(id => selectedRuntimeIds.add(id));
-            if (!modelId) modelId = sel.modelId;
+            if (!primaryModelId) primaryModelId = sel.modelId;
           }
         }
+      }
+
+      // Get all item runtime IDs from our items list
+      const allItems = items.filter(i => i.object_runtime_id && i.model_id);
+
+      if (allItems.length === 0) {
+        setTestStatus('Approach 3: No items with runtime IDs');
+        return;
+      }
+
+      // Separate into gray and red groups
+      const grayItems: { modelId: string; runtimeId: number }[] = [];
+      const redItems: { modelId: string; runtimeId: number }[] = [];
+
+      allItems.forEach(item => {
+        const entry = { modelId: item.model_id!, runtimeId: item.object_runtime_id! };
+        if (selectedRuntimeIds.has(item.object_runtime_id!)) {
+          redItems.push(entry);
+        } else {
+          grayItems.push(entry);
+        }
+      });
+
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Group gray by model and apply
+      const grayByModel: Record<string, number[]> = {};
+      grayItems.forEach(({ modelId, runtimeId }) => {
+        if (!grayByModel[modelId]) grayByModel[modelId] = [];
+        grayByModel[modelId].push(runtimeId);
+      });
+
+      // Apply all gray at once per model
+      for (const [mId, runtimeIds] of Object.entries(grayByModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId: mId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: 160, g: 160, b: 160, a: 255 } }
+        );
+      }
+
+      // Group red by model and apply
+      const redByModel: Record<string, number[]> = {};
+      redItems.forEach(({ modelId, runtimeId }) => {
+        if (!redByModel[modelId]) redByModel[modelId] = [];
+        redByModel[modelId].push(runtimeId);
+      });
+
+      // Apply all red at once per model
+      for (const [mId, runtimeIds] of Object.entries(redByModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId: mId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: 255, g: 50, b: 50, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 3: Done! Gray: ${grayItems.length}, Red: ${redItems.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 3: Error - ${e.message}`);
+      console.error('Test Approach 3 error:', e);
+    }
+  };
+
+  // Approach 4: Color each item one by one, skip selected (they stay original or get red at end)
+  const testApproach4 = async () => {
+    setTestStatus('Approach 4: Running... (One by one)');
+    try {
+      const selection = await api.viewer.getSelection();
+      const selectedRuntimeIds = new Set<number>();
+
+      if (selection?.length) {
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds?.length) {
+            sel.objectRuntimeIds.forEach(id => selectedRuntimeIds.add(id));
+          }
+        }
+      }
+
+      // Get all items from schedule
+      const allItems = items.filter(i => i.object_runtime_id && i.model_id);
+
+      if (allItems.length === 0) {
+        setTestStatus('Approach 4: No items with runtime IDs');
+        return;
       }
 
       // Reset first
       await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-      // Set ALL objects to semi-transparent gray
-      await api.viewer.setObjectState(undefined, {
-        color: { r: 180, g: 180, b: 180, a: 80 } // Low alpha = transparent
-      });
+      let grayCount = 0;
+      let redCount = 0;
 
-      // Set selected objects to solid red
-      if (modelId && selectedRuntimeIds.size > 0) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: Array.from(selectedRuntimeIds) }] },
-          { color: { r: 255, g: 50, b: 50, a: 255 } }
-        );
+      // Color each non-selected item gray one by one
+      for (const item of allItems) {
+        if (!selectedRuntimeIds.has(item.object_runtime_id!)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: item.model_id!, objectRuntimeIds: [item.object_runtime_id!] }] },
+            { color: { r: 140, g: 140, b: 140, a: 255 } }
+          );
+          grayCount++;
+        }
       }
 
-      setTestStatus(`Approach 3: Done! Transparent others, red selected (${selectedRuntimeIds.size})`);
+      // Then color selected items red one by one
+      for (const item of allItems) {
+        if (selectedRuntimeIds.has(item.object_runtime_id!)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: item.model_id!, objectRuntimeIds: [item.object_runtime_id!] }] },
+            { color: { r: 255, g: 30, b: 30, a: 255 } }
+          );
+          redCount++;
+        }
+      }
+
+      setTestStatus(`Approach 4: Done! Gray: ${grayCount}, Red: ${redCount} (one by one)`);
     } catch (e: any) {
-      setTestStatus(`Approach 3: Error - ${e.message}`);
-      console.error('Test Approach 3 error:', e);
+      setTestStatus(`Approach 4: Error - ${e.message}`);
+      console.error('Test Approach 4 error:', e);
     }
   };
 
@@ -6181,24 +6275,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <button onClick={testApproach1} className="test-btn">
                     <span className="test-btn-num">1</span>
                     <div className="test-btn-content">
-                      <strong>Reset → All Gray → Selected Red</strong>
-                      <span>Kõigepealt reset, siis kõik halliks, siis valitud punaseks</span>
+                      <strong>Red First → Then Gray All</strong>
+                      <span>Esmalt valitud punaseks, siis kõik halliks (vastupidine järjekord)</span>
                     </div>
                   </button>
 
                   <button onClick={testApproach2} className="test-btn">
                     <span className="test-btn-num">2</span>
                     <div className="test-btn-content">
-                      <strong>Filter by Items List</strong>
-                      <span>Kasutab graafiku items listi, filtreerib valitud/mittevalitud</span>
+                      <strong>Schedule Items Only</strong>
+                      <span>Ainult graafiku detailid - hall mittevaliutd, punane valitud</span>
                     </div>
                   </button>
 
                   <button onClick={testApproach3} className="test-btn">
                     <span className="test-btn-num">3</span>
                     <div className="test-btn-content">
-                      <strong>Transparency + Red</strong>
-                      <span>Kõik läbipaistvaks, valitud punane ja läbipaistmatu</span>
+                      <strong>Batch by Color</strong>
+                      <span>Kogub ID-d, rakendab kõik hallid korraga, siis kõik punased</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach4} className="test-btn">
+                    <span className="test-btn-num">4</span>
+                    <div className="test-btn-content">
+                      <strong>One by One</strong>
+                      <span>Värvib iga detaili ükshaaval - esmalt hallid, siis punased</span>
                     </div>
                   </button>
                 </div>
