@@ -509,6 +509,85 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     return Object.keys(itemsByDateAndVehicle).sort();
   }, [itemsByDateAndVehicle]);
 
+  // Calculate item sequences for duplicate assembly marks
+  // Returns a map of itemId -> { seq, total, otherLocations }
+  interface ItemSequenceInfo {
+    seq: number;
+    total: number;
+    otherLocations: Array<{
+      vehicleCode: string;
+      vehicleId: string;
+      date: string;
+      seq: number;
+    }>;
+  }
+
+  const itemSequences = useMemo(() => {
+    const sequenceMap = new Map<string, ItemSequenceInfo>();
+
+    // Group all items by assembly_mark (use ALL items, not filtered)
+    const itemsByMark: Record<string, DeliveryItem[]> = {};
+    items.forEach(item => {
+      const mark = item.assembly_mark;
+      if (!itemsByMark[mark]) itemsByMark[mark] = [];
+      itemsByMark[mark].push(item);
+    });
+
+    // For each mark with multiple items, calculate sequences
+    Object.entries(itemsByMark).forEach(([_mark, markItems]) => {
+      if (markItems.length <= 1) {
+        // Single item - no sequence display needed
+        markItems.forEach(item => {
+          sequenceMap.set(item.id, { seq: 1, total: 1, otherLocations: [] });
+        });
+        return;
+      }
+
+      // Sort items by: vehicle date, vehicle sort_order, then item sort_order
+      const sortedItems = [...markItems].sort((a, b) => {
+        const vehicleA = vehicles.find(v => v.id === a.vehicle_id);
+        const vehicleB = vehicles.find(v => v.id === b.vehicle_id);
+
+        // First by date
+        const dateA = vehicleA?.scheduled_date || a.scheduled_date || '9999-99-99';
+        const dateB = vehicleB?.scheduled_date || b.scheduled_date || '9999-99-99';
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+        // Then by vehicle sort_order
+        const vSortA = vehicleA?.sort_order ?? 999;
+        const vSortB = vehicleB?.sort_order ?? 999;
+        if (vSortA !== vSortB) return vSortA - vSortB;
+
+        // Then by item sort_order
+        return a.sort_order - b.sort_order;
+      });
+
+      // Assign sequence numbers
+      const total = sortedItems.length;
+      sortedItems.forEach((item, index) => {
+        const seq = index + 1;
+
+        // Build other locations list (excluding current item)
+        const otherLocations = sortedItems
+          .filter(other => other.id !== item.id)
+          .map(other => {
+            const otherVehicle = vehicles.find(v => v.id === other.vehicle_id);
+            const otherSeq = sortedItems.findIndex(s => s.id === other.id) + 1;
+            return {
+              vehicleCode: otherVehicle?.vehicle_code || '-',
+              vehicleId: other.vehicle_id || '',
+              date: otherVehicle?.scheduled_date || other.scheduled_date,
+              seq: otherSeq
+            };
+          });
+
+        sequenceMap.set(item.id, { seq, total, otherLocations });
+      });
+    });
+
+    return sequenceMap;
+  }, [items, vehicles]);
+
   // Group by factory (alternative view)
   const itemsByFactory = useMemo(() => {
     const groups: Record<string, { factory: DeliveryFactory; vehicles: Record<string, { vehicle: DeliveryVehicle; items: DeliveryItem[] }> }> = {};
@@ -3072,6 +3151,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
 
+                                    {/* Sequence number for duplicates */}
+                                    {(() => {
+                                      const seqInfo = itemSequences.get(item.id);
+                                      if (!seqInfo || seqInfo.total <= 1) return null;
+                                      return (
+                                        <span
+                                          className="item-sequence"
+                                          title={seqInfo.otherLocations.map(loc =>
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${formatDateShort(loc.date)})`
+                                          ).join('\n')}
+                                        >
+                                          {seqInfo.seq}/{seqInfo.total}
+                                        </span>
+                                      );
+                                    })()}
+
                                     {/* Weight */}
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
 
@@ -3360,6 +3455,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
+                                    {/* Sequence number for duplicates */}
+                                    {(() => {
+                                      const seqInfo = itemSequences.get(item.id);
+                                      if (!seqInfo || seqInfo.total <= 1) return null;
+                                      return (
+                                        <span
+                                          className="item-sequence"
+                                          title={seqInfo.otherLocations.map(loc =>
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${formatDateShort(loc.date)})`
+                                          ).join('\n')}
+                                        >
+                                          {seqInfo.seq}/{seqInfo.total}
+                                        </span>
+                                      );
+                                    })()}
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
                                     <span className="item-dimensions"></span>
                                     <div className="item-resources">

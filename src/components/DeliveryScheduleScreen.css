@@ -1179,7 +1179,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 3px 12px;
   border-bottom: 1px solid #f3f4f6;
   cursor: grab;
   transition: background 0.1s;
@@ -1195,7 +1195,8 @@
 }
 
 .delivery-item:hover {
-  background: #f8fafc;
+  background: #e8f4ff;
+  border-left: 2px solid #3b82f6;
 }
 
 .delivery-item.selected {
@@ -1264,6 +1265,24 @@
   font-weight: 500;
   color: #374151;
   text-align: right;
+}
+
+/* Item sequence number (for duplicates like 1/10, 2/10) */
+.delivery-item .item-sequence {
+  font-size: 10px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.delivery-item .item-sequence:hover {
+  background: #ddd6fe;
+  color: #5b21b6;
 }
 
 /* Item dimensions - placeholder for future */
