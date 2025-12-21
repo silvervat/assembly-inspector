@@ -5693,17 +5693,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 .filter(item => selectedItemIds.has(item.id))
                 .reduce((sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0);
               return (
-              <div className="selection-bar item-selection">
-                <span className="selection-count">{selectedItemIds.size} valitud | {Math.round(selectedItemsWeight)} kg</span>
-                <button onClick={() => setShowMoveModal(true)}>
-                  <FiMove /> Tõsta
-                </button>
-                <button className="danger" onClick={deleteSelectedItems}>
-                  <FiTrash2 /> Kustuta
-                </button>
-                <button onClick={() => setSelectedItemIds(new Set())}>
-                  <FiX /> Tühista
-                </button>
+              <div className="selection-bar item-selection two-rows">
+                <div className="selection-info-row">
+                  <span className="selection-label">Graafikust valitud:</span>
+                  <span className="selection-count">{selectedItemIds.size} detaili | {Math.round(selectedItemsWeight)} kg</span>
+                </div>
+                <div className="selection-actions-row">
+                  <button onClick={() => setShowMoveModal(true)}>
+                    <FiMove /> Tõsta
+                  </button>
+                  <button className="danger" onClick={deleteSelectedItems}>
+                    <FiTrash2 /> Kustuta
+                  </button>
+                  <button onClick={() => setSelectedItemIds(new Set())}>
+                    <FiX /> Tühista
+                  </button>
+                </div>
               </div>
               );
             })()}

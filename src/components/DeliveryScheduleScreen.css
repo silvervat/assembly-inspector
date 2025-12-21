@@ -643,6 +643,31 @@
   color: #92400e;
 }
 
+/* Two-row layout for item selection */
+.selection-bar.two-rows {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.selection-bar .selection-info-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.selection-bar .selection-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #78350f;
+}
+
+.selection-bar .selection-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .selection-bar button {
   display: flex;
   align-items: center;
