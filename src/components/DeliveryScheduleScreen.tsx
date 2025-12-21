@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
-  DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources
+  DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
+  DeliveryVehicleStatus
 } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
@@ -307,6 +308,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Active item in list
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
+
+  // Active vehicle (selected for inline editing)
+  const [activeVehicleId, setActiveVehicleId] = useState<string | null>(null);
 
   // Collapsed groups
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
@@ -791,6 +795,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setSelectedItemIds(new Set());
         setLastClickedId(null);
         setActiveItemId(null);
+        setActiveVehicleId(null);
 
         // Also clear viewer selection
         api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
@@ -2414,6 +2419,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
     const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0); // Last day of current month
 
     const days: Date[] = [];
 
@@ -2423,8 +2429,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Monday = 0
     startDate.setDate(startDate.getDate() - diff);
 
-    // Get 6 weeks of days (42 days)
-    for (let i = 0; i < 42; i++) {
+    // Get end of week (Sunday) for last day
+    const endDate = new Date(lastDay);
+    const lastDayOfWeek = endDate.getDay();
+    const endDiff = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek; // Sunday = 0
+    endDate.setDate(endDate.getDate() + endDiff);
+
+    // Calculate number of days needed
+    const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    for (let i = 0; i < totalDays; i++) {
       const date = new Date(startDate);
       date.setDate(startDate.getDate() + i);
       days.push(date);
@@ -2675,45 +2689,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className="vehicle-header"
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
                             onDragEnd={handleDragEnd}
                             onDragOver={(e) => handleVehicleHeaderDragOver(e, date, vehicleIndex)}
                             onClick={() => {
-                              const wasCollapsed = collapsedVehicles.has(vehicleId);
-
-                              // Toggle collapsed state
-                              setCollapsedVehicles(prev => {
-                                const next = new Set(prev);
-                                if (next.has(vehicleId)) {
-                                  next.delete(vehicleId);
-                                } else {
-                                  next.add(vehicleId);
-                                }
-                                return next;
-                              });
-
-                              // Select/deselect all items in this vehicle
-                              if (wasCollapsed) {
-                                // Expanding: select all items
-                                setSelectedItemIds(prev => {
-                                  const next = new Set(prev);
-                                  vehicleItems.forEach(item => next.add(item.id));
-                                  return next;
-                                });
-                              } else {
-                                // Collapsing: deselect all items
-                                setSelectedItemIds(prev => {
-                                  const next = new Set(prev);
-                                  vehicleItems.forEach(item => next.delete(item.id));
-                                  return next;
-                                });
-                              }
+                              // Toggle vehicle selection for inline editing
+                              setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
+                              setActiveItemId(null); // Deselect any active item
                             }}
                           >
-                            <span className="collapse-icon">
+                            <span
+                              className="collapse-icon clickable"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCollapsedVehicles(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(vehicleId)) {
+                                    next.delete(vehicleId);
+                                  } else {
+                                    next.add(vehicleId);
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
@@ -3160,44 +3162,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       <div key={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                         {/* Vehicle header */}
                         <div
-                          className="vehicle-header"
+                          className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
                           data-vehicle-id={vehicleId}
                           draggable
                           onDragStart={(e) => handleVehicleDragStart(e, vehicle)}
                           onDragEnd={handleDragEnd}
                           onClick={() => {
-                            const wasCollapsed = collapsedVehicles.has(vehicleId);
-
-                            // Toggle collapsed state
-                            setCollapsedVehicles(prev => {
-                              const next = new Set(prev);
-                              if (next.has(vehicleId)) {
-                                next.delete(vehicleId);
-                              } else {
-                                next.add(vehicleId);
-                              }
-                              return next;
-                            });
-
-                            // Select/deselect all items in this vehicle
-                            if (wasCollapsed) {
-                              // Expanding: select all items
-                              setSelectedItemIds(prev => {
-                                const next = new Set(prev);
-                                vehicleItems.forEach(item => next.add(item.id));
-                                return next;
-                              });
-                            } else {
-                              // Collapsing: deselect all items
-                              setSelectedItemIds(prev => {
-                                const next = new Set(prev);
-                                vehicleItems.forEach(item => next.delete(item.id));
-                                return next;
-                              });
-                            }
+                            // Toggle vehicle selection for inline editing
+                            setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
+                            setActiveItemId(null); // Deselect any active item
                           }}
                         >
-                          <span className="collapse-icon">
+                          <span
+                            className="collapse-icon clickable"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCollapsedVehicles(prev => {
+                                const next = new Set(prev);
+                                if (next.has(vehicleId)) {
+                                  next.delete(vehicleId);
+                                } else {
+                                  next.add(vehicleId);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
                           <FiTruck className="vehicle-icon" />
@@ -3429,6 +3419,168 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       <div className="delivery-content">
         {/* Calendar */}
         {renderCalendar()}
+
+        {/* Inline vehicle editing panel - shown when vehicle is selected */}
+        {activeVehicleId && (() => {
+          const activeVehicle = vehicles.find(v => v.id === activeVehicleId);
+          if (!activeVehicle) return null;
+
+          return (
+            <div className="vehicle-edit-panel">
+              <div className="vehicle-edit-header">
+                <FiTruck />
+                <span className="vehicle-edit-code">{activeVehicle.vehicle_code}</span>
+                <button
+                  className="close-btn"
+                  onClick={() => setActiveVehicleId(null)}
+                >
+                  <FiX />
+                </button>
+              </div>
+
+              <div className="vehicle-edit-row">
+                {/* Time */}
+                <div className="edit-field">
+                  <label>Kellaaeg</label>
+                  <select
+                    value={activeVehicle.unload_start_time?.slice(0, 5) || ''}
+                    onChange={async (e) => {
+                      const newTime = e.target.value || undefined;
+                      // Optimistic update
+                      setVehicles(prev => prev.map(v =>
+                        v.id === activeVehicleId ? { ...v, unload_start_time: newTime } : v
+                      ));
+                      // Save to DB
+                      await supabase
+                        .from('delivery_vehicles')
+                        .update({ unload_start_time: newTime || null })
+                        .eq('id', activeVehicleId);
+                    }}
+                  >
+                    {TIME_OPTIONS.map(time => (
+                      <option key={time || 'empty'} value={time}>{time || '--:--'}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Duration */}
+                <div className="edit-field">
+                  <label>Kestus</label>
+                  <select
+                    value={activeVehicle.unload_duration_minutes || 60}
+                    onChange={async (e) => {
+                      const newDuration = Number(e.target.value);
+                      // Optimistic update
+                      setVehicles(prev => prev.map(v =>
+                        v.id === activeVehicleId ? { ...v, unload_duration_minutes: newDuration } : v
+                      ));
+                      // Save to DB
+                      await supabase
+                        .from('delivery_vehicles')
+                        .update({ unload_duration_minutes: newDuration })
+                        .eq('id', activeVehicleId);
+                    }}
+                  >
+                    {DURATION_OPTIONS.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Status */}
+                <div className="edit-field">
+                  <label>Staatus</label>
+                  <select
+                    value={activeVehicle.status || 'planned'}
+                    onChange={async (e) => {
+                      const newStatus = e.target.value as DeliveryVehicleStatus;
+                      // Optimistic update
+                      setVehicles(prev => prev.map(v =>
+                        v.id === activeVehicleId ? { ...v, status: newStatus } : v
+                      ));
+                      // Save to DB
+                      await supabase
+                        .from('delivery_vehicles')
+                        .update({ status: newStatus })
+                        .eq('id', activeVehicleId);
+                    }}
+                  >
+                    {Object.entries(VEHICLE_STATUS_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Resources */}
+              <div className="vehicle-edit-resources">
+                <label>Ressursid</label>
+                <div className="resource-selectors">
+                  {UNLOAD_METHODS.map(method => {
+                    const count = activeVehicle.unload_methods?.[method.key] || 0;
+                    const isActive = count > 0;
+
+                    return (
+                      <div key={method.key} className="resource-selector">
+                        <button
+                          className={`resource-btn ${isActive ? 'active' : ''}`}
+                          style={{ backgroundColor: isActive ? method.activeBgColor : method.bgColor }}
+                          onClick={async () => {
+                            const newMethods = { ...activeVehicle.unload_methods };
+                            if (isActive) {
+                              delete newMethods[method.key];
+                            } else {
+                              newMethods[method.key] = 1;
+                            }
+                            // Optimistic update
+                            setVehicles(prev => prev.map(v =>
+                              v.id === activeVehicleId ? { ...v, unload_methods: newMethods } : v
+                            ));
+                            // Save to DB
+                            await supabase
+                              .from('delivery_vehicles')
+                              .update({ unload_methods: newMethods })
+                              .eq('id', activeVehicleId);
+                          }}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                        </button>
+                        {isActive && (
+                          <select
+                            className="resource-count-select"
+                            value={count}
+                            onChange={async (e) => {
+                              const newCount = Number(e.target.value);
+                              const newMethods = { ...activeVehicle.unload_methods, [method.key]: newCount };
+                              // Optimistic update
+                              setVehicles(prev => prev.map(v =>
+                                v.id === activeVehicleId ? { ...v, unload_methods: newMethods } : v
+                              ));
+                              // Save to DB
+                              await supabase
+                                .from('delivery_vehicles')
+                                .update({ unload_methods: newMethods })
+                                .eq('id', activeVehicleId);
+                            }}
+                          >
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Selection bars - between calendar and search */}
         {(selectedObjects.length > 0 || selectedItemIds.size > 0) && (
