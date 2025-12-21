@@ -1354,7 +1354,7 @@
 .delivery-item .item-info {
   display: flex;
   flex-direction: column;
-  min-width: 100px;
+  min-width: 0;
   flex: 1;
   overflow: hidden;
 }
@@ -1363,6 +1363,7 @@
   flex-direction: row;
   align-items: center;
   gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .delivery-item .item-mark {
@@ -1370,8 +1371,7 @@
   font-size: 12px;
   color: #111827;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex-shrink: 0;  /* Never shrink - always show full mark */
 }
 
 .delivery-item .item-mark.clickable {
@@ -1389,6 +1389,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 1;  /* Can shrink and hide */
+  min-width: 0;
 }
 
 .delivery-item .item-position {
@@ -1398,6 +1400,10 @@
   padding: 1px 4px;
   border-radius: 3px;
   white-space: nowrap;
+  flex-shrink: 2;  /* Shrinks first before product */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 /* Item separator */
@@ -2469,6 +2475,20 @@
   }
 }
 
+/* Container query - hide position code first (at 400px) */
+@container delivery-list (max-width: 400px) {
+  .delivery-item .item-position {
+    display: none;
+  }
+}
+
+/* Container query - hide product name second (at 320px) */
+@container delivery-list (max-width: 320px) {
+  .delivery-item .item-product {
+    display: none;
+  }
+}
+
 /* Container query - hides resources when list panel itself is narrow */
 @container delivery-list (max-width: 300px) {
   /* When collapsed: hide resources, keep actions inline */
@@ -3053,6 +3073,103 @@
 .status-badge.clickable:hover {
   opacity: 0.8;
   transform: scale(1.05);
+}
+
+/* ============================================
+   PLAYBACK SETTINGS MODAL (COMPACT)
+   ============================================ */
+
+.settings-modal.compact {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  max-width: 280px;
+  width: 90%;
+}
+
+.settings-modal.compact .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.settings-modal.compact .modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.settings-modal.compact .modal-header button {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.settings-modal.compact .modal-header button:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.settings-modal.compact .modal-body {
+  padding: 8px 16px;
+}
+
+.setting-option-compact {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+}
+
+.setting-option-compact:last-child {
+  border-bottom: none;
+}
+
+.setting-option-compact input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.setting-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.setting-text span {
+  font-size: 12px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.setting-text small {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.setting-option-compact input:disabled + .setting-text {
+  opacity: 0.5;
+}
+
+.setting-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
 }
 
 /* ============================================

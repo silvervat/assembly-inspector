@@ -3116,6 +3116,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div
                 className={`date-header ${hasSelectedItem ? 'has-selected-item' : ''}`}
                 onClick={() => {
+                  const wasCollapsed = collapsedDates.has(date);
                   setCollapsedDates(prev => {
                     const next = new Set(prev);
                     if (next.has(date)) {
@@ -3125,6 +3126,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     }
                     return next;
                   });
+                  // When expanding a date group, collapse all its vehicles
+                  if (wasCollapsed) {
+                    const dateVehicleIds = Object.keys(dateVehicles);
+                    setCollapsedVehicles(prev => {
+                      const next = new Set(prev);
+                      dateVehicleIds.forEach(id => next.add(id));
+                      return next;
+                    });
+                  }
                 }}
               >
                 <span className="collapse-icon">
@@ -5240,15 +5250,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       {/* Settings modal */}
       {showSettingsModal && (
         <div className="modal-overlay" onClick={() => setShowSettingsModal(false)}>
-          <div className="modal settings-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="settings-modal compact" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>Esituse seaded</h2>
-              <button className="close-btn" onClick={() => setShowSettingsModal(false)}>
-                <FiX />
-              </button>
+              <h3>Mängimise seaded</h3>
+              <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
-              <label className="setting-checkbox">
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorByVehicle}
@@ -5258,9 +5266,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     colorByDay: e.target.checked ? false : prev.colorByDay
                   }))}
                 />
-                Värvi iga veok erinevalt
+                <div className="setting-text">
+                  <span>Iga veok erinev värv</span>
+                  <small>Värvi iga veok erinevalt</small>
+                </div>
               </label>
-              <label className="setting-checkbox">
+
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.colorByDay}
@@ -5270,9 +5282,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     colorByVehicle: e.target.checked ? false : prev.colorByVehicle
                   }))}
                 />
-                Värvi iga päev erinevalt
+                <div className="setting-text">
+                  <span>Iga päev erinev värv</span>
+                  <small>Värvi iga päev erinevalt</small>
+                </div>
               </label>
-              <label className="setting-checkbox">
+
+              <div className="setting-divider" />
+
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.showVehicleOverview}
@@ -5281,9 +5299,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     showVehicleOverview: e.target.checked
                   }))}
                 />
-                Näita veoki ülevaadet
+                <div className="setting-text">
+                  <span>Veoki ülevaade</span>
+                  <small>Näita veoki kokkuvõtet pärast lõppu</small>
+                </div>
               </label>
-              <label className="setting-checkbox">
+
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.expandItemsDuringPlayback}
@@ -5292,9 +5314,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     expandItemsDuringPlayback: e.target.checked
                   }))}
                 />
-                Ava veoki detailid esitamisel
+                <div className="setting-text">
+                  <span>Ava veoki detailid</span>
+                  <small>Laienda veoki listi esitamise ajal</small>
+                </div>
               </label>
-              <label className="setting-checkbox">
+
+              <label className="setting-option-compact">
                 <input
                   type="checkbox"
                   checked={playbackSettings.disableZoom}
@@ -5303,13 +5329,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     disableZoom: e.target.checked
                   }))}
                 />
-                Keela suumimine
+                <div className="setting-text">
+                  <span>Ilma zoomita</span>
+                  <small>Ära zoomi detailide juurde</small>
+                </div>
               </label>
-            </div>
-            <div className="modal-footer">
-              <button className="cancel-btn" onClick={() => setShowSettingsModal(false)}>
-                Sulge
-              </button>
             </div>
           </div>
         </div>
