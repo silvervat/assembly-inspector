@@ -1630,22 +1630,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: none;
-  background: #f3f4f6;
-  color: #6b7280;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #374151;
   border-radius: 4px;
   cursor: pointer;
   position: relative;
+  flex-shrink: 0;
 }
 
 .delivery-item .item-btn svg {
-  width: 12px;
-  height: 12px;
-  stroke: currentColor;
+  width: 14px;
+  height: 14px;
+  color: #374151;
+  stroke: #374151;
   stroke-width: 2;
+  display: block;
 }
 
 .delivery-item .item-btn:hover {
