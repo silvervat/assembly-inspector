@@ -1242,6 +1242,15 @@
   text-overflow: ellipsis;
 }
 
+.delivery-item .item-mark.clickable {
+  cursor: pointer;
+}
+
+.delivery-item .item-mark.clickable:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+
 .delivery-item .item-product {
   font-size: 10px;
   color: #9ca3af;
@@ -2232,7 +2241,7 @@
 }
 
 /* Hide resources on narrow list - media query fallback */
-@media (max-width: 500px) {
+@media (max-width: 350px) {
   .vehicle-resources-section {
     display: none !important;
   }
@@ -2251,7 +2260,7 @@
 }
 
 /* Container query - hides resources when list panel itself is narrow */
-@container delivery-list (max-width: 400px) {
+@container delivery-list (max-width: 300px) {
   .vehicle-resources-section {
     display: none !important;
   }
@@ -2304,6 +2313,11 @@
     margin-left: auto;
     min-width: auto;
     flex-shrink: 0;
+  }
+
+  .delivery-item .item-actions {
+    flex-shrink: 0;
+    margin-left: 4px;
   }
 }
 
