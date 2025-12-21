@@ -1610,6 +1610,13 @@
   position: relative;
 }
 
+.delivery-item .item-btn svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
 .delivery-item .item-btn:hover {
   background: #e5e7eb;
   color: #374151;
