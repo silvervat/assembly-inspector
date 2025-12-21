@@ -929,6 +929,36 @@
   border-color: #9ca3af;
 }
 
+.list-search-box .hide-past-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.list-search-box .hide-past-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
+.list-search-box .hide-past-btn.active {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
+.list-search-box .hide-past-btn.active:hover {
+  background: #fde68a;
+}
+
 /* ============================================
    LIST
    ============================================ */

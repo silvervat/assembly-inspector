@@ -11,7 +11,8 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
-  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet
+  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
+  FiEye, FiEyeOff
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -370,6 +371,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Search
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Hide past dates/vehicles toggle
+  const [hidePastDates, setHidePastDates] = useState(true);  // Default: hide past
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -573,12 +577,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   }, [filteredItems, vehicles]);
 
   // Get sorted dates (MÄÄRAMATA always at end)
+  // Filter out past dates if hidePastDates is true (but always show selectedDate)
   const sortedDates = useMemo(() => {
     const dates = Object.keys(itemsByDateAndVehicle);
-    const regularDates = dates.filter(d => d !== UNASSIGNED_DATE).sort();
+    const today = formatDateForDB(new Date());
+
+    let regularDates = dates.filter(d => d !== UNASSIGNED_DATE);
+
+    // Filter past dates if toggle is on
+    if (hidePastDates) {
+      regularDates = regularDates.filter(d => {
+        // Always show selectedDate even if past
+        if (d === selectedDate) return true;
+        // Hide dates before today
+        return d >= today;
+      });
+    }
+
+    regularDates.sort();
     const hasUnassigned = dates.includes(UNASSIGNED_DATE);
     return hasUnassigned ? [...regularDates, UNASSIGNED_DATE] : regularDates;
-  }, [itemsByDateAndVehicle]);
+  }, [itemsByDateAndVehicle, hidePastDates, selectedDate]);
 
   // Calculate item sequences for duplicate assembly marks
   // Returns a map of itemId -> { seq, total, otherLocations }
@@ -7011,6 +7030,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             title={collapsedDates.size > 0 ? 'Ava kõik' : 'Sulge kõik'}
           >
             {collapsedDates.size > 0 ? <FiChevronDown /> : <FiChevronUp />}
+          </button>
+          <button
+            className={`hide-past-btn ${hidePastDates ? 'active' : ''}`}
+            onClick={() => setHidePastDates(!hidePastDates)}
+            title={hidePastDates ? 'Näita möödunud kuupäevi' : 'Peida möödunud kuupäevad'}
+          >
+            {hidePastDates ? <FiEyeOff /> : <FiEye />}
           </button>
           <FiSearch />
           <input
