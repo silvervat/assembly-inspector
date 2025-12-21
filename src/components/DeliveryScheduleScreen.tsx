@@ -11,7 +11,8 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
-  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet
+  FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
+  FiEye, FiEyeOff
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -370,6 +371,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Search
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Hide past dates/vehicles toggle
+  const [hidePastDates, setHidePastDates] = useState(true);  // Default: hide past
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -573,12 +577,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   }, [filteredItems, vehicles]);
 
   // Get sorted dates (MÄÄRAMATA always at end)
+  // Filter out past dates if hidePastDates is true (but always show selectedDate)
   const sortedDates = useMemo(() => {
     const dates = Object.keys(itemsByDateAndVehicle);
-    const regularDates = dates.filter(d => d !== UNASSIGNED_DATE).sort();
+    const today = formatDateForDB(new Date());
+
+    let regularDates = dates.filter(d => d !== UNASSIGNED_DATE);
+
+    // Filter past dates if toggle is on
+    if (hidePastDates) {
+      regularDates = regularDates.filter(d => {
+        // Always show selectedDate even if past
+        if (d === selectedDate) return true;
+        // Hide dates before today
+        return d >= today;
+      });
+    }
+
+    regularDates.sort();
     const hasUnassigned = dates.includes(UNASSIGNED_DATE);
     return hasUnassigned ? [...regularDates, UNASSIGNED_DATE] : regularDates;
-  }, [itemsByDateAndVehicle]);
+  }, [itemsByDateAndVehicle, hidePastDates, selectedDate]);
 
   // Calculate item sequences for duplicate assembly marks
   // Returns a map of itemId -> { seq, total, otherLocations }
@@ -4759,33 +4778,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const testApproach23 = async () => {
     setTestStatus('Approach 23: Loen andmeid Supabasest...');
     try {
-      // Fetch ALL data with pagination (Supabase default limit is 1000)
-      const PAGE_SIZE = 10000;
+      // Fetch ALL data with pagination - use order() for reliable pagination
+      const PAGE_SIZE = 5000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let offset = 0;
+      let page = 0;
       let hasMore = true;
 
       while (hasMore) {
-        setTestStatus(`Approach 23: Loen andmeid... ${modelObjects.length} kirjet`);
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        setTestStatus(`Approach 23: Loen andmeid... ${modelObjects.length} kirjet (page ${page + 1})`);
+        console.log(`[23] Fetching page ${page + 1}, range ${from}-${to}`);
+
         const { data, error } = await supabase
           .from('trimble_model_objects')
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
-          .range(offset, offset + PAGE_SIZE - 1);
+          .order('object_runtime_id', { ascending: true })
+          .range(from, to);
 
         if (error) {
+          console.error('[23] Supabase error:', error);
           setTestStatus(`Approach 23: Supabase error - ${error.message}`);
           return;
         }
 
+        console.log(`[23] Got ${data?.length || 0} rows`);
+
         if (data && data.length > 0) {
           modelObjects.push(...data);
-          offset += PAGE_SIZE;
+          page++;
           hasMore = data.length === PAGE_SIZE;
         } else {
           hasMore = false;
         }
+
+        if (page >= 100) break; // Safety limit
       }
+
+      console.log(`[23] Total fetched: ${modelObjects.length}`);
 
       if (modelObjects.length === 0) {
         setTestStatus('Approach 23: No Supabase data. Run "Scan & Save" first!');
@@ -4887,33 +4918,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const testApproach24 = async () => {
     setTestStatus('Approach 24: Loen andmeid Supabasest...');
     try {
-      // Fetch ALL data with pagination (Supabase default limit is 1000)
-      const PAGE_SIZE = 10000;
+      // Fetch ALL data with pagination - use order() for reliable pagination
+      const PAGE_SIZE = 5000;
       const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let offset = 0;
+      let page = 0;
       let hasMore = true;
 
       while (hasMore) {
-        setTestStatus(`Approach 24: Loen andmeid... ${allModelObjects.length} kirjet`);
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        setTestStatus(`Approach 24: Loen andmeid... ${allModelObjects.length} kirjet (page ${page + 1})`);
+        console.log(`[24] Fetching page ${page + 1}, range ${from}-${to}`);
+
         const { data, error } = await supabase
           .from('trimble_model_objects')
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
-          .range(offset, offset + PAGE_SIZE - 1);
+          .order('object_runtime_id', { ascending: true })
+          .range(from, to);
 
         if (error) {
+          console.error('[24] Supabase error:', error);
           setTestStatus(`Approach 24: Supabase error - ${error.message}`);
           return;
         }
 
+        console.log(`[24] Got ${data?.length || 0} rows`);
+
         if (data && data.length > 0) {
           allModelObjects.push(...data);
-          offset += PAGE_SIZE;
+          page++;
           hasMore = data.length === PAGE_SIZE;
         } else {
           hasMore = false;
         }
+
+        if (page >= 100) break; // Safety limit
       }
+
+      console.log(`[24] Total fetched: ${allModelObjects.length}`);
 
       if (allModelObjects.length === 0) {
         setTestStatus('Approach 24: No Supabase data. Run "Scan & Save" first!');
@@ -4983,33 +5026,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const testApproach25 = async () => {
     setTestStatus('Approach 25: Loen andmeid Supabasest...');
     try {
-      // Fetch ALL data with pagination
-      const PAGE_SIZE = 10000;
+      // Fetch ALL data with pagination - use order() for reliable pagination
+      const PAGE_SIZE = 5000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let offset = 0;
+      let page = 0;
       let hasMore = true;
 
       while (hasMore) {
-        setTestStatus(`Approach 25: Loen andmeid... ${modelObjects.length} kirjet`);
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        setTestStatus(`Approach 25: Loen andmeid... ${modelObjects.length} kirjet (page ${page + 1})`);
+        console.log(`[25] Fetching page ${page + 1}, range ${from}-${to}`);
+
         const { data, error } = await supabase
           .from('trimble_model_objects')
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
-          .range(offset, offset + PAGE_SIZE - 1);
+          .order('object_runtime_id', { ascending: true })
+          .range(from, to);
 
         if (error) {
+          console.error('[25] Supabase error:', error);
           setTestStatus(`Approach 25: Supabase error - ${error.message}`);
           return;
         }
 
+        console.log(`[25] Got ${data?.length || 0} rows`);
+
         if (data && data.length > 0) {
           modelObjects.push(...data);
-          offset += PAGE_SIZE;
+          page++;
           hasMore = data.length === PAGE_SIZE;
         } else {
           hasMore = false;
         }
+
+        if (page >= 100) break; // Safety limit
       }
+
+      console.log(`[25] Total fetched: ${modelObjects.length}`);
 
       if (modelObjects.length === 0) {
         setTestStatus('Approach 25: No Supabase data. Run "Scan & Save" first!');
@@ -5129,33 +5184,51 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       // Step 2: Get remaining objects from Supabase with pagination
+      // Use smaller page size and explicit ordering for reliable pagination
       setTestStatus('Approach 26: Loen ülejäänud detailid Supabasest...');
-      const PAGE_SIZE = 10000;
+      const PAGE_SIZE = 5000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let offset = 0;
+      let page = 0;
       let hasMore = true;
 
       while (hasMore) {
-        setTestStatus(`Approach 26: Loen Supabasest... ${modelObjects.length} kirjet`);
-        const { data, error } = await supabase
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        setTestStatus(`Approach 26: Loen Supabasest... ${modelObjects.length} kirjet (page ${page + 1})`);
+        console.log(`Fetching page ${page + 1}, range ${from}-${to}`);
+
+        const { data, error, count } = await supabase
           .from('trimble_model_objects')
-          .select('model_id, object_runtime_id')
+          .select('model_id, object_runtime_id', { count: 'exact' })
           .eq('trimble_project_id', projectId)
-          .range(offset, offset + PAGE_SIZE - 1);
+          .order('object_runtime_id', { ascending: true })
+          .range(from, to);
 
         if (error) {
+          console.error('Supabase error:', error);
           setTestStatus(`Approach 26: Supabase error - ${error.message}`);
           return;
         }
 
+        console.log(`Got ${data?.length || 0} rows, total count: ${count}`);
+
         if (data && data.length > 0) {
           modelObjects.push(...data);
-          offset += PAGE_SIZE;
+          page++;
+          // Continue if we got a full page (more might exist)
           hasMore = data.length === PAGE_SIZE;
         } else {
           hasMore = false;
         }
+
+        // Safety limit - max 100 pages (500k objects)
+        if (page >= 100) {
+          console.warn('Hit page limit, stopping pagination');
+          break;
+        }
       }
+
+      console.log(`Total fetched: ${modelObjects.length} objects`);
 
       if (modelObjects.length === 0) {
         setTestStatus(`Approach 26: Veokid värvitud (${scheduleColoredCount}), aga Supabase tühi!`);
@@ -7011,6 +7084,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             title={collapsedDates.size > 0 ? 'Ava kõik' : 'Sulge kõik'}
           >
             {collapsedDates.size > 0 ? <FiChevronDown /> : <FiChevronUp />}
+          </button>
+          <button
+            className={`hide-past-btn ${hidePastDates ? 'active' : ''}`}
+            onClick={() => setHidePastDates(!hidePastDates)}
+            title={hidePastDates ? 'Näita möödunud kuupäevi' : 'Peida möödunud kuupäevad'}
+          >
+            {hidePastDates ? <FiEyeOff /> : <FiEye />}
           </button>
           <FiSearch />
           <input
