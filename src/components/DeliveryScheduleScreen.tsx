@@ -1028,6 +1028,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           return;
         }
 
+        // Clear schedule item selection when model selection changes
+        // This prevents having two types of selections at the same time
+        setSelectedItemIds(new Set());
+
         const objects: SelectedObject[] = [];
 
         for (const sel of selection) {
@@ -1138,6 +1142,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     };
   }, [api]);
+
+  // Clear model selection when schedule items are selected
+  useEffect(() => {
+    if (selectedItemIds.size > 0) {
+      setSelectedObjects([]);
+      // Also clear viewer selection to avoid visual confusion
+      api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
+    }
+  }, [selectedItemIds, api]);
 
   // ============================================
   // FACTORY OPERATIONS
