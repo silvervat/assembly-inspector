@@ -1126,26 +1126,26 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     try {
       const oldFactory = factories.find(f => f.id === editingFactoryId);
       const newCode = editFactoryCode.trim().toUpperCase();
-      const newSeparator = editFactorySeparator;
+      // Get project-level separator from first factory
+      const projectSeparator = factories[0]?.vehicle_separator || '';
 
-      // Update factory
+      // Update factory (name and code only, separator is project-level)
       const { error } = await supabase
         .from('trimble_delivery_factories')
         .update({
           factory_name: editFactoryName.trim(),
-          factory_code: newCode,
-          vehicle_separator: newSeparator
+          factory_code: newCode
         })
         .eq('id', editingFactoryId);
 
       if (error) throw error;
 
-      // Update all vehicle codes if factory code or separator changed
-      if (oldFactory && (oldFactory.factory_code !== newCode || (oldFactory.vehicle_separator || '') !== newSeparator)) {
+      // Update all vehicle codes if factory code changed
+      if (oldFactory && oldFactory.factory_code !== newCode) {
         const factoryVehicles = vehicles.filter(v => v.factory_id === editingFactoryId);
 
         for (const vehicle of factoryVehicles) {
-          const newVehicleCode = `${newCode}${newSeparator}${vehicle.vehicle_number}`;
+          const newVehicleCode = `${newCode}${projectSeparator}${vehicle.vehicle_number}`;
           await supabase
             .from('trimble_delivery_vehicles')
             .update({ vehicle_code: newVehicleCode })
@@ -1159,7 +1159,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setEditingFactoryId(null);
       setEditFactoryName('');
       setEditFactoryCode('');
-      setEditFactorySeparator('.');
       await loadFactories();
     } catch (e: any) {
       console.error('Error updating factory:', e);
@@ -2906,8 +2905,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     onClick={() => {
                       setSelectedDate(dateStr);
 
-                      // If items are selected from model, open add modal
-                      if (selectedObjects.length > 0) {
+                      // Check if selected objects are NEW (not already in schedule)
+                      const existingGuids = new Set(items.map(item => item.guid));
+                      const newObjects = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+
+                      // If NEW items are selected from model, open add modal
+                      if (newObjects.length > 0) {
                         setAddModalDate(dateStr);
                         setAddModalFactoryId(factories[0]?.id || '');
                         setAddModalVehicleId('');
@@ -4975,6 +4978,53 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
             </div>
             <div className="modal-body">
+              {/* Project-level separator setting */}
+              <div className="project-separator-setting">
+                <label>Veoki koodi eraldaja:</label>
+                <div className="separator-options">
+                  {['', '.', ',', '|'].map(sep => (
+                    <button
+                      key={sep || 'empty'}
+                      className={`separator-option ${(factories[0]?.vehicle_separator || '') === sep ? 'active' : ''}`}
+                      onClick={async () => {
+                        // Update all factories with this separator
+                        setSaving(true);
+                        try {
+                          for (const f of factories) {
+                            await supabase
+                              .from('trimble_delivery_factories')
+                              .update({ vehicle_separator: sep })
+                              .eq('id', f.id);
+                            // Update all vehicle codes for this factory
+                            const factoryVehicles = vehicles.filter(v => v.factory_id === f.id);
+                            for (const vehicle of factoryVehicles) {
+                              const newVehicleCode = `${f.factory_code}${sep}${vehicle.vehicle_number}`;
+                              await supabase
+                                .from('trimble_delivery_vehicles')
+                                .update({ vehicle_code: newVehicleCode })
+                                .eq('id', vehicle.id);
+                            }
+                          }
+                          setNewFactorySeparator(sep);
+                          await loadFactories();
+                          await loadVehicles();
+                          setMessage('Eraldaja uuendatud');
+                        } catch (e: any) {
+                          setMessage('Viga: ' + e.message);
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      disabled={saving}
+                    >
+                      {sep || 'tühi'}
+                    </button>
+                  ))}
+                </div>
+                <span className="separator-preview">Näidis: ABC{factories[0]?.vehicle_separator || ''}1</span>
+              </div>
+
+              {/* Factory list */}
               <div className="factory-list">
                 {factories.map(f => (
                   <div key={f.id} className="factory-list-item">
@@ -4995,18 +5045,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           maxLength={5}
                           className="factory-edit-input factory-code-input"
                         />
-                        <select
-                          value={editFactorySeparator}
-                          onChange={(e) => setEditFactorySeparator(e.target.value)}
-                          className="factory-separator-select"
-                          title="Eraldaja"
-                        >
-                          <option value="">tühi</option>
-                          <option value=".">.</option>
-                          <option value=",">,</option>
-                          <option value="|">|</option>
-                        </select>
-                        <span className="separator-preview" title="Näidis">{editFactoryCode}{editFactorySeparator}1</span>
                         <button className="icon-btn save-btn" onClick={updateFactory} disabled={saving}>
                           <FiCheck />
                         </button>
@@ -5017,7 +5055,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     ) : (
                       <>
                         <span className="factory-name">{f.factory_name}</span>
-                        <span className="factory-code">({f.factory_code}{f.vehicle_separator || ''}#)</span>
+                        <span className="factory-code">({f.factory_code})</span>
                         <div className="factory-actions">
                           <button className="icon-btn" onClick={() => startEditFactory(f)} title="Muuda">
                             <FiEdit2 />
@@ -5031,8 +5069,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </div>
                 ))}
               </div>
+
+              {/* Add new factory - compact */}
               <div className="add-factory-form">
-                <h4>Lisa uus tehas</h4>
                 <div className="form-row">
                   <input
                     type="text"
@@ -5042,35 +5081,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   />
                   <input
                     type="text"
-                    placeholder="Kood (nt OPO)"
+                    placeholder="Kood"
                     value={newFactoryCode}
                     onChange={(e) => setNewFactoryCode(e.target.value.toUpperCase())}
                     maxLength={5}
                   />
-                  <select
-                    value={newFactorySeparator}
-                    onChange={(e) => setNewFactorySeparator(e.target.value)}
-                    className="factory-separator-select"
-                    title="Eraldaja"
-                  >
-                    <option value="">tühi</option>
-                    <option value=".">.</option>
-                    <option value=",">,</option>
-                    <option value="|">|</option>
-                  </select>
                   <button
                     className="add-btn"
                     onClick={createFactory}
                     disabled={!newFactoryName.trim() || !newFactoryCode.trim() || saving}
+                    title="Lisa tehas"
                   >
                     <FiPlus />
                   </button>
                 </div>
-                {newFactoryCode && (
-                  <div className="separator-preview-row">
-                    Näidis: <span className="separator-preview">{newFactoryCode}{newFactorySeparator}1</span>
-                  </div>
-                )}
               </div>
             </div>
             <div className="modal-footer">
