@@ -466,6 +466,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Color mode for model visualization
   const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date'>('none');
   const [showColorMenu, setShowColorMenu] = useState(false);
+  const [showImportExportMenu, setShowImportExportMenu] = useState(false);
   const [vehicleColors, setVehicleColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [dateColors, setDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
@@ -4521,14 +4522,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <button onClick={() => setShowFactoryModal(true)}>
             <FiLayers /> Tehased
           </button>
-          <button onClick={() => setShowImportModal(true)}>
-            <FiUpload /> Import
-          </button>
-          <button onClick={() => setShowExportModal(true)}>
-            <FiDownload /> Eksport
-          </button>
           <div
-            className="color-menu-wrapper"
+            className="dropdown-menu-wrapper"
+            onMouseEnter={() => setShowImportExportMenu(true)}
+            onMouseLeave={() => setShowImportExportMenu(false)}
+          >
+            <button>
+              <FiDownload /> Import-Eksport
+            </button>
+            {showImportExportMenu && (
+              <div className="dropdown-menu">
+                <button onClick={() => { setShowImportExportMenu(false); setShowImportModal(true); }}>
+                  <FiUpload /> <span>Import</span>
+                </button>
+                <button onClick={() => { setShowImportExportMenu(false); setShowExportModal(true); }}>
+                  <FiDownload /> <span>Eksport</span>
+                </button>
+              </div>
+            )}
+          </div>
+          <div
+            className="dropdown-menu-wrapper"
             onMouseEnter={() => setShowColorMenu(true)}
             onMouseLeave={() => setShowColorMenu(false)}
           >
@@ -4536,7 +4550,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <FiDroplet /> Värvi
             </button>
             {showColorMenu && (
-              <div className="color-dropdown">
+              <div className="dropdown-menu">
                 <button
                   className={colorMode === 'vehicle' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'vehicle' ? 'none' : 'vehicle')}
@@ -5114,7 +5128,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     <button
                                       key={n}
                                       type="button"
-                                      className={`qty-option ${n === count ? 'active' : ''}`}
+                                      className={`qty-btn ${n === count ? 'active' : ''}`}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setAddModalUnloadMethodCount(method.key, n);
