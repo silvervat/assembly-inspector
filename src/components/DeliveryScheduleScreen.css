@@ -1242,6 +1242,15 @@
   text-overflow: ellipsis;
 }
 
+.delivery-item .item-mark.clickable {
+  cursor: pointer;
+}
+
+.delivery-item .item-mark.clickable:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+
 .delivery-item .item-product {
   font-size: 10px;
   color: #9ca3af;

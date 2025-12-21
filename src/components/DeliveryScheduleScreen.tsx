@@ -3371,7 +3371,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                                     {/* Mark + Product on same line */}
                                     <div className="item-info inline">
-                                      <span className="item-mark">{item.assembly_mark}</span>
+                                      <span
+                                        className="item-mark clickable"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigator.clipboard.writeText(item.assembly_mark);
+                                          setMessage(`"${item.assembly_mark}" kopeeritud`);
+                                        }}
+                                        title="Kopeeri märk"
+                                      >{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
 
@@ -3678,7 +3686,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       }}
                                     />
                                     <div className="item-info inline">
-                                      <span className="item-mark">{item.assembly_mark}</span>
+                                      <span
+                                        className="item-mark clickable"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigator.clipboard.writeText(item.assembly_mark);
+                                          setMessage(`"${item.assembly_mark}" kopeeritud`);
+                                        }}
+                                        title="Kopeeri märk"
+                                      >{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
                                     {/* Sequence number for duplicates */}
