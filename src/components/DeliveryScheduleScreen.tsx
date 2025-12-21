@@ -516,6 +516,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
+  const initialCollapseRef = useRef(false);
 
   // ============================================
   // COMPUTED VALUES
@@ -934,6 +935,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Collapse all dates and vehicles on initial load
+  useEffect(() => {
+    if (!initialCollapseRef.current && vehicles.length > 0) {
+      initialCollapseRef.current = true;
+      // Collapse all dates
+      const allDates = [...new Set(vehicles.map(v => v.scheduled_date || 'MÄÄRAMATA'))];
+      setCollapsedDates(new Set(allDates));
+      // Collapse all vehicles
+      setCollapsedVehicles(new Set(vehicles.map(v => v.id)));
+    }
+  }, [vehicles]);
 
   // ESC key to cancel all selections
   useEffect(() => {
@@ -1800,6 +1813,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     const draggedIds = new Set(draggedItems.map(i => i.id));
     const isSameVehicle = draggedItems.every(item => item.vehicle_id === targetVehicleId);
+    const movedCount = draggedItems.length;
+
+    // Show notification if moving to different vehicle
+    if (!isSameVehicle) {
+      const dateStr = targetVehicle.scheduled_date
+        ? formatDateShort(targetVehicle.scheduled_date)
+        : 'MÄÄRAMATA';
+      setMessage(`${movedCount} detail${movedCount > 1 ? 'i' : ''} → ${targetVehicle.vehicle_code} · ${dateStr}`);
+    }
 
     // Optimistic update
     setItems(prev => {
