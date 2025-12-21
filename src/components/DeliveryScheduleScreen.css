@@ -2249,6 +2249,38 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
+
+  /* Item layout improvements for narrow screens */
+  .delivery-item {
+    gap: 6px;
+  }
+
+  .delivery-item .item-dimensions {
+    display: none;
+  }
+
+  .delivery-item .item-resources {
+    display: none;
+  }
+
+  .delivery-item .item-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .delivery-item .item-info.inline {
+    flex-wrap: nowrap;
+  }
+
+  .delivery-item .item-mark {
+    flex-shrink: 0;
+  }
+
+  .delivery-item .item-weight {
+    margin-left: auto;
+    min-width: auto;
+    flex-shrink: 0;
+  }
 }
 
 /* Vehicle comments in modal */
