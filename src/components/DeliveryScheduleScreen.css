@@ -436,6 +436,55 @@
   background: #fbbf24;
 }
 
+/* Calendar day tooltip */
+.calendar-day-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 6px 0;
+  min-width: 120px;
+  margin-top: 4px;
+}
+
+.calendar-day-tooltip::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid white;
+}
+
+.tooltip-vehicle {
+  display: flex;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.tooltip-vehicle:hover {
+  background: #f3f4f6;
+}
+
+.tooltip-time {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.tooltip-code {
+  color: #111827;
+  font-weight: 600;
+}
+
 /* Playback active date in calendar */
 .calendar-day.playback-active {
   background: #dcfce7 !important;
@@ -1294,6 +1343,15 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.delivery-item .item-position {
+  font-size: 10px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
 /* Item separator */
