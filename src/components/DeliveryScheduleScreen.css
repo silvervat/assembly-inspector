@@ -2163,6 +2163,30 @@
   cursor: not-allowed;
 }
 
+.factory-separator-select {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 14px;
+  width: 60px;
+  background: white;
+}
+
+.separator-preview {
+  font-weight: 600;
+  color: #0063a3;
+  background: #e0f2fe;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.separator-preview-row {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
 /* ============================================
    SETTINGS
    ============================================ */
