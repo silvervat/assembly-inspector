@@ -2906,8 +2906,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     onClick={() => {
                       setSelectedDate(dateStr);
 
-                      // If items are selected from model, open add modal
-                      if (selectedObjects.length > 0) {
+                      // Check if selected objects are NEW (not already in schedule)
+                      const existingGuids = new Set(items.map(item => item.guid));
+                      const newObjects = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+
+                      // If NEW items are selected from model, open add modal
+                      if (newObjects.length > 0) {
                         setAddModalDate(dateStr);
                         setAddModalFactoryId(factories[0]?.id || '');
                         setAddModalVehicleId('');

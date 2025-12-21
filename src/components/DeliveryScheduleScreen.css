@@ -427,13 +427,13 @@
 
 /* Highlight dates that contain items matching the selected model objects */
 .calendar-day.has-selected-item {
-  background: #fef3c7 !important;
-  border: 2px solid #f59e0b !important;
+  background: #fefce8 !important;
+  border: 2px solid #fcd34d !important;
   border-radius: 6px;
 }
 
 .calendar-day.has-selected-item .day-count {
-  background: #f59e0b;
+  background: #fbbf24;
 }
 
 /* Playback active date in calendar */
@@ -793,8 +793,8 @@
 
 /* Date header when it contains selected model items */
 .date-header.has-selected-item {
-  background: linear-gradient(to right, #fef3c7, #fde68a);
-  border-left: 4px solid #f59e0b;
+  background: linear-gradient(to right, #fefce8, #fef9c3);
+  border-left: 4px solid #fcd34d;
 }
 
 .date-header .collapse-icon {
@@ -927,13 +927,13 @@
 
 /* Vehicle group when it contains selected model items */
 .delivery-vehicle-group.has-selected-item {
-  border-color: #f59e0b;
-  background: #fffbeb;
+  border-color: #fcd34d;
+  background: #fffef7;
 }
 
 .vehicle-header.has-selected-item {
-  background: #fef3c7;
-  border-left: 3px solid #f59e0b;
+  background: #fefce8;
+  border-left: 3px solid #fcd34d;
 }
 
 /* Playback active vehicle highlight */
@@ -1036,7 +1036,7 @@
 .vehicle-header .vehicle-icon {
   color: #9ca3af;
   flex-shrink: 0;
-  font-size: 20px;
+  font-size: 24px;
 }
 
 .vehicle-header .vehicle-icon.clickable {
@@ -2710,31 +2710,31 @@
 
 /* Vehicle items container when drag over */
 .vehicle-items.drag-over {
-  background: #fef3c7;
-  border: 2px dashed #f59e0b;
+  background: #fefce8;
+  border: 2px dashed #fcd34d;
   border-radius: 6px;
   margin: 4px 0;
 }
 
 /* Date group when vehicle is dragged over */
 .delivery-date-group.drag-over {
-  background: #fef3c7;
-  border: 2px dashed #f59e0b;
+  background: #fefce8;
+  border: 2px dashed #fcd34d;
   border-radius: 8px;
 }
 
 .delivery-date-group.drag-over .date-header {
-  background: #fef08a;
+  background: #fef9c3;
 }
 
 /* Selected items highlight */
 .delivery-item.selected {
-  background: #fef08a;
-  border-left: 3px solid #eab308;
+  background: #fef9c3;
+  border-left: 3px solid #fbbf24;
 }
 
 .delivery-item.selected:hover {
-  background: #fde047;
+  background: #fef3c7;
 }
 
 /* Vehicle wrapper for drop indicators */
