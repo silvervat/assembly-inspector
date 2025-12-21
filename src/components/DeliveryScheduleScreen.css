@@ -851,7 +851,6 @@
 .vehicle-resources-section {
   display: flex;
   gap: 4px;
-  margin-left: auto;
 }
 
 .vehicle-header .method-badge,
