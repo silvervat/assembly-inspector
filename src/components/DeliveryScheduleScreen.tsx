@@ -2742,12 +2742,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 {/* Week and vehicles section */}
                 <div className="date-week-section">
                   <span className="week-primary">N{getISOWeek(new Date(date))}</span>
-                  <span className="week-secondary">{dateVehicleList.length} veoki{dateVehicleList.length !== 1 ? 't' : ''}</span>
+                  <span className="week-secondary">{dateVehicleList.length} {dateVehicleList.length === 1 ? 'veok' : 'veokit'}</span>
                 </div>
 
                 {/* Stats section */}
                 <div className="date-stats-section">
-                  <span className="stats-primary">{dateItemCount} detaili</span>
+                  <span className="stats-primary">{dateItemCount} {dateItemCount === 1 ? 'detail' : 'detaili'}</span>
                   <span className="stats-secondary">{timeRange || 'Aeg määramata'}</span>
                 </div>
 
@@ -2987,7 +2987,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Stats section */}
                             <div className="vehicle-stats-section">
-                              <span className="stats-primary">{vehicleItems.length} detaili</span>
+                              <span className="stats-primary">{vehicleItems.length} {vehicleItems.length === 1 ? 'detail' : 'detaili'}</span>
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
@@ -3548,7 +3548,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <span className="separator">•</span>
         <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
         <span className="separator">•</span>
-        <span>{vehicles.length} veokit</span>
+        <span>{vehicles.length} {vehicles.length === 1 ? 'veok' : 'veokit'}</span>
       </div>
 
       {/* Toolbar */}
