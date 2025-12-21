@@ -341,6 +341,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [isPaused, setIsPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(800);
   const [_currentPlayVehicleIndex, setCurrentPlayVehicleIndex] = useState(0);
+  const [currentPlaybackVehicleId, setCurrentPlaybackVehicleId] = useState<string | null>(null);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
 
   // Playback settings
@@ -348,6 +349,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [playbackSettings, setPlaybackSettings] = useState({
     colorByVehicle: true,      // Color each vehicle differently
     colorByDay: false,         // Color each day differently
+    expandItemsDuringPlayback: true, // Expand vehicle items during playback
     showVehicleOverview: true, // Show vehicle overview when vehicle completes
     disableZoom: false
   });
@@ -2178,11 +2180,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const playVehicle = async (vehicleIndex: number) => {
       if (vehicleIndex >= sortedVehicles.length) {
         setIsPlaying(false);
+        setCurrentPlaybackVehicleId(null);
         return;
       }
 
       const vehicle = sortedVehicles[vehicleIndex];
       const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+
+      // Set current playback vehicle for highlighting
+      setCurrentPlaybackVehicleId(vehicle.id);
 
       if (vehicleItems.length === 0) {
         // Skip empty vehicles
@@ -2190,17 +2196,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return;
       }
 
-      // Expand date and vehicle groups
+      // Expand date group always, vehicle items based on setting
       setCollapsedDates(prev => {
         const next = new Set(prev);
         next.delete(vehicle.scheduled_date);
         return next;
       });
-      setCollapsedVehicles(prev => {
-        const next = new Set(prev);
-        next.delete(vehicle.id);
-        return next;
-      });
+      if (playbackSettings.expandItemsDuringPlayback) {
+        setCollapsedVehicles(prev => {
+          const next = new Set(prev);
+          next.delete(vehicle.id);
+          return next;
+        });
+      }
 
       // Get runtime IDs for vehicle items
       const runtimeIds: number[] = [];
@@ -2265,6 +2273,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setIsPlaying(false);
     setIsPaused(false);
     setCurrentPlayVehicleIndex(0);
+    setCurrentPlaybackVehicleId(null);
 
     // Clear colors
     try {
@@ -2508,6 +2517,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               const isStartOfWeek = idx % 7 === 0;
               const weekNum = getISOWeek(date);
               const hasSelectedItem = datesWithSelectedItems.has(dateStr);
+              // Check if this is the current playback date
+              const playbackVehicle = currentPlaybackVehicleId ? vehicles.find(v => v.id === currentPlaybackVehicleId) : null;
+              const isPlaybackDate = playbackVehicle?.scheduled_date === dateStr;
 
               return (
                 <span key={idx} style={{ display: 'contents' }}>
@@ -2517,7 +2529,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   )}
                   <div
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem ? 'has-selected-item' : ''}`}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${isPlaybackDate ? 'playback-active' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateStr);
 
@@ -2558,6 +2570,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   const renderDateView = () => {
+    // Find dates and vehicles that contain selected model objects
+    const selectedGuids = new Set(selectedObjects.map(obj => obj.guid).filter(Boolean));
+    const datesWithSelectedItems = new Set<string>();
+    const vehiclesWithSelectedItems = new Set<string>();
+
+    if (selectedGuids.size > 0) {
+      items.forEach(item => {
+        if (selectedGuids.has(item.guid) && item.vehicle_id) {
+          vehiclesWithSelectedItems.add(item.vehicle_id);
+          const vehicle = vehicles.find(v => v.id === item.vehicle_id);
+          if (vehicle?.scheduled_date) {
+            datesWithSelectedItems.add(vehicle.scheduled_date);
+          }
+        }
+      });
+    }
+
     return (
       <div className="delivery-list" ref={listRef}>
         {sortedDates.length === 0 && !loading && (
@@ -2569,6 +2598,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         )}
 
         {sortedDates.map(date => {
+          const hasSelectedItem = datesWithSelectedItems.has(date);
           const dateVehicles = itemsByDateAndVehicle[date] || {};
           const dateItemCount = Object.values(dateVehicles).reduce((sum, vItems) => sum + vItems.length, 0);
           const isCollapsed = collapsedDates.has(date);
@@ -2599,13 +2629,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div
               key={date}
               id={`date-group-${date}`}
-              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
               {/* Date header - new two-row layout */}
               <div
-                className="date-header"
+                className={`date-header ${hasSelectedItem ? 'has-selected-item' : ''}`}
                 onClick={() => {
                   setCollapsedDates(prev => {
                     const next = new Set(prev);
@@ -2703,10 +2733,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
+                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
@@ -3390,20 +3420,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           ) : (
             <>
               {isPaused ? (
-                <button onClick={resumePlayback}>
+                <button className="play-btn" onClick={resumePlayback}>
                   <FiPlay /> Jätka
                 </button>
               ) : (
-                <button onClick={pausePlayback}>
+                <button className="pause-btn" onClick={pausePlayback}>
                   <FiPause /> Paus
                 </button>
               )}
-              <button onClick={stopPlayback}>
+              <button className="stop-btn" onClick={stopPlayback}>
                 <FiSquare /> Lõpeta
               </button>
             </>
           )}
           <select
+            className="speed-select"
             value={playbackSpeed}
             onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
           >
@@ -3411,7 +3442,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
-          <button onClick={() => setShowSettingsModal(true)}>
+          <button className="settings-btn" onClick={() => setShowSettingsModal(true)}>
             <FiSettings />
           </button>
         </div>
@@ -4547,6 +4578,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }))}
                 />
                 Näita veoki ülevaadet
+              </label>
+              <label className="setting-checkbox">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.expandItemsDuringPlayback}
+                  onChange={(e) => setPlaybackSettings(prev => ({
+                    ...prev,
+                    expandItemsDuringPlayback: e.target.checked
+                  }))}
+                />
+                Ava veoki detailid esitamisel
               </label>
               <label className="setting-checkbox">
                 <input
