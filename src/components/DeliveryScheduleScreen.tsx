@@ -4779,7 +4779,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 23: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -4859,7 +4859,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const batch = data.white.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 220, g: 220, b: 220, a: 255 } }  // Light gray/white
+            { color: { r: 255, g: 255, b: 255, a: 255 } }  // White
           );
           whiteCount += batch.length;
           setTestStatus(`Approach 23: White ${whiteCount}/${modelObjects.length - scheduleIds.size}...`);
@@ -4920,7 +4920,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 24: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with cursor-based pagination (more reliable than offset)
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let lastId = -1;
       let page = 0;
@@ -4989,7 +4989,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 200, g: 200, b: 200, a: 255 } }
+            { color: { r: 255, g: 255, b: 255, a: 255 } }  // White
           );
           whiteCount += batch.length;
           setTestStatus(`Approach 24: Hall ${whiteCount}/${totalWhite}...`);
@@ -5026,7 +5026,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 25: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -5186,7 +5186,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Step 2: Get remaining objects from Supabase with pagination
       // Use smaller page size and explicit ordering for reliable pagination
       setTestStatus('Approach 26: Loen ülejäänud detailid Supabasest...');
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -5258,7 +5258,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 180, g: 180, b: 180, a: 255 } }  // Gray
+            { color: { r: 255, g: 255, b: 255, a: 255 } }  // White
           );
           grayDone += batch.length;
           setTestStatus(`Approach 26: Hall ${grayDone}/${grayCount}...`);
