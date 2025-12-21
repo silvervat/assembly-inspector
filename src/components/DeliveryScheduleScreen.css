@@ -2241,7 +2241,7 @@
 }
 
 /* Hide resources on narrow list - media query fallback */
-@media (max-width: 500px) {
+@media (max-width: 350px) {
   .vehicle-resources-section {
     display: none !important;
   }
@@ -2260,7 +2260,7 @@
 }
 
 /* Container query - hides resources when list panel itself is narrow */
-@container delivery-list (max-width: 400px) {
+@container delivery-list (max-width: 300px) {
   .vehicle-resources-section {
     display: none !important;
   }
