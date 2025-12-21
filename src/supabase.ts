@@ -567,7 +567,7 @@ export interface DeliveryVehicle {
   vehicle_number: number;            // 1, 2, 3...
   vehicle_code: string;              // "OPO1", "OPO2" (genereeritakse automaatselt)
   vehicle_type?: DeliveryVehicleType; // Veoki tüüp (kinni, haagis, lahti, extralong)
-  scheduled_date: string;            // Mis kuupäeval see veok tuleb
+  scheduled_date: string | null;     // Mis kuupäeval see veok tuleb (null = määramata)
   unload_methods?: UnloadMethods;    // Mahalaadimise meetodid
   resources?: DeliveryResources;     // Ressursid (töötajad)
   status: DeliveryVehicleStatus;
@@ -613,7 +613,7 @@ export interface DeliveryItem {
   cast_unit_weight?: string;
   cast_unit_position_code?: string;
   // Tarne info
-  scheduled_date: string;            // Planeeritud kuupäev
+  scheduled_date: string | null;     // Planeeritud kuupäev (null kui veokil pole kuupäeva)
   sort_order: number;
   status: DeliveryItemStatus;
   unload_methods?: UnloadMethods;    // Detaili-taseme mahalaadimise meetodid
