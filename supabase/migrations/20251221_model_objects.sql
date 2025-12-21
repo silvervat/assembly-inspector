@@ -23,10 +23,14 @@ CREATE TABLE trimble_model_objects (
 );
 
 -- Indexes for fast lookups
-CREATE INDEX idx_model_objects_project ON trimble_model_objects(trimble_project_id);
-CREATE INDEX idx_model_objects_model ON trimble_model_objects(model_id);
+-- Main composite index for the primary query pattern (covers SELECT model_id, object_runtime_id WHERE project_id)
+CREATE INDEX idx_model_objects_project_lookup
+  ON trimble_model_objects(trimble_project_id)
+  INCLUDE (model_id, object_runtime_id);
+
+-- Individual indexes for other query patterns
 CREATE INDEX idx_model_objects_runtime ON trimble_model_objects(object_runtime_id);
-CREATE INDEX idx_model_objects_guid ON trimble_model_objects(guid);
+CREATE INDEX idx_model_objects_guid ON trimble_model_objects(guid) WHERE guid IS NOT NULL;
 
 -- Enable RLS
 ALTER TABLE trimble_model_objects ENABLE ROW LEVEL SECURITY;
