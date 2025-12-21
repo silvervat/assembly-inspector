@@ -3523,9 +3523,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     {/* Weight */}
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
 
-                                    {/* Dimensions placeholder - TODO: add later */}
-                                    <span className="item-dimensions"></span>
-
                                     {/* Resources */}
                                     <div className="item-resources">
                                       {item.unload_methods && UNLOAD_METHODS.map(method => {
@@ -3835,7 +3832,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       );
                                     })()}
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
-                                    <span className="item-dimensions"></span>
                                     <div className="item-resources">
                                       {item.unload_methods && UNLOAD_METHODS.map(method => {
                                         const count = (item.unload_methods as Record<string, number>)?.[method.key];
