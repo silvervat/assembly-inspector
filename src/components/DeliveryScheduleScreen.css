@@ -682,6 +682,34 @@
   cursor: pointer;
 }
 
+.date-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-input-wrapper input[type="date"] {
+  flex: 1;
+}
+
+.clear-date-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: #ef4444;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.clear-date-btn:hover {
+  background: #dc2626;
+}
+
 .vehicle-edit-resources {
   display: flex;
   flex-direction: column;
@@ -1255,6 +1283,20 @@
 
 .vehicle-items {
   border-top: 1px solid #e5e7eb;
+}
+
+.empty-vehicle-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.empty-vehicle-message svg {
+  opacity: 0.5;
 }
 
 /* ============================================

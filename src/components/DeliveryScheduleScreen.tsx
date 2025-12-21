@@ -501,13 +501,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     );
   }, [items, searchQuery]);
 
-  // Group items by date -> vehicle
+  // Special key for vehicles without date
+  const UNASSIGNED_DATE = 'MÄÄRAMATA';
+
+  // Group items by date -> vehicle (includes ALL vehicles, even empty ones)
   const itemsByDateAndVehicle = useMemo(() => {
     const groups: Record<string, Record<string, DeliveryItem[]>> = {};
 
+    // First, add all vehicles to their dates (creates empty arrays)
+    vehicles.forEach(vehicle => {
+      const date = vehicle.scheduled_date || UNASSIGNED_DATE;
+      if (!groups[date]) groups[date] = {};
+      if (!groups[date][vehicle.id]) groups[date][vehicle.id] = [];
+    });
+
+    // Then, add items to their vehicles
     filteredItems.forEach(item => {
-      const date = item.scheduled_date;
       const vehicleId = item.vehicle_id || 'unassigned';
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      const date = vehicle?.scheduled_date || item.scheduled_date || UNASSIGNED_DATE;
 
       if (!groups[date]) groups[date] = {};
       if (!groups[date][vehicleId]) groups[date][vehicleId] = [];
@@ -522,11 +534,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     });
 
     return groups;
-  }, [filteredItems]);
+  }, [filteredItems, vehicles]);
 
-  // Get sorted dates
+  // Get sorted dates (MÄÄRAMATA always at end)
   const sortedDates = useMemo(() => {
-    return Object.keys(itemsByDateAndVehicle).sort();
+    const dates = Object.keys(itemsByDateAndVehicle);
+    const regularDates = dates.filter(d => d !== UNASSIGNED_DATE).sort();
+    const hasUnassigned = dates.includes(UNASSIGNED_DATE);
+    return hasUnassigned ? [...regularDates, UNASSIGNED_DATE] : regularDates;
   }, [itemsByDateAndVehicle]);
 
   // Calculate item sequences for duplicate assembly marks
@@ -537,7 +552,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     otherLocations: Array<{
       vehicleCode: string;
       vehicleId: string;
-      date: string;
+      date: string | null;
       seq: number;
     }>;
   }
@@ -1476,7 +1491,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ITEM OPERATIONS
   // ============================================
 
-  const addItemsToVehicle = async (vehicleId: string, date: string, comment?: string) => {
+  const addItemsToVehicle = async (vehicleId: string, date: string | null, comment?: string) => {
     // Filter out objects that are already in the items list
     const existingGuids = new Set(items.map(item => item.guid));
     const objectsToAdd = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
@@ -2182,6 +2197,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Sort items by date and vehicle
       const sortedItems = [...items].sort((a, b) => {
         if (a.scheduled_date !== b.scheduled_date) {
+          if (!a.scheduled_date) return 1;
+          if (!b.scheduled_date) return -1;
           return a.scheduled_date.localeCompare(b.scheduled_date);
         }
         const vehicleA = getVehicle(a.vehicle_id || '');
@@ -2193,7 +2210,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       });
 
       // Generate date colors
-      const uniqueDates = [...new Set(sortedItems.map(i => i.scheduled_date))];
+      const uniqueDates = [...new Set(sortedItems.map(i => i.scheduled_date).filter((d): d is string => d !== null))];
       const dateColors = generateDateColors(uniqueDates);
 
       // Build header row
@@ -2213,8 +2230,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
-            case 'date': row.push(formatDateDisplay(item.scheduled_date)); break;
-            case 'day': row.push(WEEKDAY_NAMES[new Date(item.scheduled_date).getDay()]); break;
+            case 'date': row.push(item.scheduled_date ? formatDateDisplay(item.scheduled_date) : 'MÄÄRAMATA'); break;
+            case 'day': row.push(item.scheduled_date ? WEEKDAY_NAMES[new Date(item.scheduled_date).getDay()] : '-'); break;
             case 'time': row.push(formatTimeDisplay(vehicle?.unload_start_time)); break;
             case 'duration': {
               const mins = vehicle?.unload_duration_minutes || 90;
@@ -2281,7 +2298,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (dateColIdx >= 0) {
         sortedItems.forEach((item, rowIdx) => {
           const cellRef = XLSX.utils.encode_cell({ r: rowIdx + 1, c: dateColIdx });
-          if (ws[cellRef]) {
+          if (ws[cellRef] && item.scheduled_date) {
             const color = dateColors[item.scheduled_date];
             if (color) {
               ws[cellRef].s = {
@@ -2466,8 +2483,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     // Sort vehicles by date, then time, then sort_order
     const sortedVehicles = [...vehicles].sort((a, b) => {
-      // First by date
+      // First by date (null dates go last)
       if (a.scheduled_date !== b.scheduled_date) {
+        if (!a.scheduled_date) return 1;
+        if (!b.scheduled_date) return -1;
         return a.scheduled_date.localeCompare(b.scheduled_date);
       }
       // Then by unload_start_time (empty times go last)
@@ -2525,7 +2544,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Expand date group always, vehicle items based on setting
       setCollapsedDates(prev => {
         const next = new Set(prev);
-        next.delete(vehicle.scheduled_date);
+        next.delete(vehicle.scheduled_date || UNASSIGNED_DATE);
         return next;
       });
       if (playbackSettings.expandItemsDuringPlayback) {
@@ -3018,7 +3037,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const isCollapsed = collapsedDates.has(date);
 
           // Calculate time range for date (without seconds)
-          const dateVehicleList = vehicles.filter(v => v.scheduled_date === date);
+          // For MÄÄRAMATA, filter vehicles with null scheduled_date
+          const isUnassignedDate = date === UNASSIGNED_DATE;
+          const dateVehicleList = vehicles.filter(v =>
+            isUnassignedDate ? v.scheduled_date === null : v.scheduled_date === date
+          );
           const vehicleTimes = dateVehicleList
             .filter(v => v.unload_start_time)
             .map(v => v.unload_start_time!.slice(0, 5))
@@ -3075,14 +3098,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }}
                   title="Märgista mudelis"
                 >
-                  <span className="date-primary">{formatDateShort(date)}</span>
-                  <span className="date-secondary">{getDayName(date)}</span>
+                  <span className="date-primary">{isUnassignedDate ? 'MÄÄRAMATA' : formatDateShort(date)}</span>
+                  {!isUnassignedDate && <span className="date-secondary">{getDayName(date)}</span>}
                 </div>
 
                 {/* Vehicles and week section */}
                 <div className="date-vehicles-section">
                   <span className="vehicles-primary">{dateVehicleList.length} {dateVehicleList.length === 1 ? 'veok' : 'veokit'}</span>
-                  <span className="vehicles-secondary">N{getISOWeek(new Date(date))}</span>
+                  {!isUnassignedDate && <span className="vehicles-secondary">N{getISOWeek(new Date(date))}</span>}
                 </div>
 
                 {/* Stats section */}
@@ -3386,7 +3409,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <FiSettings /> Seaded
                             </button>
                             <button onClick={() => {
-                              setMoveTargetDate(vehicle.scheduled_date);
+                              setMoveTargetDate(vehicle.scheduled_date || '');
                               setShowMoveModal(true);
                               setVehicleMenuId(null);
                             }}>
@@ -3430,6 +3453,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             onDragOver={(e) => handleVehicleDragOver(e, vehicle.id)}
                             onDrop={(e) => handleItemDrop(e, vehicle.id, dragOverIndex ?? undefined)}
                           >
+                            {vehicleItems.length === 0 && (
+                              <div className="empty-vehicle-message">
+                                <FiPackage size={16} />
+                                <span>Ühtegi detaili pole</span>
+                              </div>
+                            )}
                             {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
                               const isActive = activeItemId === item.id;
@@ -3512,7 +3541,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         <span
                                           className="item-sequence"
                                           title={seqInfo.otherLocations.map(loc =>
-                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${formatDateShort(loc.date)})`
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${loc.date ? formatDateShort(loc.date) : 'MÄÄRAMATA'})`
                                           ).join('\n')}
                                         >
                                           {seqInfo.seq}/{seqInfo.total}
@@ -3726,7 +3755,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             }}
                             title="Märgista mudelis"
                           >{vehicle.vehicle_code}</span>
-                          <span className="vehicle-date">{formatDateEstonian(vehicle.scheduled_date)}</span>
+                          <span className="vehicle-date">{vehicle.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : 'MÄÄRAMATA'}</span>
                           <span className="vehicle-stats">
                             <span className="item-badge">{vehicleItems.length} tk</span>
                             <span className="weight-badge">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
@@ -3824,7 +3853,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         <span
                                           className="item-sequence"
                                           title={seqInfo.otherLocations.map(loc =>
-                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${formatDateShort(loc.date)})`
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${loc.date ? formatDateShort(loc.date) : 'MÄÄRAMATA'})`
                                           ).join('\n')}
                                         >
                                           {seqInfo.seq}/{seqInfo.total}
@@ -3993,22 +4022,43 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 {/* Date */}
                 <div className="edit-field">
                   <label>Kuupäev</label>
-                  <input
-                    type="date"
-                    value={activeVehicle.scheduled_date || ''}
-                    onChange={async (e) => {
-                      const newDate = e.target.value;
-                      // Optimistic update
-                      setVehicles(prev => prev.map(v =>
-                        v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
-                      ));
-                      // Save to DB
-                      await supabase
-                        .from('delivery_vehicles')
-                        .update({ scheduled_date: newDate })
-                        .eq('id', activeVehicleId);
-                    }}
-                  />
+                  <div className="date-input-wrapper">
+                    <input
+                      type="date"
+                      value={activeVehicle.scheduled_date || ''}
+                      onChange={async (e) => {
+                        const newDate = e.target.value || null;
+                        // Optimistic update
+                        setVehicles(prev => prev.map(v =>
+                          v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
+                        ));
+                        // Save to DB
+                        await supabase
+                          .from('delivery_vehicles')
+                          .update({ scheduled_date: newDate })
+                          .eq('id', activeVehicleId);
+                      }}
+                    />
+                    {activeVehicle.scheduled_date && (
+                      <button
+                        className="clear-date-btn"
+                        onClick={async () => {
+                          // Optimistic update
+                          setVehicles(prev => prev.map(v =>
+                            v.id === activeVehicleId ? { ...v, scheduled_date: null } : v
+                          ));
+                          // Save to DB
+                          await supabase
+                            .from('delivery_vehicles')
+                            .update({ scheduled_date: null })
+                            .eq('id', activeVehicleId);
+                        }}
+                        title="Eemalda kuupäev"
+                      >
+                        <FiX size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Time */}
@@ -4630,14 +4680,29 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="form-row">
                 <div className="form-group">
                   <label><FiCalendar style={{ marginRight: 4 }} />Kuupäev</label>
-                  <input
-                    type="date"
-                    value={editingVehicle.scheduled_date}
-                    onChange={(e) => setEditingVehicle({
-                      ...editingVehicle,
-                      scheduled_date: e.target.value
-                    })}
-                  />
+                  <div className="date-input-wrapper">
+                    <input
+                      type="date"
+                      value={editingVehicle.scheduled_date || ''}
+                      onChange={(e) => setEditingVehicle({
+                        ...editingVehicle,
+                        scheduled_date: e.target.value || null
+                      })}
+                    />
+                    {editingVehicle.scheduled_date && (
+                      <button
+                        type="button"
+                        className="clear-date-btn"
+                        onClick={() => setEditingVehicle({
+                          ...editingVehicle,
+                          scheduled_date: null
+                        })}
+                        title="Eemalda kuupäev"
+                      >
+                        <FiX size={12} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="form-group">
                   <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
@@ -4820,7 +4885,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const factory = getFactory(v.factory_id);
                     return (
                       <option key={v.id} value={v.id}>
-                        {v.vehicle_code} - {factory?.factory_name} ({formatDateEstonian(v.scheduled_date)})
+                        {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'MÄÄRAMATA'})
                       </option>
                     );
                   })}
@@ -5310,10 +5375,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   >
                     <option value="">- Pole määratud -</option>
                     {vehicles
-                      .sort((a, b) => a.scheduled_date.localeCompare(b.scheduled_date) || a.vehicle_code.localeCompare(b.vehicle_code))
+                      .sort((a, b) => {
+                        if (!a.scheduled_date && !b.scheduled_date) return a.vehicle_code.localeCompare(b.vehicle_code);
+                        if (!a.scheduled_date) return 1;
+                        if (!b.scheduled_date) return -1;
+                        return a.scheduled_date.localeCompare(b.scheduled_date) || a.vehicle_code.localeCompare(b.vehicle_code);
+                      })
                       .map(v => (
                         <option key={v.id} value={v.id}>
-                          {formatDateShort(v.scheduled_date)} - {v.vehicle_code}
+                          {v.scheduled_date ? formatDateShort(v.scheduled_date) : 'MÄÄRAMATA'} - {v.vehicle_code}
                         </option>
                       ))}
                   </select>
