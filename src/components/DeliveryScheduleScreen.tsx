@@ -517,6 +517,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Refs
   const listRef = useRef<HTMLDivElement>(null);
   const initialCollapseRef = useRef(false);
+  const dragExpandTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoExpandedDatesRef = useRef<Set<string>>(new Set());
+  const dragScrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ============================================
   // COMPUTED VALUES
@@ -1742,24 +1745,114 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setDragOverVehicleId(null);
     setDragOverIndex(null);
     setDragOverVehicleIndex(null);
+
+    // Clear expand timeout
+    if (dragExpandTimeoutRef.current) {
+      clearTimeout(dragExpandTimeoutRef.current);
+      dragExpandTimeoutRef.current = null;
+    }
+
+    // Collapse auto-expanded dates
+    if (autoExpandedDatesRef.current.size > 0) {
+      setCollapsedDates(prev => {
+        const next = new Set(prev);
+        autoExpandedDatesRef.current.forEach(date => next.add(date));
+        return next;
+      });
+      autoExpandedDatesRef.current.clear();
+    }
+
+    // Clear scroll interval
+    if (dragScrollIntervalRef.current) {
+      clearInterval(dragScrollIntervalRef.current);
+      dragScrollIntervalRef.current = null;
+    }
   };
 
   // Drag over a date group
   const handleDateDragOver = (e: React.DragEvent, date: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+
+    const prevDate = dragOverDate;
     setDragOverDate(date);
 
-    // When dragging items over a date, auto-expand to show vehicles
-    if (draggedItems.length > 0) {
-      setCollapsedDates(prev => {
-        if (prev.has(date)) {
-          const next = new Set(prev);
-          next.delete(date);
-          return next;
+    // Auto-scroll when near edges
+    if (listRef.current) {
+      const listRect = listRef.current.getBoundingClientRect();
+      const mouseY = e.clientY;
+      const scrollSpeed = 8;
+      const edgeZone = 60;
+
+      // Clear existing scroll interval if mouse moved away from edges
+      if (dragScrollIntervalRef.current) {
+        clearInterval(dragScrollIntervalRef.current);
+        dragScrollIntervalRef.current = null;
+      }
+
+      if (mouseY < listRect.top + edgeZone) {
+        // Near top - scroll up
+        dragScrollIntervalRef.current = setInterval(() => {
+          if (listRef.current) listRef.current.scrollTop -= scrollSpeed;
+        }, 16);
+      } else if (mouseY > listRect.bottom - edgeZone) {
+        // Near bottom - scroll down
+        dragScrollIntervalRef.current = setInterval(() => {
+          if (listRef.current) listRef.current.scrollTop += scrollSpeed;
+        }, 16);
+      }
+    }
+
+    // When dragging items over a date, auto-expand after delay
+    if (draggedItems.length > 0 && collapsedDates.has(date)) {
+      // If we moved to a new date, clear previous timeout
+      if (prevDate !== date) {
+        if (dragExpandTimeoutRef.current) {
+          clearTimeout(dragExpandTimeoutRef.current);
+          dragExpandTimeoutRef.current = null;
         }
-        return prev;
+
+        // Set new timeout for this date
+        dragExpandTimeoutRef.current = setTimeout(() => {
+          setCollapsedDates(prev => {
+            if (prev.has(date)) {
+              const next = new Set(prev);
+              next.delete(date);
+              // Track that this date was auto-expanded
+              autoExpandedDatesRef.current.add(date);
+              return next;
+            }
+            return prev;
+          });
+        }, 500); // 0.5 second delay
+      }
+    }
+  };
+
+  // When leaving a date group during drag
+  const handleDateDragLeave = (e: React.DragEvent, date: string) => {
+    // Only handle if actually leaving the date group (not entering a child)
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    const currentTarget = e.currentTarget as HTMLElement;
+
+    if (relatedTarget && currentTarget.contains(relatedTarget)) {
+      return; // Still within the same date group
+    }
+
+    // Clear expand timeout for this date
+    if (dragExpandTimeoutRef.current) {
+      clearTimeout(dragExpandTimeoutRef.current);
+      dragExpandTimeoutRef.current = null;
+    }
+
+    // Collapse if was auto-expanded and not dropping here
+    if (autoExpandedDatesRef.current.has(date)) {
+      setCollapsedDates(prev => {
+        const next = new Set(prev);
+        next.add(date);
+        return next;
       });
+      autoExpandedDatesRef.current.delete(date);
     }
   };
 
@@ -1818,6 +1911,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setDragOverVehicleId(null);
     setDragOverIndex(null);
     setIsDragging(false);
+
+    // Clear drag timeouts and intervals
+    if (dragExpandTimeoutRef.current) {
+      clearTimeout(dragExpandTimeoutRef.current);
+      dragExpandTimeoutRef.current = null;
+    }
+    if (dragScrollIntervalRef.current) {
+      clearInterval(dragScrollIntervalRef.current);
+      dragScrollIntervalRef.current = null;
+    }
+    // Clear auto-expanded dates (keep them open after successful drop)
+    autoExpandedDatesRef.current.clear();
 
     if (draggedItems.length === 0) return;
 
@@ -4446,6 +4551,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               id={`date-group-${date}`}
               className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
+              onDragLeave={(e) => handleDateDragLeave(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
               {/* Date header - new two-row layout */}
