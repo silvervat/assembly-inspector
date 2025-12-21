@@ -3365,6 +3365,181 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Approach 9: Get all objects from model, then color
+  const testApproach9 = async () => {
+    setTestStatus('Approach 9: Running... (Model getObjects)');
+    try {
+      // Step 1: Save current selection
+      const originalSelection = await api.viewer.getSelection();
+      const savedRuntimeIds: number[] = [];
+      let modelId: string | null = null;
+
+      if (originalSelection?.length) {
+        for (const sel of originalSelection) {
+          if (sel.objectRuntimeIds?.length) {
+            savedRuntimeIds.push(...sel.objectRuntimeIds);
+            if (!modelId) modelId = sel.modelId;
+          }
+        }
+      }
+
+      setTestStatus(`Approach 9: Saved ${savedRuntimeIds.length} selected, getting all objects...`);
+
+      // Step 2: Try to get all model objects
+      const viewer = (api.viewer as any);
+      let allObjectIds: number[] = [];
+
+      // Try different methods to get all objects
+      if (viewer.models && viewer.models.length > 0) {
+        const model = viewer.models[0];
+        if (model.getObjects) {
+          const allObjects = await model.getObjects();
+          setTestStatus(`Approach 9: Got ${allObjects?.length || 0} objects from model.getObjects()`);
+          if (allObjects?.length) {
+            allObjectIds = allObjects.map((obj: any) => obj.runtimeId || obj.id);
+          }
+        } else if (model.objectRuntimeIds) {
+          allObjectIds = model.objectRuntimeIds;
+          setTestStatus(`Approach 9: Got ${allObjectIds.length} from model.objectRuntimeIds`);
+        }
+      }
+
+      // Alternative: try getVisibleObjects or getAllObjects
+      if (allObjectIds.length === 0 && viewer.getVisibleObjects) {
+        const visibleObjs = await viewer.getVisibleObjects();
+        setTestStatus(`Approach 9: Got ${visibleObjs?.length || 0} from getVisibleObjects()`);
+        if (visibleObjs?.length) {
+          allObjectIds = visibleObjs.map((obj: any) => obj.objectRuntimeId || obj.runtimeId || obj);
+        }
+      }
+
+      if (allObjectIds.length === 0 && viewer.getAllObjects) {
+        const allObjs = await viewer.getAllObjects();
+        setTestStatus(`Approach 9: Got ${allObjs?.length || 0} from getAllObjects()`);
+        if (allObjs?.length) {
+          allObjectIds = allObjs;
+        }
+      }
+
+      if (allObjectIds.length === 0) {
+        setTestStatus('Approach 9: Could not get model objects. Logging viewer API...');
+        console.log('Viewer API:', viewer);
+        console.log('Viewer keys:', Object.keys(viewer));
+        if (viewer.models) console.log('Models:', viewer.models);
+        return;
+      }
+
+      // Step 3: Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Step 4: Color all objects gray using their runtime IDs
+      const savedSet = new Set(savedRuntimeIds);
+      const grayIds = allObjectIds.filter((id: number) => !savedSet.has(id));
+
+      setTestStatus(`Approach 9: Coloring ${grayIds.length} gray, ${savedRuntimeIds.length} red...`);
+
+      if (modelId && grayIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      if (modelId && savedRuntimeIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: savedRuntimeIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 9: Done! All: ${allObjectIds.length}, Gray: ${grayIds.length}, Red: ${savedRuntimeIds.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 9: Error - ${e.message}`);
+      console.error('Approach 9 error:', e);
+    }
+  };
+
+  // Approach 10: Use objectIds from selection history
+  const testApproach10 = async () => {
+    setTestStatus('Approach 10: Running... (Collect IDs via select all)');
+    try {
+      // Step 1: Save current selection
+      const originalSelection = await api.viewer.getSelection();
+      const savedRuntimeIds: number[] = [];
+      let modelId: string | null = null;
+
+      if (originalSelection?.length) {
+        for (const sel of originalSelection) {
+          if (sel.objectRuntimeIds?.length) {
+            savedRuntimeIds.push(...sel.objectRuntimeIds);
+            if (!modelId) modelId = sel.modelId;
+          }
+        }
+      }
+
+      setTestStatus(`Approach 10: Saved ${savedRuntimeIds.length}, trying selectAll...`);
+
+      // Step 2: Try to select all objects to get their IDs
+      const viewer = (api.viewer as any);
+      let allObjectIds: number[] = [];
+
+      if (viewer.selectAll) {
+        await viewer.selectAll();
+        const allSelection = await api.viewer.getSelection();
+        if (allSelection?.length) {
+          for (const sel of allSelection) {
+            if (sel.objectRuntimeIds?.length) {
+              allObjectIds.push(...sel.objectRuntimeIds);
+              if (!modelId) modelId = sel.modelId;
+            }
+          }
+        }
+        setTestStatus(`Approach 10: Got ${allObjectIds.length} via selectAll`);
+      }
+
+      if (allObjectIds.length === 0) {
+        setTestStatus('Approach 10: selectAll not available. Logging API...');
+        console.log('Viewer API methods:', Object.keys(viewer).filter(k => typeof viewer[k] === 'function'));
+        return;
+      }
+
+      // Step 3: Reset colors
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Step 4: Color
+      const savedSet = new Set(savedRuntimeIds);
+      const grayIds = allObjectIds.filter(id => !savedSet.has(id));
+
+      if (modelId && grayIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      if (modelId && savedRuntimeIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: savedRuntimeIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      // Restore original selection
+      if (savedRuntimeIds.length > 0 && modelId) {
+        await api.viewer.setSelection({
+          modelObjectIds: [{ modelId, objectRuntimeIds: savedRuntimeIds }]
+        }, 'set');
+      } else {
+        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      }
+
+      setTestStatus(`Approach 10: Done! All: ${allObjectIds.length}, Gray: ${grayIds.length}, Red: ${savedRuntimeIds.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 10: Error - ${e.message}`);
+      console.error('Approach 10 error:', e);
+    }
+  };
+
   // Reset colors
   const testReset = async () => {
     setTestStatus('Resetting colors...');
@@ -6530,6 +6705,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>Red First → Gray One-by-One</strong>
                       <span>Valitud punaseks, siis hallid ükshaaval</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach9} className="test-btn">
+                    <span className="test-btn-num">9</span>
+                    <div className="test-btn-content">
+                      <strong>Model getObjects()</strong>
+                      <span>Kasutab viewer.models[0].getObjects() kõik objektide saamiseks</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach10} className="test-btn">
+                    <span className="test-btn-num">10</span>
+                    <div className="test-btn-content">
+                      <strong>SelectAll → Get IDs</strong>
+                      <span>Kasutab selectAll() kõik objektide ID-de kogumiseks</span>
                     </div>
                   </button>
                 </div>
