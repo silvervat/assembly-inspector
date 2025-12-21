@@ -2973,44 +2973,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
-                              <div className="vehicle-code-row">
-                                <span
-                                  className="vehicle-code clickable"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (vehicle) handleVehicleClick(vehicle);
-                                  }}
-                                  title="Märgista mudelis"
-                                >{vehicle?.vehicle_code || 'Määramata'}</span>
-                                {inlineEditVehicleId === vehicleId && inlineEditField === 'date' ? (
-                                  <input
-                                    type="date"
-                                    className="inline-date-input"
-                                    autoFocus
-                                    defaultValue={vehicle?.scheduled_date || ''}
-                                    onChange={(e) => {
-                                      updateVehicleInline(vehicleId, 'date', e.target.value);
-                                    }}
-                                    onBlur={() => {
-                                      setInlineEditVehicleId(null);
-                                      setInlineEditField(null);
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                ) : (
-                                  <span
-                                    className="vehicle-date clickable"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setInlineEditVehicleId(vehicleId);
-                                      setInlineEditField('date');
-                                    }}
-                                    title="Klikka muutmiseks"
-                                  >
-                                    {vehicle?.scheduled_date ? formatDateShort(vehicle.scheduled_date) : ''}
-                                  </span>
-                                )}
-                              </div>
+                              <span
+                                className="vehicle-code clickable"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (vehicle) handleVehicleClick(vehicle);
+                                }}
+                                title="Märgista mudelis"
+                              >{vehicle?.vehicle_code || 'Määramata'}</span>
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
                                 <select
                                   className="inline-select status-select"
