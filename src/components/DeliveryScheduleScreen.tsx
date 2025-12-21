@@ -3,7 +3,7 @@ import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
   DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
-  DeliveryVehicleStatus
+  DeliveryVehicleStatus, ModelObject
 } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
@@ -4516,6 +4516,308 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // SUPABASE MODEL OBJECTS - Scan & Save
+  // ============================================
+
+  // Scan all model objects and save to Supabase
+  const scanAndSaveModelObjects = async () => {
+    setTestStatus('Scanning model objects...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Get all entities from model
+      const entitiesResult = await viewer.getEntities();
+      if (!entitiesResult?.length) {
+        setTestStatus('No entities found in model');
+        return;
+      }
+
+      const modelId = entitiesResult[0].modelId;
+      const entities = entitiesResult[0].entityForModel || [];
+      const allIds: number[] = entities.map((e: any) => e.id || e);
+
+      setTestStatus(`Found ${allIds.length} objects. Saving to Supabase...`);
+
+      // Delete existing records for this project
+      await supabase
+        .from('trimble_model_objects')
+        .delete()
+        .eq('trimble_project_id', projectId);
+
+      // Insert in batches of 1000
+      const BATCH_SIZE = 1000;
+      let savedCount = 0;
+
+      for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+        const batch = allIds.slice(i, i + BATCH_SIZE);
+        const records = batch.map(runtimeId => ({
+          trimble_project_id: projectId,
+          model_id: modelId,
+          object_runtime_id: runtimeId
+        }));
+
+        const { error } = await supabase
+          .from('trimble_model_objects')
+          .insert(records);
+
+        if (error) {
+          console.error('Batch insert error:', error);
+        } else {
+          savedCount += batch.length;
+        }
+
+        setTestStatus(`Saving... ${savedCount}/${allIds.length}`);
+      }
+
+      setTestStatus(`Saved ${savedCount} objects to Supabase!`);
+    } catch (e: any) {
+      setTestStatus(`Scan error: ${e.message}`);
+      console.error('Scan error:', e);
+    }
+  };
+
+  // Approach 23: Color using Supabase data - white for all, then color schedule items
+  const testApproach23 = async () => {
+    setTestStatus('Approach 23: Using Supabase data...');
+    try {
+      // Get all model objects from Supabase
+      const { data: modelObjects, error } = await supabase
+        .from('trimble_model_objects')
+        .select('model_id, object_runtime_id')
+        .eq('trimble_project_id', projectId);
+
+      if (error || !modelObjects?.length) {
+        setTestStatus('Approach 23: No Supabase data. Run "Scan & Save" first!');
+        return;
+      }
+
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Get schedule item IDs
+      const scheduleIds = new Set(
+        items
+          .filter(i => i.object_runtime_id)
+          .map(i => i.object_runtime_id!)
+      );
+
+      // Group by model
+      const byModel: Record<string, { white: number[]; schedule: number[] }> = {};
+
+      for (const obj of modelObjects) {
+        if (!byModel[obj.model_id]) {
+          byModel[obj.model_id] = { white: [], schedule: [] };
+        }
+        if (scheduleIds.has(obj.object_runtime_id)) {
+          byModel[obj.model_id].schedule.push(obj.object_runtime_id);
+        } else {
+          byModel[obj.model_id].white.push(obj.object_runtime_id);
+        }
+      }
+
+      // Color white (non-schedule) objects in batches
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+
+      for (const [modelId, data] of Object.entries(byModel)) {
+        for (let i = 0; i < data.white.length; i += BATCH_SIZE) {
+          const batch = data.white.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 220, g: 220, b: 220, a: 255 } }  // Light gray/white
+          );
+          whiteCount += batch.length;
+          setTestStatus(`Approach 23: White ${whiteCount}/${modelObjects.length - scheduleIds.size}...`);
+        }
+      }
+
+      // Now color schedule items by vehicle
+      const vehicleColors: Record<string, { r: number; g: number; b: number; a: number }> = {};
+      const colorPalette = [
+        { r: 239, g: 68, b: 68, a: 255 },
+        { r: 59, g: 130, b: 246, a: 255 },
+        { r: 34, g: 197, b: 94, a: 255 },
+        { r: 249, g: 115, b: 22, a: 255 },
+        { r: 168, g: 85, b: 247, a: 255 },
+        { r: 236, g: 72, b: 153, a: 255 },
+      ];
+
+      let colorIndex = 0;
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id && i.vehicle_id);
+
+      for (const item of validItems) {
+        if (!vehicleColors[item.vehicle_id]) {
+          vehicleColors[item.vehicle_id] = colorPalette[colorIndex % colorPalette.length];
+          colorIndex++;
+        }
+      }
+
+      // Color by vehicle
+      const byVehicleAndModel: Record<string, Record<string, number[]>> = {};
+      for (const item of validItems) {
+        const vid = item.vehicle_id;
+        const mid = item.model_id!;
+        if (!byVehicleAndModel[vid]) byVehicleAndModel[vid] = {};
+        if (!byVehicleAndModel[vid][mid]) byVehicleAndModel[vid][mid] = [];
+        byVehicleAndModel[vid][mid].push(item.object_runtime_id!);
+      }
+
+      for (const [vehicleId, byModel2] of Object.entries(byVehicleAndModel)) {
+        const color = vehicleColors[vehicleId];
+        for (const [modelId, runtimeIds] of Object.entries(byModel2)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color }
+          );
+        }
+      }
+
+      setTestStatus(`Approach 23: Done! White=${whiteCount}, Colored=${validItems.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 23: Error - ${e.message}`);
+      console.error('Approach 23 error:', e);
+    }
+  };
+
+  // Approach 24: Color with delay between batches
+  const testApproach24 = async () => {
+    setTestStatus('Approach 24: Using delays between batches...');
+    try {
+      const { data: modelObjects, error } = await supabase
+        .from('trimble_model_objects')
+        .select('model_id, object_runtime_id')
+        .eq('trimble_project_id', projectId);
+
+      if (error || !modelObjects?.length) {
+        setTestStatus('Approach 24: No Supabase data. Run "Scan & Save" first!');
+        return;
+      }
+
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      const scheduleIds = new Set(
+        items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
+      );
+
+      // Group non-schedule items by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const obj of modelObjects) {
+        if (!scheduleIds.has(obj.object_runtime_id)) {
+          if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
+          whiteByModel[obj.model_id].push(obj.object_runtime_id);
+        }
+      }
+
+      // Color with delays
+      const BATCH_SIZE = 2000;
+      const DELAY_MS = 100;
+      let whiteCount = 0;
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 200, g: 200, b: 200, a: 255 } }
+          );
+          whiteCount += batch.length;
+          setTestStatus(`Approach 24: Gray ${whiteCount}...`);
+
+          // Delay between batches
+          await new Promise(resolve => setTimeout(resolve, DELAY_MS));
+        }
+      }
+
+      // Color schedule items
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id);
+      const byModel: Record<string, number[]> = {};
+      for (const item of validItems) {
+        if (!byModel[item.model_id!]) byModel[item.model_id!] = [];
+        byModel[item.model_id!].push(item.object_runtime_id!);
+      }
+
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 24: Done! Gray=${whiteCount}, Red=${validItems.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 24: Error - ${e.message}`);
+      console.error('Approach 24 error:', e);
+    }
+  };
+
+  // Approach 25: Use object state with transparency
+  const testApproach25 = async () => {
+    setTestStatus('Approach 25: Transparent non-schedule items...');
+    try {
+      const { data: modelObjects, error } = await supabase
+        .from('trimble_model_objects')
+        .select('model_id, object_runtime_id')
+        .eq('trimble_project_id', projectId);
+
+      if (error || !modelObjects?.length) {
+        setTestStatus('Approach 25: No Supabase data. Run "Scan & Save" first!');
+        return;
+      }
+
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      const scheduleIds = new Set(
+        items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
+      );
+
+      // Non-schedule items - make semi-transparent
+      const transparentByModel: Record<string, number[]> = {};
+      for (const obj of modelObjects) {
+        if (!scheduleIds.has(obj.object_runtime_id)) {
+          if (!transparentByModel[obj.model_id]) transparentByModel[obj.model_id] = [];
+          transparentByModel[obj.model_id].push(obj.object_runtime_id);
+        }
+      }
+
+      // Apply with low alpha (transparent)
+      const BATCH_SIZE = 5000;
+      let count = 0;
+
+      for (const [modelId, runtimeIds] of Object.entries(transparentByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 180, g: 180, b: 180, a: 50 } }  // Low alpha = transparent
+          );
+          count += batch.length;
+          setTestStatus(`Approach 25: Transparent ${count}...`);
+        }
+      }
+
+      // Color schedule items bright
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id);
+      const byModel: Record<string, number[]> = {};
+      for (const item of validItems) {
+        if (!byModel[item.model_id!]) byModel[item.model_id!] = [];
+        byModel[item.model_id!].push(item.object_runtime_id!);
+      }
+
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: 0, g: 200, b: 0, a: 255 } }  // Bright green
+        );
+      }
+
+      setTestStatus(`Approach 25: Done! Transparent=${count}, Green=${validItems.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 25: Error - ${e.message}`);
+      console.error('Approach 25 error:', e);
+    }
+  };
+
+  // ============================================
   // ITEM CLICK HANDLING
   // ============================================
 
@@ -7806,6 +8108,43 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>👁️ setVisibility(false)</strong>
                       <span>Peidab teised objektid setVisibility abil</span>
+                    </div>
+                  </button>
+                </div>
+
+                <h3 style={{ marginTop: '20px' }}>Supabase põhine värvimine</h3>
+                <p className="test-description">Salvesta kõik objektid Supabase'i ja kasuta värvimiseks</p>
+
+                <button onClick={scanAndSaveModelObjects} className="test-btn highlight" style={{ borderColor: '#8b5cf6', marginBottom: '12px' }}>
+                  <span className="test-btn-num">💾</span>
+                  <div className="test-btn-content">
+                    <strong>Scan & Save to Supabase</strong>
+                    <span>Skaneerib kõik mudeli objektid ja salvestab Supabase'i</span>
+                  </div>
+                </button>
+
+                <div className="test-buttons">
+                  <button onClick={testApproach23} className="test-btn highlight" style={{ borderColor: '#10b981' }}>
+                    <span className="test-btn-num">23</span>
+                    <div className="test-btn-content">
+                      <strong>🎨 Supabase + Veokid</strong>
+                      <span>Hall kõigile, värvilised veokite järgi</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach24} className="test-btn highlight" style={{ borderColor: '#f59e0b' }}>
+                    <span className="test-btn-num">24</span>
+                    <div className="test-btn-content">
+                      <strong>⏱️ Supabase + Delay</strong>
+                      <span>Viivitusega partiide vahel</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach25} className="test-btn highlight" style={{ borderColor: '#3b82f6' }}>
+                    <span className="test-btn-num">25</span>
+                    <div className="test-btn-content">
+                      <strong>👻 Supabase + Transparent</strong>
+                      <span>Läbipaistev teistele, roheline graafikule</span>
                     </div>
                   </button>
                 </div>

@@ -717,3 +717,19 @@ export interface DeliveryFactoryGroup {
   itemCount: number;
   totalWeight: number;
 }
+
+// ============================================
+// MODEL OBJECTS (kõik mudeli objektid värvimiseks)
+// ============================================
+
+export interface ModelObject {
+  id: string;
+  trimble_project_id: string;
+  model_id: string;
+  object_runtime_id: number;
+  guid?: string;
+  guid_ifc?: string;
+  assembly_mark?: string;
+  product_name?: string;
+  created_at: string;
+}
