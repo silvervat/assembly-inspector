@@ -4414,12 +4414,102 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Reset colors
+  // Approach 21: Use isolateObjects() to show ONLY schedule items
+  const testApproach21 = async () => {
+    setTestStatus('Approach 21: Isolating schedule items...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Get items with valid model/runtime IDs
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id);
+
+      if (validItems.length === 0) {
+        setTestStatus('Approach 21: No items with valid IDs');
+        return;
+      }
+
+      // Group by model
+      const byModel: Record<string, number[]> = {};
+      for (const item of validItems) {
+        if (!byModel[item.model_id!]) byModel[item.model_id!] = [];
+        byModel[item.model_id!].push(item.object_runtime_id!);
+      }
+
+      const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
+        modelId,
+        objectRuntimeIds
+      }));
+
+      // Try isolateObjects - this should hide everything else
+      if (viewer.isolateObjects) {
+        await viewer.isolateObjects({ modelObjectIds });
+        setTestStatus(`Approach 21: Isolated ${validItems.length} items (others hidden)`);
+      } else {
+        setTestStatus('Approach 21: isolateObjects() not available');
+      }
+    } catch (e: any) {
+      setTestStatus(`Approach 21: Error - ${e.message}`);
+      console.error('Approach 21 error:', e);
+    }
+  };
+
+  // Approach 22: Use setVisibility(false) for non-schedule items
+  const testApproach22 = async () => {
+    setTestStatus('Approach 22: Hiding non-schedule items...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Get all entities
+      const entitiesResult = await viewer.getEntities();
+      if (!entitiesResult?.length) {
+        setTestStatus('Approach 22: No entities');
+        return;
+      }
+
+      const modelId = entitiesResult[0].modelId;
+      const entities = entitiesResult[0].entityForModel || [];
+      const allIds = entities.map((e: any) => e.id || e);
+
+      // Get schedule item IDs
+      const scheduleIds = new Set(
+        items
+          .filter(i => i.model_id === modelId && i.object_runtime_id)
+          .map(i => i.object_runtime_id!)
+      );
+
+      // IDs to hide (not in schedule)
+      const hideIds = allIds.filter((id: number) => !scheduleIds.has(id));
+
+      console.log(`Approach 22: Total=${allIds.length}, Hide=${hideIds.length}, Show=${scheduleIds.size}`);
+
+      if (hideIds.length > 0) {
+        // Try setVisibility
+        if (viewer.setVisibility) {
+          await viewer.setVisibility(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: hideIds }] },
+            false
+          );
+          setTestStatus(`Approach 22: Hidden ${hideIds.length} items, showing ${scheduleIds.size}`);
+        } else {
+          setTestStatus('Approach 22: setVisibility() not available');
+        }
+      }
+    } catch (e: any) {
+      setTestStatus(`Approach 22: Error - ${e.message}`);
+      console.error('Approach 22 error:', e);
+    }
+  };
+
+  // Reset colors and visibility
   const testReset = async () => {
-    setTestStatus('Resetting colors...');
+    setTestStatus('Resetting colors and visibility...');
     try {
       await api.viewer.setObjectState(undefined, { color: 'reset' });
-      setTestStatus('Colors reset!');
+      const viewer = api.viewer as any;
+      if (viewer.showAllObjects) {
+        await viewer.showAllObjects();
+      }
+      setTestStatus('Reset complete!');
     } catch (e: any) {
       setTestStatus(`Reset error: ${e.message}`);
     }
@@ -7700,6 +7790,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>📅 Kuupäevade järgi</strong>
                       <span>Värvib AINULT graafikus olevaid detaile kuupäevade kaupa</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach21} className="test-btn highlight" style={{ borderColor: '#f59e0b' }}>
+                    <span className="test-btn-num">21</span>
+                    <div className="test-btn-content">
+                      <strong>🔒 Isolate (peida teised)</strong>
+                      <span>isolateObjects() - peidab KÕIK peale graafiku detailide</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach22} className="test-btn highlight" style={{ borderColor: '#ef4444' }}>
+                    <span className="test-btn-num">22</span>
+                    <div className="test-btn-content">
+                      <strong>👁️ setVisibility(false)</strong>
+                      <span>Peidab teised objektid setVisibility abil</span>
                     </div>
                   </button>
                 </div>
