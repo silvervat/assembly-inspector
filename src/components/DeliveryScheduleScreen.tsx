@@ -2883,11 +2883,80 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.error('Error clearing colors:', e);
     }
 
+    // Step 1: Fetch all objects from Supabase and color non-schedule items WHITE
+    setMessage('Playback: Loen Supabasest...');
+    const PAGE_SIZE = 5000;
+    const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+    let lastId = -1;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('trimble_model_objects')
+        .select('model_id, object_runtime_id')
+        .eq('trimble_project_id', projectId)
+        .gt('object_runtime_id', lastId)
+        .order('object_runtime_id', { ascending: true })
+        .limit(PAGE_SIZE);
+
+      if (error) {
+        console.error('Supabase error:', error);
+        break;
+      }
+
+      if (!data || data.length === 0) break;
+
+      allModelObjects.push(...data);
+      lastId = data[data.length - 1].object_runtime_id;
+
+      setMessage(`Playback: Loetud ${allModelObjects.length} kirjet...`);
+
+      if (data.length < PAGE_SIZE) break;
+    }
+
+    // Get schedule item IDs
+    const scheduleRuntimeIds = new Set(
+      items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
+    );
+
+    // Color non-schedule items WHITE
+    if (allModelObjects.length > 0) {
+      const whiteByModel: Record<string, number[]> = {};
+      for (const obj of allModelObjects) {
+        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
+          if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
+          whiteByModel[obj.model_id].push(obj.object_runtime_id);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          try {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+              { color: { r: 255, g: 255, b: 255, a: 255 } }
+            );
+          } catch (e) {
+            console.error('Error coloring white:', e);
+          }
+          whiteCount += batch.length;
+          setMessage(`Playback: Valged ${whiteCount}/${totalWhite}...`);
+        }
+      }
+    }
+
+    setMessage('Playback alustab...');
+
     // Play through vehicles
     const playVehicle = async (vehicleIndex: number) => {
       if (vehicleIndex >= sortedVehicles.length) {
         setIsPlaying(false);
         setCurrentPlaybackVehicleId(null);
+        setMessage('Playback lõpetatud!');
         return;
       }
 
@@ -2960,6 +3029,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       setCurrentPlayVehicleIndex(vehicleIndex);
+      setMessage(`Veok ${vehicleIndex + 1}/${sortedVehicles.length}: ${vehicle.vehicle_code}`);
 
       // Wait and move to next vehicle
       playbackRef.current = setTimeout(() => playVehicle(vehicleIndex + 1), playbackSpeed);
