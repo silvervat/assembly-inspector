@@ -439,6 +439,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [itemMenuId, setItemMenuId] = useState<string | null>(null);
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
+  const [menuFlipUp, setMenuFlipUp] = useState(false);
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -2225,6 +2226,87 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Export single date to Excel
+  const exportDateToExcel = (date: string) => {
+    try {
+      const dateItems = items.filter(i => i.scheduled_date === date);
+
+      // Sort items by vehicle time, then sort_order
+      const sortedItems = [...dateItems].sort((a, b) => {
+        const vehicleA = getVehicle(a.vehicle_id || '');
+        const vehicleB = getVehicle(b.vehicle_id || '');
+        const timeA = vehicleA?.unload_start_time || '99:99';
+        const timeB = vehicleB?.unload_start_time || '99:99';
+        if (timeA !== timeB) return timeA.localeCompare(timeB);
+        if (vehicleA?.sort_order !== vehicleB?.sort_order) {
+          return (vehicleA?.sort_order ?? 999) - (vehicleB?.sort_order ?? 999);
+        }
+        return a.sort_order - b.sort_order;
+      });
+
+      // Headers
+      const headers = ['Nr', 'Veok', 'Aeg', 'Kestus', 'Märk', 'Toode', 'Kaal (kg)', 'Staatus'];
+
+      // Data rows
+      const rows = sortedItems.map((item, idx) => {
+        const vehicle = getVehicle(item.vehicle_id || '');
+        const durationMins = vehicle?.unload_duration_minutes || 0;
+        const durationStr = durationMins > 0 ? `${(durationMins / 60).toFixed(1)}h` : '-';
+
+        return [
+          idx + 1,
+          vehicle?.vehicle_code || '-',
+          vehicle?.unload_start_time || '-',
+          durationStr,
+          item.assembly_mark,
+          item.product_name || '',
+          item.cast_unit_weight || '',
+          ITEM_STATUS_CONFIG[item.status]?.label || item.status
+        ];
+      });
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const wsData = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Style header row
+      const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '0a3a67' } },
+        alignment: { horizontal: 'center' }
+      };
+
+      headers.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+        if (!ws[cellRef]) ws[cellRef] = { v: headers[idx] };
+        ws[cellRef].s = headerStyle;
+      });
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 5 },   // Nr
+        { wch: 10 },  // Veok
+        { wch: 8 },   // Aeg
+        { wch: 8 },   // Kestus
+        { wch: 15 },  // Märk
+        { wch: 25 },  // Toode
+        { wch: 10 },  // Kaal
+        { wch: 12 }   // Staatus
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, formatDateShort(date));
+
+      // Save file
+      const fileName = `Tarne_${date}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      setMessage(`${formatDateShort(date)} eksporditud`);
+    } catch (e: any) {
+      console.error('Error exporting date:', e);
+      setMessage('Viga eksportimisel: ' + e.message);
+    }
+  };
+
   // ============================================
   // PLAYBACK
   // ============================================
@@ -2726,7 +2808,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div
               key={date}
               id={`date-group-${date}`}
-              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
@@ -2771,7 +2853,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   className="date-menu-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setDateMenuId(dateMenuId === date ? null : date);
+                    if (dateMenuId === date) {
+                      setDateMenuId(null);
+                    } else {
+                      // Check if menu should flip up (near bottom of screen)
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const spaceBelow = window.innerHeight - rect.bottom;
+                      setMenuFlipUp(spaceBelow < 200);
+                      setDateMenuId(date);
+                    }
                   }}
                 >
                   <FiMoreVertical />
@@ -2780,13 +2870,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               {/* Date menu */}
               {dateMenuId === date && (
-                <div className="context-menu date-context-menu">
+                <div className={`context-menu date-context-menu ${menuFlipUp ? 'flip-up' : ''}`}>
                   <button onClick={() => {
                     setAddModalDate(date);
                     setShowAddModal(true);
                     setDateMenuId(null);
                   }}>
                     <FiPlus /> Lisa veok
+                  </button>
+                  <button onClick={() => {
+                    exportDateToExcel(date);
+                    setDateMenuId(null);
+                  }}>
+                    <FiDownload /> Ekspordi Excel
                   </button>
                   <button onClick={() => {
                     // Copy all marks

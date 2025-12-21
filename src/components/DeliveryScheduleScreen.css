@@ -794,7 +794,13 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+}
+
+/* When menu is open, ensure proper stacking */
+.delivery-date-group.menu-open {
+  z-index: 100;
 }
 
 .date-header {
@@ -806,6 +812,7 @@
   cursor: pointer;
   border-bottom: 1px solid #e5e7eb;
   transition: background 0.15s;
+  position: relative;
 }
 
 .date-header:hover {
@@ -833,7 +840,7 @@
 .date-info-section .date-primary {
   font-weight: 700;
   font-size: 16px;
-  color: #111827;
+  color: var(--modus-primary-darker, #0a3a67);
 }
 
 .date-info-section .date-secondary {
@@ -1527,6 +1534,13 @@
 
 .date-context-menu {
   right: 40px;
+}
+
+/* Flip menu upward when near bottom of screen */
+.context-menu.flip-up {
+  top: auto;
+  bottom: 100%;
+  margin-bottom: 4px;
 }
 
 .vehicle-context-menu {
