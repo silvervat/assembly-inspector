@@ -4650,6 +4650,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         trimble_project_id: projectId,
         model_id: item.model_id!,
         object_runtime_id: item.object_runtime_id!,
+        guid: item.guid,
+        guid_ifc: item.guid_ifc,
         assembly_mark: item.assembly_mark,
         product_name: item.product_name
       }));
@@ -4663,6 +4665,46 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setTestStatus(`Error: ${error.message}`);
       } else {
         setTestStatus(`Saved ${validItems.length} schedule items to Supabase!`);
+      }
+    } catch (e: any) {
+      setTestStatus(`Save error: ${e.message}`);
+      console.error('Save error:', e);
+    }
+  };
+
+  // Save MODEL-SELECTED objects to Supabase with full info
+  const saveModelSelectionToSupabase = async () => {
+    if (selectedObjects.length === 0) {
+      setTestStatus('Vali esmalt mudelis mõni detail!');
+      return;
+    }
+
+    setTestStatus(`Saving ${selectedObjects.length} model-selected objects...`);
+    try {
+      // Build records from model selection
+      const records = selectedObjects.map(obj => ({
+        trimble_project_id: projectId,
+        model_id: obj.modelId,
+        object_runtime_id: obj.runtimeId,
+        guid: obj.guidIfc || obj.guidMs || obj.guid,
+        guid_ifc: obj.guidIfc,
+        assembly_mark: obj.assemblyMark,
+        product_name: obj.productName
+      }));
+
+      // Use upsert to avoid duplicates
+      const { error } = await supabase
+        .from('trimble_model_objects')
+        .upsert(records, {
+          onConflict: 'trimble_project_id,model_id,object_runtime_id',
+          ignoreDuplicates: false
+        });
+
+      if (error) {
+        console.error('Insert error:', error);
+        setTestStatus(`Error: ${error.message}`);
+      } else {
+        setTestStatus(`Saved ${selectedObjects.length} objects: ${selectedObjects.map(o => o.assemblyMark).join(', ')}`);
       }
     } catch (e: any) {
       setTestStatus(`Save error: ${e.message}`);
@@ -8224,6 +8266,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>Schedule → Supabase</strong>
                       <span>Salvestab ainult graafiku detailid (kiire!)</span>
+                    </div>
+                  </button>
+
+                  <button onClick={saveModelSelectionToSupabase} className="test-btn highlight" style={{ borderColor: '#f59e0b' }}>
+                    <span className="test-btn-num">🎯</span>
+                    <div className="test-btn-content">
+                      <strong>Mudeli valik → Supabase</strong>
+                      <span>Mudelis valitud detailid koos GUID, mark, product</span>
                     </div>
                   </button>
 
