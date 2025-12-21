@@ -6,7 +6,7 @@ import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
-  FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
+  FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
   FiMessageSquare
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
@@ -3036,14 +3036,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       {/* Calendar Header */}
       <div className={`schedule-calendar ${calendarCollapsed ? 'collapsed' : ''}`}>
         <div className="calendar-header">
-          <button onClick={prevMonth} disabled={calendarCollapsed}><FiChevronLeft size={20} /></button>
-          <span className="calendar-month" onClick={() => setCalendarCollapsed(!calendarCollapsed)}>
+          <span className="calendar-month">
             {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-            <button className="calendar-collapse-btn" title={calendarCollapsed ? 'Ava kalender' : 'Sulge kalender'}>
-              {calendarCollapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={16} />}
-            </button>
           </span>
-          <button onClick={nextMonth} disabled={calendarCollapsed}><FiChevronRight size={20} /></button>
+          {!calendarCollapsed && (
+            <div className="calendar-nav">
+              <button onClick={prevMonth}><FiChevronLeft size={18} /></button>
+              <button onClick={nextMonth}><FiChevronRight size={18} /></button>
+            </div>
+          )}
+          <button
+            className="calendar-toggle-btn"
+            onClick={() => setCalendarCollapsed(!calendarCollapsed)}
+          >
+            {calendarCollapsed ? 'Kuva' : 'Peida'}
+          </button>
         </div>
 
         {!calendarCollapsed && (

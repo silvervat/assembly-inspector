@@ -2652,17 +2652,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     return (
       <div className={`schedule-calendar ${calendarCollapsed ? 'collapsed' : ''}`}>
         <div className="calendar-header">
-          <button onClick={() => setCurrentMonth(new Date(year, month - 1, 1))} disabled={calendarCollapsed}>
-            <FiChevronLeft size={20} />
-          </button>
-          <span className="calendar-month" onClick={() => setCalendarCollapsed(!calendarCollapsed)}>
+          <span className="calendar-month">
             {monthNames[month]} {year}
-            <button className="calendar-collapse-btn" title={calendarCollapsed ? 'Ava kalender' : 'Sulge kalender'}>
-              {calendarCollapsed ? <FiChevronDown size={16} /> : <FiChevronUp size={16} />}
-            </button>
           </span>
-          <button onClick={() => setCurrentMonth(new Date(year, month + 1, 1))} disabled={calendarCollapsed}>
-            <FiChevronRight size={20} />
+          {!calendarCollapsed && (
+            <div className="calendar-nav">
+              <button onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}>
+                <FiChevronLeft size={18} />
+              </button>
+              <button onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}>
+                <FiChevronRight size={18} />
+              </button>
+            </div>
+          )}
+          <button
+            className="calendar-toggle-btn"
+            onClick={() => setCalendarCollapsed(!calendarCollapsed)}
+          >
+            {calendarCollapsed ? 'Kuva' : 'Peida'}
           </button>
         </div>
 

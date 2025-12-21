@@ -65,27 +65,53 @@
 .calendar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
-.calendar-header button {
+.calendar-header .calendar-month {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--modus-text-primary, #1f2937);
+}
+
+.calendar-header .calendar-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.calendar-header .calendar-nav button {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-radius: 4px;
   color: var(--modus-text-secondary);
+  display: flex;
+  align-items: center;
 }
 
-.calendar-header button:hover {
+.calendar-header .calendar-nav button:hover {
   background: var(--modus-bg-secondary);
   color: var(--modus-primary);
 }
 
-.calendar-month {
-  font-weight: 600;
-  font-size: 14px;
+.calendar-header .calendar-toggle-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--modus-primary);
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.calendar-header .calendar-toggle-btn:hover {
+  background: var(--modus-primary);
+  color: white;
+  border-color: var(--modus-primary);
 }
 
 .calendar-grid {
@@ -1392,40 +1418,12 @@
 }
 
 /* Collapsible Calendar */
-.calendar-collapse-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 2px;
-  color: var(--modus-text-secondary);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 4px;
-  vertical-align: middle;
-}
-
-.calendar-collapse-btn:hover {
-  color: var(--modus-primary);
-}
-
-.calendar-month {
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-}
-
 .schedule-calendar.collapsed {
   padding: 8px 12px;
 }
 
 .schedule-calendar.collapsed .calendar-header {
   margin-bottom: 0;
-}
-
-.schedule-calendar.collapsed .calendar-header button:first-child,
-.schedule-calendar.collapsed .calendar-header button:last-child {
-  visibility: hidden;
 }
 
 /* Date Color Indicator */
