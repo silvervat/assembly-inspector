@@ -4997,6 +4997,110 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Approach 26: Optimized - color schedule first, then gray rest from Supabase (no double coloring)
+  const testApproach26 = async () => {
+    setTestStatus('Approach 26: Optimeeritud värvimine...');
+    try {
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Step 1: Color schedule items by vehicle FIRST
+      const colorPalette = [
+        { r: 239, g: 68, b: 68, a: 255 },   // Red
+        { r: 59, g: 130, b: 246, a: 255 },  // Blue
+        { r: 34, g: 197, b: 94, a: 255 },   // Green
+        { r: 249, g: 115, b: 22, a: 255 },  // Orange
+        { r: 168, g: 85, b: 247, a: 255 },  // Purple
+        { r: 236, g: 72, b: 153, a: 255 },  // Pink
+        { r: 14, g: 165, b: 233, a: 255 },  // Cyan
+        { r: 245, g: 158, b: 11, a: 255 },  // Amber
+      ];
+
+      // Get valid schedule items with vehicle assignment
+      const scheduleItems = items.filter(i => i.model_id && i.object_runtime_id && i.vehicle_id);
+      const coloredRuntimeIds = new Set<number>();
+
+      // Assign colors to vehicles
+      const vehicleColors: Record<string, typeof colorPalette[0]> = {};
+      let colorIndex = 0;
+      for (const item of scheduleItems) {
+        if (!vehicleColors[item.vehicle_id!]) {
+          vehicleColors[item.vehicle_id!] = colorPalette[colorIndex % colorPalette.length];
+          colorIndex++;
+        }
+      }
+
+      // Group by vehicle and model
+      const byVehicleAndModel: Record<string, Record<string, number[]>> = {};
+      for (const item of scheduleItems) {
+        const vid = item.vehicle_id!;
+        const mid = item.model_id!;
+        if (!byVehicleAndModel[vid]) byVehicleAndModel[vid] = {};
+        if (!byVehicleAndModel[vid][mid]) byVehicleAndModel[vid][mid] = [];
+        byVehicleAndModel[vid][mid].push(item.object_runtime_id!);
+        coloredRuntimeIds.add(item.object_runtime_id!);
+      }
+
+      // Color schedule items by vehicle
+      let scheduleColoredCount = 0;
+      for (const [vehicleId, byModel] of Object.entries(byVehicleAndModel)) {
+        const color = vehicleColors[vehicleId];
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color }
+          );
+          scheduleColoredCount += runtimeIds.length;
+          setTestStatus(`Approach 26: Värvin veokid... ${scheduleColoredCount}/${scheduleItems.length}`);
+        }
+      }
+
+      // Step 2: Get remaining objects from Supabase
+      setTestStatus('Approach 26: Loen ülejäänud detailid Supabasest...');
+      const { data: modelObjects, error } = await supabase
+        .from('trimble_model_objects')
+        .select('model_id, object_runtime_id')
+        .eq('trimble_project_id', projectId);
+
+      if (error || !modelObjects?.length) {
+        setTestStatus(`Approach 26: Veokid värvitud (${scheduleColoredCount}), aga Supabase tühi!`);
+        return;
+      }
+
+      // Filter to only non-colored objects
+      const grayByModel: Record<string, number[]> = {};
+      let grayCount = 0;
+      for (const obj of modelObjects) {
+        if (!coloredRuntimeIds.has(obj.object_runtime_id)) {
+          if (!grayByModel[obj.model_id]) grayByModel[obj.model_id] = [];
+          grayByModel[obj.model_id].push(obj.object_runtime_id);
+          grayCount++;
+        }
+      }
+
+      // Step 3: Color remaining objects gray in batches
+      const BATCH_SIZE = 5000;
+      let grayDone = 0;
+
+      for (const [modelId, runtimeIds] of Object.entries(grayByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 180, g: 180, b: 180, a: 255 } }  // Gray
+          );
+          grayDone += batch.length;
+          setTestStatus(`Approach 26: Hall ${grayDone}/${grayCount}...`);
+        }
+      }
+
+      setTestStatus(`✓ Approach 26: Värvitud=${scheduleColoredCount}, Hall=${grayDone}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 26: Error - ${e.message}`);
+      console.error('Approach 26 error:', e);
+    }
+  };
+
   // ============================================
   // ITEM CLICK HANDLING
   // ============================================
@@ -8359,6 +8463,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>👻 Supabase + Transparent</strong>
                       <span>Läbipaistev teistele, roheline graafikule</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach26} className="test-btn highlight" style={{ borderColor: '#22c55e' }}>
+                    <span className="test-btn-num">26</span>
+                    <div className="test-btn-content">
+                      <strong>🚀 Optimeeritud (veokid → hall)</strong>
+                      <span>Esmalt graafik veokite järgi, siis ülejäänu hall</span>
                     </div>
                   </button>
                 </div>
