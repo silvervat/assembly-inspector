@@ -3,7 +3,7 @@ import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
   DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
-  DeliveryVehicleStatus, ModelObject
+  DeliveryVehicleStatus
 } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
@@ -1147,6 +1147,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   }, [api]);
 
   // Sync schedule selection to model viewer
+  // Only syncs WHEN schedule items are selected - does NOT clear model selection otherwise
   useEffect(() => {
     if (selectedItemIds.size > 0) {
       setSelectedObjects([]);
@@ -1169,13 +1170,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (modelObjectIds.length > 0) {
         api.viewer.setSelection({ modelObjectIds }, 'set').catch(() => {});
-      } else {
-        api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
       }
-    } else {
-      // Clear viewer selection when nothing is selected in schedule
-      api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
     }
+    // NOTE: We do NOT clear viewer selection when selectedItemIds is empty
+    // This allows users to freely select objects in the model without interference
   }, [selectedItemIds, api, items]);
 
   // ============================================
@@ -4302,8 +4300,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Assign colors to vehicles
       let colorIndex = 0;
       for (const item of validItems) {
-        if (!vehicleColors[item.vehicle_id]) {
-          vehicleColors[item.vehicle_id] = colorPalette[colorIndex % colorPalette.length];
+        const vid = item.vehicle_id!;
+        if (!vehicleColors[vid]) {
+          vehicleColors[vid] = colorPalette[colorIndex % colorPalette.length];
           colorIndex++;
         }
       }
@@ -4311,7 +4310,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Group items by vehicle and model
       const byVehicleAndModel: Record<string, Record<string, number[]>> = {};
       for (const item of validItems) {
-        const vid = item.vehicle_id;
+        const vid = item.vehicle_id!;
         const mid = item.model_id!;
         if (!byVehicleAndModel[vid]) byVehicleAndModel[vid] = {};
         if (!byVehicleAndModel[vid][mid]) byVehicleAndModel[vid][mid] = [];
@@ -4357,15 +4356,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Get vehicle dates
       const vehicleDates: Record<string, string> = {};
       for (const v of vehicles) {
-        if (v.delivery_date) {
-          vehicleDates[v.id] = v.delivery_date;
+        if (v.scheduled_date) {
+          vehicleDates[v.id] = v.scheduled_date;
         }
       }
 
       // Group items by date
       const byDate: Record<string, { modelId: string; runtimeId: number }[]> = {};
       for (const item of validItems) {
-        const date = vehicleDates[item.vehicle_id] || 'no-date';
+        const date = vehicleDates[item.vehicle_id!] || 'no-date';
         if (!byDate[date]) byDate[date] = [];
         byDate[date].push({ modelId: item.model_id!, runtimeId: item.object_runtime_id! });
       }
