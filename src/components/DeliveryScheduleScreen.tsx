@@ -250,6 +250,15 @@ const rgbToHex = (r: number, g: number, b: number): string => {
   return ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
 };
 
+// Darken a hex color by a factor (0.0 = no change, 1.0 = black)
+const darkenColor = (hexColor: string, factor: number): string => {
+  const hex = hexColor.replace('#', '');
+  const r = Math.round(parseInt(hex.substring(0, 2), 16) * (1 - factor));
+  const g = Math.round(parseInt(hex.substring(2, 4), 16) * (1 - factor));
+  const b = Math.round(parseInt(hex.substring(4, 6), 16) * (1 - factor));
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+};
+
 // Text color based on background
 const getTextColor = (r: number, g: number, b: number): string => {
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
@@ -2980,7 +2989,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           .filter(v => v.scheduled_date === dateStr)
                           .sort((a, b) => (a.unload_start_time || '').localeCompare(b.unload_start_time || ''))
                           .map(v => (
-                            <div key={v.id} className="tooltip-vehicle">
+                            <div
+                              key={v.id}
+                              className="tooltip-vehicle clickable"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Clear tooltip
+                                setHoveredDate(null);
+                                if (hoverTimeoutRef.current) {
+                                  clearTimeout(hoverTimeoutRef.current);
+                                  hoverTimeoutRef.current = null;
+                                }
+                                // Expand date group
+                                setCollapsedDates(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(dateStr);
+                                  return next;
+                                });
+                                // Expand vehicle
+                                setCollapsedVehicles(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(v.id);
+                                  return next;
+                                });
+                                // Set as active vehicle
+                                setActiveVehicleId(v.id);
+                                // Scroll to vehicle after a small delay for DOM update
+                                setTimeout(() => {
+                                  const vehicleEl = document.querySelector(`[data-vehicle-id="${v.id}"]`);
+                                  if (vehicleEl) {
+                                    vehicleEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  }
+                                }, 100);
+                              }}
+                            >
                               <span className="tooltip-time">{v.unload_start_time?.slice(0, 5) || '--:--'}</span>
                               <span className="tooltip-code">{v.vehicle_code}</span>
                             </div>
@@ -3355,9 +3397,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       title={`${method.label}: ${count}`}
                                     >
                                       <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
-                                      {count > 1 && (
-                                        <span className="badge-count">{count}</span>
-                                      )}
+                                      <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
                                     </div>
                                   );
                                 })}
@@ -3565,7 +3605,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                             title={method.label}
                                           >
                                             <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
-                                            {count > 1 && <span className="resource-count">{count}</span>}
+                                            <span className="resource-count" style={{ background: darkenColor(method.bgColor, 0.15) }}>{count}</span>
                                           </span>
                                         );
                                       })}
@@ -3868,7 +3908,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         return (
                                           <span key={method.key} className="resource-badge" style={{ backgroundColor: method.bgColor }} title={method.label}>
                                             <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" />
-                                            {count > 1 && <span className="resource-count">{count}</span>}
+                                            <span className="resource-count" style={{ background: darkenColor(method.bgColor, 0.15) }}>{count}</span>
                                           </span>
                                         );
                                       })}
