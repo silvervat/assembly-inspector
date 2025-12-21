@@ -2852,4 +2852,5 @@
 
 .assembly-enable-btn:hover {
   background: var(--modus-primary-darker, #0a3a67);
+  color: white;
 }
