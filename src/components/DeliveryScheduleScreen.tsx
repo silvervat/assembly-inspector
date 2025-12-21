@@ -4672,34 +4672,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Save only SELECTED (checkbox) items to Supabase with full info
-  const saveSelectedItemsToSupabase = async () => {
-    if (selectedItemIds.size === 0) {
-      setTestStatus('Pole ühtegi detaili valitud!');
+  // Save MODEL-SELECTED objects to Supabase with full info
+  const saveModelSelectionToSupabase = async () => {
+    if (selectedObjects.length === 0) {
+      setTestStatus('Vali esmalt mudelis mõni detail!');
       return;
     }
 
-    setTestStatus(`Saving ${selectedItemIds.size} selected items...`);
+    setTestStatus(`Saving ${selectedObjects.length} model-selected objects...`);
     try {
-      // Get selected items with valid IDs
-      const selectedItems = items.filter(i =>
-        selectedItemIds.has(i.id) && i.model_id && i.object_runtime_id
-      );
-
-      if (selectedItems.length === 0) {
-        setTestStatus('Valitud detailidel pole kehtivaid ID-sid');
-        return;
-      }
-
-      // Insert selected items (don't delete existing - add to table)
-      const records = selectedItems.map(item => ({
+      // Build records from model selection
+      const records = selectedObjects.map(obj => ({
         trimble_project_id: projectId,
-        model_id: item.model_id!,
-        object_runtime_id: item.object_runtime_id!,
-        guid: item.guid,
-        guid_ifc: item.guid_ifc,
-        assembly_mark: item.assembly_mark,
-        product_name: item.product_name
+        model_id: obj.modelId,
+        object_runtime_id: obj.runtimeId,
+        guid: obj.guidIfc || obj.guidMs || obj.guid,
+        guid_ifc: obj.guidIfc,
+        assembly_mark: obj.assemblyMark,
+        product_name: obj.productName
       }));
 
       // Use upsert to avoid duplicates
@@ -4714,7 +4704,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         console.error('Insert error:', error);
         setTestStatus(`Error: ${error.message}`);
       } else {
-        setTestStatus(`Saved ${selectedItems.length} selected items with GUID, assembly_mark, product_name!`);
+        setTestStatus(`Saved ${selectedObjects.length} objects: ${selectedObjects.map(o => o.assemblyMark).join(', ')}`);
       }
     } catch (e: any) {
       setTestStatus(`Save error: ${e.message}`);
@@ -8279,11 +8269,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   </button>
 
-                  <button onClick={saveSelectedItemsToSupabase} className="test-btn highlight" style={{ borderColor: '#f59e0b' }}>
-                    <span className="test-btn-num">✅</span>
+                  <button onClick={saveModelSelectionToSupabase} className="test-btn highlight" style={{ borderColor: '#f59e0b' }}>
+                    <span className="test-btn-num">🎯</span>
                     <div className="test-btn-content">
-                      <strong>Valitud → Supabase</strong>
-                      <span>Valitud detailid koos GUID, mark, product infoga</span>
+                      <strong>Mudeli valik → Supabase</strong>
+                      <span>Mudelis valitud detailid koos GUID, mark, product</span>
                     </div>
                   </button>
 
