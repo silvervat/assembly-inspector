@@ -758,6 +758,12 @@
   background: linear-gradient(to right, #f1f5f9, #e2e8f0);
 }
 
+/* Date header when it contains selected model items */
+.date-header.has-selected-item {
+  background: linear-gradient(to right, #fef3c7, #fde68a);
+  border-left: 4px solid #f59e0b;
+}
+
 .date-header .collapse-icon {
   color: #6b7280;
   flex-shrink: 0;
@@ -868,6 +874,17 @@
 
 .delivery-vehicle-group.factory-vehicle {
   margin-left: 16px;
+}
+
+/* Vehicle group when it contains selected model items */
+.delivery-vehicle-group.has-selected-item {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.vehicle-header.has-selected-item {
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
 }
 
 /* Newly created vehicle highlight animation */

@@ -2558,6 +2558,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   const renderDateView = () => {
+    // Find dates and vehicles that contain selected model objects
+    const selectedGuids = new Set(selectedObjects.map(obj => obj.guid).filter(Boolean));
+    const datesWithSelectedItems = new Set<string>();
+    const vehiclesWithSelectedItems = new Set<string>();
+
+    if (selectedGuids.size > 0) {
+      items.forEach(item => {
+        if (selectedGuids.has(item.guid) && item.vehicle_id) {
+          vehiclesWithSelectedItems.add(item.vehicle_id);
+          const vehicle = vehicles.find(v => v.id === item.vehicle_id);
+          if (vehicle?.scheduled_date) {
+            datesWithSelectedItems.add(vehicle.scheduled_date);
+          }
+        }
+      });
+    }
+
     return (
       <div className="delivery-list" ref={listRef}>
         {sortedDates.length === 0 && !loading && (
@@ -2569,6 +2586,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         )}
 
         {sortedDates.map(date => {
+          const hasSelectedItem = datesWithSelectedItems.has(date);
           const dateVehicles = itemsByDateAndVehicle[date] || {};
           const dateItemCount = Object.values(dateVehicles).reduce((sum, vItems) => sum + vItems.length, 0);
           const isCollapsed = collapsedDates.has(date);
@@ -2599,13 +2617,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div
               key={date}
               id={`date-group-${date}`}
-              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
               {/* Date header - new two-row layout */}
               <div
-                className="date-header"
+                className={`date-header ${hasSelectedItem ? 'has-selected-item' : ''}`}
                 onClick={() => {
                   setCollapsedDates(prev => {
                     const next = new Set(prev);
@@ -2703,10 +2721,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
+                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
