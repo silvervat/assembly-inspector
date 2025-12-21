@@ -316,6 +316,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Selection from model
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
@@ -448,7 +450,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [editingFactoryId, setEditingFactoryId] = useState<string | null>(null);
   const [editFactoryName, setEditFactoryName] = useState('');
   const [editFactoryCode, setEditFactoryCode] = useState('');
-  const [editFactorySeparator, setEditFactorySeparator] = useState('.');
 
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
@@ -1203,14 +1204,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setEditingFactoryId(factory.id);
     setEditFactoryName(factory.factory_name);
     setEditFactoryCode(factory.factory_code);
-    setEditFactorySeparator(factory.vehicle_separator || '.');
   };
 
   const cancelEditFactory = () => {
     setEditingFactoryId(null);
     setEditFactoryName('');
     setEditFactoryCode('');
-    setEditFactorySeparator('.');
   };
 
   // ============================================
@@ -2904,6 +2903,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${isPlaybackDate ? 'playback-active' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateStr);
+                      setHoveredDate(null); // Clear tooltip on click
 
                       // Check if selected objects are NEW (not already in schedule)
                       const existingGuids = new Set(items.map(item => item.guid));
@@ -2935,10 +2935,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         selectDateItemsInModel(dateStr);
                       }
                     }}
+                    onMouseEnter={() => {
+                      if (vehicleCount > 0) {
+                        hoverTimeoutRef.current = setTimeout(() => {
+                          setHoveredDate(dateStr);
+                        }, 750);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      if (hoverTimeoutRef.current) {
+                        clearTimeout(hoverTimeoutRef.current);
+                        hoverTimeoutRef.current = null;
+                      }
+                      setHoveredDate(null);
+                    }}
                   >
                     <span className="day-number">{date.getDate()}</span>
                     {vehicleCount > 0 && (
                       <span className="day-count">{vehicleCount}</span>
+                    )}
+                    {/* Vehicle tooltip on hover */}
+                    {hoveredDate === dateStr && (
+                      <div className="calendar-day-tooltip">
+                        {vehicles
+                          .filter(v => v.scheduled_date === dateStr)
+                          .sort((a, b) => (a.unload_start_time || '').localeCompare(b.unload_start_time || ''))
+                          .map(v => (
+                            <div key={v.id} className="tooltip-vehicle">
+                              <span className="tooltip-time">{v.unload_start_time?.slice(0, 5) || '--:--'}</span>
+                              <span className="tooltip-code">{v.vehicle_code}</span>
+                            </div>
+                          ))}
+                      </div>
                     )}
                   </div>
                 </span>
@@ -3473,6 +3501,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         title="Kopeeri märk"
                                       >{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
+                                      {item.cast_unit_position_code && <span className="item-position">{item.cast_unit_position_code}</span>}
                                     </div>
 
                                     {/* Sequence number for duplicates */}
@@ -3788,6 +3817,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         title="Kopeeri märk"
                                       >{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
+                                      {item.cast_unit_position_code && <span className="item-position">{item.cast_unit_position_code}</span>}
                                     </div>
                                     {/* Sequence number for duplicates */}
                                     {(() => {
