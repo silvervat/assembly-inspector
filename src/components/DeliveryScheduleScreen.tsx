@@ -3558,6 +3558,192 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Approach 11: Explore API and get all model info
+  const testApproach11 = async () => {
+    setTestStatus('Approach 11: Exploring API...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Log all viewer methods
+      console.log('=== VIEWER API EXPLORATION ===');
+      console.log('Viewer object:', viewer);
+      console.log('Viewer keys:', Object.keys(viewer));
+      console.log('Viewer methods:', Object.keys(viewer).filter(k => typeof viewer[k] === 'function'));
+
+      // Try to find models
+      if (viewer.getModels) {
+        const models = await viewer.getModels();
+        console.log('getModels():', models);
+        setTestStatus(`Found ${models?.length || 0} models via getModels()`);
+      }
+
+      if (viewer.models) {
+        console.log('viewer.models:', viewer.models);
+        if (viewer.models.length > 0) {
+          const model = viewer.models[0];
+          console.log('First model:', model);
+          console.log('Model keys:', Object.keys(model));
+          console.log('Model methods:', Object.keys(model).filter(k => typeof model[k] === 'function'));
+        }
+      }
+
+      // Try getLoadedModels
+      if (viewer.getLoadedModels) {
+        const loaded = await viewer.getLoadedModels();
+        console.log('getLoadedModels():', loaded);
+      }
+
+      // Try to get scene info
+      if (viewer.getScene) {
+        const scene = await viewer.getScene();
+        console.log('getScene():', scene);
+      }
+
+      if (viewer.scene) {
+        console.log('viewer.scene:', viewer.scene);
+      }
+
+      // Try getting selection to find modelId
+      const selection = await api.viewer.getSelection();
+      console.log('Current selection:', selection);
+
+      if (selection?.length) {
+        const modelId = selection[0].modelId;
+        console.log('Model ID from selection:', modelId);
+
+        // Try to get model by ID
+        if (viewer.getModel) {
+          const model = await viewer.getModel(modelId);
+          console.log('getModel(modelId):', model);
+        }
+      }
+
+      setTestStatus('Approach 11: Check console for API exploration results');
+    } catch (e: any) {
+      setTestStatus(`Approach 11: Error - ${e.message}`);
+      console.error('Approach 11 error:', e);
+    }
+  };
+
+  // Approach 12: Use getObjectProperties to discover all objects
+  const testApproach12 = async () => {
+    setTestStatus('Approach 12: Trying to discover objects via properties...');
+    try {
+      // First get selection to find modelId
+      const selection = await api.viewer.getSelection();
+      if (!selection?.length) {
+        setTestStatus('Approach 12: No selection - please select something first');
+        return;
+      }
+
+      const modelId = selection[0].modelId;
+      const selectedIds = selection[0].objectRuntimeIds || [];
+      console.log('ModelId:', modelId, 'Selected:', selectedIds.length);
+
+      // Try to query all objects by getting properties with empty filter
+      const viewer = api.viewer as any;
+
+      // Try different query methods
+      if (viewer.queryObjects) {
+        console.log('Trying queryObjects...');
+        const allObjects = await viewer.queryObjects(modelId, {});
+        console.log('queryObjects result:', allObjects);
+      }
+
+      if (viewer.findObjects) {
+        console.log('Trying findObjects...');
+        const allObjects = await viewer.findObjects(modelId);
+        console.log('findObjects result:', allObjects);
+      }
+
+      // Try to get object tree
+      if (viewer.getObjectTree) {
+        console.log('Trying getObjectTree...');
+        const tree = await viewer.getObjectTree(modelId);
+        console.log('getObjectTree result:', tree);
+      }
+
+      // Try to enumerate objects
+      if (viewer.enumerateObjects) {
+        console.log('Trying enumerateObjects...');
+        const objs = await viewer.enumerateObjects(modelId);
+        console.log('enumerateObjects result:', objs);
+      }
+
+      setTestStatus('Approach 12: Check console for results');
+    } catch (e: any) {
+      setTestStatus(`Approach 12: Error - ${e.message}`);
+      console.error('Approach 12 error:', e);
+    }
+  };
+
+  // Approach 13: Color without using undefined - gray first, then red
+  const testApproach13 = async () => {
+    setTestStatus('Approach 13: Gray by explicit IDs, never use undefined...');
+    try {
+      // Get all items from our schedule that have runtime IDs
+      const scheduleItems = items.filter(i => i.object_runtime_id && i.model_id);
+      if (scheduleItems.length === 0) {
+        setTestStatus('Approach 13: No schedule items with runtime IDs');
+        return;
+      }
+
+      // Get selection
+      const selection = await api.viewer.getSelection();
+      const selectedIds = new Set<number>();
+      let modelId = scheduleItems[0].model_id!;
+
+      if (selection?.length) {
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds?.length) {
+            sel.objectRuntimeIds.forEach(id => selectedIds.add(id));
+            modelId = sel.modelId;
+          }
+        }
+      }
+
+      // Split into gray and red
+      const grayIds: number[] = [];
+      const redIds: number[] = [];
+
+      for (const item of scheduleItems) {
+        if (item.object_runtime_id) {
+          if (selectedIds.has(item.object_runtime_id)) {
+            redIds.push(item.object_runtime_id);
+          } else {
+            grayIds.push(item.object_runtime_id);
+          }
+        }
+      }
+
+      setTestStatus(`Approach 13: Gray=${grayIds.length}, Red=${redIds.length}, Total=${scheduleItems.length}`);
+
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Color gray ones (schedule items not selected)
+      if (grayIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      // Color red ones (selected)
+      if (redIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 13: Done! Gray=${grayIds.length}, Red=${redIds.length} (only schedule items)`);
+    } catch (e: any) {
+      setTestStatus(`Approach 13: Error - ${e.message}`);
+      console.error('Approach 13 error:', e);
+    }
+  };
+
   // Reset colors
   const testReset = async () => {
     setTestStatus('Resetting colors...');
@@ -6758,6 +6944,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>SelectAll → Get IDs</strong>
                       <span>Kasutab selectAll() kõik objektide ID-de kogumiseks</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach11} className="test-btn">
+                    <span className="test-btn-num">11</span>
+                    <div className="test-btn-content">
+                      <strong>🔍 Explore API</strong>
+                      <span>Logib konsooli kõik viewer API meetodid ja mudelid</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach12} className="test-btn">
+                    <span className="test-btn-num">12</span>
+                    <div className="test-btn-content">
+                      <strong>🔍 Query Objects</strong>
+                      <span>Proovib queryObjects, findObjects, getObjectTree</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach13} className="test-btn">
+                    <span className="test-btn-num">13</span>
+                    <div className="test-btn-content">
+                      <strong>Schedule Items Only (No Undefined)</strong>
+                      <span>Värvib AINULT graafiku detailid - hall/punane eksplitsiitsete ID-dega</span>
                     </div>
                   </button>
                 </div>
