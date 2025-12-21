@@ -65,6 +65,7 @@
 .delivery-header .header-actions {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .delivery-header .view-toggle-btn {
@@ -538,6 +539,26 @@
   background: #9ca3af;
 }
 
+.list-search-box .collapse-all-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d1d5db;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.list-search-box .collapse-all-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+  border-color: #9ca3af;
+}
+
 /* ============================================
    LIST
    ============================================ */
@@ -709,6 +730,24 @@
 
 .delivery-vehicle-group.factory-vehicle {
   margin-left: 16px;
+}
+
+/* Newly created vehicle highlight animation */
+.delivery-vehicle-group.newly-created {
+  animation: vehicleHighlight 2s ease-out;
+}
+
+@keyframes vehicleHighlight {
+  0%, 10% {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+  }
+  100% {
+    background: #fafafa;
+    border-color: #e5e7eb;
+    box-shadow: none;
+  }
 }
 
 .vehicle-header {
@@ -2414,4 +2453,28 @@
 .status-badge.clickable:hover {
   opacity: 0.8;
   transform: scale(1.05);
+}
+
+/* ============================================
+   ASSEMBLY SELECTION MODAL
+   ============================================ */
+
+.settings-modal.compact.assembly-modal {
+  max-width: 360px;
+}
+
+.assembly-enable-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: white;
+  background: var(--modus-primary, #0063a3);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.assembly-enable-btn:hover {
+  background: var(--modus-primary-darker, #0a3a67);
 }
