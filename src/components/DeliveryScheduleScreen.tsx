@@ -3079,10 +3079,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <span className="date-secondary">{getDayName(date)}</span>
                 </div>
 
-                {/* Week and vehicles section */}
-                <div className="date-week-section">
-                  <span className="week-primary">N{getISOWeek(new Date(date))}</span>
-                  <span className="week-secondary">{dateVehicleList.length} {dateVehicleList.length === 1 ? 'veok' : 'veokit'}</span>
+                {/* Vehicles and week section */}
+                <div className="date-vehicles-section">
+                  <span className="vehicles-primary">{dateVehicleList.length} {dateVehicleList.length === 1 ? 'veok' : 'veokit'}</span>
+                  <span className="vehicles-secondary">N{getISOWeek(new Date(date))}</span>
                 </div>
 
                 {/* Stats section */}
