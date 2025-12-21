@@ -3168,9 +3168,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Approach 5: Save selection, select all -> color gray, select saved -> color red, restore selection
+  // Approach 5: Save selection, color ALL model gray, then color saved red
   const testApproach5 = async () => {
-    setTestStatus('Approach 5: Running... (Save selection, select all, color)');
+    setTestStatus('Approach 5: Running... (Save selection, ALL gray, saved red)');
     try {
       // Step 1: Save current selection
       const originalSelection = await api.viewer.getSelection();
@@ -3186,63 +3186,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
-      setTestStatus(`Approach 5: Saved ${savedRuntimeIds.length} selected items...`);
+      setTestStatus(`Approach 5: Saved ${savedRuntimeIds.length} selected, coloring ALL gray...`);
 
-      // Get all schedule items
-      const allItems = items.filter(i => i.object_runtime_id && i.model_id);
-      if (allItems.length === 0) {
-        setTestStatus('Approach 5: No items with runtime IDs');
-        return;
-      }
-
-      // Group by model
-      const byModel: Record<string, number[]> = {};
-      allItems.forEach(item => {
-        if (!byModel[item.model_id!]) byModel[item.model_id!] = [];
-        byModel[item.model_id!].push(item.object_runtime_id!);
-      });
-
-      // Reset colors first
+      // Step 2: Reset first
       await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-      // Step 2: Select ALL schedule items and color them gray
-      const allModelObjectIds = Object.entries(byModel).map(([mId, runtimeIds]) => ({
-        modelId: mId,
-        objectRuntimeIds: runtimeIds
-      }));
+      // Step 3: Color ALL model objects gray (using undefined = all objects)
+      await api.viewer.setObjectState(undefined, { color: { r: 150, g: 150, b: 150, a: 255 } });
 
-      await api.viewer.setSelection({ modelObjectIds: allModelObjectIds }, 'set');
+      setTestStatus(`Approach 5: ALL gray done, now trying red for ${savedRuntimeIds.length}...`);
 
-      // Color current selection (all items) gray
-      await api.viewer.setObjectState(
-        { modelObjectIds: allModelObjectIds },
-        { color: { r: 150, g: 150, b: 150, a: 255 } }
-      );
-
-      setTestStatus(`Approach 5: Colored ${allItems.length} items gray, now coloring red...`);
-
-      // Step 3: Select only the originally selected items and color them red
+      // Step 4: Try to color saved selection red (might not work after undefined)
       if (savedRuntimeIds.length > 0 && modelId) {
-        await api.viewer.setSelection({
-          modelObjectIds: [{ modelId, objectRuntimeIds: savedRuntimeIds }]
-        }, 'set');
-
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: savedRuntimeIds }] },
           { color: { r: 255, g: 0, b: 0, a: 255 } }
         );
       }
 
-      // Step 4: Restore original selection
+      // Step 5: Restore selection
       if (savedRuntimeIds.length > 0 && modelId) {
         await api.viewer.setSelection({
           modelObjectIds: [{ modelId, objectRuntimeIds: savedRuntimeIds }]
         }, 'set');
-      } else {
-        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
       }
 
-      setTestStatus(`Approach 5: Done! Gray: ${allItems.length - savedRuntimeIds.length}, Red: ${savedRuntimeIds.length}`);
+      setTestStatus(`Approach 5: Done! ALL gray, then red for ${savedRuntimeIds.length}`);
     } catch (e: any) {
       setTestStatus(`Approach 5: Error - ${e.message}`);
       console.error('Test Approach 5 error:', e);
@@ -6535,8 +6504,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <button onClick={testApproach5} className="test-btn">
                     <span className="test-btn-num">5</span>
                     <div className="test-btn-content">
-                      <strong>Save Selection → Color All → Color Saved</strong>
-                      <span>Salvesta select, vali kõik → hall, vali saved → punane</span>
+                      <strong>Save Selection → ALL Gray → Saved Red</strong>
+                      <span>Salvesta select, KÕIK mudelis halliks, siis saved punaseks</span>
                     </div>
                   </button>
 
