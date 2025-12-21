@@ -456,7 +456,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Inline editing state for vehicle list
   const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
-  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | null>(null);
+  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | 'date' | null>(null);
 
   // Assembly selection mode
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
@@ -1269,6 +1269,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         updateData.unload_duration_minutes = value || null;
       } else if (field === 'status') {
         updateData.status = value;
+      } else if (field === 'date') {
+        updateData.scheduled_date = value;
       }
 
       const { error } = await supabase
@@ -2770,14 +2772,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
-                              <span
-                                className="vehicle-code clickable"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (vehicle) handleVehicleClick(vehicle);
-                                }}
-                                title="Märgista mudelis"
-                              >{vehicle?.vehicle_code || 'Määramata'}</span>
+                              <div className="vehicle-code-row">
+                                <span
+                                  className="vehicle-code clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (vehicle) handleVehicleClick(vehicle);
+                                  }}
+                                  title="Märgista mudelis"
+                                >{vehicle?.vehicle_code || 'Määramata'}</span>
+                                {inlineEditVehicleId === vehicleId && inlineEditField === 'date' ? (
+                                  <input
+                                    type="date"
+                                    className="inline-date-input"
+                                    autoFocus
+                                    defaultValue={vehicle?.scheduled_date || ''}
+                                    onChange={(e) => {
+                                      updateVehicleInline(vehicleId, 'date', e.target.value);
+                                    }}
+                                    onBlur={() => {
+                                      setInlineEditVehicleId(null);
+                                      setInlineEditField(null);
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <span
+                                    className="vehicle-date clickable"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInlineEditVehicleId(vehicleId);
+                                      setInlineEditField('date');
+                                    }}
+                                    title="Klikka muutmiseks"
+                                  >
+                                    {vehicle?.scheduled_date ? formatDateShort(vehicle.scheduled_date) : ''}
+                                  </span>
+                                )}
+                              </div>
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
                                 <select
                                   className="inline-select status-select"
@@ -3488,6 +3520,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="vehicle-edit-row">
+                {/* Date */}
+                <div className="edit-field">
+                  <label>Kuupäev</label>
+                  <input
+                    type="date"
+                    value={activeVehicle.scheduled_date || ''}
+                    onChange={async (e) => {
+                      const newDate = e.target.value;
+                      // Optimistic update
+                      setVehicles(prev => prev.map(v =>
+                        v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
+                      ));
+                      // Save to DB
+                      await supabase
+                        .from('delivery_vehicles')
+                        .update({ scheduled_date: newDate })
+                        .eq('id', activeVehicleId);
+                    }}
+                  />
+                </div>
+
                 {/* Time */}
                 <div className="edit-field">
                   <label>Kellaaeg</label>

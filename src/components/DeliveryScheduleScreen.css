@@ -262,9 +262,9 @@
 }
 
 .playback-controls .speed-select {
-  width: 70px;
-  padding: 6px 8px;
-  font-size: 12px;
+  width: 55px;
+  padding: 4px 6px;
+  font-size: 11px;
 }
 
 .playback-controls .settings-btn {
@@ -618,7 +618,8 @@
   text-transform: uppercase;
 }
 
-.vehicle-edit-row .edit-field select {
+.vehicle-edit-row .edit-field select,
+.vehicle-edit-row .edit-field input[type="date"] {
   padding: 6px 8px;
   border: 1px solid #93c5fd;
   border-radius: 6px;
@@ -830,8 +831,8 @@
 }
 
 .date-info-section .date-primary {
-  font-weight: 600;
-  font-size: 14px;
+  font-weight: 700;
+  font-size: 16px;
   color: #111827;
 }
 
@@ -1033,7 +1034,7 @@
 .vehicle-title-section {
   display: flex;
   flex-direction: column;
-  min-width: 80px;
+  min-width: 50px;
 }
 
 .vehicle-header .vehicle-icon {
@@ -1058,6 +1059,34 @@
   text-decoration: underline;
 }
 
+.vehicle-title-section .vehicle-code-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vehicle-title-section .vehicle-date {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.vehicle-title-section .vehicle-date.clickable {
+  cursor: pointer;
+}
+
+.vehicle-title-section .vehicle-date.clickable:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+
+.vehicle-title-section .inline-date-input {
+  padding: 2px 4px;
+  font-size: 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  width: 110px;
+}
+
 .vehicle-title-section .status-badge {
   padding: 1px 6px;
   border-radius: 8px;
@@ -1066,11 +1095,11 @@
   width: fit-content;
 }
 
-/* Vehicle stats section - two rows */
+/* Vehicle stats section - compact */
 .vehicle-stats-section {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  min-width: 55px;
 }
 
 .vehicle-stats-section .stats-primary {
@@ -1088,6 +1117,7 @@
 .vehicle-resources-section {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .vehicle-header .method-badge,
