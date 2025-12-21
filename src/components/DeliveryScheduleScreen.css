@@ -2091,11 +2091,11 @@
 .factory-list-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 10px;
   background: #f8fafc;
   border-radius: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .factory-list-item .factory-name {
@@ -2163,10 +2163,9 @@
   flex: 0;
 }
 
-.add-factory-form h4 {
-  margin: 0 0 10px 0;
-  font-size: 14px;
-  color: #374151;
+.add-factory-form {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
 }
 
 .add-factory-form .add-btn {
@@ -2187,13 +2186,55 @@
   cursor: not-allowed;
 }
 
-.factory-separator-select {
-  padding: 6px 8px;
+/* Project-level separator setting */
+.project-separator-setting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #f0f9ff;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.project-separator-setting label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.separator-options {
+  display: flex;
+  gap: 4px;
+}
+
+.separator-option {
+  padding: 6px 12px;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 14px;
-  width: 60px;
   background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  min-width: 40px;
+  transition: all 0.15s;
+}
+
+.separator-option:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.separator-option.active {
+  background: var(--modus-primary, #0063a3);
+  color: white;
+  border-color: var(--modus-primary, #0063a3);
+}
+
+.separator-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .separator-preview {
