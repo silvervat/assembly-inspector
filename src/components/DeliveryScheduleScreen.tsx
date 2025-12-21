@@ -2737,6 +2737,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // SELECT DATE ITEMS IN MODEL
+  // ============================================
+
+  const selectDateItemsInModel = async (date: string) => {
+    // Get all items for this date
+    const dateVehicles = itemsByDateAndVehicle[date] || {};
+    const dateItems = Object.values(dateVehicles).flat();
+
+    if (dateItems.length === 0) return;
+
+    // Group by model_id
+    const byModel: Record<string, number[]> = {};
+    for (const item of dateItems) {
+      if (item.model_id && item.object_runtime_id) {
+        if (!byModel[item.model_id]) {
+          byModel[item.model_id] = [];
+        }
+        byModel[item.model_id].push(item.object_runtime_id);
+      }
+    }
+
+    // Select in viewer
+    const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
+      modelId,
+      objectRuntimeIds
+    }));
+
+    if (modelObjectIds.length > 0) {
+      try {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+      } catch (e) {
+        console.error('Error selecting date items:', e);
+      }
+    }
+  };
+
+  // ============================================
   // RENDER
   // ============================================
 
@@ -2877,11 +2915,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         setAddModalComment('');
                         setShowAddModal(true);
                       } else {
-                        // Just scroll to date group
+                        // Scroll to date group
                         const element = document.getElementById(`date-group-${dateStr}`);
                         if (element) {
                           element.scrollIntoView({ behavior: 'smooth', block: 'start' });
                         }
+
+                        // Expand date group (but not vehicles)
+                        setCollapsedDates(prev => {
+                          const next = new Set(prev);
+                          next.delete(dateStr);
+                          return next;
+                        });
+
+                        // Select all items for this date in the model
+                        selectDateItemsInModel(dateStr);
                       }
                     }}
                   >
@@ -2987,8 +3035,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   {isCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                 </span>
 
-                {/* Date section */}
-                <div className="date-info-section">
+                {/* Date section - clickable to select items in model */}
+                <div
+                  className="date-info-section clickable"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectDateItemsInModel(date);
+                  }}
+                  title="Märgista mudelis"
+                >
                   <span className="date-primary">{formatDateShort(date)}</span>
                   <span className="date-secondary">{getDayName(date)}</span>
                 </div>
@@ -3022,38 +3077,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 >
                   <FiMoreVertical />
                 </button>
-              </div>
 
-              {/* Date menu */}
-              {dateMenuId === date && (
-                <div className={`context-menu date-context-menu ${menuFlipUp ? 'flip-up' : ''}`}>
-                  <button onClick={() => {
-                    setAddModalDate(date);
-                    setShowAddModal(true);
-                    setDateMenuId(null);
-                  }}>
-                    <FiPlus /> Lisa veok
-                  </button>
-                  <button onClick={() => {
-                    exportDateToExcel(date);
-                    setDateMenuId(null);
-                  }}>
-                    <FiDownload /> Ekspordi Excel
-                  </button>
-                  <button onClick={() => {
-                    // Copy all marks
-                    const marks = Object.values(dateVehicles)
-                      .flat()
-                      .map(i => i.assembly_mark)
-                      .join('\n');
-                    navigator.clipboard.writeText(marks);
-                    setMessage('Märgid kopeeritud');
-                    setDateMenuId(null);
-                  }}>
-                    <FiCopy /> Kopeeri märgid
-                  </button>
-                </div>
-              )}
+                {/* Date menu - inside date-header for correct positioning */}
+                {dateMenuId === date && (
+                  <div className={`context-menu date-context-menu ${menuFlipUp ? 'flip-up' : ''}`}>
+                    <button onClick={() => {
+                      setAddModalDate(date);
+                      setShowAddModal(true);
+                      setDateMenuId(null);
+                    }}>
+                      <FiPlus /> Lisa veok
+                    </button>
+                    <button onClick={() => {
+                      exportDateToExcel(date);
+                      setDateMenuId(null);
+                    }}>
+                      <FiDownload /> Ekspordi Excel
+                    </button>
+                    <button onClick={() => {
+                      // Copy all marks
+                      const marks = Object.values(dateVehicles)
+                        .flat()
+                        .map(i => i.assembly_mark)
+                        .join('\n');
+                      navigator.clipboard.writeText(marks);
+                      setMessage('Märgid kopeeritud');
+                      setDateMenuId(null);
+                    }}>
+                      <FiCopy /> Kopeeri märgid
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Vehicles in this date */}
               {!isCollapsed && (
@@ -3085,7 +3140,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''} ${!isVehicleCollapsed ? 'expanded' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
@@ -3231,52 +3286,55 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
-                            {/* Unload methods section */}
-                            <div className="vehicle-resources-section">
-                              {UNLOAD_METHODS.map(method => {
-                                const count = vehicle?.unload_methods?.[method.key];
-                                if (!count) return null;
-                                return (
-                                  <div
-                                    key={method.key}
-                                    className="vehicle-method-badge"
-                                    style={{ backgroundColor: method.activeBgColor }}
-                                    title={`${method.label}: ${count}`}
-                                  >
-                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
-                                    {count > 1 && (
-                                      <span className="badge-count">{count}</span>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
+                            {/* Actions row - resources and buttons */}
+                            <div className="vehicle-actions-row">
+                              {/* Unload methods section */}
+                              <div className="vehicle-resources-section">
+                                {UNLOAD_METHODS.map(method => {
+                                  const count = vehicle?.unload_methods?.[method.key];
+                                  if (!count) return null;
+                                  return (
+                                    <div
+                                      key={method.key}
+                                      className="vehicle-method-badge"
+                                      style={{ backgroundColor: method.activeBgColor }}
+                                      title={`${method.label}: ${count}`}
+                                    >
+                                      <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
+                                      {count > 1 && (
+                                        <span className="badge-count">{count}</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
 
-                          <button
-                            className="vehicle-comment-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (vehicle) {
-                                openCommentModal('vehicle', vehicle.id);
-                              }
-                            }}
-                            title="Kommentaarid"
-                          >
-                            <FiMessageSquare size={13} />
-                            {getVehicleCommentCount(vehicleId) > 0 && (
-                              <span className="comment-badge">{getVehicleCommentCount(vehicleId)}</span>
-                            )}
-                          </button>
-                          <button
-                            className="vehicle-menu-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setVehicleMenuId(vehicleMenuId === vehicleId ? null : vehicleId);
-                            }}
-                          >
-                            <FiMoreVertical />
-                          </button>
-                        </div>
+                              <button
+                                className="vehicle-comment-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (vehicle) {
+                                    openCommentModal('vehicle', vehicle.id);
+                                  }
+                                }}
+                                title="Kommentaarid"
+                              >
+                                <FiMessageSquare size={13} />
+                                {getVehicleCommentCount(vehicleId) > 0 && (
+                                  <span className="comment-badge">{getVehicleCommentCount(vehicleId)}</span>
+                                )}
+                              </button>
+                              <button
+                                className="vehicle-menu-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVehicleMenuId(vehicleMenuId === vehicleId ? null : vehicleId);
+                                }}
+                              >
+                                <FiMoreVertical />
+                              </button>
+                            </div>
+                          </div>
 
                         {/* Vehicle menu */}
                         {vehicleMenuId === vehicleId && vehicle && (

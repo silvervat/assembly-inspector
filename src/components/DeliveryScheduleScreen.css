@@ -821,6 +821,22 @@
   text-transform: lowercase;
 }
 
+.date-info-section.clickable {
+  cursor: pointer;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.date-info-section.clickable:hover {
+  background: rgba(0, 99, 163, 0.1);
+}
+
+.date-info-section.clickable:hover .date-primary {
+  text-decoration: underline;
+}
+
 /* Week section - two rows */
 .date-week-section {
   display: flex;
@@ -958,6 +974,7 @@
   cursor: grab;
   transition: background 0.15s;
   position: relative;
+  flex-wrap: wrap;
 }
 
 .vehicle-header:active {
@@ -1111,11 +1128,18 @@
   color: #6b7280;
 }
 
+/* Vehicle actions row - contains resources and buttons */
+.vehicle-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
 /* Vehicle resources section */
 .vehicle-resources-section {
   display: flex;
   gap: 3px;
-  margin-left: auto;
 }
 
 .vehicle-method-badge {
@@ -2279,8 +2303,18 @@
 
 /* Hide resources on narrow list - media query fallback */
 @media (max-width: 350px) {
-  .vehicle-resources-section {
+  /* When collapsed: hide resources, keep actions inline */
+  .vehicle-header:not(.expanded) .vehicle-resources-section {
     display: none !important;
+  }
+
+  /* When expanded: show actions on second row */
+  .vehicle-header.expanded .vehicle-actions-row {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid #e5e7eb;
   }
 
   .vehicle-header {
@@ -2298,8 +2332,18 @@
 
 /* Container query - hides resources when list panel itself is narrow */
 @container delivery-list (max-width: 300px) {
-  .vehicle-resources-section {
+  /* When collapsed: hide resources, keep actions inline */
+  .vehicle-header:not(.expanded) .vehicle-resources-section {
     display: none !important;
+  }
+
+  /* When expanded: show actions on second row */
+  .vehicle-header.expanded .vehicle-actions-row {
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid #e5e7eb;
   }
 
   .vehicle-header {
