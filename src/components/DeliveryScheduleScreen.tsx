@@ -4692,7 +4692,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return;
     }
 
-    setTestStatus(`Saving ${selectedObjects.length} model-selected objects...`);
+    const BATCH_SIZE = 1000;
+
+    setTestStatus(`Preparing ${selectedObjects.length} model-selected objects...`);
     try {
       // Deduplicate by runtimeId before saving
       const seen = new Set<string>();
@@ -4714,21 +4716,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         product_name: obj.productName
       }));
 
-      // Use upsert to avoid duplicates (updates existing, inserts new)
-      const { error } = await supabase
-        .from('trimble_model_objects')
-        .upsert(records, {
-          onConflict: 'trimble_project_id,model_id,object_runtime_id',
-          ignoreDuplicates: true  // Skip if already exists
-        });
+      // Send in batches to avoid overloading Supabase
+      const totalBatches = Math.ceil(records.length / BATCH_SIZE);
+      let savedCount = 0;
+      let errorCount = 0;
 
-      if (error) {
-        console.error('Insert error:', error);
-        setTestStatus(`Error: ${error.message}`);
+      for (let i = 0; i < records.length; i += BATCH_SIZE) {
+        const batch = records.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+
+        setTestStatus(`Saving batch ${batchNum}/${totalBatches} (${savedCount}/${records.length})...`);
+
+        const { error } = await supabase
+          .from('trimble_model_objects')
+          .upsert(batch, {
+            onConflict: 'trimble_project_id,model_id,object_runtime_id',
+            ignoreDuplicates: true  // Skip if already exists
+          });
+
+        if (error) {
+          console.error(`Batch ${batchNum} error:`, error);
+          errorCount += batch.length;
+        } else {
+          savedCount += batch.length;
+        }
+      }
+
+      if (errorCount > 0) {
+        setTestStatus(`Saved ${savedCount}/${records.length} objects (${errorCount} errors)`);
       } else {
         const marks = uniqueObjects.map(o => o.assemblyMark).slice(0, 5).join(', ');
         const more = uniqueObjects.length > 5 ? ` (+${uniqueObjects.length - 5} veel)` : '';
-        setTestStatus(`Saved ${uniqueObjects.length} objects: ${marks}${more}`);
+        setTestStatus(`✓ Saved ${savedCount} objects: ${marks}${more}`);
       }
     } catch (e: any) {
       setTestStatus(`Save error: ${e.message}`);
