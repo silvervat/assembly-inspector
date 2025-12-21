@@ -3533,6 +3533,20 @@
   background: #eff6ff;
 }
 
+.test-btn.highlight {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
+.test-btn.highlight:hover {
+  border-color: #16a34a;
+  background: #dcfce7;
+}
+
+.test-btn.highlight .test-btn-num {
+  background: #22c55e;
+}
+
 .test-btn-num {
   display: flex;
   align-items: center;

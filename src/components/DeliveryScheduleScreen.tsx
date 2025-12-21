@@ -3766,6 +3766,155 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Approach 14: Use getModels() + getObjects() - the correct API
+  const testApproach14 = async () => {
+    setTestStatus('Approach 14: Using getModels() + getObjects()...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Step 1: Get models
+      const models = await viewer.getModels();
+      console.log('getModels() result:', models);
+
+      if (!models || models.length === 0) {
+        setTestStatus('Approach 14: No models found');
+        return;
+      }
+
+      // Step 2: Get first model ID
+      const modelId = models[0].id || models[0].modelId || models[0];
+      console.log('Using modelId:', modelId);
+
+      // Step 3: Get all objects from model
+      const allObjects = await viewer.getObjects(modelId);
+      console.log('getObjects() result:', allObjects);
+      console.log('First object sample:', allObjects?.[0]);
+
+      if (!allObjects || allObjects.length === 0) {
+        setTestStatus('Approach 14: No objects found in model');
+        return;
+      }
+
+      // Step 4: Extract runtime IDs
+      const allRuntimeIds: number[] = allObjects.map((obj: any) =>
+        obj.objectRuntimeId ?? obj.runtimeId ?? obj.id ?? obj
+      ).filter((id: any) => typeof id === 'number');
+
+      console.log(`Found ${allRuntimeIds.length} runtime IDs`);
+
+      // Step 5: Get current selection (to color red)
+      const selection = await api.viewer.getSelection();
+      const selectedIds = new Set<number>();
+
+      if (selection?.length) {
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds?.length) {
+            sel.objectRuntimeIds.forEach((id: number) => selectedIds.add(id));
+          }
+        }
+      }
+
+      console.log(`Selected: ${selectedIds.size}, Total: ${allRuntimeIds.length}`);
+
+      // Step 6: Split into gray and red
+      const grayIds = allRuntimeIds.filter(id => !selectedIds.has(id));
+      const redIds = Array.from(selectedIds);
+
+      setTestStatus(`Approach 14: Coloring ${grayIds.length} gray, ${redIds.length} red...`);
+
+      // Step 7: Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Step 8: Color gray (all except selected)
+      if (grayIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      // Step 9: Color red (selected)
+      if (redIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 14: Done! Total=${allRuntimeIds.length}, Gray=${grayIds.length}, Red=${redIds.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 14: Error - ${e.message}`);
+      console.error('Approach 14 error:', e);
+    }
+  };
+
+  // Approach 15: Use getEntities() for all objects
+  const testApproach15 = async () => {
+    setTestStatus('Approach 15: Using getEntities()...');
+    try {
+      const viewer = api.viewer as any;
+
+      // Get models first
+      const models = await viewer.getModels();
+      if (!models || models.length === 0) {
+        setTestStatus('Approach 15: No models');
+        return;
+      }
+
+      const modelId = models[0].id || models[0].modelId || models[0];
+      console.log('Model ID:', modelId);
+
+      // Try getEntities
+      const entities = await viewer.getEntities(modelId);
+      console.log('getEntities() result:', entities);
+      console.log('Entity sample:', entities?.[0]);
+
+      if (!entities || entities.length === 0) {
+        setTestStatus('Approach 15: No entities found');
+        return;
+      }
+
+      // Extract IDs
+      const allIds: number[] = entities.map((e: any) =>
+        e.objectRuntimeId ?? e.runtimeId ?? e.id ?? e
+      ).filter((id: any) => typeof id === 'number');
+
+      // Get selection
+      const selection = await api.viewer.getSelection();
+      const selectedIds = new Set<number>();
+      if (selection?.length) {
+        for (const sel of selection) {
+          sel.objectRuntimeIds?.forEach((id: number) => selectedIds.add(id));
+        }
+      }
+
+      const grayIds = allIds.filter(id => !selectedIds.has(id));
+      const redIds = Array.from(selectedIds);
+
+      // Reset and color
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      if (grayIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
+          { color: { r: 150, g: 150, b: 150, a: 255 } }
+        );
+      }
+
+      if (redIds.length > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 15: Done! Total=${allIds.length}, Gray=${grayIds.length}, Red=${redIds.length}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 15: Error - ${e.message}`);
+      console.error('Approach 15 error:', e);
+    }
+  };
+
   // Reset colors
   const testReset = async () => {
     setTestStatus('Resetting colors...');
@@ -6990,6 +7139,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>Schedule Items Only (No Undefined)</strong>
                       <span>Värvib AINULT graafiku detailid - hall/punane eksplitsiitsete ID-dega</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach14} className="test-btn highlight">
+                    <span className="test-btn-num">14</span>
+                    <div className="test-btn-content">
+                      <strong>⭐ getModels() + getObjects()</strong>
+                      <span>Kasutab õiget API-t: getModels() → getObjects(modelId)</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach15} className="test-btn highlight">
+                    <span className="test-btn-num">15</span>
+                    <div className="test-btn-content">
+                      <strong>⭐ getEntities()</strong>
+                      <span>Kasutab getEntities(modelId) kõigi objektide saamiseks</span>
                     </div>
                   </button>
                 </div>
