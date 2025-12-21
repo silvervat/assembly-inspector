@@ -953,7 +953,7 @@
 .vehicle-header {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   padding: 8px 12px;
   cursor: grab;
   transition: background 0.15s;
@@ -1019,7 +1019,7 @@
 .vehicle-header .vehicle-icon {
   color: #9ca3af;
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: 20px;
 }
 
 .vehicle-header .vehicle-icon.clickable {
