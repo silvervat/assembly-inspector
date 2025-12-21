@@ -469,6 +469,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleColors, setVehicleColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [dateColors, setDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
+  // Testing modal
+  const [showTestModal, setShowTestModal] = useState(false);
+  const [testStatus, setTestStatus] = useState<string>('');
+
   // Factory management modal
   const [showFactoryModal, setShowFactoryModal] = useState(false);
   const [newFactoryName, setNewFactoryName] = useState('');
@@ -2924,6 +2928,163 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // TEST FUNCTIONS - Others Gray + Selection Red
+  // ============================================
+
+  // Approach 1: Reset all, then gray all, then red for selected
+  const testApproach1 = async () => {
+    setTestStatus('Approach 1: Running...');
+    try {
+      const selection = await api.viewer.getSelection();
+      const selectedRuntimeIds = new Set<number>();
+      let modelId: string | null = null;
+
+      if (selection?.length) {
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds?.length) {
+            sel.objectRuntimeIds.forEach(id => selectedRuntimeIds.add(id));
+            if (!modelId) modelId = sel.modelId;
+          }
+        }
+      }
+
+      // Step 1: Reset all colors
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Step 2: Set ALL objects to gray (using undefined selector = all objects)
+      await api.viewer.setObjectState(undefined, { color: { r: 128, g: 128, b: 128, a: 255 } });
+
+      // Step 3: Set selected objects to red
+      if (modelId && selectedRuntimeIds.size > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: Array.from(selectedRuntimeIds) }] },
+          { color: { r: 255, g: 0, b: 0, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 1: Done! Selected ${selectedRuntimeIds.size} objects`);
+    } catch (e: any) {
+      setTestStatus(`Approach 1: Error - ${e.message}`);
+      console.error('Test Approach 1 error:', e);
+    }
+  };
+
+  // Approach 2: Get all item IDs, filter non-selected, apply separately
+  const testApproach2 = async () => {
+    setTestStatus('Approach 2: Running...');
+    try {
+      const selection = await api.viewer.getSelection();
+      const selectedRuntimeIds = new Set<number>();
+      let modelId: string | null = null;
+
+      if (selection?.length) {
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds?.length) {
+            sel.objectRuntimeIds.forEach(id => selectedRuntimeIds.add(id));
+            if (!modelId) modelId = sel.modelId;
+          }
+        }
+      }
+
+      // Get all item runtime IDs from our items list
+      const allItemRuntimeIds = items
+        .filter(i => i.object_runtime_id && i.model_id)
+        .map(i => ({ modelId: i.model_id!, runtimeId: i.object_runtime_id! }));
+
+      if (allItemRuntimeIds.length === 0) {
+        setTestStatus('Approach 2: No items with runtime IDs');
+        return;
+      }
+
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Group by model
+      const byModel: Record<string, number[]> = {};
+      allItemRuntimeIds.forEach(({ modelId, runtimeId }) => {
+        if (!byModel[modelId]) byModel[modelId] = [];
+        byModel[modelId].push(runtimeId);
+      });
+
+      // Apply gray to non-selected, red to selected
+      for (const [mId, runtimeIds] of Object.entries(byModel)) {
+        const nonSelected = runtimeIds.filter(id => !selectedRuntimeIds.has(id));
+        const selected = runtimeIds.filter(id => selectedRuntimeIds.has(id));
+
+        if (nonSelected.length > 0) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: mId, objectRuntimeIds: nonSelected }] },
+            { color: { r: 128, g: 128, b: 128, a: 255 } }
+          );
+        }
+
+        if (selected.length > 0) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: mId, objectRuntimeIds: selected }] },
+            { color: { r: 255, g: 0, b: 0, a: 255 } }
+          );
+        }
+      }
+
+      setTestStatus(`Approach 2: Done! Gray: ${allItemRuntimeIds.length - selectedRuntimeIds.size}, Red: ${selectedRuntimeIds.size}`);
+    } catch (e: any) {
+      setTestStatus(`Approach 2: Error - ${e.message}`);
+      console.error('Test Approach 2 error:', e);
+    }
+  };
+
+  // Approach 3: Use transparency for non-selected + red for selected
+  const testApproach3 = async () => {
+    setTestStatus('Approach 3: Running...');
+    try {
+      const selection = await api.viewer.getSelection();
+      const selectedRuntimeIds = new Set<number>();
+      let modelId: string | null = null;
+
+      if (selection?.length) {
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds?.length) {
+            sel.objectRuntimeIds.forEach(id => selectedRuntimeIds.add(id));
+            if (!modelId) modelId = sel.modelId;
+          }
+        }
+      }
+
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Set ALL objects to semi-transparent gray
+      await api.viewer.setObjectState(undefined, {
+        color: { r: 180, g: 180, b: 180, a: 80 } // Low alpha = transparent
+      });
+
+      // Set selected objects to solid red
+      if (modelId && selectedRuntimeIds.size > 0) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: Array.from(selectedRuntimeIds) }] },
+          { color: { r: 255, g: 50, b: 50, a: 255 } }
+        );
+      }
+
+      setTestStatus(`Approach 3: Done! Transparent others, red selected (${selectedRuntimeIds.size})`);
+    } catch (e: any) {
+      setTestStatus(`Approach 3: Error - ${e.message}`);
+      console.error('Test Approach 3 error:', e);
+    }
+  };
+
+  // Reset colors
+  const testReset = async () => {
+    setTestStatus('Resetting colors...');
+    try {
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+      setTestStatus('Colors reset!');
+    } catch (e: any) {
+      setTestStatus(`Reset error: ${e.message}`);
+    }
+  };
+
+  // ============================================
   // ITEM CLICK HANDLING
   // ============================================
 
@@ -4393,6 +4554,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             )}
           </div>
+          <button onClick={() => setShowTestModal(true)} title="Testimine">
+            <FiSettings />
+          </button>
           <button onClick={loadAllData}>
             <FiRefreshCw />
           </button>
@@ -5979,6 +6143,62 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               >
                 Lülita Assembly Selection sisse
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Test Modal */}
+      {showTestModal && (
+        <div className="modal-overlay" onClick={() => setShowTestModal(false)}>
+          <div className="modal test-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Funktsioonide testimine</h2>
+              <button className="close-btn" onClick={() => setShowTestModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="test-section">
+                <h3>Others Gray + Selection RED</h3>
+                <p className="test-description">Vali mudelis objekte ja testi erinevaid lähenemisi</p>
+
+                <div className="test-buttons">
+                  <button onClick={testApproach1} className="test-btn">
+                    <span className="test-btn-num">1</span>
+                    <div className="test-btn-content">
+                      <strong>Reset → All Gray → Selected Red</strong>
+                      <span>Kõigepealt reset, siis kõik halliks, siis valitud punaseks</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach2} className="test-btn">
+                    <span className="test-btn-num">2</span>
+                    <div className="test-btn-content">
+                      <strong>Filter by Items List</strong>
+                      <span>Kasutab graafiku items listi, filtreerib valitud/mittevalitud</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach3} className="test-btn">
+                    <span className="test-btn-num">3</span>
+                    <div className="test-btn-content">
+                      <strong>Transparency + Red</strong>
+                      <span>Kõik läbipaistvaks, valitud punane ja läbipaistmatu</span>
+                    </div>
+                  </button>
+                </div>
+
+                <button onClick={testReset} className="reset-btn">
+                  <FiRefreshCw /> Reset värvid
+                </button>
+
+                {testStatus && (
+                  <div className="test-status">
+                    {testStatus}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
