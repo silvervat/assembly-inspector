@@ -3079,7 +3079,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Stats section */}
                             <div className="vehicle-stats-section">
-                              <span className="stats-primary">{vehicleItems.length} {vehicleItems.length === 1 ? 'detail' : 'detaili'}</span>
+                              <span className="stats-primary">{vehicleItems.length} det.</span>
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
