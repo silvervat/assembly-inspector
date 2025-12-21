@@ -5012,7 +5012,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="project-separator-setting">
                 <label>Veoki koodi eraldaja:</label>
                 <div className="separator-options">
-                  {['', '.', ',', '|'].map(sep => (
+                  {['', '.', ',', '-', '|'].map(sep => (
                     <button
                       key={sep || 'empty'}
                       className={`separator-option ${(factories[0]?.vehicle_separator || '') === sep ? 'active' : ''}`}

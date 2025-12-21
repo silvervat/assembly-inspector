@@ -1023,6 +1023,11 @@
   cursor: grab;
   transition: background 0.15s;
   position: relative;
+  flex-wrap: nowrap;
+}
+
+/* Only allow wrap when expanded */
+.vehicle-header.expanded {
   flex-wrap: wrap;
 }
 
