@@ -3208,15 +3208,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 const count = vehicle?.unload_methods?.[method.key];
                                 if (!count) return null;
                                 return (
-                                  <span
+                                  <div
                                     key={method.key}
-                                    className="method-badge"
-                                    style={{ backgroundColor: method.bgColor }}
-                                    title={method.label}
+                                    className="vehicle-method-badge"
+                                    style={{ backgroundColor: method.activeBgColor }}
+                                    title={`${method.label}: ${count}`}
                                   >
-                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
-                                    <span className="method-count">{count}</span>
-                                  </span>
+                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
+                                    {count > 1 && (
+                                      <span className="badge-count">{count}</span>
+                                    )}
+                                  </div>
                                 );
                               })}
                             </div>

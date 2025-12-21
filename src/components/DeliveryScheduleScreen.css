@@ -1114,29 +1114,42 @@
 /* Vehicle resources section */
 .vehicle-resources-section {
   display: flex;
-  gap: 4px;
+  gap: 3px;
   margin-left: auto;
 }
 
-.vehicle-header .method-badge,
-.vehicle-header .resource-badge {
+.vehicle-method-badge {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  border-radius: 6px;
+  justify-content: center;
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  padding: 2px;
 }
 
-.vehicle-header .method-badge img,
-.vehicle-header .resource-badge img {
-  width: 16px;
-  height: 16px;
+.vehicle-method-badge img {
+  width: 14px;
+  height: 14px;
 }
 
-.vehicle-header .method-count,
-.vehicle-header .resource-count {
-  font-size: 10px;
+.vehicle-method-badge .badge-count {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  font-size: 9px;
   font-weight: 600;
+  background: #1e40af;
+  color: white;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .vehicle-header .vehicle-select-btn,
