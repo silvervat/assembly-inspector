@@ -378,6 +378,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleType, setVehicleType] = useState<string>('haagis');
   const [vehicleNewComment, setVehicleNewComment] = useState<string>('');
   const [hoveredMethod, setHoveredMethod] = useState<string | null>(null);
+  const [hoveredEditMethod, setHoveredEditMethod] = useState<string | null>(null);
 
   // Move items modal
   const [showMoveModal, setShowMoveModal] = useState(false);
@@ -2942,11 +2943,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
                             onDragEnd={handleDragEnd}
                             onDragOver={(e) => handleVehicleHeaderDragOver(e, date, vehicleIndex)}
-                            onClick={() => {
-                              // Toggle vehicle selection for inline editing
-                              setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
-                              setActiveItemId(null); // Deselect any active item
-                            }}
                           >
                             <span
                               className="collapse-icon clickable"
@@ -2966,7 +2962,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                             </span>
 
-                            <FiTruck className="vehicle-icon" />
+                            <FiTruck
+                              className={`vehicle-icon clickable ${activeVehicleId === vehicleId ? 'active' : ''}`}
+                              onClick={() => {
+                                setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
+                                setActiveItemId(null);
+                              }}
+                              title="Muuda veoki seadeid"
+                            />
 
                             {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
@@ -3461,11 +3464,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           draggable
                           onDragStart={(e) => handleVehicleDragStart(e, vehicle)}
                           onDragEnd={handleDragEnd}
-                          onClick={() => {
-                            // Toggle vehicle selection for inline editing
-                            setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
-                            setActiveItemId(null); // Deselect any active item
-                          }}
                         >
                           <span
                             className="collapse-icon clickable"
@@ -3484,7 +3482,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           >
                             {isVehicleCollapsed ? <FiChevronRight /> : <FiChevronDown />}
                           </span>
-                          <FiTruck className="vehicle-icon" />
+                          <FiTruck
+                            className={`vehicle-icon clickable ${activeVehicleId === vehicleId ? 'active' : ''}`}
+                            onClick={() => {
+                              setActiveVehicleId(prev => prev === vehicleId ? null : vehicleId);
+                              setActiveItemId(null);
+                            }}
+                            title="Muuda veoki seadeid"
+                          />
                           <span
                             className="vehicle-code clickable"
                             onClick={(e) => {
@@ -3846,16 +3851,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               {/* Resources */}
               <div className="vehicle-edit-resources">
                 <label>Ressursid</label>
-                <div className="resource-selectors">
+                <div className="method-selectors">
                   {UNLOAD_METHODS.map(method => {
                     const count = activeVehicle.unload_methods?.[method.key] || 0;
                     const isActive = count > 0;
+                    const isHovered = hoveredEditMethod === method.key;
 
                     return (
-                      <div key={method.key} className="resource-selector">
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredEditMethod(method.key)}
+                        onMouseLeave={() => setHoveredEditMethod(null)}
+                      >
                         <button
-                          className={`resource-btn ${isActive ? 'active' : ''}`}
-                          style={{ backgroundColor: isActive ? method.activeBgColor : method.bgColor }}
+                          type="button"
+                          className={`method-selector ${isActive ? 'active' : ''}`}
+                          style={{
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                          }}
                           onClick={async () => {
                             const newMethods = { ...activeVehicle.unload_methods };
                             if (isActive) {
@@ -3880,29 +3894,35 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             alt={method.label}
                             style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                           />
+                          {isActive && count > 0 && (
+                            <span className="method-badge">{count}</span>
+                          )}
                         </button>
-                        {isActive && (
-                          <select
-                            className="resource-count-select"
-                            value={count}
-                            onChange={async (e) => {
-                              const newCount = Number(e.target.value);
-                              const newMethods = { ...activeVehicle.unload_methods, [method.key]: newCount };
-                              // Optimistic update
-                              setVehicles(prev => prev.map(v =>
-                                v.id === activeVehicleId ? { ...v, unload_methods: newMethods } : v
-                              ));
-                              // Save to DB
-                              await supabase
-                                .from('delivery_vehicles')
-                                .update({ unload_methods: newMethods })
-                                .eq('id', activeVehicleId);
-                            }}
-                          >
+                        {isHovered && isActive && (
+                          <div className="method-qty-dropdown">
                             {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(n => (
-                              <option key={n} value={n}>{n}</option>
+                              <button
+                                key={n}
+                                type="button"
+                                className={`qty-btn ${count === n ? 'active' : ''}`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const newMethods = { ...activeVehicle.unload_methods, [method.key]: n };
+                                  // Optimistic update
+                                  setVehicles(prev => prev.map(v =>
+                                    v.id === activeVehicleId ? { ...v, unload_methods: newMethods } : v
+                                  ));
+                                  // Save to DB
+                                  await supabase
+                                    .from('delivery_vehicles')
+                                    .update({ unload_methods: newMethods })
+                                    .eq('id', activeVehicleId);
+                                }}
+                              >
+                                {n}
+                              </button>
                             ))}
-                          </select>
+                          </div>
                         )}
                       </div>
                     );
