@@ -2305,6 +2305,11 @@
     min-width: auto;
     flex-shrink: 0;
   }
+
+  .delivery-item .item-actions {
+    flex-shrink: 0;
+    margin-left: 4px;
+  }
 }
 
 /* Vehicle comments in modal */

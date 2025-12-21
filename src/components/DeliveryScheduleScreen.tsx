@@ -231,6 +231,20 @@ const formatDateForDB = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+// Format date for display/export (DD.MM.YYYY)
+const formatDateDisplay = (dateStr: string): string => {
+  if (!dateStr || dateStr === '-') return dateStr;
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  return `${parts[2]}.${parts[1]}.${parts[0]}`;
+};
+
+// Format time without seconds (HH:MM)
+const formatTimeDisplay = (timeStr: string | null | undefined): string => {
+  if (!timeStr) return '-';
+  return timeStr.slice(0, 5); // Take only HH:MM
+};
+
 // RGB to hex
 const rgbToHex = (r: number, g: number, b: number): string => {
   return ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
@@ -2172,9 +2186,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
-            case 'date': row.push(item.scheduled_date); break;
+            case 'date': row.push(formatDateDisplay(item.scheduled_date)); break;
             case 'day': row.push(WEEKDAY_NAMES[new Date(item.scheduled_date).getDay()]); break;
-            case 'time': row.push(vehicle?.unload_start_time || '08:00'); break;
+            case 'time': row.push(formatTimeDisplay(vehicle?.unload_start_time)); break;
             case 'duration': {
               const mins = vehicle?.unload_duration_minutes || 90;
               const hours = mins / 60;
@@ -2286,8 +2300,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         return [
           v.vehicle_code,
-          v.scheduled_date || '-',
-          v.unload_start_time || '-',
+          formatDateDisplay(v.scheduled_date || '-'),
+          formatTimeDisplay(v.unload_start_time),
           durationStr,
           vehicleItems.length,
           Math.round(vehicleWeight),
@@ -2310,7 +2324,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const dateItems = items.filter(i => i.scheduled_date === date);
           const dateVehicles = new Set(dateItems.map(i => i.vehicle_id)).size;
           const dateWeight = dateItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
-          return [date, dateVehicles, dateItems.length, Math.round(dateWeight)];
+          return [formatDateDisplay(date), dateVehicles, dateItems.length, Math.round(dateWeight)];
         }),
         [],
         ['Veokite nimekiri'],
