@@ -2235,12 +2235,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return;
     }
 
-    // Sort vehicles by date and code
+    // Sort vehicles by date, then time, then sort_order
     const sortedVehicles = [...vehicles].sort((a, b) => {
+      // First by date
       if (a.scheduled_date !== b.scheduled_date) {
         return a.scheduled_date.localeCompare(b.scheduled_date);
       }
-      return a.vehicle_code.localeCompare(b.vehicle_code);
+      // Then by unload_start_time (empty times go last)
+      const timeA = a.unload_start_time || '99:99';
+      const timeB = b.unload_start_time || '99:99';
+      if (timeA !== timeB) {
+        return timeA.localeCompare(timeB);
+      }
+      // Then by sort_order
+      return (a.sort_order ?? 999) - (b.sort_order ?? 999);
     });
 
     setIsPlaying(true);
@@ -2270,6 +2278,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Set current playback vehicle for highlighting
       setCurrentPlaybackVehicleId(vehicle.id);
+
+      // Scroll vehicle into view
+      setTimeout(() => {
+        const vehicleElement = document.querySelector(`[data-vehicle-id="${vehicle.id}"]`);
+        if (vehicleElement) {
+          vehicleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
 
       if (vehicleItems.length === 0) {
         // Skip empty vehicles
@@ -2814,7 +2830,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
+                        <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
                             className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}
@@ -3334,7 +3350,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
 
                     return (
-                      <div key={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
+                      <div key={vehicleId} data-vehicle-id={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                         {/* Vehicle header */}
                         <div
                           className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
