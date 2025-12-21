@@ -5114,7 +5114,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     <button
                                       key={n}
                                       type="button"
-                                      className={`qty-option ${n === count ? 'active' : ''}`}
+                                      className={`qty-btn ${n === count ? 'active' : ''}`}
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setAddModalUnloadMethodCount(method.key, n);
