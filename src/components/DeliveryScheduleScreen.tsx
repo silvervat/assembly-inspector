@@ -1028,6 +1028,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           return;
         }
 
+        // Clear schedule item selection when model selection changes
+        // This prevents having two types of selections at the same time
+        setSelectedItemIds(new Set());
+
         const objects: SelectedObject[] = [];
 
         for (const sel of selection) {
@@ -1138,6 +1142,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     };
   }, [api]);
+
+  // Clear model selection when schedule items are selected
+  useEffect(() => {
+    if (selectedItemIds.size > 0) {
+      setSelectedObjects([]);
+      // Also clear viewer selection to avoid visual confusion
+      api.viewer.setSelection({ modelObjectIds: [] }, 'set').catch(() => {});
+    }
+  }, [selectedItemIds, api]);
 
   // ============================================
   // FACTORY OPERATIONS
@@ -3766,43 +3779,55 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Approach 14: Use getModels() + getObjects() - the correct API
+  // Approach 14: Use getObjects() - extract modelId from result
   const testApproach14 = async () => {
-    setTestStatus('Approach 14: Using getModels() + getObjects()...');
+    setTestStatus('Approach 14: Using getObjects() with correct structure...');
     try {
       const viewer = api.viewer as any;
 
-      // Step 1: Get models
-      const models = await viewer.getModels();
-      console.log('getModels() result:', models);
+      // Step 1: Get all objects (no parameter needed)
+      const objectsResult = await viewer.getObjects();
+      console.log('getObjects() result:', objectsResult);
 
-      if (!models || models.length === 0) {
-        setTestStatus('Approach 14: No models found');
+      if (!objectsResult || objectsResult.length === 0) {
+        setTestStatus('Approach 14: No objects found');
         return;
       }
 
-      // Step 2: Get first model ID
-      const modelId = models[0].id || models[0].modelId || models[0];
-      console.log('Using modelId:', modelId);
+      // Step 2: Extract from result structure: [{modelId, objects: [...]}]
+      const firstModel = objectsResult[0];
+      console.log('First model data:', firstModel);
 
-      // Step 3: Get all objects from model
-      const allObjects = await viewer.getObjects(modelId);
-      console.log('getObjects() result:', allObjects);
-      console.log('First object sample:', allObjects?.[0]);
+      const modelId = firstModel.modelId;
+      const objectsArray = firstModel.objects || [];
 
-      if (!allObjects || allObjects.length === 0) {
-        setTestStatus('Approach 14: No objects found in model');
+      console.log(`ModelId from result: ${modelId}, Objects count: ${objectsArray.length}`);
+
+      if (objectsArray.length === 0) {
+        setTestStatus('Approach 14: Objects array is empty');
         return;
       }
 
-      // Step 4: Extract runtime IDs
-      const allRuntimeIds: number[] = allObjects.map((obj: any) =>
-        obj.objectRuntimeId ?? obj.runtimeId ?? obj.id ?? obj
-      ).filter((id: any) => typeof id === 'number');
+      // Step 3: Extract runtime IDs from objects array
+      console.log('First object in array:', objectsArray[0]);
 
-      console.log(`Found ${allRuntimeIds.length} runtime IDs`);
+      const allRuntimeIds: number[] = objectsArray.map((obj: any) => {
+        // Try different property names
+        return obj.objectRuntimeId ?? obj.runtimeId ?? obj.id ?? obj;
+      }).filter((id: any) => typeof id === 'number');
 
-      // Step 5: Get current selection (to color red)
+      console.log(`Found ${allRuntimeIds.length} runtime IDs from ${objectsArray.length} objects`);
+
+      // If no runtime IDs found, the objects might just be numbers directly
+      if (allRuntimeIds.length === 0 && objectsArray.length > 0) {
+        // Check if objects are already runtime IDs (numbers)
+        if (typeof objectsArray[0] === 'number') {
+          allRuntimeIds.push(...objectsArray);
+          console.log(`Objects are direct runtime IDs: ${allRuntimeIds.length}`);
+        }
+      }
+
+      // Step 4: Get current selection (to color red)
       const selection = await api.viewer.getSelection();
       const selectedIds = new Set<number>();
 
@@ -3816,16 +3841,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       console.log(`Selected: ${selectedIds.size}, Total: ${allRuntimeIds.length}`);
 
-      // Step 6: Split into gray and red
+      // Step 5: Split into gray and red
       const grayIds = allRuntimeIds.filter(id => !selectedIds.has(id));
       const redIds = Array.from(selectedIds);
 
       setTestStatus(`Approach 14: Coloring ${grayIds.length} gray, ${redIds.length} red...`);
 
-      // Step 7: Reset first
+      // Step 6: Reset first
       await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-      // Step 8: Color gray (all except selected)
+      // Step 7: Color gray (all except selected)
       if (grayIds.length > 0) {
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: grayIds }] },
@@ -3833,7 +3858,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         );
       }
 
-      // Step 9: Color red (selected)
+      // Step 8: Color red (selected)
       if (redIds.length > 0) {
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: redIds }] },
@@ -3848,36 +3873,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
-  // Approach 15: Use getEntities() for all objects
+  // Approach 15: Use getEntities() - extract from result structure
   const testApproach15 = async () => {
-    setTestStatus('Approach 15: Using getEntities()...');
+    setTestStatus('Approach 15: Using getEntities() with correct structure...');
     try {
       const viewer = api.viewer as any;
 
-      // Get models first
-      const models = await viewer.getModels();
-      if (!models || models.length === 0) {
-        setTestStatus('Approach 15: No models');
-        return;
-      }
+      // Get entities (no parameter - returns all loaded models)
+      const entitiesResult = await viewer.getEntities();
+      console.log('getEntities() result:', entitiesResult);
 
-      const modelId = models[0].id || models[0].modelId || models[0];
-      console.log('Model ID:', modelId);
-
-      // Try getEntities
-      const entities = await viewer.getEntities(modelId);
-      console.log('getEntities() result:', entities);
-      console.log('Entity sample:', entities?.[0]);
-
-      if (!entities || entities.length === 0) {
+      if (!entitiesResult || entitiesResult.length === 0) {
         setTestStatus('Approach 15: No entities found');
         return;
       }
 
-      // Extract IDs
-      const allIds: number[] = entities.map((e: any) =>
+      // Structure: [{modelId, versionId, entityForModel: [...]}]
+      const firstModel = entitiesResult[0];
+      console.log('First model entities:', firstModel);
+
+      const modelId = firstModel.modelId;
+      const entitiesArray = firstModel.entityForModel || firstModel.entities || [];
+
+      console.log(`ModelId: ${modelId}, Entities count: ${entitiesArray.length}`);
+      console.log('First entity:', entitiesArray[0]);
+
+      // Extract runtime IDs
+      let allIds: number[] = entitiesArray.map((e: any) =>
         e.objectRuntimeId ?? e.runtimeId ?? e.id ?? e
       ).filter((id: any) => typeof id === 'number');
+
+      // If entities are direct numbers
+      if (allIds.length === 0 && entitiesArray.length > 0 && typeof entitiesArray[0] === 'number') {
+        allIds = [...entitiesArray];
+      }
+
+      console.log(`Extracted ${allIds.length} runtime IDs`);
 
       // Get selection
       const selection = await api.viewer.getSelection();
@@ -3890,6 +3921,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       const grayIds = allIds.filter(id => !selectedIds.has(id));
       const redIds = Array.from(selectedIds);
+
+      setTestStatus(`Approach 15: Coloring ${grayIds.length} gray, ${redIds.length} red...`);
 
       // Reset and color
       await api.viewer.setObjectState(undefined, { color: 'reset' });
