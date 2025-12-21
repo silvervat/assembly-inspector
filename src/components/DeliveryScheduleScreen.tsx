@@ -4271,6 +4271,149 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Approach 19: Color ONLY schedule items by vehicle (don't touch other objects)
+  const testApproach19 = async () => {
+    setTestStatus('Approach 19: Coloring schedule items by vehicle...');
+    try {
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Get items with valid model/runtime IDs
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id && i.vehicle_id);
+
+      if (validItems.length === 0) {
+        setTestStatus('Approach 19: No items with valid IDs in schedule');
+        return;
+      }
+
+      // Group by vehicle
+      const vehicleColors: Record<string, { r: number; g: number; b: number; a: number }> = {};
+      const colorPalette = [
+        { r: 239, g: 68, b: 68, a: 255 },   // Red
+        { r: 59, g: 130, b: 246, a: 255 },  // Blue
+        { r: 34, g: 197, b: 94, a: 255 },   // Green
+        { r: 249, g: 115, b: 22, a: 255 },  // Orange
+        { r: 168, g: 85, b: 247, a: 255 },  // Purple
+        { r: 236, g: 72, b: 153, a: 255 },  // Pink
+        { r: 20, g: 184, b: 166, a: 255 },  // Teal
+        { r: 245, g: 158, b: 11, a: 255 },  // Amber
+      ];
+
+      // Assign colors to vehicles
+      let colorIndex = 0;
+      for (const item of validItems) {
+        if (!vehicleColors[item.vehicle_id]) {
+          vehicleColors[item.vehicle_id] = colorPalette[colorIndex % colorPalette.length];
+          colorIndex++;
+        }
+      }
+
+      // Group items by vehicle and model
+      const byVehicleAndModel: Record<string, Record<string, number[]>> = {};
+      for (const item of validItems) {
+        const vid = item.vehicle_id;
+        const mid = item.model_id!;
+        if (!byVehicleAndModel[vid]) byVehicleAndModel[vid] = {};
+        if (!byVehicleAndModel[vid][mid]) byVehicleAndModel[vid][mid] = [];
+        byVehicleAndModel[vid][mid].push(item.object_runtime_id!);
+      }
+
+      // Color each vehicle's items
+      let coloredCount = 0;
+      for (const [vehicleId, byModel] of Object.entries(byVehicleAndModel)) {
+        const color = vehicleColors[vehicleId];
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color }
+          );
+          coloredCount += runtimeIds.length;
+        }
+      }
+
+      const vehicleCount = Object.keys(vehicleColors).length;
+      setTestStatus(`Approach 19: Done! Colored ${coloredCount} items in ${vehicleCount} vehicles`);
+    } catch (e: any) {
+      setTestStatus(`Approach 19: Error - ${e.message}`);
+      console.error('Approach 19 error:', e);
+    }
+  };
+
+  // Approach 20: Color schedule items by date
+  const testApproach20 = async () => {
+    setTestStatus('Approach 20: Coloring schedule items by date...');
+    try {
+      // Reset first
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
+
+      // Get items with valid model/runtime IDs AND date
+      const validItems = items.filter(i => i.model_id && i.object_runtime_id && i.vehicle_id);
+
+      if (validItems.length === 0) {
+        setTestStatus('Approach 20: No items with valid IDs');
+        return;
+      }
+
+      // Get vehicle dates
+      const vehicleDates: Record<string, string> = {};
+      for (const v of vehicles) {
+        if (v.delivery_date) {
+          vehicleDates[v.id] = v.delivery_date;
+        }
+      }
+
+      // Group items by date
+      const byDate: Record<string, { modelId: string; runtimeId: number }[]> = {};
+      for (const item of validItems) {
+        const date = vehicleDates[item.vehicle_id] || 'no-date';
+        if (!byDate[date]) byDate[date] = [];
+        byDate[date].push({ modelId: item.model_id!, runtimeId: item.object_runtime_id! });
+      }
+
+      // Color palette for dates
+      const colorPalette = [
+        { r: 239, g: 68, b: 68, a: 255 },   // Red
+        { r: 59, g: 130, b: 246, a: 255 },  // Blue
+        { r: 34, g: 197, b: 94, a: 255 },   // Green
+        { r: 249, g: 115, b: 22, a: 255 },  // Orange
+        { r: 168, g: 85, b: 247, a: 255 },  // Purple
+        { r: 236, g: 72, b: 153, a: 255 },  // Pink
+        { r: 20, g: 184, b: 166, a: 255 },  // Teal
+        { r: 245, g: 158, b: 11, a: 255 },  // Amber
+      ];
+
+      // Sort dates and assign colors
+      const sortedDates = Object.keys(byDate).sort();
+      let coloredCount = 0;
+
+      for (let i = 0; i < sortedDates.length; i++) {
+        const date = sortedDates[i];
+        const color = colorPalette[i % colorPalette.length];
+        const dateItems = byDate[date];
+
+        // Group by model
+        const byModel: Record<string, number[]> = {};
+        for (const di of dateItems) {
+          if (!byModel[di.modelId]) byModel[di.modelId] = [];
+          byModel[di.modelId].push(di.runtimeId);
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color }
+          );
+          coloredCount += runtimeIds.length;
+        }
+      }
+
+      setTestStatus(`Approach 20: Done! Colored ${coloredCount} items across ${sortedDates.length} dates`);
+    } catch (e: any) {
+      setTestStatus(`Approach 20: Error - ${e.message}`);
+      console.error('Approach 20 error:', e);
+    }
+  };
+
   // Reset colors
   const testReset = async () => {
     setTestStatus('Resetting colors...');
@@ -7541,6 +7684,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="test-btn-content">
                       <strong>📦 Batched Gray</strong>
                       <span>Red first, siis hallid 10000 kaupa partiidena</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach19} className="test-btn highlight" style={{ borderColor: '#10b981' }}>
+                    <span className="test-btn-num">19</span>
+                    <div className="test-btn-content">
+                      <strong>🚚 Veokite järgi</strong>
+                      <span>Värvib AINULT graafikus olevaid detaile veokite kaupa</span>
+                    </div>
+                  </button>
+
+                  <button onClick={testApproach20} className="test-btn highlight" style={{ borderColor: '#3b82f6' }}>
+                    <span className="test-btn-num">20</span>
+                    <div className="test-btn-content">
+                      <strong>📅 Kuupäevade järgi</strong>
+                      <span>Värvib AINULT graafikus olevaid detaile kuupäevade kaupa</span>
                     </div>
                   </button>
                 </div>
