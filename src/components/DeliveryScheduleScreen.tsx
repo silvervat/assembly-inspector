@@ -4779,7 +4779,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 23: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -4919,24 +4919,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const testApproach24 = async () => {
     setTestStatus('Approach 24: Loen andmeid Supabasest...');
     try {
-      // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 5000;
+      // Fetch ALL data with cursor-based pagination (more reliable than offset)
+      const PAGE_SIZE = 1000;
       const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let lastId = -1;
       let page = 0;
-      let hasMore = true;
 
-      while (hasMore) {
-        const from = page * PAGE_SIZE;
-        const to = from + PAGE_SIZE - 1;
+      while (true) {
         setTestStatus(`Approach 24: Loen andmeid... ${allModelObjects.length} kirjet (page ${page + 1})`);
-        console.log(`[24] Fetching page ${page + 1}, range ${from}-${to}`);
+        console.log(`[24] Fetching page ${page + 1}, after id ${lastId}`);
 
         const { data, error } = await supabase
           .from('trimble_model_objects')
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
+          .gt('object_runtime_id', lastId)
           .order('object_runtime_id', { ascending: true })
-          .range(from, to)
           .limit(PAGE_SIZE);
 
         if (error) {
@@ -4947,14 +4945,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         console.log(`[24] Got ${data?.length || 0} rows`);
 
-        if (data && data.length > 0) {
-          allModelObjects.push(...data);
-          page++;
-          hasMore = data.length === PAGE_SIZE;
-        } else {
-          hasMore = false;
-        }
+        if (!data || data.length === 0) break;
 
+        allModelObjects.push(...data);
+        lastId = data[data.length - 1].object_runtime_id;
+        page++;
+
+        if (data.length < PAGE_SIZE) break; // Last page
         if (page >= 100) break; // Safety limit
       }
 
@@ -5029,7 +5026,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setTestStatus('Approach 25: Loen andmeid Supabasest...');
     try {
       // Fetch ALL data with pagination - use order() for reliable pagination
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
@@ -5189,7 +5186,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Step 2: Get remaining objects from Supabase with pagination
       // Use smaller page size and explicit ordering for reliable pagination
       setTestStatus('Approach 26: Loen ülejäänud detailid Supabasest...');
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       const modelObjects: { model_id: string; object_runtime_id: number }[] = [];
       let page = 0;
       let hasMore = true;
