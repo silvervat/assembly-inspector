@@ -262,9 +262,9 @@
 }
 
 .playback-controls .speed-select {
-  width: 70px;
-  padding: 6px 8px;
-  font-size: 12px;
+  width: 55px;
+  padding: 4px 6px;
+  font-size: 11px;
 }
 
 .playback-controls .settings-btn {
@@ -618,7 +618,8 @@
   text-transform: uppercase;
 }
 
-.vehicle-edit-row .edit-field select {
+.vehicle-edit-row .edit-field select,
+.vehicle-edit-row .edit-field input[type="date"] {
   padding: 6px 8px;
   border: 1px solid #93c5fd;
   border-radius: 6px;
@@ -793,7 +794,13 @@
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: visible;
+  position: relative;
+}
+
+/* When menu is open, ensure proper stacking */
+.delivery-date-group.menu-open {
+  z-index: 100;
 }
 
 .date-header {
@@ -805,6 +812,7 @@
   cursor: pointer;
   border-bottom: 1px solid #e5e7eb;
   transition: background 0.15s;
+  position: relative;
 }
 
 .date-header:hover {
@@ -830,9 +838,9 @@
 }
 
 .date-info-section .date-primary {
-  font-weight: 600;
-  font-size: 14px;
-  color: #111827;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--modus-primary-darker, #0a3a67);
 }
 
 .date-info-section .date-secondary {
@@ -1033,7 +1041,7 @@
 .vehicle-title-section {
   display: flex;
   flex-direction: column;
-  min-width: 80px;
+  min-width: 50px;
 }
 
 .vehicle-header .vehicle-icon {
@@ -1058,6 +1066,34 @@
   text-decoration: underline;
 }
 
+.vehicle-title-section .vehicle-code-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vehicle-title-section .vehicle-date {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.vehicle-title-section .vehicle-date.clickable {
+  cursor: pointer;
+}
+
+.vehicle-title-section .vehicle-date.clickable:hover {
+  color: #1e40af;
+  text-decoration: underline;
+}
+
+.vehicle-title-section .inline-date-input {
+  padding: 2px 4px;
+  font-size: 11px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  width: 110px;
+}
+
 .vehicle-title-section .status-badge {
   padding: 1px 6px;
   border-radius: 8px;
@@ -1066,11 +1102,11 @@
   width: fit-content;
 }
 
-/* Vehicle stats section - two rows */
+/* Vehicle stats section - compact */
 .vehicle-stats-section {
   display: flex;
   flex-direction: column;
-  flex: 1;
+  min-width: 55px;
 }
 
 .vehicle-stats-section .stats-primary {
@@ -1088,6 +1124,7 @@
 .vehicle-resources-section {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .vehicle-header .method-badge,
@@ -1149,7 +1186,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 3px 12px;
   border-bottom: 1px solid #f3f4f6;
   cursor: grab;
   transition: background 0.1s;
@@ -1165,7 +1202,8 @@
 }
 
 .delivery-item:hover {
-  background: #f8fafc;
+  background: #e8f4ff;
+  border-left: 2px solid #3b82f6;
 }
 
 .delivery-item.selected {
@@ -1234,6 +1272,24 @@
   font-weight: 500;
   color: #374151;
   text-align: right;
+}
+
+/* Item sequence number (for duplicates like 1/10, 2/10) */
+.delivery-item .item-sequence {
+  font-size: 10px;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.delivery-item .item-sequence:hover {
+  background: #ddd6fe;
+  color: #5b21b6;
 }
 
 /* Item dimensions - placeholder for future */
@@ -1478,6 +1534,13 @@
 
 .date-context-menu {
   right: 40px;
+}
+
+/* Flip menu upward when near bottom of screen */
+.context-menu.flip-up {
+  top: auto;
+  bottom: 100%;
+  margin-bottom: 4px;
 }
 
 .vehicle-context-menu {
@@ -2218,6 +2281,38 @@
     max-width: 60px;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Item layout improvements for narrow screens */
+  .delivery-item {
+    gap: 6px;
+  }
+
+  .delivery-item .item-dimensions {
+    display: none;
+  }
+
+  .delivery-item .item-resources {
+    display: none;
+  }
+
+  .delivery-item .item-info {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .delivery-item .item-info.inline {
+    flex-wrap: nowrap;
+  }
+
+  .delivery-item .item-mark {
+    flex-shrink: 0;
+  }
+
+  .delivery-item .item-weight {
+    margin-left: auto;
+    min-width: auto;
+    flex-shrink: 0;
   }
 }
 

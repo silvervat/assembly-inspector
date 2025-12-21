@@ -439,6 +439,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [itemMenuId, setItemMenuId] = useState<string | null>(null);
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
+  const [menuFlipUp, setMenuFlipUp] = useState(false);
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -456,7 +457,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Inline editing state for vehicle list
   const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
-  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | null>(null);
+  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | 'date' | null>(null);
 
   // Assembly selection mode
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
@@ -508,6 +509,85 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const sortedDates = useMemo(() => {
     return Object.keys(itemsByDateAndVehicle).sort();
   }, [itemsByDateAndVehicle]);
+
+  // Calculate item sequences for duplicate assembly marks
+  // Returns a map of itemId -> { seq, total, otherLocations }
+  interface ItemSequenceInfo {
+    seq: number;
+    total: number;
+    otherLocations: Array<{
+      vehicleCode: string;
+      vehicleId: string;
+      date: string;
+      seq: number;
+    }>;
+  }
+
+  const itemSequences = useMemo(() => {
+    const sequenceMap = new Map<string, ItemSequenceInfo>();
+
+    // Group all items by assembly_mark (use ALL items, not filtered)
+    const itemsByMark: Record<string, DeliveryItem[]> = {};
+    items.forEach(item => {
+      const mark = item.assembly_mark;
+      if (!itemsByMark[mark]) itemsByMark[mark] = [];
+      itemsByMark[mark].push(item);
+    });
+
+    // For each mark with multiple items, calculate sequences
+    Object.entries(itemsByMark).forEach(([_mark, markItems]) => {
+      if (markItems.length <= 1) {
+        // Single item - no sequence display needed
+        markItems.forEach(item => {
+          sequenceMap.set(item.id, { seq: 1, total: 1, otherLocations: [] });
+        });
+        return;
+      }
+
+      // Sort items by: vehicle date, vehicle sort_order, then item sort_order
+      const sortedItems = [...markItems].sort((a, b) => {
+        const vehicleA = vehicles.find(v => v.id === a.vehicle_id);
+        const vehicleB = vehicles.find(v => v.id === b.vehicle_id);
+
+        // First by date
+        const dateA = vehicleA?.scheduled_date || a.scheduled_date || '9999-99-99';
+        const dateB = vehicleB?.scheduled_date || b.scheduled_date || '9999-99-99';
+        if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+        // Then by vehicle sort_order
+        const vSortA = vehicleA?.sort_order ?? 999;
+        const vSortB = vehicleB?.sort_order ?? 999;
+        if (vSortA !== vSortB) return vSortA - vSortB;
+
+        // Then by item sort_order
+        return a.sort_order - b.sort_order;
+      });
+
+      // Assign sequence numbers
+      const total = sortedItems.length;
+      sortedItems.forEach((item, index) => {
+        const seq = index + 1;
+
+        // Build other locations list (excluding current item)
+        const otherLocations = sortedItems
+          .filter(other => other.id !== item.id)
+          .map(other => {
+            const otherVehicle = vehicles.find(v => v.id === other.vehicle_id);
+            const otherSeq = sortedItems.findIndex(s => s.id === other.id) + 1;
+            return {
+              vehicleCode: otherVehicle?.vehicle_code || '-',
+              vehicleId: other.vehicle_id || '',
+              date: otherVehicle?.scheduled_date || other.scheduled_date,
+              seq: otherSeq
+            };
+          });
+
+        sequenceMap.set(item.id, { seq, total, otherLocations });
+      });
+    });
+
+    return sequenceMap;
+  }, [items, vehicles]);
 
   // Group by factory (alternative view)
   const itemsByFactory = useMemo(() => {
@@ -1269,6 +1349,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         updateData.unload_duration_minutes = value || null;
       } else if (field === 'status') {
         updateData.status = value;
+      } else if (field === 'date') {
+        updateData.scheduled_date = value;
       }
 
       const { error } = await supabase
@@ -2144,6 +2226,87 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Export single date to Excel
+  const exportDateToExcel = (date: string) => {
+    try {
+      const dateItems = items.filter(i => i.scheduled_date === date);
+
+      // Sort items by vehicle time, then sort_order
+      const sortedItems = [...dateItems].sort((a, b) => {
+        const vehicleA = getVehicle(a.vehicle_id || '');
+        const vehicleB = getVehicle(b.vehicle_id || '');
+        const timeA = vehicleA?.unload_start_time || '99:99';
+        const timeB = vehicleB?.unload_start_time || '99:99';
+        if (timeA !== timeB) return timeA.localeCompare(timeB);
+        if (vehicleA?.sort_order !== vehicleB?.sort_order) {
+          return (vehicleA?.sort_order ?? 999) - (vehicleB?.sort_order ?? 999);
+        }
+        return a.sort_order - b.sort_order;
+      });
+
+      // Headers
+      const headers = ['Nr', 'Veok', 'Aeg', 'Kestus', 'Märk', 'Toode', 'Kaal (kg)', 'Staatus'];
+
+      // Data rows
+      const rows = sortedItems.map((item, idx) => {
+        const vehicle = getVehicle(item.vehicle_id || '');
+        const durationMins = vehicle?.unload_duration_minutes || 0;
+        const durationStr = durationMins > 0 ? `${(durationMins / 60).toFixed(1)}h` : '-';
+
+        return [
+          idx + 1,
+          vehicle?.vehicle_code || '-',
+          vehicle?.unload_start_time || '-',
+          durationStr,
+          item.assembly_mark,
+          item.product_name || '',
+          item.cast_unit_weight || '',
+          ITEM_STATUS_CONFIG[item.status]?.label || item.status
+        ];
+      });
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const wsData = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Style header row
+      const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '0a3a67' } },
+        alignment: { horizontal: 'center' }
+      };
+
+      headers.forEach((_, idx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: idx });
+        if (!ws[cellRef]) ws[cellRef] = { v: headers[idx] };
+        ws[cellRef].s = headerStyle;
+      });
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 5 },   // Nr
+        { wch: 10 },  // Veok
+        { wch: 8 },   // Aeg
+        { wch: 8 },   // Kestus
+        { wch: 15 },  // Märk
+        { wch: 25 },  // Toode
+        { wch: 10 },  // Kaal
+        { wch: 12 }   // Staatus
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, formatDateShort(date));
+
+      // Save file
+      const fileName = `Tarne_${date}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      setMessage(`${formatDateShort(date)} eksporditud`);
+    } catch (e: any) {
+      console.error('Error exporting date:', e);
+      setMessage('Viga eksportimisel: ' + e.message);
+    }
+  };
+
   // ============================================
   // PLAYBACK
   // ============================================
@@ -2154,12 +2317,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return;
     }
 
-    // Sort vehicles by date and code
+    // Sort vehicles by date, then time, then sort_order
     const sortedVehicles = [...vehicles].sort((a, b) => {
+      // First by date
       if (a.scheduled_date !== b.scheduled_date) {
         return a.scheduled_date.localeCompare(b.scheduled_date);
       }
-      return a.vehicle_code.localeCompare(b.vehicle_code);
+      // Then by unload_start_time (empty times go last)
+      const timeA = a.unload_start_time || '99:99';
+      const timeB = b.unload_start_time || '99:99';
+      if (timeA !== timeB) {
+        return timeA.localeCompare(timeB);
+      }
+      // Then by sort_order
+      return (a.sort_order ?? 999) - (b.sort_order ?? 999);
     });
 
     setIsPlaying(true);
@@ -2189,6 +2360,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Set current playback vehicle for highlighting
       setCurrentPlaybackVehicleId(vehicle.id);
+
+      // Scroll vehicle into view
+      setTimeout(() => {
+        const vehicleElement = document.querySelector(`[data-vehicle-id="${vehicle.id}"]`);
+        if (vehicleElement) {
+          vehicleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 50);
 
       if (vehicleItems.length === 0) {
         // Skip empty vehicles
@@ -2629,7 +2808,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div
               key={date}
               id={`date-group-${date}`}
-              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
@@ -2661,12 +2840,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 {/* Week and vehicles section */}
                 <div className="date-week-section">
                   <span className="week-primary">N{getISOWeek(new Date(date))}</span>
-                  <span className="week-secondary">{dateVehicleList.length} veoki{dateVehicleList.length !== 1 ? 't' : ''}</span>
+                  <span className="week-secondary">{dateVehicleList.length} {dateVehicleList.length === 1 ? 'veok' : 'veokit'}</span>
                 </div>
 
                 {/* Stats section */}
                 <div className="date-stats-section">
-                  <span className="stats-primary">{dateItemCount} detaili</span>
+                  <span className="stats-primary">{dateItemCount} {dateItemCount === 1 ? 'detail' : 'detaili'}</span>
                   <span className="stats-secondary">{timeRange || 'Aeg määramata'}</span>
                 </div>
 
@@ -2674,7 +2853,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   className="date-menu-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setDateMenuId(dateMenuId === date ? null : date);
+                    if (dateMenuId === date) {
+                      setDateMenuId(null);
+                    } else {
+                      // Check if menu should flip up (near bottom of screen)
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const spaceBelow = window.innerHeight - rect.bottom;
+                      setMenuFlipUp(spaceBelow < 200);
+                      setDateMenuId(date);
+                    }
                   }}
                 >
                   <FiMoreVertical />
@@ -2683,13 +2870,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               {/* Date menu */}
               {dateMenuId === date && (
-                <div className="context-menu date-context-menu">
+                <div className={`context-menu date-context-menu ${menuFlipUp ? 'flip-up' : ''}`}>
                   <button onClick={() => {
                     setAddModalDate(date);
                     setShowAddModal(true);
                     setDateMenuId(null);
                   }}>
                     <FiPlus /> Lisa veok
+                  </button>
+                  <button onClick={() => {
+                    exportDateToExcel(date);
+                    setDateMenuId(null);
+                  }}>
+                    <FiDownload /> Ekspordi Excel
                   </button>
                   <button onClick={() => {
                     // Copy all marks
@@ -2733,7 +2926,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
+                        <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
                             className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}
@@ -2770,14 +2963,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
-                              <span
-                                className="vehicle-code clickable"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (vehicle) handleVehicleClick(vehicle);
-                                }}
-                                title="Märgista mudelis"
-                              >{vehicle?.vehicle_code || 'Määramata'}</span>
+                              <div className="vehicle-code-row">
+                                <span
+                                  className="vehicle-code clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (vehicle) handleVehicleClick(vehicle);
+                                  }}
+                                  title="Märgista mudelis"
+                                >{vehicle?.vehicle_code || 'Määramata'}</span>
+                                {inlineEditVehicleId === vehicleId && inlineEditField === 'date' ? (
+                                  <input
+                                    type="date"
+                                    className="inline-date-input"
+                                    autoFocus
+                                    defaultValue={vehicle?.scheduled_date || ''}
+                                    onChange={(e) => {
+                                      updateVehicleInline(vehicleId, 'date', e.target.value);
+                                    }}
+                                    onBlur={() => {
+                                      setInlineEditVehicleId(null);
+                                      setInlineEditField(null);
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : (
+                                  <span
+                                    className="vehicle-date clickable"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInlineEditVehicleId(vehicleId);
+                                      setInlineEditField('date');
+                                    }}
+                                    title="Klikka muutmiseks"
+                                  >
+                                    {vehicle?.scheduled_date ? formatDateShort(vehicle.scheduled_date) : ''}
+                                  </span>
+                                )}
+                              </div>
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
                                 <select
                                   className="inline-select status-select"
@@ -2876,7 +3099,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Stats section */}
                             <div className="vehicle-stats-section">
-                              <span className="stats-primary">{vehicleItems.length} detaili</span>
+                              <span className="stats-primary">{vehicleItems.length} {vehicleItems.length === 1 ? 'detail' : 'detaili'}</span>
                               <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
                             </div>
 
@@ -3039,6 +3262,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
+
+                                    {/* Sequence number for duplicates */}
+                                    {(() => {
+                                      const seqInfo = itemSequences.get(item.id);
+                                      if (!seqInfo || seqInfo.total <= 1) return null;
+                                      return (
+                                        <span
+                                          className="item-sequence"
+                                          title={seqInfo.otherLocations.map(loc =>
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${formatDateShort(loc.date)})`
+                                          ).join('\n')}
+                                        >
+                                          {seqInfo.seq}/{seqInfo.total}
+                                        </span>
+                                      );
+                                    })()}
 
                                     {/* Weight */}
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
@@ -3207,7 +3446,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     const isVehicleDragging = isDragging && draggedVehicle?.id === vehicleId;
 
                     return (
-                      <div key={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
+                      <div key={vehicleId} data-vehicle-id={vehicleId} className={`delivery-vehicle-group factory-vehicle ${isVehicleDragging ? 'dragging' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''}`}>
                         {/* Vehicle header */}
                         <div
                           className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''}`}
@@ -3328,6 +3567,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     </div>
+                                    {/* Sequence number for duplicates */}
+                                    {(() => {
+                                      const seqInfo = itemSequences.get(item.id);
+                                      if (!seqInfo || seqInfo.total <= 1) return null;
+                                      return (
+                                        <span
+                                          className="item-sequence"
+                                          title={seqInfo.otherLocations.map(loc =>
+                                            `${loc.seq}/${seqInfo.total}: ${loc.vehicleCode} (${formatDateShort(loc.date)})`
+                                          ).join('\n')}
+                                        >
+                                          {seqInfo.seq}/{seqInfo.total}
+                                        </span>
+                                      );
+                                    })()}
                                     <span className="item-weight">{weightInfo?.kg || '-'}</span>
                                     <span className="item-dimensions"></span>
                                     <div className="item-resources">
@@ -3406,7 +3660,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         <span className="separator">•</span>
         <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
         <span className="separator">•</span>
-        <span>{vehicles.length} veokit</span>
+        <span>{vehicles.length} {vehicles.length === 1 ? 'veok' : 'veokit'}</span>
       </div>
 
       {/* Toolbar */}
@@ -3488,6 +3742,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="vehicle-edit-row">
+                {/* Date */}
+                <div className="edit-field">
+                  <label>Kuupäev</label>
+                  <input
+                    type="date"
+                    value={activeVehicle.scheduled_date || ''}
+                    onChange={async (e) => {
+                      const newDate = e.target.value;
+                      // Optimistic update
+                      setVehicles(prev => prev.map(v =>
+                        v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
+                      ));
+                      // Save to DB
+                      await supabase
+                        .from('delivery_vehicles')
+                        .update({ scheduled_date: newDate })
+                        .eq('id', activeVehicleId);
+                    }}
+                  />
+                </div>
+
                 {/* Time */}
                 <div className="edit-field">
                   <label>Kellaaeg</label>
