@@ -1233,11 +1233,17 @@
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color {
+  padding: 4px 6px;
   border-radius: 6px;
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon {
   color: white;
+}
+
+.vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon.clickable {
+  padding: 0;
+  margin: 0;
 }
 
 .vehicle-header .vehicle-icon {
@@ -1253,8 +1259,6 @@
   border-radius: 6px;
   transition: all 0.15s;
 }
-
-/* When vehicle has color, keep same padding/margin as normal */
 
 .vehicle-header .vehicle-icon.clickable:hover {
   background: rgba(59, 130, 246, 0.15);
