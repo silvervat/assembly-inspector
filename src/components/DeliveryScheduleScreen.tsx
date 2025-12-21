@@ -2765,32 +2765,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               )}
                             </div>
 
-                            {/* Stats section */}
-                            <div className="vehicle-stats-section">
-                              <span className="stats-primary">{vehicleItems.length} detaili</span>
-                              <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
-                            </div>
-
-                            {/* Unload methods section */}
-                            <div className="vehicle-resources-section">
-                              {UNLOAD_METHODS.map(method => {
-                                const count = vehicle?.unload_methods?.[method.key];
-                                if (!count) return null;
-                                return (
-                                  <span
-                                    key={method.key}
-                                    className="method-badge"
-                                    style={{ backgroundColor: method.bgColor }}
-                                    title={method.label}
-                                  >
-                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
-                                    <span className="method-count">{count}</span>
-                                  </span>
-                                );
-                              })}
-                            </div>
-
-                            {/* Time section - RIGHT side */}
+                            {/* Time section - after vehicle code */}
                             <div className="vehicle-time-section">
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
                                 <select
@@ -2851,6 +2826,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 >{vehicle?.unload_duration_minutes ? formatDuration(vehicle.unload_duration_minutes) : '-'}</span>
                               )}
                             </div>
+
+                            {/* Stats section */}
+                            <div className="vehicle-stats-section">
+                              <span className="stats-primary">{vehicleItems.length} detaili</span>
+                              <span className="stats-secondary">{formatWeight(vehicleWeight)?.kg || '0 kg'}</span>
+                            </div>
+
+                            {/* Unload methods section */}
+                            <div className="vehicle-resources-section">
+                              {UNLOAD_METHODS.map(method => {
+                                const count = vehicle?.unload_methods?.[method.key];
+                                if (!count) return null;
+                                return (
+                                  <span
+                                    key={method.key}
+                                    className="method-badge"
+                                    style={{ backgroundColor: method.bgColor }}
+                                    title={method.label}
+                                  >
+                                    <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: method.filterCss }} />
+                                    <span className="method-count">{count}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+
                           <button
                             className="vehicle-comment-btn"
                             onClick={(e) => {
