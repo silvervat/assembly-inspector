@@ -692,7 +692,41 @@
 .vehicle-edit-header .vehicle-edit-code {
   font-weight: 700;
   font-size: 14px;
-  flex: 1;
+}
+
+.vehicle-edit-header .header-date-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.vehicle-edit-header .header-date-field input[type="date"] {
+  padding: 4px 8px;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  cursor: pointer;
+}
+
+.vehicle-edit-header .header-date-field .clear-date-btn {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: #9ca3af;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.vehicle-edit-header .header-date-field .clear-date-btn:hover {
+  background: #6b7280;
 }
 
 .vehicle-edit-header .close-btn {
@@ -1199,11 +1233,17 @@
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color {
+  padding: 4px 6px;
   border-radius: 6px;
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon {
   color: white;
+}
+
+.vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon.clickable {
+  padding: 0;
+  margin: 0;
 }
 
 .vehicle-header .vehicle-icon {
@@ -1219,8 +1259,6 @@
   border-radius: 6px;
   transition: all 0.15s;
 }
-
-/* When vehicle has color, keep same padding/margin as normal */
 
 .vehicle-header .vehicle-icon.clickable:hover {
   background: rgba(59, 130, 246, 0.15);

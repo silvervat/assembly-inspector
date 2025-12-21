@@ -4414,6 +4414,43 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="vehicle-edit-header">
                 <FiTruck />
                 <span className="vehicle-edit-code">{activeVehicle.vehicle_code}</span>
+                <div className="header-date-field">
+                  <input
+                    type="date"
+                    value={activeVehicle.scheduled_date || ''}
+                    onChange={async (e) => {
+                      const newDate = e.target.value || null;
+                      // Optimistic update
+                      setVehicles(prev => prev.map(v =>
+                        v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
+                      ));
+                      // Save to DB
+                      await supabase
+                        .from('delivery_vehicles')
+                        .update({ scheduled_date: newDate })
+                        .eq('id', activeVehicleId);
+                    }}
+                  />
+                  {activeVehicle.scheduled_date && (
+                    <button
+                      className="clear-date-btn"
+                      onClick={async () => {
+                        // Optimistic update
+                        setVehicles(prev => prev.map(v =>
+                          v.id === activeVehicleId ? { ...v, scheduled_date: null } : v
+                        ));
+                        // Save to DB
+                        await supabase
+                          .from('delivery_vehicles')
+                          .update({ scheduled_date: null })
+                          .eq('id', activeVehicleId);
+                      }}
+                      title="Eemalda kuupäev"
+                    >
+                      <FiX size={10} />
+                    </button>
+                  )}
+                </div>
                 <button
                   className="close-btn"
                   onClick={() => setActiveVehicleId(null)}
@@ -4423,48 +4460,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
 
               <div className="vehicle-edit-row">
-                {/* Date */}
-                <div className="edit-field">
-                  <label>Kuupäev</label>
-                  <div className="date-input-wrapper">
-                    <input
-                      type="date"
-                      value={activeVehicle.scheduled_date || ''}
-                      onChange={async (e) => {
-                        const newDate = e.target.value || null;
-                        // Optimistic update
-                        setVehicles(prev => prev.map(v =>
-                          v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
-                        ));
-                        // Save to DB
-                        await supabase
-                          .from('delivery_vehicles')
-                          .update({ scheduled_date: newDate })
-                          .eq('id', activeVehicleId);
-                      }}
-                    />
-                    {activeVehicle.scheduled_date && (
-                      <button
-                        className="clear-date-btn"
-                        onClick={async () => {
-                          // Optimistic update
-                          setVehicles(prev => prev.map(v =>
-                            v.id === activeVehicleId ? { ...v, scheduled_date: null } : v
-                          ));
-                          // Save to DB
-                          await supabase
-                            .from('delivery_vehicles')
-                            .update({ scheduled_date: null })
-                            .eq('id', activeVehicleId);
-                        }}
-                        title="Eemalda kuupäev"
-                      >
-                        <FiX size={12} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
                 {/* Time */}
                 <div className="edit-field">
                   <label>Kellaaeg</label>
