@@ -4645,8 +4645,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const validItems = items.filter(i => i.model_id && i.object_runtime_id && i.vehicle_id);
 
       for (const item of validItems) {
-        if (!vehicleColors[item.vehicle_id]) {
-          vehicleColors[item.vehicle_id] = colorPalette[colorIndex % colorPalette.length];
+        const vid = item.vehicle_id!;
+        if (!vehicleColors[vid]) {
+          vehicleColors[vid] = colorPalette[colorIndex % colorPalette.length];
           colorIndex++;
         }
       }
@@ -4654,7 +4655,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Color by vehicle
       const byVehicleAndModel: Record<string, Record<string, number[]>> = {};
       for (const item of validItems) {
-        const vid = item.vehicle_id;
+        const vid = item.vehicle_id!;
         const mid = item.model_id!;
         if (!byVehicleAndModel[vid]) byVehicleAndModel[vid] = {};
         if (!byVehicleAndModel[vid][mid]) byVehicleAndModel[vid][mid] = [];
