@@ -4795,7 +4795,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .order('object_runtime_id', { ascending: true })
-          .range(from, to);
+          .range(from, to)
+          .limit(PAGE_SIZE);
 
         if (error) {
           console.error('[23] Supabase error:', error);
@@ -4935,7 +4936,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .order('object_runtime_id', { ascending: true })
-          .range(from, to);
+          .range(from, to)
+          .limit(PAGE_SIZE);
 
         if (error) {
           console.error('[24] Supabase error:', error);
@@ -5043,7 +5045,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           .select('model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .order('object_runtime_id', { ascending: true })
-          .range(from, to);
+          .range(from, to)
+          .limit(PAGE_SIZE);
 
         if (error) {
           console.error('[25] Supabase error:', error);
@@ -5202,7 +5205,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           .select('model_id, object_runtime_id', { count: 'exact' })
           .eq('trimble_project_id', projectId)
           .order('object_runtime_id', { ascending: true })
-          .range(from, to);
+          .range(from, to)
+          .limit(PAGE_SIZE);
 
         if (error) {
           console.error('Supabase error:', error);
