@@ -1528,14 +1528,14 @@
 
 .resource-hover-popup {
   position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
+  top: calc(100% - 2px);
+  right: 0;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 8px;
+  padding-top: 10px;
   z-index: 1000;
   display: flex;
   gap: 6px;
@@ -1881,19 +1881,36 @@
 .delivery-item .item-btn svg {
   width: 14px;
   height: 14px;
-  color: #374151;
-  stroke: currentColor;
-  stroke-width: 2;
   display: block;
 }
 
+/* FiMoreVertical uses circles - need to fill them */
 .delivery-item .item-btn svg circle {
-  fill: currentColor;
+  fill: #374151 !important;
+  stroke: #374151 !important;
+}
+
+/* FiMessageSquare uses polyline/path - need stroke */
+.delivery-item .item-btn svg path,
+.delivery-item .item-btn svg polyline,
+.delivery-item .item-btn svg line {
+  stroke: #374151 !important;
+  stroke-width: 2;
 }
 
 .delivery-item .item-btn:hover {
   background: #e5e7eb;
-  color: #374151;
+}
+
+.delivery-item .item-btn:hover svg circle {
+  fill: #1f2937 !important;
+  stroke: #1f2937 !important;
+}
+
+.delivery-item .item-btn:hover svg path,
+.delivery-item .item-btn:hover svg polyline,
+.delivery-item .item-btn:hover svg line {
+  stroke: #1f2937 !important;
 }
 
 .delivery-item .item-btn .badge {
