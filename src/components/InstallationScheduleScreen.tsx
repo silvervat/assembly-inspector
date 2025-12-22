@@ -837,6 +837,23 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     };
   }, [api, scheduleItems]);
 
+  // Clear list selection when unscheduled model items are selected
+  useEffect(() => {
+    if (selectedObjects.length === 0) return;
+
+    // Check if any selected model object is NOT in the schedule list
+    const hasUnscheduled = selectedObjects.some(obj => {
+      const guid = obj.guid || '';
+      const guidIfc = obj.guidIfc || '';
+      return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
+    });
+
+    if (hasUnscheduled) {
+      // Clear list selection when working with unscheduled items
+      setSelectedItemIds(new Set());
+    }
+  }, [selectedObjects, scheduleItems]);
+
   // Helper to check if item has delivery warning
   const itemHasDeliveryWarning = useCallback((item: ScheduleItem): boolean => {
     const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
@@ -3698,8 +3715,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         </div>
       </div>
 
-      {/* Multi-select bar - hide during playback */}
-      {selectedItemIds.size > 0 && !isPlaying && (
+      {/* Multi-select bar - hide during playback and when unscheduled model items selected */}
+      {selectedItemIds.size > 0 && !isPlaying && !hasUnscheduledSelection && (
         <div className="multi-select-bar">
           <div className="multi-select-header">
             <span className="multi-select-count">{selectedItemIds.size} valitud</span>
