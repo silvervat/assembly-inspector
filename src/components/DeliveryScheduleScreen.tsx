@@ -6318,9 +6318,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <div className="selection-bars">
             {/* Selected objects from model - only show if not already in list */}
             {(() => {
-              // Filter out objects that are already in items list
+              // Filter out objects that are already in items list (check both guid and guid_ifc)
               const existingGuids = new Set(items.map(item => item.guid));
-              const newObjects = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+              const existingIfcGuids = new Set(items.map(item => item.guid_ifc).filter(Boolean));
+              const newObjects = selectedObjects.filter(obj => {
+                const guid = obj.guid || '';
+                const guidIfc = obj.guidIfc || '';
+                // Object is new if neither its guid nor guidIfc exists in the schedule
+                const isInSchedule = (guid && existingGuids.has(guid)) || (guidIfc && existingIfcGuids.has(guidIfc));
+                return !isInSchedule;
+              });
 
               if (newObjects.length === 0) return null;
 
