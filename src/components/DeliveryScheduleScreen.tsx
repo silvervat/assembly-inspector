@@ -4017,7 +4017,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   >
                     <span className="day-number">{date.getDate()}</span>
                     {vehicleCount > 0 && (
-                      <span className="day-count">{vehicleCount}</span>
+                      <span
+                        className="day-count"
+                        style={colorMode === 'date' && dateColors[dateStr] ? {
+                          background: `rgb(${dateColors[dateStr].r}, ${dateColors[dateStr].g}, ${dateColors[dateStr].b})`,
+                          color: getTextColor(dateColors[dateStr].r, dateColors[dateStr].g, dateColors[dateStr].b)
+                        } : undefined}
+                      >
+                        {vehicleCount}
+                      </span>
                     )}
                     {/* Vehicle tooltip on hover */}
                     {hoveredDate === dateStr && (
