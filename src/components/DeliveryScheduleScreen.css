@@ -3696,6 +3696,119 @@
   margin: 4px 0;
 }
 
+/* Danger zone in settings */
+.danger-zone {
+  margin-top: 8px;
+  padding: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+}
+
+.danger-zone-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #dc2626;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.danger-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.danger-btn:hover {
+  background: #dc2626;
+  color: white;
+  border-color: #dc2626;
+}
+
+.delete-confirm-box {
+  background: white;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.delete-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #dc2626;
+  font-size: 13px;
+  margin: 0 0 8px 0;
+}
+
+.delete-list {
+  margin: 0 0 8px 20px;
+  padding: 0;
+  font-size: 12px;
+  color: #374151;
+}
+
+.delete-list li {
+  margin-bottom: 2px;
+}
+
+.delete-warning-small {
+  font-size: 11px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.delete-confirm-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.delete-confirm-buttons .cancel-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.delete-confirm-buttons .cancel-btn:hover {
+  background: #e5e7eb;
+}
+
+.delete-confirm-buttons .confirm-delete-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: #dc2626;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.delete-confirm-buttons .confirm-delete-btn:hover {
+  background: #b91c1c;
+}
+
+.delete-confirm-buttons .confirm-delete-btn:disabled,
+.delete-confirm-buttons .cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ============================================
    ASSEMBLY SELECTION MODAL
    ============================================ */
