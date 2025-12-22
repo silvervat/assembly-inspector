@@ -7,6 +7,7 @@ import InspectionPlanScreen from './components/InspectionPlanScreen';
 import InstallationsScreen from './components/InstallationsScreen';
 import InstallationScheduleScreen from './components/InstallationScheduleScreen';
 import DeliveryScheduleScreen from './components/DeliveryScheduleScreen';
+import OrganizerScreen from './components/OrganizerScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -19,7 +20,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.128';
+export const APP_VERSION = '3.1.0';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -609,6 +610,24 @@ export default function App() {
       <>
         <NavigationOverlay />
         <DeliveryScheduleScreen
+          api={api}
+          user={user}
+          projectId={projectId}
+          tcUserEmail={tcUser?.email || ''}
+          tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
+          onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Organiseerija ekraan
+  if (currentMode === 'organizer') {
+    return (
+      <>
+        <NavigationOverlay />
+        <OrganizerScreen
           api={api}
           user={user}
           projectId={projectId}

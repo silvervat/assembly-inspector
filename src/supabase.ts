@@ -733,3 +733,151 @@ export interface ModelObject {
   product_name?: string;
   created_at: string;
 }
+
+// ============================================
+// ORGANISEERIJA SÜSTEEM (Organizer System v3.1.0)
+// ============================================
+
+// Kuvatavate väljade valikud
+export type OrganizerDisplayField =
+  | 'assembly_mark'
+  | 'product_name'
+  | 'cast_unit_weight'
+  | 'cast_unit_position_code'
+  | 'file_name'
+  | 'object_type';
+
+// Sortimise valikud
+export type OrganizerSortField =
+  | 'assembly_mark'
+  | 'product_name'
+  | 'cast_unit_weight'
+  | 'cast_unit_position_code'
+  | 'added_at'
+  | 'sort_order';
+
+export type OrganizerSortDirection = 'asc' | 'desc';
+
+// Grupp
+export interface OrganizerGroup {
+  id: string;
+  trimble_project_id: string;
+  parent_id?: string | null;
+  name: string;
+  description?: string | null;
+  color: string;
+  sort_order: number;
+  level: number;  // 0, 1, 2 (max 3 levels)
+  // Seaded
+  display_fields: OrganizerDisplayField[];
+  sort_by: OrganizerSortField;
+  sort_direction: OrganizerSortDirection;
+  is_expanded: boolean;
+  // Audit
+  created_by: string;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_by?: string | null;
+  updated_at: string;
+  // Joined data (from view)
+  item_count?: number;
+  total_weight?: number;
+  subgroup_count?: number;
+  // Runtime data
+  items?: OrganizerItem[];
+  children?: OrganizerGroup[];
+}
+
+// Grupi element (detail)
+export interface OrganizerItem {
+  id: string;
+  trimble_project_id: string;
+  group_id: string;
+  // Trimble Connect identifikaatorid
+  model_id?: string | null;
+  guid: string;
+  guid_ifc?: string | null;
+  guid_ms?: string | null;
+  object_runtime_id?: number | null;
+  // Objekti info
+  assembly_mark: string;
+  product_name?: string | null;
+  file_name?: string | null;
+  cast_unit_weight?: string | null;
+  cast_unit_position_code?: string | null;
+  cast_unit_bottom_elevation?: string | null;
+  cast_unit_top_elevation?: string | null;
+  object_type?: string | null;
+  // Positsioon
+  sort_order: number;
+  notes?: string | null;
+  // Audit
+  added_by: string;
+  added_by_name?: string | null;
+  added_at: string;
+  updated_by?: string | null;
+  updated_at: string;
+}
+
+// Ajaloo muudatuse tüüp
+export type OrganizerActionType =
+  | 'group_created'
+  | 'group_updated'
+  | 'group_deleted'
+  | 'group_moved'
+  | 'item_added'
+  | 'item_removed'
+  | 'item_moved'
+  | 'items_bulk_add'
+  | 'items_bulk_remove';
+
+// Ajalugu
+export interface OrganizerHistory {
+  id: string;
+  trimble_project_id: string;
+  group_id?: string | null;
+  item_id?: string | null;
+  action_type: OrganizerActionType;
+  old_value?: Record<string, any> | null;
+  new_value?: Record<string, any> | null;
+  affected_count?: number | null;
+  changed_by: string;
+  changed_by_name?: string | null;
+  changed_at: string;
+}
+
+// Kommentaar
+export interface OrganizerComment {
+  id: string;
+  trimble_project_id: string;
+  group_id?: string | null;
+  item_id?: string | null;
+  comment_text: string;
+  created_by: string;
+  created_by_name?: string | null;
+  created_at: string;
+}
+
+// Grupi statistika (vaade)
+export interface OrganizerGroupStats {
+  id: string;
+  trimble_project_id: string;
+  parent_id?: string | null;
+  name: string;
+  description?: string | null;
+  color: string;
+  level: number;
+  sort_order: number;
+  display_fields: OrganizerDisplayField[];
+  sort_by: OrganizerSortField;
+  sort_direction: OrganizerSortDirection;
+  is_expanded: boolean;
+  created_by: string;
+  created_by_name?: string | null;
+  created_at: string;
+  updated_by?: string | null;
+  updated_at: string;
+  item_count: number;
+  total_weight: number;
+  subgroup_count: number;
+}
