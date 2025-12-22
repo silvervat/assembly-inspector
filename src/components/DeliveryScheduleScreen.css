@@ -1731,6 +1731,16 @@
   background: #eff6ff;
 }
 
+.delivery-item.model-selected {
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  box-shadow: 0 0 0 1px #fcd34d inset;
+}
+
+.delivery-item.model-selected:hover {
+  background: #fde68a;
+}
+
 .delivery-item.active {
   background: #dbeafe;
   border-left: 3px solid var(--modus-primary, #0063a3);
@@ -1872,9 +1882,13 @@
   width: 14px;
   height: 14px;
   color: #374151;
-  stroke: #374151;
+  stroke: currentColor;
   stroke-width: 2;
   display: block;
+}
+
+.delivery-item .item-btn svg circle {
+  fill: currentColor;
 }
 
 .delivery-item .item-btn:hover {

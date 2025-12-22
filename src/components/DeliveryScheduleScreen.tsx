@@ -5692,6 +5692,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             )}
                             {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
+                              const isModelSelected = selectedGuids.has(item.guid);
                               const isActive = activeItemId === item.id;
                               const weightInfo = formatWeight(item.cast_unit_weight);
                               const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
@@ -5702,7 +5703,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <div key={item.id} className="delivery-item-wrapper">
                                   {showDropBefore && <div className="drop-indicator" />}
                                   <div
-                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                                     draggable={!!vehicle}
                                     onDragStart={(e) => vehicle && handleItemDragStart(e, item)}
                                     onDragEnd={handleDragEnd}
@@ -5880,6 +5881,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   const renderFactoryView = () => {
+    // Find items that match selected model objects
+    const selectedGuids = new Set(selectedObjects.map(obj => obj.guid).filter(Boolean));
+
     return (
       <div className="delivery-list factory-view" ref={listRef}>
         {Object.keys(itemsByFactory).length === 0 && !loading && (
@@ -6023,6 +6027,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           >
                             {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
+                              const isModelSelected = selectedGuids.has(item.guid);
                               const weightInfo = formatWeight(item.cast_unit_weight);
                               const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
                               const showDropBefore = dragOverVehicleId === vehicle.id && dragOverIndex === idx;
@@ -6032,7 +6037,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <div key={item.id} className="delivery-item-wrapper">
                                   {showDropBefore && <div className="drop-indicator" />}
                                   <div
-                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isBeingDragged ? 'dragging' : ''}`}
                                     draggable
                                     onDragStart={(e) => handleItemDragStart(e, item)}
                                     onDragEnd={handleDragEnd}
