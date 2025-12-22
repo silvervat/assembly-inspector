@@ -994,9 +994,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Link items with model - fetch real assembly marks from model
   const linkItemsWithModel = useCallback(async (itemsToLink?: DeliveryItem[]) => {
-    const targetItems = itemsToLink || items.filter(i =>
-      i.assembly_mark.startsWith('Import-') || i.assembly_mark.startsWith('Object_')
-    );
+    let targetItems: DeliveryItem[];
+
+    if (itemsToLink) {
+      targetItems = itemsToLink;
+    } else {
+      // Fetch fresh items from database to avoid stale state issues
+      const { data: freshItems } = await supabase
+        .from('trimble_delivery_items')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .or('assembly_mark.like.Import-%,assembly_mark.like.Object_%');
+
+      targetItems = (freshItems || []) as DeliveryItem[];
+    }
 
     if (targetItems.length === 0) {
       setMessage('Kõik detailid on juba mudeliga seotud');
@@ -1019,7 +1030,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       console.log('=== Link Items With Model ===');
       console.log('Total items to link:', targetItems.length);
-      console.log('Models available:', models.map(m => m.id));
+      console.log('Models available:', models.length, models.map(m => ({ id: m.id, name: (m as any).name })));
+
+      // Show first 3 items for debugging
+      console.log('First 3 items:', targetItems.slice(0, 3).map(i => ({
+        id: i.id,
+        assembly_mark: i.assembly_mark,
+        guid: i.guid,
+        guid_ifc: i.guid_ifc,
+        guid_ms: i.guid_ms
+      })));
 
       // Process items in batches
       for (const item of targetItems) {
@@ -1165,7 +1185,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage('Viga mudeliga sidumiseel: ' + e.message);
       return 0;
     }
-  }, [api, items, tcUserEmail, loadItems]);
+  }, [api, projectId, tcUserEmail, loadItems]);
 
   // Load project name
   useEffect(() => {
@@ -2995,18 +3015,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const vehicleInfo = createdVehicles.length > 0
           ? ` (loodud veokid: ${createdVehicles.join(', ')})`
           : '';
-        setMessage(`${totalImported} detaili imporditud${vehicleInfo}. Seon mudeliga...`);
         setShowImportModal(false);
         setImportText('');
         setParsedImportData([]);
 
-        // Auto-link with model after import
-        setTimeout(async () => {
-          const linked = await linkItemsWithModel();
-          if (linked > 0) {
-            setMessage(`${totalImported} detaili imporditud${vehicleInfo}, ${linked} seotud mudeliga`);
-          }
-        }, 500);
+        // Auto-link with model after import (fetches fresh items from DB)
+        setMessage(`${totalImported} detaili imporditud${vehicleInfo}. Seon mudeliga...`);
+        const linked = await linkItemsWithModel();
+        if (linked > 0) {
+          setMessage(`${totalImported} detaili imporditud${vehicleInfo}, ${linked} seotud mudeliga`);
+        } else {
+          setMessage(`${totalImported} detaili imporditud${vehicleInfo}`);
+        }
       } else {
         // SIMPLE IMPORT: All items to one new vehicle
         // Create vehicle for import
@@ -3024,7 +3044,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           trimble_project_id: projectId,
           vehicle_id: vehicle!.id,
           guid: guid,
-          guid_ifc: guid.length === 22 ? guid : '',
+          guid_ifc: guid.length === 22 ? guid : (guid.length === 36 ? msToIfcGuid(guid) : ''),
           guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
           assembly_mark: `Import-${idx + 1}`,
           scheduled_date: addModalDate,
@@ -3040,17 +3060,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         if (error) throw error;
 
         await Promise.all([loadItems(), loadVehicles()]);
-        setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}. Seon mudeliga...`);
         setShowImportModal(false);
         setImportText('');
 
-        // Auto-link with model after import
-        setTimeout(async () => {
-          const linked = await linkItemsWithModel();
-          if (linked > 0) {
-            setMessage(`${guids.length} detaili imporditud, ${linked} seotud mudeliga`);
-          }
-        }, 500);
+        // Auto-link with model after import (fetches fresh items from DB)
+        setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}. Seon mudeliga...`);
+        const linked = await linkItemsWithModel();
+        if (linked > 0) {
+          setMessage(`${guids.length} detaili imporditud, ${linked} seotud mudeliga`);
+        } else {
+          setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}`);
+        }
       }
     } catch (e: any) {
       console.error('Error importing:', e);
