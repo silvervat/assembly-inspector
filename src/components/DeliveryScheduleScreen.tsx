@@ -2422,6 +2422,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   if (excelDate) {
                     dateVal = `${excelDate.y}-${String(excelDate.m).padStart(2, '0')}-${String(excelDate.d).padStart(2, '0')}`;
                   }
+                } else if (typeof dateVal === 'string') {
+                  // Handle DD/MM/YYYY or DD.MM.YYYY text format
+                  const dateStr = dateVal.trim();
+                  const ddmmyyyyMatch = dateStr.match(/^(\d{1,2})[\/\.](\d{1,2})[\/\.](\d{4})$/);
+                  if (ddmmyyyyMatch) {
+                    const [, day, month, year] = ddmmyyyyMatch;
+                    dateVal = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                  }
                 }
 
                 parsedRows.push({
@@ -2556,22 +2564,99 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (hasDetailedData) {
         // DETAILED IMPORT: Group items by date + vehicleCode + factoryCode
+
+        // Helper function to extract factory code from vehicle code like "GDI-T7" -> "GDI-T"
+        const extractFactoryCode = (vehicleCode: string): string | null => {
+          if (!vehicleCode) return null;
+          // Match everything before the last number(s) at the end
+          // Examples: "GDI-T7" -> "GDI-T", "TRE-1" -> "TRE-", "ABC123" -> "ABC"
+          const match = vehicleCode.match(/^(.+?)\d+$/);
+          return match ? match[1] : null;
+        };
+
+        // Track factories we need to create
+        const factoriesToCreate = new Map<string, string>(); // code -> generated name
+
+        // First pass: identify all factory codes we need
+        for (const row of parsedImportData) {
+          let factoryCode = row.factoryCode;
+
+          // If no explicit factory code, try to extract from vehicle code
+          if (!factoryCode && row.vehicleCode) {
+            factoryCode = extractFactoryCode(row.vehicleCode) || undefined;
+          }
+
+          if (factoryCode) {
+            const exists = factories.some(f =>
+              f.factory_code.toLowerCase() === factoryCode!.toLowerCase()
+            );
+            if (!exists && !factoriesToCreate.has(factoryCode.toLowerCase())) {
+              // Generate factory name from code
+              const factoryName = `Tehas ${factoryCode}`;
+              factoriesToCreate.set(factoryCode.toLowerCase(), factoryCode);
+            }
+          }
+        }
+
+        // Create missing factories
+        const createdFactories: string[] = [];
+        for (const [, factoryCode] of factoriesToCreate) {
+          const factoryName = `Tehas ${factoryCode}`;
+          const { data: newFactory, error } = await supabase
+            .from('trimble_delivery_factories')
+            .insert({
+              trimble_project_id: projectId,
+              factory_name: factoryName,
+              factory_code: factoryCode,
+              vehicle_separator: ''  // No separator for codes like GDI-T7
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error('Error creating factory:', error);
+            setMessage(`Viga tehase "${factoryCode}" loomisel: ${error.message}`);
+            setImporting(false);
+            return;
+          }
+
+          createdFactories.push(factoryCode);
+        }
+
+        // Reload factories if we created new ones
+        if (createdFactories.length > 0) {
+          await loadFactories();
+          setMessage(`Loodud ${createdFactories.length} uut tehast: ${createdFactories.join(', ')}`);
+        }
+
+        // Get fresh factories list
+        const { data: currentFactories } = await supabase
+          .from('trimble_delivery_factories')
+          .select('*')
+          .eq('trimble_project_id', projectId);
+
+        const factoriesMap = new Map((currentFactories || []).map(f => [f.factory_code.toLowerCase(), f]));
+
         const groups = new Map<string, typeof parsedImportData>();
 
         for (const row of parsedImportData) {
-          // Use factory code from file, or fall back to selected factory
+          // Determine factory code
+          let factoryCode = row.factoryCode;
+          if (!factoryCode && row.vehicleCode) {
+            factoryCode = extractFactoryCode(row.vehicleCode) || undefined;
+          }
+
+          // Find factory ID
           let factoryId = importFactoryId;
-          if (row.factoryCode) {
-            const matchingFactory = factories.find(f =>
-              f.factory_code.toLowerCase() === row.factoryCode!.toLowerCase()
-            );
+          if (factoryCode) {
+            const matchingFactory = factoriesMap.get(factoryCode.toLowerCase());
             if (matchingFactory) {
               factoryId = matchingFactory.id;
             }
           }
 
           if (!factoryId) {
-            setMessage(`Tehast ei leitud koodiga "${row.factoryCode}". Vali tehas.`);
+            setMessage(`Tehast ei leitud. Vali tehas või lisa veoki kood faili.`);
             setImporting(false);
             return;
           }
@@ -6395,7 +6480,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   </div>
                   <div style={{ color: '#047857' }}>
                     {parsedImportData.length} rida kuupäevade ja veokitega.
-                    Kuupäev ja tehas võetakse failist.
+                    {parsedImportData.some(r => r.vehicleCode) && ' Tehas tuvastatakse veoki koodist automaatselt.'}
                   </div>
                 </div>
               )}
@@ -6416,8 +6501,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <div className="form-group">
                 <label>
                   Tehas
-                  {parsedImportData.length > 0 && parsedImportData.some(r => r.factoryCode) && (
-                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>(valikuline)</span>
+                  {parsedImportData.length > 0 && parsedImportData.some(r => r.factoryCode || r.vehicleCode) && (
+                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>(valikuline - tuvastatakse veoki koodist)</span>
                   )}
                 </label>
                 <select
@@ -6437,7 +6522,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!importText.trim() || (!(parsedImportData.length > 0 && parsedImportData.some(r => r.date || r.vehicleCode)) && !importFactoryId) || importing}
+                disabled={!importText.trim() || (!(parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode)) && !importFactoryId) || importing}
                 onClick={handleImport}
               >
                 {importing ? 'Importimisel...' : 'Impordi'}
