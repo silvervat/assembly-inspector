@@ -205,9 +205,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Item menu state (three-dot menu)
   const [itemMenuId, setItemMenuId] = useState<string | null>(null);
+  const [menuOpenUpward, setMenuOpenUpward] = useState(false);
 
   // Date menu state (three-dot menu for date groups)
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
+  const [dateMenuOpenUpward, setDateMenuOpenUpward] = useState(false);
 
   // Date right-click context menu (calendar picker to move all items)
   const [dateContextMenu, setDateContextMenu] = useState<{ x: number; y: number; sourceDate: string } | null>(null);
@@ -4836,14 +4838,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     </button>
                     <button
                       className={`date-menu-btn ${dateMenuId === date ? 'active' : ''}`}
-                      onClick={(e) => { e.stopPropagation(); setDateMenuId(dateMenuId === date ? null : date); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const spaceBelow = window.innerHeight - rect.bottom;
+                        setDateMenuOpenUpward(spaceBelow < 250);
+                        setDateMenuId(dateMenuId === date ? null : date);
+                      }}
                       title="Rohkem valikuid"
                     >
                       <FiMoreVertical size={14} />
                     </button>
                     {/* Date menu dropdown */}
                     {dateMenuId === date && (
-                      <div className="date-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                      <div className={`date-menu-dropdown ${dateMenuOpenUpward ? 'open-upward' : ''}`} onClick={(e) => e.stopPropagation()}>
                         <div className="date-menu-section-title">Markupid</div>
                         <button
                           className="date-menu-option"
@@ -4993,6 +5001,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                               className="item-menu-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const spaceBelow = window.innerHeight - rect.bottom;
+                                setMenuOpenUpward(spaceBelow < 180);
                                 setItemMenuId(itemMenuId === item.id ? null : item.id);
                                 setDatePickerItemId(null);
                               }}
@@ -5003,7 +5014,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                             {/* Item dropdown menu */}
                             {itemMenuId === item.id && (
-                              <div className="item-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                              <div className={`item-menu-dropdown ${menuOpenUpward ? 'open-upward' : ''}`} onClick={(e) => e.stopPropagation()}>
                                 <button
                                   className={`item-menu-option ${idx === 0 ? 'disabled' : ''}`}
                                   onClick={() => {
