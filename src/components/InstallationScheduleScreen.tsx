@@ -946,6 +946,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
   });
 
+  // Count of unscheduled objects for the quick-add button
+  const unscheduledCount = selectedObjects.filter(obj => {
+    const guid = obj.guid || '';
+    const guidIfc = obj.guidIfc || '';
+    return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
+  }).length;
+
   // Get days in current month for calendar
   const getDaysInMonth = () => {
     const year = currentMonth.getFullYear();
@@ -1152,6 +1159,76 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
     } catch (e: any) {
       console.error('Error adding to schedule:', e);
+      if (e.code === '23505') {
+        setMessage('Mõned detailid on juba graafikus!');
+      } else {
+        setMessage('Viga graafikusse lisamisel');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Add only unscheduled objects from selection to a specific date
+  // Used by the quick-add "+" button on date headers
+  const addUnscheduledToDate = async (date: string) => {
+    if (selectedObjects.length === 0) {
+      setMessage('Vali esmalt detailid mudelilt');
+      return;
+    }
+
+    // Filter to only unscheduled items
+    const existingGuids = new Set(scheduleItems.map(item => item.guid));
+    const existingIfcGuids = new Set(scheduleItems.map(item => item.guid_ifc).filter(Boolean));
+
+    const unscheduledObjects = selectedObjects.filter(obj => {
+      const guid = obj.guid || '';
+      const guidIfc = obj.guidIfc || '';
+      return !existingGuids.has(guid) && !existingIfcGuids.has(guidIfc);
+    });
+
+    if (unscheduledObjects.length === 0) {
+      setMessage('Kõik valitud detailid on juba graafikus');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const newItems = unscheduledObjects.map((obj, idx) => {
+        const guidMs = obj.guidIfc ? ifcToMsGuid(obj.guidIfc) : undefined;
+
+        return {
+          project_id: projectId,
+          model_id: obj.modelId,
+          guid: obj.guid || `runtime_${obj.runtimeId}`,
+          guid_ifc: obj.guidIfc,
+          guid_ms: guidMs || undefined,
+          object_runtime_id: obj.runtimeId,
+          assembly_mark: obj.assemblyMark,
+          product_name: obj.productName,
+          cast_unit_weight: obj.castUnitWeight,
+          cast_unit_position_code: obj.positionCode,
+          scheduled_date: date,
+          sort_order: (itemsByDate[date]?.length || 0) + idx,
+          status: 'planned',
+          install_methods: null,
+          created_by: tcUserEmail
+        };
+      });
+
+      const { error } = await supabase
+        .from('installation_schedule')
+        .insert(newItems);
+
+      if (error) throw error;
+
+      setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
+      loadSchedule();
+
+      // Clear selection
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+    } catch (e: any) {
+      console.error('Error adding unscheduled items:', e);
       if (e.code === '23505') {
         setMessage('Mõned detailid on juba graafikus!');
       } else {
@@ -4554,6 +4631,17 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <span className="date-label">{formatDateEstonian(date)}</span>
                     <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
+                    {/* Quick-add button - shows when unscheduled items are selected */}
+                    {unscheduledCount > 0 && (
+                      <button
+                        className="date-quick-add-btn"
+                        onClick={(e) => { e.stopPropagation(); addUnscheduledToDate(date); }}
+                        title={`Lisa ${unscheduledCount} valitud detaili sellele kuupäevale`}
+                      >
+                        <FiPlus size={12} />
+                        <span className="quick-add-count">{unscheduledCount}</span>
+                      </button>
+                    )}
                     <span className="date-stats-wrapper">
                       {stats && <span className="date-percentage">{stats.dailyPercentage}% | {stats.percentage}%</span>}
                       <div className="date-hover-btns">
