@@ -1434,9 +1434,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color item green in viewer
+  // Color item green in viewer using object_runtime_id from Supabase
   const colorItemGreen = async (item: ScheduleItem) => {
     try {
+      // Use object_runtime_id directly if available
+      if (item.model_id && item.object_runtime_id) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] },
+          { color: { r: 34, g: 197, b: 94, a: 255 } }
+        );
+        return;
+      }
+
+      // Fallback: use convertToObjectRuntimeIds
       const modelId = item.model_id;
       const guidIfc = item.guid_ifc || item.guid;
 
@@ -1662,108 +1672,134 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color all scheduled items with a specific color
+  // Color all non-schedule items with a specific color (fetches from Supabase)
   const colorAllItems = async (color: { r: number; g: number; b: number }) => {
     try {
-      for (const item of scheduleItems) {
-        const modelId = item.model_id;
-        const guidIfc = item.guid_ifc || item.guid;
-        if (!modelId || !guidIfc) continue;
+      setMessage('Värvin... Loen Supabasest...');
 
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
+      // Fetch ALL objects from Supabase with pagination
+      const PAGE_SIZE = 5000;
+      const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+      let lastId = -1;
 
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-          { color: { ...color, a: 255 } }
-        );
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .gt('object_runtime_id', lastId)
+          .order('object_runtime_id', { ascending: true })
+          .limit(PAGE_SIZE);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          setMessage('Viga Supabase lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        allModelObjects.push(...data);
+        lastId = data[data.length - 1].object_runtime_id;
+
+        setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
+
+        if (data.length < PAGE_SIZE) break;
       }
+
+      if (allModelObjects.length === 0) {
+        setMessage('Andmebaasis pole mudeli objekte! Kasuta Admin → "Saada andmebaasi"');
+        setTimeout(() => setMessage(null), 5000);
+        return;
+      }
+
+      // Get schedule item runtime IDs
+      const scheduleRuntimeIds = new Set(
+        scheduleItems.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
+      );
+
+      // Color non-schedule items with the given color
+      const byModel: Record<string, number[]> = {};
+      for (const obj of allModelObjects) {
+        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
+          if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
+          byModel[obj.model_id].push(obj.object_runtime_id);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+      let coloredCount = 0;
+      const total = Object.values(byModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { ...color, a: 255 } }
+          );
+          coloredCount += batch.length;
+          setMessage(`Värvin... ${coloredCount}/${total}`);
+        }
+      }
+
+      setMessage(`${total} detaili värvitud`);
+      setTimeout(() => setMessage(null), 2000);
     } catch (e) {
       console.error('Error coloring all items:', e);
+      setMessage('Viga värvimisel');
     }
   };
 
-  // Hide all scheduled items
+  // Hide all scheduled items using object_runtime_id from Supabase
   const hideAllItems = async () => {
     try {
-      // Get all loaded models once for fallback
-      const models = await api.viewer.getModels();
+      // Group items by model_id for batch processing
+      const byModel: Record<string, number[]> = {};
 
       for (const item of scheduleItems) {
-        const guidIfc = item.guid_ifc || item.guid;
-        if (!guidIfc) continue;
-
-        // Try with stored model_id first
-        if (item.model_id) {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
-          if (runtimeIds && runtimeIds.length > 0) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
-              { visible: false }
-            );
-            continue;
-          }
+        if (item.model_id && item.object_runtime_id) {
+          if (!byModel[item.model_id]) byModel[item.model_id] = [];
+          byModel[item.model_id].push(item.object_runtime_id);
         }
+      }
 
-        // Fallback: try all loaded models
-        if (models && models.length > 0) {
-          for (const model of models) {
-            try {
-              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-              if (runtimeIds && runtimeIds.length > 0) {
-                await api.viewer.setObjectState(
-                  { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
-                  { visible: false }
-                );
-                break; // Found and hidden, stop searching models
-              }
-            } catch {
-              // Try next model
-            }
-          }
-        }
+      // Hide items in batches by model
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { visible: false }
+        );
       }
     } catch (e) {
       console.error('Error hiding all items:', e);
     }
   };
 
-  // Show a specific item (make visible)
+  // Show a specific item (make visible) using object_runtime_id from Supabase
   const showItem = async (item: ScheduleItem) => {
     try {
+      // Use object_runtime_id directly if available (from Supabase)
+      if (item.model_id && item.object_runtime_id) {
+        const modelObjectIds = { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] };
+        // First reset visibility (clears blanket hide state from hideEntireModel)
+        await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
+        // Then explicitly set to visible
+        await api.viewer.setObjectState(modelObjectIds, { visible: true });
+        return;
+      }
+
+      // Fallback: use convertToObjectRuntimeIds if object_runtime_id not available
       const guidIfc = item.guid_ifc || item.guid;
       if (!guidIfc) return;
 
-      // If model_id is available, use it directly
       if (item.model_id) {
         const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
         if (runtimeIds && runtimeIds.length > 0) {
           const modelObjectIds = { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] };
-          // First reset visibility (clears blanket hide state from hideEntireModel)
           await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
-          // Then explicitly set to visible
           await api.viewer.setObjectState(modelObjectIds, { visible: true });
           return;
-        }
-      }
-
-      // Fallback: try all loaded models
-      const models = await api.viewer.getModels();
-      if (!models || models.length === 0) return;
-
-      for (const model of models) {
-        try {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-          if (runtimeIds && runtimeIds.length > 0) {
-            const modelObjectIds = { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] };
-            // First reset visibility (clears blanket hide state from hideEntireModel)
-            await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
-            // Then explicitly set to visible
-            await api.viewer.setObjectState(modelObjectIds, { visible: true });
-            return; // Found and shown, stop searching
-          }
-        } catch {
-          // Try next model
         }
       }
     } catch (e) {
@@ -1771,20 +1807,24 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color all items for a specific date
+  // Color all items for a specific date using object_runtime_id from Supabase
   const colorDateItems = async (date: string, color: { r: number; g: number; b: number }) => {
-    const items = itemsByDate[date];
-    if (!items) return;
+    const dateItems = itemsByDate[date];
+    if (!dateItems) return;
 
     try {
-      for (const item of items) {
-        const modelId = item.model_id;
-        const guidIfc = item.guid_ifc || item.guid;
-        if (!modelId || !guidIfc) continue;
+      // Group items by model for batch processing
+      const byModel: Record<string, number[]> = {};
 
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
+      for (const item of dateItems) {
+        if (item.model_id && item.object_runtime_id) {
+          if (!byModel[item.model_id]) byModel[item.model_id] = [];
+          byModel[item.model_id].push(item.object_runtime_id);
+        }
+      }
 
+      // Color items in batches by model
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
         await api.viewer.setObjectState(
           { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
           { color: { ...color, a: 255 } }
@@ -1962,21 +2002,23 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           }
         }
 
-        // Color all items of this day
+        // Color all items of this day using object_runtime_id
         if (playbackSettings.colorEachDayDifferent && playbackDateColors[currentDate]) {
           const dayColor = playbackDateColors[currentDate];
+          // Group items by model for batch processing
+          const byModel: Record<string, number[]> = {};
           for (const item of dateItems) {
-            const modelId = item.model_id;
-            const guidIfc = item.guid_ifc || item.guid;
-            if (modelId && guidIfc) {
-              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-              if (runtimeIds && runtimeIds.length > 0) {
-                await api.viewer.setObjectState(
-                  { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-                  { color: { ...dayColor, a: 255 } }
-                );
-              }
+            if (item.model_id && item.object_runtime_id) {
+              if (!byModel[item.model_id]) byModel[item.model_id] = [];
+              byModel[item.model_id].push(item.object_runtime_id);
             }
+          }
+          // Color items in batches by model
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { ...dayColor, a: 255 } }
+            );
           }
         } else {
           // Color all day items green
@@ -2079,16 +2121,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       // Option 3: Color items with their day's color
       if (playbackSettings.colorEachDayDifferent && playbackDateColors[item.scheduled_date]) {
         const dayColor = playbackDateColors[item.scheduled_date];
-        const modelId = item.model_id;
-        const guidIfc = item.guid_ifc || item.guid;
-        if (modelId && guidIfc) {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-          if (runtimeIds && runtimeIds.length > 0) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { ...dayColor, a: 255 } }
-            );
-          }
+        // Use object_runtime_id directly if available
+        if (item.model_id && item.object_runtime_id) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] },
+            { color: { ...dayColor, a: 255 } }
+          );
         }
       } else {
         // Default: color item green
