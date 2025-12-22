@@ -2204,6 +2204,60 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  const removeItemsFromVehicle = async () => {
+    if (selectedItemIds.size === 0) return;
+
+    setSaving(true);
+    try {
+      // Find items before removing to get model info for coloring
+      const itemsToRemove = items.filter(i => selectedItemIds.has(i.id));
+      const removeCount = selectedItemIds.size;
+
+      const { error } = await supabase
+        .from('trimble_delivery_items')
+        .update({
+          vehicle_id: null,
+          scheduled_date: null,
+          updated_by: tcUserEmail,
+          updated_at: new Date().toISOString()
+        })
+        .in('id', Array.from(selectedItemIds));
+
+      if (error) throw error;
+
+      // Color removed items white if color mode is active
+      if (colorMode !== 'none' && itemsToRemove.length > 0) {
+        try {
+          const byModel: Record<string, number[]> = {};
+          for (const item of itemsToRemove) {
+            if (item.model_id && item.object_runtime_id) {
+              if (!byModel[item.model_id]) byModel[item.model_id] = [];
+              byModel[item.model_id].push(item.object_runtime_id);
+            }
+          }
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: 255, g: 255, b: 255, a: 255 } }
+            );
+          }
+        } catch (colorError) {
+          console.error('Error coloring removed items white:', colorError);
+        }
+      }
+
+      await Promise.all([loadItems(), loadVehicles()]);
+      broadcastReload();
+      setSelectedItemIds(new Set());
+      setMessage(`${removeCount} detaili eemaldatud koormast`);
+    } catch (e: any) {
+      console.error('Error removing items from vehicle:', e);
+      setMessage('Viga eemaldamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const moveItemsToVehicle = async (targetVehicleId: string) => {
     if (selectedItemIds.size === 0) return;
 
@@ -6627,6 +6681,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <div className="selection-actions-row">
                   <button onClick={() => setShowMoveModal(true)}>
                     <FiMove /> Tõsta
+                  </button>
+                  <button onClick={removeItemsFromVehicle}>
+                    <FiPackage /> Eemalda koormast
                   </button>
                   <button className="danger" onClick={deleteSelectedItems}>
                     <FiTrash2 /> Kustuta

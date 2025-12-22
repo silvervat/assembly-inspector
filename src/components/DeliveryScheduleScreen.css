@@ -1528,14 +1528,14 @@
 
 .resource-hover-popup {
   position: absolute;
-  top: 100%;
-  left: 0;
-  margin-top: 4px;
+  top: calc(100% - 2px);
+  right: 0;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 8px;
+  padding-top: 10px;
   z-index: 1000;
   display: flex;
   gap: 6px;
