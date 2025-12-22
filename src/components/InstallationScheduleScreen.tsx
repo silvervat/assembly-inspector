@@ -4051,11 +4051,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const allScheduled = scheduledInfo.length === selectedObjects.length;
         const someScheduled = scheduledInfo.length > 0 && scheduledInfo.length < selectedObjects.length;
 
+        // Calculate total weight of selected objects
+        const totalWeight = selectedObjects.reduce((sum, obj) => {
+          const w = obj.castUnitWeight ? parseFloat(obj.castUnitWeight) : 0;
+          return sum + (isNaN(w) ? 0 : w);
+        }, 0);
+        const weightStr = totalWeight > 0 ? `${Math.round(totalWeight)} kg` : '';
+
         return (
           <div className="selection-info">
             {/* First row: selection count and status */}
             <div className="selection-info-row">
-              <span>Valitud mudelis: <strong>{selectedObjects.length}</strong></span>
+              <span>Valitud mudelis: <strong>{selectedObjects.length}</strong>{weightStr && <span className="selection-weight"> ({weightStr})</span>}</span>
               {allScheduled && (
                 <span
                   className="already-scheduled-info clickable"
