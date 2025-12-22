@@ -12,7 +12,7 @@ import {
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
-  FiEye, FiEyeOff
+  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -415,6 +415,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Add modal calendar
   const [addModalCalendarExpanded, setAddModalCalendarExpanded] = useState(false);
   const [addModalCalendarMonth, setAddModalCalendarMonth] = useState<Date>(new Date());
+  // Add modal items list
+  const [addModalExcludedItems, setAddModalExcludedItems] = useState<Set<number>>(new Set()); // runtimeIds to exclude
+  const [addModalItemsExpanded, setAddModalItemsExpanded] = useState(false);
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -1643,10 +1646,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ITEM OPERATIONS
   // ============================================
 
-  const addItemsToVehicle = async (vehicleId: string, date: string | null, comment?: string) => {
-    // Filter out objects that are already in the items list
+  const addItemsToVehicle = async (vehicleId: string, date: string | null, comment?: string, objectsOverride?: SelectedObject[]) => {
+    // Use provided objects or selectedObjects, and filter out those already in items
+    const sourceObjects = objectsOverride || selectedObjects;
     const existingGuids = new Set(items.map(item => item.guid));
-    const objectsToAdd = selectedObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+    const objectsToAdd = sourceObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
 
     if (objectsToAdd.length === 0) {
       setMessage('Kõik valitud detailid on juba graafikus');
@@ -4973,9 +4977,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             )}
           </div>
-          <button onClick={loadAllData}>
-            <FiRefreshCw />
-          </button>
         </div>
       </div>
 
@@ -5570,21 +5571,84 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   rows={2}
                 />
               </div>
-              <div className="selected-objects-preview">
-                <h4>Lisatavad detailid ({selectedObjects.length})</h4>
-                <div className="objects-list">
-                  {selectedObjects.slice(0, 5).map((obj, idx) => (
-                    <div key={idx} className="object-preview">
-                      {obj.assemblyMark}
+              {(() => {
+                const filteredObjects = selectedObjects.filter(obj => !addModalExcludedItems.has(obj.runtimeId));
+                const totalWeight = filteredObjects.reduce((sum, obj) => sum + (parseFloat(obj.castUnitWeight || '0') || 0), 0);
+                const isOverweight = totalWeight > 24000;
+
+                return (
+                  <div className="selected-objects-preview">
+                    <div className="preview-header" onClick={() => setAddModalItemsExpanded(!addModalItemsExpanded)}>
+                      <h4>
+                        Lisatavad detailid ({filteredObjects.length})
+                        {selectedObjects.length !== filteredObjects.length && (
+                          <span className="excluded-count"> (eemaldatud: {selectedObjects.length - filteredObjects.length})</span>
+                        )}
+                      </h4>
+                      <div className="preview-weight">
+                        {isOverweight && <FiAlertTriangle className="weight-warning" />}
+                        <span className={isOverweight ? 'overweight' : ''}>{Math.round(totalWeight)} kg</span>
+                      </div>
+                      <span className="expand-icon">{addModalItemsExpanded ? <FiChevronUp /> : <FiChevronDown />}</span>
                     </div>
-                  ))}
-                  {selectedObjects.length > 5 && (
-                    <div className="object-preview more">
-                      ... ja veel {selectedObjects.length - 5}
-                    </div>
-                  )}
-                </div>
-              </div>
+                    {!addModalItemsExpanded ? (
+                      <div className="objects-list collapsed">
+                        {filteredObjects.slice(0, 5).map((obj, idx) => (
+                          <div key={idx} className="object-preview">
+                            {obj.assemblyMark}
+                          </div>
+                        ))}
+                        {filteredObjects.length > 5 && (
+                          <div className="object-preview more">
+                            ... ja veel {filteredObjects.length - 5}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="objects-list expanded">
+                        {filteredObjects.map((obj, idx) => (
+                          <div key={idx} className="object-preview-row">
+                            <span className="obj-mark">{obj.assemblyMark}</span>
+                            <span className="obj-product">{obj.productName || '-'}</span>
+                            <span className="obj-weight">{obj.castUnitWeight ? `${Math.round(parseFloat(obj.castUnitWeight))} kg` : '-'}</span>
+                            <div className="obj-actions">
+                              <button
+                                type="button"
+                                className="zoom-btn"
+                                title="Zoomi detailini"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  try {
+                                    await api.viewer.setSelection({
+                                      modelObjectIds: [{ modelId: obj.modelId, objectRuntimeIds: [obj.runtimeId] }]
+                                    }, 'set');
+                                    await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+                                  } catch (err) {
+                                    console.error('Error zooming to item:', err);
+                                  }
+                                }}
+                              >
+                                <FiZoomIn size={14} />
+                              </button>
+                              <button
+                                type="button"
+                                className="remove-btn"
+                                title="Eemalda listist"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAddModalExcludedItems(prev => new Set([...prev, obj.runtimeId]));
+                                }}
+                              >
+                                <FiX size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => {
@@ -5593,6 +5657,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 setAddModalStartTime('');
                 setAddModalDuration(60);
                 setAddModalUnloadMethods({});
+                setAddModalExcludedItems(new Set());
+                setAddModalItemsExpanded(false);
               }}>
                 Tühista
               </button>
@@ -5673,11 +5739,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return;
                   }
 
-                  await addItemsToVehicle(vehicleId, addModalDate, addModalComment);
+                  // Filter out excluded items
+                  const filteredObjects = selectedObjects.filter(obj => !addModalExcludedItems.has(obj.runtimeId));
+                  await addItemsToVehicle(vehicleId, addModalDate, addModalComment, filteredObjects);
                   setAddModalCustomCode('');
                   setAddModalStartTime('');
                   setAddModalDuration(60);
                   setAddModalUnloadMethods({});
+                  setAddModalExcludedItems(new Set());
+                  setAddModalItemsExpanded(false);
                 }}
               >
                 {saving ? 'Lisan...' : 'Lisa'}
