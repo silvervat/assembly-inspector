@@ -1054,13 +1054,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Lookup GUIDs in trimble_model_objects table (in batches to avoid URL length limit)
       const BATCH_SIZE = 100;
-      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; cast_unit_weight: string | null; model_id: string | null; object_runtime_id: string | null }>();
+      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; model_id: string | null; object_runtime_id: string | null }>();
 
       for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
         const batch = allGuids.slice(i, i + BATCH_SIZE);
         const { data: batchObjects, error: lookupError } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, model_id, object_runtime_id')
+          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .in('guid_ifc', batch);
 
@@ -1096,7 +1096,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           };
 
           if (modelObj.product_name) updates.product_name = modelObj.product_name;
-          if (modelObj.cast_unit_weight) updates.cast_unit_weight = modelObj.cast_unit_weight;
           if (modelObj.model_id) updates.model_id = modelObj.model_id;
           if (modelObj.object_runtime_id) updates.object_runtime_id = modelObj.object_runtime_id;
 
@@ -2892,7 +2891,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         guid_ifc: string;
         assembly_mark: string;
         product_name: string | null;
-        cast_unit_weight: string | null;
         model_id: string | null;
         object_runtime_id: number | null;
       }>();
@@ -2901,7 +2899,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const batch = ifcGuidsToLookup.slice(i, i + BATCH_SIZE);
         const { data: batchObjects, error: lookupError } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, model_id, object_runtime_id')
+          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .in('guid_ifc', batch);
 
@@ -3115,7 +3113,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
               assembly_mark: modelObj?.assembly_mark || `Import-${totalImported + idx + 1}`,
               product_name: modelObj?.product_name || null,
-              cast_unit_weight: modelObj?.cast_unit_weight || null,
               model_id: modelObj?.model_id || null,
               object_runtime_id: modelObj?.object_runtime_id || null,
               scheduled_date: scheduledDate,
@@ -3174,7 +3171,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
             assembly_mark: modelObj?.assembly_mark || `Import-${idx + 1}`,
             product_name: modelObj?.product_name || null,
-            cast_unit_weight: modelObj?.cast_unit_weight || null,
             model_id: modelObj?.model_id || null,
             object_runtime_id: modelObj?.object_runtime_id || null,
             scheduled_date: addModalDate,
