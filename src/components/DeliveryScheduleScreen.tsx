@@ -3226,6 +3226,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Set current playback date (for UI highlighting)
         setCurrentPlaybackDate(date);
 
+        // Change calendar month to show this date (if not MÄÄRAMATA)
+        if (date !== UNASSIGNED_DATE) {
+          const playbackDateObj = new Date(date);
+          setCurrentMonth(new Date(playbackDateObj.getFullYear(), playbackDateObj.getMonth(), 1));
+        }
+
         // Mark date as colored
         setPlaybackColoredDates(prev => new Set([...prev, date]));
 
@@ -3301,6 +3307,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         setCurrentPlaybackVehicleId(vehicle.id);
         setPlaybackColoredVehicles(prev => new Set([...prev, vehicle.id]));
+
+        // Change calendar month to show this vehicle's date
+        if (vehicle.scheduled_date) {
+          const vehicleDateObj = new Date(vehicle.scheduled_date);
+          setCurrentMonth(new Date(vehicleDateObj.getFullYear(), vehicleDateObj.getMonth(), 1));
+        }
 
         // Scroll vehicle into view
         setTimeout(() => {
