@@ -7,7 +7,7 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare
+  FiMessageSquare, FiAlertTriangle
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -218,6 +218,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
 
+  // Delivery dates by guid (for warning about late/missing delivery)
+  const [deliveryDatesByGuid, setDeliveryDatesByGuid] = useState<Record<string, string>>({});
+
   // Installation methods for new items (multiple methods with counts)
   const [selectedInstallMethods, setSelectedInstallMethods] = useState<InstallMethods>({});
   const [methodDefaults, setMethodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
@@ -423,6 +426,34 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   useEffect(() => {
     loadSchedule();
   }, [loadSchedule]);
+
+  // Load delivery dates for all items (to check if delivery is before installation)
+  const loadDeliveryDates = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, guid_ms, scheduled_date')
+        .eq('trimble_project_id', projectId);
+
+      if (error) throw error;
+
+      // Create lookup map by guid and guid_ms
+      const datesByGuid: Record<string, string> = {};
+      for (const item of (data || [])) {
+        if (item.scheduled_date) {
+          if (item.guid) datesByGuid[item.guid.toLowerCase()] = item.scheduled_date;
+          if (item.guid_ms) datesByGuid[item.guid_ms.toLowerCase()] = item.scheduled_date;
+        }
+      }
+      setDeliveryDatesByGuid(datesByGuid);
+    } catch (e) {
+      console.error('Error loading delivery dates:', e);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    loadDeliveryDates();
+  }, [loadDeliveryDates]);
 
   // Load comments
   const loadComments = useCallback(async () => {
@@ -2573,6 +2604,25 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return methods[methodKey] || 0;
   };
 
+  // Get delivery warning for item - returns warning message if delivery is late or missing
+  const getDeliveryWarning = (item: ScheduleItem): string | null => {
+    const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
+    if (!itemGuid) return null;
+
+    const deliveryDate = deliveryDatesByGuid[itemGuid];
+
+    if (!deliveryDate) {
+      return 'Tarne puudub! Detaili pole tarnegraafikus.';
+    }
+
+    // Compare dates: if delivery is AFTER installation, show warning
+    if (deliveryDate > item.scheduled_date) {
+      return `Hiline tarne! Tarne: ${deliveryDate}, Paigaldus: ${item.scheduled_date}`;
+    }
+
+    return null;
+  };
+
   // Column width mapping - include new method columns
   const columnWidths: Record<string, number> = {
     nr: 5, date: 12, day: 12, mark: 20, position: 15,
@@ -4122,6 +4172,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                               </div>
                               {item.product_name && <span className="item-product">{item.product_name}</span>}
                             </div>
+                            {/* Delivery warning icon */}
+                            {(() => {
+                              const warning = getDeliveryWarning(item);
+                              if (!warning) return null;
+                              return (
+                                <div
+                                  className="delivery-warning-icon"
+                                  title={warning}
+                                >
+                                  <FiAlertTriangle size={14} />
+                                </div>
+                              );
+                            })()}
                             {/* Display all install methods with badges */}
                             {(() => {
                               // Get methods - support both legacy and new format

@@ -1596,6 +1596,21 @@
   cursor: pointer;
 }
 
+/* Delivery warning icon */
+.delivery-warning-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #f59e0b;
+  cursor: help;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.delivery-warning-icon:hover {
+  color: #d97706;
+}
+
 /* Item methods display - shows all methods with badges */
 .item-methods-display {
   display: flex;
