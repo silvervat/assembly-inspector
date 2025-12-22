@@ -186,7 +186,9 @@
 
 .delivery-toolbar .action-buttons {
   display: flex;
+  align-items: center;
   gap: 6px;
+  flex-wrap: nowrap;
 }
 
 .delivery-toolbar button {
@@ -201,6 +203,7 @@
   font-size: 13px;
   color: #374151;
   transition: all 0.15s;
+  min-height: 36px;
 }
 
 .delivery-toolbar button:hover {
@@ -1261,7 +1264,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 8px 12px;
+  padding: 5px 4px;
   cursor: grab;
   transition: background 0.15s;
   position: relative;
@@ -1343,8 +1346,8 @@
   flex-shrink: 0;
   border-radius: 6px;
   transition: background 0.15s;
-  width: 36px;
-  height: 36px;
+  width: 24px;
+  height: 24px;
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color {

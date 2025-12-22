@@ -4973,9 +4973,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             )}
           </div>
-          <button onClick={loadAllData}>
-            <FiRefreshCw />
-          </button>
         </div>
       </div>
 
