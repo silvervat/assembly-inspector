@@ -546,6 +546,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
   const [menuFlipUp, setMenuFlipUp] = useState(false);
   const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
+  const [quickHoveredMethod, setQuickHoveredMethod] = useState<string | null>(null); // For hover on method in quick assign
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -5456,7 +5457,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       <div
                                         className="resource-quick-assign"
                                         onMouseEnter={() => setResourceHoverId(vehicleId)}
-                                        onMouseLeave={() => setResourceHoverId(null)}
+                                        onMouseLeave={() => {
+                                          setResourceHoverId(null);
+                                          setQuickHoveredMethod(null);
+                                        }}
                                       >
                                         <button className="assign-resource-btn">
                                           <FiSettings size={12} /> Ressurss
@@ -5465,61 +5469,68 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                           <div className="resource-hover-popup" onClick={(e) => e.stopPropagation()}>
                                             {UNLOAD_METHODS.map(method => {
                                               const currentCount = vehicle.unload_methods?.[method.key] || 0;
+                                              const isActive = currentCount > 0;
+                                              const isHovered = quickHoveredMethod === method.key;
                                               return (
-                                                <div key={method.key} className="resource-hover-item">
-                                                  <div
-                                                    className={`resource-icon-btn ${currentCount > 0 ? 'active' : ''}`}
-                                                    style={{ backgroundColor: currentCount > 0 ? method.activeBgColor : method.bgColor }}
+                                                <div
+                                                  key={method.key}
+                                                  className="resource-hover-item"
+                                                  onMouseEnter={() => setQuickHoveredMethod(method.key)}
+                                                  onMouseLeave={() => setQuickHoveredMethod(null)}
+                                                >
+                                                  <button
+                                                    className={`resource-icon-btn ${isActive ? 'active' : ''}`}
+                                                    style={{ backgroundColor: isActive ? method.activeBgColor : method.bgColor }}
                                                     title={method.label}
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      const newMethods = { ...vehicle.unload_methods };
+                                                      if (isActive) {
+                                                        delete newMethods[method.key];
+                                                      } else {
+                                                        newMethods[method.key] = method.defaultCount;
+                                                      }
+                                                      setVehicles(prev => prev.map(v =>
+                                                        v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                      ));
+                                                      await supabase
+                                                        .from('trimble_delivery_vehicles')
+                                                        .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
+                                                        .eq('id', vehicle.id);
+                                                      broadcastReload();
+                                                    }}
                                                   >
                                                     <img
                                                       src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
                                                       alt={method.label}
-                                                      style={{ filter: currentCount > 0 ? 'brightness(0) invert(1)' : method.filterCss }}
+                                                      style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
                                                     />
-                                                  </div>
-                                                  <div className="resource-count-controls">
-                                                    <button
-                                                      className="count-btn minus"
-                                                      disabled={currentCount === 0}
-                                                      onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        if (currentCount > 0) {
-                                                          const newCount = currentCount - 1;
-                                                          const newMethods = { ...vehicle.unload_methods, [method.key]: newCount };
-                                                          if (newCount === 0) delete newMethods[method.key];
-                                                          setVehicles(prev => prev.map(v =>
-                                                            v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
-                                                          ));
-                                                          await supabase
-                                                            .from('trimble_delivery_vehicles')
-                                                            .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
-                                                            .eq('id', vehicle.id);
-                                                          broadcastReload();
-                                                        }
-                                                      }}
-                                                    >−</button>
-                                                    <span className="count-value">{currentCount}</span>
-                                                    <button
-                                                      className="count-btn plus"
-                                                      disabled={currentCount >= method.maxCount}
-                                                      onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        if (currentCount < method.maxCount) {
-                                                          const newCount = currentCount + 1;
-                                                          const newMethods = { ...vehicle.unload_methods, [method.key]: newCount };
-                                                          setVehicles(prev => prev.map(v =>
-                                                            v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
-                                                          ));
-                                                          await supabase
-                                                            .from('trimble_delivery_vehicles')
-                                                            .update({ unload_methods: newMethods })
-                                                            .eq('id', vehicle.id);
-                                                          broadcastReload();
-                                                        }
-                                                      }}
-                                                    >+</button>
-                                                  </div>
+                                                    {isActive && <span className="method-badge">{currentCount}</span>}
+                                                  </button>
+                                                  {isHovered && isActive && method.maxCount > 1 && (
+                                                    <div className="method-qty-dropdown quick">
+                                                      {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                                                        <button
+                                                          key={num}
+                                                          className={`qty-btn ${currentCount === num ? 'active' : ''}`}
+                                                          onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const newMethods = { ...vehicle.unload_methods, [method.key]: num };
+                                                            setVehicles(prev => prev.map(v =>
+                                                              v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                            ));
+                                                            await supabase
+                                                              .from('trimble_delivery_vehicles')
+                                                              .update({ unload_methods: newMethods })
+                                                              .eq('id', vehicle.id);
+                                                            broadcastReload();
+                                                          }}
+                                                        >
+                                                          {num}
+                                                        </button>
+                                                      ))}
+                                                    </div>
+                                                  )}
                                                 </div>
                                               );
                                             })}
