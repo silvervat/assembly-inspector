@@ -4897,7 +4897,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {showDropBefore && <div className="drop-indicator" />}
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
-                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${!isPlaying && activeItemId === item.id ? 'active' : ''} ${!isPlaying && isItemSelected ? 'multi-selected' : ''} ${!isPlaying && isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
