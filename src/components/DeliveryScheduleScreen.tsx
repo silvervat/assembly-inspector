@@ -244,9 +244,8 @@ const formatDuration = (minutes: number | null | undefined): string => {
   if (!minutes) return '';
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  if (hours === 0) return `0h ${mins}min`;
-  if (mins === 0) return `${hours}h`;
-  return `${hours}h ${mins}min`;
+  // Always show both hours and minutes
+  return `${hours}h ${mins.toString().padStart(2, '0')}min`;
 };
 
 // Get day name only
@@ -546,6 +545,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
   const [menuFlipUp, setMenuFlipUp] = useState(false);
+  const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
+  const [quickHoveredMethod, setQuickHoveredMethod] = useState<string | null>(null); // For hover on method in quick assign
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -4341,10 +4342,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   // Generate colors using golden ratio for good distribution
-  const generateColorsForKeys = (keys: string[]): Record<string, { r: number; g: number; b: number }> => {
+  const generateColorsForKeys = (keys: string[], startIndex: number = 0): Record<string, { r: number; g: number; b: number }> => {
     const colors: Record<string, { r: number; g: number; b: number }> = {};
     const goldenRatio = 0.618033988749895;
-    let hue = 0;
+    // Start hue based on startIndex to continue the sequence
+    let hue = (goldenRatio * startIndex) % 1;
 
     keys.forEach(key => {
       hue = (hue + goldenRatio) % 1;
@@ -4559,11 +4561,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         color = dateColors[targetDate];
       }
 
-      // If no color found in existing colors, generate one
+      // If no color found in existing colors, generate one continuing the sequence
       if (!color) {
         const key = colorMode === 'vehicle' ? targetVehicleId : targetDate;
         if (key) {
-          const newColors = generateColorsForKeys([key]);
+          // Get count of existing colors to continue the hue sequence
+          const existingColorCount = colorMode === 'vehicle'
+            ? Object.keys(vehicleColors).length
+            : Object.keys(dateColors).length;
+          const newColors = generateColorsForKeys([key], existingColorCount);
           color = newColors[key];
           // Update the colors state
           if (colorMode === 'vehicle') {
@@ -5430,21 +5436,116 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <div className="vehicle-actions-row">
                               {/* Unload methods section */}
                               <div className="vehicle-resources-section">
-                                {UNLOAD_METHODS.map(method => {
-                                  const count = vehicle?.unload_methods?.[method.key];
-                                  if (!count) return null;
-                                  return (
-                                    <div
-                                      key={method.key}
-                                      className="vehicle-method-badge"
-                                      style={{ backgroundColor: method.activeBgColor }}
-                                      title={`${method.label}: ${count}`}
-                                    >
-                                      <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
-                                      <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
-                                    </div>
-                                  );
-                                })}
+                                {(() => {
+                                  const hasResources = vehicle && UNLOAD_METHODS.some(m => vehicle.unload_methods?.[m.key]);
+
+                                  if (hasResources) {
+                                    // Show existing resources
+                                    return UNLOAD_METHODS.map(method => {
+                                      const count = vehicle?.unload_methods?.[method.key];
+                                      if (!count) return null;
+                                      return (
+                                        <div
+                                          key={method.key}
+                                          className="vehicle-method-badge"
+                                          style={{ backgroundColor: method.activeBgColor }}
+                                          title={`${method.label}: ${count}`}
+                                        >
+                                          <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
+                                          <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
+                                        </div>
+                                      );
+                                    });
+                                  } else if (vehicle) {
+                                    // Show "Määra ressurss" button with hover popup
+                                    return (
+                                      <div
+                                        className="resource-quick-assign"
+                                        onMouseEnter={() => setResourceHoverId(vehicleId)}
+                                        onMouseLeave={() => {
+                                          setResourceHoverId(null);
+                                          setQuickHoveredMethod(null);
+                                        }}
+                                      >
+                                        <button className="assign-resource-btn">
+                                          <FiSettings size={12} /> Ressurss
+                                        </button>
+                                        {resourceHoverId === vehicleId && (
+                                          <div className="resource-hover-popup" onClick={(e) => e.stopPropagation()}>
+                                            {UNLOAD_METHODS.map(method => {
+                                              const currentCount = vehicle.unload_methods?.[method.key] || 0;
+                                              const isActive = currentCount > 0;
+                                              const isHovered = quickHoveredMethod === method.key;
+                                              return (
+                                                <div
+                                                  key={method.key}
+                                                  className="resource-hover-item"
+                                                  onMouseEnter={() => setQuickHoveredMethod(method.key)}
+                                                  onMouseLeave={() => setQuickHoveredMethod(null)}
+                                                >
+                                                  <button
+                                                    className={`resource-icon-btn ${isActive ? 'active' : ''}`}
+                                                    style={{ backgroundColor: isActive ? method.activeBgColor : method.bgColor }}
+                                                    title={method.label}
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      const newMethods = { ...vehicle.unload_methods };
+                                                      if (isActive) {
+                                                        delete newMethods[method.key];
+                                                      } else {
+                                                        newMethods[method.key] = method.defaultCount;
+                                                      }
+                                                      setVehicles(prev => prev.map(v =>
+                                                        v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                      ));
+                                                      await supabase
+                                                        .from('trimble_delivery_vehicles')
+                                                        .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
+                                                        .eq('id', vehicle.id);
+                                                      broadcastReload();
+                                                    }}
+                                                  >
+                                                    <img
+                                                      src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                                                      alt={method.label}
+                                                      style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                                                    />
+                                                    {isActive && <span className="method-badge">{currentCount}</span>}
+                                                  </button>
+                                                  {isHovered && isActive && method.maxCount > 1 && (
+                                                    <div className="method-qty-dropdown quick">
+                                                      {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                                                        <button
+                                                          key={num}
+                                                          className={`qty-btn ${currentCount === num ? 'active' : ''}`}
+                                                          onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const newMethods = { ...vehicle.unload_methods, [method.key]: num };
+                                                            setVehicles(prev => prev.map(v =>
+                                                              v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                            ));
+                                                            await supabase
+                                                              .from('trimble_delivery_vehicles')
+                                                              .update({ unload_methods: newMethods })
+                                                              .eq('id', vehicle.id);
+                                                            broadcastReload();
+                                                          }}
+                                                        >
+                                                          {num}
+                                                        </button>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
 
                               <button
@@ -5591,6 +5692,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             )}
                             {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
+                              const isModelSelected = selectedGuids.has(item.guid);
                               const isActive = activeItemId === item.id;
                               const weightInfo = formatWeight(item.cast_unit_weight);
                               const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
@@ -5601,7 +5703,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <div key={item.id} className="delivery-item-wrapper">
                                   {showDropBefore && <div className="drop-indicator" />}
                                   <div
-                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                                     draggable={!!vehicle}
                                     onDragStart={(e) => vehicle && handleItemDragStart(e, item)}
                                     onDragEnd={handleDragEnd}
@@ -5779,6 +5881,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   const renderFactoryView = () => {
+    // Find items that match selected model objects
+    const selectedGuids = new Set(selectedObjects.map(obj => obj.guid).filter(Boolean));
+
     return (
       <div className="delivery-list factory-view" ref={listRef}>
         {Object.keys(itemsByFactory).length === 0 && !loading && (
@@ -5922,6 +6027,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           >
                             {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
+                              const isModelSelected = selectedGuids.has(item.guid);
                               const weightInfo = formatWeight(item.cast_unit_weight);
                               const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
                               const showDropBefore = dragOverVehicleId === vehicle.id && dragOverIndex === idx;
@@ -5931,7 +6037,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <div key={item.id} className="delivery-item-wrapper">
                                   {showDropBefore && <div className="drop-indicator" />}
                                   <div
-                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                                    className={`delivery-item ${isSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isBeingDragged ? 'dragging' : ''}`}
                                     draggable
                                     onDragStart={(e) => handleItemDragStart(e, item)}
                                     onDragEnd={handleDragEnd}
