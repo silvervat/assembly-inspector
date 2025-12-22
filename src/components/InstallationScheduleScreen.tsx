@@ -213,6 +213,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Date right-click context menu (calendar picker to move all items)
   const [dateContextMenu, setDateContextMenu] = useState<{ x: number; y: number; sourceDate: string } | null>(null);
+  const [contextMenuMonth, setContextMenuMonth] = useState(new Date());
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -992,10 +993,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
   }).length;
 
-  // Get days in current month for calendar
-  const getDaysInMonth = () => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
+  // Get days in a month for calendar (can be used for main calendar or context menu)
+  const getDaysForMonth = (monthDate: Date) => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const days: Date[] = [];
@@ -1016,6 +1017,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     return days;
   };
+
+  // Get days in current month for main calendar
+  const getDaysInMonth = () => getDaysForMonth(currentMonth);
 
   const formatDateKey = (date: Date) => {
     // Use local date components to avoid timezone issues
@@ -4790,6 +4794,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       onContextMenu={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        const [y, m] = date.split('-').map(Number);
+                        setContextMenuMonth(new Date(y, m - 1, 1));
                         setDateContextMenu({ x: e.clientX, y: e.clientY, sourceDate: date });
                       }}
                       title="Paremklõps: muuda kuupäeva"
@@ -5140,25 +5146,48 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           onClick={(e) => e.stopPropagation()}
         >
           <div className="date-context-header">
-            Liiguta kõik detailid kuupäevale:
+            <button
+              className="context-month-nav"
+              onClick={() => setContextMenuMonth(new Date(contextMenuMonth.getFullYear(), contextMenuMonth.getMonth() - 1, 1))}
+            >
+              <FiChevronLeft size={14} />
+            </button>
+            <span className="context-month-label">
+              {contextMenuMonth.toLocaleDateString('et-EE', { month: 'long', year: 'numeric' })}
+            </span>
+            <button
+              className="context-month-nav"
+              onClick={() => setContextMenuMonth(new Date(contextMenuMonth.getFullYear(), contextMenuMonth.getMonth() + 1, 1))}
+            >
+              <FiChevronRight size={14} />
+            </button>
           </div>
-          <div className="date-context-list">
-            {Object.keys(itemsByDate)
-              .sort()
-              .filter(d => d !== dateContextMenu.sourceDate)
-              .map(d => {
-                const count = itemsByDate[d]?.length || 0;
-                return (
-                  <div
-                    key={d}
-                    className="date-context-item"
-                    onClick={() => moveAllItemsToDate(dateContextMenu.sourceDate, d)}
-                  >
-                    <span className="date-context-date">{formatDateShort(d)}</span>
-                    <span className="date-context-badge">{count}</span>
-                  </div>
-                );
-              })}
+          <div className="context-calendar-grid">
+            {['E', 'T', 'K', 'N', 'R', 'L', 'P'].map(day => (
+              <div key={day} className="context-day-name">{day}</div>
+            ))}
+            {getDaysForMonth(contextMenuMonth).map((calDate, idx) => {
+              const dateKey = formatDateKey(calDate);
+              const isCurrentMonth = calDate.getMonth() === contextMenuMonth.getMonth();
+              const isSource = dateKey === dateContextMenu.sourceDate;
+              const itemCount = itemsByDate[dateKey]?.length || 0;
+              const isToday = dateKey === today;
+
+              return (
+                <div
+                  key={idx}
+                  className={`context-calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isSource ? 'source' : ''} ${isToday ? 'today' : ''}`}
+                  onClick={() => {
+                    if (!isSource) {
+                      moveAllItemsToDate(dateContextMenu.sourceDate, dateKey);
+                    }
+                  }}
+                >
+                  <span className="context-day-number">{calDate.getDate()}</span>
+                  {itemCount > 0 && <span className="context-day-badge">{itemCount}</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
