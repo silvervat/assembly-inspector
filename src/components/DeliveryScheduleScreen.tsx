@@ -4342,10 +4342,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   // Generate colors using golden ratio for good distribution
-  const generateColorsForKeys = (keys: string[]): Record<string, { r: number; g: number; b: number }> => {
+  const generateColorsForKeys = (keys: string[], startIndex: number = 0): Record<string, { r: number; g: number; b: number }> => {
     const colors: Record<string, { r: number; g: number; b: number }> = {};
     const goldenRatio = 0.618033988749895;
-    let hue = 0;
+    // Start hue based on startIndex to continue the sequence
+    let hue = (goldenRatio * startIndex) % 1;
 
     keys.forEach(key => {
       hue = (hue + goldenRatio) % 1;
@@ -4560,11 +4561,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         color = dateColors[targetDate];
       }
 
-      // If no color found in existing colors, generate one
+      // If no color found in existing colors, generate one continuing the sequence
       if (!color) {
         const key = colorMode === 'vehicle' ? targetVehicleId : targetDate;
         if (key) {
-          const newColors = generateColorsForKeys([key]);
+          // Get count of existing colors to continue the hue sequence
+          const existingColorCount = colorMode === 'vehicle'
+            ? Object.keys(vehicleColors).length
+            : Object.keys(dateColors).length;
+          const newColors = generateColorsForKeys([key], existingColorCount);
           color = newColors[key];
           // Update the colors state
           if (colorMode === 'vehicle') {
