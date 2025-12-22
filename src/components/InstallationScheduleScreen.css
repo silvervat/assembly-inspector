@@ -579,7 +579,9 @@
 }
 
 /* Allow dropdown menu to overflow when open */
-.date-group:has(.menu-open) {
+.date-group:has(.menu-open),
+.date-group:has(.date-menu-btn.active),
+.date-group:has(.item-menu-dropdown) {
   overflow: visible;
   z-index: 1002;
 }
@@ -602,13 +604,14 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--modus-bg-secondary);
-  border-bottom: 1px solid var(--modus-border);
+  gap: 5px;
+  padding: 10px 16px;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e5e7eb;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  position: relative;
 }
 
 .date-header:hover {

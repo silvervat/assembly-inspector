@@ -41,6 +41,7 @@ const PLAYBACK_SPEEDS = [
 
 // Estonian weekday names
 const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
+const WEEKDAY_NAMES_SHORT = ['Püh', 'Esm', 'Tei', 'Kol', 'Nel', 'Ree', 'Lau'];
 
 // Convert IFC GUID to MS GUID (UUID format)
 const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -74,6 +75,17 @@ const formatDateEstonian = (dateStr: string): string => {
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
   const weekday = WEEKDAY_NAMES[date.getDay()];
+  return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
+};
+
+// Format date with short weekday (3 chars) for date headers
+const formatDateShort = (dateStr: string): string => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayStr = String(day).padStart(2, '0');
+  const monthStr = String(month).padStart(2, '0');
+  const yearStr = String(year).slice(-2);
+  const weekday = WEEKDAY_NAMES_SHORT[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
@@ -328,6 +340,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [commentModalTarget, setCommentModalTarget] = useState<{ type: 'item' | 'date'; id: string } | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [savingComment, setSavingComment] = useState(false);
+
+  // Undo state - store previous states for Ctrl+Z
+  const [undoStack, setUndoStack] = useState<{ items: ScheduleItem[]; description: string }[]>([]);
+  const isUndoingRef = useRef(false);
+  const MAX_UNDO_HISTORY = 50;
 
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
@@ -1078,6 +1095,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const applyBatchMethodsToSelected = async () => {
     if (selectedItemIds.size === 0) return;
 
+    saveUndoState(`${selectedItemIds.size} detaili ressursside muutmine`);
     const count = selectedItemIds.size;
     const methods = Object.keys(batchInstallMethods).length > 0 ? batchInstallMethods : null;
 
@@ -1122,6 +1140,80 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   }, [selectedItemIds]);
 
+  // Save current state to undo stack before making changes
+  const saveUndoState = useCallback((description: string) => {
+    if (isUndoingRef.current) return; // Don't save during undo
+    setUndoStack(prev => {
+      const newStack = [...prev, { items: [...scheduleItems], description }];
+      // Limit stack size
+      if (newStack.length > MAX_UNDO_HISTORY) {
+        return newStack.slice(-MAX_UNDO_HISTORY);
+      }
+      return newStack;
+    });
+  }, [scheduleItems]);
+
+  // Perform undo - restore previous state
+  const performUndo = useCallback(async () => {
+    if (undoStack.length === 0) {
+      setMessage('Pole midagi tagasi võtta');
+      return;
+    }
+
+    const lastState = undoStack[undoStack.length - 1];
+    isUndoingRef.current = true;
+
+    try {
+      // Get current item IDs for comparison
+      const currentIds = new Set(scheduleItems.map(i => i.id));
+      const previousIds = new Set(lastState.items.map(i => i.id));
+
+      // Items to delete (exist now but not in previous state)
+      const idsToDelete = [...currentIds].filter(id => !previousIds.has(id));
+
+      // Items to restore/update (existed in previous state)
+      const itemsToUpsert = lastState.items;
+
+      // Delete items that were added since the saved state
+      if (idsToDelete.length > 0) {
+        await supabase
+          .from('installation_schedule')
+          .delete()
+          .in('id', idsToDelete);
+      }
+
+      // Upsert all items from previous state
+      if (itemsToUpsert.length > 0) {
+        await supabase
+          .from('installation_schedule')
+          .upsert(itemsToUpsert, { onConflict: 'id' });
+      }
+
+      // Remove from stack and update local state
+      setUndoStack(prev => prev.slice(0, -1));
+      setScheduleItems(lastState.items);
+      setMessage(`Tagasi võetud: ${lastState.description}`);
+    } catch (e) {
+      console.error('Undo error:', e);
+      setMessage('Viga tagasivõtmisel');
+    } finally {
+      isUndoingRef.current = false;
+    }
+  }, [undoStack, scheduleItems]);
+
+  // Ctrl+Z keyboard handler for undo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        performUndo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [performUndo]);
+
   // Add selected objects to date
   const addToDate = async (date: string) => {
     if (selectedObjects.length === 0) {
@@ -1137,6 +1229,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
+    saveUndoState(`${selectedObjects.length} detaili lisamine`);
     setSaving(true);
     try {
       const newItems = selectedObjects.map((obj, idx) => {
@@ -1209,6 +1302,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
+    saveUndoState(`${unscheduledObjects.length} detaili lisamine`);
     setSaving(true);
     try {
       const newItems = unscheduledObjects.map((obj, idx) => {
@@ -1258,6 +1352,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Move item to different date
   const moveItemToDate = async (itemId: string, newDate: string) => {
+    const item = scheduleItems.find(i => i.id === itemId);
+    saveUndoState(`Detaili liigutamine: ${item?.assembly_mark || itemId}`);
     try {
       const { error } = await supabase
         .from('installation_schedule')
@@ -1281,6 +1377,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const item = scheduleItems.find(i => i.id === itemId);
     if (!item) return;
 
+    saveUndoState('Järjekorra muutmine');
     const dateItems = itemsByDate[item.scheduled_date];
     const currentIndex = dateItems.findIndex(i => i.id === itemId);
 
@@ -1310,9 +1407,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Delete item (also deletes associated comments, and date comments if day becomes empty)
   const deleteItem = async (itemId: string) => {
+    const item = scheduleItems.find(i => i.id === itemId);
+    saveUndoState(`Detaili kustutamine: ${item?.assembly_mark || itemId}`);
     try {
       // Get the item's date before deleting
-      const item = scheduleItems.find(i => i.id === itemId);
       const itemDate = item?.scheduled_date;
 
       // First delete any comments for this item
@@ -1373,6 +1471,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const confirmed = window.confirm(`Kustuta ${selectedItemIds.size} detaili graafikust?`);
     if (!confirmed) return;
 
+    saveUndoState(`${selectedItemIds.size} detaili kustutamine`);
     const count = selectedItemIds.size;
     const itemIds = [...selectedItemIds];
     const itemIdSet = new Set(itemIds);
@@ -2780,6 +2879,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const moveSelectedItemsToDate = async (targetDate: string) => {
     if (selectedItemIds.size === 0) return;
 
+    saveUndoState(`${selectedItemIds.size} detaili liigutamine`);
     // Filter out items already on target date
     const itemsToMove = [...selectedItemIds].filter(itemId => {
       const item = scheduleItems.find(i => i.id === itemId);
@@ -2864,6 +2964,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setIsDragging(false);
 
     if (draggedItems.length === 0) return;
+
+    saveUndoState(`${draggedItems.length} detaili lohistamine`);
 
     const draggedIds = new Set(draggedItems.map(i => i.id));
     const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
@@ -4645,7 +4747,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         }}
                       />
                     )}
-                    <span className="date-label">{formatDateEstonian(date)}</span>
+                    <span className="date-label">{formatDateShort(date)}</span>
                     <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
                     {/* Quick-add button - shows when unscheduled items are selected */}
@@ -4975,7 +5077,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Item Hover Tooltip */}
-      {hoveredItemId && (() => {
+      {hoveredItemId && !itemMenuId && (() => {
         const item = scheduleItems.find(i => i.id === hoveredItemId);
         if (!item) return null;
         const methods = item.install_methods as InstallMethods | null;
