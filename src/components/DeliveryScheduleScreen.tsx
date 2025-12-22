@@ -2942,8 +2942,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             return;
           }
 
-          // If no date provided, use 'UNASSIGNED' as placeholder for grouping
-          const date = row.date || addModalDate || 'UNASSIGNED';
+          // If no date in Excel row, use 'UNASSIGNED' (don't fall back to addModalDate)
+          const date = row.date || 'UNASSIGNED';
           const vehicleCode = row.vehicleCode || '';
           const groupKey = `${date}|${vehicleCode}|${factoryId}`;
 
