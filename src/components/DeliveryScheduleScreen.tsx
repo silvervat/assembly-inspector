@@ -1014,29 +1014,47 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       let linkedCount = 0;
+      let notFoundCount = 0;
+      let noGuidCount = 0;
+
+      console.log('=== Link Items With Model ===');
+      console.log('Total items to link:', targetItems.length);
+      console.log('Models available:', models.map(m => m.id));
 
       // Process items in batches
       for (const item of targetItems) {
         // Get IFC GUID - convert from MS if needed
         let guidIfc = item.guid_ifc;
+        const originalGuid = item.guid_ms || item.guid;
+
         if (!guidIfc && item.guid_ms) {
           guidIfc = msToIfcGuid(item.guid_ms);
+          console.log(`Converted MS GUID ${item.guid_ms} -> IFC ${guidIfc}`);
         }
         if (!guidIfc && item.guid) {
           if (item.guid.length === 22) {
             guidIfc = item.guid;
           } else if (item.guid.length === 36) {
             guidIfc = msToIfcGuid(item.guid);
+            console.log(`Converted GUID ${item.guid} -> IFC ${guidIfc}`);
           }
         }
 
-        if (!guidIfc) continue;
+        if (!guidIfc) {
+          noGuidCount++;
+          console.log(`No GUID for item: ${item.assembly_mark}`);
+          continue;
+        }
 
         // Try to find object in each model
+        let found = false;
         for (const model of models) {
           try {
             const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-            if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) continue;
+            if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
+              continue;
+            }
+            found = true;
 
             const runtimeId = runtimeIds[0];
 
@@ -1119,15 +1137,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
             // Found in this model, no need to check others
             break;
-          } catch {
+          } catch (err) {
             // Object not found in this model, try next
+            console.log(`Error in model ${model.id} for IFC GUID ${guidIfc}:`, err);
             continue;
           }
         }
+
+        if (!found) {
+          notFoundCount++;
+          console.log(`Object not found in any model: ${originalGuid} -> IFC: ${guidIfc}`);
+        }
       }
 
+      console.log('=== Link Results ===');
+      console.log(`Linked: ${linkedCount}, Not found: ${notFoundCount}, No GUID: ${noGuidCount}`);
+
       await loadItems();
-      setMessage(`${linkedCount}/${targetItems.length} detaili seotud mudeliga`);
+      if (notFoundCount > 0) {
+        setMessage(`${linkedCount}/${targetItems.length} seotud mudeliga (${notFoundCount} ei leitud mudelist)`);
+      } else {
+        setMessage(`${linkedCount}/${targetItems.length} detaili seotud mudeliga`);
+      }
       return linkedCount;
     } catch (e: any) {
       console.error('Error linking items with model:', e);
