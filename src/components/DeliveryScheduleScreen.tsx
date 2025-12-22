@@ -2924,7 +2924,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const BATCH_SIZE = 100;
       const modelObjectsMap = new Map<string, {
         guid_ifc: string;
-        guid_ms: string;
         model_id: string | null;
         object_runtime_id: number | null;
       }>();
@@ -2933,7 +2932,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const batch = ifcGuidsToLookup.slice(i, i + BATCH_SIZE);
         const { data: batchObjects, error: lookupError } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, guid_ms, model_id, object_runtime_id')
+          .select('guid_ifc, model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .in('guid_ifc', batch);
 
@@ -2980,7 +2979,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
           objectsByModel.get(obj.model_id)!.push({
             guid_ifc,
-            guid_ms: obj.guid_ms || '',
+            guid_ms: ifcToMsGuid(guid_ifc),
             runtime_id: obj.object_runtime_id
           });
         }
