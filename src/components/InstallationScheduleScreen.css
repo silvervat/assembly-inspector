@@ -579,7 +579,9 @@
 }
 
 /* Allow dropdown menu to overflow when open */
-.date-group:has(.menu-open) {
+.date-group:has(.menu-open),
+.date-group:has(.date-menu-btn.active),
+.date-group:has(.item-menu-dropdown) {
   overflow: visible;
   z-index: 1002;
 }
@@ -602,13 +604,14 @@
   display: flex;
   align-items: center;
   flex-wrap: nowrap;
-  gap: 8px;
-  padding: 8px 10px;
-  background: var(--modus-bg-secondary);
-  border-bottom: 1px solid var(--modus-border);
+  gap: 5px;
+  padding: 10px 16px;
+  background: linear-gradient(to right, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e5e7eb;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  position: relative;
 }
 
 .date-header:hover {
@@ -778,7 +781,7 @@
   padding: 3px 8px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px dotted rgba(0, 0, 0, 0.1);
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.06);
   position: relative;
   min-height: 24px;
 }
@@ -926,6 +929,11 @@
   overflow: hidden;
 }
 
+.item-menu-dropdown.open-upward {
+  top: auto;
+  bottom: 100%;
+}
+
 .item-menu-option {
   display: flex;
   align-items: center;
@@ -970,6 +978,11 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 180px;
   overflow: hidden;
+}
+
+.date-menu-dropdown.open-upward {
+  top: auto;
+  bottom: 100%;
 }
 
 .date-menu-section-title {
@@ -2734,3 +2747,67 @@
   cursor: not-allowed;
 }
 
+/* Date context menu - calendar picker for moving all items */
+.date-context-calendar {
+  position: fixed;
+  z-index: 2000;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.date-context-header {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--modus-text-secondary);
+  border-bottom: 1px solid var(--modus-border);
+  background: #f8fafc;
+}
+
+.date-context-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.date-context-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.date-context-item:last-child {
+  border-bottom: none;
+}
+
+.date-context-item:hover {
+  background: #f0f9ff;
+}
+
+.date-context-date {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.date-context-badge {
+  background: var(--modus-primary);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.date-label {
+  cursor: context-menu;
+}

@@ -41,6 +41,7 @@ const PLAYBACK_SPEEDS = [
 
 // Estonian weekday names
 const WEEKDAY_NAMES = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
+const WEEKDAY_NAMES_SHORT = ['Püh', 'Esm', 'Tei', 'Kol', 'Nel', 'Ree', 'Lau'];
 
 // Convert IFC GUID to MS GUID (UUID format)
 const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
@@ -74,6 +75,17 @@ const formatDateEstonian = (dateStr: string): string => {
   const monthStr = String(month).padStart(2, '0');
   const yearStr = String(year).slice(-2);
   const weekday = WEEKDAY_NAMES[date.getDay()];
+  return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
+};
+
+// Format date with short weekday (3 chars) for date headers
+const formatDateShort = (dateStr: string): string => {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayStr = String(day).padStart(2, '0');
+  const monthStr = String(month).padStart(2, '0');
+  const yearStr = String(year).slice(-2);
+  const weekday = WEEKDAY_NAMES_SHORT[date.getDay()];
   return `${dayStr}.${monthStr}.${yearStr} ${weekday}`;
 };
 
@@ -193,9 +205,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Item menu state (three-dot menu)
   const [itemMenuId, setItemMenuId] = useState<string | null>(null);
+  const [menuOpenUpward, setMenuOpenUpward] = useState(false);
 
   // Date menu state (three-dot menu for date groups)
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
+  const [dateMenuOpenUpward, setDateMenuOpenUpward] = useState(false);
+
+  // Date right-click context menu (calendar picker to move all items)
+  const [dateContextMenu, setDateContextMenu] = useState<{ x: number; y: number; sourceDate: string } | null>(null);
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -328,6 +345,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [commentModalTarget, setCommentModalTarget] = useState<{ type: 'item' | 'date'; id: string } | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [savingComment, setSavingComment] = useState(false);
+
+  // Undo state - store previous states for Ctrl+Z
+  const [undoStack, setUndoStack] = useState<{ items: ScheduleItem[]; description: string }[]>([]);
+  const isUndoingRef = useRef(false);
+  const MAX_UNDO_HISTORY = 50;
 
   // Generate date colors when setting is enabled or items change
   useEffect(() => {
@@ -1078,6 +1100,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const applyBatchMethodsToSelected = async () => {
     if (selectedItemIds.size === 0) return;
 
+    saveUndoState(`${selectedItemIds.size} detaili ressursside muutmine`);
     const count = selectedItemIds.size;
     const methods = Object.keys(batchInstallMethods).length > 0 ? batchInstallMethods : null;
 
@@ -1122,6 +1145,80 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   }, [selectedItemIds]);
 
+  // Save current state to undo stack before making changes
+  const saveUndoState = useCallback((description: string) => {
+    if (isUndoingRef.current) return; // Don't save during undo
+    setUndoStack(prev => {
+      const newStack = [...prev, { items: [...scheduleItems], description }];
+      // Limit stack size
+      if (newStack.length > MAX_UNDO_HISTORY) {
+        return newStack.slice(-MAX_UNDO_HISTORY);
+      }
+      return newStack;
+    });
+  }, [scheduleItems]);
+
+  // Perform undo - restore previous state
+  const performUndo = useCallback(async () => {
+    if (undoStack.length === 0) {
+      setMessage('Pole midagi tagasi võtta');
+      return;
+    }
+
+    const lastState = undoStack[undoStack.length - 1];
+    isUndoingRef.current = true;
+
+    try {
+      // Get current item IDs for comparison
+      const currentIds = new Set(scheduleItems.map(i => i.id));
+      const previousIds = new Set(lastState.items.map(i => i.id));
+
+      // Items to delete (exist now but not in previous state)
+      const idsToDelete = [...currentIds].filter(id => !previousIds.has(id));
+
+      // Items to restore/update (existed in previous state)
+      const itemsToUpsert = lastState.items;
+
+      // Delete items that were added since the saved state
+      if (idsToDelete.length > 0) {
+        await supabase
+          .from('installation_schedule')
+          .delete()
+          .in('id', idsToDelete);
+      }
+
+      // Upsert all items from previous state
+      if (itemsToUpsert.length > 0) {
+        await supabase
+          .from('installation_schedule')
+          .upsert(itemsToUpsert, { onConflict: 'id' });
+      }
+
+      // Remove from stack and update local state
+      setUndoStack(prev => prev.slice(0, -1));
+      setScheduleItems(lastState.items);
+      setMessage(`Tagasi võetud: ${lastState.description}`);
+    } catch (e) {
+      console.error('Undo error:', e);
+      setMessage('Viga tagasivõtmisel');
+    } finally {
+      isUndoingRef.current = false;
+    }
+  }, [undoStack, scheduleItems]);
+
+  // Ctrl+Z keyboard handler for undo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        performUndo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [performUndo]);
+
   // Add selected objects to date
   const addToDate = async (date: string) => {
     if (selectedObjects.length === 0) {
@@ -1137,6 +1234,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
+    saveUndoState(`${selectedObjects.length} detaili lisamine`);
     setSaving(true);
     try {
       const newItems = selectedObjects.map((obj, idx) => {
@@ -1209,6 +1307,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
+    saveUndoState(`${unscheduledObjects.length} detaili lisamine`);
     setSaving(true);
     try {
       const newItems = unscheduledObjects.map((obj, idx) => {
@@ -1258,6 +1357,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Move item to different date
   const moveItemToDate = async (itemId: string, newDate: string) => {
+    const item = scheduleItems.find(i => i.id === itemId);
+    saveUndoState(`Detaili liigutamine: ${item?.assembly_mark || itemId}`);
     try {
       const { error } = await supabase
         .from('installation_schedule')
@@ -1281,6 +1382,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const item = scheduleItems.find(i => i.id === itemId);
     if (!item) return;
 
+    saveUndoState('Järjekorra muutmine');
     const dateItems = itemsByDate[item.scheduled_date];
     const currentIndex = dateItems.findIndex(i => i.id === itemId);
 
@@ -1310,9 +1412,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Delete item (also deletes associated comments, and date comments if day becomes empty)
   const deleteItem = async (itemId: string) => {
+    const item = scheduleItems.find(i => i.id === itemId);
+    saveUndoState(`Detaili kustutamine: ${item?.assembly_mark || itemId}`);
     try {
       // Get the item's date before deleting
-      const item = scheduleItems.find(i => i.id === itemId);
       const itemDate = item?.scheduled_date;
 
       // First delete any comments for this item
@@ -1373,6 +1476,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const confirmed = window.confirm(`Kustuta ${selectedItemIds.size} detaili graafikust?`);
     if (!confirmed) return;
 
+    saveUndoState(`${selectedItemIds.size} detaili kustutamine`);
     const count = selectedItemIds.size;
     const itemIds = [...selectedItemIds];
     const itemIdSet = new Set(itemIds);
@@ -2780,6 +2884,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const moveSelectedItemsToDate = async (targetDate: string) => {
     if (selectedItemIds.size === 0) return;
 
+    saveUndoState(`${selectedItemIds.size} detaili liigutamine`);
     // Filter out items already on target date
     const itemsToMove = [...selectedItemIds].filter(itemId => {
       const item = scheduleItems.find(i => i.id === itemId);
@@ -2802,6 +2907,39 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       setSelectedItemIds(new Set());
       setDatePickerItemId(null);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error moving items:', e);
+      setMessage('Viga detailide liigutamisel');
+    }
+  };
+
+  // Move all items from one date to another (used by right-click context menu)
+  const moveAllItemsToDate = async (sourceDate: string, targetDate: string) => {
+    if (sourceDate === targetDate) {
+      setDateContextMenu(null);
+      return;
+    }
+
+    const itemsOnDate = scheduleItems.filter(i => i.scheduled_date === sourceDate);
+    if (itemsOnDate.length === 0) {
+      setDateContextMenu(null);
+      return;
+    }
+
+    saveUndoState(`${itemsOnDate.length} detaili liigutamine kuupäevale ${formatDateShort(targetDate)}`);
+
+    try {
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
+        .eq('project_id', projectId)
+        .eq('scheduled_date', sourceDate);
+
+      if (error) throw error;
+
+      setDateContextMenu(null);
+      setMessage(`${itemsOnDate.length} detaili liigutatud kuupäevale ${formatDateShort(targetDate)}`);
       loadSchedule();
     } catch (e) {
       console.error('Error moving items:', e);
@@ -2864,6 +3002,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setIsDragging(false);
 
     if (draggedItems.length === 0) return;
+
+    saveUndoState(`${draggedItems.length} detaili lohistamine`);
 
     const draggedIds = new Set(draggedItems.map(i => i.id));
     const isSameDate = draggedItems.every(item => item.scheduled_date === targetDate);
@@ -4645,7 +4785,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         }}
                       />
                     )}
-                    <span className="date-label">{formatDateEstonian(date)}</span>
+                    <span
+                      className="date-label"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDateContextMenu({ x: e.clientX, y: e.clientY, sourceDate: date });
+                      }}
+                      title="Paremklõps: muuda kuupäeva"
+                    >{formatDateShort(date)}</span>
                     <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
                     {/* Quick-add button - shows when unscheduled items are selected */}
@@ -4690,14 +4838,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     </button>
                     <button
                       className={`date-menu-btn ${dateMenuId === date ? 'active' : ''}`}
-                      onClick={(e) => { e.stopPropagation(); setDateMenuId(dateMenuId === date ? null : date); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const spaceBelow = window.innerHeight - rect.bottom;
+                        setDateMenuOpenUpward(spaceBelow < 250);
+                        setDateMenuId(dateMenuId === date ? null : date);
+                      }}
                       title="Rohkem valikuid"
                     >
                       <FiMoreVertical size={14} />
                     </button>
                     {/* Date menu dropdown */}
                     {dateMenuId === date && (
-                      <div className="date-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                      <div className={`date-menu-dropdown ${dateMenuOpenUpward ? 'open-upward' : ''}`} onClick={(e) => e.stopPropagation()}>
                         <div className="date-menu-section-title">Markupid</div>
                         <button
                           className="date-menu-option"
@@ -4743,7 +4897,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {showDropBefore && <div className="drop-indicator" />}
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
-                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${!isPlaying && activeItemId === item.id ? 'active' : ''} ${!isPlaying && isItemSelected ? 'multi-selected' : ''} ${!isPlaying && isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
@@ -4847,6 +5001,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                               className="item-menu-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const spaceBelow = window.innerHeight - rect.bottom;
+                                setMenuOpenUpward(spaceBelow < 180);
                                 setItemMenuId(itemMenuId === item.id ? null : item.id);
                                 setDatePickerItemId(null);
                               }}
@@ -4857,7 +5014,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                             {/* Item dropdown menu */}
                             {itemMenuId === item.id && (
-                              <div className="item-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                              <div className={`item-menu-dropdown ${menuOpenUpward ? 'open-upward' : ''}`} onClick={(e) => e.stopPropagation()}>
                                 <button
                                   className={`item-menu-option ${idx === 0 ? 'disabled' : ''}`}
                                   onClick={() => {
@@ -4962,7 +5119,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Click outside to close context menus */}
-      {(listItemContextMenu || itemMenuId || datePickerItemId || dateMenuId) && (
+      {(listItemContextMenu || itemMenuId || datePickerItemId || dateMenuId || dateContextMenu) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
@@ -4970,12 +5127,44 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             setItemMenuId(null);
             setDatePickerItemId(null);
             setDateMenuId(null);
+            setDateContextMenu(null);
           }}
         />
       )}
 
+      {/* Date right-click context menu - calendar picker to move all items */}
+      {dateContextMenu && (
+        <div
+          className="date-context-calendar"
+          style={{ top: dateContextMenu.y, left: dateContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="date-context-header">
+            Liiguta kõik detailid kuupäevale:
+          </div>
+          <div className="date-context-list">
+            {Object.keys(itemsByDate)
+              .sort()
+              .filter(d => d !== dateContextMenu.sourceDate)
+              .map(d => {
+                const count = itemsByDate[d]?.length || 0;
+                return (
+                  <div
+                    key={d}
+                    className="date-context-item"
+                    onClick={() => moveAllItemsToDate(dateContextMenu.sourceDate, d)}
+                  >
+                    <span className="date-context-date">{formatDateShort(d)}</span>
+                    <span className="date-context-badge">{count}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Item Hover Tooltip */}
-      {hoveredItemId && (() => {
+      {hoveredItemId && !itemMenuId && (() => {
         const item = scheduleItems.find(i => i.id === hoveredItemId);
         if (!item) return null;
         const methods = item.install_methods as InstallMethods | null;
