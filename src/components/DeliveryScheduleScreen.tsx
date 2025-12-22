@@ -992,7 +992,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setLoading(false);
   }, [loadFactories, loadVehicles, loadItems, loadComments]);
 
-  // Link items with model - fetch real assembly marks from model
+  // Link items with model - fetch real assembly marks from trimble_model_objects table
   const linkItemsWithModel = useCallback(async (itemsToLink?: DeliveryItem[]) => {
     let targetItems: DeliveryItem[];
 
@@ -1017,197 +1017,120 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setMessage(`Seon ${targetItems.length} detaili mudeliga...`);
 
     try {
-      // Get only loaded models (models visible in viewer)
-      const models = await api.viewer.getModels('loaded');
-      if (!models || models.length === 0) {
-        setMessage('Mudeleid ei ole laetud. Palun laadige mudel vaatajasse.');
-        return 0;
-      }
+      // Collect all IFC GUIDs from items
+      const guidMap = new Map<string, DeliveryItem>();
 
-      let linkedCount = 0;
-      let notFoundCount = 0;
-      let noGuidCount = 0;
-
-      console.log('=== Link Items With Model ===');
-      console.log('Total items to link:', targetItems.length);
-      console.log('Models available:', models.length, models.map(m => ({ id: m.id, name: (m as any).name })));
-
-      // Show first 3 items for debugging
-      console.log('First 3 items:', targetItems.slice(0, 3).map(i => ({
-        id: i.id,
-        assembly_mark: i.assembly_mark,
-        guid: i.guid,
-        guid_ifc: i.guid_ifc,
-        guid_ms: i.guid_ms
-      })));
-
-      // Process items in batches
       for (const item of targetItems) {
-        // Get IFC GUID - convert from MS if needed
         let guidIfc = item.guid_ifc;
-        const originalGuid = item.guid_ms || item.guid;
 
+        // Convert from MS GUID if needed
         if (!guidIfc && item.guid_ms) {
           guidIfc = msToIfcGuid(item.guid_ms);
-          console.log(`Converted MS GUID ${item.guid_ms} -> IFC ${guidIfc}`);
         }
         if (!guidIfc && item.guid) {
           if (item.guid.length === 22) {
             guidIfc = item.guid;
           } else if (item.guid.length === 36) {
             guidIfc = msToIfcGuid(item.guid);
-            console.log(`Converted GUID ${item.guid} -> IFC ${guidIfc}`);
           }
         }
 
-        if (!guidIfc) {
-          noGuidCount++;
-          console.log(`No GUID for item: ${item.assembly_mark}`);
-          continue;
+        if (guidIfc) {
+          guidMap.set(guidIfc, item);
         }
+      }
 
-        // Try to find object in each model
-        let found = false;
-        for (const model of models) {
-          try {
-            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+      const allGuids = Array.from(guidMap.keys());
+      console.log('=== Link Items With Model (DB) ===');
+      console.log('Total items to link:', targetItems.length);
+      console.log('GUIDs to lookup:', allGuids.length);
 
-            // Log first few lookups for debugging
-            if (linkedCount + notFoundCount + noGuidCount < 5) {
-              console.log(`Lookup ${item.assembly_mark}: IFC=${guidIfc}, model=${model.id}, runtimeIds=`, runtimeIds);
-            }
+      if (allGuids.length === 0) {
+        setMessage('Detailidel puuduvad GUID-id');
+        return 0;
+      }
 
-            if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
-              continue;
-            }
-            found = true;
+      // Lookup all GUIDs in trimble_model_objects table (batch query)
+      const { data: modelObjects, error: lookupError } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+        .eq('trimble_project_id', projectId)
+        .in('guid_ifc', allGuids);
 
-            const runtimeId = runtimeIds[0];
+      if (lookupError) {
+        console.error('Error looking up model objects:', lookupError);
+        setMessage('Viga mudeli objektide otsimisel: ' + lookupError.message);
+        return 0;
+      }
 
-            // Get object properties
-            const props = await api.viewer.getObjectProperties(model.id, [runtimeId]);
+      console.log('Found in trimble_model_objects:', modelObjects?.length || 0);
 
-            // Log first few for debugging (use replacer to handle BigInt)
-            if (linkedCount < 3) {
-              const safeStringify = (obj: any) => JSON.stringify(obj, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2);
-              console.log(`Props for ${item.assembly_mark}:`, safeStringify(props?.[0])?.slice(0, 2000));
-            }
+      // Create lookup map
+      const objectMap = new Map<string, typeof modelObjects[0]>();
+      for (const obj of modelObjects || []) {
+        objectMap.set(obj.guid_ifc, obj);
+      }
 
-            if (!props || !props[0]) continue;
+      // Update items with found data
+      let linkedCount = 0;
+      const notFoundItems: { guid: string; itemId: string; assemblyMark: string }[] = [];
 
-            const objProps = props[0];
-            let assemblyMark = '';
-            let productName: string | undefined;
-            let castUnitWeight: string | undefined;
-            let positionCode: string | undefined;
+      for (const [guidIfc, item] of guidMap) {
+        const modelObj = objectMap.get(guidIfc);
 
-            // Get product name
-            const productObj = (objProps as any)?.product;
-            if (productObj?.name) {
-              productName = String(productObj.name);
-            }
+        if (modelObj && modelObj.assembly_mark) {
+          const updates: Record<string, unknown> = {
+            assembly_mark: modelObj.assembly_mark,
+            guid_ifc: guidIfc,
+            updated_by: tcUserEmail,
+            updated_at: new Date().toISOString()
+          };
 
-            // Parse properties - collect all property names for debugging
-            const allPropNames: string[] = [];
-            const propertiesList = objProps?.properties;
-            if (propertiesList && Array.isArray(propertiesList)) {
-              for (const pset of propertiesList) {
-                const psetProps = (pset as any).properties;
-                if (!psetProps || !Array.isArray(psetProps)) continue;
+          if (modelObj.product_name) updates.product_name = modelObj.product_name;
+          if (modelObj.model_id) updates.model_id = modelObj.model_id;
+          if (modelObj.object_runtime_id) updates.object_runtime_id = modelObj.object_runtime_id;
 
-                for (const prop of psetProps) {
-                  const rawName = ((prop as any).name || '');
-                  const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
-                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+          const { error } = await supabase
+            .from('trimble_delivery_items')
+            .update(updates)
+            .eq('id', item.id);
 
-                  allPropNames.push(rawName);
-
-                  if (propValue === undefined || propValue === null || propValue === '') continue;
-
-                  // Assembly/Cast unit Mark
-                  if (!assemblyMark) {
-                    if (propName.includes('cast') && propName.includes('mark')) {
-                      assemblyMark = String(propValue);
-                    } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
-                      assemblyMark = String(propValue);
-                    }
-                  }
-
-                  // Weight
-                  if (propName.includes('cast') && propName.includes('weight')) {
-                    castUnitWeight = String(propValue);
-                  }
-
-                  // Position code
-                  if (propName.includes('position') && propName.includes('code')) {
-                    positionCode = String(propValue);
-                  }
-                }
-              }
-            }
-
-            // Log first few property sets for debugging
-            if (linkedCount < 3) {
-              console.log(`All property names for ${item.assembly_mark}:`, allPropNames);
-              console.log(`Found assemblyMark: "${assemblyMark}"`);
-            }
-
-            // Update item if we found data
-            if (assemblyMark) {
-              const updates: Record<string, unknown> = {
-                assembly_mark: assemblyMark,
-                model_id: model.id,
-                object_runtime_id: runtimeId,
-                guid_ifc: guidIfc,
-                updated_by: tcUserEmail,
-                updated_at: new Date().toISOString()
-              };
-
-              if (productName) updates.product_name = productName;
-              if (castUnitWeight) updates.cast_unit_weight = castUnitWeight;
-              if (positionCode) updates.cast_unit_position_code = positionCode;
-
-              const { error } = await supabase
-                .from('trimble_delivery_items')
-                .update(updates)
-                .eq('id', item.id);
-
-              if (!error) {
-                linkedCount++;
-              }
-            }
-
-            // Found in this model, no need to check others
-            break;
-          } catch (err) {
-            // Object not found in this model, try next
-            console.log(`Error in model ${model.id} for IFC GUID ${guidIfc}:`, err);
-            continue;
+          if (!error) {
+            linkedCount++;
           }
-        }
-
-        if (!found) {
-          notFoundCount++;
-          console.log(`Object not found in any model: ${originalGuid} -> IFC: ${guidIfc}`);
+        } else {
+          notFoundItems.push({
+            guid: guidIfc,
+            itemId: item.id,
+            assemblyMark: item.assembly_mark
+          });
         }
       }
 
       console.log('=== Link Results ===');
-      console.log(`Linked: ${linkedCount}, Not found: ${notFoundCount}, No GUID: ${noGuidCount}`);
+      console.log(`Linked: ${linkedCount}, Not found: ${notFoundItems.length}`);
+      if (notFoundItems.length > 0) {
+        console.log('Not found items:', notFoundItems);
+      }
 
       await loadItems();
-      if (notFoundCount > 0) {
-        setMessage(`${linkedCount}/${targetItems.length} seotud mudeliga (${notFoundCount} ei leitud mudelist)`);
+
+      // Show warning with not found items
+      if (notFoundItems.length > 0) {
+        const notFoundList = notFoundItems.slice(0, 10).map(i => i.assemblyMark).join(', ');
+        const moreText = notFoundItems.length > 10 ? ` ja veel ${notFoundItems.length - 10}...` : '';
+        setMessage(`${linkedCount}/${targetItems.length} seotud. ⚠️ Ei leitud: ${notFoundList}${moreText}`);
       } else {
         setMessage(`${linkedCount}/${targetItems.length} detaili seotud mudeliga`);
       }
-      return linkedCount;
+
+      return { linkedCount, notFoundItems };
     } catch (e: any) {
       console.error('Error linking items with model:', e);
       setMessage('Viga mudeliga sidumiseel: ' + e.message);
-      return 0;
+      return { linkedCount: 0, notFoundItems: [] };
     }
-  }, [api, projectId, tcUserEmail, loadItems]);
+  }, [projectId, tcUserEmail, loadItems]);
 
   // Load project name
   useEffect(() => {
@@ -3043,9 +2966,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         // Auto-link with model after import (fetches fresh items from DB)
         setMessage(`${totalImported} detaili imporditud${vehicleInfo}. Seon mudeliga...`);
-        const linked = await linkItemsWithModel();
-        if (linked > 0) {
-          setMessage(`${totalImported} detaili imporditud${vehicleInfo}, ${linked} seotud mudeliga`);
+        const result = await linkItemsWithModel();
+        if (typeof result === 'object' && result.linkedCount > 0) {
+          if (result.notFoundItems.length > 0) {
+            const notFoundList = result.notFoundItems.slice(0, 5).map(i => i.assemblyMark).join(', ');
+            const moreText = result.notFoundItems.length > 5 ? ` +${result.notFoundItems.length - 5}` : '';
+            setMessage(`${totalImported} imporditud${vehicleInfo}, ${result.linkedCount} seotud. ⚠️ Ei leitud: ${notFoundList}${moreText}`);
+          } else {
+            setMessage(`${totalImported} detaili imporditud${vehicleInfo}, ${result.linkedCount} seotud mudeliga`);
+          }
         } else {
           setMessage(`${totalImported} detaili imporditud${vehicleInfo}`);
         }
@@ -3087,9 +3016,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         // Auto-link with model after import (fetches fresh items from DB)
         setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}. Seon mudeliga...`);
-        const linked = await linkItemsWithModel();
-        if (linked > 0) {
-          setMessage(`${guids.length} detaili imporditud, ${linked} seotud mudeliga`);
+        const result = await linkItemsWithModel();
+        if (typeof result === 'object' && result.linkedCount > 0) {
+          if (result.notFoundItems.length > 0) {
+            const notFoundList = result.notFoundItems.slice(0, 5).map(i => i.assemblyMark).join(', ');
+            const moreText = result.notFoundItems.length > 5 ? ` +${result.notFoundItems.length - 5}` : '';
+            setMessage(`${guids.length} imporditud, ${result.linkedCount} seotud. ⚠️ Ei leitud: ${notFoundList}${moreText}`);
+          } else {
+            setMessage(`${guids.length} detaili imporditud, ${result.linkedCount} seotud mudeliga`);
+          }
         } else {
           setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}`);
         }
