@@ -2421,16 +2421,73 @@
   border-radius: 8px;
 }
 
+.selected-objects-preview .preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.selected-objects-preview .preview-header h4 {
+  margin: 0;
+  font-size: 13px;
+  color: #374151;
+  flex: 1;
+}
+
+.selected-objects-preview .preview-header h4 .excluded-count {
+  color: #9ca3af;
+  font-weight: normal;
+}
+
+.selected-objects-preview .preview-weight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.selected-objects-preview .preview-weight .weight-warning {
+  color: #f59e0b;
+  animation: pulse-warning 1s ease-in-out infinite;
+}
+
+.selected-objects-preview .preview-weight .overweight {
+  color: #dc2626;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.selected-objects-preview .expand-icon {
+  color: #6b7280;
+}
+
 .selected-objects-preview h4 {
   margin: 0 0 8px 0;
   font-size: 13px;
   color: #6b7280;
 }
 
-.selected-objects-preview .objects-list {
+.selected-objects-preview .objects-list.collapsed {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  margin-top: 8px;
+}
+
+.selected-objects-preview .objects-list.expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .selected-objects-preview .object-preview {
@@ -2444,6 +2501,69 @@
 .selected-objects-preview .object-preview.more {
   color: #6b7280;
   font-style: italic;
+}
+
+.selected-objects-preview .object-preview-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.selected-objects-preview .object-preview-row:hover {
+  background: #f9fafb;
+}
+
+.selected-objects-preview .object-preview-row .obj-mark {
+  font-weight: 600;
+  min-width: 100px;
+  color: #374151;
+}
+
+.selected-objects-preview .object-preview-row .obj-product {
+  flex: 1;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-objects-preview .object-preview-row .obj-weight {
+  min-width: 70px;
+  text-align: right;
+  color: #374151;
+}
+
+.selected-objects-preview .object-preview-row .obj-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.selected-objects-preview .object-preview-row .obj-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.selected-objects-preview .object-preview-row .obj-actions button:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.selected-objects-preview .object-preview-row .obj-actions .remove-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* ============================================
