@@ -447,6 +447,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [importFactoryId, setImportFactoryId] = useState<string>('');
   const [importing, setImporting] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  // Parsed import data from Excel with full details
+  const [parsedImportData, setParsedImportData] = useState<{
+    guid: string;
+    date?: string;
+    vehicleCode?: string;
+    factoryCode?: string;
+    comment?: string;
+  }[]>([]);
 
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
@@ -2362,6 +2370,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       reader.onload = async (event) => {
         try {
           const data = event.target?.result;
+          const parsedRows: typeof parsedImportData = [];
           let guids: string[] = [];
 
           if (file.name.endsWith('.csv')) {
@@ -2379,19 +2388,49 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             const workbook = XLSX.read(data, { type: 'binary' });
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
-            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as string[][];
+            const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as (string | number | undefined)[][];
 
-            // Find GUID column
-            const headerRow = jsonData[0] || [];
-            let guidColIdx = headerRow.findIndex(h =>
-              typeof h === 'string' && (h.toLowerCase().includes('guid') || h.toLowerCase().includes('ms_guid'))
-            );
-            if (guidColIdx === -1) guidColIdx = 0; // Use first column if no GUID header found
+            // Find column indices from header
+            const headerRow = (jsonData[0] || []).map(h => String(h || '').toLowerCase());
+            const guidColIdx = headerRow.findIndex(h => h.includes('guid')) !== -1
+              ? headerRow.findIndex(h => h.includes('guid'))
+              : 0;
+            const dateColIdx = headerRow.findIndex(h => h.includes('date') || h.includes('kuupäev'));
+            const vehicleColIdx = headerRow.findIndex(h => h.includes('vehicle') || h.includes('veok'));
+            const factoryColIdx = headerRow.findIndex(h => h.includes('factory') || h.includes('tehas'));
+            const commentColIdx = headerRow.findIndex(h => h.includes('comment') || h.includes('kommentaar'));
 
-            guids = jsonData.slice(1).map(row => {
-              const val = row[guidColIdx];
-              return typeof val === 'string' ? val.trim() : '';
-            }).filter(g => g && g.length > 10);
+            // Check if this is a detailed import (has date or vehicle columns)
+            const hasDetailedColumns = dateColIdx !== -1 || vehicleColIdx !== -1;
+
+            for (let i = 1; i < jsonData.length; i++) {
+              const row = jsonData[i];
+              if (!row || !row[guidColIdx]) continue;
+
+              const guid = String(row[guidColIdx] || '').trim();
+              if (guid.length < 10) continue;
+
+              if (hasDetailedColumns) {
+                // Parse detailed row with date, vehicle, factory, comment
+                let dateVal = dateColIdx !== -1 ? row[dateColIdx] : undefined;
+                // Handle Excel date numbers
+                if (typeof dateVal === 'number') {
+                  const excelDate = XLSX.SSF.parse_date_code(dateVal);
+                  if (excelDate) {
+                    dateVal = `${excelDate.y}-${String(excelDate.m).padStart(2, '0')}-${String(excelDate.d).padStart(2, '0')}`;
+                  }
+                }
+
+                parsedRows.push({
+                  guid,
+                  date: dateVal ? String(dateVal).trim() : undefined,
+                  vehicleCode: vehicleColIdx !== -1 && row[vehicleColIdx] ? String(row[vehicleColIdx]).trim() : undefined,
+                  factoryCode: factoryColIdx !== -1 && row[factoryColIdx] ? String(row[factoryColIdx]).trim() : undefined,
+                  comment: commentColIdx !== -1 && row[commentColIdx] ? String(row[commentColIdx]).trim() : undefined,
+                });
+              }
+              guids.push(guid);
+            }
           }
 
           if (guids.length === 0) {
@@ -2399,9 +2438,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             return;
           }
 
+          // Store parsed data if it has detailed columns
+          if (parsedRows.length > 0) {
+            setParsedImportData(parsedRows);
+            setMessage(`${parsedRows.length} rida detailse infoga leitud`);
+          } else {
+            setParsedImportData([]);
+          }
+
           // Set the import text with GUIDs
           setImportText(guids.join('\n'));
-          setMessage(`${guids.length} GUID-i leitud failist`);
+          if (parsedRows.length === 0) {
+            setMessage(`${guids.length} GUID-i leitud failist`);
+          }
         } catch (err: any) {
           console.error('File parse error:', err);
           setMessage('Viga faili lugemisel: ' + err.message);
@@ -2424,20 +2473,60 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Download import template
+  const downloadImportTemplate = () => {
+    // Create template data with example rows
+    const templateData = [
+      ['guid_ms', 'scheduled_date', 'vehicle_code', 'factory_code', 'comment'],
+      ['12345678-1234-1234-1234-123456789ABC', '2025-01-15', 'TRE-1', 'TRE', 'Näidis kommentaar'],
+      ['87654321-4321-4321-4321-CBA987654321', '2025-01-15', 'TRE-1', 'TRE', ''],
+      ['ABCDEF12-3456-7890-ABCD-EF1234567890', '2025-01-16', 'TRE-2', 'TRE', 'Teine veok'],
+    ];
+
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_array ?
+      XLSX.utils.aoa_to_sheet(templateData) :
+      XLSX.utils.aoa_to_sheet(templateData);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 40 },  // guid_ms
+      { wch: 15 },  // scheduled_date
+      { wch: 15 },  // vehicle_code
+      { wch: 15 },  // factory_code
+      { wch: 30 },  // comment
+    ];
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Import Template');
+
+    // Download
+    XLSX.writeFile(wb, 'tarnegraafik_import_template.xlsx');
+    setMessage('Mall allalaetud');
+  };
+
   const handleImport = async () => {
     if (!importText.trim()) {
       setMessage('Kleebi GUID-id tekstiväljale');
       return;
     }
 
-    if (!importFactoryId) {
-      setMessage('Vali tehas');
-      return;
-    }
+    // Check if we have detailed import data with dates/vehicles
+    const hasDetailedData = parsedImportData.length > 0 &&
+      parsedImportData.some(row => row.date || row.vehicleCode);
 
-    if (!addModalDate) {
-      setMessage('Vali kuupäev');
-      return;
+    // For simple import, require factory and date
+    if (!hasDetailedData) {
+      if (!importFactoryId) {
+        setMessage('Vali tehas');
+        return;
+      }
+
+      if (!addModalDate) {
+        setMessage('Vali kuupäev');
+        return;
+      }
     }
 
     setImporting(true);
@@ -2464,40 +2553,143 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return;
       }
 
-      // Create vehicle for import
-      let vehicle = await createVehicle(importFactoryId, addModalDate);
-      if (!vehicle) {
-        throw new Error('Veoki loomine ebaõnnestus');
+      if (hasDetailedData) {
+        // DETAILED IMPORT: Group items by date + vehicleCode + factoryCode
+        const groups = new Map<string, typeof parsedImportData>();
+
+        for (const row of parsedImportData) {
+          // Use factory code from file, or fall back to selected factory
+          let factoryId = importFactoryId;
+          if (row.factoryCode) {
+            const matchingFactory = factories.find(f =>
+              f.factory_code.toLowerCase() === row.factoryCode!.toLowerCase()
+            );
+            if (matchingFactory) {
+              factoryId = matchingFactory.id;
+            }
+          }
+
+          if (!factoryId) {
+            setMessage(`Tehast ei leitud koodiga "${row.factoryCode}". Vali tehas.`);
+            setImporting(false);
+            return;
+          }
+
+          const date = row.date || addModalDate || new Date().toISOString().split('T')[0];
+          const vehicleCode = row.vehicleCode || '';
+          const groupKey = `${date}|${vehicleCode}|${factoryId}`;
+
+          if (!groups.has(groupKey)) {
+            groups.set(groupKey, []);
+          }
+          groups.get(groupKey)!.push(row);
+        }
+
+        let totalImported = 0;
+        const createdVehicles: string[] = [];
+
+        // Process each group
+        for (const [groupKey, groupItems] of groups) {
+          const [date, vehicleCode, factoryId] = groupKey.split('|');
+
+          // Find existing vehicle or create new one
+          let vehicle = vehicleCode
+            ? vehicles.find(v =>
+                v.vehicle_code === vehicleCode &&
+                v.scheduled_date === date &&
+                v.factory_id === factoryId
+              )
+            : null;
+
+          if (!vehicle) {
+            // Create new vehicle
+            vehicle = await createVehicle(factoryId, date);
+            if (!vehicle) {
+              throw new Error(`Veoki loomine ebaõnnestus kuupäevaks ${date}`);
+            }
+
+            // If specific vehicle code was requested, update it
+            if (vehicleCode && vehicle.vehicle_code !== vehicleCode) {
+              const { error: updateError } = await supabase
+                .from('trimble_delivery_vehicles')
+                .update({ vehicle_code: vehicleCode })
+                .eq('id', vehicle.id);
+
+              if (!updateError) {
+                vehicle = { ...vehicle, vehicle_code: vehicleCode };
+              }
+            }
+            createdVehicles.push(vehicle.vehicle_code);
+          }
+
+          // Create items for this group
+          const newItems = groupItems.map((row, idx) => ({
+            trimble_project_id: projectId,
+            vehicle_id: vehicle!.id,
+            guid: row.guid,
+            guid_ifc: row.guid.length === 22 ? row.guid : '',
+            guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
+            assembly_mark: `Import-${totalImported + idx + 1}`,
+            scheduled_date: date,
+            sort_order: idx,
+            status: 'planned' as const,
+            created_by: tcUserEmail,
+            comments: row.comment || null
+          }));
+
+          const { error } = await supabase
+            .from('trimble_delivery_items')
+            .insert(newItems);
+
+          if (error) throw error;
+          totalImported += newItems.length;
+        }
+
+        await Promise.all([loadItems(), loadVehicles()]);
+        const vehicleInfo = createdVehicles.length > 0
+          ? ` (loodud veokid: ${createdVehicles.join(', ')})`
+          : '';
+        setMessage(`${totalImported} detaili imporditud ${groups.size} veokisse${vehicleInfo}`);
+        setShowImportModal(false);
+        setImportText('');
+        setParsedImportData([]);
+      } else {
+        // SIMPLE IMPORT: All items to one new vehicle
+        // Create vehicle for import
+        let vehicle = await createVehicle(importFactoryId, addModalDate);
+        if (!vehicle) {
+          throw new Error('Veoki loomine ebaõnnestus');
+        }
+
+        // Reload vehicles to get the new one
+        await loadVehicles();
+
+        // Try to find objects in model and add them
+        // For now, create items with just the GUID
+        const newItems = guids.map((guid, idx) => ({
+          trimble_project_id: projectId,
+          vehicle_id: vehicle!.id,
+          guid: guid,
+          guid_ifc: guid.length === 22 ? guid : '',
+          guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
+          assembly_mark: `Import-${idx + 1}`,
+          scheduled_date: addModalDate,
+          sort_order: idx,
+          status: 'planned' as const,
+          created_by: tcUserEmail
+        }));
+
+        const { error } = await supabase
+          .from('trimble_delivery_items')
+          .insert(newItems);
+
+        if (error) throw error;
+
+        await Promise.all([loadItems(), loadVehicles()]);
+        setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}`);
+        setShowImportModal(false);
+        setImportText('');
       }
-
-      // Reload vehicles to get the new one
-      await loadVehicles();
-
-      // Try to find objects in model and add them
-      // For now, create items with just the GUID
-      const newItems = guids.map((guid, idx) => ({
-        trimble_project_id: projectId,
-        vehicle_id: vehicle!.id,
-        guid: guid,
-        guid_ifc: guid.length === 22 ? guid : '',
-        guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
-        assembly_mark: `Import-${idx + 1}`,
-        scheduled_date: addModalDate,
-        sort_order: idx,
-        status: 'planned' as const,
-        created_by: tcUserEmail
-      }));
-
-      const { error } = await supabase
-        .from('trimble_delivery_items')
-        .insert(newItems);
-
-      if (error) throw error;
-
-      await Promise.all([loadItems(), loadVehicles()]);
-      setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}`);
-      setShowImportModal(false);
-      setImportText('');
     } catch (e: any) {
       console.error('Error importing:', e);
       setMessage('Viga importimisel: ' + e.message);
@@ -3762,6 +3954,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               // Check if this is the current playback date
               const playbackVehicle = currentPlaybackVehicleId ? vehicles.find(v => v.id === currentPlaybackVehicleId) : null;
               const isPlaybackDate = playbackVehicle?.scheduled_date === dateStr;
+              // Don't show yellow highlight during playback
+              const isPlaybackActive = !!(currentPlaybackDate || currentPlaybackVehicleId);
 
               return (
                 <span key={idx} style={{ display: 'contents' }}>
@@ -3771,7 +3965,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   )}
                   <div
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${isPlaybackDate ? 'playback-active' : ''}`}
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem && !isPlaybackActive ? 'has-selected-item' : ''} ${isPlaybackDate ? 'playback-active' : ''}`}
                     onClick={() => {
                       setSelectedDate(dateStr);
                       setHoveredDate(null); // Clear tooltip on click
@@ -3917,6 +4111,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         {sortedDates.map(date => {
           const hasSelectedItem = datesWithSelectedItems.has(date);
+          // Don't show yellow highlight during playback
+          const isPlaybackActive = !!(currentPlaybackDate || currentPlaybackVehicleId);
           const dateVehicles = itemsByDateAndVehicle[date] || {};
           const dateItemCount = Object.values(dateVehicles).reduce((sum, vItems) => sum + vItems.length, 0);
           const isCollapsed = collapsedDates.has(date);
@@ -3951,14 +4147,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div
               key={date}
               id={`date-group-${date}`}
-              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''} ${currentPlaybackDate === date ? 'playback-active' : ''}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem && !isPlaybackActive ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''} ${currentPlaybackDate === date ? 'playback-active' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDragLeave={(e) => handleDateDragLeave(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
               {/* Date header - new two-row layout */}
               <div
-                className={`date-header ${hasSelectedItem ? 'has-selected-item' : ''} ${currentPlaybackDate === date ? 'playback-active' : ''}`}
+                className={`date-header ${hasSelectedItem && !isPlaybackActive ? 'has-selected-item' : ''} ${currentPlaybackDate === date ? 'playback-active' : ''}`}
                 onClick={() => {
                   const wasCollapsed = collapsedDates.has(date);
                   setCollapsedDates(prev => {
@@ -4102,10 +4298,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     return (
                       <div key={vehicleId} className="delivery-vehicle-wrapper">
                         {showDropBefore && <div className="vehicle-drop-indicator" />}
-                        <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
+                        <div data-vehicle-id={vehicleId} className={`delivery-vehicle-group ${isVehicleDragging ? 'dragging' : ''} ${vehicleMenuId === vehicleId ? 'menu-open' : ''} ${newlyCreatedVehicleId === vehicleId ? 'newly-created' : ''} ${vehiclesWithSelectedItems.has(vehicleId) && !isPlaybackActive ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''}`}>
                           {/* Vehicle header - new two-row layout */}
                           <div
-                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''} ${!isVehicleCollapsed ? 'expanded' : ''} ${dragOverVehicleId === vehicleId && draggedItems.length > 0 ? 'drop-target' : ''}`}
+                            className={`vehicle-header ${activeVehicleId === vehicleId ? 'active' : ''} ${vehiclesWithSelectedItems.has(vehicleId) && !isPlaybackActive ? 'has-selected-item' : ''} ${currentPlaybackVehicleId === vehicleId ? 'playback-active' : ''} ${!isVehicleCollapsed ? 'expanded' : ''} ${dragOverVehicleId === vehicleId && draggedItems.length > 0 ? 'drop-target' : ''}`}
                             data-vehicle-id={vehicleId}
                             draggable={!!vehicle}
                             onDragStart={(e) => vehicle && handleVehicleDragStart(e, vehicle)}
@@ -6092,7 +6288,27 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             </div>
             <div className="modal-body">
               <div className="form-group">
-                <label>Lae fail (Excel või CSV)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <label style={{ margin: 0 }}>Lae fail (Excel või CSV)</label>
+                  <button
+                    type="button"
+                    onClick={downloadImportTemplate}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '4px 8px',
+                      fontSize: 12,
+                      background: '#f3f4f6',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      color: '#374151'
+                    }}
+                  >
+                    <FiDownload size={12} /> Lae mall
+                  </button>
+                </div>
                 <input
                   ref={importFileRef}
                   type="file"
@@ -6110,8 +6326,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   placeholder="Kleebi siia GUID-id..."
                 />
               </div>
+              {/* Show info if detailed import data was detected */}
+              {parsedImportData.length > 0 && parsedImportData.some(r => r.date || r.vehicleCode) && (
+                <div style={{
+                  padding: '8px 12px',
+                  background: '#ecfdf5',
+                  border: '1px solid #10b981',
+                  borderRadius: 6,
+                  marginBottom: 12,
+                  fontSize: 13
+                }}>
+                  <div style={{ fontWeight: 500, color: '#059669', marginBottom: 4 }}>
+                    ✓ Detailne import tuvastatud
+                  </div>
+                  <div style={{ color: '#047857' }}>
+                    {parsedImportData.length} rida kuupäevade ja veokitega.
+                    Kuupäev ja tehas võetakse failist.
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
-                <label>Kuupäev</label>
+                <label>
+                  Kuupäev
+                  {parsedImportData.length > 0 && parsedImportData.some(r => r.date) && (
+                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>(valikuline)</span>
+                  )}
+                </label>
                 <input
                   type="date"
                   value={addModalDate}
@@ -6119,7 +6360,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 />
               </div>
               <div className="form-group">
-                <label>Tehas</label>
+                <label>
+                  Tehas
+                  {parsedImportData.length > 0 && parsedImportData.some(r => r.factoryCode) && (
+                    <span style={{ fontWeight: 'normal', color: '#6b7280', marginLeft: 6 }}>(valikuline)</span>
+                  )}
+                </label>
                 <select
                   value={importFactoryId}
                   onChange={(e) => setImportFactoryId(e.target.value)}
@@ -6137,7 +6383,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!importText.trim() || !importFactoryId || importing}
+                disabled={!importText.trim() || (!(parsedImportData.length > 0 && parsedImportData.some(r => r.date || r.vehicleCode)) && !importFactoryId) || importing}
                 onClick={handleImport}
               >
                 {importing ? 'Importimisel...' : 'Impordi'}
