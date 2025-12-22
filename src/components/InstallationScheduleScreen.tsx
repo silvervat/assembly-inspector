@@ -7,7 +7,7 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare, FiAlertTriangle
+  FiMessageSquare, FiAlertTriangle, FiFilter
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -214,6 +214,26 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter state
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+    };
+    if (showFilterDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterDropdown]);
 
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
@@ -814,23 +834,91 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     };
   }, [api, scheduleItems]);
 
-  // Filter items by search query (includes comments search)
-  const filteredItems = searchQuery.trim() === ''
-    ? scheduleItems
-    : scheduleItems.filter(item => {
-        const query = searchQuery.toLowerCase();
-        const mark = (item.assembly_mark || '').toLowerCase();
-        const guidIfc = (item.guid_ifc || '').toLowerCase();
-        const guidMs = (item.guid_ms || '').toLowerCase();
-        const guid = (item.guid || '').toLowerCase();
-        // Also search in comments for this item
-        const itemComments = comments.filter(c => c.schedule_item_id === item.id);
-        const hasMatchingComment = itemComments.some(c =>
-          c.comment_text.toLowerCase().includes(query) ||
-          (c.created_by_name || '').toLowerCase().includes(query)
-        );
-        return mark.includes(query) || guidIfc.includes(query) || guidMs.includes(query) || guid.includes(query) || hasMatchingComment;
-      });
+  // Helper to check if item has delivery warning
+  const itemHasDeliveryWarning = useCallback((item: ScheduleItem): boolean => {
+    const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
+    if (!itemGuid) return false;
+    const deliveryDate = deliveryDatesByGuid[itemGuid];
+    if (!deliveryDate) return true;
+    return deliveryDate > item.scheduled_date;
+  }, [deliveryDatesByGuid]);
+
+  // Helper to check if item passes active filters
+  const itemPassesFilters = useCallback((item: ScheduleItem): boolean => {
+    if (activeFilters.size === 0) return true;
+
+    const methods = item.install_methods || {};
+
+    for (const filter of activeFilters) {
+      if (filter === 'warning') {
+        if (itemHasDeliveryWarning(item)) return true;
+      } else if (filter === 'crane_1') {
+        if (methods.crane === 1) return true;
+      } else if (filter === 'crane_2plus') {
+        if (methods.crane && methods.crane >= 2) return true;
+      } else if (filter === 'forklift') {
+        if (methods.forklift && methods.forklift > 0) return true;
+      } else if (filter === 'poomtostuk') {
+        if (methods.poomtostuk && methods.poomtostuk > 0) return true;
+      } else if (filter === 'kaartostuk') {
+        if (methods.kaartostuk && methods.kaartostuk > 0) return true;
+      } else if (filter === 'manual') {
+        if (methods.manual && methods.manual > 0) return true;
+      } else if (filter === 'troppija') {
+        if (methods.troppija && methods.troppija > 0) return true;
+      } else if (filter === 'monteerija') {
+        if (methods.monteerija && methods.monteerija > 0) return true;
+      } else if (filter === 'keevitaja') {
+        if (methods.keevitaja && methods.keevitaja > 0) return true;
+      } else if (filter === 'no_method') {
+        const hasAnyMethod = Object.values(methods).some(v => v && v > 0);
+        if (!hasAnyMethod) return true;
+      }
+    }
+    return false;
+  }, [activeFilters, itemHasDeliveryWarning]);
+
+  // Toggle a filter
+  const toggleFilter = (filter: string) => {
+    setActiveFilters(prev => {
+      const newFilters = new Set(prev);
+      if (newFilters.has(filter)) {
+        newFilters.delete(filter);
+      } else {
+        newFilters.add(filter);
+      }
+      return newFilters;
+    });
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setActiveFilters(new Set());
+  };
+
+  // Filter items by search query and active filters
+  const filteredItems = scheduleItems.filter(item => {
+    // First apply active filters (if any)
+    if (activeFilters.size > 0 && !itemPassesFilters(item)) {
+      return false;
+    }
+
+    // Then apply search query
+    if (searchQuery.trim() === '') return true;
+
+    const query = searchQuery.toLowerCase();
+    const mark = (item.assembly_mark || '').toLowerCase();
+    const guidIfc = (item.guid_ifc || '').toLowerCase();
+    const guidMs = (item.guid_ms || '').toLowerCase();
+    const guid = (item.guid || '').toLowerCase();
+    // Also search in comments for this item
+    const itemComments = comments.filter(c => c.schedule_item_id === item.id);
+    const hasMatchingComment = itemComments.some(c =>
+      c.comment_text.toLowerCase().includes(query) ||
+      (c.created_by_name || '').toLowerCase().includes(query)
+    );
+    return mark.includes(query) || guidIfc.includes(query) || guidMs.includes(query) || guid.includes(query) || hasMatchingComment;
+  });
 
   // Group items by date (uses filtered items)
   const itemsByDate = filteredItems.reduce((acc, item) => {
@@ -4035,6 +4123,139 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           </button>
         )}
         <span className="search-count">{filteredItems.length}</span>
+
+        {/* Filter button and dropdown */}
+        <div className="filter-container" ref={filterDropdownRef}>
+          <button
+            className={`filter-btn ${activeFilters.size > 0 ? 'active' : ''}`}
+            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            title="Filtreeri ressursside järgi"
+          >
+            <FiFilter size={14} />
+            {activeFilters.size > 0 && (
+              <span className="filter-badge">{activeFilters.size}</span>
+            )}
+          </button>
+          {showFilterDropdown && (
+            <div className="filter-dropdown">
+              <div className="filter-header">
+                <span>Filtreeri</span>
+                {activeFilters.size > 0 && (
+                  <button className="filter-clear-all" onClick={clearFilters}>
+                    Tühista
+                  </button>
+                )}
+              </div>
+              <div className="filter-section">
+                <div className="filter-section-title">Hoiatused</div>
+                <label className={`filter-option ${activeFilters.has('warning') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('warning')}
+                    onChange={() => toggleFilter('warning')}
+                  />
+                  <FiAlertTriangle size={12} className="filter-icon warning" />
+                  <span>Tarnehoiatusega</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('no_method') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('no_method')}
+                    onChange={() => toggleFilter('no_method')}
+                  />
+                  <span>Ressursid määramata</span>
+                </label>
+              </div>
+              <div className="filter-section">
+                <div className="filter-section-title">Masinad</div>
+                <label className={`filter-option ${activeFilters.has('crane_1') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('crane_1')}
+                    onChange={() => toggleFilter('crane_1')}
+                  />
+                  <img src="/icons/crane.png" alt="" className="filter-method-icon" />
+                  <span>1 Kraana</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('crane_2plus') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('crane_2plus')}
+                    onChange={() => toggleFilter('crane_2plus')}
+                  />
+                  <img src="/icons/crane.png" alt="" className="filter-method-icon" />
+                  <span>2+ Kraanat</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('forklift') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('forklift')}
+                    onChange={() => toggleFilter('forklift')}
+                  />
+                  <img src="/icons/forklift.png" alt="" className="filter-method-icon" />
+                  <span>Teleskooplaadur</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('poomtostuk') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('poomtostuk')}
+                    onChange={() => toggleFilter('poomtostuk')}
+                  />
+                  <img src="/icons/poomtostuk.png" alt="" className="filter-method-icon" />
+                  <span>Korvtõstuk</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('kaartostuk') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('kaartostuk')}
+                    onChange={() => toggleFilter('kaartostuk')}
+                  />
+                  <img src="/icons/kaartostuk.png" alt="" className="filter-method-icon" />
+                  <span>Käärtõstuk</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('manual') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('manual')}
+                    onChange={() => toggleFilter('manual')}
+                  />
+                  <img src="/icons/manual.png" alt="" className="filter-method-icon" />
+                  <span>Käsitsi</span>
+                </label>
+              </div>
+              <div className="filter-section">
+                <div className="filter-section-title">Tööjõud</div>
+                <label className={`filter-option ${activeFilters.has('troppija') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('troppija')}
+                    onChange={() => toggleFilter('troppija')}
+                  />
+                  <img src="/icons/troppija.png" alt="" className="filter-method-icon" />
+                  <span>Troppija</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('monteerija') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('monteerija')}
+                    onChange={() => toggleFilter('monteerija')}
+                  />
+                  <img src="/icons/monteerija.png" alt="" className="filter-method-icon" />
+                  <span>Monteerija</span>
+                </label>
+                <label className={`filter-option ${activeFilters.has('keevitaja') ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={activeFilters.has('keevitaja')}
+                    onChange={() => toggleFilter('keevitaja')}
+                  />
+                  <img src="/icons/keevitaja.png" alt="" className="filter-method-icon" />
+                  <span>Keevitaja</span>
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Schedule List by Date */}
