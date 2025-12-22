@@ -993,6 +993,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   }, [loadFactories, loadVehicles, loadItems, loadComments]);
 
   // Link items with model - fetch real assembly marks from trimble_model_objects table
+  // Note: Currently unused as import now looks up data directly, but kept for potential manual re-link feature
+  // @ts-ignore - Intentionally unused, kept for potential manual re-link feature
   const linkItemsWithModel = useCallback(async (itemsToLink?: DeliveryItem[]) => {
     let targetItems: DeliveryItem[];
 
@@ -1052,13 +1054,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Lookup GUIDs in trimble_model_objects table (in batches to avoid URL length limit)
       const BATCH_SIZE = 100;
-      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; model_id: string | null; object_runtime_id: string | null }>();
+      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; cast_unit_weight: string | null; model_id: string | null; object_runtime_id: string | null }>();
 
       for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
         const batch = allGuids.slice(i, i + BATCH_SIZE);
         const { data: batchObjects, error: lookupError } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .in('guid_ifc', batch);
 
@@ -1094,6 +1096,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           };
 
           if (modelObj.product_name) updates.product_name = modelObj.product_name;
+          if (modelObj.cast_unit_weight) updates.cast_unit_weight = modelObj.cast_unit_weight;
           if (modelObj.model_id) updates.model_id = modelObj.model_id;
           if (modelObj.object_runtime_id) updates.object_runtime_id = modelObj.object_runtime_id;
 
@@ -1113,6 +1116,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const UPDATE_BATCH_SIZE = 50;
       let linkedCount = 0;
 
+      // Log first update for debugging
+      if (itemsToUpdate.length > 0) {
+        console.log('First item to update:', {
+          id: itemsToUpdate[0].id,
+          updates: itemsToUpdate[0].updates
+        });
+      }
+
       for (let i = 0; i < itemsToUpdate.length; i += UPDATE_BATCH_SIZE) {
         const batch = itemsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
 
@@ -1125,6 +1136,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               .eq('id', id)
           )
         );
+
+        // Log first batch errors if any
+        if (i === 0) {
+          const errors = results.filter(r => r.error);
+          if (errors.length > 0) {
+            console.log('First batch errors:', errors.map(r => r.error));
+          }
+          console.log('First batch results:', results.length, 'errors:', errors.length);
+        }
 
         linkedCount += results.filter(r => !r.error).length;
 
@@ -1140,6 +1160,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       await loadItems();
+
+      // Verify update worked - check first item
+      const { data: verifyItem } = await supabase
+        .from('trimble_delivery_items')
+        .select('id, assembly_mark, guid_ifc')
+        .eq('id', itemsToUpdate[0]?.id)
+        .single();
+      console.log('Verify first item after update:', verifyItem);
 
       // Show warning with not found items
       if (notFoundItems.length > 0) {
@@ -1910,12 +1938,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const addItemsToVehicle = async (vehicleId: string, date: string | null, comment?: string, objectsOverride?: SelectedObject[]) => {
     // Use provided objects or selectedObjects, and filter out those already in items
     const sourceObjects = objectsOverride || selectedObjects;
-    const existingGuids = new Set(items.map(item => item.guid));
-    const objectsToAdd = sourceObjects.filter(obj => !obj.guid || !existingGuids.has(obj.guid));
+
+    // Build sets for duplicate detection using multiple identifiers
+    const existingGuids = new Set(items.map(item => item.guid).filter(Boolean));
+    const existingGuidIfcs = new Set(items.map(item => item.guid_ifc).filter(Boolean));
+    const existingAssemblyMarks = new Set(items.map(item => item.assembly_mark).filter(Boolean));
+
+    // Check for duplicates and items already in a load
+    const duplicates: string[] = [];
+    const objectsToAdd = sourceObjects.filter(obj => {
+      // Check if already exists by GUID, IFC GUID, or assembly mark
+      const isDuplicate = (obj.guid && existingGuids.has(obj.guid)) ||
+                          (obj.guidIfc && existingGuidIfcs.has(obj.guidIfc)) ||
+                          (obj.assemblyMark && !obj.assemblyMark.startsWith('Object_') && existingAssemblyMarks.has(obj.assemblyMark));
+
+      if (isDuplicate) {
+        duplicates.push(obj.assemblyMark || obj.guid || obj.guidIfc || 'Tundmatu');
+      }
+      return !isDuplicate;
+    });
 
     if (objectsToAdd.length === 0) {
-      setMessage('Kõik valitud detailid on juba graafikus');
+      if (duplicates.length > 0) {
+        setMessage(`Kõik valitud detailid on juba graafikus: ${duplicates.slice(0, 5).join(', ')}${duplicates.length > 5 ? ` (+${duplicates.length - 5} veel)` : ''}`);
+      } else {
+        setMessage('Kõik valitud detailid on juba graafikus');
+      }
       return;
+    }
+
+    // Warn about duplicates that were skipped
+    if (duplicates.length > 0) {
+      console.log(`Skipped ${duplicates.length} duplicates:`, duplicates.slice(0, 10));
     }
 
     setSaving(true);
@@ -2787,13 +2841,96 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return;
       }
 
-      // Check for duplicates in existing items
-      const existingGuids = new Set(items.map(i => i.guid.toLowerCase()));
-      const duplicates = guids.filter(g => existingGuids.has(g.toLowerCase()));
+      // Build sets for duplicate detection using multiple identifiers
+      const existingGuids = new Set(items.map(i => i.guid?.toLowerCase()).filter(Boolean));
+      const existingGuidIfcs = new Set(items.map(i => i.guid_ifc?.toLowerCase()).filter(Boolean));
 
-      if (duplicates.length > 0) {
-        setMessage(`${duplicates.length} GUID-i on juba graafikus`);
+      // Check which GUIDs are duplicates
+      const duplicateGuids: string[] = [];
+      const uniqueGuids: string[] = [];
+
+      for (const guid of guids) {
+        const guidLower = guid.toLowerCase();
+        // Convert to IFC format for checking
+        const guidIfc = guid.length === 36 ? msToIfcGuid(guid).toLowerCase() : (guid.length === 22 ? guidLower : '');
+
+        const isDuplicate = existingGuids.has(guidLower) ||
+                           (guidIfc && existingGuidIfcs.has(guidIfc));
+
+        if (isDuplicate) {
+          duplicateGuids.push(guid);
+        } else {
+          uniqueGuids.push(guid);
+        }
+      }
+
+      if (uniqueGuids.length === 0) {
+        setMessage(`Kõik ${duplicateGuids.length} GUID-i on juba graafikus`);
+        setImporting(false);
         return;
+      }
+
+      // Log skipped duplicates
+      if (duplicateGuids.length > 0) {
+        console.log(`Skipping ${duplicateGuids.length} duplicate GUIDs:`, duplicateGuids.slice(0, 10));
+      }
+
+      // Continue with unique GUIDs only
+      const guidsToImport = uniqueGuids;
+
+      // Lookup all GUIDs in trimble_model_objects to get real data
+      setMessage(`Otsin andmebaasist ${guidsToImport.length} detaili andmeid...`);
+
+      // Convert all GUIDs to IFC format for lookup
+      const ifcGuidsToLookup = guidsToImport.map(guid =>
+        guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '')
+      ).filter(Boolean);
+
+      // Lookup in batches (100 at a time)
+      const BATCH_SIZE = 100;
+      const modelObjectsMap = new Map<string, {
+        guid_ifc: string;
+        assembly_mark: string;
+        product_name: string | null;
+        cast_unit_weight: string | null;
+        model_id: string | null;
+        object_runtime_id: number | null;
+      }>();
+
+      for (let i = 0; i < ifcGuidsToLookup.length; i += BATCH_SIZE) {
+        const batch = ifcGuidsToLookup.slice(i, i + BATCH_SIZE);
+        const { data: batchObjects, error: lookupError } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', batch);
+
+        if (lookupError) {
+          console.error('Error looking up model objects batch:', lookupError);
+          continue;
+        }
+
+        for (const obj of batchObjects || []) {
+          modelObjectsMap.set(obj.guid_ifc, obj);
+        }
+
+        const progress = Math.min(i + BATCH_SIZE, ifcGuidsToLookup.length);
+        setMessage(`Otsin andmebaasist... ${progress}/${ifcGuidsToLookup.length}`);
+      }
+
+      console.log(`Found ${modelObjectsMap.size}/${guidsToImport.length} objects in trimble_model_objects`);
+
+      // Track which GUIDs weren't found
+      const notFoundGuids: string[] = [];
+      for (const guid of guidsToImport) {
+        const ifcGuid = guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '');
+        if (ifcGuid && !modelObjectsMap.has(ifcGuid)) {
+          notFoundGuids.push(guid);
+        }
+      }
+
+      if (notFoundGuids.length > 0) {
+        console.log(`GUIDs not found in model:`, notFoundGuids.slice(0, 10));
       }
 
       if (hasDetailedData) {
@@ -2868,9 +3005,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         const factoriesMap = new Map((currentFactories || []).map(f => [f.factory_code.toLowerCase(), f]));
 
+        // Filter parsed data to only include non-duplicate GUIDs
+        const guidsToImportSet = new Set(guidsToImport.map(g => g.toLowerCase()));
+        const filteredParsedData = parsedImportData.filter(row =>
+          guidsToImportSet.has(row.guid.toLowerCase())
+        );
+
         const groups = new Map<string, typeof parsedImportData>();
 
-        for (const row of parsedImportData) {
+        for (const row of filteredParsedData) {
           // Determine factory code
           let factoryCode = row.factoryCode;
           if (!factoryCode && row.vehicleCode) {
@@ -2959,20 +3102,29 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             createdVehicles.push(newVehicle.vehicle_code);
           }
 
-          // Create items for this group
-          const newItems = groupItems.map((row, idx) => ({
-            trimble_project_id: projectId,
-            vehicle_id: vehicle!.id,
-            guid: row.guid,
-            guid_ifc: row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : ''),
-            guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
-            assembly_mark: `Import-${totalImported + idx + 1}`,
-            scheduled_date: scheduledDate,
-            sort_order: idx,
-            status: 'planned' as const,
-            created_by: tcUserEmail,
-            notes: row.comment || null
-          }));
+          // Create items for this group - use data from modelObjectsMap if available
+          const newItems = groupItems.map((row, idx) => {
+            const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
+            const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+
+            return {
+              trimble_project_id: projectId,
+              vehicle_id: vehicle!.id,
+              guid: row.guid,
+              guid_ifc: ifcGuid,
+              guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
+              assembly_mark: modelObj?.assembly_mark || `Import-${totalImported + idx + 1}`,
+              product_name: modelObj?.product_name || null,
+              cast_unit_weight: modelObj?.cast_unit_weight || null,
+              model_id: modelObj?.model_id || null,
+              object_runtime_id: modelObj?.object_runtime_id || null,
+              scheduled_date: scheduledDate,
+              sort_order: idx,
+              status: 'planned' as const,
+              created_by: tcUserEmail,
+              notes: row.comment || null
+            };
+          });
 
           const { error } = await supabase
             .from('trimble_delivery_items')
@@ -2986,24 +3138,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const vehicleInfo = createdVehicles.length > 0
           ? ` (loodud veokid: ${createdVehicles.join(', ')})`
           : '';
+        const skippedInfo = duplicateGuids.length > 0 ? `, ${duplicateGuids.length} vahele jäetud (duplikaadid)` : '';
         setShowImportModal(false);
         setImportText('');
         setParsedImportData([]);
 
-        // Auto-link with model after import (fetches fresh items from DB)
-        setMessage(`${totalImported} detaili imporditud${vehicleInfo}. Seon mudeliga...`);
-        const result = await linkItemsWithModel();
-        if (typeof result === 'object' && result.linkedCount > 0) {
-          if (result.notFoundItems.length > 0) {
-            const notFoundList = result.notFoundItems.slice(0, 5).map(i => i.assemblyMark).join(', ');
-            const moreText = result.notFoundItems.length > 5 ? ` +${result.notFoundItems.length - 5}` : '';
-            setMessage(`${totalImported} imporditud${vehicleInfo}, ${result.linkedCount} seotud. ⚠️ Ei leitud: ${notFoundList}${moreText}`);
-          } else {
-            setMessage(`${totalImported} detaili imporditud${vehicleInfo}, ${result.linkedCount} seotud mudeliga`);
-          }
-        } else {
-          setMessage(`${totalImported} detaili imporditud${vehicleInfo}`);
-        }
+        // Report results - data was already linked from modelObjectsMap
+        const linkedCount = modelObjectsMap.size;
+        const notFoundInfo = notFoundGuids.length > 0
+          ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
+          : '';
+
+        setMessage(`${totalImported} detaili imporditud${vehicleInfo}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
       } else {
         // SIMPLE IMPORT: All items to one new vehicle
         // Create vehicle for import
@@ -3015,20 +3161,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Reload vehicles to get the new one
         await loadVehicles();
 
-        // Try to find objects in model and add them
-        // For now, create items with just the GUID
-        const newItems = guids.map((guid, idx) => ({
-          trimble_project_id: projectId,
-          vehicle_id: vehicle!.id,
-          guid: guid,
-          guid_ifc: guid.length === 22 ? guid : (guid.length === 36 ? msToIfcGuid(guid) : ''),
-          guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
-          assembly_mark: `Import-${idx + 1}`,
-          scheduled_date: addModalDate,
-          sort_order: idx,
-          status: 'planned' as const,
-          created_by: tcUserEmail
-        }));
+        // Create items with data from modelObjectsMap
+        const newItems = guidsToImport.map((guid, idx) => {
+          const ifcGuid = guid.length === 22 ? guid : (guid.length === 36 ? msToIfcGuid(guid) : '');
+          const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+
+          return {
+            trimble_project_id: projectId,
+            vehicle_id: vehicle!.id,
+            guid: guid,
+            guid_ifc: ifcGuid,
+            guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
+            assembly_mark: modelObj?.assembly_mark || `Import-${idx + 1}`,
+            product_name: modelObj?.product_name || null,
+            cast_unit_weight: modelObj?.cast_unit_weight || null,
+            model_id: modelObj?.model_id || null,
+            object_runtime_id: modelObj?.object_runtime_id || null,
+            scheduled_date: addModalDate,
+            sort_order: idx,
+            status: 'planned' as const,
+            created_by: tcUserEmail
+          };
+        });
 
         const { error } = await supabase
           .from('trimble_delivery_items')
@@ -3040,20 +3194,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setShowImportModal(false);
         setImportText('');
 
-        // Auto-link with model after import (fetches fresh items from DB)
-        setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}. Seon mudeliga...`);
-        const result = await linkItemsWithModel();
-        if (typeof result === 'object' && result.linkedCount > 0) {
-          if (result.notFoundItems.length > 0) {
-            const notFoundList = result.notFoundItems.slice(0, 5).map(i => i.assemblyMark).join(', ');
-            const moreText = result.notFoundItems.length > 5 ? ` +${result.notFoundItems.length - 5}` : '';
-            setMessage(`${guids.length} imporditud, ${result.linkedCount} seotud. ⚠️ Ei leitud: ${notFoundList}${moreText}`);
-          } else {
-            setMessage(`${guids.length} detaili imporditud, ${result.linkedCount} seotud mudeliga`);
-          }
-        } else {
-          setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}`);
-        }
+        // Report results
+        const linkedCount = newItems.filter(i => !i.assembly_mark.startsWith('Import-')).length;
+        const skippedInfo = duplicateGuids.length > 0 ? `, ${duplicateGuids.length} vahele jäetud (duplikaadid)` : '';
+        const notFoundInfo = notFoundGuids.length > 0
+          ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
+          : '';
+
+        setMessage(`${guidsToImport.length} detaili imporditud veokisse ${vehicle.vehicle_code}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
       }
     } catch (e: any) {
       console.error('Error importing:', e);
