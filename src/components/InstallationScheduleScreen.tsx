@@ -194,6 +194,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Item menu state (three-dot menu)
   const [itemMenuId, setItemMenuId] = useState<string | null>(null);
 
+  // Date menu state (three-dot menu for date groups)
+  const [dateMenuId, setDateMenuId] = useState<string | null>(null);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -1582,6 +1585,163 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e) {
       console.error('Error taking screenshot:', e);
       setMessage('Viga pildistamisel');
+    }
+  };
+
+  // Create markups for all items on a date
+  // markupType: 'position' | 'mark' | 'both'
+  const createMarkupsForDate = async (date: string, markupType: 'position' | 'mark' | 'both') => {
+    const items = itemsByDate[date];
+    if (!items || items.length === 0) {
+      setMessage('Päeval pole detaile');
+      return;
+    }
+
+    setMessage('Loon markupe...');
+
+    try {
+      // Group items by model for batch processing
+      const itemsByModel = new Map<string, { item: ScheduleItem; idx: number; runtimeId: number }[]>();
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        if (!itemsByModel.has(modelId)) {
+          itemsByModel.set(modelId, []);
+        }
+        itemsByModel.get(modelId)!.push({ item, idx, runtimeId: runtimeIds[0] });
+      }
+
+      const markupsToCreate: any[] = [];
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          // Create fallback bboxes
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        for (const { item, idx, runtimeId } of modelItems) {
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          // Position in millimeters
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Build markup text based on type
+          let text = '';
+          const positionNum = idx + 1;
+          const assemblyMark = item.assembly_mark || '';
+
+          switch (markupType) {
+            case 'position':
+              text = String(positionNum);
+              break;
+            case 'mark':
+              text = assemblyMark;
+              break;
+            case 'both':
+              text = `${positionNum}. ${assemblyMark}`;
+              break;
+          }
+
+          if (!text) continue;
+
+          markupsToCreate.push({
+            text,
+            start: pos,
+            end: pos,
+          });
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua');
+        return;
+      }
+
+      // Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      // Extract created IDs
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // Set color to red
+      const markupColor = '#FF0000';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+        } catch (err) {
+          console.warn('Color set error:', err);
+        }
+      }
+
+      setMessage(`${createdIds.length} markupit loodud`);
+      setDateMenuId(null);
+    } catch (e) {
+      console.error('Error creating markups:', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
+  // Remove all markups
+  const removeAllMarkups = async () => {
+    try {
+      const allMarkups = await api.markup?.getTextMarkups?.();
+
+      if (!allMarkups || allMarkups.length === 0) {
+        setMessage('Markupe pole');
+        return;
+      }
+
+      const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+
+      if (allIds.length === 0) {
+        setMessage('Markupe pole');
+        return;
+      }
+
+      await api.markup?.removeMarkups?.(allIds);
+      setMessage(`${allIds.length} markupit eemaldatud`);
+      setDateMenuId(null);
+    } catch (e) {
+      console.error('Error removing markups:', e);
+      setMessage('Viga markupite eemaldamisel');
     }
   };
 
@@ -4400,12 +4560,43 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       )}
                     </button>
                     <button
-                      className="date-menu-btn"
-                      onClick={(e) => { e.stopPropagation(); /* TODO: date menu */ }}
+                      className={`date-menu-btn ${dateMenuId === date ? 'active' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); setDateMenuId(dateMenuId === date ? null : date); }}
                       title="Rohkem valikuid"
                     >
                       <FiMoreVertical size={14} />
                     </button>
+                    {/* Date menu dropdown */}
+                    {dateMenuId === date && (
+                      <div className="date-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                        <div className="date-menu-section-title">Markupid</div>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'position')}
+                        >
+                          <span className="menu-icon">📍</span> Positsioon
+                        </button>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'mark')}
+                        >
+                          <span className="menu-icon">🏷️</span> Cast unit mark
+                        </button>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'both')}
+                        >
+                          <span className="menu-icon">📋</span> Positsioon + Mark
+                        </button>
+                        <div className="date-menu-divider" />
+                        <button
+                          className="date-menu-option delete"
+                          onClick={() => removeAllMarkups()}
+                        >
+                          <span className="menu-icon">🗑️</span> Eemalda markupid
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {!isCollapsed && (
@@ -4642,13 +4833,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Click outside to close context menus */}
-      {(listItemContextMenu || itemMenuId || datePickerItemId) && (
+      {(listItemContextMenu || itemMenuId || datePickerItemId || dateMenuId) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
             setListItemContextMenu(null);
             setItemMenuId(null);
             setDatePickerItemId(null);
+            setDateMenuId(null);
           }}
         />
       )}
