@@ -2717,7 +2717,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             sort_order: idx,
             status: 'planned' as const,
             created_by: tcUserEmail,
-            comments: row.comment || null
+            notes: row.comment || null
           }));
 
           const { error } = await supabase

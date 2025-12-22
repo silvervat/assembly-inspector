@@ -1,7 +1,50 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Installation } from '../supabase';
+import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
 import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers } from 'react-icons/fi';
+
+// ============================================
+// PAIGALDUSVIISID - Installation Methods Config
+// ============================================
+interface MethodConfig {
+  key: InstallMethodType;
+  label: string;
+  icon: string;
+  bgColor: string;
+  activeBgColor: string;
+  filterCss: string;
+  maxCount: number;
+  defaultCount: number;
+  category: 'machine' | 'labor';
+}
+
+const INSTALL_METHODS_CONFIG: MethodConfig[] = [
+  // Machines
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
+  // Labor
+  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
+  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
+];
+
+// Load default counts from localStorage
+const loadDefaultCounts = (): Record<InstallMethodType, number> => {
+  try {
+    const saved = localStorage.getItem('installMethodDefaults');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('Failed to load install method defaults:', e);
+  }
+  const defaults: Record<string, number> = {};
+  INSTALL_METHODS_CONFIG.forEach(m => { defaults[m.key] = m.defaultCount; });
+  return defaults as Record<InstallMethodType, number>;
+};
 
 // GUID helper functions
 function normalizeGuid(s: string): string {
@@ -163,21 +206,19 @@ export default function InstallationsScreen({
   const [installDate, setInstallDate] = useState<string>(getLocalDateTimeString());
   const [notes, setNotes] = useState<string>('');
 
-  // Installation methods (multi-select with checkboxes)
-  const INSTALL_METHODS = ['Kraana', 'Upitaja', 'Käsitsi', 'Muu'] as const;
-  const [selectedMethods, setSelectedMethods] = useState<Set<string>>(() => {
+  // Installation methods (icon-based with counts)
+  const [selectedInstallMethods, setSelectedInstallMethods] = useState<InstallMethods>(() => {
     // Load from localStorage
-    const saved = localStorage.getItem(`install_methods_${projectId}`);
+    const saved = localStorage.getItem(`install_methods_v2_${projectId}`);
     if (saved) {
       try {
-        return new Set(JSON.parse(saved));
+        return JSON.parse(saved);
       } catch { /* ignore */ }
     }
-    return new Set(['Kraana']);
+    return { crane: 1 }; // Default: 1 crane
   });
-  const [customMethodDesc, setCustomMethodDesc] = useState<string>(() => {
-    return localStorage.getItem(`install_custom_desc_${projectId}`) || '';
-  });
+  const [methodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
+  const [hoveredMethod, setHoveredMethod] = useState<InstallMethodType | null>(null);
 
   // Team members
   const [teamMembers, setTeamMembers] = useState<string[]>(() => {
@@ -287,14 +328,10 @@ export default function InstallationsScreen({
     }
   }, [message]);
 
-  // Save settings to localStorage when they change
+  // Save install methods to localStorage when they change
   useEffect(() => {
-    localStorage.setItem(`install_methods_${projectId}`, JSON.stringify(Array.from(selectedMethods)));
-  }, [selectedMethods, projectId]);
-
-  useEffect(() => {
-    localStorage.setItem(`install_custom_desc_${projectId}`, customMethodDesc);
-  }, [customMethodDesc, projectId]);
+    localStorage.setItem(`install_methods_v2_${projectId}`, JSON.stringify(selectedInstallMethods));
+  }, [selectedInstallMethods, projectId]);
 
   useEffect(() => {
     localStorage.setItem(`team_members_${projectId}`, JSON.stringify(teamMembers));
@@ -332,37 +369,30 @@ export default function InstallationsScreen({
     loadKnownTeamMembers();
   }, [projectId]);
 
-  // Toggle installation method
-  const toggleMethod = (method: string) => {
-    const newMethods = new Set(selectedMethods);
-
-    if (method === 'Muu') {
-      // If selecting "Muu", clear all others
-      if (!newMethods.has('Muu')) {
-        newMethods.clear();
-        newMethods.add('Muu');
+  // Toggle install method on/off
+  const toggleInstallMethod = (method: InstallMethodType) => {
+    setSelectedInstallMethods(prev => {
+      const newMethods = { ...prev };
+      if (newMethods[method]) {
+        // Remove method
+        delete newMethods[method];
       } else {
-        // If deselecting "Muu", just remove it
-        newMethods.delete('Muu');
-        if (newMethods.size === 0) newMethods.add('Kraana'); // Default
+        // Add method with default count
+        newMethods[method] = methodDefaults[method] || INSTALL_METHODS_CONFIG.find(m => m.key === method)?.defaultCount || 1;
       }
-    } else {
-      // If selecting non-Muu method, remove "Muu" if present
-      if (newMethods.has('Muu')) {
-        newMethods.delete('Muu');
-        setCustomMethodDesc('');
-      }
+      return newMethods;
+    });
+  };
 
-      if (newMethods.has(method)) {
-        newMethods.delete(method);
-        // Ensure at least one method is selected
-        if (newMethods.size === 0) newMethods.add('Kraana');
-      } else {
-        newMethods.add(method);
-      }
-    }
-
-    setSelectedMethods(newMethods);
+  // Set count for a method
+  const setMethodCount = (method: InstallMethodType, count: number) => {
+    const config = INSTALL_METHODS_CONFIG.find(m => m.key === method);
+    if (!config) return;
+    const validCount = Math.max(1, Math.min(count, config.maxCount));
+    setSelectedInstallMethods(prev => ({
+      ...prev,
+      [method]: validCount
+    }));
   };
 
   // Filter suggestions based on input
@@ -811,13 +841,14 @@ export default function InstallationsScreen({
       const installerName = tcUserName || user.name || user.email.split('@')[0];
       const userEmail = tcUserEmail || user.email;
 
-      // Determine method name from multi-select
-      let methodName: string;
-      if (selectedMethods.has('Muu') && customMethodDesc) {
-        methodName = `Muu: ${customMethodDesc}`;
-      } else {
-        methodName = Array.from(selectedMethods).join(', ');
-      }
+      // Convert install methods to display string
+      const methodName = Object.entries(selectedInstallMethods)
+        .filter(([, count]) => count && count > 0)
+        .map(([key, count]) => {
+          const config = INSTALL_METHODS_CONFIG.find(m => m.key === key);
+          return count === 1 ? config?.label : `${count}x ${config?.label}`;
+        })
+        .join(', ');
 
       const installationsToSave = newObjects.map(obj => ({
         project_id: projectId,
@@ -1329,33 +1360,126 @@ export default function InstallationsScreen({
             </div>
 
             <div className="form-row">
-              <label><FiTruck size={14} /> Paigaldus meetod</label>
-              <div className="method-checkboxes">
-                {INSTALL_METHODS.map(method => (
-                  <label key={method} className={`method-checkbox ${selectedMethods.has(method) ? 'checked' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={selectedMethods.has(method)}
-                      onChange={() => toggleMethod(method)}
-                    />
-                    <span>{method}</span>
-                  </label>
-                ))}
+              <label>Paigaldus ressursid</label>
+              {/* Machines row */}
+              <div className="install-methods-row">
+                {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
+                  const isActive = !!selectedInstallMethods[method.key];
+                  const count = selectedInstallMethods[method.key] || 0;
+                  const isHovered = hoveredMethod === method.key;
+
+                  return (
+                    <div
+                      key={method.key}
+                      className="method-selector-wrapper"
+                      onMouseEnter={() => setHoveredMethod(method.key)}
+                      onMouseLeave={() => setHoveredMethod(null)}
+                    >
+                      <button
+                        type="button"
+                        className={`method-icon-btn ${isActive ? 'active' : ''}`}
+                        style={{
+                          backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                        }}
+                        onClick={() => toggleInstallMethod(method.key)}
+                        title={method.label}
+                      >
+                        <img
+                          src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                          alt={method.label}
+                          style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                        />
+                        {isActive && count > 0 && (
+                          <span
+                            className="method-count-badge"
+                            style={{ backgroundColor: `${method.activeBgColor}dd` }}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </button>
+
+                      {isHovered && isActive && (
+                        <div className="method-qty-dropdown">
+                          {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                            <button
+                              key={num}
+                              type="button"
+                              className={`qty-btn ${count === num ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMethodCount(method.key, num);
+                              }}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Labor row */}
+              <div className="install-methods-row">
+                {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
+                  const isActive = !!selectedInstallMethods[method.key];
+                  const count = selectedInstallMethods[method.key] || 0;
+                  const isHovered = hoveredMethod === method.key;
+
+                  return (
+                    <div
+                      key={method.key}
+                      className="method-selector-wrapper"
+                      onMouseEnter={() => setHoveredMethod(method.key)}
+                      onMouseLeave={() => setHoveredMethod(null)}
+                    >
+                      <button
+                        type="button"
+                        className={`method-icon-btn ${isActive ? 'active' : ''}`}
+                        style={{
+                          backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                        }}
+                        onClick={() => toggleInstallMethod(method.key)}
+                        title={method.label}
+                      >
+                        <img
+                          src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                          alt={method.label}
+                          style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                        />
+                        {isActive && count > 0 && (
+                          <span
+                            className="method-count-badge"
+                            style={{ backgroundColor: `${method.activeBgColor}dd` }}
+                          >
+                            {count}
+                          </span>
+                        )}
+                      </button>
+
+                      {isHovered && isActive && (
+                        <div className="method-qty-dropdown">
+                          {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                            <button
+                              key={num}
+                              type="button"
+                              className={`qty-btn ${count === num ? 'active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMethodCount(method.key, num);
+                              }}
+                            >
+                              {num}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
-
-            {selectedMethods.has('Muu') && (
-              <div className="form-row">
-                <label><FiEdit2 size={14} /> Kirjelda meetodit</label>
-                <textarea
-                  value={customMethodDesc}
-                  onChange={(e) => setCustomMethodDesc(e.target.value)}
-                  placeholder="Kuidas paigaldati..."
-                  className="full-width-textarea"
-                  rows={2}
-                />
-              </div>
-            )}
 
             <div className="form-row">
               <label><FiUsers size={14} /> Meeskond <span className="required-indicator">*</span></label>

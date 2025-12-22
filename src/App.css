@@ -6563,41 +6563,114 @@ button.stat-toggle.off:hover {
   margin-left: 2px;
 }
 
-/* Method checkboxes */
-.method-checkboxes {
+/* Install methods row (icon-based) */
+.install-methods-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 0;
+  overflow: visible;
 }
 
-.method-checkbox {
-  display: inline-flex;
+.method-selector-wrapper {
+  position: relative;
+  padding-bottom: 6px;
+}
+
+.method-icon-btn {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--modus-bg-secondary);
-  border: 1px solid var(--modus-border);
-  border-radius: var(--modus-radius-sm);
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 6px;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  position: relative;
   transition: all 0.15s;
 }
 
-.method-checkbox:hover {
-  background: var(--modus-bg-tertiary);
+.method-icon-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
-.method-checkbox.checked {
-  background: var(--modus-primary-selected);
-  border-color: var(--modus-primary);
-  color: var(--modus-primary-dark);
+.method-icon-btn.active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.method-checkbox input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--modus-primary);
+.method-icon-btn img {
+  width: 24px;
+  height: 24px;
+}
+
+.method-icon-btn .method-count-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.method-qty-dropdown {
+  position: absolute;
+  top: calc(100% - 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  width: max-content;
+  max-width: 120px;
+}
+
+.method-qty-dropdown .qty-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.method-qty-dropdown .qty-btn:hover {
+  background: #f3f4f6;
+  border-color: #93c5fd;
+  color: #1f2937;
+}
+
+.method-qty-dropdown .qty-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.method-qty-dropdown .qty-btn.active:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
 }
 
 .save-installation-btn {
