@@ -135,15 +135,15 @@ const TIME_OPTIONS = [
 
 const DURATION_OPTIONS = [
   { value: 0, label: '-' },  // Kestus pole veel teada
-  { value: 15, label: '0.25h' },
-  { value: 30, label: '0.5h' },
-  { value: 45, label: '0.75h' },
+  { value: 15, label: '0h 15min' },
+  { value: 30, label: '0h 30min' },
+  { value: 45, label: '0h 45min' },
   { value: 60, label: '1h' },
-  { value: 75, label: '1.25h' },
-  { value: 90, label: '1.5h' },
-  { value: 105, label: '1.75h' },
+  { value: 75, label: '1h 15min' },
+  { value: 90, label: '1h 30min' },
+  { value: 105, label: '1h 45min' },
   { value: 120, label: '2h' },
-  { value: 150, label: '2.5h' },
+  { value: 150, label: '2h 30min' },
   { value: 180, label: '3h' },
   { value: 240, label: '4h' },
   { value: 300, label: '5h' },
