@@ -2591,8 +2591,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               f.factory_code.toLowerCase() === factoryCode!.toLowerCase()
             );
             if (!exists && !factoriesToCreate.has(factoryCode.toLowerCase())) {
-              // Generate factory name from code
-              const factoryName = `Tehas ${factoryCode}`;
               factoriesToCreate.set(factoryCode.toLowerCase(), factoryCode);
             }
           }
@@ -2602,16 +2600,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const createdFactories: string[] = [];
         for (const [, factoryCode] of factoriesToCreate) {
           const factoryName = `Tehas ${factoryCode}`;
-          const { data: newFactory, error } = await supabase
+          const { error } = await supabase
             .from('trimble_delivery_factories')
             .insert({
               trimble_project_id: projectId,
               factory_name: factoryName,
               factory_code: factoryCode,
               vehicle_separator: ''  // No separator for codes like GDI-T7
-            })
-            .select()
-            .single();
+            });
 
           if (error) {
             console.error('Error creating factory:', error);
