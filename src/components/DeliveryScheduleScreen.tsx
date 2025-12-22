@@ -1113,6 +1113,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const UPDATE_BATCH_SIZE = 50;
       let linkedCount = 0;
 
+      // Log first update for debugging
+      if (itemsToUpdate.length > 0) {
+        console.log('First item to update:', {
+          id: itemsToUpdate[0].id,
+          updates: itemsToUpdate[0].updates
+        });
+      }
+
       for (let i = 0; i < itemsToUpdate.length; i += UPDATE_BATCH_SIZE) {
         const batch = itemsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
 
@@ -1125,6 +1133,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               .eq('id', id)
           )
         );
+
+        // Log first batch errors if any
+        if (i === 0) {
+          const errors = results.filter(r => r.error);
+          if (errors.length > 0) {
+            console.log('First batch errors:', errors.map(r => r.error));
+          }
+          console.log('First batch results:', results.length, 'errors:', errors.length);
+        }
 
         linkedCount += results.filter(r => !r.error).length;
 
@@ -1140,6 +1157,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       await loadItems();
+
+      // Verify update worked - check first item
+      const { data: verifyItem } = await supabase
+        .from('trimble_delivery_items')
+        .select('id, assembly_mark, guid_ifc')
+        .eq('id', itemsToUpdate[0]?.id)
+        .single();
+      console.log('Verify first item after update:', verifyItem);
 
       // Show warning with not found items
       if (notFoundItems.length > 0) {
