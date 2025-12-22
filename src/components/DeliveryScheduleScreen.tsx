@@ -5592,7 +5592,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                                       if (isActive) {
                                                         delete newMethods[method.key];
                                                       } else {
-                                                        newMethods[method.key] = method.defaultCount;
+                                                        newMethods[method.key] = 1;
                                                       }
                                                       setVehicles(prev => prev.map(v =>
                                                         v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
@@ -5611,7 +5611,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                                     />
                                                     {isActive && <span className="method-badge">{currentCount}</span>}
                                                   </button>
-                                                  {isHovered && isActive && method.maxCount > 1 && (
+                                                  {/* Show quantity dropdown on hover for all resources with maxCount > 1 */}
+                                                  {isHovered && method.maxCount > 1 && (
                                                     <div className="method-qty-dropdown quick">
                                                       {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                                                         <button
@@ -5679,7 +5680,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                                       if (isActive) {
                                                         delete newMethods[method.key];
                                                       } else {
-                                                        newMethods[method.key] = method.defaultCount;
+                                                        newMethods[method.key] = 1;
                                                       }
                                                       setVehicles(prev => prev.map(v =>
                                                         v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
@@ -5698,7 +5699,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                                     />
                                                     {isActive && <span className="method-badge">{currentCount}</span>}
                                                   </button>
-                                                  {isHovered && isActive && method.maxCount > 1 && (
+                                                  {/* Show quantity dropdown on hover for all resources with maxCount > 1 */}
+                                                  {isHovered && method.maxCount > 1 && (
                                                     <div className="method-qty-dropdown quick">
                                                       {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                                                         <button
@@ -6677,7 +6679,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <span className="method-badge">{count}</span>
                           )}
                         </button>
-                        {isHovered && isActive && method.maxCount > 1 && (
+                        {/* Show quantity dropdown on hover for all resources with maxCount > 1 */}
+                                                  {isHovered && method.maxCount > 1 && (
                           <div className="method-qty-dropdown">
                             {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(n => (
                               <button
@@ -7420,7 +7423,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <span className="method-badge">{count}</span>
                           )}
                         </button>
-                        {isHovered && isActive && method.maxCount > 1 && (
+                        {/* Show quantity dropdown on hover for all resources with maxCount > 1 */}
+                                                  {isHovered && method.maxCount > 1 && (
                           <div className="method-qty-dropdown">
                             {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
                               <button
