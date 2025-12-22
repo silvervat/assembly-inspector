@@ -1071,6 +1071,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         for (const model of models) {
           try {
             const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+
+            // Log first few lookups for debugging
+            if (linkedCount + notFoundCount + noGuidCount < 5) {
+              console.log(`Lookup ${item.assembly_mark}: IFC=${guidIfc}, model=${model.id}, runtimeIds=`, runtimeIds);
+            }
+
             if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
               continue;
             }
@@ -1080,6 +1086,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
             // Get object properties
             const props = await api.viewer.getObjectProperties(model.id, [runtimeId]);
+
+            // Log first few for debugging
+            if (linkedCount < 3) {
+              console.log(`Props for ${item.assembly_mark}:`, JSON.stringify(props?.[0], null, 2).slice(0, 1000));
+            }
+
             if (!props || !props[0]) continue;
 
             const objProps = props[0];
@@ -1094,7 +1106,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               productName = String(productObj.name);
             }
 
-            // Parse properties
+            // Parse properties - collect all property names for debugging
+            const allPropNames: string[] = [];
             const propertiesList = objProps?.properties;
             if (propertiesList && Array.isArray(propertiesList)) {
               for (const pset of propertiesList) {
@@ -1105,6 +1118,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   const rawName = ((prop as any).name || '');
                   const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  allPropNames.push(rawName);
 
                   if (propValue === undefined || propValue === null || propValue === '') continue;
 
@@ -1128,6 +1143,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
                 }
               }
+            }
+
+            // Log first few property sets for debugging
+            if (linkedCount < 3) {
+              console.log(`All property names for ${item.assembly_mark}:`, allPropNames);
+              console.log(`Found assemblyMark: "${assemblyMark}"`);
             }
 
             // Update item if we found data
