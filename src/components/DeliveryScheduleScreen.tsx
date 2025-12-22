@@ -385,12 +385,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Playback settings
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [playbackSettings, setPlaybackSettings] = useState({
-    colorByVehicle: true,      // Color each vehicle differently
-    colorByDay: false,         // Color each day differently
+    playbackMode: 'vehicle' as 'vehicle' | 'date',  // Play by vehicle or by date
     expandItemsDuringPlayback: true, // Expand vehicle items during playback
     showVehicleOverview: true, // Show vehicle overview when vehicle completes
     disableZoom: false
   });
+
+  // Playback colors - store colors during playback for UI indicators
+  const [playbackVehicleColors, setPlaybackVehicleColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+  const [playbackDateColors, setPlaybackDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+  const [playbackColoredDates, setPlaybackColoredDates] = useState<Set<string>>(new Set());
+  const [playbackColoredVehicles, setPlaybackColoredVehicles] = useState<Set<string>>(new Set());
 
   // Add items modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -2853,28 +2858,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     // Sort vehicles by date, then time, then sort_order
     const sortedVehicles = [...vehicles].sort((a, b) => {
-      // First by date (null dates go last)
       if (a.scheduled_date !== b.scheduled_date) {
         if (!a.scheduled_date) return 1;
         if (!b.scheduled_date) return -1;
         return a.scheduled_date.localeCompare(b.scheduled_date);
       }
-      // Then by unload_start_time (empty times go last)
       const timeA = a.unload_start_time || '99:99';
       const timeB = b.unload_start_time || '99:99';
-      if (timeA !== timeB) {
-        return timeA.localeCompare(timeB);
-      }
-      // Then by sort_order
+      if (timeA !== timeB) return timeA.localeCompare(timeB);
       return (a.sort_order ?? 999) - (b.sort_order ?? 999);
     });
+
+    // Get unique dates in order
+    const sortedDatesForPlayback = [...new Set(
+      sortedVehicles.map(v => v.scheduled_date || UNASSIGNED_DATE)
+    )];
 
     setIsPlaying(true);
     setIsPaused(false);
     setCurrentPlayVehicleIndex(0);
+    setPlaybackColoredDates(new Set());
+    setPlaybackColoredVehicles(new Set());
 
-    // Generate vehicle colors
-    const vehicleColors = generateDateColors(sortedVehicles.map(v => v.id));
+    // Generate colors based on playback mode
+    const vColors = generateColorsForKeys(sortedVehicles.map(v => v.id));
+    const dColors = generateColorsForKeys(sortedDatesForPlayback);
+    setPlaybackVehicleColors(vColors);
+    setPlaybackDateColors(dColors);
 
     // Clear all colors first
     try {
@@ -2883,7 +2893,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.error('Error clearing colors:', e);
     }
 
-    // Step 1: Fetch all objects from Supabase and color non-schedule items WHITE
+    // Step 1: Fetch all objects from Supabase
     setMessage('Playback: Loen Supabasest...');
     const PAGE_SIZE = 5000;
     const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
@@ -2898,41 +2908,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         .order('object_runtime_id', { ascending: true })
         .limit(PAGE_SIZE);
 
-      if (error) {
-        console.error('Supabase error:', error);
-        break;
-      }
-
+      if (error) { console.error('Supabase error:', error); break; }
       if (!data || data.length === 0) break;
 
       allModelObjects.push(...data);
       lastId = data[data.length - 1].object_runtime_id;
-
       setMessage(`Playback: Loetud ${allModelObjects.length} kirjet...`);
-
       if (data.length < PAGE_SIZE) break;
     }
 
-    // Get schedule item IDs
-    const scheduleRuntimeIds = new Set(
-      items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
-    );
-
-    // Color non-schedule items WHITE
+    // Step 2: Color ALL objects WHITE (including schedule items - they start gray/white)
     if (allModelObjects.length > 0) {
-      const whiteByModel: Record<string, number[]> = {};
+      const byModel: Record<string, number[]> = {};
       for (const obj of allModelObjects) {
-        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
-          if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
-          whiteByModel[obj.model_id].push(obj.object_runtime_id);
-        }
+        if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
+        byModel[obj.model_id].push(obj.object_runtime_id);
       }
 
       const BATCH_SIZE = 5000;
-      let whiteCount = 0;
-      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+      let count = 0;
+      const total = allModelObjects.length;
 
-      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           try {
@@ -2940,102 +2937,144 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
               { color: { r: 255, g: 255, b: 255, a: 255 } }
             );
-          } catch (e) {
-            console.error('Error coloring white:', e);
-          }
-          whiteCount += batch.length;
-          setMessage(`Playback: Valged ${whiteCount}/${totalWhite}...`);
+          } catch (e) { console.error('Error coloring white:', e); }
+          count += batch.length;
+          setMessage(`Playback: Valged ${count}/${total}...`);
         }
       }
     }
 
     setMessage('Playback alustab...');
 
-    // Play through vehicles
-    const playVehicle = async (vehicleIndex: number) => {
-      if (vehicleIndex >= sortedVehicles.length) {
-        setIsPlaying(false);
-        setCurrentPlaybackVehicleId(null);
-        setMessage('Playback lõpetatud!');
-        return;
-      }
-
-      const vehicle = sortedVehicles[vehicleIndex];
-      const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
-
-      // Set current playback vehicle for highlighting
-      setCurrentPlaybackVehicleId(vehicle.id);
-
-      // Scroll vehicle into view
-      setTimeout(() => {
-        const vehicleElement = document.querySelector(`[data-vehicle-id="${vehicle.id}"]`);
-        if (vehicleElement) {
-          vehicleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Playback by DATE
+    if (playbackSettings.playbackMode === 'date') {
+      const playDate = async (dateIndex: number) => {
+        if (dateIndex >= sortedDatesForPlayback.length) {
+          setIsPlaying(false);
+          setCurrentPlaybackVehicleId(null);
+          setMessage('Playback lõpetatud!');
+          return;
         }
-      }, 50);
 
-      if (vehicleItems.length === 0) {
-        // Skip empty vehicles
-        playbackRef.current = setTimeout(() => playVehicle(vehicleIndex + 1), 100);
-        return;
-      }
+        const date = sortedDatesForPlayback[dateIndex];
+        const dateVehicles = sortedVehicles.filter(v => (v.scheduled_date || UNASSIGNED_DATE) === date);
+        const color = dColors[date] || { r: 0, g: 255, b: 0 };
 
-      // Expand date group always, vehicle items based on setting
-      setCollapsedDates(prev => {
-        const next = new Set(prev);
-        next.delete(vehicle.scheduled_date || UNASSIGNED_DATE);
-        return next;
-      });
-      if (playbackSettings.expandItemsDuringPlayback) {
-        setCollapsedVehicles(prev => {
-          const next = new Set(prev);
-          next.delete(vehicle.id);
-          return next;
-        });
-      }
+        // Mark date as colored
+        setPlaybackColoredDates(prev => new Set([...prev, date]));
 
-      // Get runtime IDs for vehicle items
-      const runtimeIds: number[] = [];
-      for (const item of vehicleItems) {
-        if (item.object_runtime_id) {
-          runtimeIds.push(item.object_runtime_id);
+        // Expand date
+        setCollapsedDates(prev => { const next = new Set(prev); next.delete(date); return next; });
+
+        // Scroll to date
+        setTimeout(() => {
+          const dateElement = document.querySelector(`[data-date="${date}"]`);
+          if (dateElement) dateElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 50);
+
+        // Color all vehicles of this date
+        for (const vehicle of dateVehicles) {
+          const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+          const byModel: Record<string, number[]> = {};
+          for (const item of vehicleItems) {
+            if (item.model_id && item.object_runtime_id) {
+              if (!byModel[item.model_id]) byModel[item.model_id] = [];
+              byModel[item.model_id].push(item.object_runtime_id);
+            }
+          }
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            try {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+              );
+            } catch (e) { console.error('Error coloring date:', e); }
+          }
         }
-      }
 
-      if (runtimeIds.length > 0) {
-        try {
-          // Select all items in vehicle
-          const modelId = vehicleItems[0].model_id;
-          if (modelId) {
-            await api.viewer.setSelection({
-              modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
-            }, 'set');
+        // Zoom to first vehicle of date
+        const firstVehicle = dateVehicles[0];
+        if (firstVehicle && !playbackSettings.disableZoom) {
+          const vItems = items.filter(i => i.vehicle_id === firstVehicle.id && i.object_runtime_id);
+          if (vItems.length > 0 && vItems[0].model_id) {
+            try {
+              await api.viewer.setSelection({
+                modelObjectIds: [{ modelId: vItems[0].model_id, objectRuntimeIds: vItems.map(i => i.object_runtime_id!) }]
+              }, 'set');
+              await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+            } catch (e) { console.error('Error zooming:', e); }
+          }
+        }
 
-            // Color vehicle
-            const color = vehicleColors[vehicle.id] || { r: 0, g: 255, b: 0 };
+        setMessage(`Kuupäev ${dateIndex + 1}/${sortedDatesForPlayback.length}: ${date === UNASSIGNED_DATE ? 'MÄÄRAMATA' : date}`);
+        playbackRef.current = setTimeout(() => playDate(dateIndex + 1), playbackSpeed);
+      };
+
+      playDate(0);
+    }
+    // Playback by VEHICLE
+    else {
+      const playVehicle = async (vehicleIndex: number) => {
+        if (vehicleIndex >= sortedVehicles.length) {
+          setIsPlaying(false);
+          setCurrentPlaybackVehicleId(null);
+          setMessage('Playback lõpetatud!');
+          return;
+        }
+
+        const vehicle = sortedVehicles[vehicleIndex];
+        const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+        const color = vColors[vehicle.id] || { r: 0, g: 255, b: 0 };
+
+        setCurrentPlaybackVehicleId(vehicle.id);
+        setPlaybackColoredVehicles(prev => new Set([...prev, vehicle.id]));
+
+        // Scroll vehicle into view
+        setTimeout(() => {
+          const vehicleElement = document.querySelector(`[data-vehicle-id="${vehicle.id}"]`);
+          if (vehicleElement) vehicleElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 50);
+
+        if (vehicleItems.length === 0) {
+          playbackRef.current = setTimeout(() => playVehicle(vehicleIndex + 1), 100);
+          return;
+        }
+
+        // Expand date and vehicle
+        setCollapsedDates(prev => { const next = new Set(prev); next.delete(vehicle.scheduled_date || UNASSIGNED_DATE); return next; });
+        if (playbackSettings.expandItemsDuringPlayback) {
+          setCollapsedVehicles(prev => { const next = new Set(prev); next.delete(vehicle.id); return next; });
+        }
+
+        // Color vehicle items
+        const byModel: Record<string, number[]> = {};
+        for (const item of vehicleItems) {
+          if (item.model_id && item.object_runtime_id) {
+            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+            byModel[item.model_id].push(item.object_runtime_id);
+          }
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          try {
+            await api.viewer.setSelection({ modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] }, 'set');
             await api.viewer.setObjectState(
               { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
               { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
             );
-
-            // Zoom to vehicle
             if (!playbackSettings.disableZoom) {
               await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
             }
-          }
-        } catch (e) {
-          console.error('Error in playback:', e);
+          } catch (e) { console.error('Error in playback:', e); }
         }
-      }
 
-      setCurrentPlayVehicleIndex(vehicleIndex);
-      setMessage(`Veok ${vehicleIndex + 1}/${sortedVehicles.length}: ${vehicle.vehicle_code}`);
+        setCurrentPlayVehicleIndex(vehicleIndex);
+        setMessage(`Veok ${vehicleIndex + 1}/${sortedVehicles.length}: ${vehicle.vehicle_code}`);
+        playbackRef.current = setTimeout(() => playVehicle(vehicleIndex + 1), playbackSpeed);
+      };
 
-      // Wait and move to next vehicle
-      playbackRef.current = setTimeout(() => playVehicle(vehicleIndex + 1), playbackSpeed);
-    };
-
-    playVehicle(0);
+      playVehicle(0);
+    }
   };
 
   const pausePlayback = () => {
@@ -5937,12 +5976,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }}
                   title="Märgista mudelis"
                 >
-                  {colorMode === 'date' && dateColors[date] && (
+                  {/* Color indicator: show during colorMode or playback */}
+                  {(colorMode === 'date' && dateColors[date]) || (isPlaying && playbackSettings.playbackMode === 'date' && playbackColoredDates.has(date) && playbackDateColors[date]) ? (
                     <span
                       className="color-indicator"
-                      style={{ backgroundColor: `rgb(${dateColors[date].r}, ${dateColors[date].g}, ${dateColors[date].b})` }}
+                      style={{
+                        backgroundColor: isPlaying && playbackSettings.playbackMode === 'date' && playbackColoredDates.has(date) && playbackDateColors[date]
+                          ? `rgb(${playbackDateColors[date].r}, ${playbackDateColors[date].g}, ${playbackDateColors[date].b})`
+                          : dateColors[date]
+                            ? `rgb(${dateColors[date].r}, ${dateColors[date].g}, ${dateColors[date].b})`
+                            : undefined
+                      }}
                     />
-                  )}
+                  ) : null}
                   <div className="date-text-wrapper">
                     <span className="date-primary">{isUnassignedDate ? 'MÄÄRAMATA' : formatDateShort(date)}</span>
                     {!isUnassignedDate && <span className="date-secondary">{getDayName(date)}</span>}
@@ -6073,10 +6119,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             </span>
 
                             <span
-                              className={`vehicle-icon-wrapper ${colorMode === 'vehicle' && vehicleColors[vehicleId] ? 'has-color' : ''}`}
-                              style={colorMode === 'vehicle' && vehicleColors[vehicleId] ? {
-                                backgroundColor: `rgb(${vehicleColors[vehicleId].r}, ${vehicleColors[vehicleId].g}, ${vehicleColors[vehicleId].b})`
-                              } : undefined}
+                              className={`vehicle-icon-wrapper ${(colorMode === 'vehicle' && vehicleColors[vehicleId]) || (isPlaying && playbackSettings.playbackMode === 'vehicle' && playbackColoredVehicles.has(vehicleId) && playbackVehicleColors[vehicleId]) ? 'has-color' : ''}`}
+                              style={
+                                // During playback, show playback colors
+                                isPlaying && playbackSettings.playbackMode === 'vehicle' && playbackColoredVehicles.has(vehicleId) && playbackVehicleColors[vehicleId]
+                                  ? { backgroundColor: `rgb(${playbackVehicleColors[vehicleId].r}, ${playbackVehicleColors[vehicleId].g}, ${playbackVehicleColors[vehicleId].b})` }
+                                  : colorMode === 'vehicle' && vehicleColors[vehicleId]
+                                    ? { backgroundColor: `rgb(${vehicleColors[vehicleId].r}, ${vehicleColors[vehicleId].g}, ${vehicleColors[vehicleId].b})` }
+                                    : undefined
+                              }
                             >
                               <FiTruck
                                 className={`vehicle-icon clickable ${activeVehicleId === vehicleId ? 'active' : ''}`}
@@ -8197,37 +8248,40 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="modal-body">
-              <label className="setting-option-compact">
-                <input
-                  type="checkbox"
-                  checked={playbackSettings.colorByVehicle}
-                  onChange={(e) => setPlaybackSettings(prev => ({
-                    ...prev,
-                    colorByVehicle: e.target.checked,
-                    colorByDay: e.target.checked ? false : prev.colorByDay
-                  }))}
-                />
-                <div className="setting-text">
-                  <span>Iga veok erinev värv</span>
-                  <small>Värvi iga veok erinevalt</small>
-                </div>
-              </label>
+              <div className="setting-group">
+                <span className="setting-group-label">Mahamängimise režiim</span>
+                <label className="setting-option-compact">
+                  <input
+                    type="radio"
+                    name="playbackMode"
+                    checked={playbackSettings.playbackMode === 'vehicle'}
+                    onChange={() => setPlaybackSettings(prev => ({
+                      ...prev,
+                      playbackMode: 'vehicle'
+                    }))}
+                  />
+                  <div className="setting-text">
+                    <span>Veokite kaupa</span>
+                    <small>Mängi maha veok haaval</small>
+                  </div>
+                </label>
 
-              <label className="setting-option-compact">
-                <input
-                  type="checkbox"
-                  checked={playbackSettings.colorByDay}
-                  onChange={(e) => setPlaybackSettings(prev => ({
-                    ...prev,
-                    colorByDay: e.target.checked,
-                    colorByVehicle: e.target.checked ? false : prev.colorByVehicle
-                  }))}
-                />
-                <div className="setting-text">
-                  <span>Iga päev erinev värv</span>
-                  <small>Värvi iga päev erinevalt</small>
-                </div>
-              </label>
+                <label className="setting-option-compact">
+                  <input
+                    type="radio"
+                    name="playbackMode"
+                    checked={playbackSettings.playbackMode === 'date'}
+                    onChange={() => setPlaybackSettings(prev => ({
+                      ...prev,
+                      playbackMode: 'date'
+                    }))}
+                  />
+                  <div className="setting-text">
+                    <span>Kuupäevade kaupa</span>
+                    <small>Mängi maha päev haaval</small>
+                  </div>
+                </label>
+              </div>
 
               <div className="setting-divider" />
 
