@@ -1061,6 +1061,23 @@
   border-left: 4px solid #fcd34d;
 }
 
+/* Date header during playback - highlighted with pulsing animation */
+.date-header.playback-active {
+  background: linear-gradient(to right, #dbeafe, #bfdbfe);
+  border-left: 4px solid #3b82f6;
+  animation: playback-pulse 1.5s ease-in-out infinite;
+}
+
+.delivery-date-group.playback-active {
+  box-shadow: 0 0 0 2px #3b82f6;
+  border-radius: 8px;
+}
+
+@keyframes playback-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 .date-header .collapse-icon {
   color: #6b7280;
   flex-shrink: 0;
