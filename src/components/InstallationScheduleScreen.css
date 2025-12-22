@@ -2755,57 +2755,105 @@
   border: 1px solid var(--modus-border);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  min-width: 200px;
-  max-height: 300px;
+  min-width: 260px;
   overflow: hidden;
 }
 
 .date-context-header {
-  padding: 10px 12px;
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--modus-text-secondary);
+  color: var(--modus-text-primary);
   border-bottom: 1px solid var(--modus-border);
   background: #f8fafc;
 }
 
-.date-context-list {
-  max-height: 250px;
-  overflow-y: auto;
-}
-
-.date-context-item {
+.context-month-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background 0.1s;
-  border-bottom: 1px solid #f1f5f9;
+  color: var(--modus-text-secondary);
 }
 
-.date-context-item:last-child {
-  border-bottom: none;
+.context-month-nav:hover {
+  background: #e5e7eb;
+  color: var(--modus-text-primary);
 }
 
-.date-context-item:hover {
-  background: #f0f9ff;
+.context-month-label {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
 }
 
-.date-context-date {
-  font-size: 12px;
-  font-weight: 500;
+.context-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  padding: 8px;
 }
 
-.date-context-badge {
-  background: var(--modus-primary);
-  color: white;
+.context-day-name {
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 20px;
+  color: var(--modus-text-secondary);
   text-align: center;
+  padding: 4px 0;
+}
+
+.context-calendar-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 2px;
+  min-height: 32px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.context-calendar-day:hover:not(.source) {
+  background: #e0f2fe;
+}
+
+.context-calendar-day.other-month {
+  opacity: 0.4;
+}
+
+.context-calendar-day.source {
+  background: #fef3c7;
+  cursor: not-allowed;
+}
+
+.context-calendar-day.today {
+  font-weight: 700;
+}
+
+.context-calendar-day.today .context-day-number {
+  color: var(--modus-primary);
+}
+
+.context-day-number {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.context-day-badge {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--modus-primary);
+  margin-top: 2px;
 }
 
 .date-label {
