@@ -1695,6 +1695,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Reload all data
       await Promise.all([loadFactories(), loadVehicles(), loadItems()]);
+      broadcastReload();
 
       setMessage('Kõik andmed kustutatud!');
       setShowDeleteAllConfirm(false);
@@ -1873,6 +1874,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (itemsError) throw itemsError;
 
       await Promise.all([loadVehicles(), loadItems()]);
+      broadcastReload();
 
       // Color vehicle items if date color mode is active
       if (colorMode === 'date') {
@@ -2090,6 +2092,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       await Promise.all([loadItems(), loadVehicles(), loadComments()]);
+      broadcastReload();
 
       // Color newly added items if color mode is active
       if (colorMode !== 'none' && insertedItems && insertedItems.length > 0) {
@@ -2101,7 +2104,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setAddModalComment(''); // Clear comment
 
       // Clear selection
-      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      if (api) await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
     } catch (e: any) {
       console.error('Error adding items:', e);
       if (e.code === '23505') {
@@ -2124,6 +2127,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
       await Promise.all([loadItems(), loadVehicles()]);
+      broadcastReload();
       setMessage('Detail kustutatud');
     } catch (e: any) {
       console.error('Error deleting item:', e);
@@ -2146,6 +2150,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
       await Promise.all([loadItems(), loadVehicles()]);
+      broadcastReload();
       setSelectedItemIds(new Set());
       setMessage(`${selectedItemIds.size} detaili kustutatud`);
     } catch (e: any) {
@@ -2177,6 +2182,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
 
       await Promise.all([loadItems(), loadVehicles()]);
+      broadcastReload();
       setSelectedItemIds(new Set());
       setShowMoveModal(false);
       setMessage(`${selectedItemIds.size} detaili tõstetud veokisse ${targetVehicle.vehicle_code}`);
@@ -3386,6 +3392,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         await Promise.all([loadItems(), loadVehicles()]);
+        broadcastReload();
         const vehicleInfo = createdVehicles.length > 0
           ? ` (loodud veokid: ${createdVehicles.join(', ')})`
           : '';
@@ -3448,6 +3455,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         if (error) throw error;
 
         await Promise.all([loadItems(), loadVehicles()]);
+        broadcastReload();
         setShowImportModal(false);
         setImportText('');
 
@@ -3597,6 +3605,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       // Reload items
       await loadItems();
+      broadcastReload();
       setMessage(`✅ Värskendatud ${updatedCount} detaili mudelist!`);
       console.log(`✅ Refreshed ${updatedCount} items from model`);
     } catch (error: any) {
@@ -5554,6 +5563,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   if (error) throw error;
 
                                   await loadItems();
+                                  broadcastReload();
                                   setMessage(`${orphanedItemIds.length} määramata detaili kustutatud`);
                                 } catch (e: any) {
                                   setMessage('Viga kustutamisel: ' + e.message);
@@ -6415,14 +6425,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           <div className="selection-bars">
             {/* Selected objects from model - only show if not already in list */}
             {(() => {
-              // Filter out objects that are already in items list (check both guid and guid_ifc)
-              const existingGuids = new Set(items.map(item => item.guid));
+              // Filter out objects that are already in items list (check guid, guid_ifc, and guid_ms)
+              const existingGuids = new Set(items.map(item => item.guid).filter(Boolean));
               const existingIfcGuids = new Set(items.map(item => item.guid_ifc).filter(Boolean));
+              const existingMsGuids = new Set(items.map(item => item.guid_ms).filter(Boolean));
               const newObjects = selectedObjects.filter(obj => {
                 const guid = obj.guid || '';
                 const guidIfc = obj.guidIfc || '';
-                // Object is new if neither its guid nor guidIfc exists in the schedule
-                const isInSchedule = (guid && existingGuids.has(guid)) || (guidIfc && existingIfcGuids.has(guidIfc));
+                const guidMs = obj.guidMs || '';
+                // Object is new if none of its guids exist in the schedule
+                const isInSchedule =
+                  (guid && existingGuids.has(guid)) ||
+                  (guidIfc && existingIfcGuids.has(guidIfc)) ||
+                  (guidMs && existingMsGuids.has(guidMs)) ||
+                  (guid && existingIfcGuids.has(guid)) ||  // Cross-check guid against IFC guids
+                  (guidIfc && existingGuids.has(guidIfc)); // Cross-check IFC guid against regular guids
                 return !isInSchedule;
               });
 
@@ -6924,6 +6941,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       return;
                     }
                     await loadVehicles();
+                    broadcastReload();
                     vehicleId = newVehicle.id;
 
                     // Expand the date group if collapsed
@@ -7198,6 +7216,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                         created_by_name: tcUserEmail.split('@')[0]
                       });
                     await loadComments();
+                    broadcastReload();
                   }
 
                   setShowVehicleModal(false);
@@ -7652,6 +7671,7 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                           setNewFactorySeparator(sep);
                           await loadFactories();
                           await loadVehicles();
+                          broadcastReload();
                           setMessage('Eraldaja uuendatud');
                         } catch (e: any) {
                           setMessage('Viga: ' + e.message);
