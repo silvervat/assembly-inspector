@@ -2121,12 +2121,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const deleteItem = async (itemId: string) => {
     setSaving(true);
     try {
+      // Find item before deleting to get model info for coloring
+      const itemToDelete = items.find(i => i.id === itemId);
+
       const { error } = await supabase
         .from('trimble_delivery_items')
         .delete()
         .eq('id', itemId);
 
       if (error) throw error;
+
+      // Color deleted item white if color mode is active
+      if (colorMode !== 'none' && itemToDelete?.model_id && itemToDelete?.object_runtime_id) {
+        try {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: itemToDelete.model_id, objectRuntimeIds: [itemToDelete.object_runtime_id] }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        } catch (colorError) {
+          console.error('Error coloring deleted item white:', colorError);
+        }
+      }
+
       await Promise.all([loadItems(), loadVehicles()]);
       broadcastReload();
       setMessage('Detail kustutatud');
@@ -2144,16 +2160,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     setSaving(true);
     try {
+      // Find items before deleting to get model info for coloring
+      const itemsToDelete = items.filter(i => selectedItemIds.has(i.id));
+      const deleteCount = selectedItemIds.size;
+
       const { error } = await supabase
         .from('trimble_delivery_items')
         .delete()
         .in('id', Array.from(selectedItemIds));
 
       if (error) throw error;
+
+      // Color deleted items white if color mode is active
+      if (colorMode !== 'none' && itemsToDelete.length > 0) {
+        try {
+          const byModel: Record<string, number[]> = {};
+          for (const item of itemsToDelete) {
+            if (item.model_id && item.object_runtime_id) {
+              if (!byModel[item.model_id]) byModel[item.model_id] = [];
+              byModel[item.model_id].push(item.object_runtime_id);
+            }
+          }
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: 255, g: 255, b: 255, a: 255 } }
+            );
+          }
+        } catch (colorError) {
+          console.error('Error coloring deleted items white:', colorError);
+        }
+      }
+
       await Promise.all([loadItems(), loadVehicles()]);
       broadcastReload();
       setSelectedItemIds(new Set());
-      setMessage(`${selectedItemIds.size} detaili kustutatud`);
+      setMessage(`${deleteCount} detaili kustutatud`);
     } catch (e: any) {
       console.error('Error deleting items:', e);
       setMessage('Viga kustutamisel: ' + e.message);
