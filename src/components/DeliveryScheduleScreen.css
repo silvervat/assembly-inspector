@@ -234,6 +234,32 @@
   position: relative;
 }
 
+/* Ensure dropdown trigger button matches toolbar button height */
+.dropdown-menu-wrapper > button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  transition: all 0.15s;
+  height: auto;
+  min-height: 36px;
+}
+
+.dropdown-menu-wrapper > button:hover {
+  background: #e5e7eb;
+}
+
+.dropdown-menu-wrapper > button.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 .dropdown-menu-wrapper::after {
   /* Invisible bridge to prevent menu from closing when moving mouse */
   content: '';
@@ -1300,20 +1326,16 @@
   flex-shrink: 0;
   border-radius: 6px;
   transition: background 0.15s;
+  width: 36px;
+  height: 36px;
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color {
-  padding: 4px 6px;
   border-radius: 6px;
 }
 
 .vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon {
   color: white;
-}
-
-.vehicle-header .vehicle-icon-wrapper.has-color .vehicle-icon.clickable {
-  padding: 0;
-  margin: 0;
 }
 
 .vehicle-header .vehicle-icon {
