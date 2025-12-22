@@ -938,6 +938,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       .map(obj => obj.guidIfc || obj.guid || '')
   );
 
+  // Check if there are unscheduled objects selected in the model
+  // Used to prevent calendar date clicks from selecting date items when adding new items
+  const hasUnscheduledSelection = selectedObjects.length > 0 && selectedObjects.some(obj => {
+    const guid = obj.guid || '';
+    const guidIfc = obj.guidIfc || '';
+    return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
+  });
+
   // Get days in current month for calendar
   const getDaysInMonth = () => {
     const year = currentMonth.getFullYear();
@@ -1597,9 +1605,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       return;
     }
 
-    setMessage('Loon markupe...');
+    setMessage('Eemaldan vanad markupid...');
 
     try {
+      // First remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe...');
+
       // Group items by model for batch processing
       const itemsByModel = new Map<string, { item: ScheduleItem; idx: number; runtimeId: number }[]>();
 
@@ -3532,16 +3551,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setSelectedDates(newSelectedDates);
                         setSelectedDate(dateKey);
                         // Select all items from all selected dates in viewer
-                        selectMultipleDatesInViewer(newSelectedDates);
+                        // BUT only if no unscheduled items are selected in model
+                        if (!hasUnscheduledSelection) {
+                          selectMultipleDatesInViewer(newSelectedDates);
+                        }
                         scrollToDateInList(dateKey);
                       } else {
                         // Normal click: select only this date
                         setSelectedDate(dateKey);
                         setSelectedDates(new Set([dateKey]));
-                        if (itemCount > 0) {
+                        // Only select date items in viewer if no unscheduled items are selected
+                        // This prevents clearing the selection when user is trying to add new items
+                        if (itemCount > 0 && !hasUnscheduledSelection) {
                           selectDateInViewer(dateKey);
-                          scrollToDateInList(dateKey);
                         }
+                        scrollToDateInList(dateKey);
                       }
                     }}
                     onDragOver={(e) => handleDragOver(e, dateKey)}
