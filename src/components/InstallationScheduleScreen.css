@@ -235,8 +235,29 @@
 .selection-info-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   width: 100%;
+}
+
+.clear-selection-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: auto;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 4px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.clear-selection-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .selection-info .btn-primary {
@@ -720,11 +741,12 @@
 .schedule-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   padding: 3px 8px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.1);
   position: relative;
   min-height: 24px;
 }
@@ -1615,6 +1637,7 @@
 .item-methods-display {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 3px;
   flex-shrink: 0;
 }

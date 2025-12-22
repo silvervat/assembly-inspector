@@ -3458,6 +3458,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   ⚠ {scheduledInfo.length} juba planeeritud
                 </span>
               )}
+              <button
+                className="clear-selection-btn"
+                onClick={async () => {
+                  await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+                  setSelectedObjects([]);
+                }}
+                title="Tühista valik mudelis"
+              >
+                <FiX size={14} />
+              </button>
             </div>
 
             {/* Method icons in two rows: machines and labor */}
