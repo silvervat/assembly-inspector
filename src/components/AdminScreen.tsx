@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
+import { supabase } from '../supabase';
 
 // Test result type for function explorer
 interface FunctionTestResult {
@@ -13,6 +14,7 @@ interface FunctionTestResult {
 interface AdminScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   onBackToMenu: () => void;
+  projectId: string;
 }
 
 interface PropertySet {
@@ -121,9 +123,9 @@ function FunctionButton({
   );
 }
 
-export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport'>('main');
+export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScreenProps) {
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -143,6 +145,12 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
   const [guidImportText, setGuidImportText] = useState('');
   const [guidImportLoading, setGuidImportLoading] = useState(false);
   const [guidImportResults, setGuidImportResults] = useState<{found: number; notFound: string[]; total: number} | null>(null);
+
+  // Model Objects (Saada andmebaasi) state
+  const [modelObjectsLoading, setModelObjectsLoading] = useState(false);
+  const [modelObjectsStatus, setModelObjectsStatus] = useState('');
+  const [modelObjectsCount, setModelObjectsCount] = useState<number | null>(null);
+  const [modelObjectsLastUpdated, setModelObjectsLastUpdated] = useState<string | null>(null);
 
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
@@ -376,6 +384,222 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
       setGuidImportLoading(false);
     }
   }, [api, guidImportText]);
+
+  // ============================================
+  // MODEL OBJECTS (Saada andmebaasi) FUNCTIONS
+  // ============================================
+
+  // Load model objects count and last updated from Supabase
+  const loadModelObjectsInfo = useCallback(async () => {
+    if (!projectId) return;
+
+    try {
+      // Get count
+      const { count, error: countError } = await supabase
+        .from('trimble_model_objects')
+        .select('*', { count: 'exact', head: true })
+        .eq('trimble_project_id', projectId);
+
+      if (countError) {
+        console.error('Error getting count:', countError);
+      } else {
+        setModelObjectsCount(count || 0);
+      }
+
+      // Get last updated (most recent created_at)
+      const { data: lastRow, error: lastError } = await supabase
+        .from('trimble_model_objects')
+        .select('created_at')
+        .eq('trimble_project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (lastError) {
+        console.error('Error getting last updated:', lastError);
+      } else if (lastRow && lastRow.length > 0) {
+        setModelObjectsLastUpdated(lastRow[0].created_at);
+      } else {
+        setModelObjectsLastUpdated(null);
+      }
+    } catch (e) {
+      console.error('Error loading model objects info:', e);
+    }
+  }, [projectId]);
+
+  // Save MODEL-SELECTED objects to Supabase with full info
+  const saveModelSelectionToSupabase = useCallback(async () => {
+    setModelObjectsLoading(true);
+    setModelObjectsStatus('Kontrollin valikut...');
+
+    try {
+      // Get current selection
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setModelObjectsStatus('Vali esmalt mudelis mõni detail!');
+        setModelObjectsLoading(false);
+        return;
+      }
+
+      // Count total objects
+      let totalCount = 0;
+      for (const sel of selection) {
+        totalCount += sel.objectRuntimeIds?.length || 0;
+      }
+
+      setModelObjectsStatus(`Laadin ${totalCount} objekti propertiseid...`);
+
+      // Collect all objects with their properties
+      const allRecords: {
+        trimble_project_id: string;
+        model_id: string;
+        object_runtime_id: number;
+        guid: string | null;
+        guid_ifc: string | null;
+        assembly_mark: string | null;
+        product_name: string | null;
+      }[] = [];
+
+      for (const sel of selection) {
+        const modelId = sel.modelId;
+        const runtimeIds = sel.objectRuntimeIds || [];
+
+        if (runtimeIds.length === 0) continue;
+
+        // Get properties for each object
+        const properties = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+        // Get external IDs (GUIDs)
+        let externalIds: string[] = [];
+        try {
+          externalIds = await api.viewer.convertToObjectIds(modelId, runtimeIds);
+        } catch (e) {
+          console.warn('Could not get external IDs:', e);
+        }
+
+        // Process each object
+        for (let i = 0; i < runtimeIds.length; i++) {
+          const runtimeId = runtimeIds[i];
+          const props = properties && properties[i];
+          const ifcGuid = externalIds[i] || null;
+
+          // Find MS GUID from Reference Object property set
+          let msGuid: string | null = null;
+          let assemblyMark: string | null = null;
+          let productName: string | null = null;
+
+          if (props && props.propertySets) {
+            for (const ps of props.propertySets) {
+              if (ps.name === 'Reference Object' && ps.properties) {
+                msGuid = ps.properties['GUID'] as string || msGuid;
+              }
+              if (ps.name === 'Tekla Common' && ps.properties) {
+                assemblyMark = ps.properties['Cast_unit_Mark'] as string || assemblyMark;
+              }
+              if (ps.name === 'Product' && ps.properties) {
+                productName = ps.properties['Name'] as string || productName;
+              }
+            }
+          }
+
+          allRecords.push({
+            trimble_project_id: projectId,
+            model_id: modelId,
+            object_runtime_id: runtimeId,
+            guid: msGuid || ifcGuid,
+            guid_ifc: ifcGuid,
+            assembly_mark: assemblyMark,
+            product_name: productName
+          });
+        }
+      }
+
+      if (allRecords.length === 0) {
+        setModelObjectsStatus('Ühtegi objekti ei leitud');
+        setModelObjectsLoading(false);
+        return;
+      }
+
+      // Save in batches
+      const BATCH_SIZE = 1000;
+      let savedCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < allRecords.length; i += BATCH_SIZE) {
+        const batch = allRecords.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(allRecords.length / BATCH_SIZE);
+
+        setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${allRecords.length})...`);
+
+        const { error } = await supabase
+          .from('trimble_model_objects')
+          .upsert(batch, {
+            onConflict: 'trimble_project_id,model_id,object_runtime_id',
+            ignoreDuplicates: true
+          });
+
+        if (error) {
+          console.error(`Batch ${batchNum} error:`, error);
+          errorCount += batch.length;
+        } else {
+          savedCount += batch.length;
+        }
+      }
+
+      // Reload info
+      await loadModelObjectsInfo();
+
+      if (errorCount > 0) {
+        setModelObjectsStatus(`Salvestatud ${savedCount}/${allRecords.length} objekti (${errorCount} viga)`);
+      } else {
+        const marks = allRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
+        const more = allRecords.length > 5 ? ` (+${allRecords.length - 5} veel)` : '';
+        setModelObjectsStatus(`✓ Salvestatud ${savedCount} objekti: ${marks}${more}`);
+      }
+    } catch (e: any) {
+      setModelObjectsStatus(`Viga: ${e.message}`);
+      console.error('Save error:', e);
+    } finally {
+      setModelObjectsLoading(false);
+    }
+  }, [api, projectId, loadModelObjectsInfo]);
+
+  // Delete all model objects for this project
+  const deleteAllModelObjects = useCallback(async () => {
+    if (!confirm('Kas oled kindel, et soovid KÕIK kirjed kustutada?')) {
+      return;
+    }
+
+    setModelObjectsLoading(true);
+    setModelObjectsStatus('Kustutan kirjeid...');
+
+    try {
+      const { error } = await supabase
+        .from('trimble_model_objects')
+        .delete()
+        .eq('trimble_project_id', projectId);
+
+      if (error) {
+        setModelObjectsStatus(`Viga: ${error.message}`);
+      } else {
+        setModelObjectsStatus('✓ Kõik kirjed kustutatud!');
+        setModelObjectsCount(0);
+        setModelObjectsLastUpdated(null);
+      }
+    } catch (e: any) {
+      setModelObjectsStatus(`Viga: ${e.message}`);
+    } finally {
+      setModelObjectsLoading(false);
+    }
+  }, [projectId]);
+
+  // Load model objects info when entering modelObjects view
+  useEffect(() => {
+    if (adminView === 'modelObjects') {
+      loadModelObjectsInfo();
+    }
+  }, [adminView, loadModelObjectsInfo]);
 
   // Discover properties for selected objects
   const discoverProperties = useCallback(async () => {
@@ -1032,6 +1256,7 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           {adminView === 'properties' && 'Avasta propertised'}
           {adminView === 'assemblyList' && 'Assembly list & Poldid'}
           {adminView === 'guidImport' && 'Import GUID (MS)'}
+          {adminView === 'modelObjects' && 'Saada andmebaasi'}
         </h2>
       </div>
 
@@ -1059,6 +1284,11 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
           <button className="admin-tool-btn" onClick={() => setAdminView('guidImport')}>
             <FiSearch size={18} />
             <span>Import GUID (MS)</span>
+          </button>
+
+          <button className="admin-tool-btn" onClick={() => setAdminView('modelObjects')}>
+            <FiDatabase size={18} />
+            <span>Saada andmebaasi</span>
           </button>
         </div>
 
@@ -3415,6 +3645,129 @@ export default function AdminScreen({ api, onBackToMenu }: AdminScreenProps) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Model Objects View (Saada andmebaasi) */}
+      {adminView === 'modelObjects' && (
+        <div className="model-objects-panel" style={{ padding: '16px' }}>
+          {/* Stats Overview */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '16px',
+            marginBottom: '24px'
+          }}>
+            <div style={{
+              backgroundColor: '#f0f9ff',
+              padding: '20px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              border: '1px solid #bae6fd'
+            }}>
+              <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#0284c7' }}>
+                {modelObjectsCount !== null ? modelObjectsCount.toLocaleString() : '...'}
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                Objekte andmebaasis
+              </div>
+            </div>
+
+            <div style={{
+              backgroundColor: '#f0fdf4',
+              padding: '20px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              border: '1px solid #bbf7d0'
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: '600', color: '#16a34a' }}>
+                {modelObjectsLastUpdated
+                  ? new Date(modelObjectsLastUpdated).toLocaleDateString('et-EE', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+                  : 'Andmed puuduvad'
+                }
+              </div>
+              <div style={{ fontSize: '13px', color: '#64748b', marginTop: '4px' }}>
+                Viimati uuendatud
+              </div>
+            </div>
+          </div>
+
+          <div className="model-objects-description" style={{ marginBottom: '20px', color: '#666' }}>
+            <p>Vali mudelis objektid ja salvesta need andmebaasi koos GUID, mark ja product infoga.</p>
+            <p style={{ fontSize: '12px', marginTop: '4px' }}>
+              Andmebaasi salvestatud objekte kasutatakse tarnegraafiku lehel värvimiseks.
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '20px' }}>
+            <button
+              className="btn-primary"
+              onClick={saveModelSelectionToSupabase}
+              disabled={modelObjectsLoading}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px' }}
+            >
+              {modelObjectsLoading ? (
+                <>
+                  <FiRefreshCw className="spin" size={16} />
+                  Salvestan...
+                </>
+              ) : (
+                <>
+                  <FiUpload size={16} />
+                  Mudeli valik → Andmebaasi
+                </>
+              )}
+            </button>
+
+            <button
+              className="btn-secondary"
+              onClick={loadModelObjectsInfo}
+              disabled={modelObjectsLoading}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px' }}
+            >
+              <FiRefreshCw size={16} />
+              Värskenda
+            </button>
+
+            <button
+              className="btn-danger"
+              onClick={deleteAllModelObjects}
+              disabled={modelObjectsLoading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 20px',
+                backgroundColor: '#fef2f2',
+                color: '#dc2626',
+                border: '1px solid #fecaca'
+              }}
+            >
+              <FiTrash2 size={16} />
+              Kustuta kõik
+            </button>
+          </div>
+
+          {/* Status Message */}
+          {modelObjectsStatus && (
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: modelObjectsStatus.startsWith('✓') ? '#f0fdf4' : modelObjectsStatus.includes('Viga') ? '#fef2f2' : '#f8fafc',
+              border: `1px solid ${modelObjectsStatus.startsWith('✓') ? '#bbf7d0' : modelObjectsStatus.includes('Viga') ? '#fecaca' : '#e2e8f0'}`,
+              borderRadius: '6px',
+              color: modelObjectsStatus.startsWith('✓') ? '#16a34a' : modelObjectsStatus.includes('Viga') ? '#dc2626' : '#475569',
+              fontSize: '14px'
+            }}>
+              {modelObjectsStatus}
             </div>
           )}
         </div>
