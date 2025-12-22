@@ -385,6 +385,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Playback settings
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const [playbackSettings, setPlaybackSettings] = useState({
     playbackMode: 'vehicle' as 'vehicle' | 'date',  // Play by vehicle or by date
     expandItemsDuringPlayback: true, // Expand vehicle items during playback
@@ -1377,6 +1379,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setMessage('Viga tehase kustutamisel: ' + e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Delete ALL data (items, vehicles, factories)
+  const deleteAllData = async () => {
+    setDeletingAll(true);
+    try {
+      // Delete all items first
+      const { error: itemsError } = await supabase
+        .from('trimble_delivery_items')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (itemsError) throw itemsError;
+
+      // Delete all vehicles
+      const { error: vehiclesError } = await supabase
+        .from('trimble_delivery_vehicles')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (vehiclesError) throw vehiclesError;
+
+      // Delete all factories
+      const { error: factoriesError } = await supabase
+        .from('trimble_delivery_factories')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (factoriesError) throw factoriesError;
+
+      // Reload all data
+      await Promise.all([loadFactories(), loadVehicles(), loadItems()]);
+
+      setMessage('Kõik andmed kustutatud!');
+      setShowDeleteAllConfirm(false);
+      setShowSettingsModal(false);
+    } catch (e: any) {
+      console.error('Error deleting all data:', e);
+      setMessage('Viga kustutamisel: ' + e.message);
+    } finally {
+      setDeletingAll(false);
     }
   };
 
@@ -2675,6 +2716,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         for (const [groupKey, groupItems] of groups) {
           const [date, vehicleCode, factoryId] = groupKey.split('|');
 
+          // Get factory from fresh list (not from state which might be stale)
+          const factory = (currentFactories || []).find(f => f.id === factoryId);
+          if (!factory) {
+            throw new Error(`Tehast ID-ga ${factoryId} ei leitud`);
+          }
+
           // Find existing vehicle or create new one
           let vehicle = vehicleCode
             ? vehicles.find(v =>
@@ -2685,24 +2732,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             : null;
 
           if (!vehicle) {
-            // Create new vehicle
-            vehicle = await createVehicle(factoryId, date);
-            if (!vehicle) {
-              throw new Error(`Veoki loomine ebaõnnestus kuupäevaks ${date}`);
+            // Create new vehicle directly (don't use createVehicle which relies on stale state)
+            const separator = factory.vehicle_separator || '';
+            const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
+            const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
+            const vehicleNumber = maxNumber + 1 + createdVehicles.length; // Account for vehicles created in this import
+            const newVehicleCode = vehicleCode || `${factory.factory_code}${separator}${vehicleNumber}`;
+
+            const { data: newVehicle, error: vehicleError } = await supabase
+              .from('trimble_delivery_vehicles')
+              .insert({
+                trimble_project_id: projectId,
+                factory_id: factoryId,
+                vehicle_number: vehicleNumber,
+                vehicle_code: newVehicleCode,
+                scheduled_date: date,
+                status: 'planned',
+                created_by: tcUserEmail
+              })
+              .select()
+              .single();
+
+            if (vehicleError || !newVehicle) {
+              console.error('Vehicle creation error:', vehicleError);
+              throw new Error(`Veoki loomine ebaõnnestus kuupäevaks ${date}: ${vehicleError?.message || 'tundmatu viga'}`);
             }
 
-            // If specific vehicle code was requested, update it
-            if (vehicleCode && vehicle.vehicle_code !== vehicleCode) {
-              const { error: updateError } = await supabase
-                .from('trimble_delivery_vehicles')
-                .update({ vehicle_code: vehicleCode })
-                .eq('id', vehicle.id);
-
-              if (!updateError) {
-                vehicle = { ...vehicle, vehicle_code: vehicleCode };
-              }
-            }
-            createdVehicles.push(vehicle.vehicle_code);
+            vehicle = newVehicle;
+            createdVehicles.push(newVehicle.vehicle_code);
           }
 
           // Create items for this group
@@ -6814,6 +6871,50 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <small>Märgista detailid mudelis esitamise ajal</small>
                 </div>
               </label>
+
+              {/* Danger zone */}
+              <div className="setting-divider" />
+              <div className="danger-zone">
+                <span className="danger-zone-title">Ohtlik tsoon</span>
+                {!showDeleteAllConfirm ? (
+                  <button
+                    className="danger-btn"
+                    onClick={() => setShowDeleteAllConfirm(true)}
+                  >
+                    <FiTrash2 size={14} />
+                    Kustuta kõik andmed
+                  </button>
+                ) : (
+                  <div className="delete-confirm-box">
+                    <p className="delete-warning">
+                      <FiAlertTriangle size={16} />
+                      <strong>HOIATUS!</strong> See kustutab KÕIK:
+                    </p>
+                    <ul className="delete-list">
+                      <li>{items.length} detaili</li>
+                      <li>{vehicles.length} veoki(t)</li>
+                      <li>{factories.length} tehast/tehaseid</li>
+                    </ul>
+                    <p className="delete-warning-small">Seda tegevust EI SAA tagasi võtta!</p>
+                    <div className="delete-confirm-buttons">
+                      <button
+                        className="cancel-btn"
+                        onClick={() => setShowDeleteAllConfirm(false)}
+                        disabled={deletingAll}
+                      >
+                        Tühista
+                      </button>
+                      <button
+                        className="confirm-delete-btn"
+                        onClick={deleteAllData}
+                        disabled={deletingAll}
+                      >
+                        {deletingAll ? 'Kustutan...' : 'Jah, kustuta kõik!'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
