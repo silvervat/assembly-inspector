@@ -151,6 +151,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
   const [modelObjectsStatus, setModelObjectsStatus] = useState('');
   const [modelObjectsCount, setModelObjectsCount] = useState<number | null>(null);
   const [modelObjectsLastUpdated, setModelObjectsLastUpdated] = useState<string | null>(null);
+  const [modelObjectsLog, setModelObjectsLog] = useState<Array<{
+    created_at: string;
+    assembly_mark: string;
+    product_name: string | null;
+  }>>([]);
 
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
@@ -420,6 +425,20 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
         setModelObjectsLastUpdated(lastRow[0].created_at);
       } else {
         setModelObjectsLastUpdated(null);
+      }
+
+      // Get recent 50 unique objects for log (ordered by created_at desc)
+      const { data: logData, error: logError } = await supabase
+        .from('trimble_model_objects')
+        .select('created_at, assembly_mark, product_name')
+        .eq('trimble_project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (logError) {
+        console.error('Error getting log:', logError);
+      } else {
+        setModelObjectsLog(logData || []);
       }
     } catch (e) {
       console.error('Error loading model objects info:', e);
@@ -3789,6 +3808,47 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
               fontSize: '14px'
             }}>
               {modelObjectsStatus}
+            </div>
+          )}
+
+          {/* Recent Objects Log */}
+          {modelObjectsLog.length > 0 && (
+            <div style={{ marginTop: '24px' }}>
+              <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#374151' }}>
+                Viimased lisatud objektid ({modelObjectsLog.length})
+              </h3>
+              <div style={{
+                backgroundColor: '#f9fafb',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                maxHeight: '300px',
+                overflowY: 'auto'
+              }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f3f4f6', position: 'sticky', top: 0 }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Kuupäev</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>Toode</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelObjectsLog.map((obj, idx) => (
+                      <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#f9fafb' }}>
+                        <td style={{ padding: '6px 12px', color: '#6b7280', borderBottom: '1px solid #f3f4f6', whiteSpace: 'nowrap' }}>
+                          {new Date(obj.created_at).toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td style={{ padding: '6px 12px', color: '#111827', fontWeight: '500', borderBottom: '1px solid #f3f4f6' }}>
+                          {obj.assembly_mark || '-'}
+                        </td>
+                        <td style={{ padding: '6px 12px', color: '#6b7280', borderBottom: '1px solid #f3f4f6' }}>
+                          {obj.product_name || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
