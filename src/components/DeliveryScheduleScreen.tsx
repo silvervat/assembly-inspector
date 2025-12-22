@@ -561,6 +561,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Group items by date -> vehicle (includes ALL vehicles, even empty ones)
   const itemsByDateAndVehicle = useMemo(() => {
     const groups: Record<string, Record<string, DeliveryItem[]>> = {};
+    const vehicleIds = new Set(vehicles.map(v => v.id));
 
     // First, add all vehicles to their dates (creates empty arrays)
     vehicles.forEach(vehicle => {
@@ -570,9 +571,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     });
 
     // Then, add items to their vehicles
+    // If item's vehicle_id points to a deleted vehicle, treat as unassigned
     filteredItems.forEach(item => {
-      const vehicleId = item.vehicle_id || 'unassigned';
-      const vehicle = vehicles.find(v => v.id === vehicleId);
+      const vehicleExists = item.vehicle_id && vehicleIds.has(item.vehicle_id);
+      const vehicleId = vehicleExists ? item.vehicle_id! : 'unassigned';
+      const vehicle = vehicleExists ? vehicles.find(v => v.id === vehicleId) : null;
       const date = vehicle?.scheduled_date || item.scheduled_date || UNASSIGNED_DATE;
 
       if (!groups[date]) groups[date] = {};
@@ -4531,7 +4534,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             </div>
                           </div>
 
-                        {/* Vehicle menu */}
+                        {/* Vehicle menu - for actual vehicles */}
                         {vehicleMenuId === vehicleId && vehicle && (
                           <div className="context-menu vehicle-context-menu">
                             <button onClick={() => {
@@ -4599,12 +4602,45 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           </div>
                         )}
 
-                        {/* Items in this vehicle */}
-                        {!isVehicleCollapsed && vehicle && (
+                        {/* Menu for orphaned items (unassigned) */}
+                        {vehicleMenuId === vehicleId && !vehicle && vehicleId === 'unassigned' && (
+                          <div className="context-menu vehicle-context-menu">
+                            <button
+                              className="danger"
+                              onClick={async () => {
+                                // Delete all orphaned items
+                                const orphanedItemIds = vehicleItems.map(i => i.id);
+                                if (orphanedItemIds.length === 0) return;
+
+                                if (!confirm(`Kustutada ${orphanedItemIds.length} määramata detaili?`)) return;
+
+                                try {
+                                  const { error } = await supabase
+                                    .from('trimble_delivery_items')
+                                    .delete()
+                                    .in('id', orphanedItemIds);
+
+                                  if (error) throw error;
+
+                                  await loadItems();
+                                  setMessage(`${orphanedItemIds.length} määramata detaili kustutatud`);
+                                } catch (e: any) {
+                                  setMessage('Viga kustutamisel: ' + e.message);
+                                }
+                                setVehicleMenuId(null);
+                              }}
+                            >
+                              <FiTrash2 /> Kustuta kõik ({vehicleItems.length})
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Items in this vehicle (or orphaned items) */}
+                        {!isVehicleCollapsed && (vehicle || vehicleId === 'unassigned') && (
                           <div
-                            className={`vehicle-items ${dragOverVehicleId === vehicle.id && draggedItems.length > 0 ? 'drag-over' : ''}`}
-                            onDragOver={(e) => handleVehicleDragOver(e, vehicle.id)}
-                            onDrop={(e) => handleItemDrop(e, vehicle.id, dragOverIndex ?? undefined)}
+                            className={`vehicle-items ${vehicle && dragOverVehicleId === vehicle.id && draggedItems.length > 0 ? 'drag-over' : ''}`}
+                            onDragOver={(e) => vehicle && handleVehicleDragOver(e, vehicle.id)}
+                            onDrop={(e) => vehicle && handleItemDrop(e, vehicle.id, dragOverIndex ?? undefined)}
                           >
                             {vehicleItems.length === 0 && (
                               <div className="empty-vehicle-message">
@@ -4617,18 +4653,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               const isActive = activeItemId === item.id;
                               const weightInfo = formatWeight(item.cast_unit_weight);
                               const isBeingDragged = isDragging && draggedItems.some(d => d.id === item.id);
-                              const showDropBefore = dragOverVehicleId === vehicle.id && dragOverIndex === idx;
-                              const showDropAfter = dragOverVehicleId === vehicle.id && dragOverIndex === idx + 1 && idx === vehicleItems.length - 1;
+                              const showDropBefore = vehicle && dragOverVehicleId === vehicle.id && dragOverIndex === idx;
+                              const showDropAfter = vehicle && dragOverVehicleId === vehicle.id && dragOverIndex === idx + 1 && idx === vehicleItems.length - 1;
 
                               return (
                                 <div key={item.id} className="delivery-item-wrapper">
                                   {showDropBefore && <div className="drop-indicator" />}
                                   <div
                                     className={`delivery-item ${isSelected ? 'selected' : ''} ${isActive ? 'active' : ''} ${isBeingDragged ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
-                                    draggable
-                                    onDragStart={(e) => handleItemDragStart(e, item)}
+                                    draggable={!!vehicle}
+                                    onDragStart={(e) => vehicle && handleItemDragStart(e, item)}
                                     onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => handleItemDragOver(e, vehicle.id, idx)}
+                                    onDragOver={(e) => vehicle && handleItemDragOver(e, vehicle.id, idx)}
                                     onClick={(e) => handleItemClick(item, e)}
                                   >
                                     <input
