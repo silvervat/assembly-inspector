@@ -1504,6 +1504,43 @@
 /* Resource quick assign */
 .resource-quick-assign {
   position: relative;
+  display: flex;
+  gap: 4px;
+}
+
+.resource-quick-assign.has-resources {
+  display: flex;
+  gap: 4px;
+}
+
+.vehicle-method-badge.editable {
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.vehicle-method-badge.editable:hover {
+  transform: scale(1.1);
+}
+
+/* Inline dropdown for existing resources */
+.vehicle-method-badge .method-qty-dropdown.inline {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  display: flex;
+  gap: 2px;
+}
+
+.method-qty-dropdown .qty-btn.zero {
+  color: #ef4444;
+  font-size: 10px;
 }
 
 .assign-resource-btn {
@@ -1882,35 +1919,28 @@
   width: 14px;
   height: 14px;
   display: block;
+  color: #374151;
+  stroke: #374151;
+  stroke-width: 2;
 }
 
 /* FiMoreVertical uses circles - need to fill them */
 .delivery-item .item-btn svg circle {
-  fill: #374151 !important;
-  stroke: #374151 !important;
-}
-
-/* FiMessageSquare uses polyline/path - need stroke */
-.delivery-item .item-btn svg path,
-.delivery-item .item-btn svg polyline,
-.delivery-item .item-btn svg line {
-  stroke: #374151 !important;
-  stroke-width: 2;
+  fill: #374151;
+  stroke: none;
 }
 
 .delivery-item .item-btn:hover {
   background: #e5e7eb;
 }
 
-.delivery-item .item-btn:hover svg circle {
-  fill: #1f2937 !important;
-  stroke: #1f2937 !important;
+.delivery-item .item-btn:hover svg {
+  color: #1f2937;
+  stroke: #1f2937;
 }
 
-.delivery-item .item-btn:hover svg path,
-.delivery-item .item-btn:hover svg polyline,
-.delivery-item .item-btn:hover svg line {
-  stroke: #1f2937 !important;
+.delivery-item .item-btn:hover svg circle {
+  fill: #1f2937;
 }
 
 .delivery-item .item-btn .badge {

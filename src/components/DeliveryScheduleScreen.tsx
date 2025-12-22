@@ -5535,23 +5535,67 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 {(() => {
                                   const hasResources = vehicle && UNLOAD_METHODS.some(m => vehicle.unload_methods?.[m.key]);
 
-                                  if (hasResources) {
-                                    // Show existing resources
-                                    return UNLOAD_METHODS.map(method => {
-                                      const count = vehicle?.unload_methods?.[method.key];
-                                      if (!count) return null;
-                                      return (
-                                        <div
-                                          key={method.key}
-                                          className="vehicle-method-badge"
-                                          style={{ backgroundColor: method.activeBgColor }}
-                                          title={`${method.label}: ${count}`}
-                                        >
-                                          <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
-                                          <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
-                                        </div>
-                                      );
-                                    });
+                                  if (hasResources && vehicle) {
+                                    // Show existing resources with edit capability
+                                    return (
+                                      <div
+                                        className="resource-quick-assign has-resources"
+                                        onMouseEnter={() => setResourceHoverId(vehicleId)}
+                                        onMouseLeave={() => {
+                                          setResourceHoverId(null);
+                                          setQuickHoveredMethod(null);
+                                        }}
+                                      >
+                                        {UNLOAD_METHODS.map(method => {
+                                          const count = vehicle.unload_methods?.[method.key];
+                                          if (!count) return null;
+                                          const isHovered = resourceHoverId === vehicleId && quickHoveredMethod === method.key;
+                                          return (
+                                            <div
+                                              key={method.key}
+                                              className="vehicle-method-badge editable"
+                                              style={{ backgroundColor: method.activeBgColor }}
+                                              title={`${method.label}: ${count}`}
+                                              onMouseEnter={() => setQuickHoveredMethod(method.key)}
+                                              onMouseLeave={() => setQuickHoveredMethod(null)}
+                                              onClick={(e) => e.stopPropagation()}
+                                            >
+                                              <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
+                                              <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
+                                              {isHovered && method.maxCount > 1 && (
+                                                <div className="method-qty-dropdown inline">
+                                                  {Array.from({ length: method.maxCount + 1 }, (_, i) => i).map(num => (
+                                                    <button
+                                                      key={num}
+                                                      className={`qty-btn ${count === num ? 'active' : ''} ${num === 0 ? 'zero' : ''}`}
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        const newMethods = { ...vehicle.unload_methods };
+                                                        if (num === 0) {
+                                                          delete newMethods[method.key];
+                                                        } else {
+                                                          newMethods[method.key] = num;
+                                                        }
+                                                        setVehicles(prev => prev.map(v =>
+                                                          v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                        ));
+                                                        await supabase
+                                                          .from('trimble_delivery_vehicles')
+                                                          .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
+                                                          .eq('id', vehicle.id);
+                                                        broadcastReload();
+                                                      }}
+                                                    >
+                                                      {num === 0 ? '✕' : num}
+                                                    </button>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    );
                                   } else if (vehicle) {
                                     // Show "Määra ressurss" button with hover popup
                                     return (
