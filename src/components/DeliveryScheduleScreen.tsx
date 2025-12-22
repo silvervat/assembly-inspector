@@ -2606,7 +2606,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               trimble_project_id: projectId,
               factory_name: factoryName,
               factory_code: factoryCode,
-              vehicle_separator: ''  // No separator for codes like GDI-T7
+              vehicle_separator: '',  // No separator for codes like GDI-T7
+              created_by: tcUserEmail
             });
 
           if (error) {
