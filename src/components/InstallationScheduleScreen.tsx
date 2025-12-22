@@ -209,6 +209,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Date menu state (three-dot menu for date groups)
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
 
+  // Date right-click context menu (calendar picker to move all items)
+  const [dateContextMenu, setDateContextMenu] = useState<{ x: number; y: number; sourceDate: string } | null>(null);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -2909,6 +2912,39 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Move all items from one date to another (used by right-click context menu)
+  const moveAllItemsToDate = async (sourceDate: string, targetDate: string) => {
+    if (sourceDate === targetDate) {
+      setDateContextMenu(null);
+      return;
+    }
+
+    const itemsOnDate = scheduleItems.filter(i => i.scheduled_date === sourceDate);
+    if (itemsOnDate.length === 0) {
+      setDateContextMenu(null);
+      return;
+    }
+
+    saveUndoState(`${itemsOnDate.length} detaili liigutamine kuupäevale ${formatDateShort(targetDate)}`);
+
+    try {
+      const { error } = await supabase
+        .from('installation_schedule')
+        .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
+        .eq('project_id', projectId)
+        .eq('scheduled_date', sourceDate);
+
+      if (error) throw error;
+
+      setDateContextMenu(null);
+      setMessage(`${itemsOnDate.length} detaili liigutatud kuupäevale ${formatDateShort(targetDate)}`);
+      loadSchedule();
+    } catch (e) {
+      console.error('Error moving items:', e);
+      setMessage('Viga detailide liigutamisel');
+    }
+  };
+
   // Drag handlers with multi-select support
   const handleDragStart = (e: React.DragEvent, item: ScheduleItem) => {
     setIsDragging(true);
@@ -4747,7 +4783,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         }}
                       />
                     )}
-                    <span className="date-label">{formatDateShort(date)}</span>
+                    <span
+                      className="date-label"
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDateContextMenu({ x: e.clientX, y: e.clientY, sourceDate: date });
+                      }}
+                      title="Paremklõps: muuda kuupäeva"
+                    >{formatDateShort(date)}</span>
                     <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
                     {/* Quick-add button - shows when unscheduled items are selected */}
@@ -5064,7 +5108,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Click outside to close context menus */}
-      {(listItemContextMenu || itemMenuId || datePickerItemId || dateMenuId) && (
+      {(listItemContextMenu || itemMenuId || datePickerItemId || dateMenuId || dateContextMenu) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
@@ -5072,8 +5116,40 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             setItemMenuId(null);
             setDatePickerItemId(null);
             setDateMenuId(null);
+            setDateContextMenu(null);
           }}
         />
+      )}
+
+      {/* Date right-click context menu - calendar picker to move all items */}
+      {dateContextMenu && (
+        <div
+          className="date-context-calendar"
+          style={{ top: dateContextMenu.y, left: dateContextMenu.x }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="date-context-header">
+            Liiguta kõik detailid kuupäevale:
+          </div>
+          <div className="date-context-list">
+            {Object.keys(itemsByDate)
+              .sort()
+              .filter(d => d !== dateContextMenu.sourceDate)
+              .map(d => {
+                const count = itemsByDate[d]?.length || 0;
+                return (
+                  <div
+                    key={d}
+                    className="date-context-item"
+                    onClick={() => moveAllItemsToDate(dateContextMenu.sourceDate, d)}
+                  >
+                    <span className="date-context-date">{formatDateShort(d)}</span>
+                    <span className="date-context-badge">{count}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
       )}
 
       {/* Item Hover Tooltip */}

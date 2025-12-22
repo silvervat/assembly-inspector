@@ -2737,3 +2737,67 @@
   cursor: not-allowed;
 }
 
+/* Date context menu - calendar picker for moving all items */
+.date-context-calendar {
+  position: fixed;
+  z-index: 2000;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-height: 300px;
+  overflow: hidden;
+}
+
+.date-context-header {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--modus-text-secondary);
+  border-bottom: 1px solid var(--modus-border);
+  background: #f8fafc;
+}
+
+.date-context-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.date-context-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.date-context-item:last-child {
+  border-bottom: none;
+}
+
+.date-context-item:hover {
+  background: #f0f9ff;
+}
+
+.date-context-date {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.date-context-badge {
+  background: var(--modus-primary);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.date-label {
+  cursor: context-menu;
+}
