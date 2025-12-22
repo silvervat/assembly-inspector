@@ -485,6 +485,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     comment?: string;
   }[]>([]);
 
+  // Refresh from model
+  const [refreshing, setRefreshing] = useState(false);
+
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportColumns, setExportColumns] = useState([
@@ -3389,6 +3392,135 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // REFRESH FROM MODEL
+  // ============================================
+
+  const refreshFromModel = async () => {
+    if (items.length === 0) {
+      setMessage('Pole detaile mida värskendada');
+      return;
+    }
+
+    const confirmed = confirm(`Värskendada ${items.length} detaili andmeid mudelist?\n\nSee võtab natuke aega.`);
+    if (!confirmed) return;
+
+    setRefreshing(true);
+    setMessage('Värskendame andmeid mudelist...');
+
+    try {
+      console.log(`🔄 Refreshing ${items.length} items from model...`);
+
+      // Group items by model_id
+      const itemsByModel = new Map<string, typeof items>();
+      for (const item of items) {
+        if (item.model_id && item.object_runtime_id) {
+          if (!itemsByModel.has(item.model_id)) {
+            itemsByModel.set(item.model_id, []);
+          }
+          itemsByModel.get(item.model_id)!.push(item);
+        }
+      }
+
+      console.log(`📦 Grouped into ${itemsByModel.size} models`);
+
+      let updatedCount = 0;
+      const totalItems = items.length;
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(i => i.object_runtime_id!);
+        console.log(`🔍 Fetching ${runtimeIds.length} objects from model ${modelId}...`);
+
+        try {
+          const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+          if (props && props.length > 0) {
+            for (let idx = 0; idx < props.length; idx++) {
+              const objProps = props[idx];
+              const item = modelItems[idx];
+
+              let assemblyMark: string | undefined;
+              let productName: string | undefined;
+              let weight: string | undefined;
+              let positionCode: string | undefined;
+              let bottomElevation: string | undefined;
+              let topElevation: string | undefined;
+
+              // Extract properties (same logic as import)
+              for (const pset of objProps.properties || []) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const propArray = pset.properties || [];
+
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
+                    assemblyMark = String(propValue);
+                  }
+                  if (propName.includes('weight') && !weight) {
+                    weight = String(propValue);
+                  }
+                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
+                    positionCode = String(propValue);
+                  }
+                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
+                    bottomElevation = String(propValue);
+                  }
+                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
+                    topElevation = String(propValue);
+                  }
+                  if (setName === 'Product' && propName === 'name' && !productName) {
+                    productName = String(propValue);
+                  }
+                }
+              }
+
+              // Update database with fresh data
+              const updates: any = {};
+              if (assemblyMark) updates.assembly_mark = assemblyMark;
+              if (productName !== undefined) updates.product_name = productName;
+              if (weight !== undefined) updates.cast_unit_weight = weight;
+              if (positionCode !== undefined) updates.cast_unit_position_code = positionCode;
+              // NOTE: Uncomment after running migration
+              // if (bottomElevation !== undefined) updates.cast_unit_bottom_elevation = bottomElevation;
+              // if (topElevation !== undefined) updates.cast_unit_top_elevation = topElevation;
+
+              if (Object.keys(updates).length > 0) {
+                const { error } = await supabase
+                  .from('trimble_delivery_items')
+                  .update(updates)
+                  .eq('id', item.id);
+
+                if (error) {
+                  console.error(`Error updating item ${item.id}:`, error);
+                } else {
+                  updatedCount++;
+                }
+              }
+            }
+          }
+
+          setMessage(`Värskendame... ${updatedCount}/${totalItems}`);
+        } catch (error) {
+          console.error(`Error fetching properties for model ${modelId}:`, error);
+        }
+      }
+
+      // Reload items
+      await loadItems();
+      setMessage(`✅ Värskendatud ${updatedCount} detaili mudelist!`);
+      console.log(`✅ Refreshed ${updatedCount} items from model`);
+    } catch (error: any) {
+      console.error('Error refreshing from model:', error);
+      setMessage(`Viga värskendamisel: ${error.message}`);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // ============================================
   // EXPORT
   // ============================================
 
@@ -5893,6 +6025,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             )}
           </div>
+          <button
+            onClick={refreshFromModel}
+            disabled={refreshing || items.length === 0}
+            style={{
+              opacity: refreshing || items.length === 0 ? 0.5 : 1,
+              cursor: refreshing || items.length === 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <FiRefreshCw className={refreshing ? 'spinning' : ''} /> {refreshing ? 'Värskendame...' : 'Värskenda mudelist'}
+          </button>
           <div
             className="dropdown-menu-wrapper"
             onMouseEnter={() => setShowColorMenu(true)}
