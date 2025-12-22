@@ -1544,6 +1544,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           if (data.length < PAGE_SIZE) break;
         }
 
+        // If no model objects found, show warning
+        if (allModelObjects.length === 0) {
+          setMessage('Andmebaasis pole mudeli objekte! Kasuta Admin → "Saada andmebaasi" et salvestada mudeli objektid.');
+          setTimeout(() => setMessage(null), 5000);
+          // Still color the schedule items
+        }
+
         // Step 2: Get schedule item runtime IDs
         const scheduleRuntimeIds = new Set(
           scheduleItems.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
