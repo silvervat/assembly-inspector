@@ -6940,12 +6940,51 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             </div>
             <div className="modal-footer">
+              {/* Validation message */}
+              {(() => {
+                if (!importText.trim()) {
+                  return (
+                    <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
+                      ⚠️ Lae fail või kleebi GUID-id
+                    </div>
+                  );
+                }
+                const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+                if (!hasDetailedVehicles && (!importFactoryId || !addModalDate)) {
+                  const missing = [];
+                  if (!importFactoryId) missing.push('tehas');
+                  if (!addModalDate) missing.push('kuupäev');
+                  return (
+                    <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
+                      ⚠️ Vali {missing.join(' ja ')}
+                    </div>
+                  );
+                }
+                return <div style={{ flex: 1 }} />;
+              })()}
               <button className="cancel-btn" onClick={() => setShowImportModal(false)}>
                 Tühista
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!importText.trim() || (!(parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode)) && !importFactoryId) || importing}
+                disabled={(() => {
+                  // No import text
+                  if (!importText.trim()) return true;
+                  // Currently importing
+                  if (importing) return true;
+
+                  // Check if this is detailed import with vehicle codes
+                  const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+
+                  // Detailed import with vehicle codes - OK to proceed
+                  if (hasDetailedVehicles) return false;
+
+                  // Simple import or detailed without vehicles - need factory AND date
+                  if (!importFactoryId || !addModalDate) return true;
+
+                  // All checks passed
+                  return false;
+                })()}
                 onClick={handleImport}
               >
                 {importing ? 'Importimisel...' : 'Impordi'}
