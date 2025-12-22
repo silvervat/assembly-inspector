@@ -1165,6 +1165,22 @@
   background: #fef08a;
 }
 
+/* Model-selected item (selected in 3D viewer) */
+.schedule-item.model-selected {
+  background: #dbeafe;
+  border-left: 3px solid #3b82f6;
+}
+
+.schedule-item.model-selected:hover {
+  background: #bfdbfe;
+}
+
+/* Both model-selected and multi-selected */
+.schedule-item.model-selected.multi-selected {
+  background: linear-gradient(90deg, #dbeafe 50%, #fef9c3 50%);
+  border-left: 3px solid #8b5cf6;
+}
+
 /* Dragging state */
 .schedule-item.dragging {
   opacity: 0.5;

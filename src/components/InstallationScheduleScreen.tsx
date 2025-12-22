@@ -928,6 +928,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return acc;
   }, {} as Record<string, ScheduleItem[]>);
 
+  // Create Set of guids from model selection for highlighting
+  const modelSelectedGuids = new Set(
+    selectedObjects
+      .filter(obj => obj.guidIfc || obj.guid)
+      .map(obj => obj.guidIfc || obj.guid || '')
+  );
+
   // Get days in current month for calendar
   const getDaysInMonth = () => {
     const year = currentMonth.getFullYear();
@@ -1379,6 +1386,44 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     } catch (e) {
       console.error('Error selecting date items:', e);
+    }
+  };
+
+  // Select specific items in viewer (by item IDs)
+  const selectItemsInViewer = async (itemIds: Set<string>, skipZoom: boolean = false) => {
+    if (itemIds.size === 0) {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      return;
+    }
+
+    try {
+      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      const itemsToSelect = scheduleItems.filter(item => itemIds.has(item.id));
+
+      for (const item of itemsToSelect) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        const existing = modelObjects.find(m => m.modelId === modelId);
+        if (existing) {
+          existing.objectRuntimeIds.push(...runtimeIds);
+        } else {
+          modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
+        }
+      }
+
+      if (modelObjects.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
+        if (!skipZoom) {
+          await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+        }
+      }
+    } catch (e) {
+      console.error('Error selecting items in viewer:', e);
     }
   };
 
@@ -2334,24 +2379,24 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const end = Math.max(currentIndex, lastIndex);
         const rangeIds = allSortedItems.slice(start, end + 1).map(i => i.id);
 
-        setSelectedItemIds(prev => {
-          const next = new Set(prev);
-          rangeIds.forEach(id => next.add(id));
-          return next;
-        });
+        const newSelection = new Set(selectedItemIds);
+        rangeIds.forEach(id => newSelection.add(id));
+        setSelectedItemIds(newSelection);
+        // Select all items in model
+        selectItemsInViewer(newSelection, true);
       }
     } else if (e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd + click: toggle single item
-      setSelectedItemIds(prev => {
-        const next = new Set(prev);
-        if (next.has(item.id)) {
-          next.delete(item.id);
-        } else {
-          next.add(item.id);
-        }
-        return next;
-      });
+      // Ctrl/Cmd + click: toggle single item and select ALL selected items in model
+      const newSelection = new Set(selectedItemIds);
+      if (newSelection.has(item.id)) {
+        newSelection.delete(item.id);
+      } else {
+        newSelection.add(item.id);
+      }
+      setSelectedItemIds(newSelection);
       setLastClickedId(item.id);
+      // Select all selected items in model
+      selectItemsInViewer(newSelection, true);
     } else {
       // Normal click: select only this item and view in model
       setSelectedItemIds(new Set([item.id]));
@@ -4367,6 +4412,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <div className="date-items">
                       {items.map((item, idx) => {
                         const isItemSelected = selectedItemIds.has(item.id);
+                        const isModelSelected = modelSelectedGuids.has(item.guid_ifc || item.guid);
                         const allSorted = getAllItemsSorted();
                         const isCurrentlyPlaying = isPlaying && allSorted[currentPlayIndex]?.id === item.id;
                         const showDropBefore = dragOverDate === date && dragOverIndex === idx;
@@ -4377,7 +4423,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {showDropBefore && <div className="drop-indicator" />}
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
-                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
