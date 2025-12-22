@@ -2592,10 +2592,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setDraggedItems([]);
     setSelectedItemIds(new Set());
 
-    // Background database update (no await to prevent blocking)
+    // Background database update
+    // NOTE: We must calculate newOrder from the CURRENT scheduleItems, not itemsByDate which is stale
     try {
       if (isSameDate && targetIndex !== undefined) {
-        const dateItems = [...(itemsByDate[targetDate] || [])];
+        // Get current items for this date from scheduleItems (before optimistic update)
+        const dateItems = scheduleItems.filter(i => i.scheduled_date === targetDate);
         const remaining = dateItems.filter(i => !draggedIds.has(i.id));
         let adjustedIndex = targetIndex;
         for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
@@ -2610,23 +2612,25 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           ...remaining.slice(adjustedIndex)
         ];
 
-        for (let i = 0; i < newOrder.length; i++) {
+        // Update sort_order for all items in this date
+        const updatePromises = newOrder.map((item, i) =>
           supabase
             .from('installation_schedule')
             .update({ sort_order: i, updated_by: tcUserEmail })
-            .eq('id', newOrder[i].id)
-            .then();
-        }
+            .eq('id', item.id)
+        );
+        await Promise.all(updatePromises);
       } else {
-        for (const item of draggedItems) {
-          if (item.scheduled_date !== targetDate) {
+        // Moving to different date
+        const updatePromises = draggedItems
+          .filter(item => item.scheduled_date !== targetDate)
+          .map(item =>
             supabase
               .from('installation_schedule')
               .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
               .eq('id', item.id)
-              .then();
-          }
-        }
+          );
+        await Promise.all(updatePromises);
       }
     } catch (e) {
       console.error('Error saving to database:', e);
