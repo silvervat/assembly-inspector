@@ -1087,9 +1087,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             // Get object properties
             const props = await api.viewer.getObjectProperties(model.id, [runtimeId]);
 
-            // Log first few for debugging
+            // Log first few for debugging (use replacer to handle BigInt)
             if (linkedCount < 3) {
-              console.log(`Props for ${item.assembly_mark}:`, JSON.stringify(props?.[0], null, 2).slice(0, 1000));
+              const safeStringify = (obj: any) => JSON.stringify(obj, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2);
+              console.log(`Props for ${item.assembly_mark}:`, safeStringify(props?.[0])?.slice(0, 2000));
             }
 
             if (!props || !props[0]) continue;
