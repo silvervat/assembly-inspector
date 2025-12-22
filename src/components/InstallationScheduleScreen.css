@@ -581,7 +581,7 @@
 /* Allow dropdown menu to overflow when open */
 .date-group:has(.menu-open) {
   overflow: visible;
-  z-index: 200;
+  z-index: 1002;
 }
 
 .date-group.drag-over {
@@ -800,7 +800,7 @@
 }
 
 .schedule-item.menu-open {
-  z-index: 150;
+  z-index: 1002;
 }
 
 /* Item index number */
