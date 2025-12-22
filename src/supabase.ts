@@ -773,6 +773,11 @@ export interface OrganizerGroup {
   sort_by: OrganizerSortField;
   sort_direction: OrganizerSortDirection;
   is_expanded: boolean;
+  // Soft delete
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deleted_by_name?: string | null;
   // Audit
   created_by: string;
   created_by_name?: string | null;
@@ -811,6 +816,11 @@ export interface OrganizerItem {
   // Positsioon
   sort_order: number;
   notes?: string | null;
+  // Soft delete
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+  deleted_by_name?: string | null;
   // Audit
   added_by: string;
   added_by_name?: string | null;
@@ -825,11 +835,14 @@ export type OrganizerActionType =
   | 'group_updated'
   | 'group_deleted'
   | 'group_moved'
+  | 'group_restored'
   | 'item_added'
   | 'item_removed'
   | 'item_moved'
+  | 'item_restored'
   | 'items_bulk_add'
-  | 'items_bulk_remove';
+  | 'items_bulk_remove'
+  | 'items_bulk_restore';
 
 // Ajalugu
 export interface OrganizerHistory {
@@ -837,6 +850,9 @@ export interface OrganizerHistory {
   trimble_project_id: string;
   group_id?: string | null;
   item_id?: string | null;
+  // Cached info (et ajalugu oleks loetav ka pärast kustutamist)
+  group_name?: string | null;
+  item_mark?: string | null;
   action_type: OrganizerActionType;
   old_value?: Record<string, any> | null;
   new_value?: Record<string, any> | null;

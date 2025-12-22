@@ -1,5 +1,5 @@
 -- ============================================
--- ORGANISEERIJA SÜSTEEM (Organizer System v3.1.0)
+-- ORGANISEERIJA SÜSTEEM (Organizer System v3.1.1)
 -- ============================================
 
 -- Grupid (kuni 3 taset alamgruppe)
@@ -17,6 +17,11 @@ CREATE TABLE IF NOT EXISTS organizer_groups (
   sort_by TEXT DEFAULT 'assembly_mark',        -- Sortimise väli
   sort_direction TEXT DEFAULT 'asc' CHECK (sort_direction IN ('asc', 'desc')),
   is_expanded BOOLEAN DEFAULT true,            -- Kas grupp on lahti
+  -- Soft delete
+  is_deleted BOOLEAN DEFAULT false,            -- Kas on prügikastis
+  deleted_at TIMESTAMPTZ,                      -- Millal kustutati
+  deleted_by TEXT,                             -- Kes kustutas
+  deleted_by_name TEXT,                        -- Kustutaja nimi
   -- Audit väljad
   created_by TEXT NOT NULL,                    -- Kasutaja email
   created_by_name TEXT,                        -- Kasutaja nimi
@@ -49,27 +54,36 @@ CREATE TABLE IF NOT EXISTS organizer_items (
   sort_order INTEGER DEFAULT 0,
   -- Märkused
   notes TEXT,
+  -- Soft delete
+  is_deleted BOOLEAN DEFAULT false,            -- Kas on prügikastis
+  deleted_at TIMESTAMPTZ,                      -- Millal kustutati
+  deleted_by TEXT,                             -- Kes kustutas
+  deleted_by_name TEXT,                        -- Kustutaja nimi
   -- Audit väljad
   added_by TEXT NOT NULL,                      -- Kes lisas
   added_by_name TEXT,
   added_at TIMESTAMPTZ DEFAULT NOW(),
   updated_by TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  -- Unikaalsus: sama GUID ei saa olla samas grupis
-  UNIQUE(group_id, guid)
+  -- Unikaalsus: sama GUID ei saa olla samas grupis (ainult aktiivsed)
+  UNIQUE(group_id, guid) WHERE (is_deleted = false)
 );
 
 -- Ajalugu (kõik muudatused)
 CREATE TABLE IF NOT EXISTS organizer_history (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   trimble_project_id TEXT NOT NULL,
-  -- Viited
+  -- Viited (SET NULL kui kustutatakse, et ajalugu säiliks)
   group_id UUID REFERENCES organizer_groups(id) ON DELETE SET NULL,
   item_id UUID REFERENCES organizer_items(id) ON DELETE SET NULL,
+  -- Cached info (et ajalugu oleks loetav ka pärast kustutamist)
+  group_name TEXT,                             -- Grupi nimi ajaloo hetkel
+  item_mark TEXT,                              -- Detaili mark ajaloo hetkel
   -- Muudatuse tüüp
   action_type TEXT NOT NULL CHECK (action_type IN (
-    'group_created', 'group_updated', 'group_deleted', 'group_moved',
-    'item_added', 'item_removed', 'item_moved', 'items_bulk_add', 'items_bulk_remove'
+    'group_created', 'group_updated', 'group_deleted', 'group_moved', 'group_restored',
+    'item_added', 'item_removed', 'item_moved', 'item_restored',
+    'items_bulk_add', 'items_bulk_remove', 'items_bulk_restore'
   )),
   -- Muudatuse info
   old_value JSONB,                             -- Vana väärtus
@@ -105,8 +119,12 @@ CREATE INDEX IF NOT EXISTS idx_organizer_items_guid_ifc ON organizer_items(guid_
 CREATE INDEX IF NOT EXISTS idx_organizer_history_project ON organizer_history(trimble_project_id);
 CREATE INDEX IF NOT EXISTS idx_organizer_history_group ON organizer_history(group_id);
 CREATE INDEX IF NOT EXISTS idx_organizer_history_item ON organizer_history(item_id);
+CREATE INDEX IF NOT EXISTS idx_organizer_history_changed_at ON organizer_history(changed_at DESC);
+-- Soft delete indeksid
+CREATE INDEX IF NOT EXISTS idx_organizer_groups_deleted ON organizer_groups(is_deleted);
+CREATE INDEX IF NOT EXISTS idx_organizer_items_deleted ON organizer_items(is_deleted);
 
--- Vaade: gruppide statistika
+-- Vaade: gruppide statistika (ainult aktiivsed)
 CREATE OR REPLACE VIEW organizer_group_stats AS
 SELECT
   g.id,
@@ -121,17 +139,29 @@ SELECT
   g.sort_by,
   g.sort_direction,
   g.is_expanded,
+  g.is_deleted,
+  g.deleted_at,
+  g.deleted_by,
+  g.deleted_by_name,
   g.created_by,
   g.created_by_name,
   g.created_at,
   g.updated_by,
   g.updated_at,
-  COUNT(DISTINCT i.id)::INTEGER AS item_count,
-  COALESCE(SUM(NULLIF(i.cast_unit_weight, '')::NUMERIC), 0)::NUMERIC AS total_weight,
-  (SELECT COUNT(*) FROM organizer_groups sg WHERE sg.parent_id = g.id)::INTEGER AS subgroup_count
+  COUNT(DISTINCT i.id) FILTER (WHERE i.is_deleted = false)::INTEGER AS item_count,
+  COALESCE(SUM(NULLIF(i.cast_unit_weight, '')::NUMERIC) FILTER (WHERE i.is_deleted = false), 0)::NUMERIC AS total_weight,
+  (SELECT COUNT(*) FROM organizer_groups sg WHERE sg.parent_id = g.id AND sg.is_deleted = false)::INTEGER AS subgroup_count
 FROM organizer_groups g
 LEFT JOIN organizer_items i ON i.group_id = g.id
 GROUP BY g.id;
+
+-- Vaade: prügikasti statistika
+CREATE OR REPLACE VIEW organizer_trash_stats AS
+SELECT
+  trimble_project_id,
+  (SELECT COUNT(*) FROM organizer_groups WHERE trimble_project_id = p.trimble_project_id AND is_deleted = true)::INTEGER AS deleted_groups,
+  (SELECT COUNT(*) FROM organizer_items WHERE trimble_project_id = p.trimble_project_id AND is_deleted = true)::INTEGER AS deleted_items
+FROM (SELECT DISTINCT trimble_project_id FROM organizer_groups) p;
 
 -- Trigger: uuenda updated_at automaatselt
 CREATE OR REPLACE FUNCTION update_organizer_timestamp()
@@ -179,3 +209,4 @@ GRANT ALL ON organizer_items TO anon, authenticated;
 GRANT ALL ON organizer_history TO anon, authenticated;
 GRANT ALL ON organizer_comments TO anon, authenticated;
 GRANT ALL ON organizer_group_stats TO anon, authenticated;
+GRANT ALL ON organizer_trash_stats TO anon, authenticated;

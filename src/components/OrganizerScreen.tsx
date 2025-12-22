@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
-  supabase, TrimbleExUser, OrganizerGroup, OrganizerItem,
+  supabase, TrimbleExUser, OrganizerGroup, OrganizerItem, OrganizerHistory,
   OrganizerDisplayField, OrganizerSortField, OrganizerSortDirection
 } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
@@ -10,7 +10,7 @@ import {
   FiChevronDown, FiChevronRight, FiDownload,
   FiSearch, FiFolder, FiFolderPlus, FiRefreshCw,
   FiDroplet, FiMinus, FiMaximize2, FiMinimize2,
-  FiAlertTriangle, FiFilter, FiLayers, FiEye
+  FiAlertTriangle, FiFilter, FiLayers, FiEye, FiClock, FiRotateCcw
 } from 'react-icons/fi';
 import './OrganizerScreen.css';
 
@@ -93,6 +93,22 @@ const COLOR_OPTIONS = [
 
 const ESTONIAN_WEEKDAYS = ['Pühapäev', 'Esmaspäev', 'Teisipäev', 'Kolmapäev', 'Neljapäev', 'Reede', 'Laupäev'];
 
+// Action type labels in Estonian
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  'group_created': 'lõi grupi',
+  'group_updated': 'muutis gruppi',
+  'group_deleted': 'kustutas grupi',
+  'group_moved': 'liigutas gruppi',
+  'group_restored': 'taastas grupi',
+  'item_added': 'lisas detaili',
+  'item_removed': 'eemaldas detaili',
+  'item_moved': 'liigutas detaili',
+  'item_restored': 'taastas detaili',
+  'items_bulk_add': 'lisas detaile',
+  'items_bulk_remove': 'eemaldas detaile',
+  'items_bulk_restore': 'taastas detaile'
+};
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -110,6 +126,27 @@ const formatWeight = (weight: string | null | undefined): string => {
 const getCurrentWeekday = (): string => {
   const day = new Date().getDay();
   return ESTONIAN_WEEKDAYS[day].toLowerCase();
+};
+
+const formatRelativeTime = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (minutes < 1) return 'Just nüüd';
+  if (minutes < 60) return `${minutes} min tagasi`;
+  if (hours < 24) return `${hours}h tagasi`;
+  if (days < 7) return `${days}p tagasi`;
+
+  return date.toLocaleDateString('et-EE', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 // Build tree structure from flat groups
@@ -180,6 +217,15 @@ export default function OrganizerScreen({
   const [draggedItem, setDraggedItem] = useState<OrganizerItem | null>(null);
   const [dragOverGroup, setDragOverGroup] = useState<string | null>(null);
 
+  // Activity history
+  const [activityHistory, setActivityHistory] = useState<OrganizerHistory[]>([]);
+  const [showActivityPanel, setShowActivityPanel] = useState(false);
+
+  // Trash (prügikast)
+  const [showTrashView, setShowTrashView] = useState(false);
+  const [deletedGroups, setDeletedGroups] = useState<OrganizerGroup[]>([]);
+  const [deletedItems, setDeletedItems] = useState<OrganizerItem[]>([]);
+
   // Refs
   const selectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastSelectionRef = useRef<string>('');
@@ -191,30 +237,61 @@ export default function OrganizerScreen({
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load groups
+      // Load active groups (not deleted)
       const { data: groupsData, error: groupsError } = await supabase
         .from('organizer_group_stats')
         .select('*')
         .eq('trimble_project_id', projectId)
+        .eq('is_deleted', false)
         .order('level', { ascending: true })
         .order('sort_order', { ascending: true });
 
       if (groupsError) throw groupsError;
 
-      // Load items
+      // Load active items (not deleted)
       const { data: itemsData, error: itemsError } = await supabase
         .from('organizer_items')
         .select('*')
         .eq('trimble_project_id', projectId)
+        .eq('is_deleted', false)
         .order('sort_order', { ascending: true });
 
       if (itemsError) throw itemsError;
+
+      // Load activity history (last 1000 entries)
+      const { data: historyData, error: historyError } = await supabase
+        .from('organizer_history')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .order('changed_at', { ascending: false })
+        .limit(1000);
+
+      if (historyError) console.warn('Error loading history:', historyError);
+
+      // Load deleted groups (for trash)
+      const { data: deletedGroupsData } = await supabase
+        .from('organizer_groups')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .eq('is_deleted', true)
+        .order('deleted_at', { ascending: false });
+
+      // Load deleted items (for trash)
+      const { data: deletedItemsData } = await supabase
+        .from('organizer_items')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .eq('is_deleted', true)
+        .order('deleted_at', { ascending: false });
 
       const loadedGroups = (groupsData || []) as OrganizerGroup[];
       const loadedItems = (itemsData || []) as OrganizerItem[];
 
       setGroups(loadedGroups);
       setItems(loadedItems);
+      setActivityHistory((historyData || []) as OrganizerHistory[]);
+      setDeletedGroups((deletedGroupsData || []) as OrganizerGroup[]);
+      setDeletedItems((deletedItemsData || []) as OrganizerItem[]);
 
       // Build tree
       const tree = buildGroupTree(loadedGroups, loadedItems);
@@ -481,6 +558,104 @@ export default function OrganizerScreen({
     }
 
     try {
+      // Soft delete - mark as deleted instead of hard delete
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({
+          is_deleted: true,
+          deleted_at: new Date().toISOString(),
+          deleted_by: tcUserEmail,
+          deleted_by_name: tcUserName || tcUserEmail
+        })
+        .in('id', groupIds);
+
+      if (error) throw error;
+
+      // Also soft delete all items in these groups
+      await supabase
+        .from('organizer_items')
+        .update({
+          is_deleted: true,
+          deleted_at: new Date().toISOString(),
+          deleted_by: tcUserEmail,
+          deleted_by_name: tcUserName || tcUserEmail
+        })
+        .in('group_id', groupIds);
+
+      // Log history with cached group names
+      for (const groupId of groupIds) {
+        const group = groups.find(g => g.id === groupId);
+        await supabase.from('organizer_history').insert({
+          trimble_project_id: projectId,
+          group_id: groupId,
+          group_name: group?.name || 'Tundmatu',
+          action_type: 'group_deleted',
+          changed_by: tcUserEmail,
+          changed_by_name: tcUserName || tcUserEmail
+        });
+      }
+
+      showNotification('success', `${groupIds.length} gruppi prügikasti`);
+      setShowDeleteConfirm(null);
+      setDeleteConfirmInput('');
+      setSelectedGroups(new Set());
+      loadData();
+    } catch (error) {
+      console.error('Error deleting groups:', error);
+      showNotification('error', 'Gruppide kustutamine ebaõnnestus');
+    }
+  };
+
+  // Restore groups from trash
+  const restoreGroups = async (groupIds: string[]) => {
+    try {
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({
+          is_deleted: false,
+          deleted_at: null,
+          deleted_by: null,
+          deleted_by_name: null
+        })
+        .in('id', groupIds);
+
+      if (error) throw error;
+
+      // Also restore items that belong to these groups
+      await supabase
+        .from('organizer_items')
+        .update({
+          is_deleted: false,
+          deleted_at: null,
+          deleted_by: null,
+          deleted_by_name: null
+        })
+        .in('group_id', groupIds);
+
+      // Log history
+      for (const groupId of groupIds) {
+        const group = deletedGroups.find(g => g.id === groupId);
+        await supabase.from('organizer_history').insert({
+          trimble_project_id: projectId,
+          group_id: groupId,
+          group_name: group?.name || 'Tundmatu',
+          action_type: 'group_restored',
+          changed_by: tcUserEmail,
+          changed_by_name: tcUserName || tcUserEmail
+        });
+      }
+
+      showNotification('success', `${groupIds.length} gruppi taastatud`);
+      loadData();
+    } catch (error) {
+      console.error('Error restoring groups:', error);
+      showNotification('error', 'Gruppide taastamine ebaõnnestus');
+    }
+  };
+
+  // Permanently delete groups from trash
+  const permanentlyDeleteGroups = async (groupIds: string[]) => {
+    try {
       const { error } = await supabase
         .from('organizer_groups')
         .delete()
@@ -488,24 +663,10 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      // Log history
-      for (const groupId of groupIds) {
-        await supabase.from('organizer_history').insert({
-          trimble_project_id: projectId,
-          group_id: groupId,
-          action_type: 'group_deleted',
-          changed_by: tcUserEmail,
-          changed_by_name: tcUserName || tcUserEmail
-        });
-      }
-
-      showNotification('success', `${groupIds.length} gruppi kustutatud`);
-      setShowDeleteConfirm(null);
-      setDeleteConfirmInput('');
-      setSelectedGroups(new Set());
+      showNotification('success', `${groupIds.length} gruppi jäädavalt kustutatud`);
       loadData();
     } catch (error) {
-      console.error('Error deleting groups:', error);
+      console.error('Error permanently deleting groups:', error);
       showNotification('error', 'Gruppide kustutamine ebaõnnestus');
     }
   };
@@ -586,6 +747,85 @@ export default function OrganizerScreen({
     if (itemIds.length === 0) return;
 
     try {
+      // Get item marks for history before soft delete
+      const itemMarks = items
+        .filter(i => itemIds.includes(i.id))
+        .map(i => i.assembly_mark);
+
+      // Soft delete
+      const { error } = await supabase
+        .from('organizer_items')
+        .update({
+          is_deleted: true,
+          deleted_at: new Date().toISOString(),
+          deleted_by: tcUserEmail,
+          deleted_by_name: tcUserName || tcUserEmail
+        })
+        .in('id', itemIds);
+
+      if (error) throw error;
+
+      // Log history with item marks
+      await supabase.from('organizer_history').insert({
+        trimble_project_id: projectId,
+        action_type: 'items_bulk_remove',
+        affected_count: itemIds.length,
+        new_value: { marks: itemMarks },
+        changed_by: tcUserEmail,
+        changed_by_name: tcUserName || tcUserEmail
+      });
+
+      showNotification('success', `${itemIds.length} detaili prügikasti`);
+      setSelectedItems(new Set());
+      setShowDeleteConfirm(null);
+      loadData();
+    } catch (error) {
+      console.error('Error removing items:', error);
+      showNotification('error', 'Detailide eemaldamine ebaõnnestus');
+    }
+  };
+
+  // Restore items from trash
+  const restoreItems = async (itemIds: string[]) => {
+    try {
+      const { error } = await supabase
+        .from('organizer_items')
+        .update({
+          is_deleted: false,
+          deleted_at: null,
+          deleted_by: null,
+          deleted_by_name: null
+        })
+        .in('id', itemIds);
+
+      if (error) throw error;
+
+      // Get item marks for history
+      const itemMarks = deletedItems
+        .filter(i => itemIds.includes(i.id))
+        .map(i => i.assembly_mark);
+
+      // Log history
+      await supabase.from('organizer_history').insert({
+        trimble_project_id: projectId,
+        action_type: 'items_bulk_restore',
+        affected_count: itemIds.length,
+        new_value: { marks: itemMarks },
+        changed_by: tcUserEmail,
+        changed_by_name: tcUserName || tcUserEmail
+      });
+
+      showNotification('success', `${itemIds.length} detaili taastatud`);
+      loadData();
+    } catch (error) {
+      console.error('Error restoring items:', error);
+      showNotification('error', 'Detailide taastamine ebaõnnestus');
+    }
+  };
+
+  // Permanently delete items from trash
+  const permanentlyDeleteItems = async (itemIds: string[]) => {
+    try {
       const { error } = await supabase
         .from('organizer_items')
         .delete()
@@ -593,22 +833,11 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      // Log history
-      await supabase.from('organizer_history').insert({
-        trimble_project_id: projectId,
-        action_type: 'items_bulk_remove',
-        affected_count: itemIds.length,
-        changed_by: tcUserEmail,
-        changed_by_name: tcUserName || tcUserEmail
-      });
-
-      showNotification('success', `${itemIds.length} detaili eemaldatud`);
-      setSelectedItems(new Set());
-      setShowDeleteConfirm(null);
+      showNotification('success', `${itemIds.length} detaili jäädavalt kustutatud`);
       loadData();
     } catch (error) {
-      console.error('Error removing items:', error);
-      showNotification('error', 'Detailide eemaldamine ebaõnnestus');
+      console.error('Error permanently deleting items:', error);
+      showNotification('error', 'Detailide kustutamine ebaõnnestus');
     }
   };
 
@@ -1141,6 +1370,29 @@ export default function OrganizerScreen({
         <h1 className="org-title">Organiseerija</h1>
         <div className="org-header-actions">
           <button
+            className={`org-header-btn ${showActivityPanel ? 'active' : ''}`}
+            onClick={() => {
+              setShowActivityPanel(!showActivityPanel);
+              setShowTrashView(false);
+            }}
+            title="Tegevuste ajalugu"
+          >
+            <FiClock size={18} />
+          </button>
+          <button
+            className={`org-header-btn ${showTrashView ? 'active' : ''}`}
+            onClick={() => {
+              setShowTrashView(!showTrashView);
+              setShowActivityPanel(false);
+            }}
+            title={`Prügikast (${deletedGroups.length + deletedItems.length})`}
+          >
+            <FiTrash2 size={18} />
+            {(deletedGroups.length + deletedItems.length) > 0 && (
+              <span className="org-header-badge">{deletedGroups.length + deletedItems.length}</span>
+            )}
+          </button>
+          <button
             className="org-header-btn"
             onClick={() => setShowAddGroupModal(true)}
             title="Uus grupp"
@@ -1172,6 +1424,199 @@ export default function OrganizerScreen({
             {selectedObjects.slice(0, 3).map(o => o.assemblyMark).join(', ')}
             {selectedObjects.length > 3 && ` +${selectedObjects.length - 3}`}
           </span>
+        </div>
+      )}
+
+      {/* Activity History Panel */}
+      {showActivityPanel && (
+        <div className="org-activity-panel">
+          <div className="org-activity-header">
+            <h3><FiClock size={16} /> Viimased tegevused</h3>
+            <span className="org-activity-count">{activityHistory.length} kirjet</span>
+          </div>
+          <div className="org-activity-list">
+            {activityHistory.length === 0 ? (
+              <div className="org-activity-empty">
+                Tegevusi pole veel salvestatud
+              </div>
+            ) : (
+              activityHistory.slice(0, 100).map(activity => (
+                <div key={activity.id} className="org-activity-item">
+                  <div className="org-activity-icon">
+                    {activity.action_type.includes('deleted') ? (
+                      <FiTrash2 size={14} />
+                    ) : activity.action_type.includes('restored') ? (
+                      <FiRotateCcw size={14} />
+                    ) : activity.action_type.includes('added') ? (
+                      <FiPlus size={14} />
+                    ) : activity.action_type.includes('created') ? (
+                      <FiFolderPlus size={14} />
+                    ) : (
+                      <FiEdit2 size={14} />
+                    )}
+                  </div>
+                  <div className="org-activity-content">
+                    <div className="org-activity-text">
+                      <span className="org-activity-user">{activity.changed_by_name || activity.changed_by}</span>
+                      <span className="org-activity-action">{ACTION_TYPE_LABELS[activity.action_type] || activity.action_type}</span>
+                      {activity.group_name && (
+                        <span className="org-activity-target">{activity.group_name}</span>
+                      )}
+                      {activity.item_mark && (
+                        <span className="org-activity-target">{activity.item_mark}</span>
+                      )}
+                      {activity.affected_count && activity.affected_count > 1 && (
+                        <span className="org-activity-count-badge">({activity.affected_count})</span>
+                      )}
+                    </div>
+                    <div className="org-activity-time">
+                      {formatRelativeTime(activity.changed_at)}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+            {activityHistory.length > 100 && (
+              <div className="org-activity-more">
+                + veel {activityHistory.length - 100} tegevust
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Trash View Panel */}
+      {showTrashView && (
+        <div className="org-trash-panel">
+          <div className="org-trash-header">
+            <h3><FiTrash2 size={16} /> Prügikast</h3>
+            <span className="org-trash-count">
+              {deletedGroups.length} gruppi, {deletedItems.length} detaili
+            </span>
+          </div>
+          <div className="org-trash-content">
+            {deletedGroups.length === 0 && deletedItems.length === 0 ? (
+              <div className="org-trash-empty">
+                <FiTrash2 size={32} />
+                <p>Prügikast on tühi</p>
+              </div>
+            ) : (
+              <>
+                {/* Deleted Groups */}
+                {deletedGroups.length > 0 && (
+                  <div className="org-trash-section">
+                    <h4>Grupid ({deletedGroups.length})</h4>
+                    <div className="org-trash-list">
+                      {deletedGroups.map(group => (
+                        <div key={group.id} className="org-trash-item">
+                          <div className="org-trash-item-color" style={{ backgroundColor: group.color }} />
+                          <div className="org-trash-item-info">
+                            <div className="org-trash-item-name">{group.name}</div>
+                            <div className="org-trash-item-meta">
+                              Kustutas {group.deleted_by_name || group.deleted_by} • {group.deleted_at && formatRelativeTime(group.deleted_at)}
+                            </div>
+                          </div>
+                          <div className="org-trash-item-actions">
+                            <button
+                              className="org-trash-restore"
+                              onClick={() => restoreGroups([group.id])}
+                              title="Taasta"
+                            >
+                              <FiRotateCcw size={14} />
+                            </button>
+                            <button
+                              className="org-trash-delete"
+                              onClick={() => permanentlyDeleteGroups([group.id])}
+                              title="Kustuta jäädavalt"
+                            >
+                              <FiX size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {deletedGroups.length > 1 && (
+                      <div className="org-trash-bulk-actions">
+                        <button
+                          className="org-btn-secondary"
+                          onClick={() => restoreGroups(deletedGroups.map(g => g.id))}
+                        >
+                          <FiRotateCcw size={14} />
+                          Taasta kõik grupid
+                        </button>
+                        <button
+                          className="org-btn-danger-sm"
+                          onClick={() => permanentlyDeleteGroups(deletedGroups.map(g => g.id))}
+                        >
+                          <FiTrash2 size={14} />
+                          Kustuta kõik
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Deleted Items */}
+                {deletedItems.length > 0 && (
+                  <div className="org-trash-section">
+                    <h4>Detailid ({deletedItems.length})</h4>
+                    <div className="org-trash-list">
+                      {deletedItems.slice(0, 50).map(item => (
+                        <div key={item.id} className="org-trash-item">
+                          <div className="org-trash-item-info">
+                            <div className="org-trash-item-name">{item.assembly_mark}</div>
+                            <div className="org-trash-item-meta">
+                              {item.product_name && `${item.product_name} • `}
+                              Kustutas {item.deleted_by_name || item.deleted_by} • {item.deleted_at && formatRelativeTime(item.deleted_at)}
+                            </div>
+                          </div>
+                          <div className="org-trash-item-actions">
+                            <button
+                              className="org-trash-restore"
+                              onClick={() => restoreItems([item.id])}
+                              title="Taasta"
+                            >
+                              <FiRotateCcw size={14} />
+                            </button>
+                            <button
+                              className="org-trash-delete"
+                              onClick={() => permanentlyDeleteItems([item.id])}
+                              title="Kustuta jäädavalt"
+                            >
+                              <FiX size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {deletedItems.length > 50 && (
+                        <div className="org-trash-more">
+                          + veel {deletedItems.length - 50} detaili
+                        </div>
+                      )}
+                    </div>
+                    {deletedItems.length > 1 && (
+                      <div className="org-trash-bulk-actions">
+                        <button
+                          className="org-btn-secondary"
+                          onClick={() => restoreItems(deletedItems.map(i => i.id))}
+                        >
+                          <FiRotateCcw size={14} />
+                          Taasta kõik detailid
+                        </button>
+                        <button
+                          className="org-btn-danger-sm"
+                          onClick={() => permanentlyDeleteItems(deletedItems.map(i => i.id))}
+                        >
+                          <FiTrash2 size={14} />
+                          Kustuta kõik
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 
