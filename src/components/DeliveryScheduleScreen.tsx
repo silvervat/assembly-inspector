@@ -2803,7 +2803,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   const handleImport = async () => {
+    // DEBUG: Log that function was called
+    console.log('🚀 handleImport called');
+
+    // ALERT so user sees it on phone
+    const importInfo = `Import algas!\nGUID-e: ${importText.split('\n').length}\nParsed: ${parsedImportData.length}\nVeoki koodidega: ${parsedImportData.filter(r => r.vehicleCode).length}`;
+    console.log('📊 Import state:', {
+      importTextLength: importText.length,
+      parsedDataLength: parsedImportData.length,
+      hasVehicleCodes: parsedImportData.some(r => r.vehicleCode),
+      importFactoryId,
+      addModalDate,
+      importing
+    });
+
+    // Show immediate feedback
+    setMessage(importInfo);
+
     if (!importText.trim()) {
+      console.log('❌ Import text is empty');
       setMessage('Kleebi GUID-id tekstiväljale');
       return;
     }
@@ -2812,22 +2830,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const hasDetailedData = parsedImportData.length > 0 &&
       parsedImportData.some(row => row.date || row.vehicleCode);
 
+    console.log('📋 Import type:', hasDetailedData ? 'Detailed' : 'Simple');
+
     // For simple import, require factory and date
     if (!hasDetailedData) {
       if (!importFactoryId) {
+        console.log('❌ No factory selected for simple import');
         setMessage('Vali tehas');
         return;
       }
 
       if (!addModalDate) {
+        console.log('❌ No date selected for simple import');
         setMessage('Vali kuupäev');
         return;
       }
     }
 
+    console.log('✅ Starting import...');
     setImporting(true);
+    setMessage('Alustame importi...');
+
     try {
       // Parse GUIDs from text
+      console.log('📝 Parsing GUIDs from text...');
       const lines = importText.split('\n').map(l => l.trim()).filter(l => l);
       const guids = lines.map(line => {
         // Try to extract GUID from line (could be just GUID or GUID with other data)
@@ -2835,12 +2861,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return parts[0].trim();
       }).filter(g => g);
 
+      console.log(`✅ Parsed ${guids.length} GUIDs`);
+
       if (guids.length === 0) {
+        console.log('❌ No GUIDs found after parsing');
         setMessage('GUID-e ei leitud');
+        setImporting(false);
         return;
       }
 
       // Build sets for duplicate detection using multiple identifiers
+      console.log('🔍 Checking for duplicates...');
       const existingGuids = new Set(items.map(i => i.guid?.toLowerCase()).filter(Boolean));
       const existingGuidIfcs = new Set(items.map(i => i.guid_ifc?.toLowerCase()).filter(Boolean));
 
@@ -3200,9 +3231,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setMessage(`${guidsToImport.length} detaili imporditud veokisse ${vehicle.vehicle_code}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
       }
     } catch (e: any) {
-      console.error('Error importing:', e);
-      setMessage('Viga importimisel: ' + e.message);
+      console.error('❌ Error importing:', e);
+      console.error('❌ Error stack:', e.stack);
+      console.error('❌ Error details:', {
+        name: e.name,
+        message: e.message,
+        cause: e.cause
+      });
+
+      const errorMsg = `Viga importimisel: ${e.message}\n\nVaata konsooli täpsema info jaoks.`;
+      setMessage(errorMsg);
+      alert(errorMsg);
     } finally {
+      console.log('🏁 Import finished. Setting importing=false');
       setImporting(false);
     }
   };
@@ -7098,7 +7139,11 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   // All checks passed
                   return false;
                 })()}
-                onClick={handleImport}
+                onClick={() => {
+                  console.log('🔵 Import button clicked!');
+                  alert('Import button clicked! Vaata konsooli.');
+                  handleImport();
+                }}
               >
                 {importing ? 'Importimisel...' : 'Impordi'}
               </button>
