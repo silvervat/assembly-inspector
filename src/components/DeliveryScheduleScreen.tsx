@@ -1050,26 +1050,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return 0;
       }
 
-      // Lookup all GUIDs in trimble_model_objects table (batch query)
-      const { data: modelObjects, error: lookupError } = await supabase
-        .from('trimble_model_objects')
-        .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId)
-        .in('guid_ifc', allGuids);
+      // Lookup GUIDs in trimble_model_objects table (in batches to avoid URL length limit)
+      const BATCH_SIZE = 100;
+      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; model_id: string | null; object_runtime_id: string | null }>();
 
-      if (lookupError) {
-        console.error('Error looking up model objects:', lookupError);
-        setMessage('Viga mudeli objektide otsimisel: ' + lookupError.message);
-        return 0;
+      for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
+        const batch = allGuids.slice(i, i + BATCH_SIZE);
+        const { data: batchObjects, error: lookupError } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', batch);
+
+        if (lookupError) {
+          console.error('Error looking up model objects batch:', lookupError);
+          continue; // Try next batch
+        }
+
+        for (const obj of batchObjects || []) {
+          objectMap.set(obj.guid_ifc, obj);
+        }
+
+        // Update progress message
+        const progress = Math.min(i + BATCH_SIZE, allGuids.length);
+        setMessage(`Seon detaile mudeliga... ${progress}/${allGuids.length}`);
       }
 
-      console.log('Found in trimble_model_objects:', modelObjects?.length || 0);
-
-      // Create lookup map
-      const objectMap = new Map<string, typeof modelObjects[0]>();
-      for (const obj of modelObjects || []) {
-        objectMap.set(obj.guid_ifc, obj);
-      }
+      console.log('Found in trimble_model_objects:', objectMap.size);
 
       // Update items with found data
       let linkedCount = 0;
