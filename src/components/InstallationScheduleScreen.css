@@ -235,8 +235,29 @@
 .selection-info-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   width: 100%;
+}
+
+.clear-selection-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: auto;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 4px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.clear-selection-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .selection-info .btn-primary {
