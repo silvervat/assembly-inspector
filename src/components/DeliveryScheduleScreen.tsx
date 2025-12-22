@@ -6938,14 +6938,166 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   ))}
                 </select>
               </div>
+
+              {/* DEBUG PANEL */}
+              <details style={{ marginTop: 16, padding: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                  🐛 Debug Info (klikka kopeerimseks)
+                </summary>
+                <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#1f2937' }}>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Import Text:</strong><br />
+                    {importText.trim() ? (
+                      <>
+                        {importText.split('\n').length} rida<br />
+                        Esimene GUID: {importText.split('\n')[0]?.substring(0, 36)}...<br />
+                        Viimane GUID: {importText.split('\n')[importText.split('\n').length - 1]?.substring(0, 36)}...
+                      </>
+                    ) : (
+                      <span style={{ color: '#dc2626' }}>TÜHI</span>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Parsed Import Data:</strong><br />
+                    Ridu: {parsedImportData.length}<br />
+                    {parsedImportData.length > 0 && (
+                      <>
+                        Veoki koodidega: {parsedImportData.filter(r => r.vehicleCode).length}<br />
+                        Kuupäevadega: {parsedImportData.filter(r => r.date).length}<br />
+                        Tehase koodidega: {parsedImportData.filter(r => r.factoryCode).length}<br />
+                        Esimene rida: {JSON.stringify(parsedImportData[0], null, 2).substring(0, 100)}...
+                      </>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Valitud Tehas:</strong><br />
+                    {importFactoryId ? (
+                      <>
+                        ID: {importFactoryId}<br />
+                        Nimi: {factories.find(f => f.id === importFactoryId)?.factory_name || 'N/A'}
+                      </>
+                    ) : (
+                      <span style={{ color: '#dc2626' }}>VALIMATA</span>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Valitud Kuupäev:</strong><br />
+                    {addModalDate ? addModalDate : <span style={{ color: '#dc2626' }}>VALIMATA</span>}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Nupu staatus:</strong><br />
+                    {(() => {
+                      if (!importText.trim()) return '❌ DISABLED - Puudub import text';
+                      if (importing) return '⏳ DISABLED - Import käib';
+                      const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+                      if (hasDetailedVehicles) return '✅ ENABLED - Detailne import veokite koodidega';
+                      if (!importFactoryId || !addModalDate) return `❌ DISABLED - Puudub ${!importFactoryId ? 'tehas' : ''} ${!importFactoryId && !addModalDate ? 'ja' : ''} ${!addModalDate ? 'kuupäev' : ''}`;
+                      return '✅ ENABLED - Kõik OK';
+                    })()}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const debugInfo = `
+=== IMPORT DEBUG INFO ===
+Import Text Ridu: ${importText.split('\n').length}
+Import Text Tühi: ${!importText.trim()}
+
+Parsed Data Ridu: ${parsedImportData.length}
+Veoki koodidega: ${parsedImportData.filter(r => r.vehicleCode).length}
+Kuupäevadega: ${parsedImportData.filter(r => r.date).length}
+Tehase koodidega: ${parsedImportData.filter(r => r.factoryCode).length}
+
+Valitud Tehas ID: ${importFactoryId || 'VALIMATA'}
+Valitud Tehas Nimi: ${factories.find(f => f.id === importFactoryId)?.factory_name || 'N/A'}
+Valitud Kuupäev: ${addModalDate || 'VALIMATA'}
+
+Import käib: ${importing}
+
+Nupu staatus:
+${(() => {
+  if (!importText.trim()) return 'DISABLED - Puudub import text';
+  if (importing) return 'DISABLED - Import käib';
+  const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+  if (hasDetailedVehicles) return 'ENABLED - Detailne import';
+  if (!importFactoryId || !addModalDate) return `DISABLED - Puudub ${!importFactoryId ? 'tehas' : ''} ${!importFactoryId && !addModalDate ? 'ja' : ''} ${!addModalDate ? 'kuupäev' : ''}`;
+  return 'ENABLED - Kõik OK';
+})()}
+
+Parsed Data Sample:
+${JSON.stringify(parsedImportData.slice(0, 3), null, 2)}
+
+Import Text Sample (esimesed 5 rida):
+${importText.split('\n').slice(0, 5).join('\n')}
+                      `.trim();
+
+                      navigator.clipboard.writeText(debugInfo).then(() => {
+                        alert('Debug info kopeeritud! Saad nüüd kleepida näiteks Whatsappis.');
+                      }).catch(err => {
+                        alert('Kopeerimine ebaõnnestus: ' + err.message);
+                      });
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      fontWeight: 500
+                    }}
+                  >
+                    📋 Kopeeri debug info
+                  </button>
+                </div>
+              </details>
             </div>
             <div className="modal-footer">
+              {/* Validation message */}
+              {(() => {
+                if (!importText.trim()) {
+                  return (
+                    <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
+                      ⚠️ Lae fail või kleebi GUID-id
+                    </div>
+                  );
+                }
+                const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+                if (!hasDetailedVehicles && (!importFactoryId || !addModalDate)) {
+                  const missing = [];
+                  if (!importFactoryId) missing.push('tehas');
+                  if (!addModalDate) missing.push('kuupäev');
+                  return (
+                    <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
+                      ⚠️ Vali {missing.join(' ja ')}
+                    </div>
+                  );
+                }
+                return <div style={{ flex: 1 }} />;
+              })()}
               <button className="cancel-btn" onClick={() => setShowImportModal(false)}>
                 Tühista
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!importText.trim() || (!(parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode)) && !importFactoryId) || importing}
+                disabled={(() => {
+                  // No import text
+                  if (!importText.trim()) return true;
+                  // Currently importing
+                  if (importing) return true;
+
+                  // Check if this is detailed import with vehicle codes
+                  const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+
+                  // Detailed import with vehicle codes - OK to proceed
+                  if (hasDetailedVehicles) return false;
+
+                  // Simple import or detailed without vehicles - need factory AND date
+                  if (!importFactoryId || !addModalDate) return true;
+
+                  // All checks passed
+                  return false;
+                })()}
                 onClick={handleImport}
               >
                 {importing ? 'Importimisel...' : 'Impordi'}
