@@ -2908,20 +2908,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Continue with unique GUIDs only
       const guidsToImport = uniqueGuids;
 
-      // Lookup all GUIDs in trimble_model_objects to get real data
-      setMessage(`Otsin andmebaasist ${guidsToImport.length} detaili andmeid...`);
+      // NEW APPROACH: Get fresh data from Trimble model, not database!
+      console.log('🔄 Getting model_id and runtime_id from database...');
+      setMessage(`Otsin mudelit... ${guidsToImport.length} detaili`);
 
       // Convert all GUIDs to IFC format for lookup
       const ifcGuidsToLookup = guidsToImport.map(guid =>
         guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '')
       ).filter(Boolean);
 
-      // Lookup in batches (100 at a time)
+      // Lookup model_id and object_runtime_id ONLY (not data!)
       const BATCH_SIZE = 100;
       const modelObjectsMap = new Map<string, {
         guid_ifc: string;
-        assembly_mark: string;
-        product_name: string | null;
+        guid_ms: string;
         model_id: string | null;
         object_runtime_id: number | null;
       }>();
@@ -2930,7 +2930,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const batch = ifcGuidsToLookup.slice(i, i + BATCH_SIZE);
         const { data: batchObjects, error: lookupError } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+          .select('guid_ifc, guid_ms, model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .in('guid_ifc', batch);
 
@@ -2944,10 +2944,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         const progress = Math.min(i + BATCH_SIZE, ifcGuidsToLookup.length);
-        setMessage(`Otsin andmebaasist... ${progress}/${ifcGuidsToLookup.length}`);
+        setMessage(`Otsin mudelit... ${progress}/${ifcGuidsToLookup.length}`);
       }
 
-      console.log(`Found ${modelObjectsMap.size}/${guidsToImport.length} objects in trimble_model_objects`);
+      console.log(`✅ Found ${modelObjectsMap.size}/${guidsToImport.length} objects in database`);
 
       // Track which GUIDs weren't found
       const notFoundGuids: string[] = [];
@@ -2959,8 +2959,133 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       if (notFoundGuids.length > 0) {
-        console.log(`GUIDs not found in model:`, notFoundGuids.slice(0, 10));
+        console.log(`⚠️ GUIDs not in database:`, notFoundGuids.slice(0, 10));
       }
+
+      // Group objects by model_id to fetch properties efficiently
+      console.log('📦 Grouping objects by model...');
+      const objectsByModel = new Map<string, Array<{
+        guid_ifc: string;
+        guid_ms: string;
+        runtime_id: number;
+      }>>();
+
+      for (const [guid_ifc, obj] of modelObjectsMap) {
+        if (obj.model_id && obj.object_runtime_id) {
+          if (!objectsByModel.has(obj.model_id)) {
+            objectsByModel.set(obj.model_id, []);
+          }
+          objectsByModel.get(obj.model_id)!.push({
+            guid_ifc,
+            guid_ms: obj.guid_ms || '',
+            runtime_id: obj.object_runtime_id
+          });
+        }
+      }
+
+      console.log(`📊 Objects grouped into ${objectsByModel.size} models`);
+
+      // NOW: Fetch FRESH properties from Trimble model using API
+      console.log('🔍 Fetching fresh properties from Trimble model...');
+      setMessage('Loen andmeid mudelist...');
+
+      const freshPropertiesMap = new Map<string, {
+        assembly_mark: string;
+        product_name: string | null;
+        cast_unit_weight: string | null;
+        cast_unit_position_code: string | null;
+        cast_unit_bottom_elevation: string | null;
+        cast_unit_top_elevation: string | null;
+      }>();
+
+      let processedCount = 0;
+      const totalObjects = guidsToImport.length;
+
+      for (const [modelId, objects] of objectsByModel) {
+        const runtimeIds = objects.map(o => o.runtime_id);
+        console.log(`🔍 Fetching properties for model ${modelId}, ${runtimeIds.length} objects...`);
+
+        try {
+          // Fetch properties from Trimble API (like InspectorScreen does)
+          const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+          if (props && props.length > 0) {
+            // Process each object's properties
+            for (let idx = 0; idx < props.length; idx++) {
+              const objProps = props[idx];
+              const objInfo = objects[idx];
+
+              let assemblyMark: string | undefined;
+              let productName: string | undefined;
+              let weight: string | undefined;
+              let positionCode: string | undefined;
+              let bottomElevation: string | undefined;
+              let topElevation: string | undefined;
+
+              // Search all property sets for Tekla data (same logic as InspectorScreen)
+              for (const pset of objProps.properties || []) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const propArray = pset.properties || [];
+
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  // Cast_unit_Mark
+                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
+                    assemblyMark = String(propValue);
+                  }
+
+                  // Weight
+                  if (propName.includes('weight') && !weight) {
+                    weight = String(propValue);
+                  }
+
+                  // Position code
+                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
+                    positionCode = String(propValue);
+                  }
+
+                  // Elevations
+                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
+                    bottomElevation = String(propValue);
+                  }
+                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
+                    topElevation = String(propValue);
+                  }
+
+                  // Product name from "Product" property set
+                  if (setName === 'Product' && propName === 'name' && !productName) {
+                    productName = String(propValue);
+                  }
+                }
+              }
+
+              // Store fresh properties
+              freshPropertiesMap.set(objInfo.guid_ifc, {
+                assembly_mark: assemblyMark || `Import-${processedCount + 1}`,
+                product_name: productName || null,
+                cast_unit_weight: weight || null,
+                cast_unit_position_code: positionCode || null,
+                cast_unit_bottom_elevation: bottomElevation || null,
+                cast_unit_top_elevation: topElevation || null
+              });
+
+              processedCount++;
+            }
+          }
+
+          setMessage(`Loen mudelist... ${processedCount}/${totalObjects}`);
+        } catch (error) {
+          console.error(`❌ Error fetching properties for model ${modelId}:`, error);
+          // Continue with other models
+        }
+      }
+
+      console.log(`✅ Fetched fresh properties for ${freshPropertiesMap.size} objects from model`);
+      setMessage(`✅ Loetud ${freshPropertiesMap.size} detaili mudelist`);
 
       if (hasDetailedData) {
         // DETAILED IMPORT: Group items by date + vehicleCode + factoryCode
@@ -3131,10 +3256,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             createdVehicles.push(newVehicle.vehicle_code);
           }
 
-          // Create items for this group - use data from modelObjectsMap if available
+          // Create items for this group - use FRESH data from Trimble model!
           const newItems = groupItems.map((row, idx) => {
             const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
             const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+            const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
             return {
               trimble_project_id: projectId,
@@ -3142,8 +3268,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               guid: row.guid,
               guid_ifc: ifcGuid,
               guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
-              assembly_mark: modelObj?.assembly_mark || `Import-${totalImported + idx + 1}`,
-              product_name: modelObj?.product_name || null,
+              // Use FRESH properties from model!
+              assembly_mark: freshProps?.assembly_mark || `Import-${totalImported + idx + 1}`,
+              product_name: freshProps?.product_name || null,
+              cast_unit_weight: freshProps?.cast_unit_weight || null,
+              cast_unit_position_code: freshProps?.cast_unit_position_code || null,
+              cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
+              cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
+              // Model references (still from database for performance)
               model_id: modelObj?.model_id || null,
               object_runtime_id: modelObj?.object_runtime_id || null,
               scheduled_date: scheduledDate,
@@ -3171,13 +3303,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setImportText('');
         setParsedImportData([]);
 
-        // Report results - data was already linked from modelObjectsMap
-        const linkedCount = modelObjectsMap.size;
+        // Report results - data was fetched FRESH from Trimble model!
+        const linkedCount = freshPropertiesMap.size;
         const notFoundInfo = notFoundGuids.length > 0
           ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
           : '';
 
-        setMessage(`${totalImported} detaili imporditud${vehicleInfo}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
+        setMessage(`✅ ${totalImported} detaili imporditud MUDELIST${vehicleInfo}${skippedInfo}, ${linkedCount} värsket andmestikku${notFoundInfo}`);
       } else {
         // SIMPLE IMPORT: All items to one new vehicle
         // Create vehicle for import
@@ -3189,10 +3321,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Reload vehicles to get the new one
         await loadVehicles();
 
-        // Create items with data from modelObjectsMap
+        // Create items with FRESH data from Trimble model!
         const newItems = guidsToImport.map((guid, idx) => {
           const ifcGuid = guid.length === 22 ? guid : (guid.length === 36 ? msToIfcGuid(guid) : '');
           const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+          const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
           return {
             trimble_project_id: projectId,
@@ -3200,8 +3333,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             guid: guid,
             guid_ifc: ifcGuid,
             guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
-            assembly_mark: modelObj?.assembly_mark || `Import-${idx + 1}`,
-            product_name: modelObj?.product_name || null,
+            // Use FRESH properties from model!
+            assembly_mark: freshProps?.assembly_mark || `Import-${idx + 1}`,
+            product_name: freshProps?.product_name || null,
+            cast_unit_weight: freshProps?.cast_unit_weight || null,
+            cast_unit_position_code: freshProps?.cast_unit_position_code || null,
+            cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
+            cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
+            // Model references (still from database for performance)
             model_id: modelObj?.model_id || null,
             object_runtime_id: modelObj?.object_runtime_id || null,
             scheduled_date: addModalDate,
@@ -3221,14 +3360,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setShowImportModal(false);
         setImportText('');
 
-        // Report results
-        const linkedCount = newItems.filter(i => !i.assembly_mark.startsWith('Import-')).length;
+        // Report results - data was fetched FRESH from Trimble model!
+        const linkedCount = freshPropertiesMap.size;
         const skippedInfo = duplicateGuids.length > 0 ? `, ${duplicateGuids.length} vahele jäetud (duplikaadid)` : '';
         const notFoundInfo = notFoundGuids.length > 0
           ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
           : '';
 
-        setMessage(`${guidsToImport.length} detaili imporditud veokisse ${vehicle.vehicle_code}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
+        setMessage(`✅ ${guidsToImport.length} detaili imporditud MUDELIST veokisse ${vehicle.vehicle_code}${skippedInfo}, ${linkedCount} värsket andmestikku${notFoundInfo}`);
       }
     } catch (e: any) {
       console.error('❌ Error importing:', e);
