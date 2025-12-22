@@ -194,6 +194,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Item menu state (three-dot menu)
   const [itemMenuId, setItemMenuId] = useState<string | null>(null);
 
+  // Date menu state (three-dot menu for date groups)
+  const [dateMenuId, setDateMenuId] = useState<string | null>(null);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -834,6 +837,23 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     };
   }, [api, scheduleItems]);
 
+  // Clear list selection when unscheduled model items are selected
+  useEffect(() => {
+    if (selectedObjects.length === 0) return;
+
+    // Check if any selected model object is NOT in the schedule list
+    const hasUnscheduled = selectedObjects.some(obj => {
+      const guid = obj.guid || '';
+      const guidIfc = obj.guidIfc || '';
+      return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
+    });
+
+    if (hasUnscheduled) {
+      // Clear list selection when working with unscheduled items
+      setSelectedItemIds(new Set());
+    }
+  }, [selectedObjects, scheduleItems]);
+
   // Helper to check if item has delivery warning
   const itemHasDeliveryWarning = useCallback((item: ScheduleItem): boolean => {
     const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
@@ -927,6 +947,28 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     acc[date].push(item);
     return acc;
   }, {} as Record<string, ScheduleItem[]>);
+
+  // Create Set of guids from model selection for highlighting
+  const modelSelectedGuids = new Set(
+    selectedObjects
+      .filter(obj => obj.guidIfc || obj.guid)
+      .map(obj => obj.guidIfc || obj.guid || '')
+  );
+
+  // Check if there are unscheduled objects selected in the model
+  // Used to prevent calendar date clicks from selecting date items when adding new items
+  const hasUnscheduledSelection = selectedObjects.length > 0 && selectedObjects.some(obj => {
+    const guid = obj.guid || '';
+    const guidIfc = obj.guidIfc || '';
+    return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
+  });
+
+  // Count of unscheduled objects for the quick-add button
+  const unscheduledCount = selectedObjects.filter(obj => {
+    const guid = obj.guid || '';
+    const guidIfc = obj.guidIfc || '';
+    return !scheduleItems.some(item => item.guid === guid || item.guid_ifc === guidIfc);
+  }).length;
 
   // Get days in current month for calendar
   const getDaysInMonth = () => {
@@ -1134,6 +1176,76 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
     } catch (e: any) {
       console.error('Error adding to schedule:', e);
+      if (e.code === '23505') {
+        setMessage('Mõned detailid on juba graafikus!');
+      } else {
+        setMessage('Viga graafikusse lisamisel');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Add only unscheduled objects from selection to a specific date
+  // Used by the quick-add "+" button on date headers
+  const addUnscheduledToDate = async (date: string) => {
+    if (selectedObjects.length === 0) {
+      setMessage('Vali esmalt detailid mudelilt');
+      return;
+    }
+
+    // Filter to only unscheduled items
+    const existingGuids = new Set(scheduleItems.map(item => item.guid));
+    const existingIfcGuids = new Set(scheduleItems.map(item => item.guid_ifc).filter(Boolean));
+
+    const unscheduledObjects = selectedObjects.filter(obj => {
+      const guid = obj.guid || '';
+      const guidIfc = obj.guidIfc || '';
+      return !existingGuids.has(guid) && !existingIfcGuids.has(guidIfc);
+    });
+
+    if (unscheduledObjects.length === 0) {
+      setMessage('Kõik valitud detailid on juba graafikus');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const newItems = unscheduledObjects.map((obj, idx) => {
+        const guidMs = obj.guidIfc ? ifcToMsGuid(obj.guidIfc) : undefined;
+
+        return {
+          project_id: projectId,
+          model_id: obj.modelId,
+          guid: obj.guid || `runtime_${obj.runtimeId}`,
+          guid_ifc: obj.guidIfc,
+          guid_ms: guidMs || undefined,
+          object_runtime_id: obj.runtimeId,
+          assembly_mark: obj.assemblyMark,
+          product_name: obj.productName,
+          cast_unit_weight: obj.castUnitWeight,
+          cast_unit_position_code: obj.positionCode,
+          scheduled_date: date,
+          sort_order: (itemsByDate[date]?.length || 0) + idx,
+          status: 'planned',
+          install_methods: null,
+          created_by: tcUserEmail
+        };
+      });
+
+      const { error } = await supabase
+        .from('installation_schedule')
+        .insert(newItems);
+
+      if (error) throw error;
+
+      setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
+      loadSchedule();
+
+      // Clear selection
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+    } catch (e: any) {
+      console.error('Error adding unscheduled items:', e);
       if (e.code === '23505') {
         setMessage('Mõned detailid on juba graafikus!');
       } else {
@@ -1382,6 +1494,44 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Select specific items in viewer (by item IDs)
+  const selectItemsInViewer = async (itemIds: Set<string>, skipZoom: boolean = false) => {
+    if (itemIds.size === 0) {
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      return;
+    }
+
+    try {
+      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      const itemsToSelect = scheduleItems.filter(item => itemIds.has(item.id));
+
+      for (const item of itemsToSelect) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        const existing = modelObjects.find(m => m.modelId === modelId);
+        if (existing) {
+          existing.objectRuntimeIds.push(...runtimeIds);
+        } else {
+          modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
+        }
+      }
+
+      if (modelObjects.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
+        if (!skipZoom) {
+          await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+        }
+      }
+    } catch (e) {
+      console.error('Error selecting items in viewer:', e);
+    }
+  };
+
   // Select items from multiple dates in viewer
   const selectMultipleDatesInViewer = async (dates: Set<string>) => {
     if (dates.size === 0) {
@@ -1537,6 +1687,174 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e) {
       console.error('Error taking screenshot:', e);
       setMessage('Viga pildistamisel');
+    }
+  };
+
+  // Create markups for all items on a date
+  // markupType: 'position' | 'mark' | 'both'
+  const createMarkupsForDate = async (date: string, markupType: 'position' | 'mark' | 'both') => {
+    const items = itemsByDate[date];
+    if (!items || items.length === 0) {
+      setMessage('Päeval pole detaile');
+      return;
+    }
+
+    setMessage('Eemaldan vanad markupid...');
+
+    try {
+      // First remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe...');
+
+      // Group items by model for batch processing
+      const itemsByModel = new Map<string, { item: ScheduleItem; idx: number; runtimeId: number }[]>();
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+
+        if (!modelId || !guidIfc) continue;
+
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+        if (!runtimeIds || runtimeIds.length === 0) continue;
+
+        if (!itemsByModel.has(modelId)) {
+          itemsByModel.set(modelId, []);
+        }
+        itemsByModel.get(modelId)!.push({ item, idx, runtimeId: runtimeIds[0] });
+      }
+
+      const markupsToCreate: any[] = [];
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          // Create fallback bboxes
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        for (const { item, idx, runtimeId } of modelItems) {
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          // Position in millimeters
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Build markup text based on type
+          let text = '';
+          const positionNum = idx + 1;
+          const assemblyMark = item.assembly_mark || '';
+
+          switch (markupType) {
+            case 'position':
+              text = String(positionNum);
+              break;
+            case 'mark':
+              text = assemblyMark;
+              break;
+            case 'both':
+              text = `${positionNum}. ${assemblyMark}`;
+              break;
+          }
+
+          if (!text) continue;
+
+          markupsToCreate.push({
+            text,
+            start: pos,
+            end: pos,
+          });
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua');
+        return;
+      }
+
+      // Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      // Extract created IDs
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // Set color to red
+      const markupColor = '#FF0000';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+        } catch (err) {
+          console.warn('Color set error:', err);
+        }
+      }
+
+      setMessage(`${createdIds.length} markupit loodud`);
+      setDateMenuId(null);
+    } catch (e) {
+      console.error('Error creating markups:', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
+  // Remove all markups
+  const removeAllMarkups = async () => {
+    try {
+      const allMarkups = await api.markup?.getTextMarkups?.();
+
+      if (!allMarkups || allMarkups.length === 0) {
+        setMessage('Markupe pole');
+        return;
+      }
+
+      const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+
+      if (allIds.length === 0) {
+        setMessage('Markupe pole');
+        return;
+      }
+
+      await api.markup?.removeMarkups?.(allIds);
+      setMessage(`${allIds.length} markupit eemaldatud`);
+      setDateMenuId(null);
+    } catch (e) {
+      console.error('Error removing markups:', e);
+      setMessage('Viga markupite eemaldamisel');
     }
   };
 
@@ -2334,24 +2652,24 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const end = Math.max(currentIndex, lastIndex);
         const rangeIds = allSortedItems.slice(start, end + 1).map(i => i.id);
 
-        setSelectedItemIds(prev => {
-          const next = new Set(prev);
-          rangeIds.forEach(id => next.add(id));
-          return next;
-        });
+        const newSelection = new Set(selectedItemIds);
+        rangeIds.forEach(id => newSelection.add(id));
+        setSelectedItemIds(newSelection);
+        // Select all items in model
+        selectItemsInViewer(newSelection, true);
       }
     } else if (e.ctrlKey || e.metaKey) {
-      // Ctrl/Cmd + click: toggle single item
-      setSelectedItemIds(prev => {
-        const next = new Set(prev);
-        if (next.has(item.id)) {
-          next.delete(item.id);
-        } else {
-          next.add(item.id);
-        }
-        return next;
-      });
+      // Ctrl/Cmd + click: toggle single item and select ALL selected items in model
+      const newSelection = new Set(selectedItemIds);
+      if (newSelection.has(item.id)) {
+        newSelection.delete(item.id);
+      } else {
+        newSelection.add(item.id);
+      }
+      setSelectedItemIds(newSelection);
       setLastClickedId(item.id);
+      // Select all selected items in model
+      selectItemsInViewer(newSelection, true);
     } else {
       // Normal click: select only this item and view in model
       setSelectedItemIds(new Set([item.id]));
@@ -2592,10 +2910,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setDraggedItems([]);
     setSelectedItemIds(new Set());
 
-    // Background database update (no await to prevent blocking)
+    // Background database update
+    // NOTE: We must calculate newOrder from the CURRENT scheduleItems, not itemsByDate which is stale
     try {
       if (isSameDate && targetIndex !== undefined) {
-        const dateItems = [...(itemsByDate[targetDate] || [])];
+        // Get current items for this date from scheduleItems (before optimistic update)
+        const dateItems = scheduleItems.filter(i => i.scheduled_date === targetDate);
         const remaining = dateItems.filter(i => !draggedIds.has(i.id));
         let adjustedIndex = targetIndex;
         for (let i = 0; i < targetIndex && i < dateItems.length; i++) {
@@ -2610,23 +2930,25 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           ...remaining.slice(adjustedIndex)
         ];
 
-        for (let i = 0; i < newOrder.length; i++) {
+        // Update sort_order for all items in this date
+        const updatePromises = newOrder.map((item, i) =>
           supabase
             .from('installation_schedule')
             .update({ sort_order: i, updated_by: tcUserEmail })
-            .eq('id', newOrder[i].id)
-            .then();
-        }
+            .eq('id', item.id)
+        );
+        await Promise.all(updatePromises);
       } else {
-        for (const item of draggedItems) {
-          if (item.scheduled_date !== targetDate) {
+        // Moving to different date
+        const updatePromises = draggedItems
+          .filter(item => item.scheduled_date !== targetDate)
+          .map(item =>
             supabase
               .from('installation_schedule')
               .update({ scheduled_date: targetDate, updated_by: tcUserEmail })
               .eq('id', item.id)
-              .then();
-          }
-        }
+          );
+        await Promise.all(updatePromises);
       }
     } catch (e) {
       console.error('Error saving to database:', e);
@@ -3323,16 +3645,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         setSelectedDates(newSelectedDates);
                         setSelectedDate(dateKey);
                         // Select all items from all selected dates in viewer
-                        selectMultipleDatesInViewer(newSelectedDates);
+                        // BUT only if no unscheduled items are selected in model
+                        if (!hasUnscheduledSelection) {
+                          selectMultipleDatesInViewer(newSelectedDates);
+                        }
                         scrollToDateInList(dateKey);
                       } else {
                         // Normal click: select only this date
                         setSelectedDate(dateKey);
                         setSelectedDates(new Set([dateKey]));
-                        if (itemCount > 0) {
+                        // Only select date items in viewer if no unscheduled items are selected
+                        // This prevents clearing the selection when user is trying to add new items
+                        if (itemCount > 0 && !hasUnscheduledSelection) {
                           selectDateInViewer(dateKey);
-                          scrollToDateInList(dateKey);
                         }
+                        scrollToDateInList(dateKey);
                       }
                     }}
                     onDragOver={(e) => handleDragOver(e, dateKey)}
@@ -3388,8 +3715,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         </div>
       </div>
 
-      {/* Multi-select bar - hide during playback */}
-      {selectedItemIds.size > 0 && !isPlaying && (
+      {/* Multi-select bar - hide during playback and when unscheduled model items selected */}
+      {selectedItemIds.size > 0 && !isPlaying && !hasUnscheduledSelection && (
         <div className="multi-select-bar">
           <div className="multi-select-header">
             <span className="multi-select-count">{selectedItemIds.size} valitud</span>
@@ -4321,6 +4648,17 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <span className="date-label">{formatDateEstonian(date)}</span>
                     <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
+                    {/* Quick-add button - shows when unscheduled items are selected */}
+                    {unscheduledCount > 0 && (
+                      <button
+                        className="date-quick-add-btn"
+                        onClick={(e) => { e.stopPropagation(); addUnscheduledToDate(date); }}
+                        title={`Lisa ${unscheduledCount} valitud detaili sellele kuupäevale`}
+                      >
+                        <FiPlus size={12} />
+                        <span className="quick-add-count">{unscheduledCount}</span>
+                      </button>
+                    )}
                     <span className="date-stats-wrapper">
                       {stats && <span className="date-percentage">{stats.dailyPercentage}% | {stats.percentage}%</span>}
                       <div className="date-hover-btns">
@@ -4351,18 +4689,50 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       )}
                     </button>
                     <button
-                      className="date-menu-btn"
-                      onClick={(e) => { e.stopPropagation(); /* TODO: date menu */ }}
+                      className={`date-menu-btn ${dateMenuId === date ? 'active' : ''}`}
+                      onClick={(e) => { e.stopPropagation(); setDateMenuId(dateMenuId === date ? null : date); }}
                       title="Rohkem valikuid"
                     >
                       <FiMoreVertical size={14} />
                     </button>
+                    {/* Date menu dropdown */}
+                    {dateMenuId === date && (
+                      <div className="date-menu-dropdown" onClick={(e) => e.stopPropagation()}>
+                        <div className="date-menu-section-title">Markupid</div>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'position')}
+                        >
+                          <span className="menu-icon">📍</span> Positsioon
+                        </button>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'mark')}
+                        >
+                          <span className="menu-icon">🏷️</span> Cast unit mark
+                        </button>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'both')}
+                        >
+                          <span className="menu-icon">📋</span> Positsioon + Mark
+                        </button>
+                        <div className="date-menu-divider" />
+                        <button
+                          className="date-menu-option delete"
+                          onClick={() => removeAllMarkups()}
+                        >
+                          <span className="menu-icon">🗑️</span> Eemalda markupid
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {!isCollapsed && (
                     <div className="date-items">
                       {items.map((item, idx) => {
                         const isItemSelected = selectedItemIds.has(item.id);
+                        const isModelSelected = modelSelectedGuids.has(item.guid_ifc || item.guid);
                         const allSorted = getAllItemsSorted();
                         const isCurrentlyPlaying = isPlaying && allSorted[currentPlayIndex]?.id === item.id;
                         const showDropBefore = dragOverDate === date && dragOverIndex === idx;
@@ -4373,7 +4743,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {showDropBefore && <div className="drop-indicator" />}
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
-                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
+                              className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${activeItemId === item.id ? 'active' : ''} ${isItemSelected ? 'multi-selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
                               onDragEnd={handleDragEnd}
@@ -4592,13 +4962,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Click outside to close context menus */}
-      {(listItemContextMenu || itemMenuId || datePickerItemId) && (
+      {(listItemContextMenu || itemMenuId || datePickerItemId || dateMenuId) && (
         <div
           className="context-menu-backdrop"
           onClick={() => {
             setListItemContextMenu(null);
             setItemMenuId(null);
             setDatePickerItemId(null);
+            setDateMenuId(null);
           }}
         />
       )}

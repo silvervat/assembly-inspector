@@ -485,6 +485,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     comment?: string;
   }[]>([]);
 
+  // Refresh from model
+  const [refreshing, setRefreshing] = useState(false);
+
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportColumns, setExportColumns] = useState([
@@ -2803,7 +2806,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   const handleImport = async () => {
+    // DEBUG: Log that function was called
+    console.log('🚀 handleImport called');
+
+    // ALERT so user sees it on phone
+    const importInfo = `Import algas!\nGUID-e: ${importText.split('\n').length}\nParsed: ${parsedImportData.length}\nVeoki koodidega: ${parsedImportData.filter(r => r.vehicleCode).length}`;
+    console.log('📊 Import state:', {
+      importTextLength: importText.length,
+      parsedDataLength: parsedImportData.length,
+      hasVehicleCodes: parsedImportData.some(r => r.vehicleCode),
+      importFactoryId,
+      addModalDate,
+      importing
+    });
+
+    // Show immediate feedback
+    setMessage(importInfo);
+
     if (!importText.trim()) {
+      console.log('❌ Import text is empty');
       setMessage('Kleebi GUID-id tekstiväljale');
       return;
     }
@@ -2812,22 +2833,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const hasDetailedData = parsedImportData.length > 0 &&
       parsedImportData.some(row => row.date || row.vehicleCode);
 
+    console.log('📋 Import type:', hasDetailedData ? 'Detailed' : 'Simple');
+
     // For simple import, require factory and date
     if (!hasDetailedData) {
       if (!importFactoryId) {
+        console.log('❌ No factory selected for simple import');
         setMessage('Vali tehas');
         return;
       }
 
       if (!addModalDate) {
+        console.log('❌ No date selected for simple import');
         setMessage('Vali kuupäev');
         return;
       }
     }
 
+    console.log('✅ Starting import...');
     setImporting(true);
+    setMessage('Alustame importi...');
+
     try {
       // Parse GUIDs from text
+      console.log('📝 Parsing GUIDs from text...');
       const lines = importText.split('\n').map(l => l.trim()).filter(l => l);
       const guids = lines.map(line => {
         // Try to extract GUID from line (could be just GUID or GUID with other data)
@@ -2835,12 +2864,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return parts[0].trim();
       }).filter(g => g);
 
+      console.log(`✅ Parsed ${guids.length} GUIDs`);
+
       if (guids.length === 0) {
+        console.log('❌ No GUIDs found after parsing');
         setMessage('GUID-e ei leitud');
+        setImporting(false);
         return;
       }
 
       // Build sets for duplicate detection using multiple identifiers
+      console.log('🔍 Checking for duplicates...');
       const existingGuids = new Set(items.map(i => i.guid?.toLowerCase()).filter(Boolean));
       const existingGuidIfcs = new Set(items.map(i => i.guid_ifc?.toLowerCase()).filter(Boolean));
 
@@ -2877,20 +2911,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Continue with unique GUIDs only
       const guidsToImport = uniqueGuids;
 
-      // Lookup all GUIDs in trimble_model_objects to get real data
-      setMessage(`Otsin andmebaasist ${guidsToImport.length} detaili andmeid...`);
+      // NEW APPROACH: Get fresh data from Trimble model, not database!
+      console.log('🔄 Getting model_id and runtime_id from database...');
+      setMessage(`Otsin mudelit... ${guidsToImport.length} detaili`);
 
       // Convert all GUIDs to IFC format for lookup
       const ifcGuidsToLookup = guidsToImport.map(guid =>
         guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '')
       ).filter(Boolean);
 
-      // Lookup in batches (100 at a time)
+      // Lookup model_id and object_runtime_id ONLY (not data!)
       const BATCH_SIZE = 100;
       const modelObjectsMap = new Map<string, {
         guid_ifc: string;
-        assembly_mark: string;
-        product_name: string | null;
         model_id: string | null;
         object_runtime_id: number | null;
       }>();
@@ -2899,7 +2932,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const batch = ifcGuidsToLookup.slice(i, i + BATCH_SIZE);
         const { data: batchObjects, error: lookupError } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+          .select('guid_ifc, model_id, object_runtime_id')
           .eq('trimble_project_id', projectId)
           .in('guid_ifc', batch);
 
@@ -2913,10 +2946,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         const progress = Math.min(i + BATCH_SIZE, ifcGuidsToLookup.length);
-        setMessage(`Otsin andmebaasist... ${progress}/${ifcGuidsToLookup.length}`);
+        setMessage(`Otsin mudelit... ${progress}/${ifcGuidsToLookup.length}`);
       }
 
-      console.log(`Found ${modelObjectsMap.size}/${guidsToImport.length} objects in trimble_model_objects`);
+      console.log(`✅ Found ${modelObjectsMap.size}/${guidsToImport.length} objects in database`);
 
       // Track which GUIDs weren't found
       const notFoundGuids: string[] = [];
@@ -2928,8 +2961,133 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       if (notFoundGuids.length > 0) {
-        console.log(`GUIDs not found in model:`, notFoundGuids.slice(0, 10));
+        console.log(`⚠️ GUIDs not in database:`, notFoundGuids.slice(0, 10));
       }
+
+      // Group objects by model_id to fetch properties efficiently
+      console.log('📦 Grouping objects by model...');
+      const objectsByModel = new Map<string, Array<{
+        guid_ifc: string;
+        guid_ms: string;
+        runtime_id: number;
+      }>>();
+
+      for (const [guid_ifc, obj] of modelObjectsMap) {
+        if (obj.model_id && obj.object_runtime_id) {
+          if (!objectsByModel.has(obj.model_id)) {
+            objectsByModel.set(obj.model_id, []);
+          }
+          objectsByModel.get(obj.model_id)!.push({
+            guid_ifc,
+            guid_ms: ifcToMsGuid(guid_ifc),
+            runtime_id: obj.object_runtime_id
+          });
+        }
+      }
+
+      console.log(`📊 Objects grouped into ${objectsByModel.size} models`);
+
+      // NOW: Fetch FRESH properties from Trimble model using API
+      console.log('🔍 Fetching fresh properties from Trimble model...');
+      setMessage('Loen andmeid mudelist...');
+
+      const freshPropertiesMap = new Map<string, {
+        assembly_mark: string;
+        product_name: string | null;
+        cast_unit_weight: string | null;
+        cast_unit_position_code: string | null;
+        cast_unit_bottom_elevation: string | null;
+        cast_unit_top_elevation: string | null;
+      }>();
+
+      let processedCount = 0;
+      const totalObjects = guidsToImport.length;
+
+      for (const [modelId, objects] of objectsByModel) {
+        const runtimeIds = objects.map(o => o.runtime_id);
+        console.log(`🔍 Fetching properties for model ${modelId}, ${runtimeIds.length} objects...`);
+
+        try {
+          // Fetch properties from Trimble API (like InspectorScreen does)
+          const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+          if (props && props.length > 0) {
+            // Process each object's properties
+            for (let idx = 0; idx < props.length; idx++) {
+              const objProps = props[idx];
+              const objInfo = objects[idx];
+
+              let assemblyMark: string | undefined;
+              let productName: string | undefined;
+              let weight: string | undefined;
+              let positionCode: string | undefined;
+              let bottomElevation: string | undefined;
+              let topElevation: string | undefined;
+
+              // Search all property sets for Tekla data (same logic as InspectorScreen)
+              for (const pset of objProps.properties || []) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const propArray = pset.properties || [];
+
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  // Cast_unit_Mark
+                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
+                    assemblyMark = String(propValue);
+                  }
+
+                  // Weight
+                  if (propName.includes('weight') && !weight) {
+                    weight = String(propValue);
+                  }
+
+                  // Position code
+                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
+                    positionCode = String(propValue);
+                  }
+
+                  // Elevations
+                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
+                    bottomElevation = String(propValue);
+                  }
+                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
+                    topElevation = String(propValue);
+                  }
+
+                  // Product name from "Product" property set
+                  if (setName === 'Product' && propName === 'name' && !productName) {
+                    productName = String(propValue);
+                  }
+                }
+              }
+
+              // Store fresh properties
+              freshPropertiesMap.set(objInfo.guid_ifc, {
+                assembly_mark: assemblyMark || `Import-${processedCount + 1}`,
+                product_name: productName || null,
+                cast_unit_weight: weight || null,
+                cast_unit_position_code: positionCode || null,
+                cast_unit_bottom_elevation: bottomElevation || null,
+                cast_unit_top_elevation: topElevation || null
+              });
+
+              processedCount++;
+            }
+          }
+
+          setMessage(`Loen mudelist... ${processedCount}/${totalObjects}`);
+        } catch (error) {
+          console.error(`❌ Error fetching properties for model ${modelId}:`, error);
+          // Continue with other models
+        }
+      }
+
+      console.log(`✅ Fetched fresh properties for ${freshPropertiesMap.size} objects from model`);
+      setMessage(`✅ Loetud ${freshPropertiesMap.size} detaili mudelist`);
 
       if (hasDetailedData) {
         // DETAILED IMPORT: Group items by date + vehicleCode + factoryCode
@@ -3061,6 +3219,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
 
           // Find existing vehicle or create new one
+          // First check in state, then query database to avoid stale state issues
           let vehicle = vehicleCode
             ? vehicles.find(v =>
                 v.vehicle_code === vehicleCode &&
@@ -3068,6 +3227,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 v.factory_id === factoryId
               )
             : null;
+
+          // If not found in state but we have a vehicle code, check database directly
+          if (!vehicle && vehicleCode) {
+            let query = supabase
+              .from('trimble_delivery_vehicles')
+              .select('*')
+              .eq('trimble_project_id', projectId)
+              .eq('vehicle_code', vehicleCode)
+              .eq('factory_id', factoryId);
+
+            if (scheduledDate === null) {
+              query = query.is('scheduled_date', null);
+            } else {
+              query = query.eq('scheduled_date', scheduledDate);
+            }
+
+            const { data: existingVehicle } = await query.maybeSingle();
+
+            if (existingVehicle) {
+              vehicle = existingVehicle;
+            }
+          }
 
           if (!vehicle) {
             // Create new vehicle directly (don't use createVehicle which relies on stale state)
@@ -3100,10 +3281,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             createdVehicles.push(newVehicle.vehicle_code);
           }
 
-          // Create items for this group - use data from modelObjectsMap if available
+          // Create items for this group - use FRESH data from Trimble model!
           const newItems = groupItems.map((row, idx) => {
             const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
             const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+            const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
             return {
               trimble_project_id: projectId,
@@ -3111,8 +3293,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               guid: row.guid,
               guid_ifc: ifcGuid,
               guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
-              assembly_mark: modelObj?.assembly_mark || `Import-${totalImported + idx + 1}`,
-              product_name: modelObj?.product_name || null,
+              // Use FRESH properties from model!
+              assembly_mark: freshProps?.assembly_mark || `Import-${totalImported + idx + 1}`,
+              product_name: freshProps?.product_name || null,
+              cast_unit_weight: freshProps?.cast_unit_weight || null,
+              cast_unit_position_code: freshProps?.cast_unit_position_code || null,
+              // NOTE: Elevations need migration first! Uncomment after running 20251222_delivery_add_elevations.sql
+              // cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
+              // cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
+              // Model references (still from database for performance)
               model_id: modelObj?.model_id || null,
               object_runtime_id: modelObj?.object_runtime_id || null,
               scheduled_date: scheduledDate,
@@ -3140,13 +3329,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setImportText('');
         setParsedImportData([]);
 
-        // Report results - data was already linked from modelObjectsMap
-        const linkedCount = modelObjectsMap.size;
+        // Report results - data was fetched FRESH from Trimble model!
+        const linkedCount = freshPropertiesMap.size;
         const notFoundInfo = notFoundGuids.length > 0
           ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
           : '';
 
-        setMessage(`${totalImported} detaili imporditud${vehicleInfo}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
+        setMessage(`✅ ${totalImported} detaili imporditud MUDELIST${vehicleInfo}${skippedInfo}, ${linkedCount} värsket andmestikku${notFoundInfo}`);
       } else {
         // SIMPLE IMPORT: All items to one new vehicle
         // Create vehicle for import
@@ -3158,10 +3347,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Reload vehicles to get the new one
         await loadVehicles();
 
-        // Create items with data from modelObjectsMap
+        // Create items with FRESH data from Trimble model!
         const newItems = guidsToImport.map((guid, idx) => {
           const ifcGuid = guid.length === 22 ? guid : (guid.length === 36 ? msToIfcGuid(guid) : '');
           const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+          const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
           return {
             trimble_project_id: projectId,
@@ -3169,8 +3359,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             guid: guid,
             guid_ifc: ifcGuid,
             guid_ms: guid.length === 36 ? guid : (guid.length === 22 ? ifcToMsGuid(guid) : ''),
-            assembly_mark: modelObj?.assembly_mark || `Import-${idx + 1}`,
-            product_name: modelObj?.product_name || null,
+            // Use FRESH properties from model!
+            assembly_mark: freshProps?.assembly_mark || `Import-${idx + 1}`,
+            product_name: freshProps?.product_name || null,
+            cast_unit_weight: freshProps?.cast_unit_weight || null,
+            cast_unit_position_code: freshProps?.cast_unit_position_code || null,
+            cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
+            cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
+            // Model references (still from database for performance)
             model_id: modelObj?.model_id || null,
             object_runtime_id: modelObj?.object_runtime_id || null,
             scheduled_date: addModalDate,
@@ -3190,20 +3386,159 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setShowImportModal(false);
         setImportText('');
 
-        // Report results
-        const linkedCount = newItems.filter(i => !i.assembly_mark.startsWith('Import-')).length;
+        // Report results - data was fetched FRESH from Trimble model!
+        const linkedCount = freshPropertiesMap.size;
         const skippedInfo = duplicateGuids.length > 0 ? `, ${duplicateGuids.length} vahele jäetud (duplikaadid)` : '';
         const notFoundInfo = notFoundGuids.length > 0
           ? `. ⚠️ Ei leitud mudelis: ${notFoundGuids.length}`
           : '';
 
-        setMessage(`${guidsToImport.length} detaili imporditud veokisse ${vehicle.vehicle_code}${skippedInfo}, ${linkedCount} seotud mudeliga${notFoundInfo}`);
+        setMessage(`✅ ${guidsToImport.length} detaili imporditud MUDELIST veokisse ${vehicle.vehicle_code}${skippedInfo}, ${linkedCount} värsket andmestikku${notFoundInfo}`);
       }
     } catch (e: any) {
-      console.error('Error importing:', e);
-      setMessage('Viga importimisel: ' + e.message);
+      console.error('❌ Error importing:', e);
+      console.error('❌ Error stack:', e.stack);
+      console.error('❌ Error details:', {
+        name: e.name,
+        message: e.message,
+        cause: e.cause
+      });
+
+      const errorMsg = `Viga importimisel: ${e.message}\n\nVaata konsooli täpsema info jaoks.`;
+      setMessage(errorMsg);
+      alert(errorMsg);
     } finally {
+      console.log('🏁 Import finished. Setting importing=false');
       setImporting(false);
+    }
+  };
+
+  // ============================================
+  // REFRESH FROM MODEL
+  // ============================================
+
+  const refreshFromModel = async () => {
+    if (items.length === 0) {
+      setMessage('Pole detaile mida värskendada');
+      return;
+    }
+
+    const confirmed = confirm(`Värskendada ${items.length} detaili andmeid mudelist?\n\nSee võtab natuke aega.`);
+    if (!confirmed) return;
+
+    setRefreshing(true);
+    setMessage('Värskendame andmeid mudelist...');
+
+    try {
+      console.log(`🔄 Refreshing ${items.length} items from model...`);
+
+      // Group items by model_id
+      const itemsByModel = new Map<string, typeof items>();
+      for (const item of items) {
+        if (item.model_id && item.object_runtime_id) {
+          if (!itemsByModel.has(item.model_id)) {
+            itemsByModel.set(item.model_id, []);
+          }
+          itemsByModel.get(item.model_id)!.push(item);
+        }
+      }
+
+      console.log(`📦 Grouped into ${itemsByModel.size} models`);
+
+      let updatedCount = 0;
+      const totalItems = items.length;
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(i => i.object_runtime_id!);
+        console.log(`🔍 Fetching ${runtimeIds.length} objects from model ${modelId}...`);
+
+        try {
+          const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+          if (props && props.length > 0) {
+            for (let idx = 0; idx < props.length; idx++) {
+              const objProps = props[idx];
+              const item = modelItems[idx];
+
+              let assemblyMark: string | undefined;
+              let productName: string | undefined;
+              let weight: string | undefined;
+              let positionCode: string | undefined;
+              let bottomElevation: string | undefined;
+              let topElevation: string | undefined;
+
+              // Extract properties (same logic as import)
+              for (const pset of objProps.properties || []) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const propArray = pset.properties || [];
+
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
+                    assemblyMark = String(propValue);
+                  }
+                  if (propName.includes('weight') && !weight) {
+                    weight = String(propValue);
+                  }
+                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
+                    positionCode = String(propValue);
+                  }
+                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
+                    bottomElevation = String(propValue);
+                  }
+                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
+                    topElevation = String(propValue);
+                  }
+                  if (setName === 'Product' && propName === 'name' && !productName) {
+                    productName = String(propValue);
+                  }
+                }
+              }
+
+              // Update database with fresh data
+              const updates: any = {};
+              if (assemblyMark) updates.assembly_mark = assemblyMark;
+              if (productName !== undefined) updates.product_name = productName;
+              if (weight !== undefined) updates.cast_unit_weight = weight;
+              if (positionCode !== undefined) updates.cast_unit_position_code = positionCode;
+              // NOTE: Uncomment after running migration
+              // if (bottomElevation !== undefined) updates.cast_unit_bottom_elevation = bottomElevation;
+              // if (topElevation !== undefined) updates.cast_unit_top_elevation = topElevation;
+
+              if (Object.keys(updates).length > 0) {
+                const { error } = await supabase
+                  .from('trimble_delivery_items')
+                  .update(updates)
+                  .eq('id', item.id);
+
+                if (error) {
+                  console.error(`Error updating item ${item.id}:`, error);
+                } else {
+                  updatedCount++;
+                }
+              }
+            }
+          }
+
+          setMessage(`Värskendame... ${updatedCount}/${totalItems}`);
+        } catch (error) {
+          console.error(`Error fetching properties for model ${modelId}:`, error);
+        }
+      }
+
+      // Reload items
+      await loadItems();
+      setMessage(`✅ Värskendatud ${updatedCount} detaili mudelist!`);
+      console.log(`✅ Refreshed ${updatedCount} items from model`);
+    } catch (error: any) {
+      console.error('Error refreshing from model:', error);
+      setMessage(`Viga värskendamisel: ${error.message}`);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -5712,6 +6047,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </div>
             )}
           </div>
+          <button
+            onClick={refreshFromModel}
+            disabled={refreshing || items.length === 0}
+            style={{
+              opacity: refreshing || items.length === 0 ? 0.5 : 1,
+              cursor: refreshing || items.length === 0 ? 'not-allowed' : 'pointer'
+            }}
+          >
+            <FiRefreshCw className={refreshing ? 'spinning' : ''} /> {refreshing ? 'Värskendame...' : 'Värskenda mudelist'}
+          </button>
           <div
             className="dropdown-menu-wrapper"
             onMouseEnter={() => setShowColorMenu(true)}
@@ -6938,15 +7283,171 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   ))}
                 </select>
               </div>
+
+              {/* DEBUG PANEL */}
+              <details style={{ marginTop: 16, padding: 12, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 6 }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 500, color: '#374151', marginBottom: 8 }}>
+                  🐛 Debug Info (klikka kopeerimseks)
+                </summary>
+                <div style={{ fontSize: 12, fontFamily: 'monospace', color: '#1f2937' }}>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Import Text:</strong><br />
+                    {importText.trim() ? (
+                      <>
+                        {importText.split('\n').length} rida<br />
+                        Esimene GUID: {importText.split('\n')[0]?.substring(0, 36)}...<br />
+                        Viimane GUID: {importText.split('\n')[importText.split('\n').length - 1]?.substring(0, 36)}...
+                      </>
+                    ) : (
+                      <span style={{ color: '#dc2626' }}>TÜHI</span>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Parsed Import Data:</strong><br />
+                    Ridu: {parsedImportData.length}<br />
+                    {parsedImportData.length > 0 && (
+                      <>
+                        Veoki koodidega: {parsedImportData.filter(r => r.vehicleCode).length}<br />
+                        Kuupäevadega: {parsedImportData.filter(r => r.date).length}<br />
+                        Tehase koodidega: {parsedImportData.filter(r => r.factoryCode).length}<br />
+                        Esimene rida: {JSON.stringify(parsedImportData[0], null, 2).substring(0, 100)}...
+                      </>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Valitud Tehas:</strong><br />
+                    {importFactoryId ? (
+                      <>
+                        ID: {importFactoryId}<br />
+                        Nimi: {factories.find(f => f.id === importFactoryId)?.factory_name || 'N/A'}
+                      </>
+                    ) : (
+                      <span style={{ color: '#dc2626' }}>VALIMATA</span>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Valitud Kuupäev:</strong><br />
+                    {addModalDate ? addModalDate : <span style={{ color: '#dc2626' }}>VALIMATA</span>}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    <strong>Nupu staatus:</strong><br />
+                    {(() => {
+                      if (!importText.trim()) return '❌ DISABLED - Puudub import text';
+                      if (importing) return '⏳ DISABLED - Import käib';
+                      const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+                      if (hasDetailedVehicles) return '✅ ENABLED - Detailne import veokite koodidega';
+                      if (!importFactoryId || !addModalDate) return `❌ DISABLED - Puudub ${!importFactoryId ? 'tehas' : ''} ${!importFactoryId && !addModalDate ? 'ja' : ''} ${!addModalDate ? 'kuupäev' : ''}`;
+                      return '✅ ENABLED - Kõik OK';
+                    })()}
+                  </div>
+                  <button
+                    onClick={() => {
+                      const debugInfo = `
+=== IMPORT DEBUG INFO ===
+Import Text Ridu: ${importText.split('\n').length}
+Import Text Tühi: ${!importText.trim()}
+
+Parsed Data Ridu: ${parsedImportData.length}
+Veoki koodidega: ${parsedImportData.filter(r => r.vehicleCode).length}
+Kuupäevadega: ${parsedImportData.filter(r => r.date).length}
+Tehase koodidega: ${parsedImportData.filter(r => r.factoryCode).length}
+
+Valitud Tehas ID: ${importFactoryId || 'VALIMATA'}
+Valitud Tehas Nimi: ${factories.find(f => f.id === importFactoryId)?.factory_name || 'N/A'}
+Valitud Kuupäev: ${addModalDate || 'VALIMATA'}
+
+Import käib: ${importing}
+
+Nupu staatus:
+${(() => {
+  if (!importText.trim()) return 'DISABLED - Puudub import text';
+  if (importing) return 'DISABLED - Import käib';
+  const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+  if (hasDetailedVehicles) return 'ENABLED - Detailne import';
+  if (!importFactoryId || !addModalDate) return `DISABLED - Puudub ${!importFactoryId ? 'tehas' : ''} ${!importFactoryId && !addModalDate ? 'ja' : ''} ${!addModalDate ? 'kuupäev' : ''}`;
+  return 'ENABLED - Kõik OK';
+})()}
+
+Parsed Data Sample:
+${JSON.stringify(parsedImportData.slice(0, 3), null, 2)}
+
+Import Text Sample (esimesed 5 rida):
+${importText.split('\n').slice(0, 5).join('\n')}
+                      `.trim();
+
+                      navigator.clipboard.writeText(debugInfo).then(() => {
+                        alert('Debug info kopeeritud! Saad nüüd kleepida näiteks Whatsappis.');
+                      }).catch(err => {
+                        alert('Kopeerimine ebaõnnestus: ' + err.message);
+                      });
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#3b82f6',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      fontSize: 12,
+                      fontWeight: 500
+                    }}
+                  >
+                    📋 Kopeeri debug info
+                  </button>
+                </div>
+              </details>
             </div>
             <div className="modal-footer">
+              {/* Validation message */}
+              {(() => {
+                if (!importText.trim()) {
+                  return (
+                    <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
+                      ⚠️ Lae fail või kleebi GUID-id
+                    </div>
+                  );
+                }
+                const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+                if (!hasDetailedVehicles && (!importFactoryId || !addModalDate)) {
+                  const missing = [];
+                  if (!importFactoryId) missing.push('tehas');
+                  if (!addModalDate) missing.push('kuupäev');
+                  return (
+                    <div style={{ flex: 1, color: '#dc2626', fontSize: 13 }}>
+                      ⚠️ Vali {missing.join(' ja ')}
+                    </div>
+                  );
+                }
+                return <div style={{ flex: 1 }} />;
+              })()}
               <button className="cancel-btn" onClick={() => setShowImportModal(false)}>
                 Tühista
               </button>
               <button
                 className="submit-btn primary"
-                disabled={!importText.trim() || (!(parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode)) && !importFactoryId) || importing}
-                onClick={handleImport}
+                disabled={(() => {
+                  // No import text
+                  if (!importText.trim()) return true;
+                  // Currently importing
+                  if (importing) return true;
+
+                  // Check if this is detailed import with vehicle codes
+                  const hasDetailedVehicles = parsedImportData.length > 0 && parsedImportData.some(r => r.vehicleCode);
+
+                  // Detailed import with vehicle codes - OK to proceed
+                  if (hasDetailedVehicles) return false;
+
+                  // Simple import or detailed without vehicles - need factory AND date
+                  if (!importFactoryId || !addModalDate) return true;
+
+                  // All checks passed
+                  return false;
+                })()}
+                onClick={() => {
+                  console.log('🔵 Import button clicked!');
+                  alert('Import button clicked! Vaata konsooli.');
+                  handleImport();
+                }}
               >
                 {importing ? 'Importimisel...' : 'Impordi'}
               </button>

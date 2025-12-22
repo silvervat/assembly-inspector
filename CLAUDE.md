@@ -67,3 +67,39 @@ Each inspection saves these Tekla properties:
 Run `supabase-update.sql` when:
 - Adding new columns to the inspections table
 - Creating the `trimble_ex_users` table (new in v2.1.0)
+
+## Development Workflow
+
+### Making Changes
+1. Make code changes
+2. Update version in `src/App.tsx` and `package.json`
+3. Run `npm run build` to verify build works
+4. Commit changes with message format: `v3.0.XXX: Description of changes`
+5. Push to branch
+
+### Deploying to Production
+1. Create Pull Request: `gh pr create --title "v3.0.XXX: Title" --body "Description"`
+2. Merge PR: `gh pr merge --squash`
+3. GitHub Actions automatically deploys to GitHub Pages
+4. Wait ~1-2 minutes for deployment to complete
+5. Hard refresh browser (Ctrl+Shift+R) to see changes
+
+### Quick Deploy Commands
+```bash
+# Create and merge PR in one go
+gh pr create --title "v3.0.XXX: Title" --body "Description" && gh pr merge --squash
+
+# Or merge existing PR
+gh pr merge --squash
+```
+
+### Debugging
+- Check browser console for errors (F12)
+- API errors often show column names that don't exist in database
+- Database schema is in Supabase dashboard
+
+### Database Tables Reference
+- `trimble_model_objects` - Cached model data (guid_ifc, model_id, object_runtime_id, trimble_project_id)
+- `delivery_schedule` - Delivery schedule entries
+- `inspections` - Inspection records
+- `trimble_ex_users` - Authorized users
