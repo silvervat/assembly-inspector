@@ -3219,6 +3219,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
 
           // Find existing vehicle or create new one
+          // First check in state, then query database to avoid stale state issues
           let vehicle = vehicleCode
             ? vehicles.find(v =>
                 v.vehicle_code === vehicleCode &&
@@ -3226,6 +3227,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 v.factory_id === factoryId
               )
             : null;
+
+          // If not found in state but we have a vehicle code, check database directly
+          if (!vehicle && vehicleCode) {
+            let query = supabase
+              .from('trimble_delivery_vehicles')
+              .select('*')
+              .eq('trimble_project_id', projectId)
+              .eq('vehicle_code', vehicleCode)
+              .eq('factory_id', factoryId);
+
+            if (scheduledDate === null) {
+              query = query.is('scheduled_date', null);
+            } else {
+              query = query.eq('scheduled_date', scheduledDate);
+            }
+
+            const { data: existingVehicle } = await query.maybeSingle();
+
+            if (existingVehicle) {
+              vehicle = existingVehicle;
+            }
+          }
 
           if (!vehicle) {
             // Create new vehicle directly (don't use createVehicle which relies on stale state)
