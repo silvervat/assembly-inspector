@@ -1017,10 +1017,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setMessage(`Seon ${targetItems.length} detaili mudeliga...`);
 
     try {
-      // Get all models
-      const models = await api.viewer.getModels();
+      // Get only loaded models (models visible in viewer)
+      const models = await api.viewer.getModels('loaded');
       if (!models || models.length === 0) {
-        setMessage('Mudeleid ei leitud');
+        setMessage('Mudeleid ei ole laetud. Palun laadige mudel vaatajasse.');
         return 0;
       }
 
