@@ -1478,6 +1478,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         setSelectedObjects(objects);
+
+        // Clear schedule selection when model selection changes
+        if (objects.length > 0) {
+          setSelectedItemIds(new Set());
+        }
       } catch (e: any) {
         // Silently ignore timeout errors (they're not critical)
         if (!e?.message?.includes('timed out')) {
@@ -5536,7 +5541,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   const hasResources = vehicle && UNLOAD_METHODS.some(m => vehicle.unload_methods?.[m.key]);
 
                                   if (hasResources && vehicle) {
-                                    // Show existing resources with edit capability
+                                    // Show existing resources - click opens full popup with all resources
                                     return (
                                       <div
                                         className="resource-quick-assign has-resources"
@@ -5546,54 +5551,95 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                           setQuickHoveredMethod(null);
                                         }}
                                       >
+                                        {/* Show active resource badges */}
                                         {UNLOAD_METHODS.map(method => {
                                           const count = vehicle.unload_methods?.[method.key];
                                           if (!count) return null;
-                                          const isHovered = resourceHoverId === vehicleId && quickHoveredMethod === method.key;
                                           return (
                                             <div
                                               key={method.key}
                                               className="vehicle-method-badge editable"
                                               style={{ backgroundColor: method.activeBgColor }}
                                               title={`${method.label}: ${count}`}
-                                              onMouseEnter={() => setQuickHoveredMethod(method.key)}
-                                              onMouseLeave={() => setQuickHoveredMethod(null)}
                                               onClick={(e) => e.stopPropagation()}
                                             >
                                               <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
                                               <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
-                                              {isHovered && method.maxCount > 1 && (
-                                                <div className="method-qty-dropdown inline">
-                                                  {Array.from({ length: method.maxCount + 1 }, (_, i) => i).map(num => (
-                                                    <button
-                                                      key={num}
-                                                      className={`qty-btn ${count === num ? 'active' : ''} ${num === 0 ? 'zero' : ''}`}
-                                                      onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        const newMethods = { ...vehicle.unload_methods };
-                                                        if (num === 0) {
-                                                          delete newMethods[method.key];
-                                                        } else {
-                                                          newMethods[method.key] = num;
-                                                        }
-                                                        setVehicles(prev => prev.map(v =>
-                                                          v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
-                                                        ));
-                                                        await supabase
-                                                          .from('trimble_delivery_vehicles')
-                                                          .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
-                                                          .eq('id', vehicle.id);
-                                                        broadcastReload();
-                                                      }}
-                                                    >
-                                                      {num === 0 ? '✕' : num}
-                                                    </button>
-                                                  ))}
-                                                </div>
-                                              )}
                                             </div>
                                           );
                                         })}
+                                        {/* Full popup with ALL resources on hover */}
+                                        {resourceHoverId === vehicleId && (
+                                          <div className="resource-hover-popup" onClick={(e) => e.stopPropagation()}>
+                                            {UNLOAD_METHODS.map(method => {
+                                              const currentCount = vehicle.unload_methods?.[method.key] || 0;
+                                              const isActive = currentCount > 0;
+                                              const isHovered = quickHoveredMethod === method.key;
+                                              return (
+                                                <div
+                                                  key={method.key}
+                                                  className="resource-hover-item"
+                                                  onMouseEnter={() => setQuickHoveredMethod(method.key)}
+                                                  onMouseLeave={() => setQuickHoveredMethod(null)}
+                                                >
+                                                  <button
+                                                    className={`resource-icon-btn ${isActive ? 'active' : ''}`}
+                                                    style={{ backgroundColor: isActive ? method.activeBgColor : method.bgColor }}
+                                                    title={method.label}
+                                                    onClick={async (e) => {
+                                                      e.stopPropagation();
+                                                      const newMethods = { ...vehicle.unload_methods };
+                                                      if (isActive) {
+                                                        delete newMethods[method.key];
+                                                      } else {
+                                                        newMethods[method.key] = method.defaultCount;
+                                                      }
+                                                      setVehicles(prev => prev.map(v =>
+                                                        v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                      ));
+                                                      await supabase
+                                                        .from('trimble_delivery_vehicles')
+                                                        .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
+                                                        .eq('id', vehicle.id);
+                                                      broadcastReload();
+                                                    }}
+                                                  >
+                                                    <img
+                                                      src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                                                      alt={method.label}
+                                                      style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                                                    />
+                                                    {isActive && <span className="method-badge">{currentCount}</span>}
+                                                  </button>
+                                                  {isHovered && isActive && method.maxCount > 1 && (
+                                                    <div className="method-qty-dropdown quick">
+                                                      {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                                                        <button
+                                                          key={num}
+                                                          className={`qty-btn ${currentCount === num ? 'active' : ''}`}
+                                                          onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            const newMethods = { ...vehicle.unload_methods, [method.key]: num };
+                                                            setVehicles(prev => prev.map(v =>
+                                                              v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                            ));
+                                                            await supabase
+                                                              .from('trimble_delivery_vehicles')
+                                                              .update({ unload_methods: newMethods })
+                                                              .eq('id', vehicle.id);
+                                                            broadcastReload();
+                                                          }}
+                                                        >
+                                                          {num}
+                                                        </button>
+                                                      ))}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   } else if (vehicle) {
@@ -5953,7 +5999,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         }}
                                         title="Kommentaarid"
                                       >
-                                        <FiMessageSquare size={12} />
+                                        <FiMessageSquare size={12} style={{ stroke: '#374151' }} />
                                         {getItemCommentCount(item.id) > 0 && (
                                           <span className="badge">{getItemCommentCount(item.id)}</span>
                                         )}
@@ -5965,7 +6011,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                           setItemMenuId(itemMenuId === item.id ? null : item.id);
                                         }}
                                       >
-                                        <FiMoreVertical size={12} />
+                                        <FiMoreVertical size={12} style={{ fill: '#374151' }} />
                                       </button>
                                     </div>
 
@@ -6264,11 +6310,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     </div>
                                     <div className="item-actions">
                                       <button className="item-btn" onClick={(e) => { e.stopPropagation(); openCommentModal('item', item.id); }} title="Kommentaarid">
-                                        <FiMessageSquare size={12} />
+                                        <FiMessageSquare size={12} style={{ stroke: '#374151' }} />
                                         {getItemCommentCount(item.id) > 0 && <span className="badge">{getItemCommentCount(item.id)}</span>}
                                       </button>
                                       <button className="item-btn" onClick={(e) => { e.stopPropagation(); setItemMenuId(itemMenuId === item.id ? null : item.id); }}>
-                                        <FiMoreVertical size={12} />
+                                        <FiMoreVertical size={12} style={{ fill: '#374151' }} />
                                       </button>
                                     </div>
                                   </div>
