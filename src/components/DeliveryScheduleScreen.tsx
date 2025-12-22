@@ -244,9 +244,8 @@ const formatDuration = (minutes: number | null | undefined): string => {
   if (!minutes) return '';
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  if (hours === 0) return `0h ${mins}min`;
-  if (mins === 0) return `${hours}h`;
-  return `${hours}h ${mins}min`;
+  // Always show both hours and minutes
+  return `${hours}h ${mins.toString().padStart(2, '0')}min`;
 };
 
 // Get day name only
@@ -546,6 +545,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
   const [menuFlipUp, setMenuFlipUp] = useState(false);
+  const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -5430,21 +5430,106 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             <div className="vehicle-actions-row">
                               {/* Unload methods section */}
                               <div className="vehicle-resources-section">
-                                {UNLOAD_METHODS.map(method => {
-                                  const count = vehicle?.unload_methods?.[method.key];
-                                  if (!count) return null;
-                                  return (
-                                    <div
-                                      key={method.key}
-                                      className="vehicle-method-badge"
-                                      style={{ backgroundColor: method.activeBgColor }}
-                                      title={`${method.label}: ${count}`}
-                                    >
-                                      <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
-                                      <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
-                                    </div>
-                                  );
-                                })}
+                                {(() => {
+                                  const hasResources = vehicle && UNLOAD_METHODS.some(m => vehicle.unload_methods?.[m.key]);
+
+                                  if (hasResources) {
+                                    // Show existing resources
+                                    return UNLOAD_METHODS.map(method => {
+                                      const count = vehicle?.unload_methods?.[method.key];
+                                      if (!count) return null;
+                                      return (
+                                        <div
+                                          key={method.key}
+                                          className="vehicle-method-badge"
+                                          style={{ backgroundColor: method.activeBgColor }}
+                                          title={`${method.label}: ${count}`}
+                                        >
+                                          <img src={`${import.meta.env.BASE_URL}icons/${method.icon}`} alt="" style={{ filter: 'brightness(0) invert(1)' }} />
+                                          <span className="badge-count" style={{ background: darkenColor(method.activeBgColor, 0.25) }}>{count}</span>
+                                        </div>
+                                      );
+                                    });
+                                  } else if (vehicle) {
+                                    // Show "Määra ressurss" button with hover popup
+                                    return (
+                                      <div
+                                        className="resource-quick-assign"
+                                        onMouseEnter={() => setResourceHoverId(vehicleId)}
+                                        onMouseLeave={() => setResourceHoverId(null)}
+                                      >
+                                        <button className="assign-resource-btn">
+                                          <FiSettings size={12} /> Ressurss
+                                        </button>
+                                        {resourceHoverId === vehicleId && (
+                                          <div className="resource-hover-popup" onClick={(e) => e.stopPropagation()}>
+                                            {UNLOAD_METHODS.map(method => {
+                                              const currentCount = vehicle.unload_methods?.[method.key] || 0;
+                                              return (
+                                                <div key={method.key} className="resource-hover-item">
+                                                  <div
+                                                    className={`resource-icon-btn ${currentCount > 0 ? 'active' : ''}`}
+                                                    style={{ backgroundColor: currentCount > 0 ? method.activeBgColor : method.bgColor }}
+                                                    title={method.label}
+                                                  >
+                                                    <img
+                                                      src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                                                      alt={method.label}
+                                                      style={{ filter: currentCount > 0 ? 'brightness(0) invert(1)' : method.filterCss }}
+                                                    />
+                                                  </div>
+                                                  <div className="resource-count-controls">
+                                                    <button
+                                                      className="count-btn minus"
+                                                      disabled={currentCount === 0}
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (currentCount > 0) {
+                                                          const newCount = currentCount - 1;
+                                                          const newMethods = { ...vehicle.unload_methods, [method.key]: newCount };
+                                                          if (newCount === 0) delete newMethods[method.key];
+                                                          setVehicles(prev => prev.map(v =>
+                                                            v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                          ));
+                                                          await supabase
+                                                            .from('trimble_delivery_vehicles')
+                                                            .update({ unload_methods: Object.keys(newMethods).length > 0 ? newMethods : null })
+                                                            .eq('id', vehicle.id);
+                                                          broadcastReload();
+                                                        }
+                                                      }}
+                                                    >−</button>
+                                                    <span className="count-value">{currentCount}</span>
+                                                    <button
+                                                      className="count-btn plus"
+                                                      disabled={currentCount >= method.maxCount}
+                                                      onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        if (currentCount < method.maxCount) {
+                                                          const newCount = currentCount + 1;
+                                                          const newMethods = { ...vehicle.unload_methods, [method.key]: newCount };
+                                                          setVehicles(prev => prev.map(v =>
+                                                            v.id === vehicle.id ? { ...v, unload_methods: newMethods } : v
+                                                          ));
+                                                          await supabase
+                                                            .from('trimble_delivery_vehicles')
+                                                            .update({ unload_methods: newMethods })
+                                                            .eq('id', vehicle.id);
+                                                          broadcastReload();
+                                                        }
+                                                      }}
+                                                    >+</button>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                               </div>
 
                               <button
