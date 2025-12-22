@@ -124,13 +124,16 @@ const VEHICLE_TYPES = [
 // TIME AND DURATION OPTIONS
 // ============================================
 
-// Kellaaja valikud: tühi + 6:30 - 19:00 (30 min sammuga)
+// Kellaaja valikud: tühi + 6:30 - 19:00 (15 min sammuga)
 const TIME_OPTIONS = [
   '', // Tühi - kellaaeg pole veel teada
-  '06:30', '07:00', '07:30', '08:00', '08:30', '09:00', '09:30',
-  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00',
-  '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30',
-  '17:00', '17:30', '18:00', '18:30', '19:00'
+  '06:30', '06:45', '07:00', '07:15', '07:30', '07:45',
+  '08:00', '08:15', '08:30', '08:45', '09:00', '09:15', '09:30', '09:45',
+  '10:00', '10:15', '10:30', '10:45', '11:00', '11:15', '11:30', '11:45',
+  '12:00', '12:15', '12:30', '12:45', '13:00', '13:15', '13:30', '13:45',
+  '14:00', '14:15', '14:30', '14:45', '15:00', '15:15', '15:30', '15:45',
+  '16:00', '16:15', '16:30', '16:45', '17:00', '17:15', '17:30', '17:45',
+  '18:00', '18:15', '18:30', '18:45', '19:00'
 ];
 
 const DURATION_OPTIONS = [
@@ -5264,23 +5267,41 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             {/* Time section - after vehicle code */}
                             <div className="vehicle-time-section">
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'time' ? (
-                                <select
-                                  className="inline-select"
-                                  autoFocus
-                                  defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
-                                  onChange={(e) => {
-                                    updateVehicleInline(vehicleId, 'time', e.target.value);
-                                  }}
-                                  onBlur={() => {
-                                    setInlineEditVehicleId(null);
-                                    setInlineEditField(null);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {TIME_OPTIONS.map(time => (
-                                    <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
-                                  ))}
-                                </select>
+                                <>
+                                  <input
+                                    type="text"
+                                    className="inline-input time-input"
+                                    autoFocus
+                                    list="time-options-list"
+                                    defaultValue={vehicle?.unload_start_time?.slice(0, 5) || ''}
+                                    placeholder="00:00"
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      if (TIME_OPTIONS.includes(val) || val === '') {
+                                        updateVehicleInline(vehicleId, 'time', val);
+                                      }
+                                    }}
+                                    onBlur={(e) => {
+                                      const val = e.target.value;
+                                      if (TIME_OPTIONS.includes(val) || val === '') {
+                                        updateVehicleInline(vehicleId, 'time', val);
+                                      }
+                                      setInlineEditVehicleId(null);
+                                      setInlineEditField(null);
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.currentTarget.blur();
+                                      }
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                  <datalist id="time-options-list">
+                                    {TIME_OPTIONS.map(time => (
+                                      <option key={time || 'empty'} value={time} />
+                                    ))}
+                                  </datalist>
+                                </>
                               ) : (
                                 <span
                                   className="time-primary clickable"
@@ -6158,25 +6179,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 {/* Time */}
                 <div className="edit-field">
                   <label>Kellaaeg</label>
-                  <select
-                    value={activeVehicle.unload_start_time?.slice(0, 5) || ''}
-                    onChange={async (e) => {
-                      const newTime = e.target.value || undefined;
-                      // Optimistic update
-                      setVehicles(prev => prev.map(v =>
-                        v.id === activeVehicleId ? { ...v, unload_start_time: newTime } : v
-                      ));
-                      // Save to DB
-                      await supabase
-                        .from('delivery_vehicles')
-                        .update({ unload_start_time: newTime || null })
-                        .eq('id', activeVehicleId);
+                  <input
+                    type="text"
+                    className="time-input"
+                    list="time-options-edit"
+                    defaultValue={activeVehicle.unload_start_time?.slice(0, 5) || ''}
+                    placeholder="00:00"
+                    onBlur={async (e) => {
+                      const val = e.target.value;
+                      if (TIME_OPTIONS.includes(val) || val === '') {
+                        const newTime = val || undefined;
+                        setVehicles(prev => prev.map(v =>
+                          v.id === activeVehicleId ? { ...v, unload_start_time: newTime } : v
+                        ));
+                        await supabase
+                          .from('delivery_vehicles')
+                          .update({ unload_start_time: newTime || null })
+                          .eq('id', activeVehicleId);
+                      }
                     }}
-                  >
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                  />
+                  <datalist id="time-options-edit">
                     {TIME_OPTIONS.map(time => (
-                      <option key={time || 'empty'} value={time}>{time || '--:--'}</option>
+                      <option key={time || 'empty'} value={time} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
 
                 {/* Duration */}
@@ -6604,14 +6634,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     <div className="form-row">
                       <div className="form-group half">
                         <label>Algusaeg</label>
-                        <select
+                        <input
+                          type="text"
+                          className="time-input"
+                          list="time-options-add"
                           value={addModalStartTime}
+                          placeholder="00:00"
                           onChange={(e) => setAddModalStartTime(e.target.value)}
-                        >
+                        />
+                        <datalist id="time-options-add">
                           {TIME_OPTIONS.map(time => (
-                            <option key={time || 'empty'} value={time}>{time || '-- : --'}</option>
+                            <option key={time || 'empty'} value={time} />
                           ))}
-                        </select>
+                        </datalist>
                       </div>
                       <div className="form-group half">
                         <label>Kestus</label>
@@ -6946,14 +6981,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 </div>
                 <div className="form-group">
                   <label><FiClock style={{ marginRight: 4 }} />Algusaeg</label>
-                  <select
+                  <input
+                    type="text"
+                    className="time-input"
+                    list="time-options-vehicle"
                     value={vehicleStartTime}
+                    placeholder="00:00"
                     onChange={(e) => setVehicleStartTime(e.target.value)}
-                  >
+                  />
+                  <datalist id="time-options-vehicle">
                     {TIME_OPTIONS.map(time => (
-                      <option key={time || 'empty'} value={time}>{time || '- Pole teada -'}</option>
+                      <option key={time || 'empty'} value={time} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
                 <div className="form-group">
                   <label>Kestus</label>
