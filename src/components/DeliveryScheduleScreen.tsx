@@ -389,7 +389,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     playbackMode: 'vehicle' as 'vehicle' | 'date',  // Play by vehicle or by date
     expandItemsDuringPlayback: true, // Expand vehicle items during playback
     showVehicleOverview: true, // Show vehicle overview when vehicle completes
-    disableZoom: false
+    disableZoom: false,
+    selectItemsInModel: true // Select items in model during playback
   });
 
   // Playback colors - store colors during playback for UI indicators
@@ -3052,8 +3053,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           } catch (e) { console.error('Error coloring date:', e); }
         }
 
-        // Select ALL items from this date in model (ensuring exact match)
-        if (Object.keys(byModel).length > 0) {
+        // Select ALL items from this date in model (if enabled)
+        if (playbackSettings.selectItemsInModel && Object.keys(byModel).length > 0) {
           try {
             const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
               modelId,
@@ -3117,17 +3118,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }
 
+        // Apply colors to items
         for (const [modelId, runtimeIds] of Object.entries(byModel)) {
           try {
-            await api.viewer.setSelection({ modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] }, 'set');
             await api.viewer.setObjectState(
               { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
               { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
             );
+          } catch (e) { console.error('Error coloring vehicle:', e); }
+        }
+
+        // Select items in model (if enabled)
+        if (playbackSettings.selectItemsInModel && Object.keys(byModel).length > 0) {
+          try {
+            const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+              modelId,
+              objectRuntimeIds: runtimeIds
+            }));
+            await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+            // Zoom to selection if not disabled
             if (!playbackSettings.disableZoom) {
               await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
             }
-          } catch (e) { console.error('Error in playback:', e); }
+          } catch (e) { console.error('Error selecting vehicle items:', e); }
         }
 
         setCurrentPlayVehicleIndex(vehicleIndex);
@@ -6320,6 +6334,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <div className="setting-text">
                   <span>Ilma zoomita</span>
                   <small>Ära zoomi detailide juurde</small>
+                </div>
+              </label>
+
+              <label className="setting-option-compact">
+                <input
+                  type="checkbox"
+                  checked={playbackSettings.selectItemsInModel}
+                  onChange={(e) => setPlaybackSettings(prev => ({
+                    ...prev,
+                    selectItemsInModel: e.target.checked
+                  }))}
+                />
+                <div className="setting-text">
+                  <span>Vali detailid mudelis</span>
+                  <small>Märgista detailid mudelis esitamise ajal</small>
                 </div>
               </label>
             </div>
