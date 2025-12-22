@@ -1078,8 +1078,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       console.log('Found in trimble_model_objects:', objectMap.size);
 
-      // Update items with found data
-      let linkedCount = 0;
+      // Prepare updates - collect all items to update
+      const itemsToUpdate: { id: string; updates: Record<string, unknown> }[] = [];
       const notFoundItems: { guid: string; itemId: string; assemblyMark: string }[] = [];
 
       for (const [guidIfc, item] of guidMap) {
@@ -1097,14 +1097,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           if (modelObj.model_id) updates.model_id = modelObj.model_id;
           if (modelObj.object_runtime_id) updates.object_runtime_id = modelObj.object_runtime_id;
 
-          const { error } = await supabase
-            .from('trimble_delivery_items')
-            .update(updates)
-            .eq('id', item.id);
-
-          if (!error) {
-            linkedCount++;
-          }
+          itemsToUpdate.push({ id: item.id, updates });
         } else {
           notFoundItems.push({
             guid: guidIfc,
@@ -1112,6 +1105,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             assemblyMark: item.assembly_mark
           });
         }
+      }
+
+      console.log('Items to update:', itemsToUpdate.length, 'Not found:', notFoundItems.length);
+
+      // Batch update items (in parallel batches of 50)
+      const UPDATE_BATCH_SIZE = 50;
+      let linkedCount = 0;
+
+      for (let i = 0; i < itemsToUpdate.length; i += UPDATE_BATCH_SIZE) {
+        const batch = itemsToUpdate.slice(i, i + UPDATE_BATCH_SIZE);
+
+        // Run batch updates in parallel
+        const results = await Promise.all(
+          batch.map(({ id, updates }) =>
+            supabase
+              .from('trimble_delivery_items')
+              .update(updates)
+              .eq('id', id)
+          )
+        );
+
+        linkedCount += results.filter(r => !r.error).length;
+
+        // Update progress
+        const progress = Math.min(i + UPDATE_BATCH_SIZE, itemsToUpdate.length);
+        setMessage(`Uuendan detaile... ${progress}/${itemsToUpdate.length}`);
       }
 
       console.log('=== Link Results ===');
