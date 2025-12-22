@@ -174,6 +174,33 @@ const ifcToMsGuid = (ifcGuid: string): string => {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 };
 
+// Convert MS GUID to IFC GUID (reverse conversion)
+const msToIfcGuid = (msGuid: string): string => {
+  if (!msGuid) return '';
+  // Remove dashes and convert to lowercase
+  const hex = msGuid.replace(/-/g, '').toLowerCase();
+  if (hex.length !== 32) return '';
+
+  // Convert hex to 128 bits
+  let bits = '';
+  for (let i = 0; i < 32; i++) {
+    const nibble = parseInt(hex[i], 16);
+    if (isNaN(nibble)) return '';
+    bits += nibble.toString(2).padStart(4, '0');
+  }
+
+  // Convert to IFC GUID (22 chars)
+  let ifcGuid = '';
+  // First char: 2 bits
+  ifcGuid += IFC_GUID_CHARS[parseInt(bits.slice(0, 2), 2)];
+  // Remaining 21 chars: 6 bits each
+  for (let i = 2; i < 128; i += 6) {
+    ifcGuid += IFC_GUID_CHARS[parseInt(bits.slice(i, i + 6), 2)];
+  }
+
+  return ifcGuid;
+};
+
 // Format date as DD.MM.YY Day
 const formatDateEstonian = (dateStr: string): string => {
   const [year, month, day] = dateStr.split('-').map(Number);
@@ -964,6 +991,150 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments()]);
     setLoading(false);
   }, [loadFactories, loadVehicles, loadItems, loadComments]);
+
+  // Link items with model - fetch real assembly marks from model
+  const linkItemsWithModel = useCallback(async (itemsToLink?: DeliveryItem[]) => {
+    const targetItems = itemsToLink || items.filter(i =>
+      i.assembly_mark.startsWith('Import-') || i.assembly_mark.startsWith('Object_')
+    );
+
+    if (targetItems.length === 0) {
+      setMessage('Kõik detailid on juba mudeliga seotud');
+      return 0;
+    }
+
+    setMessage(`Seon ${targetItems.length} detaili mudeliga...`);
+
+    try {
+      // Get all models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) {
+        setMessage('Mudeleid ei leitud');
+        return 0;
+      }
+
+      let linkedCount = 0;
+
+      // Process items in batches
+      for (const item of targetItems) {
+        // Get IFC GUID - convert from MS if needed
+        let guidIfc = item.guid_ifc;
+        if (!guidIfc && item.guid_ms) {
+          guidIfc = msToIfcGuid(item.guid_ms);
+        }
+        if (!guidIfc && item.guid) {
+          if (item.guid.length === 22) {
+            guidIfc = item.guid;
+          } else if (item.guid.length === 36) {
+            guidIfc = msToIfcGuid(item.guid);
+          }
+        }
+
+        if (!guidIfc) continue;
+
+        // Try to find object in each model
+        for (const model of models) {
+          try {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+            if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) continue;
+
+            const runtimeId = runtimeIds[0];
+
+            // Get object properties
+            const props = await api.viewer.getObjectProperties(model.id, [runtimeId]);
+            if (!props || !props[0]) continue;
+
+            const objProps = props[0];
+            let assemblyMark = '';
+            let productName: string | undefined;
+            let castUnitWeight: string | undefined;
+            let positionCode: string | undefined;
+
+            // Get product name
+            const productObj = (objProps as any)?.product;
+            if (productObj?.name) {
+              productName = String(productObj.name);
+            }
+
+            // Parse properties
+            const propertiesList = objProps?.properties;
+            if (propertiesList && Array.isArray(propertiesList)) {
+              for (const pset of propertiesList) {
+                const psetProps = (pset as any).properties;
+                if (!psetProps || !Array.isArray(psetProps)) continue;
+
+                for (const prop of psetProps) {
+                  const rawName = ((prop as any).name || '');
+                  const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (propValue === undefined || propValue === null || propValue === '') continue;
+
+                  // Assembly/Cast unit Mark
+                  if (!assemblyMark) {
+                    if (propName.includes('cast') && propName.includes('mark')) {
+                      assemblyMark = String(propValue);
+                    } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
+                      assemblyMark = String(propValue);
+                    }
+                  }
+
+                  // Weight
+                  if (propName.includes('cast') && propName.includes('weight')) {
+                    castUnitWeight = String(propValue);
+                  }
+
+                  // Position code
+                  if (propName.includes('position') && propName.includes('code')) {
+                    positionCode = String(propValue);
+                  }
+                }
+              }
+            }
+
+            // Update item if we found data
+            if (assemblyMark) {
+              const updates: Record<string, unknown> = {
+                assembly_mark: assemblyMark,
+                model_id: model.id,
+                object_runtime_id: runtimeId,
+                guid_ifc: guidIfc,
+                updated_by: tcUserEmail,
+                updated_at: new Date().toISOString()
+              };
+
+              if (productName) updates.product_name = productName;
+              if (castUnitWeight) updates.cast_unit_weight = castUnitWeight;
+              if (positionCode) updates.cast_unit_position_code = positionCode;
+
+              const { error } = await supabase
+                .from('trimble_delivery_items')
+                .update(updates)
+                .eq('id', item.id);
+
+              if (!error) {
+                linkedCount++;
+              }
+            }
+
+            // Found in this model, no need to check others
+            break;
+          } catch {
+            // Object not found in this model, try next
+            continue;
+          }
+        }
+      }
+
+      await loadItems();
+      setMessage(`${linkedCount}/${targetItems.length} detaili seotud mudeliga`);
+      return linkedCount;
+    } catch (e: any) {
+      console.error('Error linking items with model:', e);
+      setMessage('Viga mudeliga sidumiseel: ' + e.message);
+      return 0;
+    }
+  }, [api, items, tcUserEmail, loadItems]);
 
   // Load project name
   useEffect(() => {
@@ -2699,7 +2870,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             return;
           }
 
-          const date = row.date || addModalDate || new Date().toISOString().split('T')[0];
+          // If no date provided, use 'UNASSIGNED' as placeholder for grouping
+          const date = row.date || addModalDate || 'UNASSIGNED';
           const vehicleCode = row.vehicleCode || '';
           const groupKey = `${date}|${vehicleCode}|${factoryId}`;
 
@@ -2714,7 +2886,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         // Process each group
         for (const [groupKey, groupItems] of groups) {
-          const [date, vehicleCode, factoryId] = groupKey.split('|');
+          const [dateStr, vehicleCode, factoryId] = groupKey.split('|');
+
+          // Convert 'UNASSIGNED' to null for database
+          const scheduledDate = dateStr === 'UNASSIGNED' ? null : dateStr;
 
           // Get factory from fresh list (not from state which might be stale)
           const factory = (currentFactories || []).find(f => f.id === factoryId);
@@ -2726,7 +2901,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           let vehicle = vehicleCode
             ? vehicles.find(v =>
                 v.vehicle_code === vehicleCode &&
-                v.scheduled_date === date &&
+                v.scheduled_date === scheduledDate &&
                 v.factory_id === factoryId
               )
             : null;
@@ -2746,7 +2921,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 factory_id: factoryId,
                 vehicle_number: vehicleNumber,
                 vehicle_code: newVehicleCode,
-                scheduled_date: date,
+                scheduled_date: scheduledDate,
                 status: 'planned',
                 created_by: tcUserEmail
               })
@@ -2755,7 +2930,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
             if (vehicleError || !newVehicle) {
               console.error('Vehicle creation error:', vehicleError);
-              throw new Error(`Veoki loomine ebaõnnestus kuupäevaks ${date}: ${vehicleError?.message || 'tundmatu viga'}`);
+              throw new Error(`Veoki loomine ebaõnnestus${scheduledDate ? ` kuupäevaks ${scheduledDate}` : ''}: ${vehicleError?.message || 'tundmatu viga'}`);
             }
 
             vehicle = newVehicle;
@@ -2767,10 +2942,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             trimble_project_id: projectId,
             vehicle_id: vehicle!.id,
             guid: row.guid,
-            guid_ifc: row.guid.length === 22 ? row.guid : '',
+            guid_ifc: row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : ''),
             guid_ms: row.guid.length === 36 ? row.guid : (row.guid.length === 22 ? ifcToMsGuid(row.guid) : ''),
             assembly_mark: `Import-${totalImported + idx + 1}`,
-            scheduled_date: date,
+            scheduled_date: scheduledDate,
             sort_order: idx,
             status: 'planned' as const,
             created_by: tcUserEmail,
@@ -2789,10 +2964,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const vehicleInfo = createdVehicles.length > 0
           ? ` (loodud veokid: ${createdVehicles.join(', ')})`
           : '';
-        setMessage(`${totalImported} detaili imporditud ${groups.size} veokisse${vehicleInfo}`);
+        setMessage(`${totalImported} detaili imporditud${vehicleInfo}. Seon mudeliga...`);
         setShowImportModal(false);
         setImportText('');
         setParsedImportData([]);
+
+        // Auto-link with model after import
+        setTimeout(async () => {
+          const linked = await linkItemsWithModel();
+          if (linked > 0) {
+            setMessage(`${totalImported} detaili imporditud${vehicleInfo}, ${linked} seotud mudeliga`);
+          }
+        }, 500);
       } else {
         // SIMPLE IMPORT: All items to one new vehicle
         // Create vehicle for import
@@ -2826,9 +3009,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         if (error) throw error;
 
         await Promise.all([loadItems(), loadVehicles()]);
-        setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}`);
+        setMessage(`${guids.length} detaili imporditud veokisse ${vehicle.vehicle_code}. Seon mudeliga...`);
         setShowImportModal(false);
         setImportText('');
+
+        // Auto-link with model after import
+        setTimeout(async () => {
+          const linked = await linkItemsWithModel();
+          if (linked > 0) {
+            setMessage(`${guids.length} detaili imporditud, ${linked} seotud mudeliga`);
+          }
+        }, 500);
       }
     } catch (e: any) {
       console.error('Error importing:', e);
