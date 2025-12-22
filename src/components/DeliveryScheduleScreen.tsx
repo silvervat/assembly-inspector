@@ -3273,8 +3273,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               product_name: freshProps?.product_name || null,
               cast_unit_weight: freshProps?.cast_unit_weight || null,
               cast_unit_position_code: freshProps?.cast_unit_position_code || null,
-              cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
-              cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
+              // NOTE: Elevations need migration first! Uncomment after running 20251222_delivery_add_elevations.sql
+              // cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
+              // cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
               // Model references (still from database for performance)
               model_id: modelObj?.model_id || null,
               object_runtime_id: modelObj?.object_runtime_id || null,
