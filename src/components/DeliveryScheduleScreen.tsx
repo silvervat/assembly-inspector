@@ -2484,9 +2484,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     ];
 
     // Create worksheet
-    const ws = XLSX.utils.aoa_to_array ?
-      XLSX.utils.aoa_to_sheet(templateData) :
-      XLSX.utils.aoa_to_sheet(templateData);
+    const ws = XLSX.utils.aoa_to_sheet(templateData);
 
     // Set column widths
     ws['!cols'] = [
