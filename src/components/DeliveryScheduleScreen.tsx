@@ -1187,8 +1187,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.warn('Could not add selection listener:', e);
     }
 
-    // Fallback polling - increased to 5 seconds to reduce API load
-    const interval = setInterval(handleSelectionChange, 5000);
+    // Fallback polling - 1.5 seconds for faster detection
+    const interval = setInterval(handleSelectionChange, 1500);
 
     return () => {
       clearInterval(interval);
