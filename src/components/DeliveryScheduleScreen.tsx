@@ -380,6 +380,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [playbackSpeed, setPlaybackSpeed] = useState(800);
   const [_currentPlayVehicleIndex, setCurrentPlayVehicleIndex] = useState(0);
   const [currentPlaybackVehicleId, setCurrentPlaybackVehicleId] = useState<string | null>(null);
+  const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
 
   // Playback settings
@@ -3002,6 +3003,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         if (dateIndex >= sortedDatesForPlayback.length) {
           setIsPlaying(false);
           setCurrentPlaybackVehicleId(null);
+          setCurrentPlaybackDate(null);
           setMessage('Playback lõpetatud!');
           return;
         }
@@ -3010,50 +3012,60 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const dateVehicles = sortedVehicles.filter(v => (v.scheduled_date || UNASSIGNED_DATE) === date);
         const color = dColors[date] || { r: 0, g: 255, b: 0 };
 
+        // Set current playback date (for UI highlighting)
+        setCurrentPlaybackDate(date);
+
         // Mark date as colored
         setPlaybackColoredDates(prev => new Set([...prev, date]));
 
-        // Expand date
-        setCollapsedDates(prev => { const next = new Set(prev); next.delete(date); return next; });
-
-        // Scroll to date
+        // DO NOT expand dates - keep them collapsed during date playback
+        // Scroll to date header to keep it visible
         setTimeout(() => {
-          const dateElement = document.querySelector(`[data-date="${date}"]`);
-          if (dateElement) dateElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          const dateElement = document.getElementById(`date-group-${date}`);
+          if (dateElement) {
+            dateElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
         }, 50);
 
-        // Color all vehicles of this date
+        // Collect ALL items from ALL vehicles of this date
+        const allDateItems: { modelId: string; runtimeId: number }[] = [];
+        const byModel: Record<string, number[]> = {};
+
         for (const vehicle of dateVehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
-          const byModel: Record<string, number[]> = {};
           for (const item of vehicleItems) {
             if (item.model_id && item.object_runtime_id) {
               if (!byModel[item.model_id]) byModel[item.model_id] = [];
               byModel[item.model_id].push(item.object_runtime_id);
+              allDateItems.push({ modelId: item.model_id, runtimeId: item.object_runtime_id });
             }
-          }
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            try {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-                { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-              );
-            } catch (e) { console.error('Error coloring date:', e); }
           }
         }
 
-        // Zoom to first vehicle of date
-        const firstVehicle = dateVehicles[0];
-        if (firstVehicle && !playbackSettings.disableZoom) {
-          const vItems = items.filter(i => i.vehicle_id === firstVehicle.id && i.object_runtime_id);
-          if (vItems.length > 0 && vItems[0].model_id) {
-            try {
-              await api.viewer.setSelection({
-                modelObjectIds: [{ modelId: vItems[0].model_id, objectRuntimeIds: vItems.map(i => i.object_runtime_id!) }]
-              }, 'set');
+        // Color all items of this date
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          try {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+          } catch (e) { console.error('Error coloring date:', e); }
+        }
+
+        // Select ALL items from this date in model (ensuring exact match)
+        if (Object.keys(byModel).length > 0) {
+          try {
+            const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+              modelId,
+              objectRuntimeIds: runtimeIds
+            }));
+            await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+            // Zoom to selection if not disabled
+            if (!playbackSettings.disableZoom) {
               await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
-            } catch (e) { console.error('Error zooming:', e); }
-          }
+            }
+          } catch (e) { console.error('Error selecting date items:', e); }
         }
 
         setMessage(`Kuupäev ${dateIndex + 1}/${sortedDatesForPlayback.length}: ${date === UNASSIGNED_DATE ? 'MÄÄRAMATA' : date}`);
@@ -3148,6 +3160,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setIsPaused(false);
     setCurrentPlayVehicleIndex(0);
     setCurrentPlaybackVehicleId(null);
+    setCurrentPlaybackDate(null);
 
     // Clear colors
     try {
@@ -3909,14 +3922,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div
               key={date}
               id={`date-group-${date}`}
-              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''}`}
+              className={`delivery-date-group ${dragOverDate === date && draggedVehicle ? 'drag-over' : ''} ${hasSelectedItem ? 'has-selected-item' : ''} ${dateMenuId === date ? 'menu-open' : ''} ${currentPlaybackDate === date ? 'playback-active' : ''}`}
               onDragOver={(e) => handleDateDragOver(e, date)}
               onDragLeave={(e) => handleDateDragLeave(e, date)}
               onDrop={(e) => handleVehicleDrop(e, date)}
             >
               {/* Date header - new two-row layout */}
               <div
-                className={`date-header ${hasSelectedItem ? 'has-selected-item' : ''}`}
+                className={`date-header ${hasSelectedItem ? 'has-selected-item' : ''} ${currentPlaybackDate === date ? 'playback-active' : ''}`}
                 onClick={() => {
                   const wasCollapsed = collapsedDates.has(date);
                   setCollapsedDates(prev => {
