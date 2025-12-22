@@ -1011,6 +1011,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, []);
 
+  // Broadcast selection to main window (from popup)
+  const broadcastSelectInModel = useCallback((modelId: string, runtimeId: number) => {
+    if (broadcastChannelRef.current && isPopupMode) {
+      console.log('BroadcastChannel: Sending select request', modelId, runtimeId);
+      broadcastChannelRef.current.postMessage({ type: 'selectInModel', modelId, runtimeId });
+    }
+  }, [isPopupMode]);
+
   // Link items with model - fetch real assembly marks from trimble_model_objects table
   // Note: Currently unused as import now looks up data directly, but kept for potential manual re-link feature
   // @ts-ignore - Intentionally unused, kept for potential manual re-link feature
@@ -1233,10 +1241,26 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const channel = new BroadcastChannel(channelName);
     broadcastChannelRef.current = channel;
 
-    channel.onmessage = (event) => {
+    channel.onmessage = async (event) => {
       if (event.data.type === 'reload') {
         console.log('BroadcastChannel: Received reload signal');
         loadAllData();
+      } else if (event.data.type === 'selectInModel' && !isPopupMode && api) {
+        // Main window receives selection request from popup
+        const { modelId, runtimeId } = event.data;
+        console.log('BroadcastChannel: Received select request', modelId, runtimeId);
+        try {
+          if (modelId && runtimeId) {
+            // Select object in model
+            await api.viewer.setSelection({
+              modelObjectIds: [{ modelId, objectRuntimeIds: [runtimeId] }]
+            }, 'set');
+            // Zoom to selection
+            await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+          }
+        } catch (e) {
+          console.error('Error selecting in model:', e);
+        }
       }
     };
 
@@ -4596,7 +4620,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setActiveItemId(item.id);
 
       // Select in viewer
-      if (item.model_id && item.object_runtime_id) {
+      if (isPopupMode) {
+        // In popup mode, send selection to main window via BroadcastChannel
+        if (item.model_id && item.object_runtime_id) {
+          broadcastSelectInModel(item.model_id, item.object_runtime_id);
+        }
+      } else if (item.model_id && item.object_runtime_id) {
         try {
           await api.viewer.setSelection({
             modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }]
