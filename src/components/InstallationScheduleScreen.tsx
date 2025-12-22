@@ -2380,13 +2380,69 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Highlight already scheduled items from selection in red
+  // Highlight already scheduled items from selection in red, unscheduled in blue, rest white
   const highlightScheduledItemsRed = async (scheduledObjects: { obj: SelectedObject; date: string }[]) => {
     try {
-      // First reset colors
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
+      // Step 1: Color entire model WHITE
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
 
-      // Color the scheduled items red
+      // Step 2: Color all scheduled items by their date colors
+      const dates = Object.keys(itemsByDate);
+      const dateColors = generateDateColors(dates);
+
+      for (const date of dates) {
+        const items = itemsByDate[date];
+        const color = dateColors[date] || { r: 100, g: 100, b: 100 };
+
+        for (const item of items) {
+          const guidIfc = item.guid_ifc || item.guid;
+          if (guidIfc) {
+            try {
+              // Try to find model ID from cached objects or use first available
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(undefined as any, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                // Get the model that has this object
+                const models = await api.viewer.getModels();
+                for (const model of models) {
+                  const modelRuntimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+                  if (modelRuntimeIds && modelRuntimeIds.length > 0) {
+                    await api.viewer.setObjectState(
+                      { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: modelRuntimeIds }] },
+                      { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+                    );
+                    break;
+                  }
+                }
+              }
+            } catch {
+              // Skip if can't find object
+            }
+          }
+        }
+      }
+
+      // Step 3: Color UNSCHEDULED selected items BLUE
+      const scheduledGuids = new Set(scheduledObjects.map(s => s.obj.guidIfc || s.obj.guid));
+      const unscheduledSelected = selectedObjects.filter(obj => {
+        const guid = obj.guidIfc || obj.guid;
+        return !scheduledGuids.has(guid);
+      });
+
+      for (const obj of unscheduledSelected) {
+        const modelId = obj.modelId;
+        const guidIfc = obj.guidIfc || obj.guid;
+        if (modelId && guidIfc) {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (runtimeIds && runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: 59, g: 130, b: 246, a: 255 } } // Blue color
+            );
+          }
+        }
+      }
+
+      // Step 4: Color SCHEDULED selected items (duplicates) RED - last to override date colors
       for (const { obj } of scheduledObjects) {
         const modelId = obj.modelId;
         const guidIfc = obj.guidIfc || obj.guid;
@@ -2400,7 +2456,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           }
         }
       }
-      setMessage(`${scheduledObjects.length} juba planeeritud detaili värvitud punaseks`);
+
+      setMessage(`Punane: ${scheduledObjects.length} juba planeeritud | Sinine: ${unscheduledSelected.length} uut`);
     } catch (e) {
       console.error('Error highlighting scheduled items:', e);
     }
@@ -3994,11 +4051,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const allScheduled = scheduledInfo.length === selectedObjects.length;
         const someScheduled = scheduledInfo.length > 0 && scheduledInfo.length < selectedObjects.length;
 
+        // Calculate total weight of selected objects
+        const totalWeight = selectedObjects.reduce((sum, obj) => {
+          const w = obj.castUnitWeight ? parseFloat(obj.castUnitWeight) : 0;
+          return sum + (isNaN(w) ? 0 : w);
+        }, 0);
+        const weightStr = totalWeight > 0 ? `${Math.round(totalWeight)} kg` : '';
+
         return (
           <div className="selection-info">
             {/* First row: selection count and status */}
             <div className="selection-info-row">
-              <span>Valitud mudelis: <strong>{selectedObjects.length}</strong></span>
+              <span>Valitud mudelis: <strong>{selectedObjects.length}</strong>{weightStr && <span className="selection-weight"> ({weightStr})</span>}</span>
               {allScheduled && (
                 <span
                   className="already-scheduled-info clickable"
