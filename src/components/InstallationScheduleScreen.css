@@ -781,7 +781,7 @@
   padding: 3px 8px;
   cursor: pointer;
   transition: background 0.15s;
-  border-bottom: 1px dotted rgba(0, 0, 0, 0.1);
+  border-bottom: 1px dotted rgba(0, 0, 0, 0.06);
   position: relative;
   min-height: 24px;
 }
