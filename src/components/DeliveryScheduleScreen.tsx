@@ -1057,8 +1057,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Flag to prevent concurrent selection requests
   const selectionInProgressRef = useRef(false);
-  // Flag to skip clearing selectedItemIds when selection was triggered from schedule list
-  const selectionFromScheduleRef = useRef(false);
+  // Track expected runtime IDs from schedule selection to avoid clearing on polling
+  const scheduleSelectionRuntimeIdsRef = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     const handleSelectionChange = async () => {
@@ -1074,13 +1074,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           return;
         }
 
-        // Clear schedule item selection when model selection changes from MODEL (not from schedule list)
-        // This prevents having two types of selections at the same time
-        if (selectionFromScheduleRef.current) {
-          // Selection was triggered from schedule list, don't clear it
-          selectionFromScheduleRef.current = false;
-        } else {
-          // Selection was triggered from model, clear schedule selection
+        // Get all runtime IDs from current model selection
+        const modelSelectionRuntimeIds = new Set<number>();
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds) {
+            for (const id of sel.objectRuntimeIds) {
+              modelSelectionRuntimeIds.add(id);
+            }
+          }
+        }
+
+        // Check if model selection matches the expected schedule selection
+        // If it matches (or is a subset), don't clear the schedule selection
+        const expectedIds = scheduleSelectionRuntimeIdsRef.current;
+        const isScheduleSelection = expectedIds.size > 0 &&
+          [...modelSelectionRuntimeIds].every(id => expectedIds.has(id));
+
+        if (!isScheduleSelection && expectedIds.size === 0) {
+          // Selection is from model (not from schedule list), clear schedule selection
           setSelectedItemIds(new Set());
         }
 
@@ -1187,8 +1198,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.warn('Could not add selection listener:', e);
     }
 
-    // Fallback polling - increased to 5 seconds to reduce API load
-    const interval = setInterval(handleSelectionChange, 5000);
+    // Fallback polling - 1.5 seconds for faster detection
+    const interval = setInterval(handleSelectionChange, 1500);
 
     return () => {
       clearInterval(interval);
@@ -1209,11 +1220,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Select these items in the viewer
       const selectedItems = items.filter(item => selectedItemIds.has(item.id));
       const byModel: Record<string, number[]> = {};
+      const allRuntimeIds = new Set<number>();
 
       for (const item of selectedItems) {
         if (item.model_id && item.object_runtime_id) {
           if (!byModel[item.model_id]) byModel[item.model_id] = [];
           byModel[item.model_id].push(item.object_runtime_id);
+          allRuntimeIds.add(item.object_runtime_id);
         }
       }
 
@@ -1223,10 +1236,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }));
 
       if (modelObjectIds.length > 0) {
-        // Mark that this selection is from schedule to prevent auto-clear
-        selectionFromScheduleRef.current = true;
+        // Track expected runtime IDs to prevent auto-clear during polling
+        scheduleSelectionRuntimeIdsRef.current = allRuntimeIds;
         api.viewer.setSelection({ modelObjectIds }, 'set').catch(() => {});
       }
+    } else {
+      // Clear expected IDs when no schedule selection
+      scheduleSelectionRuntimeIdsRef.current = new Set();
     }
     // NOTE: We do NOT clear viewer selection when selectedItemIds is empty
     // This allows users to freely select objects in the model without interference
@@ -3493,8 +3509,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Select in viewer
       if (item.model_id && item.object_runtime_id) {
         try {
-          // Mark that this selection is from schedule to prevent auto-clear
-          selectionFromScheduleRef.current = true;
           await api.viewer.setSelection({
             modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }]
           }, 'set');
@@ -3550,8 +3564,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     if (runtimeIds.length > 0 && modelId && !allSelected) {
       try {
-        // Mark that this selection is from schedule to prevent auto-clear
-        selectionFromScheduleRef.current = true;
         await api.viewer.setSelection({
           modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
         }, 'set');
@@ -3562,7 +3574,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } else if (allSelected) {
       // Clear viewer selection when deselecting
       try {
-        selectionFromScheduleRef.current = true;
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
       } catch (e) {
         console.error('Error clearing selection:', e);
