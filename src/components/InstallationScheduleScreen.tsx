@@ -1502,7 +1502,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }));
 
     if (newValue) {
-      // Turning ON - color all items by date
+      // Turning ON - color all items by date (same logic as DeliverySchedule)
       try {
         await api.viewer.setObjectState(undefined, { color: 'reset' });
 
@@ -1512,50 +1512,98 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        // Get all loaded models for fallback
-        const models = await api.viewer.getModels();
+        setMessage('Värvin... Loen Supabasest...');
 
+        // Step 1: Fetch ALL objects from Supabase with pagination
+        const PAGE_SIZE = 5000;
+        const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+        let lastId = -1;
+
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('model_id, object_runtime_id')
+            .eq('trimble_project_id', projectId)
+            .gt('object_runtime_id', lastId)
+            .order('object_runtime_id', { ascending: true })
+            .limit(PAGE_SIZE);
+
+          if (error) {
+            console.error('Supabase error:', error);
+            setMessage('Viga Supabase lugemisel');
+            return;
+          }
+
+          if (!data || data.length === 0) break;
+
+          allModelObjects.push(...data);
+          lastId = data[data.length - 1].object_runtime_id;
+
+          setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
+
+          if (data.length < PAGE_SIZE) break;
+        }
+
+        // Step 2: Get schedule item runtime IDs
+        const scheduleRuntimeIds = new Set(
+          scheduleItems.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
+        );
+
+        // Step 3: Color non-schedule items WHITE first
+        const whiteByModel: Record<string, number[]> = {};
+        for (const obj of allModelObjects) {
+          if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
+            if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
+            whiteByModel[obj.model_id].push(obj.object_runtime_id);
+          }
+        }
+
+        const BATCH_SIZE = 5000;
+        let whiteCount = 0;
+        const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+        for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+          for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+            const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+              { color: { r: 255, g: 255, b: 255, a: 255 } }
+            );
+            whiteCount += batch.length;
+            setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+          }
+        }
+
+        // Step 4: Color schedule items by date
+        let coloredCount = 0;
         for (const [date, items] of Object.entries(itemsByDate)) {
           const color = dateColors[date];
           if (!color) continue;
 
+          // Group by model
+          const byModel: Record<string, number[]> = {};
           for (const item of items) {
-            const guidIfc = item.guid_ifc || item.guid;
-            if (!guidIfc) continue;
-
-            // Try with stored model_id first
-            if (item.model_id) {
-              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
-              if (runtimeIds && runtimeIds.length > 0) {
-                await api.viewer.setObjectState(
-                  { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
-                  { color: { ...color, a: 255 } }
-                );
-                continue;
-              }
-            }
-
-            // Fallback: try all loaded models
-            if (models && models.length > 0) {
-              for (const model of models) {
-                try {
-                  const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-                  if (runtimeIds && runtimeIds.length > 0) {
-                    await api.viewer.setObjectState(
-                      { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
-                      { color: { ...color, a: 255 } }
-                    );
-                    break;
-                  }
-                } catch {
-                  // Try next model
-                }
-              }
+            if (item.model_id && item.object_runtime_id) {
+              if (!byModel[item.model_id]) byModel[item.model_id] = [];
+              byModel[item.model_id].push(item.object_runtime_id);
             }
           }
+
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleRuntimeIds.size}`);
+          }
         }
+
+        setMessage(`Värvitud ${coloredCount} detaili, ${totalWhite} valget`);
+        setTimeout(() => setMessage(null), 3000);
       } catch (e) {
         console.error('Error coloring by date:', e);
+        setMessage('Viga värvimisel');
       }
     } else {
       // Turning OFF - reset colors
