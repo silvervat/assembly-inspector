@@ -403,7 +403,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [searchQuery, setSearchQuery] = useState('');
 
   // Hide past dates/vehicles toggle
-  const [hidePastDates, setHidePastDates] = useState(true);  // Default: hide past
+  const [hidePastDates, setHidePastDates] = useState(false);  // Default: show past
 
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
