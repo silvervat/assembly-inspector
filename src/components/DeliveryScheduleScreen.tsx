@@ -23,10 +23,12 @@ import './DeliveryScheduleScreen.css';
 interface Props {
   api: WorkspaceAPI;
   projectId: string;
-  user: TrimbleExUser;
-  tcUserEmail: string;
+  user?: TrimbleExUser;
+  tcUserEmail?: string;
   tcUserName?: string;
-  onBackToMenu: () => void;
+  onBackToMenu?: () => void;
+  onBack?: () => void;
+  isPopupMode?: boolean;
 }
 
 interface SelectedObject {
@@ -344,7 +346,7 @@ const generateDateColors = (dates: string[]): Record<string, { r: number; g: num
 // MAIN COMPONENT
 // ============================================
 
-export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail, tcUserName: _tcUserName, onBackToMenu }: Props) {
+export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, isPopupMode }: Props) {
   // ============================================
   // STATE
   // ============================================
@@ -573,6 +575,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const dragExpandTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoExpandedDatesRef = useRef<Set<string>>(new Set());
   const dragScrollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // BroadcastChannel for syncing between main window and popup
+  const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   // ============================================
   // COMPUTED VALUES
@@ -998,6 +1003,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setLoading(false);
   }, [loadFactories, loadVehicles, loadItems, loadComments]);
 
+  // Broadcast reload signal to other windows
+  const broadcastReload = useCallback(() => {
+    if (broadcastChannelRef.current) {
+      console.log('BroadcastChannel: Sending reload signal');
+      broadcastChannelRef.current.postMessage({ type: 'reload' });
+    }
+  }, []);
+
   // Link items with model - fetch real assembly marks from trimble_model_objects table
   // Note: Currently unused as import now looks up data directly, but kept for potential manual re-link feature
   // @ts-ignore - Intentionally unused, kept for potential manual re-link feature
@@ -1193,6 +1206,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Load project name
   useEffect(() => {
+    if (isPopupMode || !api) return; // Skip in popup mode
     const loadProjectName = async () => {
       try {
         const project = await api.project.getProject();
@@ -1204,12 +1218,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
     };
     loadProjectName();
-  }, [api]);
+  }, [api, isPopupMode]);
 
   // Initial load
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // BroadcastChannel for syncing between windows
+  useEffect(() => {
+    if (!projectId) return;
+
+    const channelName = `delivery-schedule-${projectId}`;
+    const channel = new BroadcastChannel(channelName);
+    broadcastChannelRef.current = channel;
+
+    channel.onmessage = (event) => {
+      if (event.data.type === 'reload') {
+        console.log('BroadcastChannel: Received reload signal');
+        loadAllData();
+      }
+    };
+
+    return () => {
+      channel.close();
+      broadcastChannelRef.current = null;
+    };
+  }, [projectId, loadAllData]);
 
   // Collapse all dates and vehicles on initial load
   useEffect(() => {
@@ -1569,6 +1604,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setEditFactoryName('');
       setEditFactoryCode('');
       await loadFactories();
+      broadcastReload();
     } catch (e: any) {
       console.error('Error updating factory:', e);
       setMessage('Viga tehase uuendamisel: ' + e.message);
@@ -1750,6 +1786,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
       await loadVehicles();
+      broadcastReload();
       setMessage('Veok uuendatud');
     } catch (e: any) {
       console.error('Error updating vehicle:', e);
@@ -1773,6 +1810,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
       await Promise.all([loadVehicles(), loadItems()]);
+      broadcastReload();
       setMessage('Veok kustutatud');
     } catch (e: any) {
       console.error('Error deleting vehicle:', e);

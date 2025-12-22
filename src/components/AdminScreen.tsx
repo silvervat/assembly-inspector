@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
 
@@ -600,6 +600,22 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
       loadModelObjectsInfo();
     }
   }, [adminView, loadModelObjectsInfo]);
+
+  // Open delivery schedule in popup window
+  const openDeliveryPopup = useCallback(() => {
+    const width = 1200;
+    const height = 800;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+
+    const popupUrl = `${window.location.origin}${window.location.pathname}?popup=delivery&projectId=${encodeURIComponent(projectId)}`;
+
+    window.open(
+      popupUrl,
+      'delivery-schedule-popup',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
+  }, [projectId]);
 
   // Discover properties for selected objects
   const discoverProperties = useCallback(async () => {
@@ -1289,6 +1305,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
           <button className="admin-tool-btn" onClick={() => setAdminView('modelObjects')}>
             <FiDatabase size={18} />
             <span>Saada andmebaasi</span>
+          </button>
+
+          <button className="admin-tool-btn" onClick={openDeliveryPopup}>
+            <FiExternalLink size={18} />
+            <span>Tarnegraafik uues aknas</span>
           </button>
         </div>
 
