@@ -848,6 +848,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (error) throw error;
 
+      // Color the item if it was moved to a different vehicle and color mode is active
+      if (itemEditVehicleId !== (editingItem.vehicle_id || '') && colorMode !== 'none') {
+        const newVehicle = vehicles.find(v => v.id === itemEditVehicleId);
+        if (newVehicle) {
+          colorItemsForMode([editingItem], itemEditVehicleId, newVehicle.scheduled_date);
+        }
+      }
+
       setMessage('Muudatused salvestatud');
       setShowItemEditModal(false);
       await loadItems();
@@ -1044,6 +1052,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Flag to prevent concurrent selection requests
   const selectionInProgressRef = useRef(false);
+  // Flag to skip clearing selectedItemIds when selection was triggered from schedule list
+  const selectionFromScheduleRef = useRef(false);
 
   useEffect(() => {
     const handleSelectionChange = async () => {
@@ -1059,9 +1069,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           return;
         }
 
-        // Clear schedule item selection when model selection changes
+        // Clear schedule item selection when model selection changes from MODEL (not from schedule list)
         // This prevents having two types of selections at the same time
-        setSelectedItemIds(new Set());
+        if (selectionFromScheduleRef.current) {
+          // Selection was triggered from schedule list, don't clear it
+          selectionFromScheduleRef.current = false;
+        } else {
+          // Selection was triggered from model, clear schedule selection
+          setSelectedItemIds(new Set());
+        }
 
         const objects: SelectedObject[] = [];
 
@@ -1202,6 +1218,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }));
 
       if (modelObjectIds.length > 0) {
+        // Mark that this selection is from schedule to prevent auto-clear
+        selectionFromScheduleRef.current = true;
         api.viewer.setSelection({ modelObjectIds }, 'set').catch(() => {});
       }
     }
@@ -1494,6 +1512,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (itemsError) throw itemsError;
 
       await Promise.all([loadVehicles(), loadItems()]);
+
+      // Color vehicle items if date color mode is active
+      if (colorMode === 'date') {
+        const vehicleItemsToColor = items.filter(i => i.vehicle_id === vehicleId);
+        if (vehicleItemsToColor.length > 0) {
+          colorItemsForMode(vehicleItemsToColor, vehicleId, newDate);
+        }
+      }
+
       setMessage('Veok tõstetud uuele kuupäevale');
     } catch (e: any) {
       console.error('Error moving vehicle:', e);
@@ -1537,6 +1564,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setVehicles(prev => prev.map(v =>
         v.id === vehicleId ? { ...v, ...updateData } : v
       ));
+
+      // Color vehicle items if date changed and date color mode is active
+      if (field === 'date' && colorMode === 'date') {
+        const vehicleItemsToColor = items.filter(i => i.vehicle_id === vehicleId);
+        if (vehicleItemsToColor.length > 0) {
+          colorItemsForMode(vehicleItemsToColor, vehicleId, value as string | null);
+        }
+      }
 
       setInlineEditVehicleId(null);
       setInlineEditField(null);
@@ -1667,6 +1702,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       await Promise.all([loadItems(), loadVehicles(), loadComments()]);
+
+      // Color newly added items if color mode is active
+      if (colorMode !== 'none' && insertedItems && insertedItems.length > 0) {
+        colorItemsForMode(insertedItems as DeliveryItem[], vehicleId, date);
+      }
+
       setMessage(`${newItems.length} detaili lisatud veokisse ${vehicle?.vehicle_code || ''}`);
       setShowAddModal(false);
       setAddModalComment(''); // Clear comment
@@ -2034,6 +2075,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return updated;
     });
 
+    // Color moved items if colorMode is active and items were moved to different vehicle
+    if (!isSameVehicle && colorMode !== 'none') {
+      colorItemsForMode(draggedItems, targetVehicleId, targetVehicle.scheduled_date);
+    }
+
     setDraggedItems([]);
     setSelectedItemIds(new Set());
 
@@ -2239,6 +2285,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
         if (newDateVehicles.length > 0) {
           await recalculateVehicleTimes(newDateVehicles);
+        }
+
+        // Color all items in the moved vehicle with new date color
+        if (colorMode === 'date') {
+          const vehicleItemsToColor = items.filter(i => i.vehicle_id === vehicleId);
+          if (vehicleItemsToColor.length > 0) {
+            colorItemsForMode(vehicleItemsToColor, vehicleId, targetDate);
+          }
         }
 
         setMessage(`Veok tõstetud: ${oldDate} → ${targetDate}`);
@@ -3311,6 +3365,60 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   };
 
+  // Color specific items based on current colorMode (used when items are moved/added)
+  const colorItemsForMode = async (itemsToColor: DeliveryItem[], targetVehicleId?: string, targetDate?: string | null) => {
+    if (colorMode === 'none') return;
+
+    try {
+      // Group items by model
+      const byModel: Record<string, number[]> = {};
+      for (const item of itemsToColor) {
+        if (item.model_id && item.object_runtime_id) {
+          if (!byModel[item.model_id]) byModel[item.model_id] = [];
+          byModel[item.model_id].push(item.object_runtime_id);
+        }
+      }
+
+      if (Object.keys(byModel).length === 0) return;
+
+      // Determine the color to use
+      let color: { r: number; g: number; b: number } | null = null;
+
+      if (colorMode === 'vehicle' && targetVehicleId) {
+        color = vehicleColors[targetVehicleId];
+      } else if (colorMode === 'date' && targetDate) {
+        color = dateColors[targetDate];
+      }
+
+      // If no color found in existing colors, generate one
+      if (!color) {
+        const key = colorMode === 'vehicle' ? targetVehicleId : targetDate;
+        if (key) {
+          const newColors = generateColorsForKeys([key]);
+          color = newColors[key];
+          // Update the colors state
+          if (colorMode === 'vehicle') {
+            setVehicleColors(prev => ({ ...prev, [key]: color! }));
+          } else {
+            setDateColors(prev => ({ ...prev, [key]: color! }));
+          }
+        }
+      }
+
+      if (!color) return;
+
+      // Apply color to items
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+        );
+      }
+    } catch (e) {
+      console.error('Error coloring moved items:', e);
+    }
+  };
+
   // ============================================
   // ITEM CLICK HANDLING
   // ============================================
@@ -3354,6 +3462,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Select in viewer
       if (item.model_id && item.object_runtime_id) {
         try {
+          // Mark that this selection is from schedule to prevent auto-clear
+          selectionFromScheduleRef.current = true;
           await api.viewer.setSelection({
             modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }]
           }, 'set');
@@ -3409,6 +3519,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     if (runtimeIds.length > 0 && modelId && !allSelected) {
       try {
+        // Mark that this selection is from schedule to prevent auto-clear
+        selectionFromScheduleRef.current = true;
         await api.viewer.setSelection({
           modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
         }, 'set');
@@ -3419,6 +3531,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } else if (allSelected) {
       // Clear viewer selection when deselecting
       try {
+        selectionFromScheduleRef.current = true;
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
       } catch (e) {
         console.error('Error clearing selection:', e);
@@ -4804,7 +4917,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             onMouseEnter={() => setShowColorMenu(true)}
             onMouseLeave={() => setShowColorMenu(false)}
           >
-            <button className={colorMode !== 'none' ? 'active' : ''}>
+            <button
+              className={colorMode !== 'none' ? 'active' : ''}
+              onClick={() => {
+                if (colorMode !== 'none') {
+                  applyColorMode('none');
+                }
+              }}
+            >
               <FiDroplet /> Värvi
             </button>
             {showColorMenu && (
