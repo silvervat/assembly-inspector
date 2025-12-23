@@ -34,7 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_schedule_items_version ON installation_schedule(v
 -- Enable RLS (Row Level Security) for versions table
 ALTER TABLE installation_schedule_versions ENABLE ROW LEVEL SECURITY;
 
--- Create policies for versions table (allow all for now)
+-- Drop existing policy if exists, then create
+DROP POLICY IF EXISTS "Allow all operations on schedule versions" ON installation_schedule_versions;
 CREATE POLICY "Allow all operations on schedule versions" ON installation_schedule_versions
   FOR ALL USING (true) WITH CHECK (true);
 
