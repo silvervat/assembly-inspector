@@ -157,6 +157,17 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
     product_name: string | null;
   }>>([]);
 
+  // Orphaned delivery items state
+  const [orphanedItems, setOrphanedItems] = useState<Array<{
+    id: string;
+    assembly_mark: string;
+    guid: string;
+    scheduled_date: string | null;
+    created_at: string;
+  }>>([]);
+  const [orphanedLoading, setOrphanedLoading] = useState(false);
+  const [showOrphanedPanel, setShowOrphanedPanel] = useState(false);
+
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
     setFunctionResults(prev => ({
@@ -619,6 +630,51 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
       loadModelObjectsInfo();
     }
   }, [adminView, loadModelObjectsInfo]);
+
+  // Load orphaned delivery items (items with vehicle_id = NULL)
+  const loadOrphanedItems = useCallback(async () => {
+    if (!projectId) return;
+    setOrphanedLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('trimble_delivery_items')
+        .select('id, assembly_mark, guid, scheduled_date, created_at')
+        .eq('trimble_project_id', projectId)
+        .is('vehicle_id', null)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setOrphanedItems(data || []);
+    } catch (e: any) {
+      setMessage(`Viga orvude laadimisel: ${e.message}`);
+    } finally {
+      setOrphanedLoading(false);
+    }
+  }, [projectId]);
+
+  // Delete all orphaned items
+  const deleteOrphanedItems = useCallback(async () => {
+    if (!projectId) return;
+    if (orphanedItems.length === 0) return;
+    if (!confirm(`Kas kustutada ${orphanedItems.length} orvuks jäänud detaili?`)) return;
+
+    setOrphanedLoading(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_delivery_items')
+        .delete()
+        .eq('trimble_project_id', projectId)
+        .is('vehicle_id', null);
+
+      if (error) throw error;
+      setOrphanedItems([]);
+      setMessage(`${orphanedItems.length} orvuks jäänud detaili kustutatud`);
+    } catch (e: any) {
+      setMessage(`Viga kustutamisel: ${e.message}`);
+    } finally {
+      setOrphanedLoading(false);
+    }
+  }, [projectId, orphanedItems.length]);
 
   // Open delivery schedule in popup window
   const openDeliveryPopup = useCallback(() => {
@@ -1330,7 +1386,88 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
             <FiExternalLink size={18} />
             <span>Tarnegraafik uues aknas</span>
           </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setShowOrphanedPanel(true);
+              loadOrphanedItems();
+            }}
+          >
+            <FiTrash2 size={18} />
+            <span>Tarnegraafiku orvud</span>
+          </button>
         </div>
+
+      {/* Orphaned Items Panel */}
+      {showOrphanedPanel && (
+        <div className="function-explorer">
+          <div className="function-explorer-header">
+            <h3>Orvuks jäänud detailid</h3>
+            <button className="close-btn" onClick={() => setShowOrphanedPanel(false)}>✕</button>
+          </div>
+          <div className="function-explorer-content">
+            <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+              Detailid mis on graafikus aga pole üheski veokis (vehicle_id = NULL).
+              Need tekivad kui detail eemaldatakse veokist aga mitte graafikust.
+            </p>
+            {orphanedLoading ? (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <FiRefreshCw className="spin" size={24} />
+                <p>Laadin...</p>
+              </div>
+            ) : orphanedItems.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '20px', color: '#059669' }}>
+                <FiCheck size={32} />
+                <p>Orvusid ei leitud! ✓</p>
+              </div>
+            ) : (
+              <>
+                <div style={{ marginBottom: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 500 }}>Leitud: {orphanedItems.length} detaili</span>
+                  <button
+                    className="admin-tool-btn"
+                    onClick={deleteOrphanedItems}
+                    style={{ background: '#dc2626', color: 'white', padding: '6px 12px' }}
+                  >
+                    <FiTrash2 size={14} />
+                    <span>Kustuta kõik</span>
+                  </button>
+                </div>
+                <div style={{ maxHeight: '300px', overflow: 'auto', fontSize: '12px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Märk</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Kuupäev</th>
+                        <th style={{ padding: '6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Lisatud</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orphanedItems.map(item => (
+                        <tr key={item.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                          <td style={{ padding: '6px' }}>{item.assembly_mark || '-'}</td>
+                          <td style={{ padding: '6px' }}>{item.scheduled_date || '-'}</td>
+                          <td style={{ padding: '6px' }}>{new Date(item.created_at).toLocaleDateString('et-EE')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+            <button
+              className="admin-tool-btn"
+              onClick={loadOrphanedItems}
+              style={{ marginTop: '12px' }}
+              disabled={orphanedLoading}
+            >
+              <FiRefreshCw size={14} className={orphanedLoading ? 'spin' : ''} />
+              <span>Värskenda</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Function Explorer Panel */}
       {showFunctionExplorer && (
