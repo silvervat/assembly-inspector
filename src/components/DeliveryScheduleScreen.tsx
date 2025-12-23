@@ -1375,26 +1375,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           return;
         }
 
-        // Get all runtime IDs from current model selection
-        const modelSelectionRuntimeIds = new Set<number>();
-        for (const sel of selection) {
-          if (sel.objectRuntimeIds) {
-            for (const id of sel.objectRuntimeIds) {
-              modelSelectionRuntimeIds.add(id);
-            }
-          }
-        }
-
-        // Check if model selection matches the expected schedule selection
-        // If it matches (or is a subset), don't clear the schedule selection
-        const expectedIds = scheduleSelectionRuntimeIdsRef.current;
-        const isScheduleSelection = expectedIds.size > 0 &&
-          [...modelSelectionRuntimeIds].every(id => expectedIds.has(id));
-
-        if (!isScheduleSelection && expectedIds.size === 0) {
-          // Selection is from model (not from schedule list), clear schedule selection
-          setSelectedItemIds(new Set());
-        }
+        // Note: Schedule selection clearing is handled by the change detection logic below
+        // instead of auto-clearing here every time there's any model selection
 
         const objects: SelectedObject[] = [];
 
@@ -5877,6 +5859,59 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                   }
                                 }}>
                                   <FiPackage /> Eemalda {selectedInThisVehicle.length} valitud
+                                </button>
+                              ) : null;
+                            })()}
+                            {/* Remove model-selected items from this vehicle */}
+                            {selectedObjects.length > 0 && (() => {
+                              const modelSelectedGuids = new Set(selectedObjects.map(o => o.guid).filter(Boolean));
+                              const modelSelectedInThisVehicle = vehicleItems.filter(item => item.guid && modelSelectedGuids.has(item.guid));
+                              return modelSelectedInThisVehicle.length > 0 ? (
+                                <button onClick={async () => {
+                                  setVehicleMenuId(null);
+                                  const idsToRemove = modelSelectedInThisVehicle.map(i => i.id);
+                                  setSaving(true);
+                                  try {
+                                    const { error } = await supabase
+                                      .from('trimble_delivery_items')
+                                      .update({
+                                        vehicle_id: null,
+                                        scheduled_date: null,
+                                        updated_by: tcUserEmail,
+                                        updated_at: new Date().toISOString()
+                                      })
+                                      .in('id', idsToRemove);
+                                    if (error) throw error;
+                                    // Color removed items white if color mode is active
+                                    if (colorMode !== 'none') {
+                                      try {
+                                        const byModel: Record<string, number[]> = {};
+                                        for (const item of modelSelectedInThisVehicle) {
+                                          if (item.model_id && item.object_runtime_id) {
+                                            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+                                            byModel[item.model_id].push(item.object_runtime_id);
+                                          }
+                                        }
+                                        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+                                          await api.viewer.setObjectState(
+                                            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                                            { color: { r: 255, g: 255, b: 255, a: 255 } }
+                                          );
+                                        }
+                                      } catch (colorError) {
+                                        console.error('Error coloring removed items:', colorError);
+                                      }
+                                    }
+                                    await Promise.all([loadItems(), loadVehicles()]);
+                                    broadcastReload();
+                                    setMessage(`${idsToRemove.length} mudelist valitud detaili eemaldatud`);
+                                  } catch (e: any) {
+                                    setMessage('Viga eemaldamisel: ' + e.message);
+                                  } finally {
+                                    setSaving(false);
+                                  }
+                                }}>
+                                  <FiPackage /> Eemalda {modelSelectedInThisVehicle.length} mudelist valitud
                                 </button>
                               ) : null;
                             })()}
