@@ -415,6 +415,7 @@ export interface InstallMethods {
 export interface ScheduleItem {
   id: string;
   project_id: string;
+  version_id?: string;            // Schedule version (null = default/legacy)
   // Objekti identifikaatorid
   model_id?: string;
   guid: string;
@@ -473,6 +474,20 @@ export interface ScheduleByDate {
   date: string;
   items: ScheduleItem[];
   count: number;
+}
+
+// Schedule versions - for saving different planning versions
+export interface ScheduleVersion {
+  id: string;
+  project_id: string;
+  name: string;                    // "Paigaldusgraafik 23.12.24"
+  description?: string;            // Optional description
+  is_active: boolean;              // Currently selected version
+  item_count?: number;             // Number of items (calculated)
+  created_by: string;
+  created_at: string;
+  updated_by?: string;
+  updated_at?: string;
 }
 
 // Database schema:
