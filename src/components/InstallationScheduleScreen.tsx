@@ -547,9 +547,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .order('scheduled_date', { ascending: true })
         .order('sort_order', { ascending: true });
 
-      // Only filter by version if explicitly provided (versioning system active)
+      // If version is active, load items with that version OR items without version (legacy)
       if (versionId) {
-        query = query.eq('version_id', versionId);
+        query = query.or(`version_id.eq.${versionId},version_id.is.null`);
       }
       // If no versionId, load ALL items (legacy mode - no version filtering)
 
@@ -1555,6 +1555,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         return {
           project_id: projectId,
+          version_id: activeVersionId || undefined,
           model_id: obj.modelId,
           guid: obj.guid || `runtime_${obj.runtimeId}`,
           guid_ifc: obj.guidIfc,
@@ -1651,6 +1652,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         return {
           project_id: projectId,
+          version_id: activeVersionId || undefined,
           model_id: obj.modelId,
           guid: obj.guid || `runtime_${obj.runtimeId}`,
           guid_ifc: obj.guidIfc,
