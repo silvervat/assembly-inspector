@@ -511,13 +511,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .order('scheduled_date', { ascending: true })
         .order('sort_order', { ascending: true });
 
-      // Filter by version if provided
+      // Only filter by version if explicitly provided (versioning system active)
       if (versionId) {
         query = query.eq('version_id', versionId);
-      } else {
-        // Load items without version (legacy) or all if no version system
-        query = query.or('version_id.is.null,version_id.eq.' + (activeVersionId || 'null'));
       }
+      // If no versionId, load ALL items (legacy mode - no version filtering)
 
       const { data, error } = await query;
 
@@ -529,7 +527,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } finally {
       setLoading(false);
     }
-  }, [projectId, activeVersionId]);
+  }, [projectId]);
 
   // Initialize versions on mount
   useEffect(() => {
