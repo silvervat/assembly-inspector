@@ -451,6 +451,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Add modal items list
   const [addModalExcludedItems, setAddModalExcludedItems] = useState<Set<number>>(new Set()); // runtimeIds to exclude
   const [addModalItemsExpanded, setAddModalItemsExpanded] = useState(false);
+  const [addModalOnlyUnassigned, setAddModalOnlyUnassigned] = useState(false); // Only add items not already in a vehicle
 
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
@@ -3950,7 +3951,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       ];
 
       // Data headers
-      const dataHeaders = ['Nr', 'Märk', 'Toode', 'Kaal (kg)', 'Teleskoop', 'Mitu korda / Kus veel'];
+      const dataHeaders = ['Nr', 'Märk', 'Toode', 'Kaal (kg)', 'GUID', 'Teleskoop', 'Mitu korda / Kus veel'];
 
       // Data rows
       const dataRows = vehicleItems.map((item, idx) => {
@@ -3977,6 +3978,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           item.assembly_mark,
           item.product_name || '',
           item.cast_unit_weight || '',
+          item.guid || item.guid_ifc || '',
           telescopicCount > 0 ? telescopicCount : '',
           duplicateInfo
         ];
@@ -6814,44 +6816,109 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {/* Selection bars - between calendar and search */}
         {(selectedObjects.length > 0 || selectedItemIds.size > 0) && (
           <div className="selection-bars">
-            {/* Selected objects from model - only show if not already in list */}
+            {/* Selected objects from model - show add options based on item status */}
             {(() => {
-              // Filter out objects that are already in items list (check guid, guid_ifc, and guid_ms)
-              const existingGuids = new Set(items.map(item => item.guid).filter(Boolean));
-              const existingIfcGuids = new Set(items.map(item => item.guid_ifc).filter(Boolean));
-              const existingMsGuids = new Set(items.map(item => item.guid_ms).filter(Boolean));
-              const newObjects = selectedObjects.filter(obj => {
+              if (selectedObjects.length === 0) return null;
+
+              // Build lookup maps for items
+              const itemByGuid = new Map<string, DeliveryItem>();
+              items.forEach(item => {
+                if (item.guid) itemByGuid.set(item.guid, item);
+                if (item.guid_ifc) itemByGuid.set(item.guid_ifc, item);
+                if (item.guid_ms) itemByGuid.set(item.guid_ms, item);
+              });
+
+              // Categorize selected objects
+              const newObjects: SelectedObject[] = [];  // Not in schedule
+              const unassignedObjects: SelectedObject[] = [];  // In schedule, no vehicle
+              const assignedObjects: { obj: SelectedObject; item: DeliveryItem }[] = [];  // In schedule with vehicle
+
+              selectedObjects.forEach(obj => {
                 const guid = obj.guid || '';
                 const guidIfc = obj.guidIfc || '';
                 const guidMs = obj.guidMs || '';
-                // Object is new if none of its guids exist in the schedule
-                const isInSchedule =
-                  (guid && existingGuids.has(guid)) ||
-                  (guidIfc && existingIfcGuids.has(guidIfc)) ||
-                  (guidMs && existingMsGuids.has(guidMs)) ||
-                  (guid && existingIfcGuids.has(guid)) ||  // Cross-check guid against IFC guids
-                  (guidIfc && existingGuids.has(guidIfc)); // Cross-check IFC guid against regular guids
-                return !isInSchedule;
+
+                // Find matching item
+                const item = itemByGuid.get(guid) || itemByGuid.get(guidIfc) || itemByGuid.get(guidMs);
+
+                if (!item) {
+                  newObjects.push(obj);
+                } else if (!item.vehicle_id) {
+                  unassignedObjects.push(obj);
+                } else {
+                  assignedObjects.push({ obj, item });
+                }
               });
 
-              if (newObjects.length === 0) return null;
-
-              const newObjectsWeight = newObjects.reduce(
+              const totalCount = selectedObjects.length;
+              const totalWeight = selectedObjects.reduce(
                 (sum, obj) => sum + (parseFloat(obj.castUnitWeight || '0') || 0), 0
               );
+              const unassignedCount = newObjects.length + unassignedObjects.length;
+              const assignedCount = assignedObjects.length;
+
+              // If all are already assigned, don't show the bar
+              if (unassignedCount === 0 && assignedCount === 0) return null;
+
+              // Get unique vehicle codes for assigned items
+              const assignedVehicleCodes = [...new Set(assignedObjects.map(({ item }) => {
+                const v = vehicles.find(v => v.id === item.vehicle_id);
+                return v?.vehicle_code || '';
+              }).filter(Boolean))];
 
               return (
-                <div className="selection-bar model-selection">
-                  <span className="selection-count">{newObjects.length} valitud | {Math.round(newObjectsWeight)} kg</span>
-                  <button
-                    className="add-btn primary"
-                    onClick={() => {
-                      setAddModalDate(selectedDate || formatDateForDB(new Date()));
-                      setShowAddModal(true);
-                    }}
-                  >
-                    <FiPlus /> Lisa veokisse
-                  </button>
+                <div className="selection-bar model-selection two-rows">
+                  <div className="selection-info-row">
+                    <span className="selection-label">Mudelist valitud:</span>
+                    <span className="selection-count">{totalCount} detaili | {Math.round(totalWeight)} kg</span>
+                    {assignedCount > 0 && (
+                      <span className="selection-hint">
+                        ({assignedCount} juba veoki{assignedCount > 1 ? 'tes' : 's'}: {assignedVehicleCodes.slice(0, 3).join(', ')}{assignedVehicleCodes.length > 3 ? '...' : ''})
+                      </span>
+                    )}
+                  </div>
+                  <div className="selection-actions-row">
+                    {unassignedCount > 0 && (
+                      <button
+                        className="add-btn primary"
+                        onClick={() => {
+                          // Filter selectedObjects to only include unassigned ones for the modal
+                          setAddModalDate(selectedDate || formatDateForDB(new Date()));
+                          setAddModalOnlyUnassigned(true);
+                          setShowAddModal(true);
+                        }}
+                      >
+                        <FiPlus /> Lisa määramata {unassignedCount} veokisse
+                      </button>
+                    )}
+                    {assignedCount > 0 && (
+                      <button
+                        className="add-btn"
+                        onClick={() => {
+                          const vehicleList = assignedVehicleCodes.join(', ');
+                          if (confirm(`${assignedCount} detaili eemaldatakse praegustest veokitest (${vehicleList}). Kas jätkata?`)) {
+                            setAddModalDate(selectedDate || formatDateForDB(new Date()));
+                            setAddModalOnlyUnassigned(false);
+                            setShowAddModal(true);
+                          }
+                        }}
+                      >
+                        <FiMove /> Lisa kõik {totalCount} veokisse
+                      </button>
+                    )}
+                    {assignedCount === 0 && unassignedCount > 0 && totalCount === unassignedCount && (
+                      <button
+                        className="add-btn primary"
+                        onClick={() => {
+                          setAddModalDate(selectedDate || formatDateForDB(new Date()));
+                          setAddModalOnlyUnassigned(false);
+                          setShowAddModal(true);
+                        }}
+                      >
+                        <FiPlus /> Lisa veokisse
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })()}
@@ -7293,6 +7360,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 setAddModalUnloadMethods({});
                 setAddModalExcludedItems(new Set());
                 setAddModalItemsExpanded(false);
+                setAddModalOnlyUnassigned(false);
               }}>
                 Tühista
               </button>
@@ -7375,7 +7443,48 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
 
                   // Filter out excluded items
-                  const filteredObjects = selectedObjects.filter(obj => !addModalExcludedItems.has(obj.runtimeId));
+                  let filteredObjects = selectedObjects.filter(obj => !addModalExcludedItems.has(obj.runtimeId));
+
+                  // Build lookup for items by GUID
+                  const itemByGuid = new Map<string, DeliveryItem>();
+                  items.forEach(item => {
+                    if (item.guid) itemByGuid.set(item.guid, item);
+                    if (item.guid_ifc) itemByGuid.set(item.guid_ifc, item);
+                    if (item.guid_ms) itemByGuid.set(item.guid_ms, item);
+                  });
+
+                  // If only unassigned, filter out items already in a vehicle
+                  if (addModalOnlyUnassigned) {
+                    filteredObjects = filteredObjects.filter(obj => {
+                      const guid = obj.guid || '';
+                      const guidIfc = obj.guidIfc || '';
+                      const guidMs = obj.guidMs || '';
+                      const existingItem = itemByGuid.get(guid) || itemByGuid.get(guidIfc) || itemByGuid.get(guidMs);
+                      return !existingItem || !existingItem.vehicle_id;
+                    });
+                  } else {
+                    // If adding all, first remove assigned items from their current vehicles
+                    const assignedItemIds: string[] = [];
+                    filteredObjects.forEach(obj => {
+                      const guid = obj.guid || '';
+                      const guidIfc = obj.guidIfc || '';
+                      const guidMs = obj.guidMs || '';
+                      const existingItem = itemByGuid.get(guid) || itemByGuid.get(guidIfc) || itemByGuid.get(guidMs);
+                      if (existingItem?.vehicle_id) {
+                        assignedItemIds.push(existingItem.id);
+                      }
+                    });
+
+                    // Remove from current vehicles (set vehicle_id to null)
+                    if (assignedItemIds.length > 0) {
+                      await supabase
+                        .from('trimble_delivery_items')
+                        .update({ vehicle_id: null })
+                        .in('id', assignedItemIds);
+                      await loadItems();
+                    }
+                  }
+
                   await addItemsToVehicle(vehicleId, addModalDate, addModalComment, filteredObjects);
                   setAddModalCustomCode('');
                   setAddModalStartTime('');
@@ -7383,6 +7492,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   setAddModalUnloadMethods({});
                   setAddModalExcludedItems(new Set());
                   setAddModalItemsExpanded(false);
+                  setAddModalOnlyUnassigned(false);
                 }}
               >
                 {saving ? 'Lisan...' : 'Lisa'}

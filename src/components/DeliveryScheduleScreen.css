@@ -691,6 +691,12 @@
   color: #78350f;
 }
 
+.selection-bar .selection-hint {
+  font-size: 11px;
+  color: #92400e;
+  font-style: italic;
+}
+
 .selection-bar .selection-actions-row {
   display: flex;
   align-items: center;
