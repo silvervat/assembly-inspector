@@ -200,8 +200,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Active item in list (selected in model)
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
 
-  // Collapsed date groups
+  // Collapsed date groups (start with all collapsed, set in useEffect after load)
   const [collapsedDates, setCollapsedDates] = useState<Set<string>>(new Set());
+  const initialCollapseRef = useRef(false);
 
   // Date picker for moving items
   const [datePickerItemId, setDatePickerItemId] = useState<string | null>(null);
@@ -617,6 +618,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       loadSchedule(activeVersionId);
     }
   }, [activeVersionId]);
+
+  // Collapse all dates by default on initial load
+  useEffect(() => {
+    if (!initialCollapseRef.current && scheduleItems.length > 0) {
+      initialCollapseRef.current = true;
+      const allDates = [...new Set(scheduleItems.map(item => item.scheduled_date))];
+      setCollapsedDates(new Set(allDates));
+    }
+  }, [scheduleItems]);
 
   // Switch to a different version
   const switchVersion = async (versionId: string) => {
