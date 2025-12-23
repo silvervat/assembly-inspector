@@ -7643,33 +7643,69 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                     saveUndoState(`${scheduledEditItems.length} detaili muutmine`);
 
+                    // Check if date is changing - need to calculate new sort_order
+                    const originalDate = scheduledEditItems[0]?.scheduled_date;
+                    const dateIsChanging = originalDate !== scheduledEditDate;
+
+                    // Calculate new sort_order values if date is changing
+                    let newSortOrders: Record<string, number> = {};
+                    if (dateIsChanging) {
+                      // Count existing items on target date (excluding items being moved)
+                      const editItemIds = new Set(scheduledEditItems.map(e => e.id));
+                      const existingOnTargetDate = scheduleItems.filter(
+                        item => item.scheduled_date === scheduledEditDate && !editItemIds.has(item.id)
+                      ).length;
+                      // Assign new sort_order values
+                      scheduledEditItems.forEach((item, idx) => {
+                        newSortOrders[item.id] = existingOnTargetDate + idx;
+                      });
+                    }
+
                     // Update items in database
-                    const updatePromises = scheduledEditItems.map(item =>
-                      supabase
+                    const updatePromises = scheduledEditItems.map(item => {
+                      const updateData: Record<string, unknown> = {
+                        scheduled_date: scheduledEditDate,
+                        install_methods: scheduledEditMethods,
+                        updated_by: tcUserEmail
+                      };
+                      if (dateIsChanging && newSortOrders[item.id] !== undefined) {
+                        updateData.sort_order = newSortOrders[item.id];
+                      }
+                      return supabase
                         .from('installation_schedule')
-                        .update({
-                          scheduled_date: scheduledEditDate,
-                          install_methods: scheduledEditMethods
-                        })
-                        .eq('id', item.id)
-                    );
+                        .update(updateData)
+                        .eq('id', item.id);
+                    });
 
                     try {
                       await Promise.all(updatePromises);
 
-                      // Update local state
+                      // Update local state without triggering collapse
                       setScheduleItems(prev =>
                         prev.map(item => {
                           if (scheduledEditItems.some(e => e.id === item.id)) {
-                            return {
+                            const updated: ScheduleItem = {
                               ...item,
                               scheduled_date: scheduledEditDate,
                               install_methods: scheduledEditMethods
                             };
+                            if (dateIsChanging && newSortOrders[item.id] !== undefined) {
+                              updated.sort_order = newSortOrders[item.id];
+                            }
+                            return updated;
                           }
                           return item;
                         })
                       );
+
+                      // Expand target date group if collapsed
+                      if (collapsedDates.has(scheduledEditDate)) {
+                        setCollapsedDates(prev => {
+                          const next = new Set(prev);
+                          next.delete(scheduledEditDate);
+                          return next;
+                        });
+                      }
 
                       setMessage(`${scheduledEditItems.length} detaili uuendatud`);
                       setShowScheduledEditModal(false);
