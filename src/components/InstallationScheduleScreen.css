@@ -2049,25 +2049,25 @@
 
 .weight-filter-inputs {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   padding: 6px 12px;
 }
 
 .weight-input-group {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex: 1;
+  gap: 8px;
 }
 
 .weight-input-group label {
   font-size: 11px;
   color: #6b7280;
-  min-width: 28px;
+  min-width: 32px;
 }
 
 .weight-input-group input {
-  width: 100%;
+  flex: 1;
   padding: 4px 6px;
   border: 1px solid #d1d5db;
   border-radius: 4px;

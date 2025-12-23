@@ -3289,6 +3289,210 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                 />
               </div>
             </div>
+
+            {/* GANTT TIMELINE section */}
+            <div className="function-section">
+              <h4>📊 Gantt Timeline</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Ava Gantt graafik eraldi aknas tarnete ja paigalduste ülevaatega.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Ava Gantt Timeline"
+                  result={functionResults["Ava Gantt Timeline"]}
+                  onClick={() => testFunction("Ava Gantt Timeline", async () => {
+                    // Load delivery vehicles and items
+                    const { data: vehicles, error: vehiclesError } = await supabase
+                      .from('trimble_delivery_vehicles')
+                      .select('id, vehicle_code, factory_name')
+                      .eq('trimble_project_id', projectId)
+                      .order('vehicle_code');
+
+                    if (vehiclesError) throw vehiclesError;
+
+                    const { data: deliveryItems, error: itemsError } = await supabase
+                      .from('trimble_delivery_items')
+                      .select('id, guid, guid_ms, scheduled_date, vehicle_id, assembly_mark')
+                      .eq('trimble_project_id', projectId);
+
+                    if (itemsError) throw itemsError;
+
+                    // Load installation schedule items
+                    const { data: installItems, error: installError } = await supabase
+                      .from('installation_schedule')
+                      .select('id, scheduled_date, assembly_mark, install_methods')
+                      .eq('trimble_project_id', projectId);
+
+                    if (installError) throw installError;
+
+                    // Group delivery items by vehicle and date
+                    const deliveryByVehicle: Record<string, { code: string; factory: string; dates: Record<string, number> }> = {};
+                    for (const v of (vehicles || [])) {
+                      deliveryByVehicle[v.id] = {
+                        code: v.vehicle_code || 'N/A',
+                        factory: v.factory_name || 'Teadmata',
+                        dates: {}
+                      };
+                    }
+
+                    for (const item of (deliveryItems || [])) {
+                      if (item.vehicle_id && item.scheduled_date && deliveryByVehicle[item.vehicle_id]) {
+                        const date = item.scheduled_date;
+                        deliveryByVehicle[item.vehicle_id].dates[date] = (deliveryByVehicle[item.vehicle_id].dates[date] || 0) + 1;
+                      }
+                    }
+
+                    // Group deliveries by factory
+                    const deliveryByFactory: Record<string, { vehicles: string[]; dates: Record<string, { count: number; trucks: string[] }> }> = {};
+                    for (const [_vehicleId, info] of Object.entries(deliveryByVehicle)) {
+                      if (!deliveryByFactory[info.factory]) {
+                        deliveryByFactory[info.factory] = { vehicles: [], dates: {} };
+                      }
+                      deliveryByFactory[info.factory].vehicles.push(info.code);
+                      for (const [date, count] of Object.entries(info.dates)) {
+                        if (!deliveryByFactory[info.factory].dates[date]) {
+                          deliveryByFactory[info.factory].dates[date] = { count: 0, trucks: [] };
+                        }
+                        deliveryByFactory[info.factory].dates[date].count += count;
+                        deliveryByFactory[info.factory].dates[date].trucks.push(info.code);
+                      }
+                    }
+
+                    // Get installation data by date with resources
+                    type InstallMethods = Record<string, number>;
+                    const installByDate: Record<string, { count: number; resources: InstallMethods }> = {};
+                    for (const item of (installItems || [])) {
+                      const date = item.scheduled_date;
+                      if (!installByDate[date]) {
+                        installByDate[date] = { count: 0, resources: {} };
+                      }
+                      installByDate[date].count += 1;
+                      const methods = (item.install_methods || {}) as InstallMethods;
+                      for (const [key, val] of Object.entries(methods)) {
+                        if (val && val > 0) {
+                          installByDate[date].resources[key] = Math.max(installByDate[date].resources[key] || 0, val);
+                        }
+                      }
+                    }
+
+                    // Get all unique dates
+                    const allDates = new Set<string>();
+                    for (const info of Object.values(deliveryByFactory)) {
+                      Object.keys(info.dates).forEach(d => allDates.add(d));
+                    }
+                    Object.keys(installByDate).forEach(d => allDates.add(d));
+                    const sortedDates = [...allDates].sort();
+
+                    if (sortedDates.length === 0) {
+                      throw new Error('Andmeid pole');
+                    }
+
+                    // Build HTML
+                    const formatDate = (d: string) => {
+                      const [_y, m, day] = d.split('-');
+                      return `${day}.${m}`;
+                    };
+
+                    const weekdayNames = ['P', 'E', 'T', 'K', 'N', 'R', 'L'];
+                    const getWeekday = (d: string) => {
+                      const date = new Date(d);
+                      return weekdayNames[date.getDay()];
+                    };
+
+                    const resourceLabels: Record<string, string> = {
+                      crane: '🏗️ Kraana', forklift: '🚜 Teleskooplaadur', poomtostuk: '🚁 Korvtõstuk',
+                      kaartostuk: '📐 Käärtõstuk', manual: '🤲 Käsitsi', troppija: '🔗 Troppija',
+                      monteerija: '🔧 Monteerija', keevitaja: '⚡ Keevitaja'
+                    };
+
+                    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Gantt Timeline</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 12px; padding: 16px; background: #f5f5f5; }
+h2 { margin-bottom: 16px; color: #333; }
+.gantt-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+table { border-collapse: collapse; min-width: 100%; }
+th, td { border: 1px solid #e0e0e0; padding: 6px 8px; text-align: center; white-space: nowrap; }
+th { background: #f8f9fa; font-weight: 600; position: sticky; top: 0; }
+.row-header { text-align: left; font-weight: 600; background: #f0f4f8; min-width: 150px; position: sticky; left: 0; z-index: 1; }
+.date-header { font-size: 11px; min-width: 60px; }
+.weekday { font-size: 10px; color: #888; }
+.weekend { background: #fff3e0 !important; }
+.delivery-cell { background: #e3f2fd; color: #1565c0; font-weight: 600; }
+.delivery-cell.multi { background: #bbdefb; }
+.install-cell { background: #e8f5e9; color: #2e7d32; font-weight: 600; }
+.resource-cell { background: #fff8e1; color: #f57c00; }
+.resource-cell.labor { background: #f3e5f5; color: #7b1fa2; }
+.trucks { font-size: 10px; color: #666; display: block; }
+.section-title { background: #263238; color: white; font-weight: 600; }
+.empty { color: #ccc; }
+</style></head><body>
+<h2>📊 Gantt Timeline</h2>
+<div class="gantt-container"><table><thead><tr>
+<th class="row-header">Ressurss</th>
+${sortedDates.map(d => {
+  const wd = getWeekday(d);
+  const isWeekend = wd === 'L' || wd === 'P';
+  return `<th class="date-header ${isWeekend ? 'weekend' : ''}">${formatDate(d)}<br><span class="weekday">${wd}</span></th>`;
+}).join('')}
+</tr></thead><tbody>
+<tr><td class="row-header section-title" colspan="${sortedDates.length + 1}">🚚 TARNED</td></tr>
+${Object.entries(deliveryByFactory).map(([factory, info]) => `<tr>
+<td class="row-header">${factory}</td>
+${sortedDates.map(d => {
+  const wd = getWeekday(d);
+  const isWeekend = wd === 'L' || wd === 'P';
+  const dayInfo = info.dates[d];
+  if (dayInfo) {
+    const isMulti = dayInfo.trucks.length > 1;
+    return `<td class="delivery-cell ${isMulti ? 'multi' : ''} ${isWeekend ? 'weekend' : ''}">${dayInfo.count} tk<span class="trucks">${dayInfo.trucks.join(', ')}</span></td>`;
+  }
+  return `<td class="${isWeekend ? 'weekend' : ''}"><span class="empty">-</span></td>`;
+}).join('')}
+</tr>`).join('')}
+<tr><td class="row-header section-title" colspan="${sortedDates.length + 1}">🔧 PAIGALDUS</td></tr>
+<tr><td class="row-header">Paigaldus</td>
+${sortedDates.map(d => {
+  const wd = getWeekday(d);
+  const isWeekend = wd === 'L' || wd === 'P';
+  const dayInfo = installByDate[d];
+  if (dayInfo) return `<td class="install-cell ${isWeekend ? 'weekend' : ''}">${dayInfo.count} detaili</td>`;
+  return `<td class="${isWeekend ? 'weekend' : ''}"><span class="empty">-</span></td>`;
+}).join('')}
+</tr>
+<tr><td class="row-header section-title" colspan="${sortedDates.length + 1}">👷 RESSURSID</td></tr>
+${['crane', 'forklift', 'poomtostuk', 'kaartostuk', 'manual', 'troppija', 'monteerija', 'keevitaja'].map(method => {
+  const hasAny = sortedDates.some(d => installByDate[d]?.resources[method]);
+  if (!hasAny) return '';
+  const isLabor = ['troppija', 'monteerija', 'keevitaja'].includes(method);
+  return `<tr><td class="row-header">${resourceLabels[method] || method}</td>
+${sortedDates.map(d => {
+  const wd = getWeekday(d);
+  const isWeekend = wd === 'L' || wd === 'P';
+  const val = installByDate[d]?.resources[method];
+  if (val) return `<td class="resource-cell ${isLabor ? 'labor' : ''} ${isWeekend ? 'weekend' : ''}">${val}</td>`;
+  return `<td class="${isWeekend ? 'weekend' : ''}"><span class="empty">-</span></td>`;
+}).join('')}
+</tr>`;
+}).join('')}
+</tbody></table></div>
+<p style="margin-top: 16px; color: #888; font-size: 11px;">
+Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deliveryByFactory).length} tehast | Paigaldus: ${(installItems || []).length} detaili
+</p></body></html>`;
+
+                    const popup = window.open('', '_blank', 'width=1400,height=800,scrollbars=yes,resizable=yes');
+                    if (popup) {
+                      popup.document.write(html);
+                      popup.document.close();
+                      return `Gantt Timeline avatud (${sortedDates.length} päeva)`;
+                    } else {
+                      throw new Error('Popup blokeeritud - luba popupid');
+                    }
+                  })}
+                />
+              </div>
+            </div>
           </div>
         </div>
       )}
