@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
@@ -247,6 +247,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Weight filter state
+  const [weightFilterMin, setWeightFilterMin] = useState<number | null>(null);
+  const [weightFilterMax, setWeightFilterMax] = useState<number | null>(null);
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -1260,6 +1264,34 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return deliveryInfo.date > item.scheduled_date;
   }, [deliveryInfoByGuid]);
 
+  // Calculate min and max weights from all schedule items
+  const weightBounds = useMemo(() => {
+    let min = Infinity;
+    let max = -Infinity;
+    let hasWeights = false;
+
+    for (const item of scheduleItems) {
+      if (item.cast_unit_weight) {
+        const weight = parseFloat(item.cast_unit_weight.replace(',', '.'));
+        if (!isNaN(weight)) {
+          hasWeights = true;
+          if (weight < min) min = weight;
+          if (weight > max) max = weight;
+        }
+      }
+    }
+
+    if (!hasWeights) {
+      return { min: 0, max: 0, hasWeights: false };
+    }
+
+    // Round min down and max up to nice numbers
+    min = Math.floor(min);
+    max = Math.ceil(max);
+
+    return { min, max, hasWeights: true };
+  }, [scheduleItems]);
+
   // Helper to check if item passes active filters
   const itemPassesFilters = useCallback((item: ScheduleItem): boolean => {
     if (activeFilters.size === 0) return true;
@@ -1311,13 +1343,30 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Clear all filters
   const clearFilters = () => {
     setActiveFilters(new Set());
+    setWeightFilterMin(null);
+    setWeightFilterMax(null);
   };
+
+  // Check if weight filter is active
+  const isWeightFilterActive = weightFilterMin !== null || weightFilterMax !== null;
 
   // Filter items by search query and active filters
   const filteredItems = scheduleItems.filter(item => {
     // First apply active filters (if any)
     if (activeFilters.size > 0 && !itemPassesFilters(item)) {
       return false;
+    }
+
+    // Apply weight filter
+    if (isWeightFilterActive) {
+      const weightStr = item.cast_unit_weight;
+      if (!weightStr) return false; // No weight = filtered out when weight filter is active
+
+      const weight = parseFloat(weightStr.replace(',', '.'));
+      if (isNaN(weight)) return false;
+
+      if (weightFilterMin !== null && weight < weightFilterMin) return false;
+      if (weightFilterMax !== null && weight > weightFilterMax) return false;
     }
 
     // Then apply search query
@@ -5892,37 +5941,32 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         <button
                           className="btn-small btn-secondary"
                           onClick={async () => {
-                            // Remove markups for scheduled items
-                            if (deliveryMarkupMap.size > 0) {
-                              const markupIdsToRemove: number[] = [];
-                              for (const { obj } of scheduledInfo) {
-                                const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
-                                const markupId = deliveryMarkupMap.get(guidIfc);
-                                if (markupId) markupIdsToRemove.push(markupId);
-                              }
-                              if (markupIdsToRemove.length > 0) {
-                                try {
-                                  await api.markup?.removeMarkups?.(markupIdsToRemove);
-                                  const newMap = new Map(deliveryMarkupMap);
-                                  for (const { obj } of scheduledInfo) {
-                                    const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
-                                    newMap.delete(guidIfc);
-                                  }
-                                  setDeliveryMarkupMap(newMap);
-                                  setMessage(`${markupIdsToRemove.length} märgistust eemaldatud`);
-                                } catch (err) {
-                                  console.error('Error removing markups:', err);
-                                }
-                              } else {
-                                setMessage('Märgistusi pole eemaldada');
-                              }
-                            } else {
-                              setMessage('Märgistusi pole eemaldada');
-                            }
+                            // Deselect the scheduled items from selection
+                            const scheduledGuids = new Set(
+                              scheduledInfo.map(s => (s.obj.guidIfc || s.obj.guid || '').toLowerCase())
+                            );
+
+                            // Filter out scheduled items from selection
+                            const remainingObjects = selectedObjects.filter(obj => {
+                              const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+                              return !scheduledGuids.has(guidIfc);
+                            });
+
+                            // Update Trimble model selection
+                            const modelObjectIds = remainingObjects
+                              .filter(obj => obj.runtimeId)
+                              .map(obj => ({
+                                modelId: obj.modelId,
+                                objectRuntimeId: obj.runtimeId
+                              }));
+
+                            await api.viewer.setSelection({ modelObjectIds }, 'set');
+                            setSelectedObjects(remainingObjects);
+                            setMessage(`${scheduledInfo.length} detaili eemaldatud valikust`);
                             setShowScheduledDropdown(false);
                           }}
                         >
-                          Eemalda märgistus
+                          Eemalda valikust
                         </button>
                         <button
                           className="btn-small btn-primary"
@@ -6803,20 +6847,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         {/* Filter button and dropdown */}
         <div className="filter-container" ref={filterDropdownRef}>
           <button
-            className={`filter-btn ${activeFilters.size > 0 ? 'active' : ''}`}
+            className={`filter-btn ${activeFilters.size > 0 || isWeightFilterActive ? 'active' : ''}`}
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             title="Filtreeri ressursside järgi"
           >
             <FiFilter size={14} />
-            {activeFilters.size > 0 && (
-              <span className="filter-badge">{activeFilters.size}</span>
+            {(activeFilters.size > 0 || isWeightFilterActive) && (
+              <span className="filter-badge">{activeFilters.size + (isWeightFilterActive ? 1 : 0)}</span>
             )}
           </button>
           {showFilterDropdown && (
             <div className="filter-dropdown">
               <div className="filter-header">
                 <span>Filtreeri</span>
-                {activeFilters.size > 0 && (
+                {(activeFilters.size > 0 || isWeightFilterActive) && (
                   <button className="filter-clear-all" onClick={clearFilters}>
                     Tühista
                   </button>
@@ -6929,6 +6973,57 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <span>Keevitaja</span>
                 </label>
               </div>
+              {weightBounds.hasWeights && (
+                <div className="filter-section">
+                  <div className="filter-section-title">
+                    Kaal (kg)
+                    {isWeightFilterActive && (
+                      <button
+                        className="weight-filter-clear"
+                        onClick={() => {
+                          setWeightFilterMin(null);
+                          setWeightFilterMax(null);
+                        }}
+                      >
+                        Tühista
+                      </button>
+                    )}
+                  </div>
+                  <div className="weight-filter-inputs">
+                    <div className="weight-input-group">
+                      <label>Min:</label>
+                      <input
+                        type="number"
+                        min={weightBounds.min}
+                        max={weightBounds.max}
+                        value={weightFilterMin ?? ''}
+                        placeholder={weightBounds.min.toString()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWeightFilterMin(val === '' ? null : parseFloat(val));
+                        }}
+                      />
+                    </div>
+                    <div className="weight-input-group">
+                      <label>Max:</label>
+                      <input
+                        type="number"
+                        min={weightBounds.min}
+                        max={weightBounds.max}
+                        value={weightFilterMax ?? ''}
+                        placeholder={weightBounds.max.toString()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWeightFilterMax(val === '' ? null : parseFloat(val));
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="weight-range-info">
+                    Vahemik: {weightBounds.min} - {weightBounds.max} kg
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -7643,33 +7738,69 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                     saveUndoState(`${scheduledEditItems.length} detaili muutmine`);
 
+                    // Check if date is changing - need to calculate new sort_order
+                    const originalDate = scheduledEditItems[0]?.scheduled_date;
+                    const dateIsChanging = originalDate !== scheduledEditDate;
+
+                    // Calculate new sort_order values if date is changing
+                    let newSortOrders: Record<string, number> = {};
+                    if (dateIsChanging) {
+                      // Count existing items on target date (excluding items being moved)
+                      const editItemIds = new Set(scheduledEditItems.map(e => e.id));
+                      const existingOnTargetDate = scheduleItems.filter(
+                        item => item.scheduled_date === scheduledEditDate && !editItemIds.has(item.id)
+                      ).length;
+                      // Assign new sort_order values
+                      scheduledEditItems.forEach((item, idx) => {
+                        newSortOrders[item.id] = existingOnTargetDate + idx;
+                      });
+                    }
+
                     // Update items in database
-                    const updatePromises = scheduledEditItems.map(item =>
-                      supabase
+                    const updatePromises = scheduledEditItems.map(item => {
+                      const updateData: Record<string, unknown> = {
+                        scheduled_date: scheduledEditDate,
+                        install_methods: scheduledEditMethods,
+                        updated_by: tcUserEmail
+                      };
+                      if (dateIsChanging && newSortOrders[item.id] !== undefined) {
+                        updateData.sort_order = newSortOrders[item.id];
+                      }
+                      return supabase
                         .from('installation_schedule')
-                        .update({
-                          scheduled_date: scheduledEditDate,
-                          install_methods: scheduledEditMethods
-                        })
-                        .eq('id', item.id)
-                    );
+                        .update(updateData)
+                        .eq('id', item.id);
+                    });
 
                     try {
                       await Promise.all(updatePromises);
 
-                      // Update local state
+                      // Update local state without triggering collapse
                       setScheduleItems(prev =>
                         prev.map(item => {
                           if (scheduledEditItems.some(e => e.id === item.id)) {
-                            return {
+                            const updated: ScheduleItem = {
                               ...item,
                               scheduled_date: scheduledEditDate,
                               install_methods: scheduledEditMethods
                             };
+                            if (dateIsChanging && newSortOrders[item.id] !== undefined) {
+                              updated.sort_order = newSortOrders[item.id];
+                            }
+                            return updated;
                           }
                           return item;
                         })
                       );
+
+                      // Expand target date group if collapsed
+                      if (collapsedDates.has(scheduledEditDate)) {
+                        setCollapsedDates(prev => {
+                          const next = new Set(prev);
+                          next.delete(scheduledEditDate);
+                          return next;
+                        });
+                      }
 
                       setMessage(`${scheduledEditItems.length} detaili uuendatud`);
                       setShowScheduledEditModal(false);
