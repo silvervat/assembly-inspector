@@ -1478,6 +1478,83 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
           </div>
 
           <div className="function-explorer-content">
+            {/* ZOOM LINK GENERATOR section */}
+            <div className="function-section">
+              <h4>🔗 Zoom Link Generator</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Vali mudelist detail ja genereeri link mis avab mudeli ja zoomib detaili juurde.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Genereeri link"
+                  result={functionResults["generateZoomLink"]}
+                  onClick={async () => {
+                    updateFunctionResult("generateZoomLink", { status: 'pending' });
+                    try {
+                      // Get selected objects
+                      const selected = await api.viewer.getSelection();
+                      if (!selected || selected.length === 0) {
+                        updateFunctionResult("generateZoomLink", {
+                          status: 'error',
+                          error: 'Vali mudelist detail!'
+                        });
+                        return;
+                      }
+
+                      const obj = selected[0];
+                      const modelId = obj.modelId;
+                      const runtimeId = obj.objectRuntimeIds?.[0];
+
+                      if (!modelId || !runtimeId) {
+                        updateFunctionResult("generateZoomLink", {
+                          status: 'error',
+                          error: 'Valitud objektil puudub modelId või runtimeId'
+                        });
+                        return;
+                      }
+
+                      // Get GUID for this object
+                      const properties = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+                      let guid = '';
+
+                      // Find GUID in properties
+                      for (const propSet of (properties as any)?.properties || []) {
+                        for (const prop of propSet.properties || []) {
+                          if (prop.name === 'GUID' || prop.name === 'guid' || prop.name === 'GlobalId') {
+                            guid = prop.value;
+                            break;
+                          }
+                        }
+                        if (guid) break;
+                      }
+
+                      if (!guid) {
+                        // Fallback to using modelId_runtimeId as identifier
+                        guid = `${modelId}_${runtimeId}`;
+                      }
+
+                      // Generate link
+                      const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
+                      const link = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&zoom=${encodeURIComponent(guid)}&runtime=${runtimeId}`;
+
+                      // Copy to clipboard
+                      await navigator.clipboard.writeText(link);
+
+                      updateFunctionResult("generateZoomLink", {
+                        status: 'success',
+                        result: `Link kopeeritud! (${guid.slice(0, 20)}...)`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("generateZoomLink", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
             {/* CAMERA / VIEW section */}
             <div className="function-section">
               <h4>📷 Kaamera / Vaated</h4>
