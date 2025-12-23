@@ -309,6 +309,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState(false);
   const [showResourcesStats, setShowResourcesStats] = useState(false);
   const [showScheduledDropdown, setShowScheduledDropdown] = useState(false);
+  // Bulk edit modal for scheduled items from selection
+  const [showScheduledEditModal, setShowScheduledEditModal] = useState(false);
+  const [scheduledEditItems, setScheduledEditItems] = useState<ScheduleItem[]>([]);
+  const [scheduledEditDate, setScheduledEditDate] = useState<string>('');
+  const [scheduledEditMethods, setScheduledEditMethods] = useState<InstallMethods>({});
   // Track markup IDs mapped to guid_ifc for removal when items are scheduled
   const [deliveryMarkupMap, setDeliveryMarkupMap] = useState<Map<string, number>>(new Map());
 
@@ -4822,10 +4827,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     }
 
-    // Calculate resource totals per date
-    const resourceTotalsPerDate: Record<string, Record<InstallMethodType, number>> = {};
+    // Calculate resource MAX per date (not sum - we need max concurrent usage)
+    const resourceMaxPerDate: Record<string, Record<InstallMethodType, number>> = {};
     for (const dateStr of timelineDates) {
-      resourceTotalsPerDate[dateStr] = {
+      resourceMaxPerDate[dateStr] = {
         crane: 0, forklift: 0, manual: 0, poomtostuk: 0,
         kaartostuk: 0, troppija: 0, monteerija: 0, keevitaja: 0
       };
@@ -4836,7 +4841,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       for (const [key, count] of Object.entries(methods)) {
         if (count && count > 0) {
           const methodKey = key as InstallMethodType;
-          resourceTotalsPerDate[item.scheduled_date][methodKey] += count;
+          // Track MAX count needed for any item on this date
+          resourceMaxPerDate[item.scheduled_date][methodKey] = Math.max(
+            resourceMaxPerDate[item.scheduled_date][methodKey],
+            count
+          );
         }
       }
     });
@@ -4893,7 +4902,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       // Resource rows
       resourceOrder.forEach((res, idx) => {
-        const count = resourceTotalsPerDate[dateStr]?.[res.key] || 0;
+        const count = resourceMaxPerDate[dateStr]?.[res.key] || 0;
         timelineData[RESOURCE_START_ROW + idx][col] = count > 0 ? count : '';
       });
 
@@ -5915,15 +5924,68 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         >
                           Eemalda märgistus
                         </button>
+                        <button
+                          className="btn-small btn-primary"
+                          onClick={() => {
+                            // Find the actual schedule items for these objects
+                            const items = scheduledInfo
+                              .map(s => scheduleItems.find(item =>
+                                item.guid === s.obj.guid || item.guid_ifc === s.obj.guidIfc
+                              ))
+                              .filter((item): item is ScheduleItem => item !== undefined);
+
+                            if (items.length > 0) {
+                              setScheduledEditItems(items);
+                              // Use first item's date as default
+                              setScheduledEditDate(items[0].scheduled_date);
+                              // Use first item's methods as default
+                              setScheduledEditMethods(items[0].install_methods as InstallMethods || {});
+                              setShowScheduledEditModal(true);
+                              setShowScheduledDropdown(false);
+                            }
+                          }}
+                        >
+                          Muuda
+                        </button>
                       </div>
                       <div className="scheduled-dropdown-list">
-                        {scheduledInfo.slice(0, 30).map((s, idx) => (
-                          <div key={idx} className="scheduled-item-row">
-                            <span className="scheduled-item-nr">#{s.jrNr}</span>
-                            <span className="scheduled-item-mark">{s.mark}</span>
-                            <span className="scheduled-item-date">{formatDateEstonian(s.date)}</span>
-                          </div>
-                        ))}
+                        {scheduledInfo.slice(0, 30).map((s, idx) => {
+                          const item = scheduleItems.find(i =>
+                            i.guid === s.obj.guid || i.guid_ifc === s.obj.guidIfc
+                          );
+                          return (
+                            <div
+                              key={idx}
+                              className="scheduled-item-row"
+                              onClick={() => {
+                                if (item) {
+                                  // Expand the date group if collapsed
+                                  if (collapsedDates.has(item.scheduled_date)) {
+                                    setCollapsedDates(prev => {
+                                      const next = new Set(prev);
+                                      next.delete(item.scheduled_date);
+                                      return next;
+                                    });
+                                  }
+                                  // Set active item and scroll to it
+                                  setActiveItemId(item.id);
+                                  // Use setTimeout to wait for collapse animation
+                                  setTimeout(() => {
+                                    const itemEl = document.querySelector(`[data-item-id="${item.id}"]`);
+                                    if (itemEl) {
+                                      itemEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                  }, 100);
+                                  setShowScheduledDropdown(false);
+                                }
+                              }}
+                            >
+                              <span className="scheduled-item-nr">#{s.jrNr}</span>
+                              <span className="scheduled-item-mark">{s.mark}</span>
+                              <span className="scheduled-item-date">{formatDateEstonian(s.date)}</span>
+                            </div>
+                          );
+                        })}
                         {scheduledInfo.length > 30 && (
                           <div className="scheduled-item-more">
                             + veel {scheduledInfo.length - 30} detaili
@@ -7130,6 +7192,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                             {showDropBefore && <div className="drop-indicator" />}
                             <div
                               ref={isCurrentlyPlaying ? playingItemRef : null}
+                              data-item-id={item.id}
                               className={`schedule-item ${isCurrentlyPlaying ? 'playing' : ''} ${!isPlaying && activeItemId === item.id ? 'active' : ''} ${!isPlaying && isItemSelected ? 'multi-selected' : ''} ${!isPlaying && isModelSelected ? 'model-selected' : ''} ${isDragging && draggedItems.some(d => d.id === item.id) ? 'dragging' : ''} ${itemMenuId === item.id ? 'menu-open' : ''}`}
                               draggable
                               onDragStart={(e) => handleDragStart(e, item)}
@@ -7493,6 +7556,136 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           </div>
         );
       })()}
+
+      {/* Scheduled Items Bulk Edit Modal */}
+      {showScheduledEditModal && scheduledEditItems.length > 0 && (
+        <div className="modal-overlay" onClick={() => setShowScheduledEditModal(false)}>
+          <div className="scheduled-edit-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Muuda {scheduledEditItems.length} detaili</h3>
+              <button onClick={() => setShowScheduledEditModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {/* Date picker */}
+              <div className="edit-section">
+                <label>Kuupäev:</label>
+                <input
+                  type="date"
+                  value={scheduledEditDate}
+                  onChange={(e) => setScheduledEditDate(e.target.value)}
+                  className="date-input"
+                />
+              </div>
+
+              {/* Resources */}
+              <div className="edit-section">
+                <label>Ressursid:</label>
+                <div className="resource-grid">
+                  {INSTALL_METHODS.map(method => (
+                    <div key={method.key} className="resource-item">
+                      <img
+                        src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                        alt={method.label}
+                        className="resource-icon"
+                      />
+                      <span className="resource-label">{method.label}</span>
+                      <div className="resource-counter">
+                        <button
+                          onClick={() => {
+                            const current = scheduledEditMethods[method.key] || 0;
+                            if (current > 0) {
+                              setScheduledEditMethods(prev => ({
+                                ...prev,
+                                [method.key]: current - 1
+                              }));
+                            }
+                          }}
+                          disabled={(scheduledEditMethods[method.key] || 0) <= 0}
+                        >
+                          -
+                        </button>
+                        <span>{scheduledEditMethods[method.key] || 0}</span>
+                        <button
+                          onClick={() => {
+                            const current = scheduledEditMethods[method.key] || 0;
+                            if (current < method.maxCount) {
+                              setScheduledEditMethods(prev => ({
+                                ...prev,
+                                [method.key]: current + 1
+                              }));
+                            }
+                          }}
+                          disabled={(scheduledEditMethods[method.key] || 0) >= method.maxCount}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="modal-actions">
+                <button
+                  className="btn-secondary"
+                  onClick={() => setShowScheduledEditModal(false)}
+                >
+                  Tühista
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={async () => {
+                    if (!scheduledEditDate) {
+                      setMessage('Vali kuupäev');
+                      return;
+                    }
+
+                    saveUndoState(`${scheduledEditItems.length} detaili muutmine`);
+
+                    // Update items in database
+                    const updatePromises = scheduledEditItems.map(item =>
+                      supabase
+                        .from('installation_schedule')
+                        .update({
+                          scheduled_date: scheduledEditDate,
+                          install_methods: scheduledEditMethods
+                        })
+                        .eq('id', item.id)
+                    );
+
+                    try {
+                      await Promise.all(updatePromises);
+
+                      // Update local state
+                      setScheduleItems(prev =>
+                        prev.map(item => {
+                          if (scheduledEditItems.some(e => e.id === item.id)) {
+                            return {
+                              ...item,
+                              scheduled_date: scheduledEditDate,
+                              install_methods: scheduledEditMethods
+                            };
+                          }
+                          return item;
+                        })
+                      );
+
+                      setMessage(`${scheduledEditItems.length} detaili uuendatud`);
+                      setShowScheduledEditModal(false);
+                    } catch (err) {
+                      console.error('Error updating items:', err);
+                      setMessage('Viga detailide uuendamisel');
+                    }
+                  }}
+                >
+                  Salvesta
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Comment Modal */}
       {showCommentModal && commentModalTarget && (

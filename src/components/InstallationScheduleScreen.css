@@ -3591,6 +3591,15 @@
   background: #d1d5db;
 }
 
+.scheduled-dropdown-actions .btn-primary {
+  background: var(--modus-primary);
+  color: white;
+}
+
+.scheduled-dropdown-actions .btn-primary:hover {
+  background: var(--modus-primary-dark);
+}
+
 .scheduled-dropdown-list {
   max-height: 300px;
   overflow-y: auto;
@@ -3603,10 +3612,11 @@
   gap: 8px;
   padding: 4px 12px;
   font-size: 11px;
+  cursor: pointer;
 }
 
 .scheduled-item-row:hover {
-  background: #f3f4f6;
+  background: #dbeafe;
 }
 
 .scheduled-item-nr {
@@ -3638,4 +3648,162 @@
   text-align: center;
   border-top: 1px solid var(--modus-border);
   background: #f8fafc;
+}
+
+/* Scheduled Edit Modal */
+.scheduled-edit-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.scheduled-edit-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.scheduled-edit-modal .modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.scheduled-edit-modal .modal-header button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scheduled-edit-modal .modal-body {
+  padding: 20px;
+}
+
+.scheduled-edit-modal .edit-section {
+  margin-bottom: 20px;
+}
+
+.scheduled-edit-modal .edit-section > label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--modus-text-secondary);
+  margin-bottom: 8px;
+}
+
+.scheduled-edit-modal .date-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.scheduled-edit-modal .resource-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.scheduled-edit-modal .resource-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid var(--modus-border);
+}
+
+.scheduled-edit-modal .resource-icon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
+}
+
+.scheduled-edit-modal .resource-label {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--modus-text-primary);
+}
+
+.scheduled-edit-modal .resource-counter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.scheduled-edit-modal .resource-counter button {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scheduled-edit-modal .resource-counter button:hover:not(:disabled) {
+  background: var(--modus-primary);
+  color: white;
+  border-color: var(--modus-primary);
+}
+
+.scheduled-edit-modal .resource-counter button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.scheduled-edit-modal .resource-counter span {
+  min-width: 20px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.scheduled-edit-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.scheduled-edit-modal .modal-actions button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.scheduled-edit-modal .modal-actions .btn-secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.scheduled-edit-modal .modal-actions .btn-primary {
+  background: var(--modus-primary);
+  color: white;
+}
+
+.scheduled-edit-modal .modal-actions .btn-primary:hover {
+  background: var(--modus-primary-dark);
 }
