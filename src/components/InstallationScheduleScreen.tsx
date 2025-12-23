@@ -4847,8 +4847,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     // Build timeline data array
     const MONTH_ROW = 0;
     const WEEK_ROW = 1;
-    const DATE_ROW = 2;
-    const RESOURCE_START_ROW = 3;
+    const DAY_ROW = 2;      // Weekday name (E, T, K, N, R, L, P)
+    const DATE_ROW = 3;     // Date (DD.MM)
+    const RESOURCE_START_ROW = 4;
     const RESOURCE_END_ROW = RESOURCE_START_ROW + resourceOrder.length - 1;
     const SEPARATOR_ROW = RESOURCE_END_ROW + 1;
     const DETAILS_START_ROW = SEPARATOR_ROW + 1;
@@ -4864,6 +4865,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     // Column A labels
     timelineData[MONTH_ROW][0] = '';
     timelineData[WEEK_ROW][0] = '';
+    timelineData[DAY_ROW][0] = '';
     timelineData[DATE_ROW][0] = '';
     resourceOrder.forEach((res, idx) => {
       timelineData[RESOURCE_START_ROW + idx][0] = res.label;
@@ -4871,12 +4873,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     timelineData[SEPARATOR_ROW][0] = '';
     timelineData[TOTAL_ROW][0] = timelineLabels.total;
 
+    // Weekday short names
+    const weekdayShort = isEnglish
+      ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      : ['P', 'E', 'T', 'K', 'N', 'R', 'L'];
+
     // Fill date headers and data columns
     timelineDates.forEach((dateStr, colIdx) => {
       const col = colIdx + 1; // +1 for label column
       const date = new Date(dateStr);
       const dayNum = date.getDate();
       const monthNum = date.getMonth() + 1;
+
+      // Weekday name row
+      timelineData[DAY_ROW][col] = weekdayShort[date.getDay()];
 
       // Date header (DD.MM)
       timelineData[DATE_ROW][col] = `${String(dayNum).padStart(2, '0')}.${String(monthNum).padStart(2, '0')}`;
@@ -4915,6 +4925,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         ws4['!rows'].push({ hpt: 12 }); // Small height for details
       } else if (r === MONTH_ROW || r === WEEK_ROW) {
         ws4['!rows'].push({ hpt: 18 });
+      } else if (r === DAY_ROW || r === DATE_ROW) {
+        ws4['!rows'].push({ hpt: 15 });
       } else {
         ws4['!rows'].push({ hpt: 16 });
       }
@@ -5054,18 +5066,31 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (ws4[cellRef]) ws4[cellRef].s = weekHeaderStyle;
     }
 
-    // Apply date header styles with weekend highlighting
+    // Apply day name and date header styles with weekend highlighting
     timelineDates.forEach((dateStr, colIdx) => {
       const col = colIdx + 1;
       const date = new Date(dateStr);
       const isWeekend = date.getDay() === 0 || date.getDay() === 6;
       const isWorkDay = !!itemsByDate[dateStr];
+      const bgColor = isWeekend && !isWorkDay ? 'FEE2E2' : 'E5E7EB';
 
+      // Day name row
+      const dayRef = XLSX.utils.encode_cell({ r: DAY_ROW, c: col });
+      if (ws4[dayRef]) {
+        ws4[dayRef].s = {
+          font: { bold: true, sz: 9 },
+          fill: { fgColor: { rgb: bgColor } },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: thinBorder
+        };
+      }
+
+      // Date row
       const cellRef = XLSX.utils.encode_cell({ r: DATE_ROW, c: col });
       if (ws4[cellRef]) {
         ws4[cellRef].s = {
           ...timelineHeaderStyle,
-          fill: { fgColor: { rgb: isWeekend && !isWorkDay ? 'FEE2E2' : 'E5E7EB' } }
+          fill: { fgColor: { rgb: bgColor } }
         };
       }
     });
@@ -5099,7 +5124,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
 
     // Freeze panes (freeze first column and first 3 rows)
-    ws4['!freeze'] = { xSplit: 1, ySplit: 3 };
+    ws4['!freeze'] = { xSplit: 1, ySplit: 4 };
 
     XLSX.utils.book_append_sheet(wb, ws4, 'Timeline');
 
