@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
-import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment } from '../supabase';
+import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3, FiTruck
+  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3, FiTruck, FiLayers, FiSave, FiEdit
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -335,6 +335,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: number; errors: string[]; warnings: string[] } | null>(null);
 
+  // Version management state
+  const [versions, setVersions] = useState<ScheduleVersion[]>([]);
+  const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
+  const [showVersionDropdown, setShowVersionDropdown] = useState(false);
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [editingVersion, setEditingVersion] = useState<ScheduleVersion | null>(null);
+  const [newVersionName, setNewVersionName] = useState('');
+  const [newVersionDescription, setNewVersionDescription] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const versionDropdownRef = useRef<HTMLDivElement>(null);
+
   // Assembly selection state
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
@@ -453,15 +465,61 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   }, [collapsedDates]);
 
   // Load schedule items
-  const loadSchedule = useCallback(async () => {
-    setLoading(true);
+  // Load versions for this project
+  const loadVersions = useCallback(async () => {
     try {
       const { data, error } = await supabase
+        .from('installation_schedule_versions')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        // Table might not exist yet - that's ok
+        console.log('Versions table not available:', error.message);
+        setVersions([]);
+        return null;
+      }
+
+      setVersions(data || []);
+
+      // Find active version or return null
+      const active = data?.find(v => v.is_active);
+      return active?.id || null;
+    } catch (e) {
+      console.log('Error loading versions:', e);
+      setVersions([]);
+      return null;
+    }
+  }, [projectId]);
+
+  // Format date as dd.mm.yy for version names
+  const formatVersionDate = (date: Date): string => {
+    const dd = String(date.getDate()).padStart(2, '0');
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const yy = String(date.getFullYear()).slice(-2);
+    return `${dd}.${mm}.${yy}`;
+  };
+
+  const loadSchedule = useCallback(async (versionId?: string | null) => {
+    setLoading(true);
+    try {
+      let query = supabase
         .from('installation_schedule')
         .select('*')
         .eq('project_id', projectId)
         .order('scheduled_date', { ascending: true })
         .order('sort_order', { ascending: true });
+
+      // Filter by version if provided
+      if (versionId) {
+        query = query.eq('version_id', versionId);
+      } else {
+        // Load items without version (legacy) or all if no version system
+        query = query.or('version_id.is.null,version_id.eq.' + (activeVersionId || 'null'));
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setScheduleItems(data || []);
@@ -471,11 +529,211 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, activeVersionId]);
 
+  // Initialize versions on mount
   useEffect(() => {
-    loadSchedule();
-  }, [loadSchedule]);
+    const initVersions = async () => {
+      const activeId = await loadVersions();
+      if (activeId) {
+        setActiveVersionId(activeId);
+        loadSchedule(activeId);
+      } else {
+        // No versions - load all items (legacy mode)
+        loadSchedule(null);
+      }
+    };
+    initVersions();
+  }, [loadVersions]);
+
+  // Reload when version changes
+  useEffect(() => {
+    if (activeVersionId) {
+      loadSchedule(activeVersionId);
+    }
+  }, [activeVersionId]);
+
+  // Switch to a different version
+  const switchVersion = async (versionId: string) => {
+    try {
+      // Mark all versions as inactive
+      await supabase
+        .from('installation_schedule_versions')
+        .update({ is_active: false })
+        .eq('project_id', projectId);
+
+      // Mark selected version as active
+      await supabase
+        .from('installation_schedule_versions')
+        .update({ is_active: true })
+        .eq('id', versionId);
+
+      setActiveVersionId(versionId);
+      setShowVersionDropdown(false);
+      await loadVersions();
+    } catch (e) {
+      console.error('Error switching version:', e);
+      setMessage('Viga versiooni vahetamisel');
+    }
+  };
+
+  // Create new version (copy from current or empty)
+  const createNewVersion = async (copyFromCurrent: boolean = true) => {
+    const name = newVersionName.trim() || `Paigaldusgraafik ${formatVersionDate(new Date())}`;
+    const description = newVersionDescription.trim() || undefined;
+
+    try {
+      // Create version
+      const { data: newVersion, error: versionError } = await supabase
+        .from('installation_schedule_versions')
+        .insert({
+          project_id: projectId,
+          name,
+          description,
+          is_active: false,
+          created_by: tcUserEmail
+        })
+        .select()
+        .single();
+
+      if (versionError) throw versionError;
+
+      // Copy items from current version if requested
+      if (copyFromCurrent && activeVersionId && scheduleItems.length > 0) {
+        const copiedItems = scheduleItems.map(item => ({
+          project_id: item.project_id,
+          version_id: newVersion.id,
+          model_id: item.model_id,
+          guid: item.guid,
+          guid_ifc: item.guid_ifc,
+          guid_ms: item.guid_ms,
+          object_runtime_id: item.object_runtime_id,
+          assembly_mark: item.assembly_mark,
+          product_name: item.product_name,
+          file_name: item.file_name,
+          cast_unit_weight: item.cast_unit_weight,
+          cast_unit_position_code: item.cast_unit_position_code,
+          scheduled_date: item.scheduled_date,
+          sort_order: item.sort_order,
+          install_methods: item.install_methods,
+          status: item.status,
+          notes: item.notes,
+          created_by: tcUserEmail
+        }));
+
+        await supabase
+          .from('installation_schedule')
+          .insert(copiedItems);
+      }
+
+      setMessage(`Versioon "${name}" loodud`);
+      setShowVersionModal(false);
+      setNewVersionName('');
+      setNewVersionDescription('');
+      await loadVersions();
+
+      // Switch to new version
+      await switchVersion(newVersion.id);
+    } catch (e) {
+      console.error('Error creating version:', e);
+      setMessage('Viga versiooni loomisel');
+    }
+  };
+
+  // Update version name/description
+  const updateVersion = async () => {
+    if (!editingVersion) return;
+
+    const name = newVersionName.trim() || editingVersion.name;
+    const description = newVersionDescription.trim() || undefined;
+
+    try {
+      const { error } = await supabase
+        .from('installation_schedule_versions')
+        .update({
+          name,
+          description,
+          updated_by: tcUserEmail,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingVersion.id);
+
+      if (error) throw error;
+
+      setMessage(`Versioon uuendatud`);
+      setShowVersionModal(false);
+      setEditingVersion(null);
+      setNewVersionName('');
+      setNewVersionDescription('');
+      await loadVersions();
+    } catch (e) {
+      console.error('Error updating version:', e);
+      setMessage('Viga versiooni uuendamisel');
+    }
+  };
+
+  // Delete version (requires typing the version name to confirm)
+  const deleteVersion = async () => {
+    if (!editingVersion) return;
+    if (deleteConfirmInput !== editingVersion.name) {
+      setMessage('Versiooni nimi ei klapi!');
+      return;
+    }
+
+    try {
+      // First delete all items in this version
+      const { error: itemsError } = await supabase
+        .from('installation_schedule')
+        .delete()
+        .eq('version_id', editingVersion.id);
+
+      if (itemsError) throw itemsError;
+
+      // Then delete the version itself
+      const { error: versionError } = await supabase
+        .from('installation_schedule_versions')
+        .delete()
+        .eq('id', editingVersion.id);
+
+      if (versionError) throw versionError;
+
+      setMessage(`Versioon "${editingVersion.name}" kustutatud`);
+      setShowVersionModal(false);
+      setShowDeleteConfirm(false);
+      setDeleteConfirmInput('');
+      setEditingVersion(null);
+
+      // Reload versions and switch to another if needed
+      const remainingVersions = versions.filter(v => v.id !== editingVersion.id);
+      if (remainingVersions.length > 0) {
+        // Switch to first remaining version
+        await switchVersion(remainingVersions[0].id);
+      } else {
+        // No versions left - load legacy items
+        setActiveVersionId(null);
+        loadSchedule(null);
+      }
+      await loadVersions();
+    } catch (e) {
+      console.error('Error deleting version:', e);
+      setMessage('Viga versiooni kustutamisel');
+    }
+  };
+
+  // Close version dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (versionDropdownRef.current && !versionDropdownRef.current.contains(event.target as Node)) {
+        setShowVersionDropdown(false);
+      }
+    };
+    if (showVersionDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showVersionDropdown]);
 
   // Load delivery dates for all items (to check if delivery is before installation)
   const loadDeliveryDates = useCallback(async () => {
@@ -4281,6 +4539,80 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         </div>
       </div>
 
+      {/* Version bar */}
+      <div className="version-bar">
+        <div className="version-selector" ref={versionDropdownRef}>
+          <button
+            className="version-current"
+            onClick={() => setShowVersionDropdown(!showVersionDropdown)}
+          >
+            <FiLayers size={14} />
+            <span className="version-name">
+              {versions.find(v => v.id === activeVersionId)?.name || 'Põhigraafik'}
+            </span>
+            <FiChevronDown size={14} className={showVersionDropdown ? 'rotated' : ''} />
+          </button>
+
+          {showVersionDropdown && (
+            <div className="version-dropdown">
+              <div className="version-dropdown-header">Versioonid</div>
+              {versions.length === 0 ? (
+                <div className="version-empty">Versioone pole loodud</div>
+              ) : (
+                versions.map(v => (
+                  <div
+                    key={v.id}
+                    className={`version-item ${v.id === activeVersionId ? 'active' : ''}`}
+                  >
+                    <button
+                      className="version-select-btn"
+                      onClick={() => switchVersion(v.id)}
+                    >
+                      <span className="version-item-name">{v.name}</span>
+                      {v.description && (
+                        <span className="version-item-desc">{v.description}</span>
+                      )}
+                    </button>
+                    <button
+                      className="version-edit-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingVersion(v);
+                        setNewVersionName(v.name);
+                        setNewVersionDescription(v.description || '');
+                        setShowVersionModal(true);
+                        setShowVersionDropdown(false);
+                      }}
+                      title="Muuda"
+                    >
+                      <FiEdit size={12} />
+                    </button>
+                  </div>
+                ))
+              )}
+              <div className="version-dropdown-divider" />
+              <button
+                className="version-create-btn"
+                onClick={() => {
+                  setEditingVersion(null);
+                  setNewVersionName('');
+                  setNewVersionDescription('');
+                  setShowVersionModal(true);
+                  setShowVersionDropdown(false);
+                }}
+              >
+                <FiPlus size={14} />
+                <span>Loo uus versioon</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <span className="version-info">
+          {scheduleItems.length} detaili
+        </span>
+      </div>
+
       {/* Message */}
       {message && (
         <div className={`schedule-message ${message.includes('Viga') ? 'error' : 'success'}`}>
@@ -4305,7 +4637,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             className="calendar-toggle-btn"
             onClick={() => setCalendarCollapsed(!calendarCollapsed)}
           >
-            {calendarCollapsed ? 'Kuva' : 'Peida'}
+            {calendarCollapsed ? 'Ava kalender' : 'Peida kalender'}
           </button>
         </div>
 
@@ -4800,6 +5132,106 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <FiDownload size={16} />
         </button>
       </div>
+
+      {/* Version Modal */}
+      {showVersionModal && (
+        <div className="modal-overlay" onClick={() => { setShowVersionModal(false); setShowDeleteConfirm(false); setDeleteConfirmInput(''); }}>
+          <div className="settings-modal version-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>{editingVersion ? 'Muuda versiooni' : 'Loo uus versioon'}</h3>
+              <button onClick={() => { setShowVersionModal(false); setShowDeleteConfirm(false); setDeleteConfirmInput(''); }}><FiX size={18} /></button>
+            </div>
+            <div className="modal-body">
+              {!showDeleteConfirm ? (
+                <>
+                  <div className="form-group">
+                    <label>Versiooni nimi</label>
+                    <input
+                      type="text"
+                      value={newVersionName}
+                      onChange={e => setNewVersionName(e.target.value)}
+                      placeholder={`Paigaldusgraafik ${formatVersionDate(new Date())}`}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Kirjeldus (valikuline)</label>
+                    <textarea
+                      value={newVersionDescription}
+                      onChange={e => setNewVersionDescription(e.target.value)}
+                      placeholder="Lisa kirjeldus..."
+                      rows={3}
+                    />
+                  </div>
+                  {!editingVersion && scheduleItems.length > 0 && (
+                    <div className="form-info">
+                      <FiAlertCircle size={14} />
+                      <span>Uus versioon luuakse praeguse graafiku koopiana ({scheduleItems.length} detaili)</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="delete-confirm-section">
+                  <div className="delete-warning">
+                    <FiAlertTriangle size={24} />
+                    <p>Oled kustutamas versiooni <strong>"{editingVersion?.name}"</strong></p>
+                    <p>See kustutab ka kõik selle versiooni detailid ({scheduleItems.length} tk). Seda tegevust ei saa tagasi võtta!</p>
+                  </div>
+                  <div className="form-group">
+                    <label>Kinnitamiseks tipi versiooni nimi:</label>
+                    <input
+                      type="text"
+                      value={deleteConfirmInput}
+                      onChange={e => setDeleteConfirmInput(e.target.value)}
+                      placeholder={editingVersion?.name}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              {!showDeleteConfirm ? (
+                <>
+                  {editingVersion && versions.length > 1 && (
+                    <button
+                      className="btn-danger"
+                      onClick={() => setShowDeleteConfirm(true)}
+                    >
+                      <FiTrash2 size={14} />
+                      Kustuta
+                    </button>
+                  )}
+                  <div style={{ flex: 1 }} />
+                  <button className="btn-secondary" onClick={() => setShowVersionModal(false)}>
+                    Tühista
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={() => editingVersion ? updateVersion() : createNewVersion(true)}
+                  >
+                    <FiSave size={14} />
+                    {editingVersion ? 'Salvesta' : 'Loo versioon'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmInput(''); }}>
+                    Tagasi
+                  </button>
+                  <button
+                    className="btn-danger"
+                    onClick={deleteVersion}
+                    disabled={deleteConfirmInput !== editingVersion?.name}
+                  >
+                    <FiTrash2 size={14} />
+                    Kustuta versioon
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Export/Import Modal */}
       {showExportModal && (
