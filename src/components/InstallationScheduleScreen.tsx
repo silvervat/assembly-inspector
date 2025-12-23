@@ -304,6 +304,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState(false);
   const [showResourcesStats, setShowResourcesStats] = useState(false);
+  const [showScheduledDropdown, setShowScheduledDropdown] = useState(false);
   // Track markup IDs mapped to guid_ifc for removal when items are scheduled
   const [deliveryMarkupMap, setDeliveryMarkupMap] = useState<Map<string, number>>(new Map());
 
@@ -5364,36 +5365,84 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }, 0);
         const weightStr = totalWeight > 0 ? `${Math.round(totalWeight)} kg` : '';
 
-        // Build detailed tooltip for scheduled items
-        const buildScheduledTooltip = (items: typeof scheduledInfo) => {
-          if (items.length === 0) return '';
-          const lines = items.map(s => `#${s.jrNr} ${s.mark} → ${formatDateEstonian(s.date)}`);
-          lines.push('', 'Klõpsa, et värvida punaseks');
-          return lines.join('\n');
-        };
-
         return (
           <div className="selection-info">
             {/* First row: selection count and status */}
             <div className="selection-info-row">
               <span>Valitud mudelis: <strong>{selectedObjects.length}</strong>{weightStr && <span className="selection-weight"> ({weightStr})</span>}</span>
-              {allScheduled && (
-                <span
-                  className="already-scheduled-info clickable"
-                  onClick={() => highlightScheduledItemsRed(scheduledInfo)}
-                  title={buildScheduledTooltip(scheduledInfo)}
-                >
-                  ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
-                </span>
-              )}
-              {someScheduled && (
-                <span
-                  className="partially-scheduled-info clickable"
-                  onClick={() => highlightScheduledItemsRed(scheduledInfo)}
-                  title={buildScheduledTooltip(scheduledInfo)}
-                >
-                  ⚠ {scheduledInfo.length} juba planeeritud
-                </span>
+              {(allScheduled || someScheduled) && (
+                <div className="scheduled-dropdown-wrapper">
+                  <span
+                    className={`${allScheduled ? 'already-scheduled-info' : 'partially-scheduled-info'} clickable`}
+                    onClick={() => setShowScheduledDropdown(!showScheduledDropdown)}
+                  >
+                    {allScheduled ? '✓' : '⚠'} {scheduledInfo.length} juba planeeritud
+                  </span>
+                  {showScheduledDropdown && (
+                    <div className="scheduled-dropdown">
+                      <div className="scheduled-dropdown-actions">
+                        <button
+                          className="btn-small btn-danger"
+                          onClick={() => {
+                            highlightScheduledItemsRed(scheduledInfo);
+                            setShowScheduledDropdown(false);
+                          }}
+                        >
+                          Värvi punaseks
+                        </button>
+                        <button
+                          className="btn-small btn-secondary"
+                          onClick={async () => {
+                            // Remove markups for scheduled items
+                            if (deliveryMarkupMap.size > 0) {
+                              const markupIdsToRemove: number[] = [];
+                              for (const { obj } of scheduledInfo) {
+                                const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+                                const markupId = deliveryMarkupMap.get(guidIfc);
+                                if (markupId) markupIdsToRemove.push(markupId);
+                              }
+                              if (markupIdsToRemove.length > 0) {
+                                try {
+                                  await api.markup?.removeMarkups?.(markupIdsToRemove);
+                                  const newMap = new Map(deliveryMarkupMap);
+                                  for (const { obj } of scheduledInfo) {
+                                    const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+                                    newMap.delete(guidIfc);
+                                  }
+                                  setDeliveryMarkupMap(newMap);
+                                  setMessage(`${markupIdsToRemove.length} märgistust eemaldatud`);
+                                } catch (err) {
+                                  console.error('Error removing markups:', err);
+                                }
+                              } else {
+                                setMessage('Märgistusi pole eemaldada');
+                              }
+                            } else {
+                              setMessage('Märgistusi pole eemaldada');
+                            }
+                            setShowScheduledDropdown(false);
+                          }}
+                        >
+                          Eemalda märgistus
+                        </button>
+                      </div>
+                      <div className="scheduled-dropdown-list">
+                        {scheduledInfo.slice(0, 30).map((s, idx) => (
+                          <div key={idx} className="scheduled-item-row">
+                            <span className="scheduled-item-nr">#{s.jrNr}</span>
+                            <span className="scheduled-item-mark">{s.mark}</span>
+                            <span className="scheduled-item-date">{formatDateEstonian(s.date)}</span>
+                          </div>
+                        ))}
+                        {scheduledInfo.length > 30 && (
+                          <div className="scheduled-item-more">
+                            + veel {scheduledInfo.length - 30} detaili
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
               <button
                 className="clear-selection-btn"
