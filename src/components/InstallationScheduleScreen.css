@@ -2923,6 +2923,34 @@
   font-size: 13px;
 }
 
+/* Compact tooltip styles */
+.item-tooltip-compact {
+  padding: 8px 12px;
+  min-width: 180px;
+}
+
+.tooltip-row-compact {
+  margin-bottom: 3px;
+  gap: 5px;
+}
+
+.tooltip-value-small {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tooltip-separator {
+  color: #d1d5db;
+  font-size: 11px;
+  margin: 0 2px;
+}
+
+.tooltip-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 6px 0;
+}
+
 .tooltip-methods {
   margin-top: 12px;
   padding-top: 12px;

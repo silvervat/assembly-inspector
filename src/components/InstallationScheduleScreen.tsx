@@ -262,8 +262,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Project name for export
   const [projectName, setProjectName] = useState<string>('');
 
-  // Delivery dates by guid (for warning about late/missing delivery)
-  const [deliveryDatesByGuid, setDeliveryDatesByGuid] = useState<Record<string, string>>({});
+  // Delivery info by guid (for warning about late/missing delivery and showing truck info)
+  const [deliveryInfoByGuid, setDeliveryInfoByGuid] = useState<Record<string, { date: string; truckCode: string }>>({});
 
   // Installation methods for new items (multiple methods with counts)
   const [selectedInstallMethods, setSelectedInstallMethods] = useState<InstallMethods>({});
@@ -319,6 +319,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     { id: 'position', label: 'Position Code', labelEn: 'Position Code', enabled: true },
     { id: 'product', label: 'Toode', labelEn: 'Product', enabled: true },
     { id: 'weight', label: 'Kaal (kg)', labelEn: 'Weight (kg)', enabled: true },
+    { id: 'truck_nr', label: 'Veoki nr', labelEn: 'Truck No', enabled: true },
+    { id: 'delivery_date', label: 'Tarnekuupäev', labelEn: 'Delivery Date', enabled: true },
     // Individual method columns
     { id: 'crane', label: 'Kraana', labelEn: 'Crane', enabled: true },
     { id: 'forklift', label: 'Telesk.', labelEn: 'Telehandler', enabled: true },
@@ -808,33 +810,52 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     };
   }, [showVersionDropdown]);
 
-  // Load delivery dates for all items (to check if delivery is before installation)
-  const loadDeliveryDates = useCallback(async () => {
+  // Load delivery info for all items (date and truck code)
+  const loadDeliveryInfo = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      // First load items
+      const { data: items, error: itemsError } = await supabase
         .from('trimble_delivery_items')
-        .select('guid, guid_ms, scheduled_date')
+        .select('guid, guid_ms, scheduled_date, vehicle_id')
         .eq('trimble_project_id', projectId);
 
-      if (error) throw error;
+      if (itemsError) throw itemsError;
+
+      // Then load vehicles to get codes
+      const { data: vehicles, error: vehiclesError } = await supabase
+        .from('trimble_delivery_vehicles')
+        .select('id, vehicle_code')
+        .eq('trimble_project_id', projectId);
+
+      if (vehiclesError) throw vehiclesError;
+
+      // Create vehicle lookup
+      const vehicleCodeById: Record<string, string> = {};
+      for (const v of (vehicles || [])) {
+        vehicleCodeById[v.id] = v.vehicle_code || '';
+      }
 
       // Create lookup map by guid and guid_ms
-      const datesByGuid: Record<string, string> = {};
-      for (const item of (data || [])) {
+      const infoByGuid: Record<string, { date: string; truckCode: string }> = {};
+      for (const item of (items || [])) {
         if (item.scheduled_date) {
-          if (item.guid) datesByGuid[item.guid.toLowerCase()] = item.scheduled_date;
-          if (item.guid_ms) datesByGuid[item.guid_ms.toLowerCase()] = item.scheduled_date;
+          const info = {
+            date: item.scheduled_date,
+            truckCode: item.vehicle_id ? (vehicleCodeById[item.vehicle_id] || '') : ''
+          };
+          if (item.guid) infoByGuid[item.guid.toLowerCase()] = info;
+          if (item.guid_ms) infoByGuid[item.guid_ms.toLowerCase()] = info;
         }
       }
-      setDeliveryDatesByGuid(datesByGuid);
+      setDeliveryInfoByGuid(infoByGuid);
     } catch (e) {
-      console.error('Error loading delivery dates:', e);
+      console.error('Error loading delivery info:', e);
     }
   }, [projectId]);
 
   useEffect(() => {
-    loadDeliveryDates();
-  }, [loadDeliveryDates]);
+    loadDeliveryInfo();
+  }, [loadDeliveryInfo]);
 
   // Load comments
   const loadComments = useCallback(async () => {
@@ -1216,10 +1237,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const itemHasDeliveryWarning = useCallback((item: ScheduleItem): boolean => {
     const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
     if (!itemGuid) return false;
-    const deliveryDate = deliveryDatesByGuid[itemGuid];
-    if (!deliveryDate) return true;
-    return deliveryDate > item.scheduled_date;
-  }, [deliveryDatesByGuid]);
+    const deliveryInfo = deliveryInfoByGuid[itemGuid];
+    if (!deliveryInfo) return true;
+    return deliveryInfo.date > item.scheduled_date;
+  }, [deliveryInfoByGuid]);
 
   // Helper to check if item passes active filters
   const itemPassesFilters = useCallback((item: ScheduleItem): boolean => {
@@ -4195,24 +4216,31 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
     if (!itemGuid) return null;
 
-    const deliveryDate = deliveryDatesByGuid[itemGuid];
+    const deliveryInfo = deliveryInfoByGuid[itemGuid];
 
-    if (!deliveryDate) {
+    if (!deliveryInfo) {
       return 'Tarne puudub! Detaili pole tarnegraafikus.';
     }
 
     // Compare dates: if delivery is AFTER installation, show warning
-    if (deliveryDate > item.scheduled_date) {
-      return `Hiline tarne! Tarne: ${deliveryDate}, Paigaldus: ${item.scheduled_date}`;
+    if (deliveryInfo.date > item.scheduled_date) {
+      return `Hiline tarne! Tarne: ${deliveryInfo.date}, Paigaldus: ${item.scheduled_date}`;
     }
 
     return null;
   };
 
+  // Get delivery info for item
+  const getDeliveryInfo = (item: ScheduleItem): { date: string; truckCode: string } | null => {
+    const itemGuid = (item.guid_ms || item.guid || '').toLowerCase();
+    if (!itemGuid) return null;
+    return deliveryInfoByGuid[itemGuid] || null;
+  };
+
   // Column width mapping - include new method columns
   const columnWidths: Record<string, number> = {
     nr: 5, date: 12, day: 12, mark: 20, position: 15,
-    product: 25, weight: 12, method: 30,
+    product: 25, weight: 12, truck_nr: 12, delivery_date: 12, method: 30,
     crane: 8, forklift: 8, poomtostuk: 10, kaartostuk: 10,
     troppija: 8, monteerija: 10, keevitaja: 9, manual: 8,
     guid_ms: 40, guid_ifc: 25, percentage: 12, comments: 50
@@ -4268,6 +4296,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           case 'position': return item.cast_unit_position_code || '';
           case 'product': return item.product_name || '';
           case 'weight': return item.cast_unit_weight || '';
+          case 'truck_nr': {
+            const dInfo = getDeliveryInfo(item);
+            return dInfo?.truckCode || '';
+          }
+          case 'delivery_date': {
+            const dInfo = getDeliveryInfo(item);
+            if (!dInfo?.date) return '';
+            const dDate = new Date(dInfo.date);
+            return `${String(dDate.getDate()).padStart(2, '0')}.${String(dDate.getMonth() + 1).padStart(2, '0')}.${String(dDate.getFullYear()).slice(-2)}`;
+          }
           // Method columns - show count or empty
           case 'crane': return getMethodCountForItem(item, 'crane') || '';
           case 'forklift': return getMethodCountForItem(item, 'forklift') || '';
@@ -6917,10 +6955,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const weight = item.cast_unit_weight;
         const weightNum = weight ? (typeof weight === 'string' ? parseFloat(weight) : weight) : null;
         const weightStr = weightNum && !isNaN(weightNum) ? `${Math.round(weightNum)} kg` : '-';
+        const deliveryInfo = getDeliveryInfo(item);
+        const deliveryDateStr = deliveryInfo?.date ? (() => {
+          const d = new Date(deliveryInfo.date);
+          return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear()).slice(-2)}`;
+        })() : '-';
 
         return (
           <div
-            className="item-tooltip"
+            className="item-tooltip item-tooltip-compact"
             style={{
               position: 'fixed',
               left: Math.min(tooltipPosition.x, window.innerWidth - 280),
@@ -6928,25 +6971,34 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               zIndex: 9999,
             }}
           >
-            <div className="tooltip-row">
+            <div className="tooltip-row tooltip-row-compact">
               <span className="tooltip-label">Detail:</span>
-              <span className="tooltip-value">{item.assembly_mark}</span>
-            </div>
-            <div className="tooltip-row">
+              <span className="tooltip-value tooltip-value-small">{item.assembly_mark}</span>
+              <span className="tooltip-separator">|</span>
               <span className="tooltip-label">Kaal:</span>
-              <span className="tooltip-value">{weightStr}</span>
+              <span className="tooltip-value tooltip-value-small">{weightStr}</span>
             </div>
-            <div className="tooltip-row">
+            <div className="tooltip-row tooltip-row-compact">
               <span className="tooltip-label">Asukoht:</span>
-              <span className="tooltip-value">{item.cast_unit_position_code || '-'}</span>
+              <span className="tooltip-value tooltip-value-small">{item.cast_unit_position_code || '-'}</span>
             </div>
-            <div className="tooltip-row">
-              <span className="tooltip-label">Toote nimetus:</span>
-              <span className="tooltip-value">{item.product_name || '-'}</span>
+            {item.product_name && (
+              <div className="tooltip-row tooltip-row-compact">
+                <span className="tooltip-label">Toode:</span>
+                <span className="tooltip-value tooltip-value-small">{item.product_name}</span>
+              </div>
+            )}
+            <div className="tooltip-divider" />
+            <div className="tooltip-row tooltip-row-compact">
+              <span className="tooltip-label">Veok:</span>
+              <span className="tooltip-value">{deliveryInfo?.truckCode || '-'}</span>
+              <span className="tooltip-separator">|</span>
+              <span className="tooltip-label">Tarne:</span>
+              <span className="tooltip-value">{deliveryDateStr}</span>
             </div>
             {methods && Object.keys(methods).length > 0 && (
               <div className="tooltip-methods">
-                <span className="tooltip-methods-label">Paigalduse ressursid:</span>
+                <span className="tooltip-methods-label">Ressursid:</span>
                 <div className="tooltip-method-list">
                   {Object.entries(methods).map(([key, count]) => {
                     const cfg = INSTALL_METHODS.find(m => m.key === key);
