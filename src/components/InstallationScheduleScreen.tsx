@@ -2308,7 +2308,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Create markups for all items on a date
   // markupType: 'position' | 'mark' | 'both'
-  const createMarkupsForDate = async (date: string, markupType: 'position' | 'mark' | 'both') => {
+  const createMarkupsForDate = async (date: string, markupType: 'position' | 'mark' | 'both' | 'delivery') => {
     const items = itemsByDate[date];
     if (!items || items.length === 0) {
       setMessage('Päeval pole detaile');
@@ -2399,6 +2399,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             case 'both':
               text = `${positionNum}. ${assemblyMark}`;
               break;
+            case 'delivery': {
+              // Format date as DD.MM.YY
+              const d = new Date(date);
+              const dateStr = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear()).slice(-2)}`;
+              // Get truck code from delivery info
+              const deliveryInfo = getDeliveryInfo(item);
+              const truckCode = deliveryInfo?.truckCode || '';
+              text = truckCode ? `${dateStr} ${truckCode}` : dateStr;
+              break;
+            }
           }
 
           if (!text) continue;
@@ -6567,6 +6577,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           onClick={() => createMarkupsForDate(date, 'both')}
                         >
                           <span className="menu-icon">📋</span> Positsioon + Mark
+                        </button>
+                        <button
+                          className="date-menu-option"
+                          onClick={() => createMarkupsForDate(date, 'delivery')}
+                        >
+                          <span className="menu-icon">🚚</span> Kuupäev + Veok
                         </button>
                         <div className="date-menu-divider" />
                         <button
