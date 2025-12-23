@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
@@ -247,6 +247,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set());
   const filterDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Weight filter state
+  const [weightFilterMin, setWeightFilterMin] = useState<number | null>(null);
+  const [weightFilterMax, setWeightFilterMax] = useState<number | null>(null);
 
   // Close filter dropdown when clicking outside
   useEffect(() => {
@@ -1260,6 +1264,34 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return deliveryInfo.date > item.scheduled_date;
   }, [deliveryInfoByGuid]);
 
+  // Calculate min and max weights from all schedule items
+  const weightBounds = useMemo(() => {
+    let min = Infinity;
+    let max = -Infinity;
+    let hasWeights = false;
+
+    for (const item of scheduleItems) {
+      if (item.cast_unit_weight) {
+        const weight = parseFloat(item.cast_unit_weight.replace(',', '.'));
+        if (!isNaN(weight)) {
+          hasWeights = true;
+          if (weight < min) min = weight;
+          if (weight > max) max = weight;
+        }
+      }
+    }
+
+    if (!hasWeights) {
+      return { min: 0, max: 0, hasWeights: false };
+    }
+
+    // Round min down and max up to nice numbers
+    min = Math.floor(min);
+    max = Math.ceil(max);
+
+    return { min, max, hasWeights: true };
+  }, [scheduleItems]);
+
   // Helper to check if item passes active filters
   const itemPassesFilters = useCallback((item: ScheduleItem): boolean => {
     if (activeFilters.size === 0) return true;
@@ -1311,13 +1343,30 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Clear all filters
   const clearFilters = () => {
     setActiveFilters(new Set());
+    setWeightFilterMin(null);
+    setWeightFilterMax(null);
   };
+
+  // Check if weight filter is active
+  const isWeightFilterActive = weightFilterMin !== null || weightFilterMax !== null;
 
   // Filter items by search query and active filters
   const filteredItems = scheduleItems.filter(item => {
     // First apply active filters (if any)
     if (activeFilters.size > 0 && !itemPassesFilters(item)) {
       return false;
+    }
+
+    // Apply weight filter
+    if (isWeightFilterActive) {
+      const weightStr = item.cast_unit_weight;
+      if (!weightStr) return false; // No weight = filtered out when weight filter is active
+
+      const weight = parseFloat(weightStr.replace(',', '.'));
+      if (isNaN(weight)) return false;
+
+      if (weightFilterMin !== null && weight < weightFilterMin) return false;
+      if (weightFilterMax !== null && weight > weightFilterMax) return false;
     }
 
     // Then apply search query
@@ -6798,20 +6847,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         {/* Filter button and dropdown */}
         <div className="filter-container" ref={filterDropdownRef}>
           <button
-            className={`filter-btn ${activeFilters.size > 0 ? 'active' : ''}`}
+            className={`filter-btn ${activeFilters.size > 0 || isWeightFilterActive ? 'active' : ''}`}
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             title="Filtreeri ressursside järgi"
           >
             <FiFilter size={14} />
-            {activeFilters.size > 0 && (
-              <span className="filter-badge">{activeFilters.size}</span>
+            {(activeFilters.size > 0 || isWeightFilterActive) && (
+              <span className="filter-badge">{activeFilters.size + (isWeightFilterActive ? 1 : 0)}</span>
             )}
           </button>
           {showFilterDropdown && (
             <div className="filter-dropdown">
               <div className="filter-header">
                 <span>Filtreeri</span>
-                {activeFilters.size > 0 && (
+                {(activeFilters.size > 0 || isWeightFilterActive) && (
                   <button className="filter-clear-all" onClick={clearFilters}>
                     Tühista
                   </button>
@@ -6924,6 +6973,57 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <span>Keevitaja</span>
                 </label>
               </div>
+              {weightBounds.hasWeights && (
+                <div className="filter-section">
+                  <div className="filter-section-title">
+                    Kaal (kg)
+                    {isWeightFilterActive && (
+                      <button
+                        className="weight-filter-clear"
+                        onClick={() => {
+                          setWeightFilterMin(null);
+                          setWeightFilterMax(null);
+                        }}
+                      >
+                        Tühista
+                      </button>
+                    )}
+                  </div>
+                  <div className="weight-filter-inputs">
+                    <div className="weight-input-group">
+                      <label>Min:</label>
+                      <input
+                        type="number"
+                        min={weightBounds.min}
+                        max={weightBounds.max}
+                        value={weightFilterMin ?? ''}
+                        placeholder={weightBounds.min.toString()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWeightFilterMin(val === '' ? null : parseFloat(val));
+                        }}
+                      />
+                    </div>
+                    <div className="weight-input-group">
+                      <label>Max:</label>
+                      <input
+                        type="number"
+                        min={weightBounds.min}
+                        max={weightBounds.max}
+                        value={weightFilterMax ?? ''}
+                        placeholder={weightBounds.max.toString()}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setWeightFilterMax(val === '' ? null : parseFloat(val));
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="weight-range-info">
+                    Vahemik: {weightBounds.min} - {weightBounds.max} kg
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
