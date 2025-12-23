@@ -6548,8 +6548,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               <div className="vehicle-edit-row">
                 {/* Time */}
-                <div className="edit-field">
-                  <label>Kellaaeg</label>
+                <div className="edit-field time-field">
+                  <label>Aeg</label>
                   <input
                     type="text"
                     className="time-input"
@@ -6581,7 +6581,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 </div>
 
                 {/* Duration */}
-                <div className="edit-field">
+                <div className="edit-field duration-field">
                   <label>Kestus</label>
                   <select
                     value={activeVehicle.unload_duration_minutes || 60}
@@ -6605,7 +6605,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 </div>
 
                 {/* Status */}
-                <div className="edit-field">
+                <div className="edit-field status-field">
                   <label>Staatus</label>
                   <select
                     value={activeVehicle.status || 'planned'}
