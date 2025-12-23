@@ -236,6 +236,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const scheduleListRef = useRef<HTMLDivElement>(null);
+  const dragScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -4024,6 +4026,44 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Auto-scroll during drag
+  const startDragAutoScroll = (clientY: number) => {
+    const list = scheduleListRef.current;
+    if (!list) return;
+
+    const rect = list.getBoundingClientRect();
+    const scrollZone = 60; // pixels from edge to trigger scroll
+    const scrollSpeed = 8; // pixels per frame
+
+    // Clear existing interval
+    if (dragScrollIntervalRef.current) {
+      clearInterval(dragScrollIntervalRef.current);
+      dragScrollIntervalRef.current = null;
+    }
+
+    // Check if near top or bottom edge
+    if (clientY < rect.top + scrollZone) {
+      // Near top - scroll up
+      const intensity = 1 - (clientY - rect.top) / scrollZone;
+      dragScrollIntervalRef.current = setInterval(() => {
+        list.scrollTop -= scrollSpeed * Math.max(0.3, intensity);
+      }, 16);
+    } else if (clientY > rect.bottom - scrollZone) {
+      // Near bottom - scroll down
+      const intensity = 1 - (rect.bottom - clientY) / scrollZone;
+      dragScrollIntervalRef.current = setInterval(() => {
+        list.scrollTop += scrollSpeed * Math.max(0.3, intensity);
+      }, 16);
+    }
+  };
+
+  const stopDragAutoScroll = () => {
+    if (dragScrollIntervalRef.current) {
+      clearInterval(dragScrollIntervalRef.current);
+      dragScrollIntervalRef.current = null;
+    }
+  };
+
   // Drag handlers with multi-select support
   const handleDragStart = (e: React.DragEvent, item: ScheduleItem) => {
     setIsDragging(true);
@@ -4048,12 +4088,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setDraggedItems([]);
     setDragOverDate(null);
     setDragOverIndex(null);
+    stopDragAutoScroll();
   };
 
   const handleDragOver = (e: React.DragEvent, date: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverDate(date);
+    // Trigger auto-scroll when near edges
+    startDragAutoScroll(e.clientY);
   };
 
   // Handle drag over a specific item to show drop indicator
@@ -4062,6 +4105,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
     setDragOverDate(date);
+
+    // Trigger auto-scroll when near edges
+    startDragAutoScroll(e.clientY);
 
     // Determine if dropping above or below based on mouse position
     const rect = (e.target as HTMLElement).closest('.schedule-item')?.getBoundingClientRect();
@@ -6441,7 +6487,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       </div>
 
       {/* Schedule List by Date */}
-      <div className="schedule-list">
+      <div
+        className="schedule-list"
+        ref={scheduleListRef}
+        onDragOver={(e) => {
+          e.preventDefault();
+          startDragAutoScroll(e.clientY);
+        }}
+        onDragLeave={() => stopDragAutoScroll()}
+        onWheel={(e) => {
+          // Allow wheel scroll during drag
+          if (isDragging && scheduleListRef.current) {
+            scheduleListRef.current.scrollTop += e.deltaY;
+          }
+        }}
+      >
         {loading ? (
           <div className="loading">Laen...</div>
         ) : Object.keys(itemsByDate).length === 0 ? (
