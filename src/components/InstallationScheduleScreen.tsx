@@ -5709,13 +5709,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     }}
                     onDragOver={(e) => handleDragOver(e, dateKey)}
                     onDrop={(e) => handleDrop(e, dateKey)}
+                    style={isPlayingDate && dayColor ? {
+                      backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
+                      color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
+                    } : undefined}
                   >
                     <span className="day-number">{date.getDate()}</span>
                     {itemCount > 0 && (
                       <span
                         className="day-count"
                         style={dayColor ? {
-                          backgroundColor: `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
+                          backgroundColor: isPlayingDate
+                            ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.2)')
+                            : `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`,
                           color: getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000'
                         } : undefined}
                       >
