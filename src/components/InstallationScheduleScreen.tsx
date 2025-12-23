@@ -4822,10 +4822,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
     }
 
-    // Calculate resource totals per date
-    const resourceTotalsPerDate: Record<string, Record<InstallMethodType, number>> = {};
+    // Calculate resource MAX per date (not sum - we need max concurrent usage)
+    const resourceMaxPerDate: Record<string, Record<InstallMethodType, number>> = {};
     for (const dateStr of timelineDates) {
-      resourceTotalsPerDate[dateStr] = {
+      resourceMaxPerDate[dateStr] = {
         crane: 0, forklift: 0, manual: 0, poomtostuk: 0,
         kaartostuk: 0, troppija: 0, monteerija: 0, keevitaja: 0
       };
@@ -4836,7 +4836,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       for (const [key, count] of Object.entries(methods)) {
         if (count && count > 0) {
           const methodKey = key as InstallMethodType;
-          resourceTotalsPerDate[item.scheduled_date][methodKey] += count;
+          // Track MAX count needed for any item on this date
+          resourceMaxPerDate[item.scheduled_date][methodKey] = Math.max(
+            resourceMaxPerDate[item.scheduled_date][methodKey],
+            count
+          );
         }
       }
     });
@@ -4893,7 +4897,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       // Resource rows
       resourceOrder.forEach((res, idx) => {
-        const count = resourceTotalsPerDate[dateStr]?.[res.key] || 0;
+        const count = resourceMaxPerDate[dateStr]?.[res.key] || 0;
         timelineData[RESOURCE_START_ROW + idx][col] = count > 0 ? count : '';
       });
 
