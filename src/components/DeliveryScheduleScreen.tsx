@@ -7453,39 +7453,68 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     if (item.guid_ms) itemByGuid.set(item.guid_ms, item);
                   });
 
-                  // If only unassigned, filter out items already in a vehicle
-                  if (addModalOnlyUnassigned) {
-                    filteredObjects = filteredObjects.filter(obj => {
-                      const guid = obj.guid || '';
-                      const guidIfc = obj.guidIfc || '';
-                      const guidMs = obj.guidMs || '';
-                      const existingItem = itemByGuid.get(guid) || itemByGuid.get(guidIfc) || itemByGuid.get(guidMs);
-                      return !existingItem || !existingItem.vehicle_id;
-                    });
-                  } else {
-                    // If adding all, first remove assigned items from their current vehicles
-                    const assignedItemIds: string[] = [];
-                    filteredObjects.forEach(obj => {
-                      const guid = obj.guid || '';
-                      const guidIfc = obj.guidIfc || '';
-                      const guidMs = obj.guidMs || '';
-                      const existingItem = itemByGuid.get(guid) || itemByGuid.get(guidIfc) || itemByGuid.get(guidMs);
-                      if (existingItem?.vehicle_id) {
-                        assignedItemIds.push(existingItem.id);
-                      }
-                    });
+                  // Separate objects into: new (not in schedule), existing without vehicle, existing with vehicle
+                  const newObjects: SelectedObject[] = [];
+                  const existingItemIdsToMove: string[] = [];
 
-                    // Remove from current vehicles (set vehicle_id to null)
-                    if (assignedItemIds.length > 0) {
-                      await supabase
-                        .from('trimble_delivery_items')
-                        .update({ vehicle_id: null })
-                        .in('id', assignedItemIds);
-                      await loadItems();
+                  filteredObjects.forEach(obj => {
+                    const guid = obj.guid || '';
+                    const guidIfc = obj.guidIfc || '';
+                    const guidMs = obj.guidMs || '';
+                    const existingItem = itemByGuid.get(guid) || itemByGuid.get(guidIfc) || itemByGuid.get(guidMs);
+
+                    if (!existingItem) {
+                      // Not in schedule - needs to be inserted
+                      newObjects.push(obj);
+                    } else if (!existingItem.vehicle_id) {
+                      // In schedule but no vehicle - move to new vehicle
+                      existingItemIdsToMove.push(existingItem.id);
+                    } else if (!addModalOnlyUnassigned) {
+                      // In schedule with vehicle - move to new vehicle (if not only unassigned mode)
+                      existingItemIdsToMove.push(existingItem.id);
                     }
+                    // If addModalOnlyUnassigned is true and item has vehicle, skip it
+                  });
+
+                  setSaving(true);
+
+                  // Move existing items to new vehicle
+                  if (existingItemIdsToMove.length > 0) {
+                    const vehicle = getVehicle(vehicleId);
+                    const vehicleItems = items.filter(i => i.vehicle_id === vehicleId);
+                    const maxSort = vehicleItems.reduce((max, i) => Math.max(max, i.sort_order), 0);
+
+                    await supabase
+                      .from('trimble_delivery_items')
+                      .update({
+                        vehicle_id: vehicleId,
+                        scheduled_date: addModalDate,
+                        sort_order: maxSort + 1
+                      })
+                      .in('id', existingItemIdsToMove);
+
+                    setMessage(`${existingItemIdsToMove.length} detaili tõstetud veokisse ${vehicle?.vehicle_code || ''}`);
                   }
 
-                  await addItemsToVehicle(vehicleId, addModalDate, addModalComment, filteredObjects);
+                  // Get items to color before reloading (they have model_id and object_runtime_id)
+                  const itemsToColorAfterMove = items.filter(i => existingItemIdsToMove.includes(i.id));
+
+                  // Add new objects to schedule
+                  if (newObjects.length > 0) {
+                    await addItemsToVehicle(vehicleId, addModalDate, addModalComment, newObjects);
+                  } else if (existingItemIdsToMove.length > 0) {
+                    // Reload data if we only moved existing items
+                    await Promise.all([loadItems(), loadVehicles()]);
+                    broadcastReload();
+                    setShowAddModal(false);
+                  }
+
+                  // Color moved items if color mode is active (use items captured before reload)
+                  if (colorMode !== 'none' && itemsToColorAfterMove.length > 0) {
+                    colorItemsForMode(itemsToColorAfterMove, vehicleId, addModalDate);
+                  }
+
+                  setSaving(false);
                   setAddModalCustomCode('');
                   setAddModalStartTime('');
                   setAddModalDuration(60);
