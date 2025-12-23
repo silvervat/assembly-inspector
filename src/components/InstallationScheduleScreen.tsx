@@ -302,6 +302,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Hamburger menu state
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState(false);
+  // Track markup IDs mapped to guid_ifc for removal when items are scheduled
+  const [deliveryMarkupMap, setDeliveryMarkupMap] = useState<Map<string, number>>(new Map());
 
   // Export settings
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1572,6 +1574,32 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (error) throw error;
 
+      // Remove markups for added items
+      if (deliveryMarkupMap.size > 0) {
+        const markupIdsToRemove: number[] = [];
+        for (const obj of selectedObjects) {
+          const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+          const markupId = deliveryMarkupMap.get(guidIfc);
+          if (markupId) {
+            markupIdsToRemove.push(markupId);
+          }
+        }
+        if (markupIdsToRemove.length > 0) {
+          try {
+            await api.markup?.removeMarkups?.(markupIdsToRemove);
+            // Update the map to remove the deleted entries
+            const newMap = new Map(deliveryMarkupMap);
+            for (const obj of selectedObjects) {
+              const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+              newMap.delete(guidIfc);
+            }
+            setDeliveryMarkupMap(newMap);
+          } catch (err) {
+            console.error('Error removing markups:', err);
+          }
+        }
+      }
+
       setMessage(`${newItems.length} detaili lisatud`);
       loadSchedule();
 
@@ -1641,6 +1669,32 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .insert(newItems);
 
       if (error) throw error;
+
+      // Remove markups for added items
+      if (deliveryMarkupMap.size > 0) {
+        const markupIdsToRemove: number[] = [];
+        for (const obj of unscheduledObjects) {
+          const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+          const markupId = deliveryMarkupMap.get(guidIfc);
+          if (markupId) {
+            markupIdsToRemove.push(markupId);
+          }
+        }
+        if (markupIdsToRemove.length > 0) {
+          try {
+            await api.markup?.removeMarkups?.(markupIdsToRemove);
+            // Update the map to remove the deleted entries
+            const newMap = new Map(deliveryMarkupMap);
+            for (const obj of unscheduledObjects) {
+              const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+              newMap.delete(guidIfc);
+            }
+            setDeliveryMarkupMap(newMap);
+          } catch (err) {
+            console.error('Error removing markups:', err);
+          }
+        }
+      }
 
       setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
       loadSchedule();
@@ -2625,6 +2679,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       const markupsToCreate: any[] = [];
+      const markupGuidIfcs: string[] = []; // Track guid_ifc for each markup in order
 
       for (const [modelId, modelItems] of itemsByModel) {
         const runtimeIds = modelItems.map(m => m.runtimeId);
@@ -2679,6 +2734,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             start: pos,
             end: pos,
           });
+          // Track the guid_ifc for this markup
+          markupGuidIfcs.push((item.guid_ifc || item.guid || '').toLowerCase());
         }
       }
 
@@ -2700,6 +2757,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       } else if (result?.ids) {
         createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
       }
+
+      // Build map of guid_ifc -> markup_id for later removal
+      const newMarkupMap = new Map<string, number>();
+      for (let i = 0; i < Math.min(createdIds.length, markupGuidIfcs.length); i++) {
+        if (markupGuidIfcs[i] && createdIds[i]) {
+          newMarkupMap.set(markupGuidIfcs[i], createdIds[i]);
+        }
+      }
+      setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - orange for delivery dates
       const markupColor = '#FF6600';
@@ -2806,6 +2872,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       const markupsToCreate: any[] = [];
+      const markupGuidIfcs: string[] = []; // Track guid_ifc for each markup in order
 
       for (const [modelId, modelItems] of itemsByModel) {
         const runtimeIds = modelItems.map(m => m.runtimeId);
@@ -2859,6 +2926,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             start: pos,
             end: pos,
           });
+          // Track the guid_ifc for this markup
+          markupGuidIfcs.push((item.guid_ifc || item.guid || '').toLowerCase());
         }
       }
 
@@ -2879,6 +2948,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       } else if (result?.ids) {
         createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
       }
+
+      // Build map of guid_ifc -> markup_id for later removal
+      const newMarkupMap = new Map<string, number>();
+      for (let i = 0; i < Math.min(createdIds.length, markupGuidIfcs.length); i++) {
+        if (markupGuidIfcs[i] && createdIds[i]) {
+          newMarkupMap.set(markupGuidIfcs[i], createdIds[i]);
+        }
+      }
+      setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - green for non-ERP items
       const markupColor = '#22C55E';
@@ -2978,7 +3056,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return colors;
   };
 
-  // Toggle color by date mode (on/off) - OPTIMIZED VERSION
+  // Toggle color by date mode (on/off) - reads from database like delivery schedule
   const toggleColorByDate = async () => {
     const newValue = !playbackSettings.colorEachDayDifferent;
     setPlaybackSettings(prev => ({
@@ -2996,16 +3074,64 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        setMessage('Värvin mudeli valgeks...');
+        // Step 1: Reset colors first
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-        // Step 1: Color ALL items in the model white first (single API call - no object IDs needed)
-        // The 'undefined' selector targets ALL objects in the viewer
-        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+        // Step 2: Fetch ALL model objects from Supabase (like delivery schedule)
+        setMessage('Loen andmebaasist...');
+        const PAGE_SIZE = 5000;
+        const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
+        let lastId = -1;
+
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('model_id, object_runtime_id')
+            .eq('trimble_project_id', projectId)
+            .gt('object_runtime_id', lastId)
+            .order('object_runtime_id', { ascending: true })
+            .limit(PAGE_SIZE);
+
+          if (error) { console.error('Supabase error:', error); break; }
+          if (!data || data.length === 0) break;
+
+          allModelObjects.push(...data);
+          lastId = data[data.length - 1].object_runtime_id;
+          setMessage(`Loetud ${allModelObjects.length} objekti...`);
+          if (data.length < PAGE_SIZE) break;
+        }
+
+        // Step 3: Color ALL objects WHITE in batches
+        if (allModelObjects.length > 0) {
+          setMessage('Värvin mudeli valgeks...');
+          const byModel: Record<string, number[]> = {};
+          for (const obj of allModelObjects) {
+            if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
+            byModel[obj.model_id].push(obj.object_runtime_id);
+          }
+
+          const BATCH_SIZE = 5000;
+          let count = 0;
+          const total = allModelObjects.length;
+
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              try {
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                  { color: { r: 255, g: 255, b: 255, a: 255 } }
+                );
+              } catch (e) { console.error('Error coloring white:', e); }
+              count += batch.length;
+              setMessage(`Valged ${count}/${total}...`);
+            }
+          }
+        }
 
         setMessage('Värvin päevi...');
 
-        // Step 2: Group ALL items by color (batch same-colored items together)
-        // This minimizes API calls - one call per unique color per model
+        // Step 4: Color scheduled items by date
         const colorBatches: Map<string, { modelId: string; runtimeIds: number[]; color: { r: number; g: number; b: number } }[]> = new Map();
 
         for (const [date, items] of Object.entries(itemsByDate)) {
@@ -3032,24 +3158,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           }
         }
 
-        // Step 3: Execute all color batches in PARALLEL (much faster!)
-        const colorPromises: Promise<void>[] = [];
+        // Execute all color batches
         let totalItems = 0;
-
         for (const batches of colorBatches.values()) {
           for (const batch of batches) {
             totalItems += batch.runtimeIds.length;
-            colorPromises.push(
-              api.viewer.setObjectState(
+            try {
+              await api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId: batch.modelId, objectRuntimeIds: batch.runtimeIds }] },
                 { color: { r: batch.color.r, g: batch.color.g, b: batch.color.b, a: 255 } }
-              )
-            );
+              );
+            } catch (e) { console.error('Error coloring by date:', e); }
           }
         }
-
-        // Wait for all coloring to complete in parallel
-        await Promise.all(colorPromises);
 
         setMessage(`Värvitud ${totalItems} detaili`);
         setTimeout(() => setMessage(null), 2000);
