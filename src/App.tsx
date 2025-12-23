@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.177';
+export const APP_VERSION = '3.0.178';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -41,6 +41,48 @@ interface SelectedInspectionType {
 // Check if running in popup mode
 const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'delivery';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
+
+// Check if this is a zoom link (from shared link)
+const urlParams = new URLSearchParams(window.location.search);
+const zoomTargetGuid = urlParams.get('zoom');
+const zoomTargetModel = urlParams.get('model');
+const zoomTargetRuntime = urlParams.get('runtime');
+const zoomTargetProject = urlParams.get('project');
+
+// If zoom params in URL, store in localStorage and redirect to Trimble Connect
+if (zoomTargetProject && zoomTargetModel && zoomTargetRuntime && !isPopupMode) {
+  // Store zoom target for later use
+  localStorage.setItem('assembly_inspector_zoom', JSON.stringify({
+    project: zoomTargetProject,
+    model: zoomTargetModel,
+    runtime: zoomTargetRuntime,
+    guid: zoomTargetGuid,
+    timestamp: Date.now()
+  }));
+
+  // Redirect to Trimble Connect with the model
+  const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomTargetProject}/viewer/3d/?modelId=${zoomTargetModel}`;
+  console.log('🔗 Redirecting to Trimble Connect:', trimbleUrl);
+  window.location.href = trimbleUrl;
+}
+
+// Check for pending zoom from localStorage
+const getPendingZoom = () => {
+  try {
+    const stored = localStorage.getItem('assembly_inspector_zoom');
+    if (stored) {
+      const data = JSON.parse(stored);
+      // Only use if less than 5 minutes old
+      if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+        return data;
+      }
+      localStorage.removeItem('assembly_inspector_zoom');
+    }
+  } catch (e) {
+    console.error('Error reading zoom target:', e);
+  }
+  return null;
+};
 
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
@@ -102,6 +144,36 @@ export default function App() {
         const project = await connected.project.getProject();
         setProjectId(project.id);
         console.log('Connected to project:', project.name);
+
+        // Handle pending zoom from shared link
+        const pendingZoom = getPendingZoom();
+        if (pendingZoom && pendingZoom.project === project.id) {
+          console.log('🔗 Pending zoom detected, zooming to:', pendingZoom);
+          // Clear the pending zoom immediately to avoid re-triggering
+          localStorage.removeItem('assembly_inspector_zoom');
+
+          try {
+            // Wait a moment for the viewer to be fully ready
+            await new Promise(resolve => setTimeout(resolve, 1500));
+
+            const runtimeId = parseInt(pendingZoom.runtime, 10);
+            if (!isNaN(runtimeId)) {
+              await connected.viewer.setSelection({
+                modelObjectIds: [{
+                  modelId: pendingZoom.model,
+                  objectRuntimeIds: [runtimeId]
+                }]
+              }, 'set');
+              await (connected.viewer as any).zoomToObjects?.([{
+                modelId: pendingZoom.model,
+                objectRuntimeIds: [runtimeId]
+              }]);
+              console.log('✓ Zoomed to object successfully');
+            }
+          } catch (zoomErr) {
+            console.error('Failed to zoom to object:', zoomErr);
+          }
+        }
 
         // Hangi Trimble Connect kasutaja info
         let tcUserData: TrimbleConnectUser | null = null;
