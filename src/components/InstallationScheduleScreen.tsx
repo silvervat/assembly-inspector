@@ -540,23 +540,52 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const loadSchedule = useCallback(async (versionId?: string | null) => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('installation_schedule')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('scheduled_date', { ascending: true })
-        .order('sort_order', { ascending: true });
+      let allItems: ScheduleItem[] = [];
 
-      // Only filter by version if explicitly provided (versioning system active)
       if (versionId) {
-        query = query.eq('version_id', versionId);
+        // Load items with this version_id
+        const { data: versionItems, error: err1 } = await supabase
+          .from('installation_schedule')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('version_id', versionId)
+          .order('scheduled_date', { ascending: true })
+          .order('sort_order', { ascending: true });
+
+        if (err1) throw err1;
+
+        // Also load legacy items without version_id
+        const { data: legacyItems, error: err2 } = await supabase
+          .from('installation_schedule')
+          .select('*')
+          .eq('project_id', projectId)
+          .is('version_id', null)
+          .order('scheduled_date', { ascending: true })
+          .order('sort_order', { ascending: true });
+
+        if (err2) throw err2;
+
+        // Combine and sort
+        allItems = [...(versionItems || []), ...(legacyItems || [])];
+        allItems.sort((a, b) => {
+          const dateCompare = a.scheduled_date.localeCompare(b.scheduled_date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.sort_order || 0) - (b.sort_order || 0);
+        });
+      } else {
+        // No version - load ALL items (legacy mode)
+        const { data, error } = await supabase
+          .from('installation_schedule')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('scheduled_date', { ascending: true })
+          .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        allItems = data || [];
       }
-      // If no versionId, load ALL items (legacy mode - no version filtering)
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setScheduleItems(data || []);
+      setScheduleItems(allItems);
     } catch (e) {
       console.error('Error loading schedule:', e);
       setMessage('Viga graafiku laadimisel');
@@ -1555,6 +1584,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         return {
           project_id: projectId,
+          version_id: activeVersionId || undefined,
           model_id: obj.modelId,
           guid: obj.guid || `runtime_${obj.runtimeId}`,
           guid_ifc: obj.guidIfc,
@@ -1651,6 +1681,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         return {
           project_id: projectId,
+          version_id: activeVersionId || undefined,
           model_id: obj.modelId,
           guid: obj.guid || `runtime_${obj.runtimeId}`,
           guid_ifc: obj.guidIfc,
@@ -5541,7 +5572,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 disabled={saving}
               >
                 <FiPlus size={14} />
-                Lisa {formatDateEstonian(selectedDate)}
+                Lisa {selectedObjects.length - scheduledInfo.length} detaili {formatDateEstonian(selectedDate)}
+                {scheduledInfo.length > 0 && (
+                  <span className="already-scheduled-count"> | {scheduledInfo.length} juba planeeritud</span>
+                )}
               </button>
             )}
             {!allScheduled && !selectedDate && (
