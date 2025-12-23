@@ -7,7 +7,7 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3
+  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3, FiTruck
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -2149,6 +2149,181 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Create markups for unplanned items showing their delivery dates
+  const createDeliveryDateMarkups = async () => {
+    setShowHamburgerMenu(false);
+    setShowMarkupSubmenu(false);
+
+    try {
+      setMessage('Laadin tarnegraafiku andmeid...');
+
+      // 1. Get all delivery items with dates from tarnegraafik
+      const { data: deliveryItems, error } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, guid_ifc, guid_ms, model_id, scheduled_date, assembly_mark')
+        .eq('trimble_project_id', projectId)
+        .not('scheduled_date', 'is', null);
+
+      if (error) throw error;
+
+      if (!deliveryItems || deliveryItems.length === 0) {
+        setMessage('Tarnegraafikus pole detaile kuupäevadega');
+        return;
+      }
+
+      // 2. Get guids of items already in installation schedule
+      const scheduledGuidsIfc = new Set(
+        scheduleItems
+          .filter(item => item.guid_ifc)
+          .map(item => item.guid_ifc!.toLowerCase())
+      );
+      const scheduledGuids = new Set(
+        scheduleItems
+          .filter(item => item.guid)
+          .map(item => item.guid.toLowerCase())
+      );
+
+      // 3. Filter to only unplanned items (not in installation schedule)
+      const unplannedItems = deliveryItems.filter(item => {
+        const guidIfc = (item.guid_ifc || '').toLowerCase();
+        const guid = (item.guid || '').toLowerCase();
+        return !scheduledGuidsIfc.has(guidIfc) && !scheduledGuids.has(guid);
+      });
+
+      if (unplannedItems.length === 0) {
+        setMessage('Kõik tarnegraafiku detailid on juba paigaldusgraafikus');
+        return;
+      }
+
+      setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} planeerimata detaili)`);
+
+      // 4. Remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe...');
+
+      // 5. Group by model for batch processing
+      const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number }[]>();
+
+      for (const item of unplannedItems) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+
+        if (!modelId || !guidIfc) continue;
+
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (!runtimeIds || runtimeIds.length === 0) continue;
+
+          if (!itemsByModel.has(modelId)) {
+            itemsByModel.set(modelId, []);
+          }
+          itemsByModel.get(modelId)!.push({ item, runtimeId: runtimeIds[0] });
+        } catch (err) {
+          // Object not found in model, skip
+        }
+      }
+
+      const markupsToCreate: any[] = [];
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        for (const { item, runtimeId } of modelItems) {
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          // Position in millimeters
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Format date as dd.mm.yy
+          const dateStr = item.scheduled_date || '';
+          let formattedDate = dateStr;
+          if (dateStr) {
+            const dateParts = dateStr.split('-'); // YYYY-MM-DD
+            if (dateParts.length === 3) {
+              const yy = dateParts[0].slice(-2);
+              const mm = dateParts[1];
+              const dd = dateParts[2];
+              formattedDate = `${dd}.${mm}.${yy}`;
+            }
+          }
+
+          if (!formattedDate) continue;
+
+          markupsToCreate.push({
+            text: formattedDate,
+            start: pos,
+            end: pos,
+          });
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        return;
+      }
+
+      // 6. Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      // Extract created IDs
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // 7. Set color - orange for delivery dates
+      const markupColor = '#FF6600';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+        } catch (err) {
+          console.warn('Color set error:', err);
+        }
+      }
+
+      setMessage(`${createdIds.length} tarnekuupäeva markupit loodud`);
+    } catch (e) {
+      console.error('Error creating delivery date markups:', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
   // Copy all assembly marks for a date to clipboard
   const copyDateMarksToClipboard = async (date: string) => {
     const dateItems = scheduleItems.filter(item => item.scheduled_date === date);
@@ -3987,6 +4162,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     <button onClick={createMarkupsForAllDays}>
                       <span>Märgi kõik päevad (P1-1, P1-2...)</span>
                     </button>
+                    <button onClick={createDeliveryDateMarkups}>
+                      <FiTruck size={14} />
+                      <span>Tarnekuupäevad (planeerimata)</span>
+                    </button>
+                    <div className="submenu-divider" />
                     <button onClick={() => {
                       setShowHamburgerMenu(false);
                       setShowMarkupSubmenu(false);

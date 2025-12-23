@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.182';
+export const APP_VERSION = '3.0.184';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -44,18 +44,16 @@ const popupProjectId = new URLSearchParams(window.location.search).get('projectI
 
 // Check if this is a zoom link (from shared link)
 const urlParams = new URLSearchParams(window.location.search);
-const zoomTargetGuid = urlParams.get('zoom');
+const zoomTargetGuid = urlParams.get('guid'); // IFC GUID (permanent identifier)
 const zoomTargetModel = urlParams.get('model');
-const zoomTargetRuntime = urlParams.get('runtime');
 const zoomTargetProject = urlParams.get('project');
 
 // If zoom params in URL, store in localStorage and redirect to Trimble Connect
-if (zoomTargetProject && zoomTargetModel && zoomTargetRuntime && !isPopupMode) {
+if (zoomTargetProject && zoomTargetModel && zoomTargetGuid && !isPopupMode) {
   // Store zoom target for later use
   localStorage.setItem('assembly_inspector_zoom', JSON.stringify({
     project: zoomTargetProject,
     model: zoomTargetModel,
-    runtime: zoomTargetRuntime,
     guid: zoomTargetGuid,
     timestamp: Date.now()
   }));
@@ -147,60 +145,69 @@ export default function App() {
 
         // Handle pending zoom from shared link
         const pendingZoom = getPendingZoom();
-        if (pendingZoom && pendingZoom.project === project.id) {
-          console.log('🔗 Pending zoom detected, zooming to:', pendingZoom);
+        if (pendingZoom && pendingZoom.project === project.id && pendingZoom.guid) {
+          console.log('🔗 Pending zoom detected, zooming to GUID:', pendingZoom.guid);
           // Clear the pending zoom immediately to avoid re-triggering
           localStorage.removeItem('assembly_inspector_zoom');
 
-          const runtimeId = parseInt(pendingZoom.runtime, 10);
-          if (!isNaN(runtimeId)) {
-            // Retry zoom until model is loaded (max 60 seconds)
-            const maxRetries = 30;
-            const retryDelay = 2000; // 2 seconds between retries
+          // Retry zoom until model is loaded (max 60 seconds)
+          const maxRetries = 30;
+          const retryDelay = 2000; // 2 seconds between retries
 
-            const tryZoom = async (attempt: number): Promise<boolean> => {
-              try {
-                console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}...`);
+          const tryZoom = async (attempt: number): Promise<boolean> => {
+            try {
+              console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}...`);
 
-                // Check if model is loaded by trying to get its objects
-                const models = await connected.viewer.getModels();
-                const modelLoaded = models?.some((m: any) => m.id === pendingZoom.model);
+              // Check if model is loaded
+              const models = await connected.viewer.getModels();
+              const modelLoaded = models?.some((m: any) => m.id === pendingZoom.model);
 
-                if (!modelLoaded) {
-                  console.log('⏳ Model not loaded yet, waiting...');
-                  return false;
-                }
-
-                // Try to select and zoom
-                await connected.viewer.setSelection({
-                  modelObjectIds: [{
-                    modelId: pendingZoom.model,
-                    objectRuntimeIds: [runtimeId]
-                  }]
-                }, 'set');
-
-                await (connected.viewer as any).zoomToObjects?.([{
-                  modelId: pendingZoom.model,
-                  objectRuntimeIds: [runtimeId]
-                }]);
-
-                console.log('✓ Zoomed to object successfully!');
-                return true;
-              } catch (e) {
-                console.log('⏳ Zoom failed, will retry...', e);
+              if (!modelLoaded) {
+                console.log('⏳ Model not loaded yet, waiting...');
                 return false;
               }
-            };
 
-            // Start retry loop in background (don't block init)
-            (async () => {
-              for (let i = 1; i <= maxRetries; i++) {
-                await new Promise(resolve => setTimeout(resolve, retryDelay));
-                const success = await tryZoom(i);
-                if (success) break;
+              // Convert IFC GUID to runtime ID for this session
+              const runtimeIds = await connected.viewer.convertToObjectRuntimeIds(
+                pendingZoom.model,
+                [pendingZoom.guid]
+              );
+
+              if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
+                console.log('⏳ Could not find object by GUID, waiting...');
+                return false;
               }
-            })();
-          }
+
+              const runtimeId = runtimeIds[0];
+              console.log(`🔗 Found runtime ID ${runtimeId} for GUID ${pendingZoom.guid}`);
+
+              // Try to select and zoom
+              await connected.viewer.setSelection({
+                modelObjectIds: [{
+                  modelId: pendingZoom.model,
+                  objectRuntimeIds: [runtimeId]
+                }]
+              }, 'set');
+
+              // Zoom to selected object
+              await connected.viewer.setCamera({ selected: true }, { animationTime: 500 });
+
+              console.log('✓ Zoomed to object successfully!');
+              return true;
+            } catch (e) {
+              console.log('⏳ Zoom failed, will retry...', e);
+              return false;
+            }
+          };
+
+          // Start retry loop in background (don't block init)
+          (async () => {
+            for (let i = 1; i <= maxRetries; i++) {
+              await new Promise(resolve => setTimeout(resolve, retryDelay));
+              const success = await tryZoom(i);
+              if (success) break;
+            }
+          })();
         }
 
         // Hangi Trimble Connect kasutaja info

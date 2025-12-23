@@ -127,6 +127,12 @@
   background: #f3f4f6;
 }
 
+.hamburger-dropdown .submenu .submenu-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
 /* Message - floating toast notification */
 .schedule-message {
   position: absolute;
