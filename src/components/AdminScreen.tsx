@@ -1513,36 +1513,35 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         return;
                       }
 
-                      // Get GUID for this object
-                      const properties = await api.viewer.getObjectProperties(modelId, [runtimeId]);
-                      let guid = '';
-
-                      // Find GUID in properties
-                      for (const propSet of (properties as any)?.properties || []) {
-                        for (const prop of propSet.properties || []) {
-                          if (prop.name === 'GUID' || prop.name === 'guid' || prop.name === 'GlobalId') {
-                            guid = prop.value;
-                            break;
-                          }
+                      // Get IFC GUID using convertToObjectIds (this is the permanent identifier)
+                      let ifcGuid = '';
+                      try {
+                        const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+                        if (externalIds && externalIds.length > 0 && externalIds[0]) {
+                          ifcGuid = externalIds[0];
                         }
-                        if (guid) break;
+                      } catch (e) {
+                        console.warn('Could not get IFC GUID:', e);
                       }
 
-                      if (!guid) {
-                        // Fallback to using modelId_runtimeId as identifier
-                        guid = `${modelId}_${runtimeId}`;
+                      if (!ifcGuid) {
+                        updateFunctionResult("generateZoomLink", {
+                          status: 'error',
+                          error: 'Ei leidnud objekti IFC GUID-i!'
+                        });
+                        return;
                       }
 
-                      // Generate link
+                      // Generate link with IFC GUID (permanent) - no runtime ID needed
                       const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
-                      const link = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&zoom=${encodeURIComponent(guid)}&runtime=${runtimeId}`;
+                      const link = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(ifcGuid)}`;
 
                       // Copy to clipboard
                       await navigator.clipboard.writeText(link);
 
                       updateFunctionResult("generateZoomLink", {
                         status: 'success',
-                        result: `Link kopeeritud! (${guid.slice(0, 20)}...)`
+                        result: `Link kopeeritud! (${ifcGuid})`
                       });
                     } catch (e: any) {
                       updateFunctionResult("generateZoomLink", {
