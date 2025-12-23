@@ -93,28 +93,136 @@
 }
 
 /* ============================================
-   STATS BAR
+   COMPACT TOOLBAR (combined stats + icons)
    ============================================ */
 
-.delivery-stats-bar {
+.delivery-toolbar-compact {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 16px;
+  justify-content: space-between;
+  padding: 6px 12px;
   background: #f8fafc;
   border-bottom: 1px solid #e5e7eb;
-  font-size: 12px;
-  color: #6b7280;
   flex-shrink: 0;
 }
 
-.delivery-stats-bar .separator {
+.delivery-toolbar-compact .toolbar-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.delivery-toolbar-compact .toolbar-stats .separator {
   color: #d1d5db;
 }
 
+.delivery-toolbar-compact .toolbar-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.delivery-toolbar-compact .icon-menu-wrapper {
+  position: relative;
+}
+
+.delivery-toolbar-compact .icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.15s ease;
+}
+
+.delivery-toolbar-compact .icon-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.delivery-toolbar-compact .icon-btn.active {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.delivery-toolbar-compact .icon-btn.spinning svg {
+  animation: spin 1s linear infinite;
+}
+
+.delivery-toolbar-compact .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.delivery-toolbar-compact .icon-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 160px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  padding: 4px;
+}
+
+.delivery-toolbar-compact .icon-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+}
+
+.delivery-toolbar-compact .icon-dropdown button:hover {
+  background: #f3f4f6;
+}
+
+.delivery-toolbar-compact .icon-dropdown button.active {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.delivery-toolbar-compact .icon-dropdown .dropdown-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+.delivery-toolbar-compact .icon-dropdown .speed-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.delivery-toolbar-compact .icon-dropdown .speed-selector select {
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+}
+
 /* ============================================
-   TOOLBAR
+   OLD TOOLBAR (keep for backwards compat)
    ============================================ */
 
 .delivery-toolbar {

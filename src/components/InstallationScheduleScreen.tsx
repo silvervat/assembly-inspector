@@ -7,7 +7,7 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare, FiAlertTriangle, FiFilter
+  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -297,6 +297,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Track current playback day for coloring
   const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
   const [playbackDateColors, setPlaybackDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+
+  // Hamburger menu state
+  const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
+  const [showMarkupSubmenu, setShowMarkupSubmenu] = useState(false);
 
   // Export settings
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1922,8 +1926,36 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
       }
 
-      // Set color to red
-      const markupColor = '#FF0000';
+      // Set color - use contrasting color based on day color
+      let markupColor = '#FF0000'; // Default red
+
+      // If day has a color, use a contrasting color for markups
+      if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
+        const dayColor = playbackDateColors[date];
+        // Calculate brightness of day color
+        const brightness = (dayColor.r * 299 + dayColor.g * 587 + dayColor.b * 114) / 1000;
+
+        // If day color is similar to red (high R, low G and B), use a different color
+        const isRedish = dayColor.r > 180 && dayColor.g < 100 && dayColor.b < 100;
+        const isGreenish = dayColor.g > 180 && dayColor.r < 100 && dayColor.b < 100;
+        const isBlueish = dayColor.b > 180 && dayColor.r < 100 && dayColor.g < 100;
+        const isYellowish = dayColor.r > 180 && dayColor.g > 180 && dayColor.b < 100;
+
+        if (isRedish) {
+          markupColor = '#0066FF'; // Blue if day is red
+        } else if (isGreenish) {
+          markupColor = '#FF0066'; // Magenta if day is green
+        } else if (isBlueish) {
+          markupColor = '#FF6600'; // Orange if day is blue
+        } else if (isYellowish) {
+          markupColor = '#6600FF'; // Purple if day is yellow
+        } else if (brightness > 128) {
+          markupColor = '#000000'; // Black if day is bright
+        } else {
+          markupColor = '#FFFFFF'; // White if day is dark
+        }
+      }
+
       for (const id of createdIds) {
         try {
           await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
@@ -1936,6 +1968,157 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDateMenuId(null);
     } catch (e) {
       console.error('Error creating markups:', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
+  // Create markups for ALL days with format P{dayNum}-{itemNum}
+  const createMarkupsForAllDays = async () => {
+    setShowHamburgerMenu(false);
+    setShowMarkupSubmenu(false);
+
+    const allDates = Object.keys(itemsByDate).sort();
+    if (allDates.length === 0) {
+      setMessage('Graafikus pole detaile');
+      return;
+    }
+
+    setMessage('Eemaldan vanad markupid...');
+
+    try {
+      // First remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe kõigile päevadele...');
+
+      const markupsToCreate: any[] = [];
+      const markupDateColors: { id?: number; color: string }[] = [];
+
+      // Process each day
+      for (let dayIndex = 0; dayIndex < allDates.length; dayIndex++) {
+        const date = allDates[dayIndex];
+        const dayItems = itemsByDate[date];
+        if (!dayItems || dayItems.length === 0) continue;
+
+        const dayNum = dayIndex + 1; // P1, P2, P3...
+
+        // Get day color for contrast
+        let markupColor = '#FF0000';
+        if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
+          const dayColor = playbackDateColors[date];
+          const brightness = (dayColor.r * 299 + dayColor.g * 587 + dayColor.b * 114) / 1000;
+          const isRedish = dayColor.r > 180 && dayColor.g < 100 && dayColor.b < 100;
+          const isGreenish = dayColor.g > 180 && dayColor.r < 100 && dayColor.b < 100;
+          const isBlueish = dayColor.b > 180 && dayColor.r < 100 && dayColor.g < 100;
+          const isYellowish = dayColor.r > 180 && dayColor.g > 180 && dayColor.b < 100;
+
+          if (isRedish) markupColor = '#0066FF';
+          else if (isGreenish) markupColor = '#FF0066';
+          else if (isBlueish) markupColor = '#FF6600';
+          else if (isYellowish) markupColor = '#6600FF';
+          else if (brightness > 128) markupColor = '#000000';
+          else markupColor = '#FFFFFF';
+        }
+
+        // Group items by model for batch processing
+        const itemsByModel = new Map<string, { item: ScheduleItem; itemIdx: number; runtimeId: number }[]>();
+
+        for (let itemIdx = 0; itemIdx < dayItems.length; itemIdx++) {
+          const item = dayItems[itemIdx];
+          const modelId = item.model_id;
+          const guidIfc = item.guid_ifc || item.guid;
+
+          if (!modelId || !guidIfc) continue;
+
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (!runtimeIds || runtimeIds.length === 0) continue;
+
+          if (!itemsByModel.has(modelId)) {
+            itemsByModel.set(modelId, []);
+          }
+          itemsByModel.get(modelId)!.push({ item, itemIdx, runtimeId: runtimeIds[0] });
+        }
+
+        for (const [modelId, modelItems] of itemsByModel) {
+          const runtimeIds = modelItems.map(m => m.runtimeId);
+
+          let bBoxes: any[] = [];
+          try {
+            bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+          } catch (err) {
+            bBoxes = runtimeIds.map(id => ({
+              id,
+              boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+            }));
+          }
+
+          for (const { itemIdx, runtimeId } of modelItems) {
+            const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+            if (!bBox) continue;
+
+            const bb = bBox.boundingBox;
+            const pos = {
+              positionX: ((bb.min.x + bb.max.x) / 2) * 1000,
+              positionY: ((bb.min.y + bb.max.y) / 2) * 1000,
+              positionZ: ((bb.min.z + bb.max.z) / 2) * 1000,
+            };
+
+            // Format: P1-1, P1-2, P2-1, etc.
+            const text = `P${dayNum}-${itemIdx + 1}`;
+
+            markupsToCreate.push({
+              text,
+              start: pos,
+              end: pos,
+            });
+            markupDateColors.push({ color: markupColor });
+          }
+        }
+
+        setMessage(`Loon markupe... ${dayIndex + 1}/${allDates.length} päeva`);
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua');
+        return;
+      }
+
+      // Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      // Extract created IDs
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // Set colors
+      for (let i = 0; i < createdIds.length; i++) {
+        const id = createdIds[i];
+        const colorInfo = markupDateColors[i];
+        if (colorInfo) {
+          try {
+            await (api.markup as any)?.editMarkup?.(id, { color: colorInfo.color });
+          } catch (err) {
+            console.warn('Color set error:', err);
+          }
+        }
+      }
+
+      setMessage(`${createdIds.length} markupit loodud (${allDates.length} päeva)`);
+    } catch (e) {
+      console.error('Error creating markups for all days:', e);
       setMessage('Viga markupite loomisel');
     }
   };
@@ -3770,13 +3953,54 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   return (
     <div className="schedule-screen">
-      {/* Header */}
-      <div className="mode-title-bar">
+      {/* Header - Dark blue topbar */}
+      <div className="mode-title-bar dark-blue">
         <button className="back-to-menu-btn" onClick={onBackToMenu}>
           <FiArrowLeft size={14} />
           <span>Menüü</span>
         </button>
         <span className="mode-title">Paigaldusgraafik</span>
+
+        {/* Hamburger menu */}
+        <div className="hamburger-menu-wrapper">
+          <button
+            className="hamburger-btn"
+            onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
+          >
+            <FiMenu size={20} />
+          </button>
+
+          {showHamburgerMenu && (
+            <div className="hamburger-dropdown">
+              {/* Märgistused submenu */}
+              <div
+                className="dropdown-item with-submenu"
+                onMouseEnter={() => setShowMarkupSubmenu(true)}
+                onMouseLeave={() => setShowMarkupSubmenu(false)}
+              >
+                <FiEdit3 size={14} />
+                <span>Märgistused</span>
+                <FiChevronRight size={14} className="submenu-arrow" />
+
+                {showMarkupSubmenu && (
+                  <div className="submenu">
+                    <button onClick={createMarkupsForAllDays}>
+                      <span>Märgi kõik päevad (P1-1, P1-2...)</span>
+                    </button>
+                    <button onClick={() => {
+                      setShowHamburgerMenu(false);
+                      setShowMarkupSubmenu(false);
+                      removeAllMarkups();
+                    }}>
+                      <FiTrash2 size={14} />
+                      <span>Eemalda kõik markupid</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Message */}
@@ -4948,6 +5172,35 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         >
                           <span className="menu-icon">🗑️</span> Eemalda markupid
                         </button>
+                        {/* Add selected unscheduled items section */}
+                        {(() => {
+                          // Calculate unscheduled count from model selection
+                          const existingGuids = new Set(scheduleItems.map(item => item.guid));
+                          const existingIfcGuids = new Set(scheduleItems.map(item => item.guid_ifc).filter(Boolean));
+                          const unscheduledCount = selectedObjects.filter(obj => {
+                            const guid = obj.guid || '';
+                            const guidIfc = obj.guidIfc || '';
+                            return !existingGuids.has(guid) && !existingIfcGuids.has(guidIfc);
+                          }).length;
+
+                          if (unscheduledCount > 0) {
+                            return (
+                              <>
+                                <div className="date-menu-divider" />
+                                <button
+                                  className="date-menu-option add-items"
+                                  onClick={() => {
+                                    addUnscheduledToDate(date);
+                                    setDateMenuId(null);
+                                  }}
+                                >
+                                  <span className="menu-icon">➕</span> Lisa valitud detailid ({unscheduledCount})
+                                </button>
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     )}
                   </div>

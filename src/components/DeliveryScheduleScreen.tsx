@@ -522,10 +522,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     { id: 'comments', label: 'Kommentaarid', enabled: true }
   ]);
 
-  // Color mode for model visualization
-  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date'>('none');
+  // Color mode for model visualization - default to vehicle coloring
+  const [colorMode, setColorMode] = useState<'none' | 'vehicle' | 'date'>('vehicle');
   const [showColorMenu, setShowColorMenu] = useState(false);
   const [showImportExportMenu, setShowImportExportMenu] = useState(false);
+  const [showPlaybackMenu, setShowPlaybackMenu] = useState(false);
   const [vehicleColors, setVehicleColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [dateColors, setDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
@@ -1238,6 +1239,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Apply default color mode after initial load
+  const initialColorApplied = useRef(false);
+  useEffect(() => {
+    if (!loading && items.length > 0 && vehicles.length > 0 && colorMode !== 'none' && !initialColorApplied.current) {
+      initialColorApplied.current = true;
+      // Small delay to ensure viewer is ready
+      setTimeout(() => {
+        applyColorMode(colorMode);
+      }, 1000);
+    }
+  }, [loading, items.length, vehicles.length, colorMode]);
 
   // BroadcastChannel for syncing between windows
   useEffect(() => {
@@ -6455,120 +6468,168 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         </div>
       </header>
 
-      {/* Stats bar - compact summary */}
-      <div className="delivery-stats-bar">
-        <span>{totalItems} tk</span>
-        <span className="separator">•</span>
-        <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
-        <span className="separator">•</span>
-        <span>{vehicles.length} {vehicles.length === 1 ? 'veok' : 'veokit'}</span>
-      </div>
-
-      {/* Toolbar */}
-      <div className="delivery-toolbar">
-        {/* Playback controls */}
-        <div className="playback-controls">
-          {!isPlaying ? (
-            <button className="play-btn" onClick={startPlayback}>
-              <FiPlay /> Esita
-            </button>
-          ) : (
-            <>
-              {isPaused ? (
-                <button className="play-btn" onClick={resumePlayback}>
-                  <FiPlay /> Jätka
-                </button>
-              ) : (
-                <button className="pause-btn" onClick={pausePlayback}>
-                  <FiPause /> Paus
-                </button>
-              )}
-              <button className="stop-btn" onClick={stopPlayback}>
-                <FiSquare /> Lõpeta
-              </button>
-            </>
-          )}
-          <select
-            className="speed-select"
-            value={playbackSpeed}
-            onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-          >
-            {PLAYBACK_SPEEDS.map(s => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
-          <button className="settings-btn" onClick={() => setShowSettingsModal(true)}>
-            <FiSettings />
-          </button>
+      {/* Compact toolbar with stats and icon menus */}
+      <div className="delivery-toolbar-compact">
+        {/* Stats on left */}
+        <div className="toolbar-stats">
+          <span>{totalItems} tk</span>
+          <span className="separator">•</span>
+          <span>{formatWeight(totalWeight)?.kg || '0 kg'}</span>
+          <span className="separator">•</span>
+          <span>{vehicles.length} {vehicles.length === 1 ? 'veok' : 'veokit'}</span>
         </div>
 
-        {/* Action buttons */}
-        <div className="action-buttons">
-          <button onClick={() => setShowFactoryModal(true)}>
-            <FiLayers /> Tehased
-          </button>
+        {/* Icon menus on right */}
+        <div className="toolbar-icons">
+          {/* TEHASED */}
+          <div className="icon-menu-wrapper">
+            <button
+              className="icon-btn"
+              onClick={() => setShowFactoryModal(true)}
+              title="Tehased"
+            >
+              <FiLayers size={18} />
+            </button>
+          </div>
+
+          {/* IMPORT-EKSPORT */}
           <div
-            className="dropdown-menu-wrapper"
+            className="icon-menu-wrapper"
             onMouseEnter={() => setShowImportExportMenu(true)}
             onMouseLeave={() => setShowImportExportMenu(false)}
           >
-            <button>
-              <FiDownload /> Import-Eksport
+            <button className="icon-btn" title="Import-Eksport">
+              <FiDownload size={18} />
             </button>
             {showImportExportMenu && (
-              <div className="dropdown-menu">
+              <div className="icon-dropdown">
                 <button onClick={() => { setShowImportExportMenu(false); setShowImportModal(true); }}>
-                  <FiUpload /> <span>Import</span>
+                  <FiUpload size={14} /> Import
                 </button>
                 <button onClick={() => { setShowImportExportMenu(false); setShowExportModal(true); }}>
-                  <FiDownload /> <span>Eksport</span>
+                  <FiDownload size={14} /> Eksport
                 </button>
               </div>
             )}
           </div>
-          <button
-            onClick={refreshFromModel}
-            disabled={refreshing || items.length === 0}
-            style={{
-              opacity: refreshing || items.length === 0 ? 0.5 : 1,
-              cursor: refreshing || items.length === 0 ? 'not-allowed' : 'pointer'
-            }}
-          >
-            <FiRefreshCw className={refreshing ? 'spinning' : ''} /> {refreshing ? 'Värskendame...' : 'Värskenda mudelist'}
-          </button>
+
+          {/* VÄRSKENDA */}
+          <div className="icon-menu-wrapper">
+            <button
+              className={`icon-btn ${refreshing ? 'spinning' : ''}`}
+              onClick={refreshFromModel}
+              disabled={refreshing || items.length === 0}
+              title="Värskenda mudelist"
+            >
+              <FiRefreshCw size={18} />
+            </button>
+          </div>
+
+          {/* VÄRVI */}
           <div
-            className="dropdown-menu-wrapper"
+            className="icon-menu-wrapper"
             onMouseEnter={() => setShowColorMenu(true)}
             onMouseLeave={() => setShowColorMenu(false)}
           >
             <button
-              className={colorMode !== 'none' ? 'active' : ''}
+              className={`icon-btn ${colorMode !== 'none' ? 'active' : ''}`}
+              title="Värvi"
               onClick={() => {
                 if (colorMode !== 'none') {
                   applyColorMode('none');
                 }
               }}
             >
-              <FiDroplet /> Värvi
+              <FiDroplet size={18} />
             </button>
             {showColorMenu && (
-              <div className="dropdown-menu">
+              <div className="icon-dropdown">
                 <button
                   className={colorMode === 'vehicle' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'vehicle' ? 'none' : 'vehicle')}
                 >
-                  <FiTruck /> <span>Veokite kaupa</span>
-                  {colorMode === 'vehicle' && <FiCheck />}
+                  <FiTruck size={14} /> Veokite kaupa
+                  {colorMode === 'vehicle' && <FiCheck size={14} />}
                 </button>
                 <button
                   className={colorMode === 'date' ? 'active' : ''}
                   onClick={() => applyColorMode(colorMode === 'date' ? 'none' : 'date')}
                 >
-                  <FiCalendar /> <span>Kuupäevade kaupa</span>
-                  {colorMode === 'date' && <FiCheck />}
+                  <FiCalendar size={14} /> Kuupäevade kaupa
+                  {colorMode === 'date' && <FiCheck size={14} />}
                 </button>
               </div>
             )}
+          </div>
+
+          {/* PLAY */}
+          <div
+            className="icon-menu-wrapper"
+            onMouseEnter={() => setShowPlaybackMenu(true)}
+            onMouseLeave={() => setShowPlaybackMenu(false)}
+          >
+            <button
+              className={`icon-btn ${isPlaying ? 'active' : ''}`}
+              title="Esita"
+              onClick={() => {
+                if (!isPlaying) {
+                  startPlayback();
+                } else if (isPaused) {
+                  resumePlayback();
+                } else {
+                  pausePlayback();
+                }
+              }}
+            >
+              {isPlaying && !isPaused ? <FiPause size={18} /> : <FiPlay size={18} />}
+            </button>
+            {showPlaybackMenu && (
+              <div className="icon-dropdown">
+                {!isPlaying ? (
+                  <button onClick={startPlayback}>
+                    <FiPlay size={14} /> Esita
+                  </button>
+                ) : (
+                  <>
+                    {isPaused ? (
+                      <button onClick={resumePlayback}>
+                        <FiPlay size={14} /> Jätka
+                      </button>
+                    ) : (
+                      <button onClick={pausePlayback}>
+                        <FiPause size={14} /> Paus
+                      </button>
+                    )}
+                    <button onClick={stopPlayback}>
+                      <FiSquare size={14} /> Lõpeta
+                    </button>
+                  </>
+                )}
+                <div className="dropdown-divider" />
+                <div className="speed-selector">
+                  <span>Kiirus:</span>
+                  <select
+                    value={playbackSpeed}
+                    onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+                  >
+                    {PLAYBACK_SPEEDS.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SEADED */}
+          <div className="icon-menu-wrapper">
+            <button
+              className="icon-btn"
+              onClick={() => setShowSettingsModal(true)}
+              title="Seaded"
+            >
+              <FiSettings size={18} />
+            </button>
           </div>
         </div>
       </div>
