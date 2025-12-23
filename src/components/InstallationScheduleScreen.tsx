@@ -596,32 +596,42 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (versionError) throw versionError;
 
-      // Copy items from current version if requested
-      if (copyFromCurrent && activeVersionId && scheduleItems.length > 0) {
-        const copiedItems = scheduleItems.map(item => ({
-          project_id: item.project_id,
-          version_id: newVersion.id,
-          model_id: item.model_id,
-          guid: item.guid,
-          guid_ifc: item.guid_ifc,
-          guid_ms: item.guid_ms,
-          object_runtime_id: item.object_runtime_id,
-          assembly_mark: item.assembly_mark,
-          product_name: item.product_name,
-          file_name: item.file_name,
-          cast_unit_weight: item.cast_unit_weight,
-          cast_unit_position_code: item.cast_unit_position_code,
-          scheduled_date: item.scheduled_date,
-          sort_order: item.sort_order,
-          install_methods: item.install_methods,
-          status: item.status,
-          notes: item.notes,
-          created_by: tcUserEmail
-        }));
+      // Handle items based on whether this is first version or not
+      if (copyFromCurrent && scheduleItems.length > 0) {
+        if (activeVersionId) {
+          // Copying from existing version - create new items
+          const copiedItems = scheduleItems.map(item => ({
+            project_id: item.project_id,
+            version_id: newVersion.id,
+            model_id: item.model_id,
+            guid: item.guid,
+            guid_ifc: item.guid_ifc,
+            guid_ms: item.guid_ms,
+            object_runtime_id: item.object_runtime_id,
+            assembly_mark: item.assembly_mark,
+            product_name: item.product_name,
+            file_name: item.file_name,
+            cast_unit_weight: item.cast_unit_weight,
+            cast_unit_position_code: item.cast_unit_position_code,
+            scheduled_date: item.scheduled_date,
+            sort_order: item.sort_order,
+            install_methods: item.install_methods,
+            status: item.status,
+            notes: item.notes,
+            created_by: tcUserEmail
+          }));
 
-        await supabase
-          .from('installation_schedule')
-          .insert(copiedItems);
+          await supabase
+            .from('installation_schedule')
+            .insert(copiedItems);
+        } else {
+          // First version - update existing items (with null version_id) to use new version
+          await supabase
+            .from('installation_schedule')
+            .update({ version_id: newVersion.id })
+            .eq('project_id', projectId)
+            .is('version_id', null);
+        }
       }
 
       setMessage(`Versioon "${name}" loodud`);
