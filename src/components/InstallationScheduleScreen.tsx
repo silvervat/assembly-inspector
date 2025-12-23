@@ -540,23 +540,52 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const loadSchedule = useCallback(async (versionId?: string | null) => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('installation_schedule')
-        .select('*')
-        .eq('project_id', projectId)
-        .order('scheduled_date', { ascending: true })
-        .order('sort_order', { ascending: true });
+      let allItems: ScheduleItem[] = [];
 
-      // If version is active, load items with that version OR items without version (legacy)
       if (versionId) {
-        query = query.or(`version_id.eq.${versionId},version_id.is.null`);
+        // Load items with this version_id
+        const { data: versionItems, error: err1 } = await supabase
+          .from('installation_schedule')
+          .select('*')
+          .eq('project_id', projectId)
+          .eq('version_id', versionId)
+          .order('scheduled_date', { ascending: true })
+          .order('sort_order', { ascending: true });
+
+        if (err1) throw err1;
+
+        // Also load legacy items without version_id
+        const { data: legacyItems, error: err2 } = await supabase
+          .from('installation_schedule')
+          .select('*')
+          .eq('project_id', projectId)
+          .is('version_id', null)
+          .order('scheduled_date', { ascending: true })
+          .order('sort_order', { ascending: true });
+
+        if (err2) throw err2;
+
+        // Combine and sort
+        allItems = [...(versionItems || []), ...(legacyItems || [])];
+        allItems.sort((a, b) => {
+          const dateCompare = a.scheduled_date.localeCompare(b.scheduled_date);
+          if (dateCompare !== 0) return dateCompare;
+          return (a.sort_order || 0) - (b.sort_order || 0);
+        });
+      } else {
+        // No version - load ALL items (legacy mode)
+        const { data, error } = await supabase
+          .from('installation_schedule')
+          .select('*')
+          .eq('project_id', projectId)
+          .order('scheduled_date', { ascending: true })
+          .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        allItems = data || [];
       }
-      // If no versionId, load ALL items (legacy mode - no version filtering)
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setScheduleItems(data || []);
+      setScheduleItems(allItems);
     } catch (e) {
       console.error('Error loading schedule:', e);
       setMessage('Viga graafiku laadimisel');
