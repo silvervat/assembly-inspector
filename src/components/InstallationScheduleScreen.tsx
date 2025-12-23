@@ -226,6 +226,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
+  const processingDayRef = useRef<number>(-1); // Track which day is being processed to avoid re-runs
 
   // Multi-select state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -3519,6 +3520,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Wait a moment then start
     setTimeout(() => {
+      processingDayRef.current = -1; // Reset processing tracker
       setIsPlaying(true);
       setIsPaused(false);
       setCurrentPlayIndex(0);
@@ -3541,6 +3543,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const stopPlayback = async () => {
     setIsPlaying(false);
     setIsPaused(false);
+    processingDayRef.current = -1; // Reset processing tracker
     if (playbackRef.current) {
       clearTimeout(playbackRef.current);
       playbackRef.current = null;
@@ -3583,6 +3586,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       // End of playback
       if (currentDayIndex >= sortedDates.length) {
+        processingDayRef.current = -1;
         const endPlayback = async () => {
           setIsPlaying(false);
           setIsPaused(false);
@@ -3595,6 +3599,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         endPlayback();
         return;
       }
+
+      // Skip if we're already processing this day (prevents re-runs from collapsedDates changes)
+      if (processingDayRef.current === currentDayIndex) {
+        return;
+      }
+      processingDayRef.current = currentDayIndex;
 
       const currentDate = sortedDates[currentDayIndex];
       const dateItems = itemsByDate[currentDate] || [];
@@ -4739,6 +4749,360 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     XLSX.utils.book_append_sheet(wb, ws2, isEnglish ? 'Summary' : 'Kokkuvõte');
 
+    // ========== TIMELINE SHEET ==========
+    // Structure:
+    // Row 0: Months (merged)
+    // Row 1: Weeks (merged)
+    // Row 2: Dates (DD.MM)
+    // Rows 3-10: Resources (one per row)
+    // Row 11: Empty separator
+    // Rows 12+: Details (each under its date)
+    // Last row: Totals per date
+
+    const timelineLabels = isEnglish ? {
+      resources: 'Resources',
+      details: 'Details',
+      total: 'Total',
+      week: 'W',
+      crane: 'Crane',
+      forklift: 'Telehandler',
+      poomtostuk: 'Boom Lift',
+      kaartostuk: 'Scissor Lift',
+      troppija: 'Rigger',
+      monteerija: 'Installer',
+      keevitaja: 'Welder',
+      manual: 'Manual',
+    } : {
+      resources: 'Ressursid',
+      details: 'Detailid',
+      total: 'Kokku',
+      week: 'N',
+      crane: 'Kraana',
+      forklift: 'Teleskooplaadur',
+      poomtostuk: 'Korvtõstuk',
+      kaartostuk: 'Käärtõstuk',
+      troppija: 'Troppija',
+      monteerija: 'Monteerija',
+      keevitaja: 'Keevitaja',
+      manual: 'Käsitsi',
+    };
+
+    const resourceOrder: { key: InstallMethodType; label: string }[] = [
+      { key: 'crane', label: timelineLabels.crane },
+      { key: 'forklift', label: timelineLabels.forklift },
+      { key: 'poomtostuk', label: timelineLabels.poomtostuk },
+      { key: 'kaartostuk', label: timelineLabels.kaartostuk },
+      { key: 'manual', label: timelineLabels.manual },
+      { key: 'troppija', label: timelineLabels.troppija },
+      { key: 'monteerija', label: timelineLabels.monteerija },
+      { key: 'keevitaja', label: timelineLabels.keevitaja },
+    ];
+
+    // Get all dates and fill gaps (weekends if gap <= 2 days)
+    const allWorkDates = [...sortedDates].sort();
+    const timelineDates: string[] = [];
+
+    for (let i = 0; i < allWorkDates.length; i++) {
+      timelineDates.push(allWorkDates[i]);
+
+      // Check if we need to add weekend/gap days
+      if (i < allWorkDates.length - 1) {
+        const current = new Date(allWorkDates[i]);
+        const next = new Date(allWorkDates[i + 1]);
+        const diffDays = Math.floor((next.getTime() - current.getTime()) / (1000 * 60 * 60 * 24));
+
+        // If gap is 2 days or less, fill in the gap (weekends)
+        if (diffDays > 1 && diffDays <= 3) {
+          for (let d = 1; d < diffDays; d++) {
+            const gapDate = new Date(current);
+            gapDate.setDate(gapDate.getDate() + d);
+            timelineDates.push(gapDate.toISOString().split('T')[0]);
+          }
+        }
+      }
+    }
+
+    // Calculate resource totals per date
+    const resourceTotalsPerDate: Record<string, Record<InstallMethodType, number>> = {};
+    for (const dateStr of timelineDates) {
+      resourceTotalsPerDate[dateStr] = {
+        crane: 0, forklift: 0, manual: 0, poomtostuk: 0,
+        kaartostuk: 0, troppija: 0, monteerija: 0, keevitaja: 0
+      };
+    }
+
+    sortedItems.forEach(item => {
+      const methods = getItemMethods(item);
+      for (const [key, count] of Object.entries(methods)) {
+        if (count && count > 0) {
+          const methodKey = key as InstallMethodType;
+          resourceTotalsPerDate[item.scheduled_date][methodKey] += count;
+        }
+      }
+    });
+
+    // Find max items in any single date for sizing
+    const maxItemsPerDate = Math.max(...sortedDates.map(d => (itemsByDate[d]?.length || 0)));
+
+    // Build timeline data array
+    const MONTH_ROW = 0;
+    const WEEK_ROW = 1;
+    const DATE_ROW = 2;
+    const RESOURCE_START_ROW = 3;
+    const RESOURCE_END_ROW = RESOURCE_START_ROW + resourceOrder.length - 1;
+    const SEPARATOR_ROW = RESOURCE_END_ROW + 1;
+    const DETAILS_START_ROW = SEPARATOR_ROW + 1;
+    const DETAILS_END_ROW = DETAILS_START_ROW + maxItemsPerDate - 1;
+    const TOTAL_ROW = DETAILS_END_ROW + 1;
+
+    const numCols = timelineDates.length + 1; // +1 for label column
+    const numRows = TOTAL_ROW + 1;
+
+    // Initialize empty array
+    const timelineData: any[][] = Array(numRows).fill(null).map(() => Array(numCols).fill(''));
+
+    // Column A labels
+    timelineData[MONTH_ROW][0] = '';
+    timelineData[WEEK_ROW][0] = '';
+    timelineData[DATE_ROW][0] = '';
+    resourceOrder.forEach((res, idx) => {
+      timelineData[RESOURCE_START_ROW + idx][0] = res.label;
+    });
+    timelineData[SEPARATOR_ROW][0] = '';
+    timelineData[TOTAL_ROW][0] = timelineLabels.total;
+
+    // Fill date headers and data columns
+    timelineDates.forEach((dateStr, colIdx) => {
+      const col = colIdx + 1; // +1 for label column
+      const date = new Date(dateStr);
+      const dayNum = date.getDate();
+      const monthNum = date.getMonth() + 1;
+
+      // Date header (DD.MM)
+      timelineData[DATE_ROW][col] = `${String(dayNum).padStart(2, '0')}.${String(monthNum).padStart(2, '0')}`;
+
+      // Resource rows
+      resourceOrder.forEach((res, idx) => {
+        const count = resourceTotalsPerDate[dateStr]?.[res.key] || 0;
+        timelineData[RESOURCE_START_ROW + idx][col] = count > 0 ? count : '';
+      });
+
+      // Details for this date
+      const dateItems = itemsByDate[dateStr] || [];
+      dateItems.forEach((item, idx) => {
+        if (DETAILS_START_ROW + idx < TOTAL_ROW) {
+          timelineData[DETAILS_START_ROW + idx][col] = item.assembly_mark || '';
+        }
+      });
+
+      // Total count
+      timelineData[TOTAL_ROW][col] = dateItems.length > 0 ? dateItems.length : '';
+    });
+
+    // Create worksheet
+    const ws4 = XLSX.utils.aoa_to_sheet(timelineData);
+
+    // Set column widths
+    ws4['!cols'] = [{ wch: 14 }]; // Label column
+    for (let i = 0; i < timelineDates.length; i++) {
+      ws4['!cols'].push({ wch: 8 });
+    }
+
+    // Set row heights (small for details)
+    ws4['!rows'] = [];
+    for (let r = 0; r < numRows; r++) {
+      if (r >= DETAILS_START_ROW && r < TOTAL_ROW) {
+        ws4['!rows'].push({ hpt: 12 }); // Small height for details
+      } else if (r === MONTH_ROW || r === WEEK_ROW) {
+        ws4['!rows'].push({ hpt: 18 });
+      } else {
+        ws4['!rows'].push({ hpt: 16 });
+      }
+    }
+
+    // Merge cells for months and weeks
+    const merges: XLSX.Range[] = [];
+
+    // Track month spans
+    let currentMonth = -1;
+    let monthStartCol = 1;
+
+    timelineDates.forEach((dateStr, colIdx) => {
+      const col = colIdx + 1;
+      const date = new Date(dateStr);
+      const month = date.getMonth();
+
+      if (month !== currentMonth) {
+        // Close previous month merge
+        if (currentMonth !== -1 && col - monthStartCol > 1) {
+          merges.push({ s: { r: MONTH_ROW, c: monthStartCol }, e: { r: MONTH_ROW, c: col - 1 } });
+        }
+        // Start new month
+        currentMonth = month;
+        monthStartCol = col;
+
+        // Set month label
+        const monthNames = isEnglish
+          ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+          : ['Jaan', 'Veebr', 'Märts', 'Apr', 'Mai', 'Juuni', 'Juuli', 'Aug', 'Sept', 'Okt', 'Nov', 'Dets'];
+        const cellRef = XLSX.utils.encode_cell({ r: MONTH_ROW, c: col });
+        if (!ws4[cellRef]) ws4[cellRef] = { t: 's', v: '' };
+        ws4[cellRef].v = `${monthNames[month]} ${date.getFullYear()}`;
+      }
+    });
+    // Close last month merge
+    if (timelineDates.length + 1 - monthStartCol > 1) {
+      merges.push({ s: { r: MONTH_ROW, c: monthStartCol }, e: { r: MONTH_ROW, c: timelineDates.length } });
+    }
+
+    // Track week spans
+    let currentWeek = -1;
+    let weekStartCol = 1;
+
+    const getWeekNumber = (d: Date): number => {
+      const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+      const dayNum = date.getUTCDay() || 7;
+      date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+      return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    };
+
+    timelineDates.forEach((dateStr, colIdx) => {
+      const col = colIdx + 1;
+      const date = new Date(dateStr);
+      const week = getWeekNumber(date);
+
+      if (week !== currentWeek) {
+        // Close previous week merge
+        if (currentWeek !== -1 && col - weekStartCol > 1) {
+          merges.push({ s: { r: WEEK_ROW, c: weekStartCol }, e: { r: WEEK_ROW, c: col - 1 } });
+        }
+        // Start new week
+        currentWeek = week;
+        weekStartCol = col;
+
+        // Set week label
+        const cellRef = XLSX.utils.encode_cell({ r: WEEK_ROW, c: col });
+        if (!ws4[cellRef]) ws4[cellRef] = { t: 's', v: '' };
+        ws4[cellRef].v = `${timelineLabels.week}${week}`;
+      }
+    });
+    // Close last week merge
+    if (timelineDates.length + 1 - weekStartCol > 1) {
+      merges.push({ s: { r: WEEK_ROW, c: weekStartCol }, e: { r: WEEK_ROW, c: timelineDates.length } });
+    }
+
+    ws4['!merges'] = merges;
+
+    // Apply styles
+    const timelineHeaderStyle = {
+      font: { bold: true, sz: 10 },
+      fill: { fgColor: { rgb: 'E5E7EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: thinBorder
+    };
+
+    const monthHeaderStyle = {
+      font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '3B82F6' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: thinBorder
+    };
+
+    const weekHeaderStyle = {
+      font: { bold: true, sz: 10, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '6B7280' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: thinBorder
+    };
+
+    const resourceLabelStyle = {
+      font: { bold: true, sz: 9 },
+      fill: { fgColor: { rgb: 'F3F4F6' } },
+      alignment: { horizontal: 'left', vertical: 'center' },
+      border: thinBorder
+    };
+
+    const resourceValueStyle = {
+      font: { sz: 9 },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: thinBorder
+    };
+
+    const detailStyle = {
+      font: { sz: 8 },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: thinBorder
+    };
+
+    const totalStyle = {
+      font: { bold: true, sz: 9 },
+      fill: { fgColor: { rgb: 'FEF3C7' } },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: thinBorder
+    };
+
+    // Apply month header styles
+    for (let c = 1; c <= timelineDates.length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: MONTH_ROW, c });
+      if (ws4[cellRef]) ws4[cellRef].s = monthHeaderStyle;
+    }
+
+    // Apply week header styles
+    for (let c = 1; c <= timelineDates.length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: WEEK_ROW, c });
+      if (ws4[cellRef]) ws4[cellRef].s = weekHeaderStyle;
+    }
+
+    // Apply date header styles with weekend highlighting
+    timelineDates.forEach((dateStr, colIdx) => {
+      const col = colIdx + 1;
+      const date = new Date(dateStr);
+      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+      const isWorkDay = !!itemsByDate[dateStr];
+
+      const cellRef = XLSX.utils.encode_cell({ r: DATE_ROW, c: col });
+      if (ws4[cellRef]) {
+        ws4[cellRef].s = {
+          ...timelineHeaderStyle,
+          fill: { fgColor: { rgb: isWeekend && !isWorkDay ? 'FEE2E2' : 'E5E7EB' } }
+        };
+      }
+    });
+
+    // Apply resource label styles
+    resourceOrder.forEach((_, idx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: RESOURCE_START_ROW + idx, c: 0 });
+      if (ws4[cellRef]) ws4[cellRef].s = resourceLabelStyle;
+    });
+
+    // Apply resource value styles
+    for (let r = RESOURCE_START_ROW; r <= RESOURCE_END_ROW; r++) {
+      for (let c = 1; c <= timelineDates.length; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r, c });
+        if (ws4[cellRef]) ws4[cellRef].s = resourceValueStyle;
+      }
+    }
+
+    // Apply detail styles
+    for (let r = DETAILS_START_ROW; r < TOTAL_ROW; r++) {
+      for (let c = 0; c <= timelineDates.length; c++) {
+        const cellRef = XLSX.utils.encode_cell({ r, c });
+        if (ws4[cellRef]) ws4[cellRef].s = detailStyle;
+      }
+    }
+
+    // Apply total row styles
+    for (let c = 0; c <= timelineDates.length; c++) {
+      const cellRef = XLSX.utils.encode_cell({ r: TOTAL_ROW, c });
+      if (ws4[cellRef]) ws4[cellRef].s = totalStyle;
+    }
+
+    // Freeze panes (freeze first column and first 3 rows)
+    ws4['!freeze'] = { xSplit: 1, ySplit: 3 };
+
+    XLSX.utils.book_append_sheet(wb, ws4, 'Timeline');
+
     // Generate filename with project name
     const safeProjectName = projectName
       ? projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s-]/g, '').replace(/\s+/g, '_').substring(0, 50)
@@ -5443,12 +5807,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             const scheduled = scheduleItems.find(item => item.guid === obj.guid || item.guid_ifc === obj.guidIfc);
             if (!scheduled) return null;
 
-            // Calculate position number on that day
+            // Calculate position number on that day (use actual list order, not sorted by mark)
             const dateItems = itemsByDate[scheduled.scheduled_date] || [];
-            const sortedDateItems = [...dateItems].sort((a, b) =>
-              (a.assembly_mark || '').localeCompare(b.assembly_mark || '')
-            );
-            const jrNr = sortedDateItems.findIndex(item => item.id === scheduled.id) + 1;
+            const jrNr = dateItems.findIndex(item => item.id === scheduled.id) + 1;
 
             return {
               obj,
