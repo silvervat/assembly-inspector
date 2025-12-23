@@ -1922,8 +1922,36 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
       }
 
-      // Set color to red
-      const markupColor = '#FF0000';
+      // Set color - use contrasting color based on day color
+      let markupColor = '#FF0000'; // Default red
+
+      // If day has a color, use a contrasting color for markups
+      if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
+        const dayColor = playbackDateColors[date];
+        // Calculate brightness of day color
+        const brightness = (dayColor.r * 299 + dayColor.g * 587 + dayColor.b * 114) / 1000;
+
+        // If day color is similar to red (high R, low G and B), use a different color
+        const isRedish = dayColor.r > 180 && dayColor.g < 100 && dayColor.b < 100;
+        const isGreenish = dayColor.g > 180 && dayColor.r < 100 && dayColor.b < 100;
+        const isBlueish = dayColor.b > 180 && dayColor.r < 100 && dayColor.g < 100;
+        const isYellowish = dayColor.r > 180 && dayColor.g > 180 && dayColor.b < 100;
+
+        if (isRedish) {
+          markupColor = '#0066FF'; // Blue if day is red
+        } else if (isGreenish) {
+          markupColor = '#FF0066'; // Magenta if day is green
+        } else if (isBlueish) {
+          markupColor = '#FF6600'; // Orange if day is blue
+        } else if (isYellowish) {
+          markupColor = '#6600FF'; // Purple if day is yellow
+        } else if (brightness > 128) {
+          markupColor = '#000000'; // Black if day is bright
+        } else {
+          markupColor = '#FFFFFF'; // White if day is dark
+        }
+      }
+
       for (const id of createdIds) {
         try {
           await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
