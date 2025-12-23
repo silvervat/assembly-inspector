@@ -226,6 +226,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
+  const processingDayRef = useRef<number>(-1); // Track which day is being processed to avoid re-runs
 
   // Multi-select state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -3519,6 +3520,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     // Wait a moment then start
     setTimeout(() => {
+      processingDayRef.current = -1; // Reset processing tracker
       setIsPlaying(true);
       setIsPaused(false);
       setCurrentPlayIndex(0);
@@ -3541,6 +3543,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const stopPlayback = async () => {
     setIsPlaying(false);
     setIsPaused(false);
+    processingDayRef.current = -1; // Reset processing tracker
     if (playbackRef.current) {
       clearTimeout(playbackRef.current);
       playbackRef.current = null;
@@ -3583,6 +3586,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       // End of playback
       if (currentDayIndex >= sortedDates.length) {
+        processingDayRef.current = -1;
         const endPlayback = async () => {
           setIsPlaying(false);
           setIsPaused(false);
@@ -3595,6 +3599,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         endPlayback();
         return;
       }
+
+      // Skip if we're already processing this day (prevents re-runs from collapsedDates changes)
+      if (processingDayRef.current === currentDayIndex) {
+        return;
+      }
+      processingDayRef.current = currentDayIndex;
 
       const currentDate = sortedDates[currentDayIndex];
       const dateItems = itemsByDate[currentDate] || [];
@@ -5443,12 +5453,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             const scheduled = scheduleItems.find(item => item.guid === obj.guid || item.guid_ifc === obj.guidIfc);
             if (!scheduled) return null;
 
-            // Calculate position number on that day
+            // Calculate position number on that day (use actual list order, not sorted by mark)
             const dateItems = itemsByDate[scheduled.scheduled_date] || [];
-            const sortedDateItems = [...dateItems].sort((a, b) =>
-              (a.assembly_mark || '').localeCompare(b.assembly_mark || '')
-            );
-            const jrNr = sortedDateItems.findIndex(item => item.id === scheduled.id) + 1;
+            const jrNr = dateItems.findIndex(item => item.id === scheduled.id) + 1;
 
             return {
               obj,
