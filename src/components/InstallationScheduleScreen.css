@@ -95,21 +95,28 @@
   opacity: 0.5;
 }
 
-/* Submenu - opens to the left */
-.hamburger-dropdown .submenu {
-  position: absolute;
-  top: 0;
-  right: 100%;
-  margin-right: 2px;
-  min-width: 180px;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  padding: 2px;
+/* Submenu arrow rotation */
+.hamburger-dropdown .dropdown-item .submenu-arrow {
+  transition: transform 0.15s;
 }
 
-.hamburger-dropdown .submenu button {
+.hamburger-dropdown .dropdown-item .submenu-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.hamburger-dropdown .dropdown-item.expanded {
+  background: #f3f4f6;
+}
+
+/* Inline submenu - expands below the parent item */
+.hamburger-dropdown .submenu-inline {
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid #e5e7eb;
+  margin-left: 12px;
+  margin-bottom: 4px;
+}
+
+.hamburger-dropdown .submenu-inline button {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -120,15 +127,15 @@
   cursor: pointer;
   border-radius: 4px;
   color: #374151;
-  font-size: 12px;
+  font-size: 11px;
   text-align: left;
 }
 
-.hamburger-dropdown .submenu button:hover {
+.hamburger-dropdown .submenu-inline button:hover {
   background: #f3f4f6;
 }
 
-.hamburger-dropdown .submenu .submenu-divider {
+.hamburger-dropdown .submenu-inline .submenu-divider {
   height: 1px;
   background: #e5e7eb;
   margin: 2px 0;
@@ -342,6 +349,49 @@
   border-radius: 6px;
   font-size: 12px;
   color: #1e40af;
+}
+
+/* Version copy options */
+.version-copy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-copy-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.version-copy-option:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.version-copy-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.version-copy-option span {
+  font-size: 13px;
+  color: #374151;
+}
+
+/* Version item count in dropdown */
+.version-item-count {
+  font-weight: 400;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .version-modal .delete-confirm-section {

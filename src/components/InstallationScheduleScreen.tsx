@@ -7,7 +7,8 @@ import {
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3, FiTruck, FiLayers, FiSave, FiEdit
+  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3, FiTruck, FiLayers, FiSave, FiEdit,
+  FiPackage, FiTag
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 
@@ -343,6 +344,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [editingVersion, setEditingVersion] = useState<ScheduleVersion | null>(null);
   const [newVersionName, setNewVersionName] = useState('');
   const [newVersionDescription, setNewVersionDescription] = useState('');
+  const [copyFromCurrent, setCopyFromCurrent] = useState(true); // Whether to copy items from current version
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const versionDropdownRef = useRef<HTMLDivElement>(null);
@@ -465,7 +467,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   }, [collapsedDates]);
 
   // Load schedule items
-  // Load versions for this project
+  // Load versions for this project (with item counts)
   const loadVersions = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -481,7 +483,35 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return null;
       }
 
-      setVersions(data || []);
+      // Get item counts for each version
+      if (data && data.length > 0) {
+        const versionIds = data.map(v => v.id);
+        const { data: counts, error: countError } = await supabase
+          .from('installation_schedule')
+          .select('version_id')
+          .eq('project_id', projectId)
+          .in('version_id', versionIds);
+
+        if (!countError && counts) {
+          // Count items per version
+          const countMap: Record<string, number> = {};
+          for (const item of counts) {
+            if (item.version_id) {
+              countMap[item.version_id] = (countMap[item.version_id] || 0) + 1;
+            }
+          }
+          // Add item_count to each version
+          const versionsWithCounts = data.map(v => ({
+            ...v,
+            item_count: countMap[v.id] || 0
+          }));
+          setVersions(versionsWithCounts);
+        } else {
+          setVersions(data || []);
+        }
+      } else {
+        setVersions(data || []);
+      }
 
       // Find active version or return null
       const active = data?.find(v => v.is_active);
@@ -2688,6 +2718,185 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Create markups for unplanned items WITHOUT ERP in assembly mark
+  const createDeliveryDateMarkupsNoERP = async () => {
+    setShowHamburgerMenu(false);
+    setShowMarkupSubmenu(false);
+
+    try {
+      setMessage('Laadin tarnegraafiku andmeid (ilma ERP)...');
+
+      // 1. Get all delivery items with dates from tarnegraafik
+      const { data: deliveryItems, error } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, guid_ifc, guid_ms, model_id, scheduled_date, assembly_mark')
+        .eq('trimble_project_id', projectId)
+        .not('scheduled_date', 'is', null);
+
+      if (error) throw error;
+
+      if (!deliveryItems || deliveryItems.length === 0) {
+        setMessage('Tarnegraafikus pole detaile kuupäevadega');
+        return;
+      }
+
+      // 2. Get guids of items already in installation schedule
+      const scheduledGuidsIfc = new Set(
+        scheduleItems
+          .filter(item => item.guid_ifc)
+          .map(item => item.guid_ifc!.toLowerCase())
+      );
+      const scheduledGuids = new Set(
+        scheduleItems
+          .filter(item => item.guid)
+          .map(item => item.guid.toLowerCase())
+      );
+
+      // 3. Filter to only unplanned items (not in installation schedule) AND exclude ERP items
+      const unplannedItems = deliveryItems.filter(item => {
+        const guidIfc = (item.guid_ifc || '').toLowerCase();
+        const guid = (item.guid || '').toLowerCase();
+        const assemblyMark = (item.assembly_mark || '').toUpperCase();
+
+        // Exclude if contains ERP
+        if (assemblyMark.includes('ERP')) return false;
+
+        // Exclude if already in schedule
+        return !scheduledGuidsIfc.has(guidIfc) && !scheduledGuids.has(guid);
+      });
+
+      if (unplannedItems.length === 0) {
+        setMessage('Pole detaile (ilma ERP) mis pole paigaldusgraafikus');
+        return;
+      }
+
+      setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} detaili ilma ERP)`);
+
+      // 4. Remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe...');
+
+      // 5. Group by model for batch processing
+      const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number }[]>();
+
+      for (const item of unplannedItems) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+
+        if (!modelId || !guidIfc) continue;
+
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (!runtimeIds || runtimeIds.length === 0) continue;
+
+          if (!itemsByModel.has(modelId)) {
+            itemsByModel.set(modelId, []);
+          }
+          itemsByModel.get(modelId)!.push({ item, runtimeId: runtimeIds[0] });
+        } catch (err) {
+          // Object not found in model, skip
+        }
+      }
+
+      const markupsToCreate: any[] = [];
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        for (const { item, runtimeId } of modelItems) {
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Format date as dd.mm.yy
+          const dateStr = item.scheduled_date || '';
+          let formattedDate = dateStr;
+          if (dateStr) {
+            const dateParts = dateStr.split('-');
+            if (dateParts.length === 3) {
+              const yy = dateParts[0].slice(-2);
+              const mm = dateParts[1];
+              const dd = dateParts[2];
+              formattedDate = `${dd}.${mm}.${yy}`;
+            }
+          }
+
+          if (!formattedDate) continue;
+
+          markupsToCreate.push({
+            text: formattedDate,
+            start: pos,
+            end: pos,
+          });
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        return;
+      }
+
+      // 6. Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // 7. Set color - green for non-ERP items
+      const markupColor = '#22C55E';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+        } catch (err) {
+          console.warn('Color set error:', err);
+        }
+      }
+
+      setMessage(`${createdIds.length} markupit loodud (ilma ERP)`);
+    } catch (e) {
+      console.error('Error creating delivery date markups (no ERP):', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
   // Copy all assembly marks for a date to clipboard
   const copyDateMarksToClipboard = async (date: string) => {
     const dateItems = scheduleItems.filter(item => item.scheduled_date === date);
@@ -2779,7 +2988,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }));
 
     if (newValue) {
-      // Turning ON - color schedule items by date (FAST: no Supabase, no white coloring)
+      // Turning ON - color schedule items by date
       try {
         const dates = Object.keys(itemsByDate);
         if (dates.length === 0) return;
@@ -2787,10 +2996,13 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        setMessage('Värvin...');
+        setMessage('Värvin mudeli valgeks...');
 
-        // Step 1: Reset all colors first (this is fast - single API call)
-        await api.viewer.setObjectState(undefined, { color: 'reset' });
+        // Step 1: Color ALL items in the model white first (single API call - no object IDs needed)
+        // The 'undefined' selector targets ALL objects in the viewer
+        await api.viewer.setObjectState(undefined, { color: { r: 240, g: 240, b: 240, a: 255 } });
+
+        setMessage('Värvin päevi...');
 
         // Step 2: Group ALL items by color (batch same-colored items together)
         // This minimizes API calls - one call per unique color per model
@@ -4507,37 +4719,41 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
           {showHamburgerMenu && (
             <div className="hamburger-dropdown">
-              {/* Märgistused submenu */}
+              {/* Märgistused submenu - expands inline */}
               <div
-                className="dropdown-item with-submenu"
-                onMouseEnter={() => setShowMarkupSubmenu(true)}
-                onMouseLeave={() => setShowMarkupSubmenu(false)}
+                className={`dropdown-item with-submenu ${showMarkupSubmenu ? 'expanded' : ''}`}
+                onClick={() => setShowMarkupSubmenu(!showMarkupSubmenu)}
               >
-                <FiChevronLeft size={14} className="submenu-arrow" />
+                <FiChevronDown size={14} className={`submenu-arrow ${showMarkupSubmenu ? 'rotated' : ''}`} />
                 <FiEdit3 size={14} />
                 <span>Märgistused</span>
-
-                {showMarkupSubmenu && (
-                  <div className="submenu">
-                    <button onClick={createMarkupsForAllDays}>
-                      <span>Märgi kõik päevad (P1-1, P1-2...)</span>
-                    </button>
-                    <button onClick={createDeliveryDateMarkups}>
-                      <FiTruck size={14} />
-                      <span>Tarnekuupäevad (planeerimata)</span>
-                    </button>
-                    <div className="submenu-divider" />
-                    <button onClick={() => {
-                      setShowHamburgerMenu(false);
-                      setShowMarkupSubmenu(false);
-                      removeAllMarkups();
-                    }}>
-                      <FiTrash2 size={14} />
-                      <span>Eemalda kõik markupid</span>
-                    </button>
-                  </div>
-                )}
               </div>
+
+              {showMarkupSubmenu && (
+                <div className="submenu-inline">
+                  <button onClick={createMarkupsForAllDays}>
+                    <FiTag size={14} />
+                    <span>Märgi kõik päevad (P1-1, P1-2...)</span>
+                  </button>
+                  <button onClick={createDeliveryDateMarkups}>
+                    <FiTruck size={14} />
+                    <span>Tarnekuupäevad (planeerimata)</span>
+                  </button>
+                  <button onClick={createDeliveryDateMarkupsNoERP}>
+                    <FiPackage size={14} />
+                    <span>Ilma ERP-ideta (planeerimata)</span>
+                  </button>
+                  <div className="submenu-divider" />
+                  <button onClick={() => {
+                    setShowHamburgerMenu(false);
+                    setShowMarkupSubmenu(false);
+                    removeAllMarkups();
+                  }}>
+                    <FiTrash2 size={14} />
+                    <span>Eemalda kõik markupid</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -4572,7 +4788,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       className="version-select-btn"
                       onClick={() => switchVersion(v.id)}
                     >
-                      <span className="version-item-name">{v.name}</span>
+                      <span className="version-item-name">
+                        {v.name}
+                        {v.item_count !== undefined && (
+                          <span className="version-item-count"> ({v.item_count})</span>
+                        )}
+                      </span>
                       {v.description && (
                         <span className="version-item-desc">{v.description}</span>
                       )}
@@ -4601,6 +4822,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   setEditingVersion(null);
                   setNewVersionName('');
                   setNewVersionDescription('');
+                  setCopyFromCurrent(true);
                   setShowVersionModal(true);
                   setShowVersionDropdown(false);
                 }}
@@ -5167,9 +5389,28 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                     />
                   </div>
                   {!editingVersion && scheduleItems.length > 0 && (
-                    <div className="form-info">
-                      <FiAlertCircle size={14} />
-                      <span>Uus versioon luuakse praeguse graafiku koopiana ({scheduleItems.length} detaili)</span>
+                    <div className="form-group">
+                      <label>Detailid</label>
+                      <div className="version-copy-options">
+                        <label className="version-copy-option">
+                          <input
+                            type="radio"
+                            name="copyOption"
+                            checked={copyFromCurrent}
+                            onChange={() => setCopyFromCurrent(true)}
+                          />
+                          <span>Kopeeri praegusest versioonist ({scheduleItems.length} detaili)</span>
+                        </label>
+                        <label className="version-copy-option">
+                          <input
+                            type="radio"
+                            name="copyOption"
+                            checked={!copyFromCurrent}
+                            onChange={() => setCopyFromCurrent(false)}
+                          />
+                          <span>Loo tühi versioon</span>
+                        </label>
+                      </div>
                     </div>
                   )}
                 </>
@@ -5211,7 +5452,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   </button>
                   <button
                     className="btn-primary"
-                    onClick={() => editingVersion ? updateVersion() : createNewVersion(true)}
+                    onClick={() => editingVersion ? updateVersion() : createNewVersion(copyFromCurrent)}
                   >
                     <FiSave size={14} />
                     {editingVersion ? 'Salvesta' : 'Loo versioon'}
