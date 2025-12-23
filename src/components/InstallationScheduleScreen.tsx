@@ -3395,87 +3395,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Highlight already scheduled items from selection in red, unscheduled in blue - OPTIMIZED
+  // Highlight already scheduled items from selection in red - simple version
   const highlightScheduledItemsRed = async (scheduledObjects: { obj: SelectedObject; date: string }[]) => {
     try {
-      // Step 1: Reset colors first (fast)
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
-
-      // Step 2: Color all schedule items by their date colors (using stored runtime IDs)
-      const dates = Object.keys(itemsByDate);
-      const dateColors = generateDateColors(dates);
-
-      // Batch by color and model
-      const colorPromises: Promise<void>[] = [];
-
-      for (const date of dates) {
-        const items = itemsByDate[date];
-        const color = dateColors[date] || { r: 100, g: 100, b: 100 };
-
-        // Group items by model
-        const byModel: Record<string, number[]> = {};
-        for (const item of items) {
-          if (item.model_id && item.object_runtime_id) {
-            if (!byModel[item.model_id]) byModel[item.model_id] = [];
-            byModel[item.model_id].push(item.object_runtime_id);
-          }
-        }
-
-        // Add color operations to batch
-        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-          colorPromises.push(
-            api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-            )
-          );
-        }
-      }
-
-      // Execute date coloring in parallel
-      await Promise.all(colorPromises);
-
-      // Step 3: Color UNSCHEDULED selected items BLUE (batch)
-      const scheduledGuids = new Set(scheduledObjects.map(s => s.obj.guidIfc || s.obj.guid));
-      const unscheduledSelected = selectedObjects.filter(obj => {
-        const guid = obj.guidIfc || obj.guid;
-        return !scheduledGuids.has(guid);
-      });
+      if (scheduledObjects.length === 0) return;
 
       // Group by model for batching
-      const blueByModel: Record<string, number[]> = {};
-      const blueConversions: Promise<void>[] = [];
-
-      for (const obj of unscheduledSelected) {
-        const modelId = obj.modelId;
-        const guidIfc = obj.guidIfc || obj.guid;
-        if (modelId && guidIfc) {
-          blueConversions.push(
-            (async () => {
-              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-              if (runtimeIds && runtimeIds.length > 0) {
-                if (!blueByModel[modelId]) blueByModel[modelId] = [];
-                blueByModel[modelId].push(runtimeIds[0]);
-              }
-            })()
-          );
-        }
-      }
-
-      await Promise.all(blueConversions);
-
-      // Apply blue colors in batch
-      const bluePromises: Promise<void>[] = [];
-      for (const [modelId, runtimeIds] of Object.entries(blueByModel)) {
-        bluePromises.push(
-          api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            { color: { r: 59, g: 130, b: 246, a: 255 } }
-          )
-        );
-      }
-
-      // Step 4: Color SCHEDULED selected items RED (batch)
       const redByModel: Record<string, number[]> = {};
       const redConversions: Promise<void>[] = [];
 
@@ -3497,7 +3422,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       await Promise.all(redConversions);
 
-      // Apply red colors after blue (to override)
+      // Apply red color to scheduled items only
       const redPromises: Promise<void>[] = [];
       for (const [modelId, runtimeIds] of Object.entries(redByModel)) {
         redPromises.push(
@@ -3508,11 +3433,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         );
       }
 
-      // Execute blue and red in sequence (red after blue)
-      await Promise.all(bluePromises);
       await Promise.all(redPromises);
 
-      setMessage(`Punane: ${scheduledObjects.length} juba planeeritud | Sinine: ${unscheduledSelected.length} uut`);
+      setMessage(`${scheduledObjects.length} detaili värvitud punaseks`);
     } catch (e) {
       console.error('Error highlighting scheduled items:', e);
     }
