@@ -5336,13 +5336,27 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       {/* Selection Info - hide during playback */}
       {selectedObjects.length > 0 && !isPlaying && !isPaused && (() => {
-        // Check if selected objects are already scheduled
+        // Check if selected objects are already scheduled - with full details
         const scheduledInfo = selectedObjects
           .map(obj => {
             const scheduled = scheduleItems.find(item => item.guid === obj.guid || item.guid_ifc === obj.guidIfc);
-            return scheduled ? { obj, date: scheduled.scheduled_date } : null;
+            if (!scheduled) return null;
+
+            // Calculate position number on that day
+            const dateItems = itemsByDate[scheduled.scheduled_date] || [];
+            const sortedDateItems = [...dateItems].sort((a, b) =>
+              (a.assembly_mark || '').localeCompare(b.assembly_mark || '')
+            );
+            const jrNr = sortedDateItems.findIndex(item => item.id === scheduled.id) + 1;
+
+            return {
+              obj,
+              date: scheduled.scheduled_date,
+              mark: scheduled.assembly_mark || '',
+              jrNr
+            };
           })
-          .filter(Boolean) as { obj: SelectedObject; date: string }[];
+          .filter(Boolean) as { obj: SelectedObject; date: string; mark: string; jrNr: number }[];
 
         const allScheduled = scheduledInfo.length === selectedObjects.length;
         const someScheduled = scheduledInfo.length > 0 && scheduledInfo.length < selectedObjects.length;
@@ -5354,6 +5368,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }, 0);
         const weightStr = totalWeight > 0 ? `${Math.round(totalWeight)} kg` : '';
 
+        // Build detailed tooltip for scheduled items
+        const buildScheduledTooltip = (items: typeof scheduledInfo) => {
+          if (items.length === 0) return '';
+          const lines = items.map(s => `#${s.jrNr} ${s.mark} → ${formatDateEstonian(s.date)}`);
+          lines.push('', 'Klõpsa, et värvida punaseks');
+          return lines.join('\n');
+        };
+
         return (
           <div className="selection-info">
             {/* First row: selection count and status */}
@@ -5363,7 +5385,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <span
                   className="already-scheduled-info clickable"
                   onClick={() => highlightScheduledItemsRed(scheduledInfo)}
-                  title="Klõpsa, et värvida punaseks"
+                  title={buildScheduledTooltip(scheduledInfo)}
                 >
                   ✓ Planeeritud: {[...new Set(scheduledInfo.map(s => formatDateEstonian(s.date)))].join(', ')}
                 </span>
@@ -5372,7 +5394,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <span
                   className="partially-scheduled-info clickable"
                   onClick={() => highlightScheduledItemsRed(scheduledInfo)}
-                  title="Klõpsa, et värvida punaseks"
+                  title={buildScheduledTooltip(scheduledInfo)}
                 >
                   ⚠ {scheduledInfo.length} juba planeeritud
                 </span>
