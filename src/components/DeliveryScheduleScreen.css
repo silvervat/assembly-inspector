@@ -1601,6 +1601,7 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
+  position: relative;
 }
 
 .resource-icon-btn {
@@ -1649,9 +1650,29 @@
 
 /* Quick dropdown variant for resource assign */
 .resource-hover-item .method-qty-dropdown {
-  top: calc(100% + 2px);
+  position: absolute;
+  top: 32px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 300;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 6px;
+  padding-top: 10px;
+  display: flex;
+  gap: 3px;
+}
+
+/* Invisible bridge to allow mouse movement to dropdown */
+.resource-hover-item .method-qty-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 10px;
 }
 
 .resource-count-controls {

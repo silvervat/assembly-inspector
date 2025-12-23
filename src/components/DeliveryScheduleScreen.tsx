@@ -5819,6 +5819,60 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 </button>
                               ) : null;
                             })()}
+                            {/* Remove selected items from this vehicle */}
+                            {selectedItemIds.size > 0 && (() => {
+                              const selectedInThisVehicle = vehicleItems.filter(item => selectedItemIds.has(item.id));
+                              return selectedInThisVehicle.length > 0 ? (
+                                <button onClick={async () => {
+                                  setVehicleMenuId(null);
+                                  // Remove only the selected items that are in this vehicle
+                                  const idsToRemove = selectedInThisVehicle.map(i => i.id);
+                                  setSaving(true);
+                                  try {
+                                    const { error } = await supabase
+                                      .from('trimble_delivery_items')
+                                      .update({
+                                        vehicle_id: null,
+                                        scheduled_date: null,
+                                        updated_by: tcUserEmail,
+                                        updated_at: new Date().toISOString()
+                                      })
+                                      .in('id', idsToRemove);
+                                    if (error) throw error;
+                                    // Color removed items white if color mode is active
+                                    if (colorMode !== 'none') {
+                                      try {
+                                        const byModel: Record<string, number[]> = {};
+                                        for (const item of selectedInThisVehicle) {
+                                          if (item.model_id && item.object_runtime_id) {
+                                            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+                                            byModel[item.model_id].push(item.object_runtime_id);
+                                          }
+                                        }
+                                        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+                                          await api.viewer.setObjectState(
+                                            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                                            { color: { r: 255, g: 255, b: 255, a: 255 } }
+                                          );
+                                        }
+                                      } catch (colorError) {
+                                        console.error('Error coloring removed items:', colorError);
+                                      }
+                                    }
+                                    await Promise.all([loadItems(), loadVehicles()]);
+                                    broadcastReload();
+                                    setSelectedItemIds(new Set());
+                                    setMessage(`${idsToRemove.length} detaili eemaldatud veokist`);
+                                  } catch (e: any) {
+                                    setMessage('Viga eemaldamisel: ' + e.message);
+                                  } finally {
+                                    setSaving(false);
+                                  }
+                                }}>
+                                  <FiPackage /> Eemalda {selectedInThisVehicle.length} valitud
+                                </button>
+                              ) : null;
+                            })()}
                             <button
                               className="danger"
                               onClick={() => {
