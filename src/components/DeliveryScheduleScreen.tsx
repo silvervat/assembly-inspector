@@ -1358,6 +1358,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const selectionInProgressRef = useRef(false);
   // Track expected runtime IDs from schedule selection to avoid clearing on polling
   const scheduleSelectionRuntimeIdsRef = useRef<Set<number>>(new Set());
+  // Track previous model selection to detect actual changes
+  const previousModelSelectionRef = useRef<string>('');
 
   useEffect(() => {
     const handleSelectionChange = async () => {
@@ -1477,10 +1479,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }
 
+        // Create a signature of current selection to detect actual changes
+        const currentSelectionKey = objects.map(o => `${o.modelId}-${o.runtimeId}`).sort().join(',');
+        const selectionActuallyChanged = currentSelectionKey !== previousModelSelectionRef.current;
+        previousModelSelectionRef.current = currentSelectionKey;
+
         setSelectedObjects(objects);
 
-        // Clear schedule selection when model selection changes
-        if (objects.length > 0) {
+        // Only clear schedule selection when model selection actually CHANGES to something new
+        if (objects.length > 0 && selectionActuallyChanged) {
           setSelectedItemIds(new Set());
         }
       } catch (e: any) {
