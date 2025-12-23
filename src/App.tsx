@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.178';
+export const APP_VERSION = '3.0.179';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -152,26 +152,54 @@ export default function App() {
           // Clear the pending zoom immediately to avoid re-triggering
           localStorage.removeItem('assembly_inspector_zoom');
 
-          try {
-            // Wait a moment for the viewer to be fully ready
-            await new Promise(resolve => setTimeout(resolve, 1500));
+          const runtimeId = parseInt(pendingZoom.runtime, 10);
+          if (!isNaN(runtimeId)) {
+            // Retry zoom until model is loaded (max 60 seconds)
+            const maxRetries = 30;
+            const retryDelay = 2000; // 2 seconds between retries
 
-            const runtimeId = parseInt(pendingZoom.runtime, 10);
-            if (!isNaN(runtimeId)) {
-              await connected.viewer.setSelection({
-                modelObjectIds: [{
+            const tryZoom = async (attempt: number): Promise<boolean> => {
+              try {
+                console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}...`);
+
+                // Check if model is loaded by trying to get its objects
+                const models = await connected.viewer.getModels();
+                const modelLoaded = models?.some((m: any) => m.id === pendingZoom.model);
+
+                if (!modelLoaded) {
+                  console.log('⏳ Model not loaded yet, waiting...');
+                  return false;
+                }
+
+                // Try to select and zoom
+                await connected.viewer.setSelection({
+                  modelObjectIds: [{
+                    modelId: pendingZoom.model,
+                    objectRuntimeIds: [runtimeId]
+                  }]
+                }, 'set');
+
+                await (connected.viewer as any).zoomToObjects?.([{
                   modelId: pendingZoom.model,
                   objectRuntimeIds: [runtimeId]
-                }]
-              }, 'set');
-              await (connected.viewer as any).zoomToObjects?.([{
-                modelId: pendingZoom.model,
-                objectRuntimeIds: [runtimeId]
-              }]);
-              console.log('✓ Zoomed to object successfully');
-            }
-          } catch (zoomErr) {
-            console.error('Failed to zoom to object:', zoomErr);
+                }]);
+
+                console.log('✓ Zoomed to object successfully!');
+                return true;
+              } catch (e) {
+                console.log('⏳ Zoom failed, will retry...', e);
+                return false;
+              }
+            };
+
+            // Start retry loop in background (don't block init)
+            (async () => {
+              for (let i = 1; i <= maxRetries; i++) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                const success = await tryZoom(i);
+                if (success) break;
+              }
+            })();
           }
         }
 
