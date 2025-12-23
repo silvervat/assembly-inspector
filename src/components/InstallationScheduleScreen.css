@@ -60,25 +60,25 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
-  min-width: 200px;
+  margin-top: 2px;
+  min-width: 160px;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   z-index: 200;
-  padding: 4px;
+  padding: 2px;
 }
 
 .hamburger-dropdown .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 6px 10px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 4px;
   color: #374151;
-  font-size: 14px;
+  font-size: 12px;
   position: relative;
 }
 
@@ -91,8 +91,8 @@
 }
 
 .hamburger-dropdown .dropdown-item .submenu-arrow {
-  margin-right: 4px;
-  opacity: 0.6;
+  margin-right: 2px;
+  opacity: 0.5;
 }
 
 /* Submenu - opens to the left */
@@ -100,27 +100,27 @@
   position: absolute;
   top: 0;
   right: 100%;
-  margin-right: 4px;
-  min-width: 220px;
+  margin-right: 2px;
+  min-width: 180px;
   background: white;
   border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  padding: 4px;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 2px;
 }
 
 .hamburger-dropdown .submenu button {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 6px 10px;
   border: none;
   background: transparent;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: 4px;
   color: #374151;
-  font-size: 13px;
+  font-size: 12px;
   text-align: left;
 }
 
@@ -131,7 +131,7 @@
 .hamburger-dropdown .submenu .submenu-divider {
   height: 1px;
   background: #e5e7eb;
-  margin: 4px 0;
+  margin: 2px 0;
 }
 
 /* Version bar */
