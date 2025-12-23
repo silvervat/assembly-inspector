@@ -3499,3 +3499,10 @@
 .stats-count-row .count-value {
   color: var(--modus-text-primary);
 }
+
+/* Already scheduled count in add button */
+.add-to-date-btn .already-scheduled-count {
+  opacity: 0.8;
+  font-weight: 400;
+  font-size: 11px;
+}

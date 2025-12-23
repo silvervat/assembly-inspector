@@ -5541,7 +5541,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 disabled={saving}
               >
                 <FiPlus size={14} />
-                Lisa {formatDateEstonian(selectedDate)}
+                Lisa {selectedObjects.length - scheduledInfo.length} detaili {formatDateEstonian(selectedDate)}
+                {scheduledInfo.length > 0 && (
+                  <span className="already-scheduled-count"> | {scheduledInfo.length} juba planeeritud</span>
+                )}
               </button>
             )}
             {!allScheduled && !selectedDate && (
