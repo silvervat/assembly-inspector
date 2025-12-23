@@ -2008,18 +2008,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     // Use provided objects or selectedObjects, and filter out those already in items
     const sourceObjects = objectsOverride || selectedObjects;
 
-    // Build sets for duplicate detection using multiple identifiers
+    // Build sets for duplicate detection using GUID only (assembly_mark can repeat for different elements)
     const existingGuids = new Set(items.map(item => item.guid).filter(Boolean));
     const existingGuidIfcs = new Set(items.map(item => item.guid_ifc).filter(Boolean));
-    const existingAssemblyMarks = new Set(items.map(item => item.assembly_mark).filter(Boolean));
 
-    // Check for duplicates and items already in a load
+    // Check for duplicates by GUID only
     const duplicates: string[] = [];
     const objectsToAdd = sourceObjects.filter(obj => {
-      // Check if already exists by GUID, IFC GUID, or assembly mark
+      // Check if already exists by GUID or IFC GUID only (not assembly mark - same mark can have multiple GUIDs)
       const isDuplicate = (obj.guid && existingGuids.has(obj.guid)) ||
-                          (obj.guidIfc && existingGuidIfcs.has(obj.guidIfc)) ||
-                          (obj.assemblyMark && !obj.assemblyMark.startsWith('Object_') && existingAssemblyMarks.has(obj.assemblyMark));
+                          (obj.guidIfc && existingGuidIfcs.has(obj.guidIfc));
 
       if (isDuplicate) {
         duplicates.push(obj.assemblyMark || obj.guid || obj.guidIfc || 'Tundmatu');
