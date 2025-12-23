@@ -302,6 +302,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Hamburger menu state
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState(false);
+  // Track markup IDs mapped to guid_ifc for removal when items are scheduled
+  const [deliveryMarkupMap, setDeliveryMarkupMap] = useState<Map<string, number>>(new Map());
 
   // Export settings
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1572,6 +1574,32 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (error) throw error;
 
+      // Remove markups for added items
+      if (deliveryMarkupMap.size > 0) {
+        const markupIdsToRemove: number[] = [];
+        for (const obj of selectedObjects) {
+          const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+          const markupId = deliveryMarkupMap.get(guidIfc);
+          if (markupId) {
+            markupIdsToRemove.push(markupId);
+          }
+        }
+        if (markupIdsToRemove.length > 0) {
+          try {
+            await api.markup?.removeMarkups?.(markupIdsToRemove);
+            // Update the map to remove the deleted entries
+            const newMap = new Map(deliveryMarkupMap);
+            for (const obj of selectedObjects) {
+              const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+              newMap.delete(guidIfc);
+            }
+            setDeliveryMarkupMap(newMap);
+          } catch (err) {
+            console.error('Error removing markups:', err);
+          }
+        }
+      }
+
       setMessage(`${newItems.length} detaili lisatud`);
       loadSchedule();
 
@@ -1641,6 +1669,32 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .insert(newItems);
 
       if (error) throw error;
+
+      // Remove markups for added items
+      if (deliveryMarkupMap.size > 0) {
+        const markupIdsToRemove: number[] = [];
+        for (const obj of unscheduledObjects) {
+          const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+          const markupId = deliveryMarkupMap.get(guidIfc);
+          if (markupId) {
+            markupIdsToRemove.push(markupId);
+          }
+        }
+        if (markupIdsToRemove.length > 0) {
+          try {
+            await api.markup?.removeMarkups?.(markupIdsToRemove);
+            // Update the map to remove the deleted entries
+            const newMap = new Map(deliveryMarkupMap);
+            for (const obj of unscheduledObjects) {
+              const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+              newMap.delete(guidIfc);
+            }
+            setDeliveryMarkupMap(newMap);
+          } catch (err) {
+            console.error('Error removing markups:', err);
+          }
+        }
+      }
 
       setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
       loadSchedule();
@@ -2625,6 +2679,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       const markupsToCreate: any[] = [];
+      const markupGuidIfcs: string[] = []; // Track guid_ifc for each markup in order
 
       for (const [modelId, modelItems] of itemsByModel) {
         const runtimeIds = modelItems.map(m => m.runtimeId);
@@ -2679,6 +2734,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             start: pos,
             end: pos,
           });
+          // Track the guid_ifc for this markup
+          markupGuidIfcs.push((item.guid_ifc || item.guid || '').toLowerCase());
         }
       }
 
@@ -2700,6 +2757,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       } else if (result?.ids) {
         createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
       }
+
+      // Build map of guid_ifc -> markup_id for later removal
+      const newMarkupMap = new Map<string, number>();
+      for (let i = 0; i < Math.min(createdIds.length, markupGuidIfcs.length); i++) {
+        if (markupGuidIfcs[i] && createdIds[i]) {
+          newMarkupMap.set(markupGuidIfcs[i], createdIds[i]);
+        }
+      }
+      setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - orange for delivery dates
       const markupColor = '#FF6600';
@@ -2806,6 +2872,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       const markupsToCreate: any[] = [];
+      const markupGuidIfcs: string[] = []; // Track guid_ifc for each markup in order
 
       for (const [modelId, modelItems] of itemsByModel) {
         const runtimeIds = modelItems.map(m => m.runtimeId);
@@ -2859,6 +2926,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             start: pos,
             end: pos,
           });
+          // Track the guid_ifc for this markup
+          markupGuidIfcs.push((item.guid_ifc || item.guid || '').toLowerCase());
         }
       }
 
@@ -2879,6 +2948,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       } else if (result?.ids) {
         createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
       }
+
+      // Build map of guid_ifc -> markup_id for later removal
+      const newMarkupMap = new Map<string, number>();
+      for (let i = 0; i < Math.min(createdIds.length, markupGuidIfcs.length); i++) {
+        if (markupGuidIfcs[i] && createdIds[i]) {
+          newMarkupMap.set(markupGuidIfcs[i], createdIds[i]);
+        }
+      }
+      setDeliveryMarkupMap(newMarkupMap);
 
       // 7. Set color - green for non-ERP items
       const markupColor = '#22C55E';
