@@ -5892,37 +5892,32 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                         <button
                           className="btn-small btn-secondary"
                           onClick={async () => {
-                            // Remove markups for scheduled items
-                            if (deliveryMarkupMap.size > 0) {
-                              const markupIdsToRemove: number[] = [];
-                              for (const { obj } of scheduledInfo) {
-                                const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
-                                const markupId = deliveryMarkupMap.get(guidIfc);
-                                if (markupId) markupIdsToRemove.push(markupId);
-                              }
-                              if (markupIdsToRemove.length > 0) {
-                                try {
-                                  await api.markup?.removeMarkups?.(markupIdsToRemove);
-                                  const newMap = new Map(deliveryMarkupMap);
-                                  for (const { obj } of scheduledInfo) {
-                                    const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
-                                    newMap.delete(guidIfc);
-                                  }
-                                  setDeliveryMarkupMap(newMap);
-                                  setMessage(`${markupIdsToRemove.length} märgistust eemaldatud`);
-                                } catch (err) {
-                                  console.error('Error removing markups:', err);
-                                }
-                              } else {
-                                setMessage('Märgistusi pole eemaldada');
-                              }
-                            } else {
-                              setMessage('Märgistusi pole eemaldada');
-                            }
+                            // Deselect the scheduled items from selection
+                            const scheduledGuids = new Set(
+                              scheduledInfo.map(s => (s.obj.guidIfc || s.obj.guid || '').toLowerCase())
+                            );
+
+                            // Filter out scheduled items from selection
+                            const remainingObjects = selectedObjects.filter(obj => {
+                              const guidIfc = (obj.guidIfc || obj.guid || '').toLowerCase();
+                              return !scheduledGuids.has(guidIfc);
+                            });
+
+                            // Update Trimble model selection
+                            const modelObjectIds = remainingObjects
+                              .filter(obj => obj.runtimeId)
+                              .map(obj => ({
+                                modelId: obj.modelId,
+                                objectRuntimeId: obj.runtimeId
+                              }));
+
+                            await api.viewer.setSelection({ modelObjectIds }, 'set');
+                            setSelectedObjects(remainingObjects);
+                            setMessage(`${scheduledInfo.length} detaili eemaldatud valikust`);
                             setShowScheduledDropdown(false);
                           }}
                         >
-                          Eemalda märgistus
+                          Eemalda valikust
                         </button>
                         <button
                           className="btn-small btn-primary"
