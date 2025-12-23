@@ -286,12 +286,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     colorPreviousDayBlack: false,  // Option 1: Color previous day black when new day starts
     colorAllWhiteAtStart: false,   // Option 2: Color all items white before playback
     colorEachDayDifferent: false,  // Option 3: Color each day different color (disables option 1)
-    progressiveReveal: false,      // Option 4: Hide scheduled items at start, reveal one by one
-    hideEntireModel: false,        // Option 5: Hide ENTIRE model at start, build up from scratch
-    showDayOverview: false,        // Option 6: Show day overview after each day completes
+    progressiveReveal: false,      // Option 4: Hide all items at start, reveal one by one (uses database)
+    showDayOverview: false,        // Option 5: Show day overview after each day completes
     dayOverviewDuration: 2500,     // Duration in ms for day overview display
-    playByDay: false,              // Option 7: Play day by day instead of item by item
-    disableZoom: false             // Option 8: Don't zoom to items during playback
+    playByDay: false,              // Option 6: Play day by day instead of item by item
+    disableZoom: false             // Option 7: Don't zoom to items during playback
   });
 
   // Day overview state - tracks if we're showing day overview
@@ -3263,11 +3262,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color all non-schedule items with a specific color (fetches from Supabase)
-  const colorAllItems = async (color: { r: number; g: number; b: number }) => {
+  // Color ENTIRE model with a specific color (fetches ALL objects from Supabase)
+  const colorEntireModelWhite = async () => {
     try {
-      setMessage('Värvin... Loen Supabasest...');
-
       // Fetch ALL objects from Supabase with pagination
       const PAGE_SIZE = 5000;
       const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
@@ -3282,63 +3279,36 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .order('object_runtime_id', { ascending: true })
           .limit(PAGE_SIZE);
 
-        if (error) {
-          console.error('Supabase error:', error);
-          setMessage('Viga Supabase lugemisel');
-          return;
-        }
-
+        if (error) { console.error('Supabase error:', error); break; }
         if (!data || data.length === 0) break;
 
         allModelObjects.push(...data);
         lastId = data[data.length - 1].object_runtime_id;
-
-        setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
-
         if (data.length < PAGE_SIZE) break;
       }
 
-      if (allModelObjects.length === 0) {
-        setMessage('Andmebaasis pole mudeli objekte! Kasuta Admin → "Saada andmebaasi"');
-        setTimeout(() => setMessage(null), 5000);
-        return;
-      }
+      if (allModelObjects.length === 0) return;
 
-      // Get schedule item runtime IDs
-      const scheduleRuntimeIds = new Set(
-        scheduleItems.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
-      );
-
-      // Color non-schedule items with the given color
+      // Group by model
       const byModel: Record<string, number[]> = {};
       for (const obj of allModelObjects) {
-        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
-          if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
-          byModel[obj.model_id].push(obj.object_runtime_id);
-        }
+        if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
+        byModel[obj.model_id].push(obj.object_runtime_id);
       }
 
+      // Color ALL objects white in batches
       const BATCH_SIZE = 5000;
-      let coloredCount = 0;
-      const total = Object.values(byModel).reduce((sum, arr) => sum + arr.length, 0);
-
       for (const [modelId, runtimeIds] of Object.entries(byModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { ...color, a: 255 } }
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
           );
-          coloredCount += batch.length;
-          setMessage(`Värvin... ${coloredCount}/${total}`);
         }
       }
-
-      setMessage(`${total} detaili värvitud`);
-      setTimeout(() => setMessage(null), 2000);
     } catch (e) {
-      console.error('Error coloring all items:', e);
-      setMessage('Viga värvimisel');
+      console.error('Error coloring model white:', e);
     }
   };
 
@@ -3373,7 +3343,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       // Use object_runtime_id directly if available (from Supabase)
       if (item.model_id && item.object_runtime_id) {
         const modelObjectIds = { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] };
-        // First reset visibility (clears blanket hide state from hideEntireModel)
+        // First reset visibility, then set visible
         await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
         // Then explicitly set to visible
         await api.viewer.setObjectState(modelObjectIds, { visible: true });
@@ -3487,19 +3457,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setPlaybackDateColors(colors);
     }
 
-    // Hide entire model (build from scratch)
-    if (playbackSettings.hideEntireModel) {
-      await api.viewer.setObjectState(undefined, { visible: false }); // Hide everything
-    }
-    // Progressive reveal: hide only scheduled items
-    else if (playbackSettings.progressiveReveal) {
-      await api.viewer.setObjectState(undefined, { visible: 'reset' }); // First show all
-      await hideAllItems(); // Then hide only scheduled items
+    // Progressive reveal: hide ALL scheduled items, reveal one by one
+    if (playbackSettings.progressiveReveal) {
+      await hideAllItems(); // Hide all scheduled items using database
     }
 
-    // Color all items white if setting is enabled
+    // Color entire model white if setting is enabled (uses database)
     if (playbackSettings.colorAllWhiteAtStart) {
-      await colorAllItems({ r: 255, g: 255, b: 255 });
+      await colorEntireModelWhite();
     }
 
     // Reset current playback date
@@ -3537,7 +3502,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       playbackRef.current = null;
     }
     // Reset visibility if progressive reveal or hide entire model was enabled
-    if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+    if (playbackSettings.progressiveReveal) {
       await api.viewer.setObjectState(undefined, { visible: 'reset' });
     }
   };
@@ -3578,7 +3543,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           setIsPlaying(false);
           setIsPaused(false);
           setCurrentPlaybackDate(null);
-          if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+          if (playbackSettings.progressiveReveal) {
             api.viewer.setObjectState(undefined, { visible: 'reset' });
           }
           zoomToAllItems();
@@ -3607,7 +3572,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
 
         // Show all items of this day (progressive reveal / hide entire model)
-        if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+        if (playbackSettings.progressiveReveal) {
           for (const item of dateItems) {
             await showItem(item);
           }
@@ -3682,7 +3647,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         setIsPaused(false);
         setCurrentPlaybackDate(null);
         // Reset visibility if progressive reveal or hide entire model was enabled
-        if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+        if (playbackSettings.progressiveReveal) {
           api.viewer.setObjectState(undefined, { visible: 'reset' });
         }
         // Zoom out at end
@@ -3725,7 +3690,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Progressive reveal / hide entire model: show the item first
-      if (playbackSettings.progressiveReveal || playbackSettings.hideEntireModel) {
+      if (playbackSettings.progressiveReveal) {
         await showItem(item);
       }
 
@@ -5591,21 +5556,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       {/* Playback Controls */}
       <div className="playback-controls">
         {!isPlaying ? (
-          <button className="play-btn" onClick={startPlayback} disabled={scheduleItems.length === 0}>
+          <button className="play-btn" onClick={startPlayback} disabled={scheduleItems.length === 0} title="Esita">
             <FiPlay size={16} />
-            <span>Esita</span>
           </button>
         ) : (
           <>
             {isPaused ? (
-              <button className="play-btn" onClick={resumePlayback}>
+              <button className="play-btn" onClick={resumePlayback} title="Jätka">
                 <FiPlay size={16} />
-                <span>Jätka</span>
               </button>
             ) : (
-              <button className="pause-btn" onClick={pausePlayback}>
+              <button className="pause-btn" onClick={pausePlayback} title="Paus">
                 <FiPause size={16} />
-                <span>Paus</span>
               </button>
             )}
             <button className="stop-btn" onClick={stopPlayback}>
@@ -6126,28 +6088,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <input
                   type="checkbox"
                   checked={playbackSettings.progressiveReveal}
-                  disabled={playbackSettings.hideEntireModel}
                   onChange={e => setPlaybackSettings(prev => ({ ...prev, progressiveReveal: e.target.checked }))}
                 />
                 <div className="setting-text">
-                  <span>Järk-järguline esitus</span>
-                  <small>Peida graafiku detailid, kuva järjest</small>
-                </div>
-              </label>
-
-              <label className="setting-option-compact">
-                <input
-                  type="checkbox"
-                  checked={playbackSettings.hideEntireModel}
-                  onChange={e => setPlaybackSettings(prev => ({
-                    ...prev,
-                    hideEntireModel: e.target.checked,
-                    progressiveReveal: e.target.checked ? false : prev.progressiveReveal
-                  }))}
-                />
-                <div className="setting-text">
-                  <span>Ehita nullist</span>
-                  <small>Peida KOGU mudel, ehita graafiku järgi</small>
+                  <span>Järk-järguline ehitus</span>
+                  <small>Peida detailid, kuva järjest graafiku järgi</small>
                 </div>
               </label>
 
