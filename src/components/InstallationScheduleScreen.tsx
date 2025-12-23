@@ -1539,6 +1539,104 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Remove model-selected items from a specific date
+  const removeSelectedFromDate = async (date: string) => {
+    const dateItems = itemsByDate[date] || [];
+    if (dateItems.length === 0 || selectedObjects.length === 0) return;
+
+    // Find which selected model objects match items on this date
+    const modelSelectedGuidsIfc = new Set(
+      selectedObjects
+        .filter(obj => obj.guidIfc)
+        .map(obj => obj.guidIfc!.toLowerCase())
+    );
+    const modelSelectedGuids = new Set(
+      selectedObjects
+        .filter(obj => obj.guid)
+        .map(obj => obj.guid!.toLowerCase())
+    );
+
+    // Find items from this date that are selected in model
+    const itemsToRemove = dateItems.filter(item => {
+      const guidIfc = (item.guid_ifc || '').toLowerCase();
+      const guid = (item.guid || '').toLowerCase();
+      return modelSelectedGuidsIfc.has(guidIfc) || modelSelectedGuids.has(guid);
+    });
+
+    if (itemsToRemove.length === 0) {
+      setMessage('Valitud detailid ei ole sellel kuupäeval');
+      return;
+    }
+
+    saveUndoState(`${itemsToRemove.length} detaili eemaldamine kuupäevalt ${date}`);
+
+    try {
+      const itemIds = itemsToRemove.map(i => i.id);
+
+      // Get runtime IDs before deletion for coloring
+      const runtimeIdsToColor: { modelId: string; runtimeId: number }[] = [];
+      if (playbackSettings.colorEachDayDifferent) {
+        for (const item of itemsToRemove) {
+          if (item.model_id && item.object_runtime_id) {
+            runtimeIdsToColor.push({ modelId: item.model_id, runtimeId: item.object_runtime_id });
+          }
+        }
+      }
+
+      // Delete comments for these items
+      await supabase
+        .from('schedule_comments')
+        .delete()
+        .in('schedule_item_id', itemIds);
+
+      // Check if date will be empty after deletion
+      const remainingCount = dateItems.length - itemsToRemove.length;
+      if (remainingCount === 0) {
+        // Delete date comments too
+        await supabase
+          .from('schedule_comments')
+          .delete()
+          .eq('project_id', projectId)
+          .eq('schedule_date', date);
+      }
+
+      // Delete the items
+      const { error } = await supabase
+        .from('installation_schedule')
+        .delete()
+        .in('id', itemIds);
+
+      if (error) throw error;
+
+      // Color removed items white if coloring is enabled
+      if (playbackSettings.colorEachDayDifferent && runtimeIdsToColor.length > 0) {
+        const byModel: Record<string, number[]> = {};
+        for (const { modelId, runtimeId } of runtimeIdsToColor) {
+          if (!byModel[modelId]) byModel[modelId] = [];
+          byModel[modelId].push(runtimeId);
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      // Clear model selection
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
+      setMessage(`${itemsToRemove.length} detaili eemaldatud kuupäevalt`);
+      setDateMenuId(null);
+      await loadComments();
+      loadSchedule();
+    } catch (e) {
+      console.error('Error removing items from date:', e);
+      setMessage('Viga eemaldamisel');
+    }
+  };
+
   // Select and zoom to item in viewer
   const selectInViewer = async (item: ScheduleItem, skipZoom: boolean = false) => {
     try {
@@ -4153,9 +4251,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 onMouseEnter={() => setShowMarkupSubmenu(true)}
                 onMouseLeave={() => setShowMarkupSubmenu(false)}
               >
+                <FiChevronLeft size={14} className="submenu-arrow" />
                 <FiEdit3 size={14} />
                 <span>Märgistused</span>
-                <FiChevronRight size={14} className="submenu-arrow" />
 
                 {showMarkupSubmenu && (
                   <div className="submenu">
@@ -5375,6 +5473,41 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                                   }}
                                 >
                                   <span className="menu-icon">➕</span> Lisa valitud detailid ({unscheduledCount})
+                                </button>
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
+                        {/* Remove selected items from this date */}
+                        {(() => {
+                          // Calculate how many selected model objects are on this date
+                          const dateItems = itemsByDate[date] || [];
+                          const modelSelectedGuidsIfc = new Set(
+                            selectedObjects
+                              .filter(obj => obj.guidIfc)
+                              .map(obj => obj.guidIfc!.toLowerCase())
+                          );
+                          const modelSelectedGuids = new Set(
+                            selectedObjects
+                              .filter(obj => obj.guid)
+                              .map(obj => obj.guid!.toLowerCase())
+                          );
+                          const removeCount = dateItems.filter(item => {
+                            const guidIfc = (item.guid_ifc || '').toLowerCase();
+                            const guid = (item.guid || '').toLowerCase();
+                            return modelSelectedGuidsIfc.has(guidIfc) || modelSelectedGuids.has(guid);
+                          }).length;
+
+                          if (removeCount > 0) {
+                            return (
+                              <>
+                                <div className="date-menu-divider" />
+                                <button
+                                  className="date-menu-option delete"
+                                  onClick={() => removeSelectedFromDate(date)}
+                                >
+                                  <span className="menu-icon">➖</span> Eemalda valitud ({removeCount})
                                 </button>
                               </>
                             );
