@@ -895,7 +895,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             updates.scheduled_date = newVehicle.scheduled_date;
           }
         } else {
-          updates.vehicle_id = null;
+          // Don't allow clearing vehicle - it would create an orphan
+          // If user wants to remove, they should use delete button
+          setMessage('Veoki eemaldamiseks kasuta "Kustuta" nuppu');
+          setSaving(false);
+          return;
         }
       }
 
@@ -2208,14 +2212,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const itemsToRemove = items.filter(i => selectedItemIds.has(i.id));
       const removeCount = selectedItemIds.size;
 
+      // Delete items from schedule (not just remove from vehicle) to prevent orphans
       const { error } = await supabase
         .from('trimble_delivery_items')
-        .update({
-          vehicle_id: null,
-          scheduled_date: null,
-          updated_by: tcUserEmail,
-          updated_at: new Date().toISOString()
-        })
+        .delete()
         .in('id', Array.from(selectedItemIds));
 
       if (error) throw error;
@@ -5816,18 +5816,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               return selectedInThisVehicle.length > 0 ? (
                                 <button onClick={async () => {
                                   setVehicleMenuId(null);
-                                  // Remove only the selected items that are in this vehicle
+                                  // Delete selected items from this vehicle (not just remove to prevent orphans)
                                   const idsToRemove = selectedInThisVehicle.map(i => i.id);
                                   setSaving(true);
                                   try {
                                     const { error } = await supabase
                                       .from('trimble_delivery_items')
-                                      .update({
-                                        vehicle_id: null,
-                                        scheduled_date: null,
-                                        updated_by: tcUserEmail,
-                                        updated_at: new Date().toISOString()
-                                      })
+                                      .delete()
                                       .in('id', idsToRemove);
                                     if (error) throw error;
                                     // Color removed items white if color mode is active
@@ -5871,17 +5866,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               return modelSelectedInThisVehicle.length > 0 ? (
                                 <button onClick={async () => {
                                   setVehicleMenuId(null);
+                                  // Delete model-selected items from this vehicle (not just remove to prevent orphans)
                                   const idsToRemove = modelSelectedInThisVehicle.map(i => i.id);
                                   setSaving(true);
                                   try {
                                     const { error } = await supabase
                                       .from('trimble_delivery_items')
-                                      .update({
-                                        vehicle_id: null,
-                                        scheduled_date: null,
-                                        updated_by: tcUserEmail,
-                                        updated_at: new Date().toISOString()
-                                      })
+                                      .delete()
                                       .in('id', idsToRemove);
                                     if (error) throw error;
                                     // Color removed items white if color mode is active
