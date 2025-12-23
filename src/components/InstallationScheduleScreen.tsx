@@ -381,58 +381,58 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   }, [playbackSettings.colorEachDayDifferent, scheduleItems]);
 
-  // Apply colors to model when colorEachDayDifferent is enabled and items change
+  // Apply colors to model when colorEachDayDifferent is enabled and items change - OPTIMIZED
   useEffect(() => {
     if (!playbackSettings.colorEachDayDifferent || Object.keys(playbackDateColors).length === 0) return;
     if (scheduleItems.length === 0) return;
 
     const applyColorsToModel = async () => {
       try {
-        const models = await api.viewer.getModels();
+        // Group items by color and model for batch processing
+        const colorBatches: Map<string, Map<string, number[]>> = new Map();
 
         for (const item of scheduleItems) {
           const color = playbackDateColors[item.scheduled_date];
-          if (!color) continue;
+          if (!color || !item.model_id || !item.object_runtime_id) continue;
 
-          const guidIfc = item.guid_ifc || item.guid;
-          if (!guidIfc) continue;
+          const colorKey = `${color.r}-${color.g}-${color.b}`;
 
-          // Try with stored model_id first
-          if (item.model_id) {
-            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
-            if (runtimeIds && runtimeIds.length > 0) {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] },
-                { color: { ...color, a: 255 } }
-              );
-              continue;
-            }
+          if (!colorBatches.has(colorKey)) {
+            colorBatches.set(colorKey, new Map());
           }
 
-          // Fallback: try all loaded models
-          if (models && models.length > 0) {
-            for (const model of models) {
-              try {
-                const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-                if (runtimeIds && runtimeIds.length > 0) {
-                  await api.viewer.setObjectState(
-                    { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }] },
-                    { color: { ...color, a: 255 } }
-                  );
-                  break;
-                }
-              } catch {
-                // Try next model
-              }
-            }
+          const modelMap = colorBatches.get(colorKey)!;
+          if (!modelMap.has(item.model_id)) {
+            modelMap.set(item.model_id, []);
+          }
+          modelMap.get(item.model_id)!.push(item.object_runtime_id);
+        }
+
+        // Execute all color operations in parallel
+        const colorPromises: Promise<void>[] = [];
+
+        for (const [colorKey, modelMap] of colorBatches) {
+          const [r, g, b] = colorKey.split('-').map(Number);
+
+          for (const [modelId, runtimeIds] of modelMap) {
+            colorPromises.push(
+              api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                { color: { r, g, b, a: 255 } }
+              )
+            );
           }
         }
+
+        await Promise.all(colorPromises);
       } catch (e) {
         console.error('Error applying colors to model:', e);
       }
     };
 
-    applyColorsToModel();
+    // Debounce the color application to avoid excessive calls when items change rapidly
+    const timeoutId = setTimeout(applyColorsToModel, 100);
+    return () => clearTimeout(timeoutId);
   }, [playbackDateColors, scheduleItems]);
 
   // Ref for auto-scrolling to playing item
@@ -2761,7 +2761,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return colors;
   };
 
-  // Toggle color by date mode (on/off)
+  // Toggle color by date mode (on/off) - OPTIMIZED VERSION
   const toggleColorByDate = async () => {
     const newValue = !playbackSettings.colorEachDayDifferent;
     setPlaybackSettings(prev => ({
@@ -2771,112 +2771,68 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }));
 
     if (newValue) {
-      // Turning ON - color all items by date (same logic as DeliverySchedule)
+      // Turning ON - color schedule items by date (FAST: no Supabase, no white coloring)
       try {
-        await api.viewer.setObjectState(undefined, { color: 'reset' });
-
         const dates = Object.keys(itemsByDate);
         if (dates.length === 0) return;
 
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        setMessage('Värvin... Loen Supabasest...');
+        setMessage('Värvin...');
 
-        // Step 1: Fetch ALL objects from Supabase with pagination
-        const PAGE_SIZE = 5000;
-        const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-        let lastId = -1;
+        // Step 1: Reset all colors first (this is fast - single API call)
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-        while (true) {
-          const { data, error } = await supabase
-            .from('trimble_model_objects')
-            .select('model_id, object_runtime_id')
-            .eq('trimble_project_id', projectId)
-            .gt('object_runtime_id', lastId)
-            .order('object_runtime_id', { ascending: true })
-            .limit(PAGE_SIZE);
+        // Step 2: Group ALL items by color (batch same-colored items together)
+        // This minimizes API calls - one call per unique color per model
+        const colorBatches: Map<string, { modelId: string; runtimeIds: number[]; color: { r: number; g: number; b: number } }[]> = new Map();
 
-          if (error) {
-            console.error('Supabase error:', error);
-            setMessage('Viga Supabase lugemisel');
-            return;
-          }
-
-          if (!data || data.length === 0) break;
-
-          allModelObjects.push(...data);
-          lastId = data[data.length - 1].object_runtime_id;
-
-          setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
-
-          if (data.length < PAGE_SIZE) break;
-        }
-
-        // If no model objects found, show warning
-        if (allModelObjects.length === 0) {
-          setMessage('Andmebaasis pole mudeli objekte! Kasuta Admin → "Saada andmebaasi" et salvestada mudeli objektid.');
-          setTimeout(() => setMessage(null), 5000);
-          // Still color the schedule items
-        }
-
-        // Step 2: Get schedule item runtime IDs
-        const scheduleRuntimeIds = new Set(
-          scheduleItems.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
-        );
-
-        // Step 3: Color non-schedule items WHITE first
-        const whiteByModel: Record<string, number[]> = {};
-        for (const obj of allModelObjects) {
-          if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
-            if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
-            whiteByModel[obj.model_id].push(obj.object_runtime_id);
-          }
-        }
-
-        const BATCH_SIZE = 5000;
-        let whiteCount = 0;
-        const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-
-        for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-          for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-            const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-              { color: { r: 255, g: 255, b: 255, a: 255 } }
-            );
-            whiteCount += batch.length;
-            setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
-          }
-        }
-
-        // Step 4: Color schedule items by date
-        let coloredCount = 0;
         for (const [date, items] of Object.entries(itemsByDate)) {
           const color = dateColors[date];
           if (!color) continue;
 
-          // Group by model
-          const byModel: Record<string, number[]> = {};
-          for (const item of items) {
-            if (item.model_id && item.object_runtime_id) {
-              if (!byModel[item.model_id]) byModel[item.model_id] = [];
-              byModel[item.model_id].push(item.object_runtime_id);
-            }
-          }
+          const colorKey = `${color.r}-${color.g}-${color.b}`;
 
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-            );
-            coloredCount += runtimeIds.length;
-            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleRuntimeIds.size}`);
+          for (const item of items) {
+            if (!item.model_id || !item.object_runtime_id) continue;
+
+            if (!colorBatches.has(colorKey)) {
+              colorBatches.set(colorKey, []);
+            }
+
+            // Find or create batch for this model
+            const batches = colorBatches.get(colorKey)!;
+            let modelBatch = batches.find(b => b.modelId === item.model_id);
+            if (!modelBatch) {
+              modelBatch = { modelId: item.model_id, runtimeIds: [], color };
+              batches.push(modelBatch);
+            }
+            modelBatch.runtimeIds.push(item.object_runtime_id);
           }
         }
 
-        setMessage(`Värvitud ${coloredCount} detaili, ${totalWhite} valget`);
-        setTimeout(() => setMessage(null), 3000);
+        // Step 3: Execute all color batches in PARALLEL (much faster!)
+        const colorPromises: Promise<void>[] = [];
+        let totalItems = 0;
+
+        for (const batches of colorBatches.values()) {
+          for (const batch of batches) {
+            totalItems += batch.runtimeIds.length;
+            colorPromises.push(
+              api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: batch.modelId, objectRuntimeIds: batch.runtimeIds }] },
+                { color: { r: batch.color.r, g: batch.color.g, b: batch.color.b, a: 255 } }
+              )
+            );
+          }
+        }
+
+        // Wait for all coloring to complete in parallel
+        await Promise.all(colorPromises);
+
+        setMessage(`Värvitud ${totalItems} detaili`);
+        setTimeout(() => setMessage(null), 2000);
       } catch (e) {
         console.error('Error coloring by date:', e);
         setMessage('Viga värvimisel');
@@ -3094,82 +3050,122 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Highlight already scheduled items from selection in red, unscheduled in blue, rest white
+  // Highlight already scheduled items from selection in red, unscheduled in blue - OPTIMIZED
   const highlightScheduledItemsRed = async (scheduledObjects: { obj: SelectedObject; date: string }[]) => {
     try {
-      // Step 1: Color entire model WHITE
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+      // Step 1: Reset colors first (fast)
+      await api.viewer.setObjectState(undefined, { color: 'reset' });
 
-      // Step 2: Color all scheduled items by their date colors
+      // Step 2: Color all schedule items by their date colors (using stored runtime IDs)
       const dates = Object.keys(itemsByDate);
       const dateColors = generateDateColors(dates);
+
+      // Batch by color and model
+      const colorPromises: Promise<void>[] = [];
 
       for (const date of dates) {
         const items = itemsByDate[date];
         const color = dateColors[date] || { r: 100, g: 100, b: 100 };
 
+        // Group items by model
+        const byModel: Record<string, number[]> = {};
         for (const item of items) {
-          const guidIfc = item.guid_ifc || item.guid;
-          if (guidIfc) {
-            try {
-              // Try to find model ID from cached objects or use first available
-              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(undefined as any, [guidIfc]);
-              if (runtimeIds && runtimeIds.length > 0) {
-                // Get the model that has this object
-                const models = await api.viewer.getModels();
-                for (const model of models) {
-                  const modelRuntimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-                  if (modelRuntimeIds && modelRuntimeIds.length > 0) {
-                    await api.viewer.setObjectState(
-                      { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: modelRuntimeIds }] },
-                      { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-                    );
-                    break;
-                  }
-                }
-              }
-            } catch {
-              // Skip if can't find object
-            }
+          if (item.model_id && item.object_runtime_id) {
+            if (!byModel[item.model_id]) byModel[item.model_id] = [];
+            byModel[item.model_id].push(item.object_runtime_id);
           }
+        }
+
+        // Add color operations to batch
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          colorPromises.push(
+            api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            )
+          );
         }
       }
 
-      // Step 3: Color UNSCHEDULED selected items BLUE
+      // Execute date coloring in parallel
+      await Promise.all(colorPromises);
+
+      // Step 3: Color UNSCHEDULED selected items BLUE (batch)
       const scheduledGuids = new Set(scheduledObjects.map(s => s.obj.guidIfc || s.obj.guid));
       const unscheduledSelected = selectedObjects.filter(obj => {
         const guid = obj.guidIfc || obj.guid;
         return !scheduledGuids.has(guid);
       });
 
+      // Group by model for batching
+      const blueByModel: Record<string, number[]> = {};
+      const blueConversions: Promise<void>[] = [];
+
       for (const obj of unscheduledSelected) {
         const modelId = obj.modelId;
         const guidIfc = obj.guidIfc || obj.guid;
         if (modelId && guidIfc) {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-          if (runtimeIds && runtimeIds.length > 0) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: 59, g: 130, b: 246, a: 255 } } // Blue color
-            );
-          }
+          blueConversions.push(
+            (async () => {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                if (!blueByModel[modelId]) blueByModel[modelId] = [];
+                blueByModel[modelId].push(runtimeIds[0]);
+              }
+            })()
+          );
         }
       }
 
-      // Step 4: Color SCHEDULED selected items (duplicates) RED - last to override date colors
+      await Promise.all(blueConversions);
+
+      // Apply blue colors in batch
+      const bluePromises: Promise<void>[] = [];
+      for (const [modelId, runtimeIds] of Object.entries(blueByModel)) {
+        bluePromises.push(
+          api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { r: 59, g: 130, b: 246, a: 255 } }
+          )
+        );
+      }
+
+      // Step 4: Color SCHEDULED selected items RED (batch)
+      const redByModel: Record<string, number[]> = {};
+      const redConversions: Promise<void>[] = [];
+
       for (const { obj } of scheduledObjects) {
         const modelId = obj.modelId;
         const guidIfc = obj.guidIfc || obj.guid;
         if (modelId && guidIfc) {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-          if (runtimeIds && runtimeIds.length > 0) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: 220, g: 38, b: 38, a: 255 } } // Red color
-            );
-          }
+          redConversions.push(
+            (async () => {
+              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+              if (runtimeIds && runtimeIds.length > 0) {
+                if (!redByModel[modelId]) redByModel[modelId] = [];
+                redByModel[modelId].push(runtimeIds[0]);
+              }
+            })()
+          );
         }
       }
+
+      await Promise.all(redConversions);
+
+      // Apply red colors after blue (to override)
+      const redPromises: Promise<void>[] = [];
+      for (const [modelId, runtimeIds] of Object.entries(redByModel)) {
+        redPromises.push(
+          api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { r: 220, g: 38, b: 38, a: 255 } }
+          )
+        );
+      }
+
+      // Execute blue and red in sequence (red after blue)
+      await Promise.all(bluePromises);
+      await Promise.all(redPromises);
 
       setMessage(`Punane: ${scheduledObjects.length} juba planeeritud | Sinine: ${unscheduledSelected.length} uut`);
     } catch (e) {
