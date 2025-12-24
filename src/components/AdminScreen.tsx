@@ -3301,10 +3301,24 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                   name="Ava Gantt Timeline"
                   result={functionResults["Ava Gantt Timeline"]}
                   onClick={() => testFunction("Ava Gantt Timeline", async () => {
-                    // Load delivery vehicles and items
+                    // Load factories first
+                    const { data: factories, error: factoriesError } = await supabase
+                      .from('trimble_delivery_factories')
+                      .select('id, factory_name, factory_code')
+                      .eq('trimble_project_id', projectId);
+
+                    if (factoriesError) throw factoriesError;
+
+                    // Create factory lookup
+                    const factoryById: Record<string, string> = {};
+                    for (const f of (factories || [])) {
+                      factoryById[f.id] = f.factory_name || f.factory_code || 'Teadmata';
+                    }
+
+                    // Load delivery vehicles
                     const { data: vehicles, error: vehiclesError } = await supabase
                       .from('trimble_delivery_vehicles')
-                      .select('id, vehicle_code, factory_name')
+                      .select('id, vehicle_code, factory_id')
                       .eq('trimble_project_id', projectId)
                       .order('vehicle_code');
 
@@ -3330,7 +3344,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                     for (const v of (vehicles || [])) {
                       deliveryByVehicle[v.id] = {
                         code: v.vehicle_code || 'N/A',
-                        factory: v.factory_name || 'Teadmata',
+                        factory: factoryById[v.factory_id] || 'Teadmata',
                         dates: {}
                       };
                     }
