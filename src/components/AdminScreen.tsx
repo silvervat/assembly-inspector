@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
+import * as XLSX from 'xlsx-js-style';
 
 // Test result type for function explorer
 interface FunctionTestResult {
@@ -3503,6 +3504,191 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     } else {
                       throw new Error('Popup blokeeritud - luba popupid');
                     }
+                  })}
+                />
+              </div>
+            </div>
+
+            {/* GUID EXPORT section */}
+            <div className="function-section">
+              <h4>📋 GUID Eksport</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Kogu kõikide mudelite detailide GUID koodid ja ekspordi Excelisse.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="Ekspordi kõik GUID-id Excelisse"
+                  result={functionResults["Ekspordi kõik GUID-id Excelisse"]}
+                  onClick={() => testFunction("Ekspordi kõik GUID-id Excelisse", async () => {
+                    // Get all loaded models
+                    const models = await api.viewer.getModels();
+                    if (!models || models.length === 0) {
+                      throw new Error('Ühtegi mudelit pole laetud!');
+                    }
+
+                    const allObjects: {
+                      modelId: string;
+                      modelName: string;
+                      runtimeId: number;
+                      guidIfc: string;
+                      guidMs: string;
+                      assemblyMark: string;
+                      productName: string;
+                      className: string;
+                    }[] = [];
+
+                    // IFC GUID conversion helper
+                    const IFC_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+                    const ifcToMs = (ifcGuid: string): string => {
+                      if (!ifcGuid || ifcGuid.length !== 22) return '';
+                      let bits = '';
+                      for (let i = 0; i < 22; i++) {
+                        const idx = IFC_CHARS.indexOf(ifcGuid[i]);
+                        if (idx < 0) return '';
+                        const numBits = i === 0 ? 2 : 6;
+                        bits += idx.toString(2).padStart(numBits, '0');
+                      }
+                      if (bits.length !== 128) return '';
+                      let hex = '';
+                      for (let i = 0; i < 128; i += 4) {
+                        hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+                      }
+                      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`.toUpperCase();
+                    };
+
+                    // Process each model
+                    for (const model of models) {
+                      const modelId = model.id;
+                      const modelName = model.name || model.id;
+
+                      // Get all objects in the model
+                      const objects = await (api.viewer as any).getObjects?.(modelId);
+                      if (!objects || objects.length === 0) continue;
+
+                      // Get runtime IDs
+                      const runtimeIds = objects.map((o: any) => o.id || o.objectRuntimeId || o);
+
+                      // Get IFC GUIDs using convertToObjectIds
+                      let ifcGuids: string[] = [];
+                      try {
+                        ifcGuids = await api.viewer.convertToObjectIds(modelId, runtimeIds);
+                      } catch (e) {
+                        console.warn('Could not get IFC GUIDs for model:', modelId, e);
+                      }
+
+                      // Get properties for all objects (in batches)
+                      const BATCH_SIZE = 500;
+                      const propsByRuntimeId: Record<number, any> = {};
+
+                      for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                        const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                        try {
+                          const props = await api.viewer.getObjectProperties(modelId, batch);
+                          props.forEach((p: any, idx: number) => {
+                            propsByRuntimeId[batch[idx]] = p;
+                          });
+                        } catch (e) {
+                          console.warn('Could not get properties for batch:', e);
+                        }
+                      }
+
+                      // Build object list
+                      for (let i = 0; i < runtimeIds.length; i++) {
+                        const runtimeId = runtimeIds[i];
+                        const ifcGuid = ifcGuids[i] || '';
+                        const msGuid = ifcToMs(ifcGuid);
+                        const props = propsByRuntimeId[runtimeId];
+
+                        // Extract assembly mark and product name from properties
+                        let assemblyMark = '';
+                        let productName = '';
+                        let className = props?.class || '';
+
+                        if (props?.propertySets) {
+                          for (const ps of props.propertySets) {
+                            if (ps.name === 'Tekla Assembly' && ps.properties?.['Assembly.Prefix']) {
+                              assemblyMark = `${ps.properties['Assembly.Prefix'] || ''}${ps.properties['Assembly.Position_number'] || ''}`;
+                            }
+                            if (ps.name === 'Tekla Quantity' && ps.properties?.['Cast_unit_Mark']) {
+                              assemblyMark = ps.properties['Cast_unit_Mark'];
+                            }
+                            if (ps.name === 'Product' && ps.properties?.['Name']) {
+                              productName = ps.properties['Name'];
+                            }
+                          }
+                        }
+
+                        allObjects.push({
+                          modelId,
+                          modelName,
+                          runtimeId,
+                          guidIfc: ifcGuid,
+                          guidMs: msGuid,
+                          assemblyMark,
+                          productName,
+                          className
+                        });
+                      }
+                    }
+
+                    if (allObjects.length === 0) {
+                      throw new Error('Ühtegi objekti ei leitud!');
+                    }
+
+                    // Create Excel workbook
+                    const wb = XLSX.utils.book_new();
+
+                    // Header row
+                    const headers = ['Model', 'Runtime ID', 'GUID (IFC)', 'GUID (MS)', 'Assembly Mark', 'Product Name', 'Class'];
+                    const data = [headers];
+
+                    // Add data rows
+                    for (const obj of allObjects) {
+                      data.push([
+                        obj.modelName,
+                        String(obj.runtimeId),
+                        obj.guidIfc,
+                        obj.guidMs,
+                        obj.assemblyMark,
+                        obj.productName,
+                        obj.className
+                      ]);
+                    }
+
+                    const ws = XLSX.utils.aoa_to_sheet(data);
+
+                    // Style header row
+                    const headerStyle = {
+                      font: { bold: true, color: { rgb: 'FFFFFF' } },
+                      fill: { fgColor: { rgb: '2563EB' } },
+                      alignment: { horizontal: 'center' }
+                    };
+                    for (let i = 0; i < headers.length; i++) {
+                      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: i })];
+                      if (cell) cell.s = headerStyle;
+                    }
+
+                    // Set column widths
+                    ws['!cols'] = [
+                      { wch: 30 }, // Model
+                      { wch: 12 }, // Runtime ID
+                      { wch: 24 }, // GUID IFC
+                      { wch: 38 }, // GUID MS
+                      { wch: 20 }, // Assembly Mark
+                      { wch: 25 }, // Product Name
+                      { wch: 25 }  // Class
+                    ];
+
+                    XLSX.utils.book_append_sheet(wb, ws, 'GUID Export');
+
+                    // Generate and download file
+                    const now = new Date();
+                    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    const fileName = `GUID_Export_${dateStr}.xlsx`;
+
+                    XLSX.writeFile(wb, fileName);
+
+                    return `Eksporditud ${allObjects.length} objekti faili "${fileName}"`;
                   })}
                 />
               </div>
