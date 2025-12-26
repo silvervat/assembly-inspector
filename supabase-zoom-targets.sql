@@ -11,10 +11,14 @@ CREATE TABLE IF NOT EXISTS zoom_targets (
   model_id TEXT NOT NULL,
   guid TEXT NOT NULL,              -- IFC GUID of target object
   assembly_mark TEXT,              -- For display purposes
+  action_type TEXT DEFAULT 'zoom', -- 'zoom' | 'zoom_red' | 'zoom_isolate'
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 minutes'),
   consumed BOOLEAN DEFAULT FALSE
 );
+
+-- If table already exists, add action_type column
+ALTER TABLE zoom_targets ADD COLUMN IF NOT EXISTS action_type TEXT DEFAULT 'zoom';
 
 -- Index for fast lookup by project (most common query pattern)
 CREATE INDEX IF NOT EXISTS idx_zoom_targets_project_consumed

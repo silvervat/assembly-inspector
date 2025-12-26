@@ -753,12 +753,15 @@ export interface ModelObject {
 // ZOOM TARGETS (Shared link zoom persistence)
 // ============================================
 
+export type ZoomActionType = 'zoom' | 'zoom_red' | 'zoom_isolate';
+
 export interface ZoomTarget {
   id: string;
   project_id: string;
   model_id: string;
   guid: string;                    // IFC GUID for zoom target
   assembly_mark?: string;          // For display purposes
+  action_type: ZoomActionType;     // What to do: zoom, zoom+red, zoom+isolate
   created_at: string;
   expires_at: string;              // Auto-cleanup after expiry
   consumed: boolean;               // Mark as used after zoom

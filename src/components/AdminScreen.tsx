@@ -1486,112 +1486,124 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                 Vali mudelist detail ja genereeri link mis avab mudeli ja zoomib detaili juurde.
               </p>
               <div className="function-grid">
-                <FunctionButton
-                  name="Genereeri link"
-                  result={functionResults["generateZoomLink"]}
-                  onClick={async () => {
-                    updateFunctionResult("generateZoomLink", { status: 'pending' });
-                    try {
-                      // Get selected objects
-                      const selected = await api.viewer.getSelection();
-                      if (!selected || selected.length === 0) {
-                        updateFunctionResult("generateZoomLink", {
-                          status: 'error',
-                          error: 'Vali mudelist detail!'
-                        });
-                        return;
-                      }
+                {/* Helper function for generating zoom links */}
+                {(['zoom', 'zoom_red', 'zoom_isolate'] as const).map((actionType) => {
+                  const buttonConfig = {
+                    zoom: { name: '🔍 Zoom', key: 'generateZoomLink' },
+                    zoom_red: { name: '🔴 Zoom + Punane', key: 'generateZoomLinkRed' },
+                    zoom_isolate: { name: '👁️ Zoom + Isoleeri', key: 'generateZoomLinkIsolate' }
+                  }[actionType];
 
-                      const obj = selected[0];
-                      const modelId = obj.modelId;
-                      const runtimeId = obj.objectRuntimeIds?.[0];
+                  return (
+                    <FunctionButton
+                      key={actionType}
+                      name={buttonConfig.name}
+                      result={functionResults[buttonConfig.key]}
+                      onClick={async () => {
+                        updateFunctionResult(buttonConfig.key, { status: 'pending' });
+                        try {
+                          // Get selected objects
+                          const selected = await api.viewer.getSelection();
+                          if (!selected || selected.length === 0) {
+                            updateFunctionResult(buttonConfig.key, {
+                              status: 'error',
+                              error: 'Vali mudelist detail!'
+                            });
+                            return;
+                          }
 
-                      if (!modelId || !runtimeId) {
-                        updateFunctionResult("generateZoomLink", {
-                          status: 'error',
-                          error: 'Valitud objektil puudub modelId või runtimeId'
-                        });
-                        return;
-                      }
+                          const obj = selected[0];
+                          const modelId = obj.modelId;
+                          const runtimeId = obj.objectRuntimeIds?.[0];
 
-                      // Get IFC GUID using convertToObjectIds (this is the permanent identifier)
-                      let ifcGuid = '';
-                      try {
-                        const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
-                        if (externalIds && externalIds.length > 0 && externalIds[0]) {
-                          ifcGuid = externalIds[0];
-                        }
-                      } catch (e) {
-                        console.warn('Could not get IFC GUID:', e);
-                      }
+                          if (!modelId || !runtimeId) {
+                            updateFunctionResult(buttonConfig.key, {
+                              status: 'error',
+                              error: 'Valitud objektil puudub modelId või runtimeId'
+                            });
+                            return;
+                          }
 
-                      if (!ifcGuid) {
-                        updateFunctionResult("generateZoomLink", {
-                          status: 'error',
-                          error: 'Ei leidnud objekti IFC GUID-i!'
-                        });
-                        return;
-                      }
+                          // Get IFC GUID using convertToObjectIds (this is the permanent identifier)
+                          let ifcGuid = '';
+                          try {
+                            const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+                            if (externalIds && externalIds.length > 0 && externalIds[0]) {
+                              ifcGuid = externalIds[0];
+                            }
+                          } catch (e) {
+                            console.warn('Could not get IFC GUID:', e);
+                          }
 
-                      // Get assembly mark for display
-                      let assemblyMark = '';
-                      try {
-                        const propsArray: any = await api.viewer.getObjectProperties(modelId, [runtimeId]);
-                        const props = propsArray?.[0];
-                        if (props?.properties && Array.isArray(props.properties)) {
-                          for (const pset of props.properties) {
-                            if (pset.name === 'Tekla Assembly') {
-                              for (const p of pset.properties || []) {
-                                if (p.name === 'Assembly/Cast unit Mark') {
-                                  assemblyMark = String(p.value || '');
-                                  break;
+                          if (!ifcGuid) {
+                            updateFunctionResult(buttonConfig.key, {
+                              status: 'error',
+                              error: 'Ei leidnud objekti IFC GUID-i!'
+                            });
+                            return;
+                          }
+
+                          // Get assembly mark for display
+                          let assemblyMark = '';
+                          try {
+                            const propsArray: any = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+                            const props = propsArray?.[0];
+                            if (props?.properties && Array.isArray(props.properties)) {
+                              for (const pset of props.properties) {
+                                if (pset.name === 'Tekla Assembly') {
+                                  for (const p of pset.properties || []) {
+                                    if (p.name === 'Assembly/Cast unit Mark') {
+                                      assemblyMark = String(p.value || '');
+                                      break;
+                                    }
+                                  }
                                 }
                               }
                             }
+                          } catch (e) {
+                            console.warn('Could not get assembly mark:', e);
                           }
+
+                          // Store zoom target in Supabase with action type
+                          const { error: dbError } = await supabase
+                            .from('zoom_targets')
+                            .insert({
+                              project_id: projectId,
+                              model_id: modelId,
+                              guid: ifcGuid,
+                              assembly_mark: assemblyMark || null,
+                              action_type: actionType
+                            });
+
+                          if (dbError) {
+                            console.error('Failed to store zoom target:', dbError);
+                            updateFunctionResult(buttonConfig.key, {
+                              status: 'error',
+                              error: 'Andmebaasi viga: ' + dbError.message
+                            });
+                            return;
+                          }
+
+                          // Generate link with action type in URL hash
+                          const trimbleUrl = `https://web.connect.trimble.com/projects/${projectId}/viewer/3d/?modelId=${modelId}#${actionType}=${ifcGuid}`;
+
+                          // Copy to clipboard
+                          await navigator.clipboard.writeText(trimbleUrl);
+
+                          updateFunctionResult(buttonConfig.key, {
+                            status: 'success',
+                            result: `Link kopeeritud! ${assemblyMark || ifcGuid}`
+                          });
+                        } catch (e: any) {
+                          updateFunctionResult(buttonConfig.key, {
+                            status: 'error',
+                            error: e.message
+                          });
                         }
-                      } catch (e) {
-                        console.warn('Could not get assembly mark:', e);
-                      }
-
-                      // Store zoom target in Supabase (works across iframe boundaries)
-                      const { error: dbError } = await supabase
-                        .from('zoom_targets')
-                        .insert({
-                          project_id: projectId,
-                          model_id: modelId,
-                          guid: ifcGuid,
-                          assembly_mark: assemblyMark || null
-                        });
-
-                      if (dbError) {
-                        console.error('Failed to store zoom target:', dbError);
-                        updateFunctionResult("generateZoomLink", {
-                          status: 'error',
-                          error: 'Andmebaasi viga: ' + dbError.message
-                        });
-                        return;
-                      }
-
-                      // Generate link with GUID in URL hash (for reference/backup)
-                      // Extension reads from Supabase, but GUID in URL makes link self-documenting
-                      const trimbleUrl = `https://web.connect.trimble.com/projects/${projectId}/viewer/3d/?modelId=${modelId}#zoom=${ifcGuid}`;
-
-                      // Copy to clipboard
-                      await navigator.clipboard.writeText(trimbleUrl);
-
-                      updateFunctionResult("generateZoomLink", {
-                        status: 'success',
-                        result: `Link kopeeritud! ${assemblyMark || ifcGuid}`
-                      });
-                    } catch (e: any) {
-                      updateFunctionResult("generateZoomLink", {
-                        status: 'error',
-                        error: e.message
-                      });
-                    }
-                  }}
-                />
+                      }}
+                    />
+                  );
+                })}
               </div>
             </div>
 
