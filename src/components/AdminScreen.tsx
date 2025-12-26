@@ -3513,14 +3513,18 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <div className="function-section">
               <h4>📋 GUID Eksport</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Ekspordi avatud mudeli detailide GUID koodid Excelisse koos Tekla infoga.
+                Ekspordi mudeli assemblyde (Cast Unit) GUID koodid Excelisse koos Tekla infoga.
               </p>
               <div className="function-grid">
                 <FunctionButton
                   name="Ekspordi mudeli GUID-id Excelisse"
                   result={functionResults["Ekspordi mudeli GUID-id Excelisse"]}
                   onClick={() => testFunction("Ekspordi mudeli GUID-id Excelisse", async () => {
-                    // Get all objects from all models using getObjects()
+                    // Enable assembly selection to get only assemblies (Cast Units), not individual parts
+                    await (api.viewer as any).setSettings?.({ assemblySelection: true });
+                    console.log('Assembly selection enabled');
+
+                    // Get all assembly-level objects from all models using getObjects()
                     const allModelObjects = await api.viewer.getObjects();
                     if (!allModelObjects || allModelObjects.length === 0) {
                       throw new Error('Ühtegi mudelit pole laetud!');
