@@ -3517,47 +3517,30 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               </p>
               <div className="function-grid">
                 <FunctionButton
-                  name="Ekspordi mudeli GUID-id Excelisse"
-                  result={functionResults["Ekspordi mudeli GUID-id Excelisse"]}
-                  onClick={() => testFunction("Ekspordi mudeli GUID-id Excelisse", async () => {
-                    // Enable assembly selection to get only assemblies (Cast Units)
+                  name="1️⃣ Lülita Assembly Selection SISSE"
+                  result={functionResults["1️⃣ Lülita Assembly Selection SISSE"]}
+                  onClick={() => testFunction("1️⃣ Lülita Assembly Selection SISSE", async () => {
                     await (api.viewer as any).setSettings?.({ assemblySelection: true });
-                    console.log('Assembly selection enabled');
-
-                    // Log available viewer methods for debugging
-                    const viewerMethods = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function');
-                    console.log('Available viewer methods:', viewerMethods);
-
-                    // Try selectAll API (mimics Ctrl+A behavior with assembly selection)
-                    if (typeof (api.viewer as any).selectAll === 'function') {
-                      console.log('Using viewer.selectAll()');
-                      await (api.viewer as any).selectAll();
-                    } else if (typeof (api.viewer as any).select === 'function') {
-                      console.log('Using viewer.select("all")');
-                      await (api.viewer as any).select('all');
-                    } else {
-                      // Fallback: programmatic selection (may not respect assembly mode)
-                      console.log('selectAll not available, using setSelection fallback');
-                      const allModelObjects = await api.viewer.getObjects();
-                      if (!allModelObjects || allModelObjects.length === 0) {
-                        throw new Error('Ühtegi mudelit pole laetud!');
-                      }
-                      const selectionSpec = allModelObjects.map((modelObj: any) => ({
-                        modelId: modelObj.modelId,
-                        objectRuntimeIds: modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || []
-                      })).filter((s: any) => s.objectRuntimeIds.length > 0);
-                      await api.viewer.setSelection({ modelObjectIds: selectionSpec }, 'set');
-                    }
-                    console.log('Selection completed');
-
-                    // Wait a moment for selection to process
-                    await new Promise(r => setTimeout(r, 200));
-
-                    // Get the selection
+                    return "Assembly selection SEES. Nüüd vajuta mudelis Ctrl+A, et valida kõik assemblyd!";
+                  })}
+                />
+                <FunctionButton
+                  name="2️⃣ Ekspordi VALITUD assemblyd Excelisse"
+                  result={functionResults["2️⃣ Ekspordi VALITUD assemblyd Excelisse"]}
+                  onClick={() => testFunction("2️⃣ Ekspordi VALITUD assemblyd Excelisse", async () => {
+                    // Get current selection (user must have selected assemblies first)
                     const selection = await api.viewer.getSelection();
+
                     if (!selection || selection.length === 0) {
-                      throw new Error('Valik on tühi!');
+                      throw new Error('Vali esmalt assemblyd mudelis! (Lülita Assembly Selection sisse → vajuta Ctrl+A)');
                     }
+
+                    // Count total objects
+                    let totalCount = 0;
+                    for (const sel of selection) {
+                      totalCount += sel.objectRuntimeIds?.length || 0;
+                    }
+                    console.log(`Processing ${totalCount} selected objects`);
 
                     // Get model names
                     const models = await api.viewer.getModels();
@@ -3597,7 +3580,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`.toUpperCase();
                     };
 
-                    // Process selection (assemblies only)
+                    // Process selection
                     for (const sel of selection) {
                       const modelId = sel.modelId;
                       const modelName = modelNames[modelId] || modelId;
@@ -3605,7 +3588,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
 
                       if (runtimeIds.length === 0) continue;
 
-                      console.log(`Found ${runtimeIds.length} assemblies in model ${modelName}`);
+                      console.log(`Processing ${runtimeIds.length} objects from model ${modelName}`);
 
                       // Get IFC GUIDs using convertToObjectIds (in batches)
                       const BATCH_SIZE = 1000;
@@ -3638,7 +3621,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         }
                       }
 
-                      // Build object list
+                      // Build object list - include ALL selected objects (they are assemblies if selected with assembly mode)
                       for (const runtimeId of runtimeIds) {
                         const ifcGuid = ifcGuidsMap[runtimeId] || '';
                         const msGuid = ifcToMs(ifcGuid);
@@ -3651,7 +3634,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         let positionCode = '';
                         let weight = '';
 
-                        // Log first few objects' property structure for debugging
+                        // Log first object's property structure for debugging
                         if (runtimeId === runtimeIds[0]) {
                           console.log('Sample object properties:', JSON.stringify(props, null, 2));
                         }
@@ -3666,17 +3649,14 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                               if (p['Cast_unit_Mark']) castUnitMark = String(p['Cast_unit_Mark']);
                               if (p['Cast_unit_Weight']) weight = String(p['Cast_unit_Weight']);
                               if (p['Cast_unit_Position_Code']) positionCode = String(p['Cast_unit_Position_Code']);
-                              // Also check Mark as fallback
                               if (!castUnitMark && p['Mark']) castUnitMark = String(p['Mark']);
                             }
 
-                            // Product - Name
                             if (ps.name === 'Product' && p['Name']) {
                               productName = String(p['Name']);
                             }
                           }
                         } else if (props?.properties) {
-                          // Alternative property format (array-based)
                           const rawProps = props.properties;
                           if (Array.isArray(rawProps)) {
                             for (const pset of rawProps) {
@@ -3702,26 +3682,23 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           }
                         }
 
-                        // Only include objects with Cast Unit Mark (these are assemblies)
-                        // Individual parts don't have Cast_unit_Mark
-                        if (castUnitMark) {
-                          allObjects.push({
-                            modelName,
-                            runtimeId,
-                            guidIfc: ifcGuid,
-                            guidMs: msGuid,
-                            castUnitMark,
-                            productName,
-                            className,
-                            positionCode,
-                            weight
-                          });
-                        }
+                        // Include ALL selected objects (user selected with assembly mode)
+                        allObjects.push({
+                          modelName,
+                          runtimeId,
+                          guidIfc: ifcGuid,
+                          guidMs: msGuid,
+                          castUnitMark: castUnitMark || '-',
+                          productName,
+                          className,
+                          positionCode,
+                          weight
+                        });
                       }
                     }
 
                     if (allObjects.length === 0) {
-                      throw new Error('Ühtegi detaili ei leitud! Kontrolli, et mudel on laetud.');
+                      throw new Error('Ühtegi objekti ei leitud!');
                     }
 
                     // Sort by Cast Unit Mark
