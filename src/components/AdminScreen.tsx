@@ -3615,25 +3615,30 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           let positionCode = '';
                           let weight = '';
 
-                          if (props?.propertySets) {
-                            for (const ps of props.propertySets) {
-                              const p = ps.properties || {};
+                          // New format: props.properties is array of property sets
+                          // Each set has { name, properties: [{name, value, type}] }
+                          if (props?.properties && Array.isArray(props.properties)) {
+                            for (const pset of props.properties) {
+                              const setName = pset.name || '';
+                              const propsArr = pset.properties || [];
 
-                              if (ps.name === 'Tekla Quantity' || ps.name === 'Tekla Common') {
-                                if (p['Cast_unit_Mark']) castUnitMark = String(p['Cast_unit_Mark']);
-                                if (p['Cast_unit_Weight']) weight = String(p['Cast_unit_Weight']);
-                                if (p['Cast_unit_Position_Code']) positionCode = String(p['Cast_unit_Position_Code']);
-                                if (!castUnitMark && p['Mark']) castUnitMark = String(p['Mark']);
-                              }
-
-                              if (ps.name === 'Product' && p['Name']) {
-                                productName = String(p['Name']);
+                              if (setName === 'Tekla Assembly') {
+                                for (const p of propsArr) {
+                                  if (p.name === 'Assembly/Cast unit Mark') castUnitMark = String(p.value || '');
+                                  if (p.name === 'Assembly/Cast unit weight') weight = String(p.value || '');
+                                  if (p.name === 'Assembly/Cast unit position code') positionCode = String(p.value || '');
+                                }
                               }
                             }
                           }
 
-                          // Only include objects WITH Cast_unit_Mark (assemblies)
-                          if (castUnitMark) {
+                          // Product name from props.product.name
+                          if (props?.product?.name) {
+                            productName = String(props.product.name);
+                          }
+
+                          // Only include IFCELEMENTASSEMBLY with Cast unit Mark
+                          if (className === 'IFCELEMENTASSEMBLY' || castUnitMark) {
                             foundCount++;
                             allObjects.push({
                               modelName,
