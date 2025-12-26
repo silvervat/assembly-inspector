@@ -3335,7 +3335,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                     const { data: installItems, error: installError } = await supabase
                       .from('installation_schedule')
                       .select('id, scheduled_date, assembly_mark, install_methods')
-                      .eq('trimble_project_id', projectId);
+                      .eq('project_id', projectId);
 
                     if (installError) throw installError;
 

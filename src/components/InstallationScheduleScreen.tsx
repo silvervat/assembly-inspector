@@ -513,6 +513,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .eq('project_id', projectId)
           .in('version_id', versionIds);
 
+        // Also count legacy items (version_id is null) - these are shown with active version
+        const { data: legacyCounts, error: legacyError } = await supabase
+          .from('installation_schedule')
+          .select('id')
+          .eq('project_id', projectId)
+          .is('version_id', null);
+
+        const legacyCount = (!legacyError && legacyCounts) ? legacyCounts.length : 0;
+
         if (!countError && counts) {
           // Count items per version
           const countMap: Record<string, number> = {};
@@ -522,9 +531,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             }
           }
           // Add item_count to each version
+          // Active version also includes legacy items (version_id = null)
           const versionsWithCounts = data.map(v => ({
             ...v,
-            item_count: countMap[v.id] || 0
+            item_count: (countMap[v.id] || 0) + (v.is_active ? legacyCount : 0)
           }));
           setVersions(versionsWithCounts);
         } else {
