@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.231';
+export const APP_VERSION = '3.0.233';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -48,8 +48,18 @@ const zoomTargetGuid = urlParams.get('guid'); // IFC GUID (permanent identifier)
 const zoomTargetModel = urlParams.get('model');
 const zoomTargetProject = urlParams.get('project');
 
+// Log for debugging zoom links
+console.log('🔗 [ZOOM] App loaded, checking URL params:', {
+  guid: zoomTargetGuid,
+  model: zoomTargetModel,
+  project: zoomTargetProject,
+  isPopupMode,
+  fullUrl: window.location.href
+});
+
 // If zoom params in URL, store in localStorage and redirect to Trimble Connect
 if (zoomTargetProject && zoomTargetModel && zoomTargetGuid && !isPopupMode) {
+  console.log('🔗 [ZOOM] Storing zoom target in localStorage and redirecting...');
   // Store zoom target for later use
   localStorage.setItem('assembly_inspector_zoom', JSON.stringify({
     project: zoomTargetProject,
@@ -60,7 +70,7 @@ if (zoomTargetProject && zoomTargetModel && zoomTargetGuid && !isPopupMode) {
 
   // Redirect to Trimble Connect with the model
   const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomTargetProject}/viewer/3d/?modelId=${zoomTargetModel}`;
-  console.log('🔗 Redirecting to Trimble Connect:', trimbleUrl);
+  console.log('🔗 [ZOOM] Redirecting to Trimble Connect:', trimbleUrl);
   window.location.href = trimbleUrl;
 }
 
@@ -68,16 +78,20 @@ if (zoomTargetProject && zoomTargetModel && zoomTargetGuid && !isPopupMode) {
 const getPendingZoom = () => {
   try {
     const stored = localStorage.getItem('assembly_inspector_zoom');
+    console.log('🔗 [ZOOM] Checking localStorage for pending zoom:', stored);
     if (stored) {
       const data = JSON.parse(stored);
+      const age = Date.now() - data.timestamp;
+      console.log('🔗 [ZOOM] Found pending zoom, age:', Math.round(age / 1000), 'seconds');
       // Only use if less than 5 minutes old
-      if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+      if (age < 5 * 60 * 1000) {
         return data;
       }
+      console.log('🔗 [ZOOM] Pending zoom expired, removing');
       localStorage.removeItem('assembly_inspector_zoom');
     }
   } catch (e) {
-    console.error('Error reading zoom target:', e);
+    console.error('🔗 [ZOOM] Error reading zoom target:', e);
   }
   return null;
 };
@@ -145,8 +159,15 @@ export default function App() {
 
         // Handle pending zoom from shared link
         const pendingZoom = getPendingZoom();
+        console.log('🔗 [ZOOM] Pending zoom check:', {
+          hasPendingZoom: !!pendingZoom,
+          pendingProject: pendingZoom?.project,
+          currentProject: project.id,
+          projectMatch: pendingZoom?.project === project.id,
+          guid: pendingZoom?.guid
+        });
         if (pendingZoom && pendingZoom.project === project.id && pendingZoom.guid) {
-          console.log('🔗 Pending zoom detected, zooming to GUID:', pendingZoom.guid);
+          console.log('🔗 [ZOOM] ✓ Starting zoom process for GUID:', pendingZoom.guid);
           // Clear the pending zoom immediately to avoid re-triggering
           localStorage.removeItem('assembly_inspector_zoom');
 
