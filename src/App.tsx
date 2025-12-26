@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.233';
+export const APP_VERSION = '3.0.234';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -42,59 +42,8 @@ interface SelectedInspectionType {
 const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'delivery';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 
-// Check if this is a zoom link (from shared link)
-const urlParams = new URLSearchParams(window.location.search);
-const zoomTargetGuid = urlParams.get('guid'); // IFC GUID (permanent identifier)
-const zoomTargetModel = urlParams.get('model');
-const zoomTargetProject = urlParams.get('project');
-
-// Log for debugging zoom links
-console.log('🔗 [ZOOM] App loaded, checking URL params:', {
-  guid: zoomTargetGuid,
-  model: zoomTargetModel,
-  project: zoomTargetProject,
-  isPopupMode,
-  fullUrl: window.location.href
-});
-
-// If zoom params in URL, store in localStorage and redirect to Trimble Connect
-if (zoomTargetProject && zoomTargetModel && zoomTargetGuid && !isPopupMode) {
-  console.log('🔗 [ZOOM] Storing zoom target in localStorage and redirecting...');
-  // Store zoom target for later use
-  localStorage.setItem('assembly_inspector_zoom', JSON.stringify({
-    project: zoomTargetProject,
-    model: zoomTargetModel,
-    guid: zoomTargetGuid,
-    timestamp: Date.now()
-  }));
-
-  // Redirect to Trimble Connect with the model
-  const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomTargetProject}/viewer/3d/?modelId=${zoomTargetModel}`;
-  console.log('🔗 [ZOOM] Redirecting to Trimble Connect:', trimbleUrl);
-  window.location.href = trimbleUrl;
-}
-
-// Check for pending zoom from localStorage
-const getPendingZoom = () => {
-  try {
-    const stored = localStorage.getItem('assembly_inspector_zoom');
-    console.log('🔗 [ZOOM] Checking localStorage for pending zoom:', stored);
-    if (stored) {
-      const data = JSON.parse(stored);
-      const age = Date.now() - data.timestamp;
-      console.log('🔗 [ZOOM] Found pending zoom, age:', Math.round(age / 1000), 'seconds');
-      // Only use if less than 5 minutes old
-      if (age < 5 * 60 * 1000) {
-        return data;
-      }
-      console.log('🔗 [ZOOM] Pending zoom expired, removing');
-      localStorage.removeItem('assembly_inspector_zoom');
-    }
-  } catch (e) {
-    console.error('🔗 [ZOOM] Error reading zoom target:', e);
-  }
-  return null;
-};
+// Log app load for debugging
+console.log('🔗 [ZOOM] App loaded, isPopupMode:', isPopupMode);
 
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
@@ -157,78 +106,98 @@ export default function App() {
         setProjectId(project.id);
         console.log('Connected to project:', project.name);
 
-        // Handle pending zoom from shared link
-        const pendingZoom = getPendingZoom();
-        console.log('🔗 [ZOOM] Pending zoom check:', {
-          hasPendingZoom: !!pendingZoom,
-          pendingProject: pendingZoom?.project,
-          currentProject: project.id,
-          projectMatch: pendingZoom?.project === project.id,
-          guid: pendingZoom?.guid
-        });
-        if (pendingZoom && pendingZoom.project === project.id && pendingZoom.guid) {
-          console.log('🔗 [ZOOM] ✓ Starting zoom process for GUID:', pendingZoom.guid);
-          // Clear the pending zoom immediately to avoid re-triggering
-          localStorage.removeItem('assembly_inspector_zoom');
+        // Check for pending zoom targets in Supabase (shared links)
+        console.log('🔗 [ZOOM] Checking Supabase for pending zoom targets...');
+        try {
+          const { data: zoomTargets, error: zoomError } = await supabase
+            .from('zoom_targets')
+            .select('*')
+            .eq('project_id', project.id)
+            .eq('consumed', false)
+            .gte('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1);
 
-          // Retry zoom until model is loaded (max 60 seconds)
-          const maxRetries = 30;
-          const retryDelay = 2000; // 2 seconds between retries
+          if (zoomError) {
+            console.log('🔗 [ZOOM] Supabase query error:', zoomError);
+          } else if (zoomTargets && zoomTargets.length > 0) {
+            const pendingZoom = zoomTargets[0];
+            console.log('🔗 [ZOOM] Found pending zoom target:', {
+              id: pendingZoom.id,
+              model: pendingZoom.model_id,
+              guid: pendingZoom.guid,
+              assemblyMark: pendingZoom.assembly_mark
+            });
 
-          const tryZoom = async (attempt: number): Promise<boolean> => {
-            try {
-              console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}...`);
+            // Mark as consumed immediately to avoid re-triggering
+            await supabase
+              .from('zoom_targets')
+              .update({ consumed: true })
+              .eq('id', pendingZoom.id);
 
-              // Check if model is loaded
-              const models = await connected.viewer.getModels();
-              const modelLoaded = models?.some((m: any) => m.id === pendingZoom.model);
+            // Retry zoom until model is loaded (max 60 seconds)
+            const maxRetries = 30;
+            const retryDelay = 2000; // 2 seconds between retries
 
-              if (!modelLoaded) {
-                console.log('⏳ Model not loaded yet, waiting...');
+            const tryZoom = async (attempt: number): Promise<boolean> => {
+              try {
+                console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}...`);
+
+                // Check if model is loaded
+                const models = await connected.viewer.getModels();
+                const modelLoaded = models?.some((m: any) => m.id === pendingZoom.model_id);
+
+                if (!modelLoaded) {
+                  console.log('⏳ Model not loaded yet, waiting...');
+                  return false;
+                }
+
+                // Convert IFC GUID to runtime ID for this session
+                const runtimeIds = await connected.viewer.convertToObjectRuntimeIds(
+                  pendingZoom.model_id,
+                  [pendingZoom.guid]
+                );
+
+                if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
+                  console.log('⏳ Could not find object by GUID, waiting...');
+                  return false;
+                }
+
+                const runtimeId = runtimeIds[0];
+                console.log(`🔗 Found runtime ID ${runtimeId} for GUID ${pendingZoom.guid}`);
+
+                // Try to select and zoom
+                await connected.viewer.setSelection({
+                  modelObjectIds: [{
+                    modelId: pendingZoom.model_id,
+                    objectRuntimeIds: [runtimeId]
+                  }]
+                }, 'set');
+
+                // Zoom to selected object
+                await connected.viewer.setCamera({ selected: true }, { animationTime: 500 });
+
+                console.log('✓ Zoomed to object successfully!', pendingZoom.assembly_mark || pendingZoom.guid);
+                return true;
+              } catch (e) {
+                console.log('⏳ Zoom failed, will retry...', e);
                 return false;
               }
+            };
 
-              // Convert IFC GUID to runtime ID for this session
-              const runtimeIds = await connected.viewer.convertToObjectRuntimeIds(
-                pendingZoom.model,
-                [pendingZoom.guid]
-              );
-
-              if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
-                console.log('⏳ Could not find object by GUID, waiting...');
-                return false;
+            // Start retry loop in background (don't block init)
+            (async () => {
+              for (let i = 1; i <= maxRetries; i++) {
+                await new Promise(resolve => setTimeout(resolve, retryDelay));
+                const success = await tryZoom(i);
+                if (success) break;
               }
-
-              const runtimeId = runtimeIds[0];
-              console.log(`🔗 Found runtime ID ${runtimeId} for GUID ${pendingZoom.guid}`);
-
-              // Try to select and zoom
-              await connected.viewer.setSelection({
-                modelObjectIds: [{
-                  modelId: pendingZoom.model,
-                  objectRuntimeIds: [runtimeId]
-                }]
-              }, 'set');
-
-              // Zoom to selected object
-              await connected.viewer.setCamera({ selected: true }, { animationTime: 500 });
-
-              console.log('✓ Zoomed to object successfully!');
-              return true;
-            } catch (e) {
-              console.log('⏳ Zoom failed, will retry...', e);
-              return false;
-            }
-          };
-
-          // Start retry loop in background (don't block init)
-          (async () => {
-            for (let i = 1; i <= maxRetries; i++) {
-              await new Promise(resolve => setTimeout(resolve, retryDelay));
-              const success = await tryZoom(i);
-              if (success) break;
-            }
-          })();
+            })();
+          } else {
+            console.log('🔗 [ZOOM] No pending zoom targets found');
+          }
+        } catch (e) {
+          console.error('🔗 [ZOOM] Error checking zoom targets:', e);
         }
 
         // Hangi Trimble Connect kasutaja info

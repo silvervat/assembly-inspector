@@ -748,3 +748,18 @@ export interface ModelObject {
   product_name?: string;
   created_at: string;
 }
+
+// ============================================
+// ZOOM TARGETS (Shared link zoom persistence)
+// ============================================
+
+export interface ZoomTarget {
+  id: string;
+  project_id: string;
+  model_id: string;
+  guid: string;                    // IFC GUID for zoom target
+  assembly_mark?: string;          // For display purposes
+  created_at: string;
+  expires_at: string;              // Auto-cleanup after expiry
+  consumed: boolean;               // Mark as used after zoom
+}

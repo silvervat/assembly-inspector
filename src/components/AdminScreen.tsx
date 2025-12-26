@@ -1533,16 +1533,55 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         return;
                       }
 
-                      // Generate link with IFC GUID (permanent) - no runtime ID needed
-                      const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
-                      const link = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(ifcGuid)}`;
+                      // Get assembly mark for display
+                      let assemblyMark = '';
+                      try {
+                        const propsArray: any = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+                        const props = propsArray?.[0];
+                        if (props?.properties && Array.isArray(props.properties)) {
+                          for (const pset of props.properties) {
+                            if (pset.name === 'Tekla Assembly') {
+                              for (const p of pset.properties || []) {
+                                if (p.name === 'Assembly/Cast unit Mark') {
+                                  assemblyMark = String(p.value || '');
+                                  break;
+                                }
+                              }
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.warn('Could not get assembly mark:', e);
+                      }
+
+                      // Store zoom target in Supabase (works across iframe boundaries)
+                      const { error: dbError } = await supabase
+                        .from('zoom_targets')
+                        .insert({
+                          project_id: projectId,
+                          model_id: modelId,
+                          guid: ifcGuid,
+                          assembly_mark: assemblyMark || null
+                        });
+
+                      if (dbError) {
+                        console.error('Failed to store zoom target:', dbError);
+                        updateFunctionResult("generateZoomLink", {
+                          status: 'error',
+                          error: 'Andmebaasi viga: ' + dbError.message
+                        });
+                        return;
+                      }
+
+                      // Generate direct link to Trimble Connect (extension will check Supabase on load)
+                      const trimbleUrl = `https://web.connect.trimble.com/projects/${projectId}/viewer/3d/?modelId=${modelId}`;
 
                       // Copy to clipboard
-                      await navigator.clipboard.writeText(link);
+                      await navigator.clipboard.writeText(trimbleUrl);
 
                       updateFunctionResult("generateZoomLink", {
                         status: 'success',
-                        result: `Link kopeeritud! (${ifcGuid})`
+                        result: `Link kopeeritud! ${assemblyMark || ifcGuid}`
                       });
                     } catch (e: any) {
                       updateFunctionResult("generateZoomLink", {
