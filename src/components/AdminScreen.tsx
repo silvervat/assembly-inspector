@@ -3517,6 +3517,203 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               </p>
               <div className="function-grid">
                 <FunctionButton
+                  name="📋 Ekspordi KÕIK assemblyd (Cast_unit_Mark)"
+                  result={functionResults["📋 Ekspordi KÕIK assemblyd (Cast_unit_Mark)"]}
+                  onClick={() => testFunction("📋 Ekspordi KÕIK assemblyd (Cast_unit_Mark)", async () => {
+                    // Get all objects from all models
+                    const allModelObjects = await api.viewer.getObjects();
+                    if (!allModelObjects || allModelObjects.length === 0) {
+                      throw new Error('Ühtegi mudelit pole laetud!');
+                    }
+
+                    // Get model names
+                    const models = await api.viewer.getModels();
+                    const modelNames: Record<string, string> = {};
+                    for (const m of models) {
+                      modelNames[m.id] = m.name || m.id;
+                    }
+
+                    const allObjects: {
+                      modelName: string;
+                      runtimeId: number;
+                      guidIfc: string;
+                      guidMs: string;
+                      castUnitMark: string;
+                      productName: string;
+                      className: string;
+                      positionCode: string;
+                      weight: string;
+                    }[] = [];
+
+                    // IFC GUID conversion helper
+                    const IFC_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+                    const ifcToMs = (ifcGuid: string): string => {
+                      if (!ifcGuid || ifcGuid.length !== 22) return '';
+                      let bits = '';
+                      for (let i = 0; i < 22; i++) {
+                        const idx = IFC_CHARS.indexOf(ifcGuid[i]);
+                        if (idx < 0) return '';
+                        const numBits = i === 0 ? 2 : 6;
+                        bits += idx.toString(2).padStart(numBits, '0');
+                      }
+                      if (bits.length !== 128) return '';
+                      let hex = '';
+                      for (let i = 0; i < 128; i += 4) {
+                        hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+                      }
+                      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`.toUpperCase();
+                    };
+
+                    // Process each model
+                    for (const modelObj of allModelObjects) {
+                      const modelId = modelObj.modelId;
+                      const modelName = modelNames[modelId] || modelId;
+                      const objects = (modelObj as any).objects || [];
+                      const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                      if (runtimeIds.length === 0) continue;
+
+                      console.log(`Scanning ${runtimeIds.length} objects in model ${modelName}...`);
+
+                      // Get properties in batches and filter by Cast_unit_Mark
+                      const BATCH_SIZE = 500;
+                      let processedCount = 0;
+                      let foundCount = 0;
+
+                      for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                        const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                        processedCount += batch.length;
+
+                        // Get properties for batch
+                        let propsArray: any[] = [];
+                        try {
+                          propsArray = await api.viewer.getObjectProperties(modelId, batch);
+                        } catch (e) {
+                          console.warn('Error getting properties for batch:', e);
+                          continue;
+                        }
+
+                        // Get IFC GUIDs for batch
+                        let guidsArray: string[] = [];
+                        try {
+                          guidsArray = await api.viewer.convertToObjectIds(modelId, batch);
+                        } catch (e) {
+                          console.warn('Error getting GUIDs for batch:', e);
+                        }
+
+                        // Process each object in batch
+                        for (let j = 0; j < batch.length; j++) {
+                          const runtimeId = batch[j];
+                          const props = propsArray[j];
+                          const ifcGuid = guidsArray[j] || '';
+                          const msGuid = ifcToMs(ifcGuid);
+
+                          // Extract Cast_unit_Mark from properties
+                          let castUnitMark = '';
+                          let productName = '';
+                          let className = props?.class || '';
+                          let positionCode = '';
+                          let weight = '';
+
+                          if (props?.propertySets) {
+                            for (const ps of props.propertySets) {
+                              const p = ps.properties || {};
+
+                              if (ps.name === 'Tekla Quantity' || ps.name === 'Tekla Common') {
+                                if (p['Cast_unit_Mark']) castUnitMark = String(p['Cast_unit_Mark']);
+                                if (p['Cast_unit_Weight']) weight = String(p['Cast_unit_Weight']);
+                                if (p['Cast_unit_Position_Code']) positionCode = String(p['Cast_unit_Position_Code']);
+                                if (!castUnitMark && p['Mark']) castUnitMark = String(p['Mark']);
+                              }
+
+                              if (ps.name === 'Product' && p['Name']) {
+                                productName = String(p['Name']);
+                              }
+                            }
+                          }
+
+                          // Only include objects WITH Cast_unit_Mark (assemblies)
+                          if (castUnitMark) {
+                            foundCount++;
+                            allObjects.push({
+                              modelName,
+                              runtimeId,
+                              guidIfc: ifcGuid,
+                              guidMs: msGuid,
+                              castUnitMark,
+                              productName,
+                              className,
+                              positionCode,
+                              weight
+                            });
+                          }
+                        }
+
+                        // Log progress every 10 batches
+                        if ((i / BATCH_SIZE) % 10 === 0) {
+                          console.log(`Progress: ${processedCount}/${runtimeIds.length}, found ${foundCount} assemblies`);
+                        }
+                      }
+
+                      console.log(`Model ${modelName}: found ${foundCount} assemblies out of ${runtimeIds.length} objects`);
+                    }
+
+                    if (allObjects.length === 0) {
+                      throw new Error('Ühtegi assembly-t (Cast_unit_Mark) ei leitud!');
+                    }
+
+                    // Sort by Cast Unit Mark
+                    allObjects.sort((a, b) => a.castUnitMark.localeCompare(b.castUnitMark));
+
+                    // Create Excel workbook
+                    const wb = XLSX.utils.book_new();
+                    const headers = ['Cast Unit Mark', 'GUID (IFC)', 'GUID (MS)', 'Product Name', 'Position Code', 'Weight (kg)', 'Class', 'Model', 'Runtime ID'];
+                    const data = [headers];
+
+                    for (const obj of allObjects) {
+                      data.push([
+                        obj.castUnitMark,
+                        obj.guidIfc,
+                        obj.guidMs,
+                        obj.productName,
+                        obj.positionCode,
+                        obj.weight,
+                        obj.className,
+                        obj.modelName,
+                        String(obj.runtimeId)
+                      ]);
+                    }
+
+                    const ws = XLSX.utils.aoa_to_sheet(data);
+
+                    // Style header row
+                    const headerStyle = {
+                      font: { bold: true, color: { rgb: 'FFFFFF' } },
+                      fill: { fgColor: { rgb: '2563EB' } },
+                      alignment: { horizontal: 'center' }
+                    };
+                    for (let i = 0; i < headers.length; i++) {
+                      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: i })];
+                      if (cell) cell.s = headerStyle;
+                    }
+
+                    ws['!cols'] = [
+                      { wch: 18 }, { wch: 24 }, { wch: 38 }, { wch: 25 },
+                      { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 12 }
+                    ];
+
+                    XLSX.utils.book_append_sheet(wb, ws, 'Assemblies');
+
+                    const now = new Date();
+                    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                    const fileName = `Assemblies_GUID_${dateStr}.xlsx`;
+
+                    XLSX.writeFile(wb, fileName);
+
+                    return `Eksporditud ${allObjects.length} assembly-t faili "${fileName}"`;
+                  })}
+                />
+                <FunctionButton
                   name="1️⃣ Lülita Assembly Selection SISSE"
                   result={functionResults["1️⃣ Lülita Assembly Selection SISSE"]}
                   onClick={() => testFunction("1️⃣ Lülita Assembly Selection SISSE", async () => {
