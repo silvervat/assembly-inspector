@@ -1573,8 +1573,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         return;
                       }
 
-                      // Generate direct link to Trimble Connect (extension will check Supabase on load)
-                      const trimbleUrl = `https://web.connect.trimble.com/projects/${projectId}/viewer/3d/?modelId=${modelId}`;
+                      // Generate link with GUID in URL hash (for reference/backup)
+                      // Extension reads from Supabase, but GUID in URL makes link self-documenting
+                      const trimbleUrl = `https://web.connect.trimble.com/projects/${projectId}/viewer/3d/?modelId=${modelId}#zoom=${ifcGuid}`;
 
                       // Copy to clipboard
                       await navigator.clipboard.writeText(trimbleUrl);

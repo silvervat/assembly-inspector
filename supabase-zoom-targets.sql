@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS zoom_targets (
   guid TEXT NOT NULL,              -- IFC GUID of target object
   assembly_mark TEXT,              -- For display purposes
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '10 minutes'),
+  expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '30 minutes'),
   consumed BOOLEAN DEFAULT FALSE
 );
 
