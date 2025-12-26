@@ -3524,25 +3524,36 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     await (api.viewer as any).setSettings?.({ assemblySelection: true });
                     console.log('Assembly selection enabled');
 
-                    // Get all objects from all models
-                    const allModelObjects = await api.viewer.getObjects();
-                    if (!allModelObjects || allModelObjects.length === 0) {
-                      throw new Error('Ühtegi mudelit pole laetud!');
+                    // Log available viewer methods for debugging
+                    const viewerMethods = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function');
+                    console.log('Available viewer methods:', viewerMethods);
+
+                    // Try selectAll API (mimics Ctrl+A behavior with assembly selection)
+                    if (typeof (api.viewer as any).selectAll === 'function') {
+                      console.log('Using viewer.selectAll()');
+                      await (api.viewer as any).selectAll();
+                    } else if (typeof (api.viewer as any).select === 'function') {
+                      console.log('Using viewer.select("all")');
+                      await (api.viewer as any).select('all');
+                    } else {
+                      // Fallback: programmatic selection (may not respect assembly mode)
+                      console.log('selectAll not available, using setSelection fallback');
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        throw new Error('Ühtegi mudelit pole laetud!');
+                      }
+                      const selectionSpec = allModelObjects.map((modelObj: any) => ({
+                        modelId: modelObj.modelId,
+                        objectRuntimeIds: modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || []
+                      })).filter((s: any) => s.objectRuntimeIds.length > 0);
+                      await api.viewer.setSelection({ modelObjectIds: selectionSpec }, 'set');
                     }
-
-                    // Select ALL objects - with assembly selection ON, only assemblies will be selected
-                    const selectionSpec = allModelObjects.map((modelObj: any) => ({
-                      modelId: modelObj.modelId,
-                      objectRuntimeIds: modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || []
-                    })).filter((s: any) => s.objectRuntimeIds.length > 0);
-
-                    await api.viewer.setSelection({ modelObjectIds: selectionSpec }, 'set');
-                    console.log('Selected all objects');
+                    console.log('Selection completed');
 
                     // Wait a moment for selection to process
-                    await new Promise(r => setTimeout(r, 100));
+                    await new Promise(r => setTimeout(r, 200));
 
-                    // Get the selection - with assembly selection ON, this returns only assemblies
+                    // Get the selection
                     const selection = await api.viewer.getSelection();
                     if (!selection || selection.length === 0) {
                       throw new Error('Valik on tühi!');
@@ -3640,25 +3651,53 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         let positionCode = '';
                         let weight = '';
 
+                        // Log first few objects' property structure for debugging
+                        if (runtimeId === runtimeIds[0]) {
+                          console.log('Sample object properties:', JSON.stringify(props, null, 2));
+                        }
+
+                        // Handle different property formats from API
                         if (props?.propertySets) {
                           for (const ps of props.propertySets) {
                             const p = ps.properties || {};
 
-                            // Tekla Quantity - Cast_unit_Mark
-                            if (ps.name === 'Tekla Quantity') {
-                              if (p['Cast_unit_Mark']) castUnitMark = p['Cast_unit_Mark'];
+                            // Check for Cast_unit_Mark in both property sets
+                            if (ps.name === 'Tekla Quantity' || ps.name === 'Tekla Common') {
+                              if (p['Cast_unit_Mark']) castUnitMark = String(p['Cast_unit_Mark']);
                               if (p['Cast_unit_Weight']) weight = String(p['Cast_unit_Weight']);
-                              if (p['Cast_unit_Position_Code']) positionCode = p['Cast_unit_Position_Code'];
+                              if (p['Cast_unit_Position_Code']) positionCode = String(p['Cast_unit_Position_Code']);
+                              // Also check Mark as fallback
+                              if (!castUnitMark && p['Mark']) castUnitMark = String(p['Mark']);
                             }
 
                             // Product - Name
                             if (ps.name === 'Product' && p['Name']) {
-                              productName = p['Name'];
+                              productName = String(p['Name']);
                             }
+                          }
+                        } else if (props?.properties) {
+                          // Alternative property format (array-based)
+                          const rawProps = props.properties;
+                          if (Array.isArray(rawProps)) {
+                            for (const pset of rawProps) {
+                              const setName = (pset as any).set || (pset as any).name || '';
+                              const propsArray = (pset as any).properties || [];
 
-                            // Tekla Common - fallback for mark
-                            if (ps.name === 'Tekla Common' && !castUnitMark) {
-                              if (p['Mark']) castUnitMark = p['Mark'];
+                              if (setName === 'Tekla Quantity' || setName === 'Tekla Common') {
+                                if (Array.isArray(propsArray)) {
+                                  for (const prop of propsArray) {
+                                    if (prop?.name === 'Cast_unit_Mark') castUnitMark = String(prop.displayValue ?? prop.value ?? '');
+                                    if (prop?.name === 'Cast_unit_Weight') weight = String(prop.displayValue ?? prop.value ?? '');
+                                    if (prop?.name === 'Cast_unit_Position_Code') positionCode = String(prop.displayValue ?? prop.value ?? '');
+                                    if (!castUnitMark && prop?.name === 'Mark') castUnitMark = String(prop.displayValue ?? prop.value ?? '');
+                                  }
+                                }
+                              }
+                              if (setName === 'Product' && Array.isArray(propsArray)) {
+                                for (const prop of propsArray) {
+                                  if (prop?.name === 'Name') productName = String(prop.displayValue ?? prop.value ?? '');
+                                }
+                              }
                             }
                           }
                         }
@@ -3746,6 +3785,66 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     XLSX.writeFile(wb, fileName);
 
                     return `Eksporditud ${allObjects.length} detaili faili "${fileName}"`;
+                  })}
+                />
+                <FunctionButton
+                  name="🔍 Kontrolli viewer meetodeid"
+                  result={functionResults["🔍 Kontrolli viewer meetodeid"]}
+                  onClick={() => testFunction("🔍 Kontrolli viewer meetodeid", async () => {
+                    // Log all available viewer methods
+                    const viewerMethods = Object.keys(api.viewer).filter(k => typeof (api.viewer as any)[k] === 'function');
+                    console.log('Available viewer methods:', viewerMethods);
+
+                    // Check for selectAll or similar methods
+                    const selectMethods = viewerMethods.filter(m => m.toLowerCase().includes('select'));
+                    console.log('Select-related methods:', selectMethods);
+
+                    // Check for selection-related methods
+                    const hasSelectAll = typeof (api.viewer as any).selectAll === 'function';
+                    const hasSelect = typeof (api.viewer as any).select === 'function';
+                    const hasSelectVisible = typeof (api.viewer as any).selectVisible === 'function';
+                    const hasSelectAllObjects = typeof (api.viewer as any).selectAllObjects === 'function';
+
+                    let result = `Viewer meetodid (${viewerMethods.length}):\n`;
+                    result += viewerMethods.join(', ') + '\n\n';
+                    result += `Select meetodid: ${selectMethods.join(', ') || 'puuduvad'}\n`;
+                    result += `selectAll: ${hasSelectAll ? 'JAH' : 'EI'}\n`;
+                    result += `select: ${hasSelect ? 'JAH' : 'EI'}\n`;
+                    result += `selectVisible: ${hasSelectVisible ? 'JAH' : 'EI'}\n`;
+                    result += `selectAllObjects: ${hasSelectAllObjects ? 'JAH' : 'EI'}`;
+
+                    return result;
+                  })}
+                />
+                <FunctionButton
+                  name="🎯 Testi selectAll()"
+                  result={functionResults["🎯 Testi selectAll()"]}
+                  onClick={() => testFunction("🎯 Testi selectAll()", async () => {
+                    // Enable assembly selection first
+                    await (api.viewer as any).setSettings?.({ assemblySelection: true });
+                    console.log('Assembly selection enabled');
+
+                    // Try different selectAll variants
+                    if (typeof (api.viewer as any).selectAll === 'function') {
+                      await (api.viewer as any).selectAll();
+                      console.log('Called viewer.selectAll()');
+                    } else if (typeof (api.viewer as any).select === 'function') {
+                      await (api.viewer as any).select('all');
+                      console.log('Called viewer.select("all")');
+                    } else {
+                      console.log('No selectAll method found');
+                    }
+
+                    // Wait and get selection
+                    await new Promise(r => setTimeout(r, 300));
+                    const selection = await api.viewer.getSelection();
+
+                    let totalCount = 0;
+                    for (const sel of selection) {
+                      totalCount += sel.objectRuntimeIds?.length || 0;
+                    }
+
+                    return `Valitud ${totalCount} objekti (${selection.length} mudelit)`;
                   })}
                 />
               </div>
