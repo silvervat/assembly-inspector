@@ -3714,6 +3714,199 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   })}
                 />
                 <FunctionButton
+                  name="🔬 Analüüsi objektide hierarhiat"
+                  result={functionResults["🔬 Analüüsi objektide hierarhiat"]}
+                  onClick={() => testFunction("🔬 Analüüsi objektide hierarhiat", async () => {
+                    // Get all objects
+                    const allModelObjects = await api.viewer.getObjects();
+                    if (!allModelObjects || allModelObjects.length === 0) {
+                      throw new Error('Ühtegi mudelit pole laetud!');
+                    }
+
+                    const results: string[] = [];
+
+                    for (const modelObj of allModelObjects) {
+                      const modelId = modelObj.modelId;
+                      const objects = (modelObj as any).objects || [];
+                      const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                      results.push(`Model ${modelId}: ${runtimeIds.length} objects`);
+
+                      // Check first 100 objects for children
+                      const sampleIds = runtimeIds.slice(0, 100);
+                      let withChildren = 0;
+                      let withoutChildren = 0;
+                      const classNames: Record<string, number> = {};
+
+                      for (const id of sampleIds) {
+                        try {
+                          const children = await (api.viewer as any).getHierarchyChildren(modelId, [id]);
+                          if (children && children[0] && children[0].length > 0) {
+                            withChildren++;
+                          } else {
+                            withoutChildren++;
+                          }
+                        } catch (e) {
+                          // Ignore errors
+                        }
+
+                        // Get class name
+                        try {
+                          const props = await api.viewer.getObjectProperties(modelId, [id]);
+                          const cls = props[0]?.class || 'unknown';
+                          classNames[cls] = (classNames[cls] || 0) + 1;
+                        } catch (e) {
+                          // Ignore
+                        }
+                      }
+
+                      results.push(`  With children: ${withChildren}, Without: ${withoutChildren}`);
+                      results.push(`  Classes: ${Object.entries(classNames).map(([k, v]) => `${k}(${v})`).join(', ')}`);
+                    }
+
+                    console.log('Hierarchy analysis:', results.join('\n'));
+                    return results.join('\n');
+                  })}
+                />
+                <FunctionButton
+                  name="📋 Ekspordi hierarhia alusel (vanemobjektid)"
+                  result={functionResults["📋 Ekspordi hierarhia alusel (vanemobjektid)"]}
+                  onClick={() => testFunction("📋 Ekspordi hierarhia alusel (vanemobjektid)", async () => {
+                    // Get all objects
+                    const allModelObjects = await api.viewer.getObjects();
+                    if (!allModelObjects || allModelObjects.length === 0) {
+                      throw new Error('Ühtegi mudelit pole laetud!');
+                    }
+
+                    const models = await api.viewer.getModels();
+                    const modelNames: Record<string, string> = {};
+                    for (const m of models) {
+                      modelNames[m.id] = m.name || m.id;
+                    }
+
+                    const allAssemblies: {
+                      modelName: string;
+                      runtimeId: number;
+                      guidIfc: string;
+                      guidMs: string;
+                      castUnitMark: string;
+                      productName: string;
+                      className: string;
+                      childCount: number;
+                    }[] = [];
+
+                    const IFC_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+                    const ifcToMs = (ifcGuid: string): string => {
+                      if (!ifcGuid || ifcGuid.length !== 22) return '';
+                      let bits = '';
+                      for (let i = 0; i < 22; i++) {
+                        const idx = IFC_CHARS.indexOf(ifcGuid[i]);
+                        if (idx < 0) return '';
+                        const numBits = i === 0 ? 2 : 6;
+                        bits += idx.toString(2).padStart(numBits, '0');
+                      }
+                      if (bits.length !== 128) return '';
+                      let hex = '';
+                      for (let i = 0; i < 128; i += 4) {
+                        hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+                      }
+                      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`.toUpperCase();
+                    };
+
+                    for (const modelObj of allModelObjects) {
+                      const modelId = modelObj.modelId;
+                      const modelName = modelNames[modelId] || modelId;
+                      const objects = (modelObj as any).objects || [];
+                      const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                      console.log(`Checking hierarchy for ${runtimeIds.length} objects in ${modelName}...`);
+
+                      // Process in batches
+                      const BATCH_SIZE = 100;
+                      let processed = 0;
+
+                      for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                        const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                        processed += batch.length;
+
+                        // Check children for batch
+                        for (const id of batch) {
+                          try {
+                            const children = await (api.viewer as any).getHierarchyChildren(modelId, [id]);
+                            const childCount = children?.[0]?.length || 0;
+
+                            // Only include objects WITH children (assemblies)
+                            if (childCount > 0) {
+                              // Get properties
+                              const props = await api.viewer.getObjectProperties(modelId, [id]);
+                              const guids = await api.viewer.convertToObjectIds(modelId, [id]);
+
+                              const prop: any = props[0] || {};
+                              const ifcGuid = guids[0] || '';
+                              let castUnitMark = '';
+                              let productName = '';
+
+                              if (prop.propertySets) {
+                                for (const ps of prop.propertySets) {
+                                  const p = ps.properties || {};
+                                  if (ps.name === 'Tekla Quantity' || ps.name === 'Tekla Common') {
+                                    if (p['Cast_unit_Mark']) castUnitMark = String(p['Cast_unit_Mark']);
+                                    if (!castUnitMark && p['Mark']) castUnitMark = String(p['Mark']);
+                                  }
+                                  if (ps.name === 'Product' && p['Name']) {
+                                    productName = String(p['Name']);
+                                  }
+                                }
+                              }
+
+                              allAssemblies.push({
+                                modelName,
+                                runtimeId: id,
+                                guidIfc: ifcGuid,
+                                guidMs: ifcToMs(ifcGuid),
+                                castUnitMark: castUnitMark || '-',
+                                productName,
+                                className: prop.class || '',
+                                childCount
+                              });
+                            }
+                          } catch (e) {
+                            // Ignore errors
+                          }
+                        }
+
+                        if ((i / BATCH_SIZE) % 50 === 0) {
+                          console.log(`Progress: ${processed}/${runtimeIds.length}, found ${allAssemblies.length} assemblies`);
+                        }
+                      }
+                    }
+
+                    if (allAssemblies.length === 0) {
+                      throw new Error('Ühtegi assembly-t ei leitud!');
+                    }
+
+                    // Sort and export
+                    allAssemblies.sort((a, b) => a.castUnitMark.localeCompare(b.castUnitMark));
+
+                    const wb = XLSX.utils.book_new();
+                    const headers = ['Cast Unit Mark', 'GUID (IFC)', 'GUID (MS)', 'Product Name', 'Class', 'Child Count', 'Model', 'Runtime ID'];
+                    const data = [headers, ...allAssemblies.map(a => [
+                      a.castUnitMark, a.guidIfc, a.guidMs, a.productName,
+                      a.className, String(a.childCount), a.modelName, String(a.runtimeId)
+                    ])];
+
+                    const ws = XLSX.utils.aoa_to_sheet(data);
+                    ws['!cols'] = [{ wch: 18 }, { wch: 24 }, { wch: 38 }, { wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 25 }, { wch: 12 }];
+                    XLSX.utils.book_append_sheet(wb, ws, 'Assemblies');
+
+                    const now = new Date();
+                    const fileName = `Assemblies_Hierarchy_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.xlsx`;
+                    XLSX.writeFile(wb, fileName);
+
+                    return `Eksporditud ${allAssemblies.length} assembly-t (hierarhia alusel) faili "${fileName}"`;
+                  })}
+                />
+                <FunctionButton
                   name="1️⃣ Lülita Assembly Selection SISSE"
                   result={functionResults["1️⃣ Lülita Assembly Selection SISSE"]}
                   onClick={() => testFunction("1️⃣ Lülita Assembly Selection SISSE", async () => {
@@ -3831,9 +4024,13 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         let positionCode = '';
                         let weight = '';
 
-                        // Log first object's property structure for debugging
+                        // Log first object's property structure for debugging (with BigInt handling)
                         if (runtimeId === runtimeIds[0]) {
-                          console.log('Sample object properties:', JSON.stringify(props, null, 2));
+                          try {
+                            console.log('Sample object properties:', JSON.stringify(props, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
+                          } catch (e) {
+                            console.log('Sample object properties (raw):', props);
+                          }
                         }
 
                         // Handle different property formats from API
