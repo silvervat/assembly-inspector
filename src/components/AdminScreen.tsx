@@ -3670,9 +3670,10 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     // Sort by Cast Unit Mark
                     allObjects.sort((a, b) => a.castUnitMark.localeCompare(b.castUnitMark));
 
-                    // Create Excel workbook
+                    // Create Excel workbook - simplified for smaller file size
                     const wb = XLSX.utils.book_new();
-                    const headers = ['Cast Unit Mark', 'GUID (IFC)', 'GUID (MS)', 'Product Name', 'Position Code', 'Weight (kg)', 'Class', 'Model', 'Runtime ID'];
+                    // Reduced columns - removed Runtime ID and Model (same for all)
+                    const headers = ['Cast Unit Mark', 'GUID (IFC)', 'GUID (MS)', 'Product', 'Position', 'Weight'];
                     const data = [headers];
 
                     for (const obj of allObjects) {
@@ -3682,29 +3683,15 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         obj.guidMs,
                         obj.productName,
                         obj.positionCode,
-                        obj.weight,
-                        obj.className,
-                        obj.modelName,
-                        String(obj.runtimeId)
+                        obj.weight
                       ]);
                     }
 
                     const ws = XLSX.utils.aoa_to_sheet(data);
 
-                    // Style header row
-                    const headerStyle = {
-                      font: { bold: true, color: { rgb: 'FFFFFF' } },
-                      fill: { fgColor: { rgb: '2563EB' } },
-                      alignment: { horizontal: 'center' }
-                    };
-                    for (let i = 0; i < headers.length; i++) {
-                      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: i })];
-                      if (cell) cell.s = headerStyle;
-                    }
-
+                    // Minimal column widths
                     ws['!cols'] = [
-                      { wch: 18 }, { wch: 24 }, { wch: 38 }, { wch: 25 },
-                      { wch: 14 }, { wch: 12 }, { wch: 20 }, { wch: 25 }, { wch: 12 }
+                      { wch: 14 }, { wch: 22 }, { wch: 36 }, { wch: 12 }, { wch: 10 }, { wch: 8 }
                     ];
 
                     XLSX.utils.book_append_sheet(wb, ws, 'Assemblies');
@@ -3713,7 +3700,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
                     const fileName = `Assemblies_GUID_${dateStr}.xlsx`;
 
-                    XLSX.writeFile(wb, fileName);
+                    // Write with compression
+                    XLSX.writeFile(wb, fileName, { compression: true });
 
                     return `Eksporditud ${allObjects.length} assembly-t faili "${fileName}"`;
                   })}
