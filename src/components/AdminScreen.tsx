@@ -3831,9 +3831,13 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         let positionCode = '';
                         let weight = '';
 
-                        // Log first object's property structure for debugging
+                        // Log first object's property structure for debugging (with BigInt handling)
                         if (runtimeId === runtimeIds[0]) {
-                          console.log('Sample object properties:', JSON.stringify(props, null, 2));
+                          try {
+                            console.log('Sample object properties:', JSON.stringify(props, (_, v) => typeof v === 'bigint' ? v.toString() : v, 2));
+                          } catch (e) {
+                            console.log('Sample object properties (raw):', props);
+                          }
                         }
 
                         // Handle different property formats from API
