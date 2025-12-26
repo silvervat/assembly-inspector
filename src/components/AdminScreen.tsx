@@ -3520,14 +3520,32 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   name="Ekspordi mudeli GUID-id Excelisse"
                   result={functionResults["Ekspordi mudeli GUID-id Excelisse"]}
                   onClick={() => testFunction("Ekspordi mudeli GUID-id Excelisse", async () => {
-                    // Enable assembly selection to get only assemblies (Cast Units), not individual parts
+                    // Enable assembly selection to get only assemblies (Cast Units)
                     await (api.viewer as any).setSettings?.({ assemblySelection: true });
                     console.log('Assembly selection enabled');
 
-                    // Get all assembly-level objects from all models using getObjects()
+                    // Get all objects from all models
                     const allModelObjects = await api.viewer.getObjects();
                     if (!allModelObjects || allModelObjects.length === 0) {
                       throw new Error('Ühtegi mudelit pole laetud!');
+                    }
+
+                    // Select ALL objects - with assembly selection ON, only assemblies will be selected
+                    const selectionSpec = allModelObjects.map((modelObj: any) => ({
+                      modelId: modelObj.modelId,
+                      objectRuntimeIds: modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || []
+                    })).filter((s: any) => s.objectRuntimeIds.length > 0);
+
+                    await api.viewer.setSelection({ modelObjectIds: selectionSpec }, 'set');
+                    console.log('Selected all objects');
+
+                    // Wait a moment for selection to process
+                    await new Promise(r => setTimeout(r, 100));
+
+                    // Get the selection - with assembly selection ON, this returns only assemblies
+                    const selection = await api.viewer.getSelection();
+                    if (!selection || selection.length === 0) {
+                      throw new Error('Valik on tühi!');
                     }
 
                     // Get model names
@@ -3568,16 +3586,15 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                       return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`.toUpperCase();
                     };
 
-                    // Process each model
-                    for (const modelObj of allModelObjects) {
-                      const modelId = modelObj.modelId;
+                    // Process selection (assemblies only)
+                    for (const sel of selection) {
+                      const modelId = sel.modelId;
                       const modelName = modelNames[modelId] || modelId;
+                      const runtimeIds = sel.objectRuntimeIds || [];
 
-                      // Get runtime IDs from the objects array
-                      const runtimeIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
                       if (runtimeIds.length === 0) continue;
 
-                      console.log(`Found ${runtimeIds.length} objects in model ${modelName}`);
+                      console.log(`Found ${runtimeIds.length} assemblies in model ${modelName}`);
 
                       // Get IFC GUIDs using convertToObjectIds (in batches)
                       const BATCH_SIZE = 1000;
