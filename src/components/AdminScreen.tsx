@@ -3520,10 +3520,17 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   name="Ekspordi mudeli GUID-id Excelisse"
                   result={functionResults["Ekspordi mudeli GUID-id Excelisse"]}
                   onClick={() => testFunction("Ekspordi mudeli GUID-id Excelisse", async () => {
-                    // Get all loaded models
-                    const models = await api.viewer.getModels();
-                    if (!models || models.length === 0) {
+                    // Get all objects from all models using getObjects()
+                    const allModelObjects = await api.viewer.getObjects();
+                    if (!allModelObjects || allModelObjects.length === 0) {
                       throw new Error('Ühtegi mudelit pole laetud!');
+                    }
+
+                    // Get model names
+                    const models = await api.viewer.getModels();
+                    const modelNames: Record<string, string> = {};
+                    for (const m of models) {
+                      modelNames[m.id] = m.name || m.id;
                     }
 
                     const allObjects: {
@@ -3558,29 +3565,12 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     };
 
                     // Process each model
-                    for (const model of models) {
-                      const modelId = model.id;
-                      const modelName = model.name || model.id;
+                    for (const modelObj of allModelObjects) {
+                      const modelId = modelObj.modelId;
+                      const modelName = modelNames[modelId] || modelId;
 
-                      // Get model tree to find all objects
-                      const tree = await (api.viewer as any).getModelTree?.(modelId);
-                      if (!tree) {
-                        console.warn('getModelTree not available, trying alternative...');
-                        continue;
-                      }
-
-                      // Collect all runtime IDs from tree recursively
-                      const runtimeIds: number[] = [];
-                      const collectIds = (node: any) => {
-                        if (node.id !== undefined) runtimeIds.push(node.id);
-                        if (node.children) node.children.forEach(collectIds);
-                      };
-                      if (Array.isArray(tree)) {
-                        tree.forEach(collectIds);
-                      } else if (tree.children) {
-                        tree.children.forEach(collectIds);
-                      }
-
+                      // Get runtime IDs from the objects array
+                      const runtimeIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
                       if (runtimeIds.length === 0) continue;
 
                       console.log(`Found ${runtimeIds.length} objects in model ${modelName}`);
@@ -3593,7 +3583,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         const batch = runtimeIds.slice(i, i + BATCH_SIZE);
                         try {
                           const guids = await api.viewer.convertToObjectIds(modelId, batch);
-                          batch.forEach((id, idx) => {
+                          batch.forEach((id: number, idx: number) => {
                             if (guids[idx]) ifcGuidsMap[id] = guids[idx];
                           });
                         } catch (e) {
