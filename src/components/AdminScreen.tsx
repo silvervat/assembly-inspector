@@ -3646,8 +3646,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           }
                         }
 
-                        // Only include objects with GUID or Cast Unit Mark
-                        if (ifcGuid || castUnitMark) {
+                        // Only include objects with Cast Unit Mark (these are assemblies)
+                        // Individual parts don't have Cast_unit_Mark
+                        if (castUnitMark) {
                           allObjects.push({
                             modelName,
                             runtimeId,
