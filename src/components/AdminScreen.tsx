@@ -136,6 +136,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
   // Function explorer state
   const [showFunctionExplorer, setShowFunctionExplorer] = useState(false);
   const [functionResults, setFunctionResults] = useState<Record<string, FunctionTestResult>>({});
+  const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
 
   // Assembly & Bolts list state
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
@@ -1582,6 +1583,39 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
                 Vali mudelist detailid ja ekspordi Excel tabelisse koos poltide infoga.
               </p>
+              {/* Language selection */}
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                <button
+                  onClick={() => setExportLanguage('et')}
+                  style={{
+                    padding: '4px 10px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: exportLanguage === 'et' ? '#3b82f6' : '#e5e7eb',
+                    color: exportLanguage === 'et' ? '#fff' : '#374151',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  🇪🇪 Eesti
+                </button>
+                <button
+                  onClick={() => setExportLanguage('en')}
+                  style={{
+                    padding: '4px 10px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: exportLanguage === 'en' ? '#3b82f6' : '#e5e7eb',
+                    color: exportLanguage === 'en' ? '#fff' : '#374151',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  🇬🇧 English
+                </button>
+              </div>
               <div className="function-grid">
                 <FunctionButton
                   name="📥 Ekspordi Excel"
@@ -1812,9 +1846,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
-                      // Create Excel workbook
+                      // Create Excel workbook with language-aware headers
+                      const headers = exportLanguage === 'en'
+                        ? ['Cast Unit Mark', 'Weight (kg)', 'Position Code', 'Product Name', 'Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nut Type', 'Nuts', 'Washer Name', 'Washer Type', 'Washer ⌀', 'Washers']
+                        : ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'];
                       const wsData = [
-                        ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'],
+                        headers,
                         ...exportRows.map(r => [
                           r.castUnitMark,
                           r.weight,
@@ -1948,7 +1985,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       }
 
                       const wb = XLSX.utils.book_new();
-                      XLSX.utils.book_append_sheet(wb, ws, 'Detailid+Poldid');
+                      const mainSheetName = exportLanguage === 'en' ? 'Details+Bolts' : 'Detailid+Poldid';
+                      XLSX.utils.book_append_sheet(wb, ws, mainSheetName);
 
                       // Create Bolt Summary sheet - aggregate all bolts and washers for ordering
                       const boltSummary = new Map<string, {name: string, standard: string, size: string, length: string, count: number}>();
@@ -2031,30 +2069,50 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         return diamA - diamB;
                       });
 
-                      const summaryData: (string | number)[][] = [
-                        ['POLDID', '', '', '', ''],
-                        ['Nimi', 'Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
-                        ...sortedBolts.map(b => [b.name, b.standard, b.size, b.length, b.count]),
-                        [],
-                        ['MUTRID', '', ''],
-                        ['Nimi', 'Tüüp', 'Kogus'],
-                        ...sortedNuts.map(n => [n.name, n.type, n.count]),
-                        [],
-                        ['SEIBID', '', '', ''],
-                        ['Nimi', 'Tüüp', 'Diameeter', 'Kogus'],
-                        ...sortedWashers.map(w => [w.name, w.type, w.diameter, w.count])
-                      ];
+                      // Summary sheet with language-aware labels
+                      const summaryData: (string | number)[][] = exportLanguage === 'en'
+                        ? [
+                            ['BOLTS', '', '', '', ''],
+                            ['Name', 'Standard', 'Size', 'Length (mm)', 'Qty'],
+                            ...sortedBolts.map(b => [b.name, b.standard, b.size, b.length, b.count]),
+                            [],
+                            ['NUTS', '', ''],
+                            ['Name', 'Type', 'Qty'],
+                            ...sortedNuts.map(n => [n.name, n.type, n.count]),
+                            [],
+                            ['WASHERS', '', '', ''],
+                            ['Name', 'Type', 'Diameter', 'Qty'],
+                            ...sortedWashers.map(w => [w.name, w.type, w.diameter, w.count])
+                          ]
+                        : [
+                            ['POLDID', '', '', '', ''],
+                            ['Nimi', 'Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
+                            ...sortedBolts.map(b => [b.name, b.standard, b.size, b.length, b.count]),
+                            [],
+                            ['MUTRID', '', ''],
+                            ['Nimi', 'Tüüp', 'Kogus'],
+                            ...sortedNuts.map(n => [n.name, n.type, n.count]),
+                            [],
+                            ['SEIBID', '', '', ''],
+                            ['Nimi', 'Tüüp', 'Diameeter', 'Kogus'],
+                            ...sortedWashers.map(w => [w.name, w.type, w.diameter, w.count])
+                          ];
 
                       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-                      XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
+                      const summarySheetName = exportLanguage === 'en' ? 'Summary' : 'Kokkuvõte';
+                      XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
 
-                      // Download
-                      const fileName = `${projectName}_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
+                      // Download with language-aware filename
+                      const fileNameSuffix = exportLanguage === 'en' ? 'bolts' : 'poldid';
+                      const fileName = `${projectName}_${fileNameSuffix}_${new Date().toISOString().slice(0,10)}.xlsx`;
                       XLSX.writeFile(wb, fileName, { compression: true });
 
+                      const successMsg = exportLanguage === 'en'
+                        ? `Exported ${allRuntimeIds.length} items, ${exportRows.length} rows`
+                        : `Eksporditud ${allRuntimeIds.length} detaili, ${exportRows.length} rida`;
                       updateFunctionResult("exportSelectedWithBolts", {
                         status: 'success',
-                        result: `Eksporditud ${allRuntimeIds.length} detaili, ${exportRows.length} rida`
+                        result: successMsg
                       });
                     } catch (e: any) {
                       console.error('Export error:', e);
