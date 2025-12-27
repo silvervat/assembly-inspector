@@ -1665,14 +1665,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           }
                         }
 
-                        // Get children (bolt assemblies)
+                        // Get children (bolt assemblies) using getHierarchyChildren (same as Avasta propertised)
                         let childBolts: ExportRow[] = [];
                         try {
-                          const hierarchy = await (api.viewer as any).getHierarchy?.(modelId, [runtimeId]);
-                          console.log('📊 Hierarchy for', runtimeId, ':', hierarchy);
+                          const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                          console.log('📊 HierarchyChildren for', runtimeId, ':', hierarchyChildren);
 
-                          if (hierarchy && hierarchy[0]?.children) {
-                            const childIds = hierarchy[0].children.map((c: any) => c.id);
+                          // hierarchyChildren returns array of arrays: [[{id: x}, {id: y}]]
+                          const children = hierarchyChildren?.[0];
+                          if (children && Array.isArray(children) && children.length > 0) {
+                            const childIds = children.map((c: any) => c.id);
                             console.log('📊 Found', childIds.length, 'children:', childIds);
 
                             if (childIds.length > 0) {
