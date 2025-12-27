@@ -1631,6 +1631,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         castUnitMark: string;
                         weight: string;
                         positionCode: string;
+                        productName: string;
                         boltName: string;
                         boltStandard: string;
                         boltSize: string;
@@ -1656,14 +1657,23 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         let castUnitMark = '';
                         let weight = '';
                         let positionCode = '';
+                        let productName = '';
 
                         if (props?.properties && Array.isArray(props.properties)) {
                           for (const pset of props.properties) {
                             if (pset.name === 'Tekla Assembly') {
                               for (const p of pset.properties || []) {
                                 if (p.name === 'Assembly/Cast unit Mark') castUnitMark = String(p.value || '');
-                                if (p.name === 'Assembly/Cast unit weight') weight = String(p.value || '');
+                                if (p.name === 'Assembly/Cast unit weight') {
+                                  const w = parseFloat(p.value);
+                                  weight = isNaN(w) ? String(p.value || '') : w.toFixed(2);
+                                }
                                 if (p.name === 'Assembly/Cast unit position code') positionCode = String(p.value || '');
+                              }
+                            }
+                            if (pset.name === 'Product') {
+                              for (const p of pset.properties || []) {
+                                if (p.name === 'Name') productName = String(p.value || '');
                               }
                             }
                           }
@@ -1738,6 +1748,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                       castUnitMark,
                                       weight,
                                       positionCode,
+                                      productName,
                                       boltName: boltInfo.boltName || '',
                                       boltStandard: boltInfo.boltStandard || '',
                                       boltSize: boltInfo.boltSize || '',
@@ -1768,6 +1779,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                             castUnitMark,
                             weight,
                             positionCode,
+                            productName,
                             boltName: '',
                             boltStandard: '',
                             boltSize: '',
@@ -1802,11 +1814,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Create Excel workbook
                       const wsData = [
-                        ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'],
+                        ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'],
                         ...exportRows.map(r => [
                           r.castUnitMark,
                           r.weight,
                           r.positionCode,
+                          r.productName,
                           r.boltName,
                           r.boltStandard,
                           r.boltSize,
@@ -1829,6 +1842,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         { wch: 18 }, // Cast Unit Mark
                         { wch: 10 }, // Kaal
                         { wch: 14 }, // Asukoha kood
+                        { wch: 20 }, // Toote nimi
                         { wch: 16 }, // Poldi nimi
                         { wch: 10 }, // Standard
                         { wch: 8 },  // Suurus
@@ -1877,7 +1891,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       };
 
                       // Apply header styles (row 0)
-                      const numCols = 15;
+                      const numCols = 16;
                       for (let c = 0; c < numCols; c++) {
                         const cellRef = XLSX.utils.encode_cell({ r: 0, c });
                         if (ws[cellRef]) {
@@ -1890,13 +1904,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         for (let c = 0; c < numCols; c++) {
                           const cellRef = XLSX.utils.encode_cell({ r, c });
                           if (ws[cellRef]) {
-                            // Use merged cell style for first 3 columns (will be merged)
-                            ws[cellRef].s = c < 3 ? mergedCellStyle : cellStyle;
+                            // Use merged cell style for first 4 columns (will be merged)
+                            ws[cellRef].s = c < 4 ? mergedCellStyle : cellStyle;
                           }
                         }
                       }
 
-                      // Merge left columns (Cast Unit Mark, Weight, Position Code) for same detail
+                      // Merge left columns (Cast Unit Mark, Weight, Position Code, Product Name) for same detail
                       // exportRows[i] corresponds to wsData row i+1 (row 0 is header)
                       const merges: Array<{s: {r: number, c: number}, e: {r: number, c: number}}> = [];
                       let currentMark = exportRows[0]?.castUnitMark || '';
@@ -1907,8 +1921,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           // End of group: exportRows[groupStartIdx] to exportRows[i-1]
                           // In wsData terms: row groupStartIdx+1 to row i (0-based)
                           if (i - groupStartIdx > 1) {
-                            // More than one row - create merges for columns A, B, C (0, 1, 2)
-                            for (let col = 0; col < 3; col++) {
+                            // More than one row - create merges for columns A, B, C, D (0, 1, 2, 3)
+                            for (let col = 0; col < 4; col++) {
                               merges.push({
                                 s: { r: groupStartIdx + 1, c: col },
                                 e: { r: i, c: col }
@@ -1921,7 +1935,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       }
                       // Handle last group
                       if (exportRows.length - groupStartIdx > 1) {
-                        for (let col = 0; col < 3; col++) {
+                        for (let col = 0; col < 4; col++) {
                           merges.push({
                             s: { r: groupStartIdx + 1, c: col },
                             e: { r: exportRows.length, c: col }
