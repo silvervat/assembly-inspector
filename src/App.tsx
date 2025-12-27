@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.236';
+export const APP_VERSION = '3.0.237';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -41,6 +41,40 @@ interface SelectedInspectionType {
 // Check if running in popup mode
 const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'delivery';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
+
+// Check if this is a zoom link redirect (from shared link)
+const urlParams = new URLSearchParams(window.location.search);
+const zoomProject = urlParams.get('project');
+const zoomModel = urlParams.get('model');
+const zoomGuid = urlParams.get('guid');
+const zoomAction = urlParams.get('action') || 'zoom';
+
+// If zoom params in URL, store in Supabase and redirect to Trimble Connect
+if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
+  console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction });
+
+  // Store to Supabase (async, but we redirect immediately)
+  supabase
+    .from('zoom_targets')
+    .insert({
+      project_id: zoomProject,
+      model_id: zoomModel,
+      guid: zoomGuid,
+      action_type: zoomAction
+    })
+    .then(({ error }) => {
+      if (error) {
+        console.error('🔗 [ZOOM] Failed to store zoom target:', error);
+      } else {
+        console.log('🔗 [ZOOM] Zoom target stored successfully');
+      }
+    });
+
+  // Redirect to Trimble Connect
+  const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomProject}/viewer/3d/?modelId=${zoomModel}`;
+  console.log('🔗 [ZOOM] Redirecting to:', trimbleUrl);
+  window.location.href = trimbleUrl;
+}
 
 // Log app load for debugging
 console.log('🔗 [ZOOM] App loaded, isPopupMode:', isPopupMode);
