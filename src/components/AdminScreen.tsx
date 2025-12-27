@@ -1669,10 +1669,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         let childBolts: ExportRow[] = [];
                         try {
                           const hierarchy = await (api.viewer as any).getHierarchy?.(modelId, [runtimeId]);
+                          console.log('📊 Hierarchy for', runtimeId, ':', hierarchy);
+
                           if (hierarchy && hierarchy[0]?.children) {
                             const childIds = hierarchy[0].children.map((c: any) => c.id);
+                            console.log('📊 Found', childIds.length, 'children:', childIds);
+
                             if (childIds.length > 0) {
                               const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+                              console.log('📊 Child properties:', childProps);
 
                               for (const childProp of childProps) {
                                 // Check if this is a bolt assembly (has Tekla Bolt property set)
@@ -1681,27 +1686,37 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                   let boltInfo: Partial<ExportRow> = {};
 
                                   for (const pset of childProp.properties) {
-                                    if (pset.name === 'Tekla Bolt') {
+                                    // Match "Tekla Bolt" case-insensitively
+                                    const psetName = (pset.name || '').toLowerCase();
+                                    console.log('📊 Property set:', pset.name);
+
+                                    if (psetName.includes('tekla bolt') || psetName.includes('bolt')) {
                                       hasTeklaBolt = true;
+                                      console.log('📊 Found bolt property set:', pset.name, pset.properties);
+
                                       for (const p of pset.properties || []) {
-                                        const val = String(p.value || '');
-                                        if (p.name === 'Bolt Name') boltInfo.boltName = val;
-                                        if (p.name === 'Bolt standard') boltInfo.boltStandard = val;
-                                        if (p.name === 'Bolt size') boltInfo.boltSize = val;
-                                        if (p.name === 'Bolt length') boltInfo.boltLength = val;
-                                        if (p.name === 'Bolt count') boltInfo.boltCount = val;
-                                        if (p.name === 'Nut name') boltInfo.nutName = val;
-                                        if (p.name === 'Nut type') boltInfo.nutType = val;
-                                        if (p.name === 'Nut count') boltInfo.nutCount = val;
-                                        if (p.name === 'Washer name') boltInfo.washerName = val;
-                                        if (p.name === 'Washer type') boltInfo.washerType = val;
-                                        if (p.name === 'Washer diameter') boltInfo.washerDiameter = val;
-                                        if (p.name === 'Washer count') boltInfo.washerCount = val;
+                                        const propName = (p.name || '').toLowerCase();
+                                        const val = String(p.value ?? p.displayValue ?? '');
+
+                                        // Match property names case-insensitively
+                                        if (propName.includes('bolt') && propName.includes('name')) boltInfo.boltName = val;
+                                        if (propName.includes('bolt') && propName.includes('standard')) boltInfo.boltStandard = val;
+                                        if (propName.includes('bolt') && propName.includes('size')) boltInfo.boltSize = val;
+                                        if (propName.includes('bolt') && propName.includes('length')) boltInfo.boltLength = val;
+                                        if (propName.includes('bolt') && propName.includes('count')) boltInfo.boltCount = val;
+                                        if (propName.includes('nut') && propName.includes('name')) boltInfo.nutName = val;
+                                        if (propName.includes('nut') && propName.includes('type')) boltInfo.nutType = val;
+                                        if (propName.includes('nut') && propName.includes('count')) boltInfo.nutCount = val;
+                                        if (propName.includes('washer') && propName.includes('name')) boltInfo.washerName = val;
+                                        if (propName.includes('washer') && propName.includes('type')) boltInfo.washerType = val;
+                                        if (propName.includes('washer') && propName.includes('diameter')) boltInfo.washerDiameter = val;
+                                        if (propName.includes('washer') && propName.includes('count')) boltInfo.washerCount = val;
                                       }
                                     }
                                   }
 
                                   if (hasTeklaBolt) {
+                                    console.log('📊 Adding bolt row:', boltInfo);
                                     childBolts.push({
                                       castUnitMark,
                                       weight,
@@ -1723,6 +1738,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                 }
                               }
                             }
+                          } else {
+                            console.log('📊 No hierarchy children found for', runtimeId);
                           }
                         } catch (e) {
                           console.warn('Could not get children for', runtimeId, e);
