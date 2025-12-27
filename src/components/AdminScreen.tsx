@@ -1589,6 +1589,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                   onClick={async () => {
                     updateFunctionResult("exportSelectedWithBolts", { status: 'pending' });
                     try {
+                      // Get project name for file
+                      const project = await api.project.getProject();
+                      const projectName = (project?.name || 'projekt').replace(/[^a-zA-Z0-9äöüõÄÖÜÕ_-]/g, '_');
+
                       // Get ALL selected objects
                       const selected = await api.viewer.getSelection();
                       if (!selected || selected.length === 0) {
@@ -2031,7 +2035,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
 
                       // Download
-                      const fileName = `detailid_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
+                      const fileName = `${projectName}_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
                       XLSX.writeFile(wb, fileName, { compression: true });
 
                       updateFunctionResult("exportSelectedWithBolts", {
