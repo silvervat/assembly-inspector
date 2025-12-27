@@ -1589,6 +1589,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                   onClick={async () => {
                     updateFunctionResult("exportSelectedWithBolts", { status: 'pending' });
                     try {
+                      // Get project name for file
+                      const project = await api.project.getProject();
+                      const projectName = (project?.name || 'projekt').replace(/[^a-zA-Z0-9äöüõÄÖÜÕ_-]/g, '_');
+
                       // Get ALL selected objects
                       const selected = await api.viewer.getSelection();
                       if (!selected || selected.length === 0) {
@@ -1820,6 +1824,78 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       const ws = XLSX.utils.aoa_to_sheet(wsData);
 
+                      // Set column widths
+                      ws['!cols'] = [
+                        { wch: 18 }, // Cast Unit Mark
+                        { wch: 10 }, // Kaal
+                        { wch: 14 }, // Asukoha kood
+                        { wch: 16 }, // Poldi nimi
+                        { wch: 10 }, // Standard
+                        { wch: 8 },  // Suurus
+                        { wch: 8 },  // Pikkus
+                        { wch: 6 },  // Polte
+                        { wch: 14 }, // Mutri nimi
+                        { wch: 10 }, // Mutri tüüp
+                        { wch: 8 },  // Mutreid
+                        { wch: 14 }, // Seib nimi
+                        { wch: 10 }, // Seibi tüüp
+                        { wch: 8 },  // Seibi ⌀
+                        { wch: 6 }   // Seibe
+                      ];
+
+                      // Style definitions
+                      const headerStyle = {
+                        fill: { fgColor: { rgb: '003366' } }, // Trimble dark blue
+                        font: { color: { rgb: 'FFFFFF' }, bold: true },
+                        alignment: { horizontal: 'center', vertical: 'center' },
+                        border: {
+                          top: { style: 'thin', color: { rgb: '000000' } },
+                          bottom: { style: 'thin', color: { rgb: '000000' } },
+                          left: { style: 'thin', color: { rgb: '000000' } },
+                          right: { style: 'thin', color: { rgb: '000000' } }
+                        }
+                      };
+
+                      const cellStyle = {
+                        border: {
+                          top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                        },
+                        alignment: { vertical: 'center' }
+                      };
+
+                      const mergedCellStyle = {
+                        border: {
+                          top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                        },
+                        alignment: { horizontal: 'center', vertical: 'center' }
+                      };
+
+                      // Apply header styles (row 0)
+                      const numCols = 15;
+                      for (let c = 0; c < numCols; c++) {
+                        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+                        if (ws[cellRef]) {
+                          ws[cellRef].s = headerStyle;
+                        }
+                      }
+
+                      // Apply cell styles to data rows
+                      for (let r = 1; r <= exportRows.length; r++) {
+                        for (let c = 0; c < numCols; c++) {
+                          const cellRef = XLSX.utils.encode_cell({ r, c });
+                          if (ws[cellRef]) {
+                            // Use merged cell style for first 3 columns (will be merged)
+                            ws[cellRef].s = c < 3 ? mergedCellStyle : cellStyle;
+                          }
+                        }
+                      }
+
                       // Merge left columns (Cast Unit Mark, Weight, Position Code) for same detail
                       // exportRows[i] corresponds to wsData row i+1 (row 0 is header)
                       const merges: Array<{s: {r: number, c: number}, e: {r: number, c: number}}> = [];
@@ -1959,7 +2035,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
 
                       // Download
-                      const fileName = `detailid_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
+                      const fileName = `${projectName}_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
                       XLSX.writeFile(wb, fileName, { compression: true });
 
                       updateFunctionResult("exportSelectedWithBolts", {
@@ -1969,6 +2045,147 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                     } catch (e: any) {
                       console.error('Export error:', e);
                       updateFunctionResult("exportSelectedWithBolts", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📋 Kopeeri poldid"
+                  result={functionResults["copyBoltsToClipboard"]}
+                  onClick={async () => {
+                    updateFunctionResult("copyBoltsToClipboard", { status: 'pending' });
+                    try {
+                      // Get ALL selected objects
+                      const selected = await api.viewer.getSelection();
+                      if (!selected || selected.length === 0) {
+                        updateFunctionResult("copyBoltsToClipboard", {
+                          status: 'error',
+                          error: 'Vali mudelist detailid!'
+                        });
+                        return;
+                      }
+
+                      // Collect all runtime IDs
+                      const allRuntimeIds: number[] = [];
+                      let modelId = '';
+                      for (const sel of selected) {
+                        if (!modelId) modelId = sel.modelId;
+                        if (sel.objectRuntimeIds) {
+                          allRuntimeIds.push(...sel.objectRuntimeIds);
+                        }
+                      }
+
+                      if (!modelId || allRuntimeIds.length === 0) {
+                        updateFunctionResult("copyBoltsToClipboard", {
+                          status: 'error',
+                          error: 'Valitud objektidel puudub info'
+                        });
+                        return;
+                      }
+
+                      // Collect bolt and washer data
+                      const boltData = new Map<string, { name: string; standard: string; count: number }>();
+                      const washerData = new Map<string, { name: string; type: string; count: number }>();
+
+                      // Process each selected object
+                      for (const runtimeId of allRuntimeIds) {
+                        try {
+                          const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+
+                          if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+                            const childIds = hierarchyChildren.map((c: any) => c.id);
+
+                            if (childIds.length > 0) {
+                              const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+
+                              for (const childProp of childProps) {
+                                if (childProp?.properties && Array.isArray(childProp.properties)) {
+                                  let boltName = '';
+                                  let boltStandard = '';
+                                  let boltCount = 0;
+                                  let washerName = '';
+                                  let washerType = '';
+                                  let washerCount = 0;
+                                  let hasTeklaBolt = false;
+
+                                  for (const pset of childProp.properties) {
+                                    const psetName = (pset.name || '').toLowerCase();
+                                    if (psetName.includes('tekla bolt') || psetName.includes('bolt')) {
+                                      hasTeklaBolt = true;
+                                      for (const p of pset.properties || []) {
+                                        const propName = (p.name || '').toLowerCase();
+                                        const val = String(p.value ?? p.displayValue ?? '');
+                                        if (propName.includes('bolt') && propName.includes('name')) boltName = val;
+                                        if (propName.includes('bolt') && propName.includes('standard')) boltStandard = val;
+                                        if (propName.includes('bolt') && propName.includes('count')) boltCount = parseInt(val) || 0;
+                                        if (propName.includes('washer') && propName.includes('name')) washerName = val;
+                                        if (propName.includes('washer') && propName.includes('type')) washerType = val;
+                                        if (propName.includes('washer') && propName.includes('count')) washerCount = parseInt(val) || 0;
+                                      }
+                                    }
+                                  }
+
+                                  // Skip if washer count = 0 (openings)
+                                  if (!hasTeklaBolt || washerCount === 0) continue;
+
+                                  // Aggregate bolts
+                                  const boltKey = `${boltName}|${boltStandard}`;
+                                  if (boltData.has(boltKey)) {
+                                    boltData.get(boltKey)!.count += boltCount;
+                                  } else {
+                                    boltData.set(boltKey, { name: boltName, standard: boltStandard, count: boltCount });
+                                  }
+
+                                  // Aggregate washers
+                                  const washerKey = `${washerName}|${washerType}`;
+                                  if (washerData.has(washerKey)) {
+                                    washerData.get(washerKey)!.count += washerCount;
+                                  } else {
+                                    washerData.set(washerKey, { name: washerName, type: washerType, count: washerCount });
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          console.warn('Could not get children for', runtimeId, e);
+                        }
+                      }
+
+                      // Sort by name
+                      const sortedBolts = Array.from(boltData.values()).sort((a, b) => {
+                        const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                        const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                        return sizeA - sizeB;
+                      });
+                      const sortedWashers = Array.from(washerData.values()).sort((a, b) => {
+                        const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                        const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                        return sizeA - sizeB;
+                      });
+
+                      // Build clipboard text
+                      let clipText = 'POLDID\nNimi\tStandard\tKogus\n';
+                      for (const b of sortedBolts) {
+                        clipText += `${b.name}\t${b.standard}\t${b.count}\n`;
+                      }
+                      clipText += '\nSEIBID\nNimi\tTüüp\tKogus\n';
+                      for (const w of sortedWashers) {
+                        clipText += `${w.name}\t${w.type}\t${w.count}\n`;
+                      }
+
+                      // Copy to clipboard
+                      await navigator.clipboard.writeText(clipText);
+
+                      updateFunctionResult("copyBoltsToClipboard", {
+                        status: 'success',
+                        result: `Kopeeritud: ${sortedBolts.length} polti, ${sortedWashers.length} seibi`
+                      });
+                    } catch (e: any) {
+                      console.error('Clipboard error:', e);
+                      updateFunctionResult("copyBoltsToClipboard", {
                         status: 'error',
                         error: e.message
                       });
