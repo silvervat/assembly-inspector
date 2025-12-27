@@ -1717,6 +1717,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                   }
 
                                   if (hasTeklaBolt) {
+                                    // Filter: skip rows where washer count = 0 (openings, not real bolts)
+                                    const washerCountNum = parseInt(boltInfo.washerCount || '0') || 0;
+                                    if (washerCountNum === 0) {
+                                      console.log('📊 Skipping bolt with washerCount=0:', boltInfo);
+                                      continue;
+                                    }
                                     console.log('📊 Adding bolt row:', boltInfo);
                                     childBolts.push({
                                       castUnitMark,
@@ -1766,7 +1772,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                             washerCount: ''
                           });
                         } else {
-                          exportRows.push(...childBolts);
+                          // Group same bolts by name+standard+size+length and sum counts
+                          const boltGroups = new Map<string, ExportRow>();
+                          for (const bolt of childBolts) {
+                            const key = `${bolt.boltName}|${bolt.boltStandard}|${bolt.boltSize}|${bolt.boltLength}`;
+                            if (boltGroups.has(key)) {
+                              const existing = boltGroups.get(key)!;
+                              // Sum counts
+                              existing.boltCount = String((parseInt(existing.boltCount) || 0) + (parseInt(bolt.boltCount) || 0));
+                              existing.nutCount = String((parseInt(existing.nutCount) || 0) + (parseInt(bolt.nutCount) || 0));
+                              existing.washerCount = String((parseInt(existing.washerCount) || 0) + (parseInt(bolt.washerCount) || 0));
+                            } else {
+                              boltGroups.set(key, { ...bolt });
+                            }
+                          }
+                          exportRows.push(...Array.from(boltGroups.values()));
                         }
                       }
 
@@ -1793,6 +1813,44 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       ];
 
                       const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+                      // Merge left columns (Cast Unit Mark, Weight, Position Code) for same detail
+                      // exportRows[i] corresponds to wsData row i+1 (row 0 is header)
+                      const merges: Array<{s: {r: number, c: number}, e: {r: number, c: number}}> = [];
+                      let currentMark = exportRows[0]?.castUnitMark || '';
+                      let groupStartIdx = 0; // exportRows index of current group start
+
+                      for (let i = 1; i < exportRows.length; i++) {
+                        if (exportRows[i].castUnitMark !== currentMark) {
+                          // End of group: exportRows[groupStartIdx] to exportRows[i-1]
+                          // In wsData terms: row groupStartIdx+1 to row i (0-based)
+                          if (i - groupStartIdx > 1) {
+                            // More than one row - create merges for columns A, B, C (0, 1, 2)
+                            for (let col = 0; col < 3; col++) {
+                              merges.push({
+                                s: { r: groupStartIdx + 1, c: col },
+                                e: { r: i, c: col }
+                              });
+                            }
+                          }
+                          groupStartIdx = i;
+                          currentMark = exportRows[i].castUnitMark;
+                        }
+                      }
+                      // Handle last group
+                      if (exportRows.length - groupStartIdx > 1) {
+                        for (let col = 0; col < 3; col++) {
+                          merges.push({
+                            s: { r: groupStartIdx + 1, c: col },
+                            e: { r: exportRows.length, c: col }
+                          });
+                        }
+                      }
+
+                      if (merges.length > 0) {
+                        ws['!merges'] = merges;
+                      }
+
                       const wb = XLSX.utils.book_new();
                       XLSX.utils.book_append_sheet(wb, ws, 'Detailid+Poldid');
 
