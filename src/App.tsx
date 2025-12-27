@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.234';
+export const APP_VERSION = '3.0.236';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -122,11 +122,13 @@ export default function App() {
             console.log('🔗 [ZOOM] Supabase query error:', zoomError);
           } else if (zoomTargets && zoomTargets.length > 0) {
             const pendingZoom = zoomTargets[0];
+            const actionType = pendingZoom.action_type || 'zoom';
             console.log('🔗 [ZOOM] Found pending zoom target:', {
               id: pendingZoom.id,
               model: pendingZoom.model_id,
               guid: pendingZoom.guid,
-              assemblyMark: pendingZoom.assembly_mark
+              assemblyMark: pendingZoom.assembly_mark,
+              actionType
             });
 
             // Mark as consumed immediately to avoid re-triggering
@@ -141,7 +143,7 @@ export default function App() {
 
             const tryZoom = async (attempt: number): Promise<boolean> => {
               try {
-                console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}...`);
+                console.log(`🔗 Zoom attempt ${attempt}/${maxRetries}... (action: ${actionType})`);
 
                 // Check if model is loaded
                 const models = await connected.viewer.getModels();
@@ -166,7 +168,27 @@ export default function App() {
                 const runtimeId = runtimeIds[0];
                 console.log(`🔗 Found runtime ID ${runtimeId} for GUID ${pendingZoom.guid}`);
 
-                // Try to select and zoom
+                // Handle different action types
+                if (actionType === 'zoom_isolate') {
+                  // ISOLATE: Hide all objects, then show only target
+                  console.log('🔗 Isolating object...');
+                  // First hide everything
+                  await connected.viewer.setObjectState(undefined, { visible: false });
+                  // Then show only the target
+                  await connected.viewer.setObjectState(
+                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: [runtimeId] }] },
+                    { visible: true }
+                  );
+                } else if (actionType === 'zoom_red') {
+                  // RED: Color the target object red
+                  console.log('🔗 Coloring object red...');
+                  await connected.viewer.setObjectState(
+                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: [runtimeId] }] },
+                    { color: { r: 255, g: 0, b: 0, a: 255 } }
+                  );
+                }
+
+                // Select the object
                 await connected.viewer.setSelection({
                   modelObjectIds: [{
                     modelId: pendingZoom.model_id,
@@ -177,7 +199,7 @@ export default function App() {
                 // Zoom to selected object
                 await connected.viewer.setCamera({ selected: true }, { animationTime: 500 });
 
-                console.log('✓ Zoomed to object successfully!', pendingZoom.assembly_mark || pendingZoom.guid);
+                console.log(`✓ Zoom (${actionType}) completed!`, pendingZoom.assembly_mark || pendingZoom.guid);
                 return true;
               } catch (e) {
                 console.log('⏳ Zoom failed, will retry...', e);
