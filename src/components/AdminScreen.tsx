@@ -1820,6 +1820,78 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       const ws = XLSX.utils.aoa_to_sheet(wsData);
 
+                      // Set column widths
+                      ws['!cols'] = [
+                        { wch: 18 }, // Cast Unit Mark
+                        { wch: 10 }, // Kaal
+                        { wch: 14 }, // Asukoha kood
+                        { wch: 16 }, // Poldi nimi
+                        { wch: 10 }, // Standard
+                        { wch: 8 },  // Suurus
+                        { wch: 8 },  // Pikkus
+                        { wch: 6 },  // Polte
+                        { wch: 14 }, // Mutri nimi
+                        { wch: 10 }, // Mutri tüüp
+                        { wch: 8 },  // Mutreid
+                        { wch: 14 }, // Seib nimi
+                        { wch: 10 }, // Seibi tüüp
+                        { wch: 8 },  // Seibi ⌀
+                        { wch: 6 }   // Seibe
+                      ];
+
+                      // Style definitions
+                      const headerStyle = {
+                        fill: { fgColor: { rgb: '003366' } }, // Trimble dark blue
+                        font: { color: { rgb: 'FFFFFF' }, bold: true },
+                        alignment: { horizontal: 'center', vertical: 'center' },
+                        border: {
+                          top: { style: 'thin', color: { rgb: '000000' } },
+                          bottom: { style: 'thin', color: { rgb: '000000' } },
+                          left: { style: 'thin', color: { rgb: '000000' } },
+                          right: { style: 'thin', color: { rgb: '000000' } }
+                        }
+                      };
+
+                      const cellStyle = {
+                        border: {
+                          top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                        },
+                        alignment: { vertical: 'center' }
+                      };
+
+                      const mergedCellStyle = {
+                        border: {
+                          top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                          right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                        },
+                        alignment: { horizontal: 'center', vertical: 'center' }
+                      };
+
+                      // Apply header styles (row 0)
+                      const numCols = 15;
+                      for (let c = 0; c < numCols; c++) {
+                        const cellRef = XLSX.utils.encode_cell({ r: 0, c });
+                        if (ws[cellRef]) {
+                          ws[cellRef].s = headerStyle;
+                        }
+                      }
+
+                      // Apply cell styles to data rows
+                      for (let r = 1; r <= exportRows.length; r++) {
+                        for (let c = 0; c < numCols; c++) {
+                          const cellRef = XLSX.utils.encode_cell({ r, c });
+                          if (ws[cellRef]) {
+                            // Use merged cell style for first 3 columns (will be merged)
+                            ws[cellRef].s = c < 3 ? mergedCellStyle : cellStyle;
+                          }
+                        }
+                      }
+
                       // Merge left columns (Cast Unit Mark, Weight, Position Code) for same detail
                       // exportRows[i] corresponds to wsData row i+1 (row 0 is header)
                       const merges: Array<{s: {r: number, c: number}, e: {r: number, c: number}}> = [];
