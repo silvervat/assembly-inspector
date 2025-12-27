@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.238';
+export const APP_VERSION = '3.0.239';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -210,21 +210,13 @@ export default function App() {
 
                 // Handle different action types
                 if (actionType === 'zoom_isolate') {
-                  // ISOLATE: Reset visibility, hide all, then show only targets
-                  console.log('🔗 Isolating objects...');
-                  // Reset visibility first
-                  await connected.viewer.setObjectState(undefined, { visible: 'reset' });
-                  // Small delay to ensure reset is applied
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                  // Hide everything
-                  await connected.viewer.setObjectState(undefined, { visible: false });
-                  // Small delay
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                  // Show only the target objects
-                  await connected.viewer.setObjectState(
-                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: validRuntimeIds }] },
-                    { visible: true }
-                  );
+                  // ISOLATE: Use isolateEntities API
+                  console.log('🔗 Isolating objects with isolateEntities...');
+                  const modelEntities = [{
+                    modelId: pendingZoom.model_id,
+                    entityIds: validRuntimeIds
+                  }];
+                  await connected.viewer.isolateEntities(modelEntities);
                 } else if (actionType === 'zoom_red') {
                   // RED: Color all target objects red
                   console.log('🔗 Coloring objects red...');
