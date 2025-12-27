@@ -2101,6 +2101,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Collect bolt and washer data
                       const boltData = new Map<string, { name: string; standard: string; count: number }>();
+                      const nutData = new Map<string, { name: string; type: string; count: number }>();
                       const washerData = new Map<string, { name: string; type: string; count: number }>();
 
                       // Process each selected object
@@ -2119,6 +2120,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                   let boltName = '';
                                   let boltStandard = '';
                                   let boltCount = 0;
+                                  let nutName = '';
+                                  let nutType = '';
+                                  let nutCount = 0;
                                   let washerName = '';
                                   let washerType = '';
                                   let washerCount = 0;
@@ -2134,6 +2138,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                         if (propName.includes('bolt') && propName.includes('name')) boltName = val;
                                         if (propName.includes('bolt') && propName.includes('standard')) boltStandard = val;
                                         if (propName.includes('bolt') && propName.includes('count')) boltCount = parseInt(val) || 0;
+                                        if (propName.includes('nut') && propName.includes('name')) nutName = val;
+                                        if (propName.includes('nut') && propName.includes('type')) nutType = val;
+                                        if (propName.includes('nut') && propName.includes('count')) nutCount = parseInt(val) || 0;
                                         if (propName.includes('washer') && propName.includes('name')) washerName = val;
                                         if (propName.includes('washer') && propName.includes('type')) washerType = val;
                                         if (propName.includes('washer') && propName.includes('count')) washerCount = parseInt(val) || 0;
@@ -2152,6 +2159,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                     boltData.set(boltKey, { name: boltName, standard: boltStandard, count: boltCount });
                                   }
 
+                                  // Aggregate nuts
+                                  if (nutName || nutType) {
+                                    const nutKey = `${nutName}|${nutType}`;
+                                    if (nutData.has(nutKey)) {
+                                      nutData.get(nutKey)!.count += nutCount;
+                                    } else {
+                                      nutData.set(nutKey, { name: nutName, type: nutType, count: nutCount });
+                                    }
+                                  }
+
                                   // Aggregate washers
                                   const washerKey = `${washerName}|${washerType}`;
                                   if (washerData.has(washerKey)) {
@@ -2168,8 +2185,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
-                      // Sort by name
+                      // Sort by name/size
                       const sortedBolts = Array.from(boltData.values()).sort((a, b) => {
+                        const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                        const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                        return sizeA - sizeB;
+                      });
+                      const sortedNuts = Array.from(nutData.values()).sort((a, b) => {
                         const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
                         const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
                         return sizeA - sizeB;
@@ -2185,6 +2207,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       for (const b of sortedBolts) {
                         clipText += `${b.name}\t${b.standard}\t${b.count}\n`;
                       }
+                      clipText += '\nMUTRID\nNimi\tTüüp\tKogus\n';
+                      for (const n of sortedNuts) {
+                        clipText += `${n.name}\t${n.type}\t${n.count}\n`;
+                      }
                       clipText += '\nSEIBID\nNimi\tTüüp\tKogus\n';
                       for (const w of sortedWashers) {
                         clipText += `${w.name}\t${w.type}\t${w.count}\n`;
@@ -2195,7 +2221,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       updateFunctionResult("copyBoltsToClipboard", {
                         status: 'success',
-                        result: `Kopeeritud: ${sortedBolts.length} polti, ${sortedWashers.length} seibi`
+                        result: `Kopeeritud: ${sortedBolts.length} polti, ${sortedNuts.length} mutrit, ${sortedWashers.length} seibi`
                       });
                     } catch (e: any) {
                       console.error('Clipboard error:', e);
