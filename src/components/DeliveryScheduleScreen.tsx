@@ -495,31 +495,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Export modal
   const [showExportModal, setShowExportModal] = useState(false);
+  const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
   const [exportColumns, setExportColumns] = useState([
-    { id: 'nr', label: 'Nr', enabled: true },
-    { id: 'date', label: 'Kuupäev', enabled: true },
-    { id: 'day', label: 'Päev', enabled: true },
-    { id: 'time', label: 'Kellaaeg', enabled: true },
-    { id: 'duration', label: 'Kestus', enabled: true },
-    { id: 'vehicle', label: 'Veok', enabled: true },
-    { id: 'vehicle_type', label: 'Veoki tüüp', enabled: true },
-    { id: 'factory', label: 'Tehas', enabled: true },
-    { id: 'mark', label: 'Assembly Mark', enabled: true },
-    { id: 'position', label: 'Position Code', enabled: true },
-    { id: 'product', label: 'Toode', enabled: true },
-    { id: 'weight', label: 'Kaal (kg)', enabled: true },
-    { id: 'status', label: 'Staatus', enabled: true },
-    { id: 'crane', label: 'Kraana', enabled: true },
-    { id: 'telescopic', label: 'Teleskoop', enabled: true },
-    { id: 'manual', label: 'Käsitsi', enabled: true },
-    { id: 'poomtostuk', label: 'Poomtõstuk', enabled: true },
-    { id: 'taasnik', label: 'Taasnik', enabled: true },
-    { id: 'keevitaja', label: 'Keevitaja', enabled: true },
-    { id: 'guid_ms', label: 'GUID (MS)', enabled: true },
-    { id: 'guid_ifc', label: 'GUID (IFC)', enabled: true },
-    { id: 'original_date', label: 'Algne kuupäev', enabled: true },
-    { id: 'original_vehicle', label: 'Algne veok', enabled: true },
-    { id: 'comments', label: 'Kommentaarid', enabled: true }
+    { id: 'nr', label: 'Nr', labelEn: 'No', enabled: true },
+    { id: 'date', label: 'Kuupäev', labelEn: 'Date', enabled: true },
+    { id: 'day', label: 'Päev', labelEn: 'Day', enabled: true },
+    { id: 'time', label: 'Kellaaeg', labelEn: 'Time', enabled: true },
+    { id: 'duration', label: 'Kestus', labelEn: 'Duration', enabled: true },
+    { id: 'vehicle', label: 'Veok', labelEn: 'Vehicle', enabled: true },
+    { id: 'vehicle_type', label: 'Veoki tüüp', labelEn: 'Vehicle Type', enabled: true },
+    { id: 'factory', label: 'Tehas', labelEn: 'Factory', enabled: true },
+    { id: 'mark', label: 'Assembly Mark', labelEn: 'Assembly Mark', enabled: true },
+    { id: 'position', label: 'Position Code', labelEn: 'Position Code', enabled: true },
+    { id: 'product', label: 'Toode', labelEn: 'Product', enabled: true },
+    { id: 'weight', label: 'Kaal (kg)', labelEn: 'Weight (kg)', enabled: true },
+    { id: 'status', label: 'Staatus', labelEn: 'Status', enabled: true },
+    { id: 'crane', label: 'Kraana', labelEn: 'Crane', enabled: true },
+    { id: 'telescopic', label: 'Teleskoop', labelEn: 'Telehandler', enabled: true },
+    { id: 'manual', label: 'Käsitsi', labelEn: 'Manual', enabled: true },
+    { id: 'poomtostuk', label: 'Poomtõstuk', labelEn: 'Boom Lift', enabled: true },
+    { id: 'taasnik', label: 'Taasnik', labelEn: 'Rigger', enabled: true },
+    { id: 'keevitaja', label: 'Keevitaja', labelEn: 'Welder', enabled: true },
+    { id: 'guid_ms', label: 'GUID (MS)', labelEn: 'GUID (MS)', enabled: true },
+    { id: 'guid_ifc', label: 'GUID (IFC)', labelEn: 'GUID (IFC)', enabled: true },
+    { id: 'original_date', label: 'Algne kuupäev', labelEn: 'Original Date', enabled: true },
+    { id: 'original_vehicle', label: 'Algne veok', labelEn: 'Original Vehicle', enabled: true },
+    { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
   ]);
 
   // Color mode for model visualization - default to vehicle coloring
@@ -3726,6 +3727,19 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const exportToExcel = async () => {
     try {
       const enabledColumns = exportColumns.filter(c => c.enabled);
+      const isEnglish = exportLanguage === 'en';
+
+      // English weekday names
+      const WEEKDAY_NAMES_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+      // English status labels
+      const ITEM_STATUS_EN: Record<string, string> = {
+        planned: 'Planned',
+        loaded: 'Loaded',
+        in_transit: 'In Transit',
+        delivered: 'Delivered',
+        cancelled: 'Cancelled'
+      };
 
       // Sort items by date and vehicle
       const sortedItems = [...items].sort((a, b) => {
@@ -3746,8 +3760,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const uniqueDates = [...new Set(sortedItems.map(i => i.scheduled_date).filter((d): d is string => d !== null))];
       const dateColors = generateDateColors(uniqueDates);
 
-      // Build header row
-      const headers = enabledColumns.map(c => c.label);
+      // Build header row with language support
+      const headers = enabledColumns.map(c => isEnglish ? c.labelEn : c.label);
 
       // Build data rows
       const rows = sortedItems.map((item, idx) => {
@@ -3763,8 +3777,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
           switch (col.id) {
             case 'nr': row.push(idx + 1); break;
-            case 'date': row.push(item.scheduled_date ? formatDateDisplay(item.scheduled_date) : 'MÄÄRAMATA'); break;
-            case 'day': row.push(item.scheduled_date ? WEEKDAY_NAMES[new Date(item.scheduled_date).getDay()] : '-'); break;
+            case 'date': row.push(item.scheduled_date ? formatDateDisplay(item.scheduled_date) : (isEnglish ? 'UNASSIGNED' : 'MÄÄRAMATA')); break;
+            case 'day': row.push(item.scheduled_date ? (isEnglish ? WEEKDAY_NAMES_EN : WEEKDAY_NAMES)[new Date(item.scheduled_date).getDay()] : '-'); break;
             case 'time': row.push(formatTimeDisplay(vehicle?.unload_start_time)); break;
             case 'duration': {
               const mins = vehicle?.unload_duration_minutes || 90;
@@ -3783,7 +3797,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             case 'position': row.push(item.cast_unit_position_code || ''); break;
             case 'product': row.push(item.product_name || ''); break;
             case 'weight': row.push(item.cast_unit_weight || ''); break;
-            case 'status': row.push(ITEM_STATUS_CONFIG[item.status]?.label || item.status); break;
+            case 'status': row.push(isEnglish ? (ITEM_STATUS_EN[item.status] || item.status) : (ITEM_STATUS_CONFIG[item.status]?.label || item.status)); break;
             case 'crane': row.push(itemMethods?.crane || ''); break;
             case 'telescopic': row.push(itemMethods?.telescopic || ''); break;
             case 'manual': row.push(itemMethods?.manual || ''); break;
@@ -3856,7 +3870,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       });
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Tarnegraafik');
+      const mainSheetName = isEnglish ? 'Delivery Schedule' : 'Tarnegraafik';
+      XLSX.utils.book_append_sheet(wb, ws, mainSheetName);
 
       // Summary sheet - prepare vehicle list
       const sortedVehicles = [...vehicles].sort((a, b) => {
@@ -3866,14 +3881,36 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         return (a.unload_start_time || '99:99').localeCompare(b.unload_start_time || '99:99');
       });
 
+      // English vehicle status labels
+      const VEHICLE_STATUS_EN: Record<string, string> = {
+        planned: 'Planned',
+        loading: 'Loading',
+        transit: 'In Transit',
+        arrived: 'Arrived',
+        unloading: 'Unloading',
+        completed: 'Completed',
+        cancelled: 'Cancelled'
+      };
+
+      // English unload method labels
+      const UNLOAD_METHODS_EN: Record<string, string> = {
+        crane: 'Crane',
+        telescopic: 'Telehandler',
+        manual: 'Manual',
+        poomtostuk: 'Boom Lift'
+      };
+
       const vehicleRows = sortedVehicles.map(v => {
         const vehicleItems = items.filter(i => i.vehicle_id === v.id);
         const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
         const resources = UNLOAD_METHODS
           .filter(m => v.unload_methods?.[m.key])
-          .map(m => `${m.label}: ${v.unload_methods?.[m.key]}`)
+          .map(m => `${isEnglish ? UNLOAD_METHODS_EN[m.key] || m.label : m.label}: ${v.unload_methods?.[m.key]}`)
           .join(', ') || '-';
         const durationStr = v.unload_duration_minutes ? `${(v.unload_duration_minutes / 60).toFixed(1)}h` : '-';
+        const statusLabel = isEnglish
+          ? VEHICLE_STATUS_EN[v.status] || v.status
+          : VEHICLE_STATUS_CONFIG[v.status]?.label || v.status;
 
         return [
           v.vehicle_code,
@@ -3883,43 +3920,68 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           vehicleItems.length,
           Math.round(vehicleWeight),
           resources,
-          VEHICLE_STATUS_CONFIG[v.status]?.label || v.status
+          statusLabel
         ];
       });
 
-      const summaryData = [
-        ['Kokkuvõte'],
-        [],
-        ['Kokku detaile', totalItems],
-        ['Kokku kaal', `${Math.round(totalWeight)} kg`],
-        ['Veokeid', vehicles.length],
-        ['Tehaseid', factories.length],
-        [],
-        ['Kuupäevade kaupa'],
-        ['Kuupäev', 'Veokeid', 'Detaile', 'Kaal (kg)'],
-        ...sortedDates.map(date => {
-          const dateItems = items.filter(i => i.scheduled_date === date);
-          const dateVehicles = new Set(dateItems.map(i => i.vehicle_id)).size;
-          const dateWeight = dateItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
-          return [formatDateDisplay(date), dateVehicles, dateItems.length, Math.round(dateWeight)];
-        }),
-        [],
-        ['Veokite nimekiri'],
-        ['Veok', 'Kuupäev', 'Aeg', 'Kestus', 'Detaile', 'Kaal (kg)', 'Ressursid', 'Staatus'],
-        ...vehicleRows
-      ];
+      const summaryData = isEnglish
+        ? [
+            ['Summary'],
+            [],
+            ['Total Items', totalItems],
+            ['Total Weight', `${Math.round(totalWeight)} kg`],
+            ['Vehicles', vehicles.length],
+            ['Factories', factories.length],
+            [],
+            ['By Date'],
+            ['Date', 'Vehicles', 'Items', 'Weight (kg)'],
+            ...sortedDates.map(date => {
+              const dateItems = items.filter(i => i.scheduled_date === date);
+              const dateVehicles = new Set(dateItems.map(i => i.vehicle_id)).size;
+              const dateWeight = dateItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
+              return [formatDateDisplay(date), dateVehicles, dateItems.length, Math.round(dateWeight)];
+            }),
+            [],
+            ['Vehicle List'],
+            ['Vehicle', 'Date', 'Time', 'Duration', 'Items', 'Weight (kg)', 'Resources', 'Status'],
+            ...vehicleRows
+          ]
+        : [
+            ['Kokkuvõte'],
+            [],
+            ['Kokku detaile', totalItems],
+            ['Kokku kaal', `${Math.round(totalWeight)} kg`],
+            ['Veokeid', vehicles.length],
+            ['Tehaseid', factories.length],
+            [],
+            ['Kuupäevade kaupa'],
+            ['Kuupäev', 'Veokeid', 'Detaile', 'Kaal (kg)'],
+            ...sortedDates.map(date => {
+              const dateItems = items.filter(i => i.scheduled_date === date);
+              const dateVehicles = new Set(dateItems.map(i => i.vehicle_id)).size;
+              const dateWeight = dateItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
+              return [formatDateDisplay(date), dateVehicles, dateItems.length, Math.round(dateWeight)];
+            }),
+            [],
+            ['Veokite nimekiri'],
+            ['Veok', 'Kuupäev', 'Aeg', 'Kestus', 'Detaile', 'Kaal (kg)', 'Ressursid', 'Staatus'],
+            ...vehicleRows
+          ];
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-      XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
+      const summarySheetName = isEnglish ? 'Summary' : 'Kokkuvõte';
+      XLSX.utils.book_append_sheet(wb, wsSummary, summarySheetName);
 
-      // Save file
-      const fileName = `${projectName || 'Tarne'}_graafik_${formatDateForDB(new Date())}.xlsx`;
+      // Save file with language-aware filename
+      const filePrefix = isEnglish ? 'Delivery' : 'Tarne';
+      const fileSuffix = isEnglish ? 'schedule' : 'graafik';
+      const fileName = `${projectName || filePrefix}_${fileSuffix}_${formatDateForDB(new Date())}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      setMessage('Excel eksporditud');
+      setMessage(isEnglish ? 'Excel exported' : 'Excel eksporditud');
       setShowExportModal(false);
     } catch (e: any) {
       console.error('Error exporting:', e);
-      setMessage('Viga eksportimisel: ' + e.message);
+      setMessage(exportLanguage === 'en' ? 'Export error: ' + e.message : 'Viga eksportimisel: ' + e.message);
     }
   };
 
@@ -8184,6 +8246,40 @@ ${importText.split('\n').slice(0, 5).join('\n')}
               </button>
             </div>
             <div className="modal-body">
+              {/* Language selection */}
+              <h4>Keel / Language</h4>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                <button
+                  onClick={() => setExportLanguage('et')}
+                  style={{
+                    padding: '6px 14px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: exportLanguage === 'et' ? '#3b82f6' : '#e5e7eb',
+                    color: exportLanguage === 'et' ? '#fff' : '#374151',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500
+                  }}
+                >
+                  🇪🇪 Eesti
+                </button>
+                <button
+                  onClick={() => setExportLanguage('en')}
+                  style={{
+                    padding: '6px 14px',
+                    border: 'none',
+                    borderRadius: '4px',
+                    background: exportLanguage === 'en' ? '#3b82f6' : '#e5e7eb',
+                    color: exportLanguage === 'en' ? '#fff' : '#374151',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500
+                  }}
+                >
+                  🇬🇧 English
+                </button>
+              </div>
               <h4>Veerud</h4>
               <div className="column-list">
                 {exportColumns.map(col => (
@@ -8197,17 +8293,17 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                         ));
                       }}
                     />
-                    {col.label}
+                    {exportLanguage === 'en' ? col.labelEn : col.label}
                   </label>
                 ))}
               </div>
             </div>
             <div className="modal-footer">
               <button className="cancel-btn" onClick={() => setShowExportModal(false)}>
-                Tühista
+                {exportLanguage === 'en' ? 'Cancel' : 'Tühista'}
               </button>
               <button className="submit-btn primary" onClick={exportToExcel}>
-                <FiDownload /> Ekspordi
+                <FiDownload /> {exportLanguage === 'en' ? 'Export' : 'Ekspordi'}
               </button>
             </div>
           </div>
