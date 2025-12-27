@@ -1502,79 +1502,66 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       onClick={async () => {
                         updateFunctionResult(buttonConfig.key, { status: 'pending' });
                         try {
-                          // Get selected objects
+                          // Get ALL selected objects (supports multiple selection)
                           const selected = await api.viewer.getSelection();
                           if (!selected || selected.length === 0) {
                             updateFunctionResult(buttonConfig.key, {
                               status: 'error',
-                              error: 'Vali mudelist detail!'
+                              error: 'Vali mudelist detail(id)!'
                             });
                             return;
                           }
 
-                          const obj = selected[0];
-                          const modelId = obj.modelId;
-                          const runtimeId = obj.objectRuntimeIds?.[0];
-
-                          if (!modelId || !runtimeId) {
-                            updateFunctionResult(buttonConfig.key, {
-                              status: 'error',
-                              error: 'Valitud objektil puudub modelId või runtimeId'
-                            });
-                            return;
-                          }
-
-                          // Get IFC GUID using convertToObjectIds (this is the permanent identifier)
-                          let ifcGuid = '';
-                          try {
-                            const externalIds = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
-                            if (externalIds && externalIds.length > 0 && externalIds[0]) {
-                              ifcGuid = externalIds[0];
+                          // Collect all runtime IDs from all selected objects
+                          const allRuntimeIds: number[] = [];
+                          let modelId = '';
+                          for (const sel of selected) {
+                            if (!modelId) modelId = sel.modelId;
+                            if (sel.objectRuntimeIds) {
+                              allRuntimeIds.push(...sel.objectRuntimeIds);
                             }
-                          } catch (e) {
-                            console.warn('Could not get IFC GUID:', e);
                           }
 
-                          if (!ifcGuid) {
+                          if (!modelId || allRuntimeIds.length === 0) {
                             updateFunctionResult(buttonConfig.key, {
                               status: 'error',
-                              error: 'Ei leidnud objekti IFC GUID-i!'
+                              error: 'Valitud objektidel puudub modelId või runtimeId'
                             });
                             return;
                           }
 
-                          // Get assembly mark for display
-                          let assemblyMark = '';
+                          // Get IFC GUIDs for ALL selected objects
+                          const allGuids: string[] = [];
                           try {
-                            const propsArray: any = await api.viewer.getObjectProperties(modelId, [runtimeId]);
-                            const props = propsArray?.[0];
-                            if (props?.properties && Array.isArray(props.properties)) {
-                              for (const pset of props.properties) {
-                                if (pset.name === 'Tekla Assembly') {
-                                  for (const p of pset.properties || []) {
-                                    if (p.name === 'Assembly/Cast unit Mark') {
-                                      assemblyMark = String(p.value || '');
-                                      break;
-                                    }
-                                  }
-                                }
+                            const externalIds = await api.viewer.convertToObjectIds(modelId, allRuntimeIds);
+                            if (externalIds) {
+                              for (const id of externalIds) {
+                                if (id) allGuids.push(id);
                               }
                             }
                           } catch (e) {
-                            console.warn('Could not get assembly mark:', e);
+                            console.warn('Could not get IFC GUIDs:', e);
                           }
 
-                          // Generate link through GitHub Pages
-                          // When user opens link, App.tsx stores to Supabase and redirects to Trimble
+                          if (allGuids.length === 0) {
+                            updateFunctionResult(buttonConfig.key, {
+                              status: 'error',
+                              error: 'Ei leidnud objektide IFC GUID-e!'
+                            });
+                            return;
+                          }
+
+                          // Generate link with comma-separated GUIDs
                           const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
-                          const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(ifcGuid)}&action=${actionType}`;
+                          const guidsParam = allGuids.join(',');
+                          const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(guidsParam)}&action=${actionType}`;
 
                           // Copy to clipboard
                           await navigator.clipboard.writeText(zoomUrl);
 
                           updateFunctionResult(buttonConfig.key, {
                             status: 'success',
-                            result: `Link kopeeritud! ${assemblyMark || ifcGuid}`
+                            result: `Link kopeeritud! (${allGuids.length} detaili)`
                           });
                         } catch (e: any) {
                           updateFunctionResult(buttonConfig.key, {

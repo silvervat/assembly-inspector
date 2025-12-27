@@ -19,7 +19,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.237';
+export const APP_VERSION = '3.0.238';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -188,52 +188,64 @@ export default function App() {
                   return false;
                 }
 
-                // Convert IFC GUID to runtime ID for this session
+                // Parse comma-separated GUIDs (supports multiple objects)
+                const guids = pendingZoom.guid.split(',').filter((g: string) => g.trim());
+                console.log(`🔗 Processing ${guids.length} GUID(s)...`);
+
+                // Convert ALL IFC GUIDs to runtime IDs
                 const runtimeIds = await connected.viewer.convertToObjectRuntimeIds(
                   pendingZoom.model_id,
-                  [pendingZoom.guid]
+                  guids
                 );
 
-                if (!runtimeIds || runtimeIds.length === 0 || !runtimeIds[0]) {
-                  console.log('⏳ Could not find object by GUID, waiting...');
+                // Filter out null/undefined runtime IDs
+                const validRuntimeIds = (runtimeIds || []).filter((id: number | null) => id !== null && id !== undefined);
+
+                if (validRuntimeIds.length === 0) {
+                  console.log('⏳ Could not find objects by GUIDs, waiting...');
                   return false;
                 }
 
-                const runtimeId = runtimeIds[0];
-                console.log(`🔗 Found runtime ID ${runtimeId} for GUID ${pendingZoom.guid}`);
+                console.log(`🔗 Found ${validRuntimeIds.length} runtime ID(s)`);
 
                 // Handle different action types
                 if (actionType === 'zoom_isolate') {
-                  // ISOLATE: Hide all objects, then show only target
-                  console.log('🔗 Isolating object...');
-                  // First hide everything
+                  // ISOLATE: Reset visibility, hide all, then show only targets
+                  console.log('🔗 Isolating objects...');
+                  // Reset visibility first
+                  await connected.viewer.setObjectState(undefined, { visible: 'reset' });
+                  // Small delay to ensure reset is applied
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  // Hide everything
                   await connected.viewer.setObjectState(undefined, { visible: false });
-                  // Then show only the target
+                  // Small delay
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                  // Show only the target objects
                   await connected.viewer.setObjectState(
-                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: [runtimeId] }] },
+                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: validRuntimeIds }] },
                     { visible: true }
                   );
                 } else if (actionType === 'zoom_red') {
-                  // RED: Color the target object red
-                  console.log('🔗 Coloring object red...');
+                  // RED: Color all target objects red
+                  console.log('🔗 Coloring objects red...');
                   await connected.viewer.setObjectState(
-                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: [runtimeId] }] },
+                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: validRuntimeIds }] },
                     { color: { r: 255, g: 0, b: 0, a: 255 } }
                   );
                 }
 
-                // Select the object
+                // Select all objects
                 await connected.viewer.setSelection({
                   modelObjectIds: [{
                     modelId: pendingZoom.model_id,
-                    objectRuntimeIds: [runtimeId]
+                    objectRuntimeIds: validRuntimeIds
                   }]
                 }, 'set');
 
-                // Zoom to selected object
+                // Zoom to selected objects
                 await connected.viewer.setCamera({ selected: true }, { animationTime: 500 });
 
-                console.log(`✓ Zoom (${actionType}) completed!`, pendingZoom.assembly_mark || pendingZoom.guid);
+                console.log(`✓ Zoom (${actionType}) completed! ${validRuntimeIds.length} object(s)`);
                 return true;
               } catch (e) {
                 console.log('⏳ Zoom failed, will retry...', e);
