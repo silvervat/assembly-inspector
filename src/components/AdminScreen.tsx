@@ -1564,31 +1564,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                             console.warn('Could not get assembly mark:', e);
                           }
 
-                          // Store zoom target in Supabase with action type
-                          const { error: dbError } = await supabase
-                            .from('zoom_targets')
-                            .insert({
-                              project_id: projectId,
-                              model_id: modelId,
-                              guid: ifcGuid,
-                              assembly_mark: assemblyMark || null,
-                              action_type: actionType
-                            });
-
-                          if (dbError) {
-                            console.error('Failed to store zoom target:', dbError);
-                            updateFunctionResult(buttonConfig.key, {
-                              status: 'error',
-                              error: 'Andmebaasi viga: ' + dbError.message
-                            });
-                            return;
-                          }
-
-                          // Generate link with action type in URL hash
-                          const trimbleUrl = `https://web.connect.trimble.com/projects/${projectId}/viewer/3d/?modelId=${modelId}#${actionType}=${ifcGuid}`;
+                          // Generate link through GitHub Pages
+                          // When user opens link, App.tsx stores to Supabase and redirects to Trimble
+                          const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
+                          const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(ifcGuid)}&action=${actionType}`;
 
                           // Copy to clipboard
-                          await navigator.clipboard.writeText(trimbleUrl);
+                          await navigator.clipboard.writeText(zoomUrl);
 
                           updateFunctionResult(buttonConfig.key, {
                             status: 'success',

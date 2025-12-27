@@ -31,6 +31,11 @@ ON zoom_targets(expires_at);
 -- Enable RLS
 ALTER TABLE zoom_targets ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for re-running this script)
+DROP POLICY IF EXISTS "Anyone can insert zoom targets" ON zoom_targets;
+DROP POLICY IF EXISTS "Anyone can select zoom targets" ON zoom_targets;
+DROP POLICY IF EXISTS "Anyone can update zoom targets" ON zoom_targets;
+
 -- Policy: Anyone can insert (for generating links)
 CREATE POLICY "Anyone can insert zoom targets" ON zoom_targets
   FOR INSERT WITH CHECK (true);
