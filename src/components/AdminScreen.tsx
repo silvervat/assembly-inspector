@@ -1576,6 +1576,228 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
               </div>
             </div>
 
+            {/* EXPORT SELECTED WITH BOLTS section */}
+            <div className="function-section">
+              <h4>📊 Ekspordi valitud detailid + poldid</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Vali mudelist detailid ja ekspordi Excel tabelisse koos poltide infoga.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="📥 Ekspordi Excel"
+                  result={functionResults["exportSelectedWithBolts"]}
+                  onClick={async () => {
+                    updateFunctionResult("exportSelectedWithBolts", { status: 'pending' });
+                    try {
+                      // Get ALL selected objects
+                      const selected = await api.viewer.getSelection();
+                      if (!selected || selected.length === 0) {
+                        updateFunctionResult("exportSelectedWithBolts", {
+                          status: 'error',
+                          error: 'Vali mudelist detailid!'
+                        });
+                        return;
+                      }
+
+                      // Collect all runtime IDs
+                      const allRuntimeIds: number[] = [];
+                      let modelId = '';
+                      for (const sel of selected) {
+                        if (!modelId) modelId = sel.modelId;
+                        if (sel.objectRuntimeIds) {
+                          allRuntimeIds.push(...sel.objectRuntimeIds);
+                        }
+                      }
+
+                      if (!modelId || allRuntimeIds.length === 0) {
+                        updateFunctionResult("exportSelectedWithBolts", {
+                          status: 'error',
+                          error: 'Valitud objektidel puudub info'
+                        });
+                        return;
+                      }
+
+                      console.log(`📊 Exporting ${allRuntimeIds.length} selected objects...`);
+
+                      // Get properties for all selected objects
+                      const properties: any[] = await api.viewer.getObjectProperties(modelId, allRuntimeIds);
+
+                      // Prepare export data
+                      interface ExportRow {
+                        castUnitMark: string;
+                        weight: string;
+                        positionCode: string;
+                        boltName: string;
+                        boltStandard: string;
+                        boltSize: string;
+                        boltLength: string;
+                        boltCount: string;
+                        nutName: string;
+                        nutType: string;
+                        nutCount: string;
+                        washerName: string;
+                        washerType: string;
+                        washerDiameter: string;
+                        washerCount: string;
+                      }
+
+                      const exportRows: ExportRow[] = [];
+
+                      // Process each selected object
+                      for (let i = 0; i < allRuntimeIds.length; i++) {
+                        const runtimeId = allRuntimeIds[i];
+                        const props = properties[i];
+
+                        // Extract assembly properties
+                        let castUnitMark = '';
+                        let weight = '';
+                        let positionCode = '';
+
+                        if (props?.properties && Array.isArray(props.properties)) {
+                          for (const pset of props.properties) {
+                            if (pset.name === 'Tekla Assembly') {
+                              for (const p of pset.properties || []) {
+                                if (p.name === 'Assembly/Cast unit Mark') castUnitMark = String(p.value || '');
+                                if (p.name === 'Assembly/Cast unit weight') weight = String(p.value || '');
+                                if (p.name === 'Assembly/Cast unit position code') positionCode = String(p.value || '');
+                              }
+                            }
+                          }
+                        }
+
+                        // Get children (bolt assemblies)
+                        let childBolts: ExportRow[] = [];
+                        try {
+                          const hierarchy = await (api.viewer as any).getHierarchy?.(modelId, [runtimeId]);
+                          if (hierarchy && hierarchy[0]?.children) {
+                            const childIds = hierarchy[0].children.map((c: any) => c.id);
+                            if (childIds.length > 0) {
+                              const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+
+                              for (const childProp of childProps) {
+                                // Check if this is a bolt assembly (has Tekla Bolt property set)
+                                if (childProp?.properties && Array.isArray(childProp.properties)) {
+                                  let hasTeklaBolt = false;
+                                  let boltInfo: Partial<ExportRow> = {};
+
+                                  for (const pset of childProp.properties) {
+                                    if (pset.name === 'Tekla Bolt') {
+                                      hasTeklaBolt = true;
+                                      for (const p of pset.properties || []) {
+                                        const val = String(p.value || '');
+                                        if (p.name === 'Bolt Name') boltInfo.boltName = val;
+                                        if (p.name === 'Bolt standard') boltInfo.boltStandard = val;
+                                        if (p.name === 'Bolt size') boltInfo.boltSize = val;
+                                        if (p.name === 'Bolt length') boltInfo.boltLength = val;
+                                        if (p.name === 'Bolt count') boltInfo.boltCount = val;
+                                        if (p.name === 'Nut name') boltInfo.nutName = val;
+                                        if (p.name === 'Nut type') boltInfo.nutType = val;
+                                        if (p.name === 'Nut count') boltInfo.nutCount = val;
+                                        if (p.name === 'Washer name') boltInfo.washerName = val;
+                                        if (p.name === 'Washer type') boltInfo.washerType = val;
+                                        if (p.name === 'Washer diameter') boltInfo.washerDiameter = val;
+                                        if (p.name === 'Washer count') boltInfo.washerCount = val;
+                                      }
+                                    }
+                                  }
+
+                                  if (hasTeklaBolt) {
+                                    childBolts.push({
+                                      castUnitMark,
+                                      weight,
+                                      positionCode,
+                                      boltName: boltInfo.boltName || '',
+                                      boltStandard: boltInfo.boltStandard || '',
+                                      boltSize: boltInfo.boltSize || '',
+                                      boltLength: boltInfo.boltLength || '',
+                                      boltCount: boltInfo.boltCount || '',
+                                      nutName: boltInfo.nutName || '',
+                                      nutType: boltInfo.nutType || '',
+                                      nutCount: boltInfo.nutCount || '',
+                                      washerName: boltInfo.washerName || '',
+                                      washerType: boltInfo.washerType || '',
+                                      washerDiameter: boltInfo.washerDiameter || '',
+                                      washerCount: boltInfo.washerCount || ''
+                                    });
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          console.warn('Could not get children for', runtimeId, e);
+                        }
+
+                        // If no bolts found, add just the assembly row
+                        if (childBolts.length === 0) {
+                          exportRows.push({
+                            castUnitMark,
+                            weight,
+                            positionCode,
+                            boltName: '',
+                            boltStandard: '',
+                            boltSize: '',
+                            boltLength: '',
+                            boltCount: '',
+                            nutName: '',
+                            nutType: '',
+                            nutCount: '',
+                            washerName: '',
+                            washerType: '',
+                            washerDiameter: '',
+                            washerCount: ''
+                          });
+                        } else {
+                          exportRows.push(...childBolts);
+                        }
+                      }
+
+                      // Create Excel workbook
+                      const wsData = [
+                        ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'],
+                        ...exportRows.map(r => [
+                          r.castUnitMark,
+                          r.weight,
+                          r.positionCode,
+                          r.boltName,
+                          r.boltStandard,
+                          r.boltSize,
+                          r.boltLength,
+                          r.boltCount,
+                          r.nutName,
+                          r.nutType,
+                          r.nutCount,
+                          r.washerName,
+                          r.washerType,
+                          r.washerDiameter,
+                          r.washerCount
+                        ])
+                      ];
+
+                      const ws = XLSX.utils.aoa_to_sheet(wsData);
+                      const wb = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(wb, ws, 'Detailid+Poldid');
+
+                      // Download
+                      const fileName = `detailid_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
+                      XLSX.writeFile(wb, fileName, { compression: true });
+
+                      updateFunctionResult("exportSelectedWithBolts", {
+                        status: 'success',
+                        result: `Eksporditud ${allRuntimeIds.length} detaili, ${exportRows.length} rida`
+                      });
+                    } catch (e: any) {
+                      console.error('Export error:', e);
+                      updateFunctionResult("exportSelectedWithBolts", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
             {/* CAMERA / VIEW section */}
             <div className="function-section">
               <h4>📷 Kaamera / Vaated</h4>
