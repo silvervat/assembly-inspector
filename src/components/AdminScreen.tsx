@@ -1671,10 +1671,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
                           console.log('📊 HierarchyChildren for', runtimeId, ':', hierarchyChildren);
 
-                          // hierarchyChildren returns array of arrays: [[{id: x}, {id: y}]]
-                          const children = hierarchyChildren?.[0];
-                          if (children && Array.isArray(children) && children.length > 0) {
-                            const childIds = children.map((c: any) => c.id);
+                          // hierarchyChildren returns array directly: [{id: x, name: 'Bolt assembly'}, ...]
+                          if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+                            const childIds = hierarchyChildren.map((c: any) => c.id);
                             console.log('📊 Found', childIds.length, 'children:', childIds);
 
                             if (childIds.length > 0) {
