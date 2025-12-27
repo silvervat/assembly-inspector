@@ -1918,19 +1918,41 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
-                      // Build summary sheet data
+                      // Build summary sheet data - sort by size
+                      const sortedBolts = Array.from(boltSummary.values()).sort((a, b) => {
+                        const sizeA = parseInt(a.size) || 0;
+                        const sizeB = parseInt(b.size) || 0;
+                        if (sizeA !== sizeB) return sizeA - sizeB;
+                        const lengthA = parseInt(a.length) || 0;
+                        const lengthB = parseInt(b.length) || 0;
+                        return lengthA - lengthB;
+                      });
+
+                      const sortedNuts = Array.from(nutSummary.values()).sort((a, b) => {
+                        // Extract size from name (e.g., "M16-EN4032" -> 16)
+                        const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                        const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                        return sizeA - sizeB;
+                      });
+
+                      const sortedWashers = Array.from(washerSummary.values()).sort((a, b) => {
+                        const diamA = parseInt(a.diameter) || 0;
+                        const diamB = parseInt(b.diameter) || 0;
+                        return diamA - diamB;
+                      });
+
                       const summaryData: (string | number)[][] = [
                         ['POLDID', '', '', '', ''],
                         ['Nimi', 'Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
-                        ...Array.from(boltSummary.values()).map(b => [b.name, b.standard, b.size, b.length, b.count]),
+                        ...sortedBolts.map(b => [b.name, b.standard, b.size, b.length, b.count]),
                         [],
                         ['MUTRID', '', ''],
                         ['Nimi', 'Tüüp', 'Kogus'],
-                        ...Array.from(nutSummary.values()).map(n => [n.name, n.type, n.count]),
+                        ...sortedNuts.map(n => [n.name, n.type, n.count]),
                         [],
                         ['SEIBID', '', '', ''],
                         ['Nimi', 'Tüüp', 'Diameeter', 'Kogus'],
-                        ...Array.from(washerSummary.values()).map(w => [w.name, w.type, w.diameter, w.count])
+                        ...sortedWashers.map(w => [w.name, w.type, w.diameter, w.count])
                       ];
 
                       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
