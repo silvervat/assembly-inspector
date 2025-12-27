@@ -1861,20 +1861,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       XLSX.utils.book_append_sheet(wb, ws, 'Detailid+Poldid');
 
                       // Create Bolt Summary sheet - aggregate all bolts and washers for ordering
-                      const boltSummary = new Map<string, {standard: string, size: string, length: string, count: number}>();
+                      const boltSummary = new Map<string, {name: string, standard: string, size: string, length: string, count: number}>();
                       const nutSummary = new Map<string, {name: string, type: string, count: number}>();
                       const washerSummary = new Map<string, {name: string, type: string, diameter: string, count: number}>();
 
                       for (const row of exportRows) {
-                        // Aggregate bolts by standard+size+length
-                        if (row.boltStandard || row.boltSize || row.boltLength) {
-                          const boltKey = `${row.boltStandard}|${row.boltSize}|${row.boltLength}`;
+                        // Aggregate bolts by name+standard+size+length
+                        if (row.boltName || row.boltStandard || row.boltSize || row.boltLength) {
+                          const boltKey = `${row.boltName}|${row.boltStandard}|${row.boltSize}|${row.boltLength}`;
                           const existing = boltSummary.get(boltKey);
                           const count = parseInt(row.boltCount) || 0;
                           if (existing) {
                             existing.count += count;
                           } else {
                             boltSummary.set(boltKey, {
+                              name: row.boltName,
                               standard: row.boltStandard,
                               size: row.boltSize,
                               length: row.boltLength,
@@ -1919,9 +1920,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Build summary sheet data
                       const summaryData: (string | number)[][] = [
-                        ['POLDID', '', '', ''],
-                        ['Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
-                        ...Array.from(boltSummary.values()).map(b => [b.standard, b.size, b.length, b.count]),
+                        ['POLDID', '', '', '', ''],
+                        ['Nimi', 'Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
+                        ...Array.from(boltSummary.values()).map(b => [b.name, b.standard, b.size, b.length, b.count]),
                         [],
                         ['MUTRID', '', ''],
                         ['Nimi', 'Tüüp', 'Kogus'],
@@ -1946,6 +1947,204 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                     } catch (e: any) {
                       console.error('Export error:', e);
                       updateFunctionResult("exportSelectedWithBolts", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* BOLT MARKUPS section */}
+            <div className="function-section">
+              <h4>🏷️ Poltide markupid</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Vali mudelist detailid ja lisa poltidele markupid Bolt Name väärtusega.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="🟢 Lisa poldi markupid"
+                  result={functionResults["addBoltMarkups"]}
+                  onClick={async () => {
+                    updateFunctionResult("addBoltMarkups", { status: 'pending' });
+                    try {
+                      // Get ALL selected objects
+                      const selected = await api.viewer.getSelection();
+                      if (!selected || selected.length === 0) {
+                        updateFunctionResult("addBoltMarkups", {
+                          status: 'error',
+                          error: 'Vali mudelist detailid!'
+                        });
+                        return;
+                      }
+
+                      // Collect all runtime IDs
+                      const allRuntimeIds: number[] = [];
+                      let modelId = '';
+                      for (const sel of selected) {
+                        if (!modelId) modelId = sel.modelId;
+                        if (sel.objectRuntimeIds) {
+                          allRuntimeIds.push(...sel.objectRuntimeIds);
+                        }
+                      }
+
+                      if (!modelId || allRuntimeIds.length === 0) {
+                        updateFunctionResult("addBoltMarkups", {
+                          status: 'error',
+                          error: 'Valitud objektidel puudub info'
+                        });
+                        return;
+                      }
+
+                      console.log(`🏷️ Adding markups for ${allRuntimeIds.length} selected objects...`);
+
+                      const markupsToCreate: { text: string; start: { x: number; y: number; z: number }; end: { x: number; y: number; z: number } }[] = [];
+
+                      // Process each selected object
+                      for (const runtimeId of allRuntimeIds) {
+                        // Get children (bolt assemblies) using getHierarchyChildren
+                        try {
+                          const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                          console.log('🏷️ HierarchyChildren for', runtimeId, ':', hierarchyChildren);
+
+                          if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+                            const childIds = hierarchyChildren.map((c: any) => c.id);
+                            console.log('🏷️ Found', childIds.length, 'children');
+
+                            if (childIds.length > 0) {
+                              // Get properties for children
+                              const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+
+                              // Get bounding boxes for children
+                              const childBBoxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                              for (let i = 0; i < childProps.length; i++) {
+                                const childProp = childProps[i];
+                                const childBBox = childBBoxes[i];
+
+                                if (childProp?.properties && Array.isArray(childProp.properties)) {
+                                  let boltName = '';
+                                  let hasTeklaBolt = false;
+                                  let washerCount = 0;
+
+                                  for (const pset of childProp.properties) {
+                                    const psetName = (pset.name || '').toLowerCase();
+                                    if (psetName.includes('tekla bolt') || psetName.includes('bolt')) {
+                                      hasTeklaBolt = true;
+                                      for (const p of pset.properties || []) {
+                                        const propName = (p.name || '').toLowerCase();
+                                        const val = String(p.value ?? p.displayValue ?? '');
+                                        if (propName.includes('bolt') && propName.includes('name')) boltName = val;
+                                        if (propName.includes('washer') && propName.includes('count')) washerCount = parseInt(val) || 0;
+                                      }
+                                    }
+                                  }
+
+                                  // Skip if not a real bolt (washer count = 0 means opening)
+                                  if (!hasTeklaBolt || washerCount === 0) continue;
+
+                                  // Get center position from bounding box
+                                  if (childBBox?.boundingBox && boltName) {
+                                    const box = childBBox.boundingBox;
+                                    const center = {
+                                      x: (box.min.x + box.max.x) / 2,
+                                      y: (box.min.y + box.max.y) / 2,
+                                      z: (box.min.z + box.max.z) / 2
+                                    };
+
+                                    markupsToCreate.push({
+                                      text: boltName,
+                                      start: center,
+                                      end: center
+                                    });
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        } catch (e) {
+                          console.warn('Could not get children for', runtimeId, e);
+                        }
+                      }
+
+                      if (markupsToCreate.length === 0) {
+                        updateFunctionResult("addBoltMarkups", {
+                          status: 'error',
+                          error: 'Polte ei leitud (või washer count = 0)'
+                        });
+                        return;
+                      }
+
+                      console.log('🏷️ Creating', markupsToCreate.length, 'markups');
+
+                      // Create markups
+                      const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
+
+                      // Extract created IDs
+                      let createdIds: number[] = [];
+                      if (Array.isArray(result)) {
+                        result.forEach((r: any) => {
+                          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+                          else if (typeof r === 'number') createdIds.push(r);
+                        });
+                      } else if (typeof result === 'object' && result?.id) {
+                        createdIds.push(Number(result.id));
+                      }
+
+                      // Color them green
+                      const greenColor = '#22C55E';
+                      for (const id of createdIds) {
+                        try {
+                          await (api.markup as any)?.editMarkup?.(id, { color: greenColor });
+                        } catch (e) {
+                          console.warn('Could not set color for markup', id, e);
+                        }
+                      }
+
+                      updateFunctionResult("addBoltMarkups", {
+                        status: 'success',
+                        result: `${createdIds.length} markupit loodud`
+                      });
+                    } catch (e: any) {
+                      console.error('Markup error:', e);
+                      updateFunctionResult("addBoltMarkups", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🗑️ Eemalda markupid"
+                  result={functionResults["removeBoltMarkups"]}
+                  onClick={async () => {
+                    updateFunctionResult("removeBoltMarkups", { status: 'pending' });
+                    try {
+                      const allMarkups = await api.markup?.getTextMarkups?.();
+                      if (!allMarkups || allMarkups.length === 0) {
+                        updateFunctionResult("removeBoltMarkups", {
+                          status: 'success',
+                          result: 'Markupe pole'
+                        });
+                        return;
+                      }
+                      const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+                      if (allIds.length === 0) {
+                        updateFunctionResult("removeBoltMarkups", {
+                          status: 'success',
+                          result: 'Markupe pole'
+                        });
+                        return;
+                      }
+                      await api.markup?.removeMarkups?.(allIds);
+                      updateFunctionResult("removeBoltMarkups", {
+                        status: 'success',
+                        result: `${allIds.length} markupit eemaldatud`
+                      });
+                    } catch (e: any) {
+                      console.error('Remove markups error:', e);
+                      updateFunctionResult("removeBoltMarkups", {
                         status: 'error',
                         error: e.message
                       });
