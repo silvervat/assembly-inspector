@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw } from 'react-icons/fi';
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -199,6 +199,50 @@ const generateMonthColors = (months: string[]): Record<string, { r: number; g: n
   return colors;
 };
 
+// Estonian weekday short names for calendar
+const DAY_NAMES = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+
+// Get days in a month for calendar (Monday-first week)
+const getDaysForMonth = (monthDate: Date): Date[] => {
+  const year = monthDate.getFullYear();
+  const month = monthDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const days: Date[] = [];
+
+  // Start from Monday (getDay() === 0 is Sunday, so adjust)
+  const startPadding = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+  for (let i = startPadding; i > 0; i--) {
+    days.push(new Date(year, month, 1 - i));
+  }
+
+  for (let i = 1; i <= lastDay.getDate(); i++) {
+    days.push(new Date(year, month, i));
+  }
+
+  const endPadding = (7 - (days.length % 7)) % 7;
+  for (let i = 1; i <= endPadding; i++) {
+    days.push(new Date(year, month + 1, i));
+  }
+
+  return days;
+};
+
+// Format date to YYYY-MM-DD for calendar key
+const formatDateKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// Worker group for grouping installations by team
+interface WorkerGroup {
+  key: string;
+  workers: string[];
+  items: Installation[];
+}
+
 // Compact date format: dd.mm.yy HH:MM
 function formatCompactDateTime(dateStr: string): string {
   const date = new Date(dateStr);
@@ -340,6 +384,10 @@ export default function InstallationsScreen({
   const [dayColors, setDayColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [monthColors, setMonthColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [coloringInProgress, setColoringInProgress] = useState(false);
+
+  // Calendar state
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [calendarCollapsed, setCalendarCollapsed] = useState(false);
 
   // Assembly selection state
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
@@ -817,24 +865,24 @@ export default function InstallationsScreen({
         return;
       }
 
-      // Step 3: Color ALL objects gray first (like AdminScreen does)
-      console.log('Step 3: Coloring ALL objects gray...');
-      let totalGray = 0;
+      // Step 3: Color ALL objects white first
+      console.log('Step 3: Coloring ALL objects white...');
+      let totalWhite = 0;
       for (const modelObj of allModelObjects) {
         const modelId = modelObj.modelId;
         const allIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
         if (allIds.length > 0) {
-          totalGray += allIds.length;
+          totalWhite += allIds.length;
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: allIds }] },
-            { color: { r: 200, g: 200, b: 200, a: 255 } } // Gray
+            { color: { r: 255, g: 255, b: 255, a: 255 } } // White
           );
         }
       }
-      console.log(`Colored ${totalGray} objects gray`);
+      console.log(`Colored ${totalWhite} objects white`);
 
-      // Step 4: Color installed objects green ON TOP (overrides gray)
-      console.log('Step 4: Coloring installed objects green...');
+      // Step 4: Color installed objects dark green ON TOP (overrides white)
+      console.log('Step 4: Coloring installed objects dark green...');
       coloredObjectsRef.current = new Map();
       let totalGreen = 0;
 
@@ -850,10 +898,10 @@ export default function InstallationsScreen({
               totalGreen += validInstalledIds.length;
               coloredObjectsRef.current.set(modelId, validInstalledIds);
 
-              console.log(`Model ${modelId}: coloring ${validInstalledIds.length} installed objects green`);
+              console.log(`Model ${modelId}: coloring ${validInstalledIds.length} installed objects dark green`);
               await api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId, objectRuntimeIds: validInstalledIds }] },
-                { color: { r: 34, g: 197, b: 94, a: 255 } } // Green
+                { color: { r: 0, g: 100, b: 0, a: 255 } } // Dark green
               );
             }
           } catch (e) {
@@ -862,7 +910,7 @@ export default function InstallationsScreen({
         }
       }
 
-      console.log(`Colored ${totalGreen} installed objects green`);
+      console.log(`Colored ${totalGreen} installed objects dark green`);
       console.log('=== COLORING COMPLETE ===');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
@@ -1435,6 +1483,59 @@ export default function InstallationsScreen({
 
   const monthGroups = groupByMonthAndDay(filteredInstallations);
 
+  // Build items by date map for calendar
+  const itemsByDate: Record<string, Installation[]> = {};
+  for (const inst of installations) {
+    const dateKey = getDayKey(inst.installed_at);
+    if (!itemsByDate[dateKey]) itemsByDate[dateKey] = [];
+    itemsByDate[dateKey].push(inst);
+  }
+
+  // Calendar navigation
+  const prevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1));
+  };
+
+  // Get calendar days for current month
+  const calendarDays = getDaysForMonth(currentMonth);
+  const today = formatDateKey(new Date());
+
+  // Get month name in Estonian
+  const MONTH_NAMES = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni', 'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
+  const currentMonthName = `${MONTH_NAMES[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
+
+  // Group items within a day by workers (team_members)
+  const groupItemsByWorkers = (items: Installation[]): WorkerGroup[] => {
+    const workerMap: Record<string, Installation[]> = {};
+
+    for (const item of items) {
+      // Get worker list from team_members field (comma-separated) or fall back to user_email
+      const workers = item.team_members
+        ? item.team_members.split(',').map(w => w.trim()).sort().join(',')
+        : item.user_email || 'Tundmatu';
+
+      if (!workerMap[workers]) workerMap[workers] = [];
+      workerMap[workers].push(item);
+    }
+
+    // Convert to array
+    return Object.entries(workerMap).map(([key, items]) => ({
+      key,
+      workers: key.split(',').map(w => w.trim()),
+      items
+    }));
+  };
+
+  // Check if all items in a day have the same workers (no grouping needed)
+  const shouldShowWorkerGroups = (items: Installation[]): boolean => {
+    const groups = groupItemsByWorkers(items);
+    return groups.length > 1; // Only show groups if there are multiple different worker combinations
+  };
+
   // Check which selected objects are already installed
   const getObjectGuid = (obj: SelectedObject): string | undefined => {
     return obj.guidIfc || obj.guid || undefined;
@@ -1459,8 +1560,63 @@ export default function InstallationsScreen({
     setSelectedInstallationIds(newSelected);
   };
 
+  // Render a single installation item
+  const renderInstallationItem = (inst: Installation) => {
+    const canDelete = isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase();
+    const isSelected = selectedInstallationIds.has(inst.id);
+    return (
+      <div className="installation-item" key={inst.id}>
+        <input
+          type="checkbox"
+          className="installation-item-checkbox"
+          checked={isSelected}
+          onChange={() => {}}
+          onClick={(e) => toggleInstallationSelect(inst.id, e)}
+        />
+        <div className="installation-item-main" onClick={() => zoomToInstallation(inst)}>
+          <div className="installation-item-mark">
+            {inst.assembly_mark}
+            {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
+          </div>
+        </div>
+        <span className="installation-time compact-date">
+          {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </span>
+        <button
+          className="installation-info-btn"
+          onClick={(e) => { e.stopPropagation(); setShowInstallInfo(inst); }}
+          title="Info"
+        >
+          <FiInfo size={14} />
+        </button>
+        <button
+          className="installation-zoom-btn"
+          onClick={() => zoomToInstallation(inst)}
+          title="Zoom"
+        >
+          <FiZoomIn size={14} />
+        </button>
+        {canDelete && (
+          <button
+            className="installation-delete-btn"
+            onClick={() => deleteInstallation(inst.id)}
+            title="Kustuta"
+          >
+            <FiTrash2 size={14} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
   const renderDayGroup = (day: DayGroup) => {
     const dayColor = colorByDay ? dayColors[day.dayKey] : null;
+    const showWorkerGrouping = shouldShowWorkerGroups(day.items);
+    const workerGroups = showWorkerGrouping ? groupItemsByWorkers(day.items) : [];
+
     return (
       <div key={day.dayKey} className="installation-date-group">
         <div className="date-group-header" onClick={() => toggleDay(day.dayKey)}>
@@ -1502,56 +1658,54 @@ export default function InstallationsScreen({
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
-            {day.items.map(inst => {
-              const canDelete = isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase();
-              const isSelected = selectedInstallationIds.has(inst.id);
-              return (
-                <div className="installation-item" key={inst.id}>
-                  <input
-                    type="checkbox"
-                    className="installation-item-checkbox"
-                    checked={isSelected}
-                    onChange={() => {}}
-                    onClick={(e) => toggleInstallationSelect(inst.id, e)}
-                  />
-                  <div className="installation-item-main" onClick={() => zoomToInstallation(inst)}>
-                    <div className="installation-item-mark">
-                      {inst.assembly_mark}
-                      {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
-                    </div>
-                  </div>
-                  <span className="installation-time compact-date">
-                    {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
-                  </span>
-                  <button
-                    className="installation-info-btn"
-                    onClick={(e) => { e.stopPropagation(); setShowInstallInfo(inst); }}
-                    title="Info"
+            {showWorkerGrouping ? (
+              // Show worker groups
+              workerGroups.map((group) => (
+                <div key={group.key} className="worker-group" style={{ marginBottom: '8px' }}>
+                  <div
+                    className="worker-group-header"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '4px 8px',
+                      background: '#f0f9ff',
+                      borderRadius: '4px',
+                      marginBottom: '4px',
+                      fontSize: '11px',
+                      color: '#0369a1'
+                    }}
                   >
-                    <FiInfo size={14} />
-                  </button>
-                  <button
-                    className="installation-zoom-btn"
-                    onClick={() => zoomToInstallation(inst)}
-                    title="Zoom"
-                  >
-                    <FiZoomIn size={14} />
-                  </button>
-                  {canDelete && (
-                    <button
-                      className="installation-delete-btn"
-                      onClick={() => deleteInstallation(inst.id)}
-                      title="Kustuta"
+                    <FiUsers size={12} />
+                    <span style={{ fontWeight: 500 }}>{group.workers.join(', ')}</span>
+                    <span
+                      className="worker-group-count"
+                      style={{
+                        marginLeft: 'auto',
+                        background: '#0369a1',
+                        color: '#fff',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectInstallations(group.items);
+                      }}
+                      title="Vali need detailid mudelis"
                     >
-                      <FiTrash2 size={14} />
-                    </button>
-                  )}
+                      {group.items.length}
+                    </span>
+                  </div>
+                  {group.items.map(inst => renderInstallationItem(inst))}
                 </div>
-              );
-            })}
+              ))
+            ) : (
+              // No worker grouping needed - show items directly
+              day.items.map(inst => renderInstallationItem(inst))
+            )}
           </div>
         )}
       </div>
@@ -1999,6 +2153,112 @@ export default function InstallationsScreen({
                 >
                   <FiRefreshCw size={14} />
                 </button>
+              )}
+            </div>
+          </div>
+
+          {/* Calendar */}
+          <div className="installations-calendar" style={{ padding: '0 12px 12px', borderBottom: '1px solid #e5e7eb' }}>
+            <div className="calendar-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+              <span style={{ fontWeight: 600, fontSize: '14px' }}>{currentMonthName}</span>
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                {!calendarCollapsed && (
+                  <div className="calendar-nav" style={{ display: 'flex', gap: '4px' }}>
+                    <button onClick={prevMonth} style={{ padding: '4px', border: 'none', background: '#f3f4f6', borderRadius: '4px', cursor: 'pointer' }}>
+                      <FiChevronLeft size={16} />
+                    </button>
+                    <button onClick={nextMonth} style={{ padding: '4px', border: 'none', background: '#f3f4f6', borderRadius: '4px', cursor: 'pointer' }}>
+                      <FiChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+                <button
+                  onClick={() => setCalendarCollapsed(!calendarCollapsed)}
+                  style={{ padding: '4px 8px', border: 'none', background: '#e5e7eb', borderRadius: '4px', cursor: 'pointer', fontSize: '11px' }}
+                >
+                  {calendarCollapsed ? 'Ava' : 'Peida'}
+                </button>
+              </div>
+            </div>
+
+            {!calendarCollapsed && (
+              <div className="calendar-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '2px',
+                fontSize: '11px'
+              }}>
+                {/* Day names */}
+                {DAY_NAMES.map(day => (
+                  <div key={day} style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#6b7280' }}>
+                    {day}
+                  </div>
+                ))}
+                {/* Calendar days */}
+                {calendarDays.map((date, idx) => {
+                  const dateKey = formatDateKey(date);
+                  const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                  const isToday = dateKey === today;
+                  const itemCount = itemsByDate[dateKey]?.length || 0;
+                  const dayColor = colorByDay && dayColors[dateKey];
+
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        // Select items for this day in viewer
+                        const dayItems = itemsByDate[dateKey];
+                        if (dayItems && dayItems.length > 0) {
+                          selectInstallations(dayItems);
+                          // Scroll to this date in list
+                          const dayKey = getDayKey(dateKey);
+                          setExpandedDays(prev => new Set([...prev, dayKey]));
+                          // Expand the month containing this date
+                          const monthKey = getMonthKey(dateKey);
+                          setExpandedMonths(prev => new Set([...prev, monthKey]));
+                        }
+                      }}
+                      style={{
+                        textAlign: 'center',
+                        padding: '4px 2px',
+                        borderRadius: '4px',
+                        cursor: itemCount > 0 ? 'pointer' : 'default',
+                        background: isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
+                        border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                        color: isCurrentMonth ? '#111827' : '#9ca3af',
+                        position: 'relative',
+                        opacity: isCurrentMonth ? 1 : 0.6
+                      }}
+                    >
+                      <span style={{ fontSize: '11px' }}>{date.getDate()}</span>
+                      {itemCount > 0 && (
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: '9px',
+                            fontWeight: 600,
+                            marginTop: '1px',
+                            padding: '1px 4px',
+                            borderRadius: '8px',
+                            background: dayColor ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})` : '#006400',
+                            color: dayColor ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000') : '#fff'
+                          }}
+                        >
+                          {itemCount}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Calendar stats */}
+            <div style={{ marginTop: '8px', fontSize: '11px', color: '#6b7280', display: 'flex', gap: '12px' }}>
+              <span>Kokku: <strong style={{ color: '#111827' }}>{installations.length}</strong></span>
+              <span>Päevi: <strong style={{ color: '#111827' }}>{Object.keys(itemsByDate).length}</strong></span>
+              {Object.keys(itemsByDate).length > 0 && (
+                <span>Keskm: <strong style={{ color: '#111827' }}>{Math.round(installations.length / Object.keys(itemsByDate).length)}</strong> tk/päev</span>
               )}
             </div>
           </div>
