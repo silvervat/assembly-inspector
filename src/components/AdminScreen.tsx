@@ -1861,20 +1861,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       XLSX.utils.book_append_sheet(wb, ws, 'Detailid+Poldid');
 
                       // Create Bolt Summary sheet - aggregate all bolts and washers for ordering
-                      const boltSummary = new Map<string, {standard: string, size: string, length: string, count: number}>();
+                      const boltSummary = new Map<string, {name: string, standard: string, size: string, length: string, count: number}>();
                       const nutSummary = new Map<string, {name: string, type: string, count: number}>();
                       const washerSummary = new Map<string, {name: string, type: string, diameter: string, count: number}>();
 
                       for (const row of exportRows) {
-                        // Aggregate bolts by standard+size+length
-                        if (row.boltStandard || row.boltSize || row.boltLength) {
-                          const boltKey = `${row.boltStandard}|${row.boltSize}|${row.boltLength}`;
+                        // Aggregate bolts by name+standard+size+length
+                        if (row.boltName || row.boltStandard || row.boltSize || row.boltLength) {
+                          const boltKey = `${row.boltName}|${row.boltStandard}|${row.boltSize}|${row.boltLength}`;
                           const existing = boltSummary.get(boltKey);
                           const count = parseInt(row.boltCount) || 0;
                           if (existing) {
                             existing.count += count;
                           } else {
                             boltSummary.set(boltKey, {
+                              name: row.boltName,
                               standard: row.boltStandard,
                               size: row.boltSize,
                               length: row.boltLength,
@@ -1919,9 +1920,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Build summary sheet data
                       const summaryData: (string | number)[][] = [
-                        ['POLDID', '', '', ''],
-                        ['Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
-                        ...Array.from(boltSummary.values()).map(b => [b.standard, b.size, b.length, b.count]),
+                        ['POLDID', '', '', '', ''],
+                        ['Nimi', 'Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
+                        ...Array.from(boltSummary.values()).map(b => [b.name, b.standard, b.size, b.length, b.count]),
                         [],
                         ['MUTRID', '', ''],
                         ['Nimi', 'Tüüp', 'Kogus'],
