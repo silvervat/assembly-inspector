@@ -1699,18 +1699,24 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                         const propName = (p.name || '').toLowerCase();
                                         const val = String(p.value ?? p.displayValue ?? '');
 
+                                        // Helper to round numeric values (mm dimensions)
+                                        const roundNum = (v: string) => {
+                                          const num = parseFloat(v);
+                                          return isNaN(num) ? v : String(Math.round(num));
+                                        };
+
                                         // Match property names case-insensitively
                                         if (propName.includes('bolt') && propName.includes('name')) boltInfo.boltName = val;
                                         if (propName.includes('bolt') && propName.includes('standard')) boltInfo.boltStandard = val;
-                                        if (propName.includes('bolt') && propName.includes('size')) boltInfo.boltSize = val;
-                                        if (propName.includes('bolt') && propName.includes('length')) boltInfo.boltLength = val;
+                                        if (propName.includes('bolt') && propName.includes('size')) boltInfo.boltSize = roundNum(val);
+                                        if (propName.includes('bolt') && propName.includes('length')) boltInfo.boltLength = roundNum(val);
                                         if (propName.includes('bolt') && propName.includes('count')) boltInfo.boltCount = val;
                                         if (propName.includes('nut') && propName.includes('name')) boltInfo.nutName = val;
                                         if (propName.includes('nut') && propName.includes('type')) boltInfo.nutType = val;
                                         if (propName.includes('nut') && propName.includes('count')) boltInfo.nutCount = val;
                                         if (propName.includes('washer') && propName.includes('name')) boltInfo.washerName = val;
                                         if (propName.includes('washer') && propName.includes('type')) boltInfo.washerType = val;
-                                        if (propName.includes('washer') && propName.includes('diameter')) boltInfo.washerDiameter = val;
+                                        if (propName.includes('washer') && propName.includes('diameter')) boltInfo.washerDiameter = roundNum(val);
                                         if (propName.includes('washer') && propName.includes('count')) boltInfo.washerCount = val;
                                       }
                                     }
@@ -1853,6 +1859,81 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       const wb = XLSX.utils.book_new();
                       XLSX.utils.book_append_sheet(wb, ws, 'Detailid+Poldid');
+
+                      // Create Bolt Summary sheet - aggregate all bolts and washers for ordering
+                      const boltSummary = new Map<string, {standard: string, size: string, length: string, count: number}>();
+                      const nutSummary = new Map<string, {name: string, type: string, count: number}>();
+                      const washerSummary = new Map<string, {name: string, type: string, diameter: string, count: number}>();
+
+                      for (const row of exportRows) {
+                        // Aggregate bolts by standard+size+length
+                        if (row.boltStandard || row.boltSize || row.boltLength) {
+                          const boltKey = `${row.boltStandard}|${row.boltSize}|${row.boltLength}`;
+                          const existing = boltSummary.get(boltKey);
+                          const count = parseInt(row.boltCount) || 0;
+                          if (existing) {
+                            existing.count += count;
+                          } else {
+                            boltSummary.set(boltKey, {
+                              standard: row.boltStandard,
+                              size: row.boltSize,
+                              length: row.boltLength,
+                              count
+                            });
+                          }
+                        }
+
+                        // Aggregate nuts by name+type
+                        if (row.nutName || row.nutType) {
+                          const nutKey = `${row.nutName}|${row.nutType}`;
+                          const existing = nutSummary.get(nutKey);
+                          const count = parseInt(row.nutCount) || 0;
+                          if (existing) {
+                            existing.count += count;
+                          } else {
+                            nutSummary.set(nutKey, {
+                              name: row.nutName,
+                              type: row.nutType,
+                              count
+                            });
+                          }
+                        }
+
+                        // Aggregate washers by name+type+diameter
+                        if (row.washerName || row.washerType || row.washerDiameter) {
+                          const washerKey = `${row.washerName}|${row.washerType}|${row.washerDiameter}`;
+                          const existing = washerSummary.get(washerKey);
+                          const count = parseInt(row.washerCount) || 0;
+                          if (existing) {
+                            existing.count += count;
+                          } else {
+                            washerSummary.set(washerKey, {
+                              name: row.washerName,
+                              type: row.washerType,
+                              diameter: row.washerDiameter,
+                              count
+                            });
+                          }
+                        }
+                      }
+
+                      // Build summary sheet data
+                      const summaryData: (string | number)[][] = [
+                        ['POLDID', '', '', ''],
+                        ['Standard', 'Suurus', 'Pikkus (mm)', 'Kogus'],
+                        ...Array.from(boltSummary.values()).map(b => [b.standard, b.size, b.length, b.count]),
+                        [],
+                        ['MUTRID', '', ''],
+                        ['Nimi', 'Tüüp', 'Kogus'],
+                        ...Array.from(nutSummary.values()).map(n => [n.name, n.type, n.count]),
+                        [],
+                        ['SEIBID', '', '', ''],
+                        ['Nimi', 'Tüüp', 'Diameeter', 'Kogus'],
+                        ...Array.from(washerSummary.values()).map(w => [w.name, w.type, w.diameter, w.count])
+                      ];
+
+                      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+                      XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
 
                       // Download
                       const fileName = `detailid_poldid_${new Date().toISOString().slice(0,10)}.xlsx`;
