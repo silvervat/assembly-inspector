@@ -1631,6 +1631,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         castUnitMark: string;
                         weight: string;
                         positionCode: string;
+                        productName: string;
                         boltName: string;
                         boltStandard: string;
                         boltSize: string;
@@ -1656,14 +1657,23 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         let castUnitMark = '';
                         let weight = '';
                         let positionCode = '';
+                        let productName = '';
 
                         if (props?.properties && Array.isArray(props.properties)) {
                           for (const pset of props.properties) {
                             if (pset.name === 'Tekla Assembly') {
                               for (const p of pset.properties || []) {
                                 if (p.name === 'Assembly/Cast unit Mark') castUnitMark = String(p.value || '');
-                                if (p.name === 'Assembly/Cast unit weight') weight = String(p.value || '');
+                                if (p.name === 'Assembly/Cast unit weight') {
+                                  const w = parseFloat(p.value);
+                                  weight = isNaN(w) ? String(p.value || '') : w.toFixed(2);
+                                }
                                 if (p.name === 'Assembly/Cast unit position code') positionCode = String(p.value || '');
+                              }
+                            }
+                            if (pset.name === 'Product') {
+                              for (const p of pset.properties || []) {
+                                if (p.name === 'Name') productName = String(p.value || '');
                               }
                             }
                           }
@@ -1738,6 +1748,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                       castUnitMark,
                                       weight,
                                       positionCode,
+                                      productName,
                                       boltName: boltInfo.boltName || '',
                                       boltStandard: boltInfo.boltStandard || '',
                                       boltSize: boltInfo.boltSize || '',
@@ -1768,6 +1779,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                             castUnitMark,
                             weight,
                             positionCode,
+                            productName,
                             boltName: '',
                             boltStandard: '',
                             boltSize: '',
@@ -1802,11 +1814,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Create Excel workbook
                       const wsData = [
-                        ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'],
+                        ['Cast Unit Mark', 'Kaal (kg)', 'Asukoha kood', 'Toote nimi', 'Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutri tüüp', 'Mutreid', 'Seib nimi', 'Seibi tüüp', 'Seibi ⌀', 'Seibe'],
                         ...exportRows.map(r => [
                           r.castUnitMark,
                           r.weight,
                           r.positionCode,
+                          r.productName,
                           r.boltName,
                           r.boltStandard,
                           r.boltSize,
@@ -1829,6 +1842,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         { wch: 18 }, // Cast Unit Mark
                         { wch: 10 }, // Kaal
                         { wch: 14 }, // Asukoha kood
+                        { wch: 20 }, // Toote nimi
                         { wch: 16 }, // Poldi nimi
                         { wch: 10 }, // Standard
                         { wch: 8 },  // Suurus
@@ -1877,7 +1891,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       };
 
                       // Apply header styles (row 0)
-                      const numCols = 15;
+                      const numCols = 16;
                       for (let c = 0; c < numCols; c++) {
                         const cellRef = XLSX.utils.encode_cell({ r: 0, c });
                         if (ws[cellRef]) {
@@ -1890,13 +1904,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         for (let c = 0; c < numCols; c++) {
                           const cellRef = XLSX.utils.encode_cell({ r, c });
                           if (ws[cellRef]) {
-                            // Use merged cell style for first 3 columns (will be merged)
-                            ws[cellRef].s = c < 3 ? mergedCellStyle : cellStyle;
+                            // Use merged cell style for first 4 columns (will be merged)
+                            ws[cellRef].s = c < 4 ? mergedCellStyle : cellStyle;
                           }
                         }
                       }
 
-                      // Merge left columns (Cast Unit Mark, Weight, Position Code) for same detail
+                      // Merge left columns (Cast Unit Mark, Weight, Position Code, Product Name) for same detail
                       // exportRows[i] corresponds to wsData row i+1 (row 0 is header)
                       const merges: Array<{s: {r: number, c: number}, e: {r: number, c: number}}> = [];
                       let currentMark = exportRows[0]?.castUnitMark || '';
@@ -1907,8 +1921,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           // End of group: exportRows[groupStartIdx] to exportRows[i-1]
                           // In wsData terms: row groupStartIdx+1 to row i (0-based)
                           if (i - groupStartIdx > 1) {
-                            // More than one row - create merges for columns A, B, C (0, 1, 2)
-                            for (let col = 0; col < 3; col++) {
+                            // More than one row - create merges for columns A, B, C, D (0, 1, 2, 3)
+                            for (let col = 0; col < 4; col++) {
                               merges.push({
                                 s: { r: groupStartIdx + 1, c: col },
                                 e: { r: i, c: col }
@@ -1921,7 +1935,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       }
                       // Handle last group
                       if (exportRows.length - groupStartIdx > 1) {
-                        for (let col = 0; col < 3; col++) {
+                        for (let col = 0; col < 4; col++) {
                           merges.push({
                             s: { r: groupStartIdx + 1, c: col },
                             e: { r: exportRows.length, c: col }
@@ -2087,6 +2101,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Collect bolt and washer data
                       const boltData = new Map<string, { name: string; standard: string; count: number }>();
+                      const nutData = new Map<string, { name: string; type: string; count: number }>();
                       const washerData = new Map<string, { name: string; type: string; count: number }>();
 
                       // Process each selected object
@@ -2105,6 +2120,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                   let boltName = '';
                                   let boltStandard = '';
                                   let boltCount = 0;
+                                  let nutName = '';
+                                  let nutType = '';
+                                  let nutCount = 0;
                                   let washerName = '';
                                   let washerType = '';
                                   let washerCount = 0;
@@ -2120,6 +2138,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                         if (propName.includes('bolt') && propName.includes('name')) boltName = val;
                                         if (propName.includes('bolt') && propName.includes('standard')) boltStandard = val;
                                         if (propName.includes('bolt') && propName.includes('count')) boltCount = parseInt(val) || 0;
+                                        if (propName.includes('nut') && propName.includes('name')) nutName = val;
+                                        if (propName.includes('nut') && propName.includes('type')) nutType = val;
+                                        if (propName.includes('nut') && propName.includes('count')) nutCount = parseInt(val) || 0;
                                         if (propName.includes('washer') && propName.includes('name')) washerName = val;
                                         if (propName.includes('washer') && propName.includes('type')) washerType = val;
                                         if (propName.includes('washer') && propName.includes('count')) washerCount = parseInt(val) || 0;
@@ -2138,6 +2159,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                     boltData.set(boltKey, { name: boltName, standard: boltStandard, count: boltCount });
                                   }
 
+                                  // Aggregate nuts
+                                  if (nutName || nutType) {
+                                    const nutKey = `${nutName}|${nutType}`;
+                                    if (nutData.has(nutKey)) {
+                                      nutData.get(nutKey)!.count += nutCount;
+                                    } else {
+                                      nutData.set(nutKey, { name: nutName, type: nutType, count: nutCount });
+                                    }
+                                  }
+
                                   // Aggregate washers
                                   const washerKey = `${washerName}|${washerType}`;
                                   if (washerData.has(washerKey)) {
@@ -2154,8 +2185,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
-                      // Sort by name
+                      // Sort by name/size
                       const sortedBolts = Array.from(boltData.values()).sort((a, b) => {
+                        const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
+                        const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
+                        return sizeA - sizeB;
+                      });
+                      const sortedNuts = Array.from(nutData.values()).sort((a, b) => {
                         const sizeA = parseInt(a.name.replace(/\D/g, '')) || 0;
                         const sizeB = parseInt(b.name.replace(/\D/g, '')) || 0;
                         return sizeA - sizeB;
@@ -2171,6 +2207,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       for (const b of sortedBolts) {
                         clipText += `${b.name}\t${b.standard}\t${b.count}\n`;
                       }
+                      clipText += '\nMUTRID\nNimi\tTüüp\tKogus\n';
+                      for (const n of sortedNuts) {
+                        clipText += `${n.name}\t${n.type}\t${n.count}\n`;
+                      }
                       clipText += '\nSEIBID\nNimi\tTüüp\tKogus\n';
                       for (const w of sortedWashers) {
                         clipText += `${w.name}\t${w.type}\t${w.count}\n`;
@@ -2181,7 +2221,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       updateFunctionResult("copyBoltsToClipboard", {
                         status: 'success',
-                        result: `Kopeeritud: ${sortedBolts.length} polti, ${sortedWashers.length} seibi`
+                        result: `Kopeeritud: ${sortedBolts.length} polti, ${sortedNuts.length} mutrit, ${sortedWashers.length} seibi`
                       });
                     } catch (e: any) {
                       console.error('Clipboard error:', e);
