@@ -3079,6 +3079,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       console.log(`🏷️ Adding markups for ${allRuntimeIds.length} selected objects...`);
 
+                      // Save camera state BEFORE any operations
+                      let savedCamera: any = null;
+                      try {
+                        savedCamera = await api.viewer.getCamera();
+                        console.log('🏷️ Camera saved:', savedCamera?.position);
+                      } catch (e) {
+                        console.log('🏷️ Could not save camera');
+                      }
+
                       const markupsToCreate: { text: string; start: { x: number; y: number; z: number }; end: { x: number; y: number; z: number } }[] = [];
 
                       // Process each selected object
@@ -3223,14 +3232,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
-                      // Reset model state to restore visibility (fix white model issue)
+                      // Reset model state to restore visibility (fix white/gray model issue)
                       try {
                         console.log('🏷️ Starting model reset...');
 
-                        // Small delay to let markup creation finish
-                        await new Promise(resolve => setTimeout(resolve, 100));
-
-                        // 1. End markup editing mode first
+                        // 1. End markup editing mode IMMEDIATELY
                         try {
                           await (api.markup as any)?.endEditing?.();
                           console.log('🏷️ 1. Markup editing ended');
@@ -3238,7 +3244,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           console.log('🏷️ 1. No endEditing method');
                         }
 
-                        // 2. Exit presentation/isolation mode
+                        // 2. Exit presentation mode
                         try {
                           await (api.viewer as any).setPresentation?.(null);
                           console.log('🏷️ 2. Presentation cleared');
@@ -3246,7 +3252,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           console.log('🏷️ 2. No setPresentation method');
                         }
 
-                        // 3. Show all isolated entities (exit isolation mode)
+                        // Wait for viewer to process mode changes
+                        await new Promise(resolve => setTimeout(resolve, 300));
+
+                        // 3. Exit isolation mode
                         try {
                           await api.viewer.isolateEntities([]);
                           console.log('🏷️ 3. Isolation cleared');
@@ -3270,15 +3279,32 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                           console.log('🏷️ 6. No showAll method');
                         }
 
-                        // 7. Try to fit view to all models
+                        // Wait again before restoring camera
+                        await new Promise(resolve => setTimeout(resolve, 200));
+
+                        // 7. Restore saved camera position (this often fixes the gray model issue)
+                        if (savedCamera) {
+                          try {
+                            await api.viewer.setCamera(savedCamera);
+                            console.log('🏷️ 7. Camera restored');
+                          } catch (e) {
+                            console.log('🏷️ 7. Could not restore camera:', e);
+                          }
+                        }
+
+                        // 8. Force render refresh by slightly moving camera
                         try {
-                          const models = await api.viewer.getModels();
-                          if (models && models.length > 0) {
-                            await (api.viewer as any).fitToView?.();
-                            console.log('🏷️ 7. fitToView called');
+                          const currentCam = await api.viewer.getCamera();
+                          if (currentCam && currentCam.position) {
+                            // Nudge camera slightly and back
+                            const nudgedCam = { ...currentCam, position: { ...currentCam.position, x: currentCam.position.x + 0.001 } };
+                            await api.viewer.setCamera(nudgedCam);
+                            await new Promise(resolve => setTimeout(resolve, 50));
+                            await api.viewer.setCamera(currentCam);
+                            console.log('🏷️ 8. Camera nudged to force refresh');
                           }
                         } catch (e) {
-                          console.log('🏷️ 7. No fitToView method');
+                          console.log('🏷️ 8. Camera nudge failed:', e);
                         }
 
                         console.log('🏷️ Model reset complete');
