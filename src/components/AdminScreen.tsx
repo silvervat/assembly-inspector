@@ -3416,6 +3416,98 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
               </div>
             </div>
 
+            {/* TEAM / MEMBERS section */}
+            <div className="function-section">
+              <h4>👥 Meeskond / Team</h4>
+              <div className="function-grid">
+                <FunctionButton
+                  name="getMembers()"
+                  result={functionResults["getMembers()"]}
+                  onClick={() => testFunction("getMembers()", async () => {
+                    const members = await (api.project as any).getMembers?.();
+                    return members;
+                  })}
+                />
+                <FunctionButton
+                  name="getProjectMembers()"
+                  result={functionResults["getProjectMembers()"]}
+                  onClick={() => testFunction("getProjectMembers()", async () => {
+                    const members = await (api.project as any).getProjectMembers?.();
+                    return members;
+                  })}
+                />
+                <FunctionButton
+                  name="getUsers()"
+                  result={functionResults["getUsers()"]}
+                  onClick={() => testFunction("getUsers()", async () => {
+                    const users = await (api.project as any).getUsers?.();
+                    return users;
+                  })}
+                />
+                <FunctionButton
+                  name="getTeam()"
+                  result={functionResults["getTeam()"]}
+                  onClick={() => testFunction("getTeam()", async () => {
+                    const team = await (api.project as any).getTeam?.();
+                    return team;
+                  })}
+                />
+                <FunctionButton
+                  name="getGroups()"
+                  result={functionResults["getGroups()"]}
+                  onClick={() => testFunction("getGroups()", async () => {
+                    const groups = await (api.project as any).getGroups?.();
+                    return groups;
+                  })}
+                />
+                <FunctionButton
+                  name="getRoles()"
+                  result={functionResults["getRoles()"]}
+                  onClick={() => testFunction("getRoles()", async () => {
+                    const roles = await (api.project as any).getRoles?.();
+                    return roles;
+                  })}
+                />
+                <FunctionButton
+                  name="List member methods"
+                  result={functionResults["List member methods"]}
+                  onClick={() => testFunction("List member methods", async () => {
+                    const allMethods = Object.keys(api.project).filter(k => typeof (api.project as any)[k] === 'function');
+                    const memberMethods = allMethods.filter(m =>
+                      m.toLowerCase().includes('member') ||
+                      m.toLowerCase().includes('user') ||
+                      m.toLowerCase().includes('team') ||
+                      m.toLowerCase().includes('group') ||
+                      m.toLowerCase().includes('role')
+                    );
+                    return memberMethods.length > 0 ? memberMethods.join(', ') : 'No member-related methods found. All methods: ' + allMethods.join(', ');
+                  })}
+                />
+                <FunctionButton
+                  name="Explore api.project"
+                  result={functionResults["Explore api.project"]}
+                  onClick={() => testFunction("Explore api.project", async () => {
+                    const project = api.project as any;
+                    const info: Record<string, string> = {};
+
+                    // List all properties and their types
+                    for (const key of Object.keys(project)) {
+                      const val = project[key];
+                      if (typeof val === 'function') {
+                        info[key] = 'function()';
+                      } else if (typeof val === 'object' && val !== null) {
+                        info[key] = 'object: ' + Object.keys(val).slice(0, 5).join(', ');
+                      } else {
+                        info[key] = String(val);
+                      }
+                    }
+
+                    return info;
+                  })}
+                />
+              </div>
+            </div>
+
             {/* OTHER/EXPERIMENTAL section */}
             <div className="function-section">
               <h4>🧪 Muud / Eksperimentaalsed</h4>
