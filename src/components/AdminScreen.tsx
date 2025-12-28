@@ -3102,30 +3102,69 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                               for (let i = 0; i < childProps.length; i++) {
                                 const childProp = childProps[i];
                                 const childBBox = childBBoxes[i];
+                                const childId = childIds[i];
 
                                 if (childProp?.properties && Array.isArray(childProp.properties)) {
                                   let boltName = '';
                                   let hasTeklaBolt = false;
-                                  let washerCount = 0;
+                                  let washerCount = -1; // -1 means not found
+                                  const allPsetNames: string[] = [];
 
                                   for (const pset of childProp.properties) {
-                                    const psetName = (pset.name || '').toLowerCase();
-                                    if (psetName.includes('tekla bolt') || psetName.includes('bolt')) {
+                                    const psetName = (pset.name || '');
+                                    allPsetNames.push(psetName);
+                                    const psetNameLower = psetName.toLowerCase();
+
+                                    // Check for Tekla Bolt property set (more specific matching)
+                                    if (psetNameLower.includes('tekla') && psetNameLower.includes('bolt')) {
                                       hasTeklaBolt = true;
                                       for (const p of pset.properties || []) {
                                         const propName = (p.name || '').toLowerCase();
                                         const val = String(p.value ?? p.displayValue ?? '');
-                                        if (propName.includes('bolt') && propName.includes('name')) boltName = val;
-                                        if (propName.includes('washer') && propName.includes('count')) washerCount = parseInt(val) || 0;
+
+                                        // Get bolt name - check various naming patterns
+                                        if (propName === 'bolt_name' || propName === 'bolt.name' ||
+                                            (propName.includes('bolt') && propName.includes('name'))) {
+                                          boltName = val;
+                                        }
+                                        // Get washer count
+                                        if (propName.includes('washer') && propName.includes('count')) {
+                                          washerCount = parseInt(val) || 0;
+                                        }
                                       }
                                     }
                                   }
 
-                                  // Skip if not a real bolt (washer count = 0 means opening)
-                                  if (!hasTeklaBolt || washerCount === 0) continue;
+                                  // Log detailed info for each child
+                                  console.log(`🏷️ Child ${i} (ID: ${childId}):`, {
+                                    psets: allPsetNames,
+                                    hasTeklaBolt,
+                                    boltName: boltName || '(empty)',
+                                    washerCount,
+                                    hasBBox: !!childBBox?.boundingBox
+                                  });
+
+                                  // Skip if no Tekla Bolt property set found
+                                  if (!hasTeklaBolt) {
+                                    console.log(`   ⏭️ Skipped: no Tekla Bolt pset`);
+                                    continue;
+                                  }
+
+                                  // Skip if washer count is 0 (opening, not a real bolt)
+                                  // But if washer count was not found (-1), still try to create markup
+                                  if (washerCount === 0) {
+                                    console.log(`   ⏭️ Skipped: washer count = 0 (opening)`);
+                                    continue;
+                                  }
+
+                                  // Skip if no bolt name
+                                  if (!boltName) {
+                                    console.log(`   ⏭️ Skipped: no bolt name found`);
+                                    continue;
+                                  }
 
                                   // Get center position from bounding box
-                                  if (childBBox?.boundingBox && boltName) {
+                                  if (childBBox?.boundingBox) {
                                     const box = childBBox.boundingBox;
                                     const center = {
                                       x: (box.min.x + box.max.x) / 2,
@@ -3138,6 +3177,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                       start: center,
                                       end: center
                                     });
+                                    console.log(`   ✅ Will create markup: "${boltName}"`);
+                                  } else {
+                                    console.log(`   ⏭️ Skipped: no bounding box`);
                                   }
                                 }
                               }
