@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
@@ -163,6 +163,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
   const [guidControllerLoading, setGuidControllerLoading] = useState(false);
   const [guidControllerResult, setGuidControllerResult] = useState<{ status: 'success' | 'error' | 'idle'; message: string }>({ status: 'idle', message: '' });
 
+  // Reference to external GUID Controller window
+  const guidControllerWindowRef = useRef<Window | null>(null);
+
   // Assembly & Bolts list state
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
   const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
@@ -222,15 +225,34 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
   };
 
   // GUID Controller: Find and act on objects by GUID
-  const handleGuidAction = async (action: 'zoom' | 'select' | 'isolate' | 'highlight') => {
-    const guids = guidControllerInput
+  // Can be called with guidsInput (from external window) or use guidControllerInput state
+  const handleGuidAction = async (action: 'zoom' | 'select' | 'isolate' | 'highlight' | 'reset', guidsInput?: string): Promise<{ status: 'success' | 'error'; message: string }> => {
+    // Handle reset action separately
+    if (action === 'reset') {
+      try {
+        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+        const result = { status: 'success' as const, message: 'Mudel lähtestatud!' };
+        setGuidControllerResult(result);
+        return result;
+      } catch (e: any) {
+        const result = { status: 'error' as const, message: e.message || 'Viga lähtestamisel' };
+        setGuidControllerResult(result);
+        return result;
+      }
+    }
+
+    // Use provided guids or fall back to state
+    const guidsSource = guidsInput ?? guidControllerInput;
+    const guids = guidsSource
       .split(/[\n,;]+/)
       .map(g => g.trim())
       .filter(g => g.length > 0);
 
     if (guids.length === 0) {
-      setGuidControllerResult({ status: 'error', message: 'Sisesta vähemalt üks GUID!' });
-      return;
+      const result = { status: 'error' as const, message: 'Sisesta vähemalt üks GUID!' };
+      setGuidControllerResult(result);
+      return result;
     }
 
     setGuidControllerLoading(true);
@@ -240,9 +262,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        setGuidControllerResult({ status: 'error', message: 'Mudeleid pole laaditud!' });
+        const result = { status: 'error' as const, message: 'Mudeleid pole laaditud!' };
+        setGuidControllerResult(result);
         setGuidControllerLoading(false);
-        return;
+        return result;
       }
 
       console.log(`🔍 Searching for ${guids.length} GUID(s) in ${models.length} model(s)...`);
@@ -269,9 +292,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
       }
 
       if (foundObjects.length === 0) {
-        setGuidControllerResult({ status: 'error', message: `GUID-e ei leitud! (${guids.length} otsitud)` });
+        const result = { status: 'error' as const, message: `GUID-e ei leitud! (${guids.length} otsitud)` };
+        setGuidControllerResult(result);
         setGuidControllerLoading(false);
-        return;
+        return result;
       }
 
       // Build selection objects for different APIs
@@ -287,23 +311,24 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
       }));
 
       const totalFound = foundObjects.reduce((sum, fo) => sum + fo.runtimeIds.length, 0);
+      let result: { status: 'success' | 'error'; message: string };
 
       // Perform the action
       switch (action) {
         case 'zoom':
           await api.viewer.setSelection({ modelObjectIds }, 'set');
           await (api.viewer as any).zoomToObjects?.(modelObjectIds);
-          setGuidControllerResult({ status: 'success', message: `Zoomitud! (${totalFound} objekti)` });
+          result = { status: 'success', message: `Zoomitud! (${totalFound} objekti)` };
           break;
 
         case 'select':
           await api.viewer.setSelection({ modelObjectIds }, 'set');
-          setGuidControllerResult({ status: 'success', message: `Valitud! (${totalFound} objekti)` });
+          result = { status: 'success', message: `Valitud! (${totalFound} objekti)` };
           break;
 
         case 'isolate':
           await api.viewer.isolateEntities(isolateEntities);
-          setGuidControllerResult({ status: 'success', message: `Isoleeritud! (${totalFound} objekti)` });
+          result = { status: 'success', message: `Isoleeritud! (${totalFound} objekti)` };
           break;
 
         case 'highlight':
@@ -314,17 +339,420 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
             { color: '#FF0000' }
           );
           await (api.viewer as any).zoomToObjects?.(modelObjectIds);
-          setGuidControllerResult({ status: 'success', message: `Esile tõstetud punasena! (${totalFound} objekti)` });
+          result = { status: 'success', message: `Esile tõstetud punasena! (${totalFound} objekti)` };
           break;
+
+        default:
+          result = { status: 'error', message: 'Tundmatu toiming' };
       }
+
+      setGuidControllerResult(result);
+      return result;
 
     } catch (e: any) {
       console.error('GUID action error:', e);
-      setGuidControllerResult({ status: 'error', message: e.message || 'Viga toimingu tegemisel' });
+      const result = { status: 'error' as const, message: e.message || 'Viga toimingu tegemisel' };
+      setGuidControllerResult(result);
+      return result;
     } finally {
       setGuidControllerLoading(false);
     }
   };
+
+  // Open GUID Controller in a separate browser window
+  const openGuidControllerWindow = () => {
+    // Close existing window if open
+    if (guidControllerWindowRef.current && !guidControllerWindowRef.current.closed) {
+      guidControllerWindowRef.current.focus();
+      return;
+    }
+
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎯 GUID Controller - Assembly Inspector</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #e2e8f0;
+    }
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .header p {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 12px;
+    }
+    .status-connected {
+      background: rgba(34, 197, 94, 0.2);
+      color: #22c55e;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .status-disconnected {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.1); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .input-section {
+      background: rgba(30, 41, 59, 0.8);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .input-section label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(15, 23, 42, 0.8);
+      color: #e2e8f0;
+      font-family: 'Fira Code', 'Monaco', monospace;
+      font-size: 13px;
+      resize: vertical;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    textarea::placeholder {
+      color: #64748b;
+    }
+    .button-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    button {
+      padding: 14px 16px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button:not(:disabled):hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    button:not(:disabled):active {
+      transform: translateY(0);
+    }
+    .btn-zoom { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+    .btn-select { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+    .btn-isolate { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; }
+    .btn-highlight { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+    .btn-reset {
+      background: rgba(255,255,255,0.1);
+      color: #94a3b8;
+      border: 1px solid rgba(255,255,255,0.15);
+      grid-column: span 2;
+    }
+    .btn-reset:not(:disabled):hover {
+      background: rgba(255,255,255,0.15);
+      color: #e2e8f0;
+    }
+    .result-box {
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 16px;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .result-success {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #22c55e;
+    }
+    .result-error {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+    .result-loading {
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: #3b82f6;
+    }
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .icon { font-size: 18px; }
+    .help-text {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      color: #64748b;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎯 GUID Controller</h1>
+      <p>Kontrolli Trimble Connect mudelit reaalajas</p>
+      <div id="status" class="status-indicator status-connected">
+        <span class="pulse"></span>
+        <span>Ühendatud</span>
+      </div>
+    </div>
+
+    <div class="input-section">
+      <label>GUID(id)</label>
+      <textarea id="guidInput" placeholder="Sisesta GUID(id)...&#10;&#10;Näited:&#10;3cUkl00wxCuAr0f8gkqJbz&#10;2vBpM91wxDvBs1g9hlrKcA&#10;&#10;Eraldaja: koma, semikoolon või reavahetus"></textarea>
+      <p class="help-text">💡 Toetab mitut GUID-i korraga. Kopeeri GUIDs otse Tekla'st või IFC failist.</p>
+    </div>
+
+    <div class="button-grid">
+      <button class="btn-zoom" onclick="sendAction('zoom')">
+        <span class="icon">🔍</span> Zoom
+      </button>
+      <button class="btn-select" onclick="sendAction('select')">
+        <span class="icon">✓</span> Select
+      </button>
+      <button class="btn-isolate" onclick="sendAction('isolate')">
+        <span class="icon">👁</span> Isolate
+      </button>
+      <button class="btn-highlight" onclick="sendAction('highlight')">
+        <span class="icon">⚡</span> Highlight
+      </button>
+      <button class="btn-reset" onclick="sendAction('reset')">
+        <span class="icon">↺</span> Reset mudel
+      </button>
+    </div>
+
+    <div id="result"></div>
+
+    <div class="footer">
+      Assembly Inspector • GUID Controller Window
+    </div>
+  </div>
+
+  <script>
+    let isLoading = false;
+    const buttons = document.querySelectorAll('button');
+    const resultDiv = document.getElementById('result');
+    const statusDiv = document.getElementById('status');
+    const guidInput = document.getElementById('guidInput');
+
+    // Check if opener is available
+    function checkConnection() {
+      if (!window.opener || window.opener.closed) {
+        statusDiv.className = 'status-indicator status-disconnected';
+        statusDiv.innerHTML = '<span class="pulse"></span><span>Ühendus katkes - sulge aken</span>';
+        buttons.forEach(btn => btn.disabled = true);
+        return false;
+      }
+      return true;
+    }
+
+    // Check connection periodically
+    setInterval(checkConnection, 2000);
+
+    function setLoading(loading) {
+      isLoading = loading;
+      buttons.forEach(btn => btn.disabled = loading);
+      if (loading) {
+        resultDiv.innerHTML = '<div class="result-box result-loading"><span class="spinner"></span> Töötlen...</div>';
+      }
+    }
+
+    function showResult(status, message) {
+      const isSuccess = status === 'success';
+      resultDiv.innerHTML = \`
+        <div class="result-box \${isSuccess ? 'result-success' : 'result-error'}">
+          <span class="icon">\${isSuccess ? '✓' : '✕'}</span>
+          <span>\${message}</span>
+        </div>
+      \`;
+    }
+
+    function sendAction(action) {
+      if (isLoading) return;
+      if (!checkConnection()) return;
+
+      const guids = guidInput.value.trim();
+      if (!guids && action !== 'reset') {
+        showResult('error', 'Sisesta vähemalt üks GUID!');
+        return;
+      }
+
+      setLoading(true);
+
+      // Send message to parent window
+      window.opener.postMessage({
+        type: 'GUID_CONTROLLER_ACTION',
+        action: action,
+        guids: guids
+      }, '*');
+    }
+
+    // Listen for responses from parent
+    window.addEventListener('message', (event) => {
+      if (event.data && event.data.type === 'GUID_CONTROLLER_RESULT') {
+        setLoading(false);
+        showResult(event.data.status, event.data.message);
+      }
+    });
+
+    // Focus input on load
+    guidInput.focus();
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+          case 'Enter': sendAction('zoom'); e.preventDefault(); break;
+          case 's': sendAction('select'); e.preventDefault(); break;
+          case 'i': sendAction('isolate'); e.preventDefault(); break;
+          case 'h': sendAction('highlight'); e.preventDefault(); break;
+          case 'r': sendAction('reset'); e.preventDefault(); break;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
+    `;
+
+    // Open new window
+    const popup = window.open('', 'GuidControllerWindow', 'width=550,height=650,resizable=yes,scrollbars=yes');
+    if (popup) {
+      popup.document.write(htmlContent);
+      popup.document.close();
+      guidControllerWindowRef.current = popup;
+      console.log('🎯 GUID Controller window opened');
+    } else {
+      alert('Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.');
+    }
+  };
+
+  // Listen for messages from external GUID Controller window
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.data && event.data.type === 'GUID_CONTROLLER_ACTION') {
+        const { action, guids } = event.data;
+        console.log('🎯 Received GUID Controller action:', action, guids);
+
+        try {
+          const result = await handleGuidAction(action, guids);
+
+          // Send result back to popup window
+          if (guidControllerWindowRef.current && !guidControllerWindowRef.current.closed) {
+            guidControllerWindowRef.current.postMessage({
+              type: 'GUID_CONTROLLER_RESULT',
+              status: result.status,
+              message: result.message
+            }, '*');
+          }
+        } catch (e: any) {
+          if (guidControllerWindowRef.current && !guidControllerWindowRef.current.closed) {
+            guidControllerWindowRef.current.postMessage({
+              type: 'GUID_CONTROLLER_RESULT',
+              status: 'error',
+              message: e.message || 'Viga toimingu tegemisel'
+            }, '*');
+          }
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
 
   // BigInt-safe JSON stringify helper
   const safeStringify = (obj: unknown, space?: number): string => {
@@ -1770,22 +2198,28 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                 </div>
               )}
 
-              {/* Open in popup button */}
+              {/* Open in separate browser window button */}
               <button
-                onClick={() => setShowGuidController(true)}
+                onClick={openGuidControllerWindow}
                 style={{
                   marginTop: '8px',
-                  padding: '6px 12px',
+                  padding: '8px 12px',
                   borderRadius: '4px',
-                  border: '1px dashed var(--border-color)',
-                  backgroundColor: 'transparent',
-                  color: 'var(--text-secondary)',
-                  fontSize: '11px',
+                  border: '1px solid var(--primary-color)',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  color: 'var(--primary-color)',
+                  fontSize: '12px',
+                  fontWeight: '500',
                   cursor: 'pointer',
-                  width: '100%'
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
                 }}
               >
-                📌 Ava eraldi aknas (püsib avatud)
+                <FiExternalLink size={14} />
+                Ava eraldi brauseri aknas
               </button>
             </div>
 
