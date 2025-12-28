@@ -3150,14 +3150,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                     continue;
                                   }
 
-                                  // Skip if washer count is 0 (opening, not a real bolt)
-                                  // But if washer count was not found (-1), still try to create markup
+                                  // Skip if washer count is 0 (opening/hole, not a real bolt)
                                   if (washerCount === 0) {
-                                    console.log(`   ⏭️ Skipped: washer count = 0 (opening)`);
+                                    console.log(`   ⏭️ Skipped: washer count = 0 (opening/ava)`);
                                     continue;
                                   }
 
-                                  // Skip if no bolt name
+                                  // Skip if no bolt name (required for markup text)
                                   if (!boltName) {
                                     console.log(`   ⏭️ Skipped: no bolt name found`);
                                     continue;
@@ -3226,37 +3225,63 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Reset model state to restore visibility (fix white model issue)
                       try {
-                        // Try to exit presentation mode first
-                        try {
-                          await (api.viewer as any).setPresentation?.(null);
-                          console.log('🏷️ Presentation cleared');
-                        } catch (e) {
-                          console.log('🏷️ No setPresentation method');
-                        }
+                        console.log('🏷️ Starting model reset...');
 
-                        // Try to end markup editing mode
+                        // Small delay to let markup creation finish
+                        await new Promise(resolve => setTimeout(resolve, 100));
+
+                        // 1. End markup editing mode first
                         try {
                           await (api.markup as any)?.endEditing?.();
-                          console.log('🏷️ Markup editing ended');
+                          console.log('🏷️ 1. Markup editing ended');
                         } catch (e) {
-                          console.log('🏷️ No endEditing method');
+                          console.log('🏷️ 1. No endEditing method');
                         }
 
-                        // Reset object visibility and colors
+                        // 2. Exit presentation/isolation mode
+                        try {
+                          await (api.viewer as any).setPresentation?.(null);
+                          console.log('🏷️ 2. Presentation cleared');
+                        } catch (e) {
+                          console.log('🏷️ 2. No setPresentation method');
+                        }
+
+                        // 3. Show all isolated entities (exit isolation mode)
+                        try {
+                          await api.viewer.isolateEntities([]);
+                          console.log('🏷️ 3. Isolation cleared');
+                        } catch (e) {
+                          console.log('🏷️ 3. Could not clear isolation:', e);
+                        }
+
+                        // 4. Reset object visibility and colors
                         await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                        console.log('🏷️ 4. Object state reset');
 
-                        // Clear selection to avoid focus on specific objects
+                        // 5. Clear selection
                         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+                        console.log('🏷️ 5. Selection cleared');
 
-                        // Try to show all entities
+                        // 6. Try to show all entities
                         try {
                           await (api.viewer as any).showAll?.();
-                          console.log('🏷️ showAll called');
+                          console.log('🏷️ 6. showAll called');
                         } catch (e) {
-                          console.log('🏷️ No showAll method');
+                          console.log('🏷️ 6. No showAll method');
                         }
 
-                        console.log('🏷️ Model state reset after markup creation');
+                        // 7. Try to fit view to all models
+                        try {
+                          const models = await api.viewer.getModels();
+                          if (models && models.length > 0) {
+                            await (api.viewer as any).fitToView?.();
+                            console.log('🏷️ 7. fitToView called');
+                          }
+                        } catch (e) {
+                          console.log('🏷️ 7. No fitToView method');
+                        }
+
+                        console.log('🏷️ Model reset complete');
                       } catch (resetErr) {
                         console.warn('Could not reset model state:', resetErr);
                       }
@@ -3269,11 +3294,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       console.error('Markup error:', e);
                       // Reset model state even on error
                       try {
-                        await (api.viewer as any).setPresentation?.(null);
+                        await new Promise(resolve => setTimeout(resolve, 100));
                         await (api.markup as any)?.endEditing?.();
+                        await (api.viewer as any).setPresentation?.(null);
+                        await api.viewer.isolateEntities([]);
                         await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
                         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
                         await (api.viewer as any).showAll?.();
+                        await (api.viewer as any).fitToView?.();
                       } catch (resetErr) {
                         console.warn('Could not reset model state:', resetErr);
                       }
