@@ -157,6 +157,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [teamMembersLoading, setTeamMembersLoading] = useState(false);
 
+  // GUID Controller popup state
+  const [showGuidController, setShowGuidController] = useState(false);
+  const [guidControllerInput, setGuidControllerInput] = useState('');
+  const [guidControllerLoading, setGuidControllerLoading] = useState(false);
+  const [guidControllerResult, setGuidControllerResult] = useState<{ status: 'success' | 'error' | 'idle'; message: string }>({ status: 'idle', message: '' });
+
   // Assembly & Bolts list state
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
   const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
@@ -212,6 +218,111 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
       const errMsg = e instanceof Error ? e.message : String(e);
       updateFunctionResult(fnName, { status: 'error', error: errMsg });
       console.error(`❌ ${fnName}:`, e);
+    }
+  };
+
+  // GUID Controller: Find and act on objects by GUID
+  const handleGuidAction = async (action: 'zoom' | 'select' | 'isolate' | 'highlight') => {
+    const guids = guidControllerInput
+      .split(/[\n,;]+/)
+      .map(g => g.trim())
+      .filter(g => g.length > 0);
+
+    if (guids.length === 0) {
+      setGuidControllerResult({ status: 'error', message: 'Sisesta vähemalt üks GUID!' });
+      return;
+    }
+
+    setGuidControllerLoading(true);
+    setGuidControllerResult({ status: 'idle', message: '' });
+
+    try {
+      // Get all loaded models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) {
+        setGuidControllerResult({ status: 'error', message: 'Mudeleid pole laaditud!' });
+        setGuidControllerLoading(false);
+        return;
+      }
+
+      console.log(`🔍 Searching for ${guids.length} GUID(s) in ${models.length} model(s)...`);
+
+      // Search for GUIDs in each model
+      const foundObjects: { modelId: string; runtimeIds: number[] }[] = [];
+
+      for (const model of models) {
+        const modelId = model.id;
+        try {
+          // Convert IFC GUIDs to runtime IDs
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, guids);
+          if (runtimeIds && runtimeIds.length > 0) {
+            // Filter out null/undefined values
+            const validIds = runtimeIds.filter((id: number | null) => id != null) as number[];
+            if (validIds.length > 0) {
+              foundObjects.push({ modelId, runtimeIds: validIds });
+              console.log(`✅ Found ${validIds.length} objects in model ${modelId}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not search in model ${modelId}:`, e);
+        }
+      }
+
+      if (foundObjects.length === 0) {
+        setGuidControllerResult({ status: 'error', message: `GUID-e ei leitud! (${guids.length} otsitud)` });
+        setGuidControllerLoading(false);
+        return;
+      }
+
+      // Build selection objects for different APIs
+      const modelObjectIds = foundObjects.map(fo => ({
+        modelId: fo.modelId,
+        objectRuntimeIds: fo.runtimeIds
+      }));
+
+      // For isolateEntities, use entityIds instead of objectRuntimeIds
+      const isolateEntities = foundObjects.map(fo => ({
+        modelId: fo.modelId,
+        entityIds: fo.runtimeIds
+      }));
+
+      const totalFound = foundObjects.reduce((sum, fo) => sum + fo.runtimeIds.length, 0);
+
+      // Perform the action
+      switch (action) {
+        case 'zoom':
+          await api.viewer.setSelection({ modelObjectIds }, 'set');
+          await (api.viewer as any).zoomToObjects?.(modelObjectIds);
+          setGuidControllerResult({ status: 'success', message: `Zoomitud! (${totalFound} objekti)` });
+          break;
+
+        case 'select':
+          await api.viewer.setSelection({ modelObjectIds }, 'set');
+          setGuidControllerResult({ status: 'success', message: `Valitud! (${totalFound} objekti)` });
+          break;
+
+        case 'isolate':
+          await api.viewer.isolateEntities(isolateEntities);
+          setGuidControllerResult({ status: 'success', message: `Isoleeritud! (${totalFound} objekti)` });
+          break;
+
+        case 'highlight':
+          await api.viewer.setSelection({ modelObjectIds }, 'set');
+          // Set objects red
+          await api.viewer.setObjectState(
+            { modelObjectIds },
+            { color: '#FF0000' }
+          );
+          await (api.viewer as any).zoomToObjects?.(modelObjectIds);
+          setGuidControllerResult({ status: 'success', message: `Esile tõstetud punasena! (${totalFound} objekti)` });
+          break;
+      }
+
+    } catch (e: any) {
+      console.error('GUID action error:', e);
+      setGuidControllerResult({ status: 'error', message: e.message || 'Viga toimingu tegemisel' });
+    } finally {
+      setGuidControllerLoading(false);
     }
   };
 
@@ -1499,6 +1610,185 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
           </div>
 
           <div className="function-explorer-content">
+            {/* GUID CONTROLLER section */}
+            <div className="function-section" style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '2px solid var(--primary-color)'
+            }}>
+              <h4>🎯 GUID Controller</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Sisesta GUID(id) ja kontrolli mudelit. Toetab mitut GUID-i (eralda komaga, semikooloniga või reavahetusega).
+              </p>
+
+              {/* Input area */}
+              <textarea
+                value={guidControllerInput}
+                onChange={(e) => setGuidControllerInput(e.target.value)}
+                placeholder="Sisesta GUID(id)...&#10;nt: 3cUkl00wxCuAr0f8gkqJbz&#10;või mitu: 3cUkl00wxCuAr0f8gkqJbz, 2vBpM91wxDvBs1g9hlrKcA"
+                style={{
+                  width: '100%',
+                  minHeight: '60px',
+                  padding: '8px',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  resize: 'vertical',
+                  marginBottom: '8px'
+                }}
+              />
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                <button
+                  onClick={() => handleGuidAction('zoom')}
+                  disabled={guidControllerLoading}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: '#3B82F6',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: guidControllerLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: guidControllerLoading ? 0.6 : 1
+                  }}
+                >
+                  {guidControllerLoading ? <FiLoader className="spin" size={14} /> : <FiSearch size={14} />}
+                  Zoom
+                </button>
+                <button
+                  onClick={() => handleGuidAction('select')}
+                  disabled={guidControllerLoading}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: '#22C55E',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: guidControllerLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: guidControllerLoading ? 0.6 : 1
+                  }}
+                >
+                  <FiCheck size={14} />
+                  Select
+                </button>
+                <button
+                  onClick={() => handleGuidAction('isolate')}
+                  disabled={guidControllerLoading}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: '#8B5CF6',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: guidControllerLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: guidControllerLoading ? 0.6 : 1
+                  }}
+                >
+                  <FiExternalLink size={14} />
+                  Isolate
+                </button>
+                <button
+                  onClick={() => handleGuidAction('highlight')}
+                  disabled={guidControllerLoading}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    backgroundColor: '#EF4444',
+                    color: 'white',
+                    fontSize: '12px',
+                    cursor: guidControllerLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: guidControllerLoading ? 0.6 : 1
+                  }}
+                >
+                  <FiZap size={14} />
+                  Highlight
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+                      setGuidControllerResult({ status: 'success', message: 'Mudel lähtestatud!' });
+                    } catch (e: any) {
+                      setGuidControllerResult({ status: 'error', message: e.message });
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    backgroundColor: 'var(--bg-secondary)',
+                    color: 'var(--text-primary)',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiRefreshCw size={14} />
+                  Reset
+                </button>
+              </div>
+
+              {/* Result message */}
+              {guidControllerResult.status !== 'idle' && (
+                <div style={{
+                  padding: '8px',
+                  borderRadius: '4px',
+                  backgroundColor: guidControllerResult.status === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  border: `1px solid ${guidControllerResult.status === 'success' ? '#22C55E' : '#EF4444'}`,
+                  color: guidControllerResult.status === 'success' ? '#22C55E' : '#EF4444',
+                  fontSize: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  {guidControllerResult.status === 'success' ? <FiCheck size={14} /> : <FiX size={14} />}
+                  {guidControllerResult.message}
+                </div>
+              )}
+
+              {/* Open in popup button */}
+              <button
+                onClick={() => setShowGuidController(true)}
+                style={{
+                  marginTop: '8px',
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  border: '1px dashed var(--border-color)',
+                  backgroundColor: 'transparent',
+                  color: 'var(--text-secondary)',
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                📌 Ava eraldi aknas (püsib avatud)
+              </button>
+            </div>
+
             {/* ZOOM LINK GENERATOR section */}
             <div className="function-section">
               <h4>🔗 Zoom Link Generator</h4>
@@ -2460,7 +2750,36 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       // Reset model state to restore visibility (fix white model issue)
                       try {
+                        // Try to exit presentation mode first
+                        try {
+                          await (api.viewer as any).setPresentation?.(null);
+                          console.log('🏷️ Presentation cleared');
+                        } catch (e) {
+                          console.log('🏷️ No setPresentation method');
+                        }
+
+                        // Try to end markup editing mode
+                        try {
+                          await (api.markup as any)?.endEditing?.();
+                          console.log('🏷️ Markup editing ended');
+                        } catch (e) {
+                          console.log('🏷️ No endEditing method');
+                        }
+
+                        // Reset object visibility and colors
                         await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+
+                        // Clear selection to avoid focus on specific objects
+                        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
+                        // Try to show all entities
+                        try {
+                          await (api.viewer as any).showAll?.();
+                          console.log('🏷️ showAll called');
+                        } catch (e) {
+                          console.log('🏷️ No showAll method');
+                        }
+
                         console.log('🏷️ Model state reset after markup creation');
                       } catch (resetErr) {
                         console.warn('Could not reset model state:', resetErr);
@@ -2474,7 +2793,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       console.error('Markup error:', e);
                       // Reset model state even on error
                       try {
+                        await (api.viewer as any).setPresentation?.(null);
+                        await (api.markup as any)?.endEditing?.();
                         await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+                        await (api.viewer as any).showAll?.();
                       } catch (resetErr) {
                         console.warn('Could not reset model state:', resetErr);
                       }
@@ -6147,6 +6470,216 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating GUID Controller Popup */}
+      {showGuidController && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          width: '320px',
+          backgroundColor: 'var(--bg-primary)',
+          borderRadius: '12px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)',
+          border: '2px solid var(--primary-color)',
+          zIndex: 9999,
+          overflow: 'hidden'
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: 'var(--primary-color)',
+            color: 'white',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            cursor: 'move'
+          }}>
+            <span style={{ fontWeight: '600', fontSize: '13px' }}>🎯 GUID Controller</span>
+            <button
+              onClick={() => setShowGuidController(false)}
+              style={{
+                background: 'rgba(255,255,255,0.2)',
+                border: 'none',
+                color: 'white',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Content */}
+          <div style={{ padding: '12px' }}>
+            <textarea
+              value={guidControllerInput}
+              onChange={(e) => setGuidControllerInput(e.target.value)}
+              placeholder="Sisesta GUID(id)..."
+              style={{
+                width: '100%',
+                minHeight: '50px',
+                padding: '8px',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                resize: 'vertical',
+                marginBottom: '10px'
+              }}
+            />
+
+            {/* Action buttons - 2x2 grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '8px' }}>
+              <button
+                onClick={() => handleGuidAction('zoom')}
+                disabled={guidControllerLoading}
+                style={{
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#3B82F6',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: guidControllerLoading ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  opacity: guidControllerLoading ? 0.6 : 1
+                }}
+              >
+                {guidControllerLoading ? <FiLoader className="spin" size={14} /> : <FiSearch size={14} />}
+                Zoom
+              </button>
+              <button
+                onClick={() => handleGuidAction('select')}
+                disabled={guidControllerLoading}
+                style={{
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#22C55E',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: guidControllerLoading ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  opacity: guidControllerLoading ? 0.6 : 1
+                }}
+              >
+                <FiCheck size={14} />
+                Select
+              </button>
+              <button
+                onClick={() => handleGuidAction('isolate')}
+                disabled={guidControllerLoading}
+                style={{
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#8B5CF6',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: guidControllerLoading ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  opacity: guidControllerLoading ? 0.6 : 1
+                }}
+              >
+                <FiExternalLink size={14} />
+                Isolate
+              </button>
+              <button
+                onClick={() => handleGuidAction('highlight')}
+                disabled={guidControllerLoading}
+                style={{
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  backgroundColor: '#EF4444',
+                  color: 'white',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: guidControllerLoading ? 'wait' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '4px',
+                  opacity: guidControllerLoading ? 0.6 : 1
+                }}
+              >
+                <FiZap size={14} />
+                Highlight
+              </button>
+            </div>
+
+            {/* Reset button */}
+            <button
+              onClick={async () => {
+                try {
+                  await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                  await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+                  setGuidControllerResult({ status: 'success', message: 'Mudel lähtestatud!' });
+                } catch (e: any) {
+                  setGuidControllerResult({ status: 'error', message: e.message });
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '6px',
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-secondary)',
+                color: 'var(--text-primary)',
+                fontSize: '11px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                marginBottom: '8px'
+              }}
+            >
+              <FiRefreshCw size={12} />
+              Reset mudel
+            </button>
+
+            {/* Result message */}
+            {guidControllerResult.status !== 'idle' && (
+              <div style={{
+                padding: '8px',
+                borderRadius: '6px',
+                backgroundColor: guidControllerResult.status === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                border: `1px solid ${guidControllerResult.status === 'success' ? '#22C55E' : '#EF4444'}`,
+                color: guidControllerResult.status === 'success' ? '#22C55E' : '#EF4444',
+                fontSize: '11px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                {guidControllerResult.status === 'success' ? <FiCheck size={12} /> : <FiX size={12} />}
+                {guidControllerResult.message}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
