@@ -80,6 +80,21 @@ interface BoltSummaryItem {
   washerType: string;
 }
 
+// Team member from Trimble Connect API
+interface TeamMember {
+  status: string;
+  id: string;
+  tiduuid: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  createdOn: string;
+  modifiedOn: string;
+  hasImage: boolean;
+  thumbnail: string;
+  role: string;
+}
+
 // Function button component for testing API functions
 function FunctionButton({
   name,
@@ -137,6 +152,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
   const [showFunctionExplorer, setShowFunctionExplorer] = useState(false);
   const [functionResults, setFunctionResults] = useState<Record<string, FunctionTestResult>>({});
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
+
+  // Team members state
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamMembersLoading, setTeamMembersLoading] = useState(false);
 
   // Assembly & Bolts list state
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
@@ -2439,12 +2458,26 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
+                      // Reset model state to restore visibility (fix white model issue)
+                      try {
+                        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                        console.log('🏷️ Model state reset after markup creation');
+                      } catch (resetErr) {
+                        console.warn('Could not reset model state:', resetErr);
+                      }
+
                       updateFunctionResult("addBoltMarkups", {
                         status: 'success',
                         result: `${createdIds.length} markupit loodud`
                       });
                     } catch (e: any) {
                       console.error('Markup error:', e);
+                      // Reset model state even on error
+                      try {
+                        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                      } catch (resetErr) {
+                        console.warn('Could not reset model state:', resetErr);
+                      }
                       updateFunctionResult("addBoltMarkups", {
                         status: 'error',
                         error: e.message
@@ -3419,93 +3452,191 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
             {/* TEAM / MEMBERS section */}
             <div className="function-section">
               <h4>👥 Meeskond / Team</h4>
-              <div className="function-grid">
-                <FunctionButton
-                  name="getMembers()"
-                  result={functionResults["getMembers()"]}
-                  onClick={() => testFunction("getMembers()", async () => {
-                    const members = await (api.project as any).getMembers?.();
-                    return members;
-                  })}
-                />
-                <FunctionButton
-                  name="getProjectMembers()"
-                  result={functionResults["getProjectMembers()"]}
-                  onClick={() => testFunction("getProjectMembers()", async () => {
-                    const members = await (api.project as any).getProjectMembers?.();
-                    return members;
-                  })}
-                />
-                <FunctionButton
-                  name="getUsers()"
-                  result={functionResults["getUsers()"]}
-                  onClick={() => testFunction("getUsers()", async () => {
-                    const users = await (api.project as any).getUsers?.();
-                    return users;
-                  })}
-                />
-                <FunctionButton
-                  name="getTeam()"
-                  result={functionResults["getTeam()"]}
-                  onClick={() => testFunction("getTeam()", async () => {
-                    const team = await (api.project as any).getTeam?.();
-                    return team;
-                  })}
-                />
-                <FunctionButton
-                  name="getGroups()"
-                  result={functionResults["getGroups()"]}
-                  onClick={() => testFunction("getGroups()", async () => {
-                    const groups = await (api.project as any).getGroups?.();
-                    return groups;
-                  })}
-                />
-                <FunctionButton
-                  name="getRoles()"
-                  result={functionResults["getRoles()"]}
-                  onClick={() => testFunction("getRoles()", async () => {
-                    const roles = await (api.project as any).getRoles?.();
-                    return roles;
-                  })}
-                />
-                <FunctionButton
-                  name="List member methods"
-                  result={functionResults["List member methods"]}
-                  onClick={() => testFunction("List member methods", async () => {
-                    const allMethods = Object.keys(api.project).filter(k => typeof (api.project as any)[k] === 'function');
-                    const memberMethods = allMethods.filter(m =>
-                      m.toLowerCase().includes('member') ||
-                      m.toLowerCase().includes('user') ||
-                      m.toLowerCase().includes('team') ||
-                      m.toLowerCase().includes('group') ||
-                      m.toLowerCase().includes('role')
-                    );
-                    return memberMethods.length > 0 ? memberMethods.join(', ') : 'No member-related methods found. All methods: ' + allMethods.join(', ');
-                  })}
-                />
-                <FunctionButton
-                  name="Explore api.project"
-                  result={functionResults["Explore api.project"]}
-                  onClick={() => testFunction("Explore api.project", async () => {
-                    const project = api.project as any;
-                    const info: Record<string, string> = {};
 
-                    // List all properties and their types
-                    for (const key of Object.keys(project)) {
-                      const val = project[key];
-                      if (typeof val === 'function') {
-                        info[key] = 'function()';
-                      } else if (typeof val === 'object' && val !== null) {
-                        info[key] = 'object: ' + Object.keys(val).slice(0, 5).join(', ');
+              {/* Load Team Button */}
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  className="inspector-button primary"
+                  onClick={async () => {
+                    setTeamMembersLoading(true);
+                    try {
+                      const members = await (api.project as any).getMembers?.();
+                      if (members && Array.isArray(members)) {
+                        setTeamMembers(members);
+                        console.log('✅ Team members loaded:', members);
                       } else {
-                        info[key] = String(val);
+                        console.log('⚠️ No members returned');
+                        setTeamMembers([]);
                       }
+                    } catch (e) {
+                      console.error('❌ Error loading members:', e);
+                      setTeamMembers([]);
+                    } finally {
+                      setTeamMembersLoading(false);
                     }
-
-                    return info;
-                  })}
-                />
+                  }}
+                  disabled={teamMembersLoading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  {teamMembersLoading ? <FiLoader className="spin" size={16} /> : <FiRefreshCw size={16} />}
+                  {teamMembersLoading ? 'Laadin...' : 'Laadi meeskond'}
+                </button>
               </div>
+
+              {/* Members Table */}
+              {teamMembers.length > 0 && (
+                <div style={{ overflowX: 'auto', marginBottom: '16px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '2px solid var(--border-color)' }}>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Nimi</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Email</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Roll</th>
+                        <th style={{ padding: '8px', textAlign: 'center' }}>Staatus</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Liitunud</th>
+                        <th style={{ padding: '8px', textAlign: 'left' }}>Viimati muudetud</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {teamMembers.map((member, idx) => (
+                        <tr
+                          key={member.id}
+                          style={{
+                            backgroundColor: idx % 2 === 0 ? 'transparent' : 'var(--bg-secondary)',
+                            borderBottom: '1px solid var(--border-color)'
+                          }}
+                        >
+                          <td style={{ padding: '8px', fontWeight: 500 }}>
+                            {member.firstName} {member.lastName}
+                          </td>
+                          <td style={{ padding: '8px', color: 'var(--text-secondary)' }}>
+                            <a
+                              href={`mailto:${member.email}`}
+                              style={{ color: 'var(--primary-color)', textDecoration: 'none' }}
+                            >
+                              {member.email}
+                            </a>
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 500,
+                              backgroundColor: member.role === 'ADMIN' ? 'var(--warning-color)' : 'var(--bg-tertiary)',
+                              color: member.role === 'ADMIN' ? '#fff' : 'var(--text-primary)'
+                            }}>
+                              {member.role}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: 500,
+                              backgroundColor: member.status === 'ACTIVE' ? 'var(--success-color)' : 'var(--error-color)',
+                              color: '#fff'
+                            }}>
+                              {member.status}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px', color: 'var(--text-secondary)', fontSize: '11px' }}>
+                            {new Date(member.createdOn).toLocaleDateString('et-EE')}
+                          </td>
+                          <td style={{ padding: '8px', color: 'var(--text-secondary)', fontSize: '11px' }}>
+                            {new Date(member.modifiedOn).toLocaleDateString('et-EE')} {new Date(member.modifiedOn).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    Kokku: {teamMembers.length} liiget
+                  </div>
+                </div>
+              )}
+
+              {/* Debug buttons */}
+              <details style={{ marginTop: '8px' }}>
+                <summary style={{ cursor: 'pointer', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  🔧 API testimine
+                </summary>
+                <div className="function-grid" style={{ marginTop: '8px' }}>
+                  <FunctionButton
+                    name="Member object keys"
+                    result={functionResults["Member object keys"]}
+                    onClick={() => testFunction("Member object keys", async () => {
+                      const members = await (api.project as any).getMembers?.();
+                      if (members && members[0]) {
+                        return Object.keys(members[0]).join(', ');
+                      }
+                      return 'No members found';
+                    })}
+                  />
+                  <FunctionButton
+                    name="Full member object"
+                    result={functionResults["Full member object"]}
+                    onClick={() => testFunction("Full member object", async () => {
+                      const members = await (api.project as any).getMembers?.();
+                      if (members && members[0]) {
+                        return members[0];
+                      }
+                      return 'No members found';
+                    })}
+                  />
+                  <FunctionButton
+                    name="getProject() details"
+                    result={functionResults["getProject() details"]}
+                    onClick={() => testFunction("getProject() details", async () => {
+                      const project = await api.project.getProject();
+                      return project;
+                    })}
+                  />
+                  <FunctionButton
+                    name="getSettings()"
+                    result={functionResults["getSettings()"]}
+                    onClick={() => testFunction("getSettings()", async () => {
+                      const settings = await (api.project as any).getSettings?.();
+                      return settings;
+                    })}
+                  />
+                  <FunctionButton
+                    name="All api namespaces"
+                    result={functionResults["All api namespaces"]}
+                    onClick={() => testFunction("All api namespaces", async () => {
+                      const namespaces = Object.keys(api);
+                      const info: Record<string, string> = {};
+                      for (const ns of namespaces) {
+                        const val = (api as any)[ns];
+                        if (typeof val === 'object' && val !== null) {
+                          info[ns] = Object.keys(val).filter(k => typeof val[k] === 'function').join(', ');
+                        }
+                      }
+                      return info;
+                    })}
+                  />
+                  <FunctionButton
+                    name="Explore api.project"
+                    result={functionResults["Explore api.project"]}
+                    onClick={() => testFunction("Explore api.project", async () => {
+                      const project = api.project as any;
+                      const info: Record<string, string> = {};
+                      for (const key of Object.keys(project)) {
+                        const val = project[key];
+                        if (typeof val === 'function') {
+                          info[key] = 'function()';
+                        } else if (typeof val === 'object' && val !== null) {
+                          info[key] = 'object: ' + Object.keys(val).slice(0, 5).join(', ');
+                        } else {
+                          info[key] = String(val);
+                        }
+                      }
+                      return info;
+                    })}
+                  />
+                </div>
+              </details>
             </div>
 
             {/* OTHER/EXPERIMENTAL section */}
