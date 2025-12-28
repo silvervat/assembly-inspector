@@ -2458,12 +2458,26 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
+                      // Reset model state to restore visibility (fix white model issue)
+                      try {
+                        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                        console.log('🏷️ Model state reset after markup creation');
+                      } catch (resetErr) {
+                        console.warn('Could not reset model state:', resetErr);
+                      }
+
                       updateFunctionResult("addBoltMarkups", {
                         status: 'success',
                         result: `${createdIds.length} markupit loodud`
                       });
                     } catch (e: any) {
                       console.error('Markup error:', e);
+                      // Reset model state even on error
+                      try {
+                        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
+                      } catch (resetErr) {
+                        console.warn('Could not reset model state:', resetErr);
+                      }
                       updateFunctionResult("addBoltMarkups", {
                         status: 'error',
                         error: e.message
