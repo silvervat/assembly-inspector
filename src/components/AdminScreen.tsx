@@ -3079,7 +3079,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
 
                       console.log(`🏷️ Adding markups for ${allRuntimeIds.length} selected objects...`);
 
-                      const markupsToCreate: { text: string; start: { x: number; y: number; z: number }; end: { x: number; y: number; z: number } }[] = [];
+                      const markupsToCreate: any[] = [];
 
                       // Process each selected object
                       for (const runtimeId of allRuntimeIds) {
@@ -3165,16 +3165,23 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                                   // Get center position from bounding box
                                   if (childBBox?.boundingBox) {
                                     const box = childBBox.boundingBox;
-                                    const center = {
+                                    const midPoint = {
                                       x: (box.min.x + box.max.x) / 2,
                                       y: (box.min.y + box.max.y) / 2,
                                       z: (box.min.z + box.max.z) / 2
                                     };
 
+                                    // Use same format as InstallationScheduleScreen (position in mm)
+                                    const pos = {
+                                      positionX: midPoint.x * 1000,
+                                      positionY: midPoint.y * 1000,
+                                      positionZ: midPoint.z * 1000,
+                                    };
+
                                     markupsToCreate.push({
                                       text: boltName,
-                                      start: center,
-                                      end: center
+                                      start: pos,
+                                      end: pos,
                                     });
                                     console.log(`   ✅ Will create markup: "${boltName}"`);
                                   } else {
@@ -3223,68 +3230,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                         }
                       }
 
-                      // Reset model state to restore visibility (fix white model issue)
-                      try {
-                        console.log('🏷️ Starting model reset...');
-
-                        // Small delay to let markup creation finish
-                        await new Promise(resolve => setTimeout(resolve, 100));
-
-                        // 1. End markup editing mode first
-                        try {
-                          await (api.markup as any)?.endEditing?.();
-                          console.log('🏷️ 1. Markup editing ended');
-                        } catch (e) {
-                          console.log('🏷️ 1. No endEditing method');
-                        }
-
-                        // 2. Exit presentation/isolation mode
-                        try {
-                          await (api.viewer as any).setPresentation?.(null);
-                          console.log('🏷️ 2. Presentation cleared');
-                        } catch (e) {
-                          console.log('🏷️ 2. No setPresentation method');
-                        }
-
-                        // 3. Show all isolated entities (exit isolation mode)
-                        try {
-                          await api.viewer.isolateEntities([]);
-                          console.log('🏷️ 3. Isolation cleared');
-                        } catch (e) {
-                          console.log('🏷️ 3. Could not clear isolation:', e);
-                        }
-
-                        // 4. Reset object visibility and colors
-                        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
-                        console.log('🏷️ 4. Object state reset');
-
-                        // 5. Clear selection
-                        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-                        console.log('🏷️ 5. Selection cleared');
-
-                        // 6. Try to show all entities
-                        try {
-                          await (api.viewer as any).showAll?.();
-                          console.log('🏷️ 6. showAll called');
-                        } catch (e) {
-                          console.log('🏷️ 6. No showAll method');
-                        }
-
-                        // 7. Try to fit view to all models
-                        try {
-                          const models = await api.viewer.getModels();
-                          if (models && models.length > 0) {
-                            await (api.viewer as any).fitToView?.();
-                            console.log('🏷️ 7. fitToView called');
-                          }
-                        } catch (e) {
-                          console.log('🏷️ 7. No fitToView method');
-                        }
-
-                        console.log('🏷️ Model reset complete');
-                      } catch (resetErr) {
-                        console.warn('Could not reset model state:', resetErr);
-                      }
+                      // No reset needed - same as InstallationScheduleScreen approach
+                      console.log('🏷️ Markups created successfully, no reset needed');
 
                       updateFunctionResult("addBoltMarkups", {
                         status: 'success',
@@ -3292,19 +3239,6 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                       });
                     } catch (e: any) {
                       console.error('Markup error:', e);
-                      // Reset model state even on error
-                      try {
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                        await (api.markup as any)?.endEditing?.();
-                        await (api.viewer as any).setPresentation?.(null);
-                        await api.viewer.isolateEntities([]);
-                        await api.viewer.setObjectState(undefined, { visible: "reset", color: "reset" });
-                        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
-                        await (api.viewer as any).showAll?.();
-                        await (api.viewer as any).fitToView?.();
-                      } catch (resetErr) {
-                        console.warn('Could not reset model state:', resetErr);
-                      }
                       updateFunctionResult("addBoltMarkups", {
                         status: 'error',
                         error: e.message
