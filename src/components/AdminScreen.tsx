@@ -3550,11 +3550,56 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
                 </summary>
                 <div className="function-grid" style={{ marginTop: '8px' }}>
                   <FunctionButton
-                    name="getMembers()"
-                    result={functionResults["getMembers()"]}
-                    onClick={() => testFunction("getMembers()", async () => {
+                    name="Member object keys"
+                    result={functionResults["Member object keys"]}
+                    onClick={() => testFunction("Member object keys", async () => {
                       const members = await (api.project as any).getMembers?.();
-                      return members;
+                      if (members && members[0]) {
+                        return Object.keys(members[0]).join(', ');
+                      }
+                      return 'No members found';
+                    })}
+                  />
+                  <FunctionButton
+                    name="Full member object"
+                    result={functionResults["Full member object"]}
+                    onClick={() => testFunction("Full member object", async () => {
+                      const members = await (api.project as any).getMembers?.();
+                      if (members && members[0]) {
+                        return members[0];
+                      }
+                      return 'No members found';
+                    })}
+                  />
+                  <FunctionButton
+                    name="getProject() details"
+                    result={functionResults["getProject() details"]}
+                    onClick={() => testFunction("getProject() details", async () => {
+                      const project = await api.project.getProject();
+                      return project;
+                    })}
+                  />
+                  <FunctionButton
+                    name="getSettings()"
+                    result={functionResults["getSettings()"]}
+                    onClick={() => testFunction("getSettings()", async () => {
+                      const settings = await (api.project as any).getSettings?.();
+                      return settings;
+                    })}
+                  />
+                  <FunctionButton
+                    name="All api namespaces"
+                    result={functionResults["All api namespaces"]}
+                    onClick={() => testFunction("All api namespaces", async () => {
+                      const namespaces = Object.keys(api);
+                      const info: Record<string, string> = {};
+                      for (const ns of namespaces) {
+                        const val = (api as any)[ns];
+                        if (typeof val === 'object' && val !== null) {
+                          info[ns] = Object.keys(val).filter(k => typeof val[k] === 'function').join(', ');
+                        }
+                      }
+                      return info;
                     })}
                   />
                   <FunctionButton
