@@ -1360,94 +1360,81 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     }
   }, [projectId, propertyMappings]);
 
-  // Scan model for all available properties
+  // Scan model for all available properties (uses current selection)
   const scanAvailableProperties = useCallback(async () => {
     setPropertiesScanning(true);
-    setMessage('Skanneerin mudeli propertiseid...');
+    setMessage('Skanneerin valitud objektide propertiseid...');
     setAvailableProperties([]);
 
     try {
-      // Get loaded models with their objects
-      const loadedModels = await api.viewer.getModels('loaded');
-      if (loadedModels.length === 0) {
-        setMessage('Ühtegi mudelit pole laetud!');
+      // Get current selection
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setMessage('Vali mudelist vähemalt üks detail ja proovi uuesti!');
         setPropertiesScanning(false);
         return;
       }
 
       const propertiesMap = new Map<string, { setName: string; propName: string; sampleValue: string }>();
 
-      // For each model, get objects and their properties
-      for (const model of loadedModels) {
-        const modelId = model.id;
-        const modelName = model.name || model.id;
-        setMessage(`Skanneerin mudelit ${modelName}...`);
+      for (const modelSelection of selection) {
+        const modelId = modelSelection.modelId;
+        const runtimeIds = modelSelection.objectRuntimeIds || [];
 
-        try {
-          // Get objects from model (same approach as export function)
-          const modelObj = model as any;
-          const objects = modelObj.objects || [];
-          const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+        if (runtimeIds.length === 0) continue;
 
-          if (runtimeIds.length === 0) {
-            console.log(`No objects found in model ${modelName}`);
-            continue;
-          }
+        setMessage(`Skanneerin ${runtimeIds.length} objekti propertiseid...`);
 
-          console.log(`Scanning ${runtimeIds.length} objects in model ${modelName}...`);
+        // Get properties for selected objects (limit to first 100)
+        const sampleIds = runtimeIds.slice(0, 100);
+        const propsArray = await (api.viewer as any).getObjectProperties(modelId, sampleIds, { includeHidden: true });
 
-          // Get properties for first 100 objects (sample)
-          const sampleIds = runtimeIds.slice(0, 100);
-          const propsArray = await api.viewer.getObjectProperties(modelId, sampleIds);
+        // Extract all property sets and properties
+        for (const props of propsArray) {
+          if (!props) continue;
+          const propsAny = props as any;
 
-          // Extract all property sets and properties
-          for (const props of propsArray) {
-            if (!props) continue;
-            const propsAny = props as any;
+          // Format 1: props.properties is array of property sets
+          if (propsAny.properties && Array.isArray(propsAny.properties)) {
+            for (const pset of propsAny.properties) {
+              const setName = pset.name || '';
+              const propsArr = pset.properties || [];
 
-            // Format 1: props.properties is array of property sets
-            if (propsAny.properties && Array.isArray(propsAny.properties)) {
-              for (const pset of propsAny.properties) {
-                const setName = pset.name || '';
-                const propsArr = pset.properties || [];
-
-                for (const prop of propsArr) {
-                  if (!prop?.name) continue;
-                  const key = `${setName}|${prop.name}`;
-                  if (!propertiesMap.has(key)) {
-                    const value = prop.displayValue ?? prop.value ?? '';
-                    propertiesMap.set(key, {
-                      setName,
-                      propName: prop.name,
-                      sampleValue: String(value).substring(0, 50),
-                    });
-                  }
-                }
-              }
-            }
-
-            // Format 2: props.propertySets
-            if (propsAny.propertySets && Array.isArray(propsAny.propertySets)) {
-              for (const pset of propsAny.propertySets) {
-                if (!pset?.name || !pset?.properties) continue;
-
-                for (const prop of pset.properties) {
-                  if (!prop?.name) continue;
-                  const key = `${pset.name}|${prop.name}`;
-                  if (!propertiesMap.has(key)) {
-                    const value = prop.displayValue ?? prop.value ?? '';
-                    propertiesMap.set(key, {
-                      setName: pset.name,
-                      propName: prop.name,
-                      sampleValue: String(value).substring(0, 50),
-                    });
-                  }
+              for (const prop of propsArr) {
+                if (!prop?.name) continue;
+                const key = `${setName}|${prop.name}`;
+                if (!propertiesMap.has(key)) {
+                  const value = prop.displayValue ?? prop.value ?? '';
+                  propertiesMap.set(key, {
+                    setName,
+                    propName: prop.name,
+                    sampleValue: String(value).substring(0, 50),
+                  });
                 }
               }
             }
           }
-        } catch (e) {
-          console.warn('Error scanning model:', model.id, e);
+
+          // Format 2: props.propertySets
+          if (propsAny.propertySets && Array.isArray(propsAny.propertySets)) {
+            for (const pset of propsAny.propertySets) {
+              if (!pset?.name || !pset?.properties) continue;
+
+              for (const prop of pset.properties) {
+                if (!prop?.name) continue;
+                const key = `${pset.name}|${prop.name}`;
+                if (!propertiesMap.has(key)) {
+                  const value = prop.displayValue ?? prop.value ?? '';
+                  propertiesMap.set(key, {
+                    setName: pset.name,
+                    propName: prop.name,
+                    sampleValue: String(value).substring(0, 50),
+                  });
+                }
+              }
+            }
+          }
         }
       }
 
@@ -1458,7 +1445,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       });
 
       setAvailableProperties(propertiesList);
-      setMessage(`Leitud ${propertiesList.length} property't mudelist`);
+      if (propertiesList.length === 0) {
+        setMessage('Valitud objektidel pole propertiseid. Proovi valida teisi objekte.');
+      } else {
+        setMessage(`Leitud ${propertiesList.length} property't valitud objektidest`);
+      }
     } catch (e: any) {
       console.error('Error scanning properties:', e);
       setMessage(`Viga skanneerimisel: ${e.message}`);
@@ -7150,9 +7141,12 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               style={{ background: '#3b82f6', color: 'white' }}
             >
               <FiSearch size={16} />
-              <span>Skaneeri mudeli propertised</span>
+              <span>Skaneeri valitud objektid</span>
               {propertiesScanning && <FiRefreshCw className="spin" size={14} />}
             </button>
+            <span style={{ fontSize: '11px', color: '#6b7280' }}>
+              (Vali enne mudelist mõned detailid)
+            </span>
 
             <button
               className="admin-tool-btn"
