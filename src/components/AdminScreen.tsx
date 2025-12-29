@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
+import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
 
 // Test result type for function explorer
@@ -1348,6 +1349,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           });
         if (error) throw error;
       }
+      // Clear the cache so other components reload the new mappings
+      clearMappingsCache(projectId);
       setMessage('✓ Seaded salvestatud!');
     } catch (e: any) {
       console.error('Error saving property mappings:', e);
