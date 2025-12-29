@@ -10,6 +10,7 @@ import {
   colorObjectsByGuid,
   selectObjectsByGuid
 } from '../utils/navigationHelper';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
@@ -354,6 +355,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
   // STATE
   // ============================================
+
+  // Property mappings for reading Tekla properties
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
   // Data state
   const [factories, setFactories] = useState<DeliveryFactory[]>([]);
@@ -1431,6 +1435,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             const propertiesList = objProps?.properties;
             if (propertiesList && Array.isArray(propertiesList)) {
               for (const pset of propertiesList) {
+                const setName = (pset as any).set || (pset as any).name || '';
                 const psetProps = (pset as any).properties;
                 if (!psetProps || !Array.isArray(psetProps)) continue;
 
@@ -1441,23 +1446,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   if (propValue === undefined || propValue === null || propValue === '') continue;
 
-                  // Assembly/Cast unit Mark
+                  // Assembly/Cast unit Mark - configured mapping first
                   if (assemblyMark.startsWith('Object_')) {
-                    if (propName.includes('cast') && propName.includes('mark')) {
+                    if (setName === propertyMappings.assembly_mark_set && rawName === propertyMappings.assembly_mark_prop) {
+                      assemblyMark = String(propValue);
+                    } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
                     } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
                       assemblyMark = String(propValue);
                     }
                   }
 
-                  // Weight
-                  if (propName.includes('cast') && propName.includes('weight')) {
-                    castUnitWeight = String(propValue);
+                  // Weight - configured mapping first
+                  if (!castUnitWeight) {
+                    if (setName === propertyMappings.weight_set && rawName === propertyMappings.weight_prop) {
+                      castUnitWeight = String(propValue);
+                    } else if (propName.includes('cast') && propName.includes('weight')) {
+                      castUnitWeight = String(propValue);
+                    }
                   }
 
-                  // Position code
-                  if (propName.includes('position') && propName.includes('code')) {
-                    positionCode = String(propValue);
+                  // Position code - configured mapping first
+                  if (!positionCode) {
+                    if (setName === propertyMappings.position_code_set && rawName === propertyMappings.position_code_prop) {
+                      positionCode = String(propValue);
+                    } else if (propName.includes('position') && propName.includes('code')) {
+                      positionCode = String(propValue);
+                    }
                   }
 
                   // Trimble Product ID
@@ -3169,38 +3184,62 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               let bottomElevation: string | undefined;
               let topElevation: string | undefined;
 
-              // Search all property sets for Tekla data (same logic as InspectorScreen)
+              // Search all property sets for Tekla data
+              // First try configured property mappings, then fall back to pattern matching
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
                 const propArray = pset.properties || [];
 
                 for (const prop of propArray) {
-                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propNameOriginal = (prop as any).name || '';
+                  const propName = propNameOriginal.toLowerCase();
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
 
-                  // Cast_unit_Mark
-                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
-                    assemblyMark = String(propValue);
+                  // Assembly Mark - check configured mapping first
+                  if (!assemblyMark) {
+                    if (setName === propertyMappings.assembly_mark_set && propNameOriginal === propertyMappings.assembly_mark_prop) {
+                      assemblyMark = String(propValue);
+                    } else if (propName.includes('cast') && propName.includes('mark')) {
+                      assemblyMark = String(propValue);
+                    }
                   }
 
-                  // Weight
-                  if (propName.includes('weight') && !weight) {
-                    weight = String(propValue);
+                  // Weight - check configured mapping first
+                  if (!weight) {
+                    if (setName === propertyMappings.weight_set && propNameOriginal === propertyMappings.weight_prop) {
+                      weight = String(propValue);
+                    } else if (propName.includes('weight')) {
+                      weight = String(propValue);
+                    }
                   }
 
-                  // Position code
-                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
-                    positionCode = String(propValue);
+                  // Position code - check configured mapping first
+                  if (!positionCode) {
+                    if (setName === propertyMappings.position_code_set && propNameOriginal === propertyMappings.position_code_prop) {
+                      positionCode = String(propValue);
+                    } else if (propName.includes('position') && propName.includes('code')) {
+                      positionCode = String(propValue);
+                    }
                   }
 
-                  // Elevations
-                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
-                    bottomElevation = String(propValue);
+                  // Bottom elevation - check configured mapping first
+                  if (!bottomElevation) {
+                    if (setName === propertyMappings.bottom_elevation_set && propNameOriginal === propertyMappings.bottom_elevation_prop) {
+                      bottomElevation = String(propValue);
+                    } else if (propName.includes('bottom') && propName.includes('elevation')) {
+                      bottomElevation = String(propValue);
+                    }
                   }
-                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
-                    topElevation = String(propValue);
+
+                  // Top elevation - check configured mapping first
+                  if (!topElevation) {
+                    if (setName === propertyMappings.top_elevation_set && propNameOriginal === propertyMappings.top_elevation_prop) {
+                      topElevation = String(propValue);
+                    } else if (propName.includes('top') && propName.includes('elevation')) {
+                      topElevation = String(propValue);
+                    }
                   }
 
                   // Product name from "Product" property set
@@ -3630,31 +3669,57 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               let bottomElevation: string | undefined;
               let topElevation: string | undefined;
 
-              // Extract properties (same logic as import)
+              // Extract properties - use configured mappings first, then pattern matching
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
                 const propArray = pset.properties || [];
 
                 for (const prop of propArray) {
-                  const propName = ((prop as any).name || '').toLowerCase();
+                  const propNameOriginal = (prop as any).name || '';
+                  const propName = propNameOriginal.toLowerCase();
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
 
-                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
-                    assemblyMark = String(propValue);
+                  // Assembly Mark - configured mapping first
+                  if (!assemblyMark) {
+                    if (setName === propertyMappings.assembly_mark_set && propNameOriginal === propertyMappings.assembly_mark_prop) {
+                      assemblyMark = String(propValue);
+                    } else if (propName.includes('cast') && propName.includes('mark')) {
+                      assemblyMark = String(propValue);
+                    }
                   }
-                  if (propName.includes('weight') && !weight) {
-                    weight = String(propValue);
+                  // Weight - configured mapping first
+                  if (!weight) {
+                    if (setName === propertyMappings.weight_set && propNameOriginal === propertyMappings.weight_prop) {
+                      weight = String(propValue);
+                    } else if (propName.includes('weight')) {
+                      weight = String(propValue);
+                    }
                   }
-                  if (propName.includes('position') && propName.includes('code') && !positionCode) {
-                    positionCode = String(propValue);
+                  // Position code - configured mapping first
+                  if (!positionCode) {
+                    if (setName === propertyMappings.position_code_set && propNameOriginal === propertyMappings.position_code_prop) {
+                      positionCode = String(propValue);
+                    } else if (propName.includes('position') && propName.includes('code')) {
+                      positionCode = String(propValue);
+                    }
                   }
-                  if (propName.includes('bottom') && propName.includes('elevation') && !bottomElevation) {
-                    bottomElevation = String(propValue);
+                  // Bottom elevation - configured mapping first
+                  if (!bottomElevation) {
+                    if (setName === propertyMappings.bottom_elevation_set && propNameOriginal === propertyMappings.bottom_elevation_prop) {
+                      bottomElevation = String(propValue);
+                    } else if (propName.includes('bottom') && propName.includes('elevation')) {
+                      bottomElevation = String(propValue);
+                    }
                   }
-                  if (propName.includes('top') && propName.includes('elevation') && !topElevation) {
-                    topElevation = String(propValue);
+                  // Top elevation - configured mapping first
+                  if (!topElevation) {
+                    if (setName === propertyMappings.top_elevation_set && propNameOriginal === propertyMappings.top_elevation_prop) {
+                      topElevation = String(propValue);
+                    } else if (propName.includes('top') && propName.includes('elevation')) {
+                      topElevation = String(propValue);
+                    }
                   }
                   if (setName === 'Product' && propName === 'name' && !productName) {
                     productName = String(propValue);
