@@ -7,7 +7,8 @@ import {
   colorObjectsByGuid,
   selectObjectsByGuid,
   zoomToObjectsByGuid,
-  showObjectsByGuid
+  showObjectsByGuid,
+  hideObjectsByGuid
 } from '../utils/navigationHelper';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
@@ -3155,8 +3156,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
         setMessage('Värvin päevi...');
 
-        // Step 4: Color scheduled items by date
-        const colorBatches: Map<string, { modelId: string; runtimeIds: number[]; color: { r: number; g: number; b: number } }[]> = new Map();
+        // Step 4: Color scheduled items by date using GUID-based lookup
+        const colorBatches: Map<string, { guids: string[]; color: { r: number; g: number; b: number } }> = new Map();
 
         for (const [date, items] of Object.entries(itemsByDate)) {
           const color = dateColors[date];
@@ -3164,36 +3165,25 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
           const colorKey = `${color.r}-${color.g}-${color.b}`;
 
+          if (!colorBatches.has(colorKey)) {
+            colorBatches.set(colorKey, { guids: [], color });
+          }
+
+          const batch = colorBatches.get(colorKey)!;
           for (const item of items) {
-            if (!item.model_id || !item.object_runtime_id) continue;
-
-            if (!colorBatches.has(colorKey)) {
-              colorBatches.set(colorKey, []);
-            }
-
-            // Find or create batch for this model
-            const batches = colorBatches.get(colorKey)!;
-            let modelBatch = batches.find(b => b.modelId === item.model_id);
-            if (!modelBatch) {
-              modelBatch = { modelId: item.model_id, runtimeIds: [], color };
-              batches.push(modelBatch);
-            }
-            modelBatch.runtimeIds.push(item.object_runtime_id);
+            const guidIfc = item.guid_ifc || item.guid;
+            if (guidIfc) batch.guids.push(guidIfc);
           }
         }
 
-        // Execute all color batches
+        // Execute all color batches using GUID-based lookup
         let totalItems = 0;
-        for (const batches of colorBatches.values()) {
-          for (const batch of batches) {
-            totalItems += batch.runtimeIds.length;
-            try {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: batch.modelId, objectRuntimeIds: batch.runtimeIds }] },
-                { color: { r: batch.color.r, g: batch.color.g, b: batch.color.b, a: 255 } }
-              );
-            } catch (e) { console.error('Error coloring by date:', e); }
-          }
+        for (const batch of colorBatches.values()) {
+          if (batch.guids.length === 0) continue;
+          totalItems += batch.guids.length;
+          try {
+            await colorObjectsByGuid(api, batch.guids, { r: batch.color.r, g: batch.color.g, b: batch.color.b, a: 255 });
+          } catch (e) { console.error('Error coloring by date:', e); }
         }
 
         setMessage(`Värvitud ${totalItems} detaili`);
@@ -3302,26 +3292,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Hide all scheduled items using object_runtime_id from Supabase
+  // Hide all scheduled items using GUID-based lookup
   const hideAllItems = async () => {
     try {
-      // Group items by model_id for batch processing
-      const byModel: Record<string, number[]> = {};
+      // Collect all GUIDs
+      const guids = scheduleItems
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
 
-      for (const item of scheduleItems) {
-        if (item.model_id && item.object_runtime_id) {
-          if (!byModel[item.model_id]) byModel[item.model_id] = [];
-          byModel[item.model_id].push(item.object_runtime_id);
-        }
-      }
+      if (guids.length === 0) return;
 
-      // Hide items in batches by model
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-          { visible: false }
-        );
-      }
+      // Use GUID-based lookup - works with any loaded model
+      await hideObjectsByGuid(api, guids);
     } catch (e) {
       console.error('Error hiding all items:', e);
     }
@@ -3551,23 +3533,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           }
         }
 
-        // Color all items of this day using object_runtime_id
+        // Color all items of this day using GUID-based lookup
         if (playbackSettings.colorEachDayDifferent && playbackDateColors[currentDate]) {
           const dayColor = playbackDateColors[currentDate];
-          // Group items by model for batch processing
-          const byModel: Record<string, number[]> = {};
-          for (const item of dateItems) {
-            if (item.model_id && item.object_runtime_id) {
-              if (!byModel[item.model_id]) byModel[item.model_id] = [];
-              byModel[item.model_id].push(item.object_runtime_id);
-            }
-          }
-          // Color items in batches by model
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { ...dayColor, a: 255 } }
-            );
+          // Collect all GUIDs for this date
+          const guids = dateItems
+            .map(item => item.guid_ifc || item.guid)
+            .filter((g): g is string => !!g);
+
+          if (guids.length > 0) {
+            await colorObjectsByGuid(api, guids, { ...dayColor, a: 255 });
           }
         } else {
           // Color all day items green
@@ -3667,15 +3642,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         await showItem(item);
       }
 
-      // Option 3: Color items with their day's color
+      // Option 3: Color items with their day's color using GUID-based lookup
       if (playbackSettings.colorEachDayDifferent && playbackDateColors[item.scheduled_date]) {
         const dayColor = playbackDateColors[item.scheduled_date];
-        // Use object_runtime_id directly if available
-        if (item.model_id && item.object_runtime_id) {
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] },
-            { color: { ...dayColor, a: 255 } }
-          );
+        const guidIfc = item.guid_ifc || item.guid;
+        if (guidIfc) {
+          await colorObjectsByGuid(api, [guidIfc], { ...dayColor, a: 255 });
         }
       } else {
         // Default: color item green
