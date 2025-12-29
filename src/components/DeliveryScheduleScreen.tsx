@@ -1446,9 +1446,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   if (propValue === undefined || propValue === null || propValue === '') continue;
 
-                  // Assembly/Cast unit Mark - configured mapping first
+                  // Helper to normalize property names for comparison (remove spaces, lowercase)
+                  const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+                  const setNameNorm = normalize(setName);
+                  const rawNameNorm = normalize(rawName);
+                  const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+                  const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+                  const weightSetNorm = normalize(propertyMappings.weight_set);
+                  const weightPropNorm = normalize(propertyMappings.weight_prop);
+                  const posSetNorm = normalize(propertyMappings.position_code_set);
+                  const posPropNorm = normalize(propertyMappings.position_code_prop);
+
+                  // Assembly/Cast unit Mark - configured mapping first (normalized comparison)
                   if (assemblyMark.startsWith('Object_')) {
-                    if (setName === propertyMappings.assembly_mark_set && rawName === propertyMappings.assembly_mark_prop) {
+                    if (setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm) {
                       assemblyMark = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
@@ -1457,18 +1468,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     }
                   }
 
-                  // Weight - configured mapping first
+                  // Weight - configured mapping first (normalized comparison)
                   if (!castUnitWeight) {
-                    if (setName === propertyMappings.weight_set && rawName === propertyMappings.weight_prop) {
+                    if (setNameNorm === weightSetNorm && rawNameNorm === weightPropNorm) {
                       castUnitWeight = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('weight')) {
                       castUnitWeight = String(propValue);
                     }
                   }
 
-                  // Position code - configured mapping first
+                  // Position code - configured mapping first (normalized comparison)
                   if (!positionCode) {
-                    if (setName === propertyMappings.position_code_set && rawName === propertyMappings.position_code_prop) {
+                    if (setNameNorm === posSetNorm && rawNameNorm === posPropNorm) {
                       positionCode = String(propValue);
                     } else if (propName.includes('position') && propName.includes('code')) {
                       positionCode = String(propValue);
@@ -3184,58 +3195,63 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               let bottomElevation: string | undefined;
               let topElevation: string | undefined;
 
+              // Helper to normalize property names (remove spaces, lowercase)
+              const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+
               // Search all property sets for Tekla data
               // First try configured property mappings, then fall back to pattern matching
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
                 const propArray = pset.properties || [];
 
                 for (const prop of propArray) {
                   const propNameOriginal = (prop as any).name || '';
+                  const propNameNorm = normalize(propNameOriginal);
                   const propName = propNameOriginal.toLowerCase();
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
 
-                  // Assembly Mark - check configured mapping first
+                  // Assembly Mark - check configured mapping first (normalized comparison)
                   if (!assemblyMark) {
-                    if (setName === propertyMappings.assembly_mark_set && propNameOriginal === propertyMappings.assembly_mark_prop) {
+                    if (setNameNorm === normalize(propertyMappings.assembly_mark_set) && propNameNorm === normalize(propertyMappings.assembly_mark_prop)) {
                       assemblyMark = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
                     }
                   }
 
-                  // Weight - check configured mapping first
+                  // Weight - check configured mapping first (normalized comparison)
                   if (!weight) {
-                    if (setName === propertyMappings.weight_set && propNameOriginal === propertyMappings.weight_prop) {
+                    if (setNameNorm === normalize(propertyMappings.weight_set) && propNameNorm === normalize(propertyMappings.weight_prop)) {
                       weight = String(propValue);
                     } else if (propName.includes('weight')) {
                       weight = String(propValue);
                     }
                   }
 
-                  // Position code - check configured mapping first
+                  // Position code - check configured mapping first (normalized comparison)
                   if (!positionCode) {
-                    if (setName === propertyMappings.position_code_set && propNameOriginal === propertyMappings.position_code_prop) {
+                    if (setNameNorm === normalize(propertyMappings.position_code_set) && propNameNorm === normalize(propertyMappings.position_code_prop)) {
                       positionCode = String(propValue);
                     } else if (propName.includes('position') && propName.includes('code')) {
                       positionCode = String(propValue);
                     }
                   }
 
-                  // Bottom elevation - check configured mapping first
+                  // Bottom elevation - check configured mapping first (normalized comparison)
                   if (!bottomElevation) {
-                    if (setName === propertyMappings.bottom_elevation_set && propNameOriginal === propertyMappings.bottom_elevation_prop) {
+                    if (setNameNorm === normalize(propertyMappings.bottom_elevation_set) && propNameNorm === normalize(propertyMappings.bottom_elevation_prop)) {
                       bottomElevation = String(propValue);
                     } else if (propName.includes('bottom') && propName.includes('elevation')) {
                       bottomElevation = String(propValue);
                     }
                   }
 
-                  // Top elevation - check configured mapping first
+                  // Top elevation - check configured mapping first (normalized comparison)
                   if (!topElevation) {
-                    if (setName === propertyMappings.top_elevation_set && propNameOriginal === propertyMappings.top_elevation_prop) {
+                    if (setNameNorm === normalize(propertyMappings.top_elevation_set) && propNameNorm === normalize(propertyMappings.top_elevation_prop)) {
                       topElevation = String(propValue);
                     } else if (propName.includes('top') && propName.includes('elevation')) {
                       topElevation = String(propValue);
@@ -3669,53 +3685,58 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               let bottomElevation: string | undefined;
               let topElevation: string | undefined;
 
+              // Helper to normalize property names (remove spaces, lowercase)
+              const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+
               // Extract properties - use configured mappings first, then pattern matching
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
                 const propArray = pset.properties || [];
 
                 for (const prop of propArray) {
                   const propNameOriginal = (prop as any).name || '';
+                  const propNameNorm = normalize(propNameOriginal);
                   const propName = propNameOriginal.toLowerCase();
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
 
-                  // Assembly Mark - configured mapping first
+                  // Assembly Mark - configured mapping first (normalized)
                   if (!assemblyMark) {
-                    if (setName === propertyMappings.assembly_mark_set && propNameOriginal === propertyMappings.assembly_mark_prop) {
+                    if (setNameNorm === normalize(propertyMappings.assembly_mark_set) && propNameNorm === normalize(propertyMappings.assembly_mark_prop)) {
                       assemblyMark = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
                     }
                   }
-                  // Weight - configured mapping first
+                  // Weight - configured mapping first (normalized)
                   if (!weight) {
-                    if (setName === propertyMappings.weight_set && propNameOriginal === propertyMappings.weight_prop) {
+                    if (setNameNorm === normalize(propertyMappings.weight_set) && propNameNorm === normalize(propertyMappings.weight_prop)) {
                       weight = String(propValue);
                     } else if (propName.includes('weight')) {
                       weight = String(propValue);
                     }
                   }
-                  // Position code - configured mapping first
+                  // Position code - configured mapping first (normalized)
                   if (!positionCode) {
-                    if (setName === propertyMappings.position_code_set && propNameOriginal === propertyMappings.position_code_prop) {
+                    if (setNameNorm === normalize(propertyMappings.position_code_set) && propNameNorm === normalize(propertyMappings.position_code_prop)) {
                       positionCode = String(propValue);
                     } else if (propName.includes('position') && propName.includes('code')) {
                       positionCode = String(propValue);
                     }
                   }
-                  // Bottom elevation - configured mapping first
+                  // Bottom elevation - configured mapping first (normalized)
                   if (!bottomElevation) {
-                    if (setName === propertyMappings.bottom_elevation_set && propNameOriginal === propertyMappings.bottom_elevation_prop) {
+                    if (setNameNorm === normalize(propertyMappings.bottom_elevation_set) && propNameNorm === normalize(propertyMappings.bottom_elevation_prop)) {
                       bottomElevation = String(propValue);
                     } else if (propName.includes('bottom') && propName.includes('elevation')) {
                       bottomElevation = String(propValue);
                     }
                   }
-                  // Top elevation - configured mapping first
+                  // Top elevation - configured mapping first (normalized)
                   if (!topElevation) {
-                    if (setName === propertyMappings.top_elevation_set && propNameOriginal === propertyMappings.top_elevation_prop) {
+                    if (setNameNorm === normalize(propertyMappings.top_elevation_set) && propNameNorm === normalize(propertyMappings.top_elevation_prop)) {
                       topElevation = String(propValue);
                     } else if (propName.includes('top') && propName.includes('elevation')) {
                       topElevation = String(propValue);
