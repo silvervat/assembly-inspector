@@ -766,3 +766,89 @@ export interface ZoomTarget {
   expires_at: string;              // Auto-cleanup after expiry
   consumed: boolean;               // Mark as used after zoom
 }
+
+// ============================================
+// TEKLA PROPERTY MAPPINGS (Configurable property locations)
+// ============================================
+
+// Single property mapping - which property set and property name to use
+export interface PropertyMapping {
+  propertySet: string;    // e.g. "Tekla Assembly" or "EBE_Tootmine"
+  propertyName: string;   // e.g. "Cast_unit_Mark" or "1EBE_Pos_number"
+}
+
+// All configurable property mappings for a project
+export interface ProjectPropertyMappings {
+  id: string;
+  trimble_project_id: string;
+  // Assembly/Cast unit Mark
+  assembly_mark_set: string;
+  assembly_mark_prop: string;
+  // Assembly/Cast unit position code
+  position_code_set: string;
+  position_code_prop: string;
+  // Assembly/Cast unit top elevation
+  top_elevation_set: string;
+  top_elevation_prop: string;
+  // Assembly/Cast unit bottom elevation
+  bottom_elevation_set: string;
+  bottom_elevation_prop: string;
+  // Assembly/Cast unit weight
+  weight_set: string;
+  weight_prop: string;
+  // GUID field (for matching)
+  guid_set: string;
+  guid_prop: string;
+  // Metadata
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  updated_by?: string;
+}
+
+// Default property mappings (standard Tekla)
+export const DEFAULT_PROPERTY_MAPPINGS = {
+  assembly_mark_set: 'Tekla Assembly',
+  assembly_mark_prop: 'Cast_unit_Mark',
+  position_code_set: 'Tekla Assembly',
+  position_code_prop: 'Cast_unit_Position_Code',
+  top_elevation_set: 'Tekla Assembly',
+  top_elevation_prop: 'Cast_unit_Top_Elevation',
+  bottom_elevation_set: 'Tekla Assembly',
+  bottom_elevation_prop: 'Cast_unit_Bottom_Elevation',
+  weight_set: 'Tekla Assembly',
+  weight_prop: 'Cast_unit_Weight',
+  guid_set: 'Tekla Common',
+  guid_prop: 'GUID',
+};
+
+// Helper to get property from property sets using mapping
+export function getPropertyFromSets(
+  propertySets: Record<string, Record<string, unknown>> | undefined,
+  mapping: { set: string; prop: string }
+): string | null {
+  if (!propertySets) return null;
+
+  // Try exact match first
+  const exactSet = propertySets[mapping.set];
+  if (exactSet && exactSet[mapping.prop] !== undefined) {
+    return String(exactSet[mapping.prop]);
+  }
+
+  // Try case-insensitive match
+  const setNameLower = mapping.set.toLowerCase();
+  const propNameLower = mapping.prop.toLowerCase();
+
+  for (const [setName, setProps] of Object.entries(propertySets)) {
+    if (setName.toLowerCase() === setNameLower) {
+      for (const [propName, propValue] of Object.entries(setProps)) {
+        if (propName.toLowerCase() === propNameLower && propValue !== undefined) {
+          return String(propValue);
+        }
+      }
+    }
+  }
+
+  return null;
+}
+

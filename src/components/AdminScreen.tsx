@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
+import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
 
 // Test result type for function explorer
@@ -16,6 +17,7 @@ interface AdminScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   onBackToMenu: () => void;
   projectId: string;
+  userEmail?: string;
 }
 
 interface PropertySet {
@@ -139,14 +141,34 @@ function FunctionButton({
   );
 }
 
-export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects'>('main');
+export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
   const [message, setMessage] = useState('');
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
+
+  // Property Mappings state (configurable Tekla property locations)
+  const [propertyMappings, setPropertyMappings] = useState({
+    assembly_mark_set: 'Tekla Assembly',
+    assembly_mark_prop: 'Cast_unit_Mark',
+    position_code_set: 'Tekla Assembly',
+    position_code_prop: 'Cast_unit_Position_Code',
+    top_elevation_set: 'Tekla Assembly',
+    top_elevation_prop: 'Cast_unit_Top_Elevation',
+    bottom_elevation_set: 'Tekla Assembly',
+    bottom_elevation_prop: 'Cast_unit_Bottom_Elevation',
+    weight_set: 'Tekla Assembly',
+    weight_prop: 'Cast_unit_Weight',
+    guid_set: 'Tekla Common',
+    guid_prop: 'GUID',
+  });
+  const [propertyMappingsLoading, setPropertyMappingsLoading] = useState(false);
+  const [propertyMappingsSaving, setPropertyMappingsSaving] = useState(false);
+  const [availableProperties, setAvailableProperties] = useState<{ setName: string; propName: string; sampleValue: string }[]>([]);
+  const [propertiesScanning, setPropertiesScanning] = useState(false);
 
   // Function explorer state
   const [showFunctionExplorer, setShowFunctionExplorer] = useState(false);
@@ -1252,6 +1274,190 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
     );
   }, [projectId]);
 
+  // Load property mappings from database
+  const loadPropertyMappings = useCallback(async () => {
+    if (!projectId) return;
+    setPropertyMappingsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('project_property_mappings')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 = not found
+
+      if (data) {
+        setPropertyMappings({
+          assembly_mark_set: data.assembly_mark_set || 'Tekla Assembly',
+          assembly_mark_prop: data.assembly_mark_prop || 'Cast_unit_Mark',
+          position_code_set: data.position_code_set || 'Tekla Assembly',
+          position_code_prop: data.position_code_prop || 'Cast_unit_Position_Code',
+          top_elevation_set: data.top_elevation_set || 'Tekla Assembly',
+          top_elevation_prop: data.top_elevation_prop || 'Cast_unit_Top_Elevation',
+          bottom_elevation_set: data.bottom_elevation_set || 'Tekla Assembly',
+          bottom_elevation_prop: data.bottom_elevation_prop || 'Cast_unit_Bottom_Elevation',
+          weight_set: data.weight_set || 'Tekla Assembly',
+          weight_prop: data.weight_prop || 'Cast_unit_Weight',
+          guid_set: data.guid_set || 'Tekla Common',
+          guid_prop: data.guid_prop || 'GUID',
+        });
+        setMessage('Seaded laetud andmebaasist');
+      } else {
+        setMessage('Kasutan vaikimisi seadeid (pole veel salvestatud)');
+      }
+    } catch (e: any) {
+      console.error('Error loading property mappings:', e);
+      setMessage(`Viga seadete laadimisel: ${e.message}`);
+    } finally {
+      setPropertyMappingsLoading(false);
+    }
+  }, [projectId]);
+
+  // Save property mappings to database
+  const savePropertyMappings = useCallback(async () => {
+    if (!projectId) return;
+    setPropertyMappingsSaving(true);
+    try {
+      const { data: existing } = await supabase
+        .from('project_property_mappings')
+        .select('id')
+        .eq('trimble_project_id', projectId)
+        .single();
+
+      if (existing) {
+        // Update existing
+        const { error } = await supabase
+          .from('project_property_mappings')
+          .update({
+            ...propertyMappings,
+            updated_at: new Date().toISOString(),
+            updated_by: userEmail || 'unknown',
+          })
+          .eq('trimble_project_id', projectId);
+        if (error) throw error;
+      } else {
+        // Insert new
+        const { error } = await supabase
+          .from('project_property_mappings')
+          .insert({
+            trimble_project_id: projectId,
+            ...propertyMappings,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            created_by: userEmail || 'unknown',
+          });
+        if (error) throw error;
+      }
+      // Clear the cache so other components reload the new mappings
+      clearMappingsCache(projectId);
+      setMessage('✓ Seaded salvestatud!');
+    } catch (e: any) {
+      console.error('Error saving property mappings:', e);
+      setMessage(`Viga salvestamisel: ${e.message}`);
+    } finally {
+      setPropertyMappingsSaving(false);
+    }
+  }, [projectId, propertyMappings]);
+
+  // Scan model for all available properties
+  const scanAvailableProperties = useCallback(async () => {
+    setPropertiesScanning(true);
+    setMessage('Skanneerin mudeli propertiseid...');
+    setAvailableProperties([]);
+
+    try {
+      // Get loaded models
+      const loadedModels = await api.viewer.getModels('loaded');
+      if (loadedModels.length === 0) {
+        setMessage('Ühtegi mudelit pole laetud!');
+        setPropertiesScanning(false);
+        return;
+      }
+
+      const propertiesMap = new Map<string, { setName: string; propName: string; sampleValue: string }>();
+
+      // For each model, get some objects and their properties
+      for (const model of loadedModels) {
+        setMessage(`Skanneerin mudelit ${model.name || model.id}...`);
+
+        // Get some objects from the model (first 100)
+        try {
+          // Use selection to get objects - select all and then limit
+          // Actually, let's try to get objects with properties directly
+          // We'll get a sample of objects to discover properties
+
+          // Get model structure to find objects
+          const structure = await (api.viewer as any).getModelStructure?.(model.id);
+          if (!structure) continue;
+
+          // Collect object IDs from structure (limit to 100)
+          const objectIds: number[] = [];
+          const collectIds = (node: any) => {
+            if (objectIds.length >= 100) return;
+            if (node.id) objectIds.push(node.id);
+            if (node.children) {
+              for (const child of node.children) {
+                collectIds(child);
+                if (objectIds.length >= 100) break;
+              }
+            }
+          };
+
+          if (structure.children) {
+            for (const child of structure.children) {
+              collectIds(child);
+            }
+          }
+
+          if (objectIds.length === 0) continue;
+
+          // Get properties for these objects
+          const properties = await (api.viewer as any).getObjectProperties(model.id, objectIds, { includeHidden: true });
+
+          // Extract all property sets and properties
+          for (const objProps of properties) {
+            if (!objProps?.propertySets) continue;
+
+            for (const pset of objProps.propertySets) {
+              if (!pset?.name || !pset?.properties) continue;
+
+              for (const prop of pset.properties) {
+                if (!prop?.name) continue;
+
+                const key = `${pset.name}|${prop.name}`;
+                if (!propertiesMap.has(key)) {
+                  const value = prop.displayValue ?? prop.value ?? '';
+                  propertiesMap.set(key, {
+                    setName: pset.name,
+                    propName: prop.name,
+                    sampleValue: String(value).substring(0, 50),
+                  });
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Error scanning model:', model.id, e);
+        }
+      }
+
+      // Convert to array and sort
+      const propertiesList = Array.from(propertiesMap.values()).sort((a, b) => {
+        if (a.setName !== b.setName) return a.setName.localeCompare(b.setName);
+        return a.propName.localeCompare(b.propName);
+      });
+
+      setAvailableProperties(propertiesList);
+      setMessage(`Leitud ${propertiesList.length} property't mudelist`);
+    } catch (e: any) {
+      console.error('Error scanning properties:', e);
+      setMessage(`Viga skanneerimisel: ${e.message}`);
+    } finally {
+      setPropertiesScanning(false);
+    }
+  }, [api]);
+
   // Discover properties for selected objects
   const discoverProperties = useCallback(async () => {
     setIsLoading(true);
@@ -1908,6 +2114,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
           {adminView === 'assemblyList' && 'Assembly list & Poldid'}
           {adminView === 'guidImport' && 'Import GUID (MS)'}
           {adminView === 'modelObjects' && 'Saada andmebaasi'}
+          {adminView === 'propertyMappings' && 'Tekla property seaded'}
         </h2>
       </div>
 
@@ -1956,6 +2163,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId }: AdminScree
           >
             <FiTrash2 size={18} />
             <span>Tarnegraafiku orvud</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('propertyMappings');
+              loadPropertyMappings();
+            }}
+            style={{ background: '#7c3aed', color: 'white' }}
+          >
+            <FiDatabase size={18} />
+            <span>Tekla property seaded</span>
           </button>
         </div>
 
@@ -6906,6 +7125,220 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Property Mappings View */}
+      {adminView === 'propertyMappings' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              className="admin-tool-btn"
+              onClick={scanAvailableProperties}
+              disabled={propertiesScanning}
+              style={{ background: '#3b82f6', color: 'white' }}
+            >
+              <FiSearch size={16} />
+              <span>Skaneeri mudeli propertised</span>
+              {propertiesScanning && <FiRefreshCw className="spin" size={14} />}
+            </button>
+
+            <button
+              className="admin-tool-btn"
+              onClick={savePropertyMappings}
+              disabled={propertyMappingsSaving}
+              style={{ background: '#059669', color: 'white' }}
+            >
+              <FiCheck size={16} />
+              <span>Salvesta seaded</span>
+              {propertyMappingsSaving && <FiRefreshCw className="spin" size={14} />}
+            </button>
+
+            <button
+              className="admin-tool-btn"
+              onClick={() => {
+                setPropertyMappings({
+                  assembly_mark_set: 'Tekla Assembly',
+                  assembly_mark_prop: 'Cast_unit_Mark',
+                  position_code_set: 'Tekla Assembly',
+                  position_code_prop: 'Cast_unit_Position_Code',
+                  top_elevation_set: 'Tekla Assembly',
+                  top_elevation_prop: 'Cast_unit_Top_Elevation',
+                  bottom_elevation_set: 'Tekla Assembly',
+                  bottom_elevation_prop: 'Cast_unit_Bottom_Elevation',
+                  weight_set: 'Tekla Assembly',
+                  weight_prop: 'Cast_unit_Weight',
+                  guid_set: 'Tekla Common',
+                  guid_prop: 'GUID',
+                });
+                setMessage('Lähtestatud vaikimisi seadetele');
+              }}
+              style={{ background: '#6b7280', color: 'white' }}
+            >
+              <FiRefreshCw size={16} />
+              <span>Lähtesta vaikimisi</span>
+            </button>
+          </div>
+
+          {propertyMappingsLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <FiRefreshCw className="spin" size={32} />
+              <p>Laadin seadeid...</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
+                Määra millistest Tekla property set'idest ja property'dest andmeid lugeda.
+                Vaikimisi kasutatakse standardseid Tekla Assembly propertiseid.
+                Skaneeri mudel, et näha kõiki saadaolevaid propertiseid.
+              </p>
+
+              {/* Property Mapping Fields */}
+              {[
+                { label: 'Assembly/Cast unit Mark', setKey: 'assembly_mark_set' as const, propKey: 'assembly_mark_prop' as const },
+                { label: 'Position Code', setKey: 'position_code_set' as const, propKey: 'position_code_prop' as const },
+                { label: 'Top Elevation', setKey: 'top_elevation_set' as const, propKey: 'top_elevation_prop' as const },
+                { label: 'Bottom Elevation', setKey: 'bottom_elevation_set' as const, propKey: 'bottom_elevation_prop' as const },
+                { label: 'Weight (kaal)', setKey: 'weight_set' as const, propKey: 'weight_prop' as const },
+                { label: 'GUID', setKey: 'guid_set' as const, propKey: 'guid_prop' as const },
+              ].map(({ label, setKey, propKey }) => (
+                <div key={label} style={{
+                  background: 'var(--bg-secondary)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px', color: 'var(--text-primary)' }}>
+                    {label}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+                        Property Set
+                      </label>
+                      <input
+                        type="text"
+                        list={`${setKey}-options`}
+                        value={propertyMappings[setKey]}
+                        onChange={(e) => setPropertyMappings(prev => ({ ...prev, [setKey]: e.target.value }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px'
+                        }}
+                        placeholder="nt. Tekla Assembly"
+                      />
+                      <datalist id={`${setKey}-options`}>
+                        {[...new Set(availableProperties.map(p => p.setName))].map(setName => (
+                          <option key={setName} value={setName} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '4px' }}>
+                        Property nimi
+                      </label>
+                      <input
+                        type="text"
+                        list={`${propKey}-options`}
+                        value={propertyMappings[propKey]}
+                        onChange={(e) => setPropertyMappings(prev => ({ ...prev, [propKey]: e.target.value }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-primary)',
+                          color: 'var(--text-primary)',
+                          fontSize: '13px'
+                        }}
+                        placeholder="nt. Cast_unit_Mark"
+                      />
+                      <datalist id={`${propKey}-options`}>
+                        {availableProperties
+                          .filter(p => p.setName === propertyMappings[setKey])
+                          .map(p => (
+                            <option key={p.propName} value={p.propName}>
+                              {p.propName} ({p.sampleValue})
+                            </option>
+                          ))}
+                      </datalist>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Available Properties List */}
+              {availableProperties.length > 0 && (
+                <div style={{
+                  marginTop: '16px',
+                  background: 'var(--bg-secondary)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: '14px' }}>
+                    Leitud propertised mudelis ({availableProperties.length})
+                  </h4>
+                  <div style={{ maxHeight: '300px', overflow: 'auto' }}>
+                    <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ position: 'sticky', top: 0, background: 'var(--bg-secondary)' }}>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Property Set</th>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Property</th>
+                          <th style={{ textAlign: 'left', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Näidis</th>
+                          <th style={{ textAlign: 'center', padding: '4px 8px', borderBottom: '1px solid var(--border-color)' }}>Kasuta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {availableProperties.map((prop, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '4px 8px', color: '#6b7280' }}>{prop.setName}</td>
+                            <td style={{ padding: '4px 8px', fontWeight: '500' }}>{prop.propName}</td>
+                            <td style={{ padding: '4px 8px', color: '#6b7280', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prop.sampleValue || '-'}</td>
+                            <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                              <select
+                                onChange={(e) => {
+                                  if (e.target.value) {
+                                    const [setKey, propKey] = e.target.value.split('|');
+                                    setPropertyMappings(prev => ({
+                                      ...prev,
+                                      [setKey]: prop.setName,
+                                      [propKey]: prop.propName,
+                                    }));
+                                    setMessage(`Määratud: ${prop.setName}.${prop.propName}`);
+                                    e.target.value = '';
+                                  }
+                                }}
+                                style={{
+                                  padding: '2px 4px',
+                                  fontSize: '10px',
+                                  borderRadius: '4px',
+                                  border: '1px solid var(--border-color)'
+                                }}
+                              >
+                                <option value="">→ Määra...</option>
+                                <option value="assembly_mark_set|assembly_mark_prop">Assembly Mark</option>
+                                <option value="position_code_set|position_code_prop">Position Code</option>
+                                <option value="top_elevation_set|top_elevation_prop">Top Elevation</option>
+                                <option value="bottom_elevation_set|bottom_elevation_prop">Bottom Elevation</option>
+                                <option value="weight_set|weight_prop">Weight</option>
+                                <option value="guid_set|guid_prop">GUID</option>
+                              </select>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

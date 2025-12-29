@@ -273,3 +273,57 @@ CREATE TRIGGER schedule_change_log
   AFTER INSERT OR UPDATE ON installation_schedule
   FOR EACH ROW
   EXECUTE FUNCTION log_schedule_change();
+
+-- ============================================
+-- PROJECT PROPERTY MAPPINGS (v3.0.277)
+-- ============================================
+-- Configure Tekla property locations per project
+-- Some projects use different property set names
+-- This allows admins to map where properties are located
+
+CREATE TABLE IF NOT EXISTS project_property_mappings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  trimble_project_id TEXT NOT NULL UNIQUE,
+  -- Assembly Mark location
+  assembly_mark_set TEXT DEFAULT 'Tekla Assembly',
+  assembly_mark_prop TEXT DEFAULT 'Cast_unit_Mark',
+  -- Position Code location
+  position_code_set TEXT DEFAULT 'Tekla Assembly',
+  position_code_prop TEXT DEFAULT 'Cast_unit_Position_Code',
+  -- Top Elevation location
+  top_elevation_set TEXT DEFAULT 'Tekla Assembly',
+  top_elevation_prop TEXT DEFAULT 'Cast_unit_Top_Elevation',
+  -- Bottom Elevation location
+  bottom_elevation_set TEXT DEFAULT 'Tekla Assembly',
+  bottom_elevation_prop TEXT DEFAULT 'Cast_unit_Bottom_Elevation',
+  -- Weight location
+  weight_set TEXT DEFAULT 'Tekla Assembly',
+  weight_prop TEXT DEFAULT 'Cast_unit_Weight',
+  -- GUID location
+  guid_set TEXT DEFAULT 'Tekla Common',
+  guid_prop TEXT DEFAULT 'GUID',
+  -- Audit fields
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  created_by TEXT NOT NULL,
+  updated_by TEXT
+);
+
+-- Index for quick lookup by project
+CREATE INDEX IF NOT EXISTS idx_property_mappings_project ON project_property_mappings(trimble_project_id);
+
+-- Function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_property_mappings_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger for auto-updating updated_at
+DROP TRIGGER IF EXISTS property_mappings_updated_at ON project_property_mappings;
+CREATE TRIGGER property_mappings_updated_at
+  BEFORE UPDATE ON project_property_mappings
+  FOR EACH ROW
+  EXECUTE FUNCTION update_property_mappings_timestamp();
