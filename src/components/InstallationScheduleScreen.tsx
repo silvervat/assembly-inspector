@@ -3099,59 +3099,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        // Step 1: Reset colors first
-        await api.viewer.setObjectState(undefined, { color: 'reset' });
-
-        // Step 2: Fetch ALL model objects from Supabase (like delivery schedule)
-        setMessage('Loen andmebaasist...');
-        const PAGE_SIZE = 5000;
-        const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-        let lastId = -1;
-
-        while (true) {
-          const { data, error } = await supabase
-            .from('trimble_model_objects')
-            .select('model_id, object_runtime_id')
-            .eq('trimble_project_id', projectId)
-            .gt('object_runtime_id', lastId)
-            .order('object_runtime_id', { ascending: true })
-            .limit(PAGE_SIZE);
-
-          if (error) { console.error('Supabase error:', error); break; }
-          if (!data || data.length === 0) break;
-
-          allModelObjects.push(...data);
-          lastId = data[data.length - 1].object_runtime_id;
-          setMessage(`Loetud ${allModelObjects.length} objekti...`);
-          if (data.length < PAGE_SIZE) break;
-        }
-
-        // Step 3: Color ALL objects WHITE in batches
-        if (allModelObjects.length > 0) {
-          setMessage('Värvin mudeli valgeks...');
-          const byModel: Record<string, number[]> = {};
-          for (const obj of allModelObjects) {
-            if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
-            byModel[obj.model_id].push(obj.object_runtime_id);
-          }
-
-          const BATCH_SIZE = 5000;
-          let count = 0;
-          const total = allModelObjects.length;
-
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-              try {
-                await api.viewer.setObjectState(
-                  { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-                  { color: { r: 255, g: 255, b: 255, a: 255 } }
-                );
-              } catch (e) { console.error('Error coloring white:', e); }
-              count += batch.length;
-              setMessage(`Valged ${count}/${total}...`);
-            }
-          }
+        // Step 1: Color ALL objects white in all loaded models (model-independent approach)
+        setMessage('Värvin mudeli valgeks...');
+        try {
+          await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+        } catch (e) {
+          console.error('Error coloring all white:', e);
         }
 
         setMessage('Värvin päevi...');
@@ -3242,51 +3195,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color ENTIRE model with a specific color (fetches ALL objects from Supabase)
+  // Color ENTIRE model white (model-independent approach)
   const colorEntireModelWhite = async () => {
     try {
-      // Fetch ALL objects from Supabase with pagination
-      const PAGE_SIZE = 5000;
-      const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let lastId = -1;
-
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('model_id, object_runtime_id')
-          .eq('trimble_project_id', projectId)
-          .gt('object_runtime_id', lastId)
-          .order('object_runtime_id', { ascending: true })
-          .limit(PAGE_SIZE);
-
-        if (error) { console.error('Supabase error:', error); break; }
-        if (!data || data.length === 0) break;
-
-        allModelObjects.push(...data);
-        lastId = data[data.length - 1].object_runtime_id;
-        if (data.length < PAGE_SIZE) break;
-      }
-
-      if (allModelObjects.length === 0) return;
-
-      // Group by model
-      const byModel: Record<string, number[]> = {};
-      for (const obj of allModelObjects) {
-        if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
-        byModel[obj.model_id].push(obj.object_runtime_id);
-      }
-
-      // Color ALL objects white in batches
-      const BATCH_SIZE = 5000;
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-        }
-      }
+      // Color ALL objects white in all loaded models
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
     } catch (e) {
       console.error('Error coloring model white:', e);
     }

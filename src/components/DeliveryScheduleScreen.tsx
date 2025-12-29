@@ -5,6 +5,11 @@ import {
   DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
   DeliveryVehicleStatus
 } from '../supabase';
+import {
+  findObjectsInLoadedModels,
+  colorObjectsByGuid,
+  selectObjectsByGuid
+} from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
@@ -1019,11 +1024,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, []);
 
-  // Broadcast selection to main window (from popup)
-  const broadcastSelectInModel = useCallback((modelId: string, runtimeId: number) => {
+  // Broadcast selection to main window (from popup) - now uses GUID
+  const broadcastSelectInModel = useCallback((guidIfc: string) => {
     if (broadcastChannelRef.current && isPopupMode) {
-      console.log('BroadcastChannel: Sending select request', modelId, runtimeId);
-      broadcastChannelRef.current.postMessage({ type: 'selectInModel', modelId, runtimeId });
+      console.log('BroadcastChannel: Sending select request for GUID', guidIfc);
+      broadcastChannelRef.current.postMessage({ type: 'selectInModel', guidIfc });
     }
   }, [isPopupMode]);
 
@@ -1266,17 +1271,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         console.log('BroadcastChannel: Received reload signal');
         loadAllData();
       } else if (event.data.type === 'selectInModel' && !isPopupMode && api) {
-        // Main window receives selection request from popup
-        const { modelId, runtimeId } = event.data;
-        console.log('BroadcastChannel: Received select request', modelId, runtimeId);
+        // Main window receives selection request from popup - now uses GUID
+        const { guidIfc } = event.data;
+        console.log('BroadcastChannel: Received select request for GUID', guidIfc);
         try {
-          if (modelId && runtimeId) {
-            // Select object in model
-            await api.viewer.setSelection({
-              modelObjectIds: [{ modelId, objectRuntimeIds: [runtimeId] }]
-            }, 'set');
-            // Zoom to selection
-            await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+          if (guidIfc) {
+            // Select object in model using GUID-based lookup
+            const count = await selectObjectsByGuid(api, [guidIfc], 'set');
+            if (count > 0) {
+              // Zoom to selection
+              await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+            }
           }
         } catch (e) {
           console.error('Error selecting in model:', e);
@@ -1375,8 +1380,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Flag to prevent concurrent selection requests
   const selectionInProgressRef = useRef(false);
-  // Track expected runtime IDs from schedule selection to avoid clearing on polling
-  const scheduleSelectionRuntimeIdsRef = useRef<Set<number>>(new Set());
   // Track previous model selection to detect actual changes
   const previousModelSelectionRef = useRef<string>('');
 
@@ -1529,32 +1532,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     if (selectedItemIds.size > 0) {
       setSelectedObjects([]);
 
-      // Select these items in the viewer
+      // Select these items in the viewer using GUID-based lookup
       const selectedItems = items.filter(item => selectedItemIds.has(item.id));
-      const byModel: Record<string, number[]> = {};
-      const allRuntimeIds = new Set<number>();
+      const guids = selectedItems
+        .map(item => item.guid_ifc)
+        .filter((g): g is string => !!g);
 
-      for (const item of selectedItems) {
-        if (item.model_id && item.object_runtime_id) {
-          if (!byModel[item.model_id]) byModel[item.model_id] = [];
-          byModel[item.model_id].push(item.object_runtime_id);
-          allRuntimeIds.add(item.object_runtime_id);
-        }
+      if (guids.length > 0) {
+        // Use GUID-based selection
+        selectObjectsByGuid(api, guids, 'set').catch(() => {});
       }
-
-      const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
-        modelId,
-        objectRuntimeIds
-      }));
-
-      if (modelObjectIds.length > 0) {
-        // Track expected runtime IDs to prevent auto-clear during polling
-        scheduleSelectionRuntimeIdsRef.current = allRuntimeIds;
-        api.viewer.setSelection({ modelObjectIds }, 'set').catch(() => {});
-      }
-    } else {
-      // Clear expected IDs when no schedule selection
-      scheduleSelectionRuntimeIdsRef.current = new Set();
     }
     // NOTE: We do NOT clear viewer selection when selectedItemIds is empty
     // This allows users to freely select objects in the model without interference
@@ -2143,12 +2130,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
 
       // Color deleted item white if color mode is active
-      if (colorMode !== 'none' && itemToDelete?.model_id && itemToDelete?.object_runtime_id) {
+      if (colorMode !== 'none' && itemToDelete?.guid_ifc) {
         try {
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId: itemToDelete.model_id, objectRuntimeIds: [itemToDelete.object_runtime_id] }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
+          await colorObjectsByGuid(api, [itemToDelete.guid_ifc], { r: 255, g: 255, b: 255, a: 255 });
         } catch (colorError) {
           console.error('Error coloring deleted item white:', colorError);
         }
@@ -2185,18 +2169,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Color deleted items white if color mode is active
       if (colorMode !== 'none' && itemsToDelete.length > 0) {
         try {
-          const byModel: Record<string, number[]> = {};
-          for (const item of itemsToDelete) {
-            if (item.model_id && item.object_runtime_id) {
-              if (!byModel[item.model_id]) byModel[item.model_id] = [];
-              byModel[item.model_id].push(item.object_runtime_id);
-            }
-          }
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: 255, g: 255, b: 255, a: 255 } }
-            );
+          const guids = itemsToDelete
+            .map(item => item.guid_ifc)
+            .filter((g): g is string => !!g);
+          if (guids.length > 0) {
+            await colorObjectsByGuid(api, guids, { r: 255, g: 255, b: 255, a: 255 });
           }
         } catch (colorError) {
           console.error('Error coloring deleted items white:', colorError);
@@ -2235,18 +2212,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Color removed items white if color mode is active
       if (colorMode !== 'none' && itemsToRemove.length > 0) {
         try {
-          const byModel: Record<string, number[]> = {};
-          for (const item of itemsToRemove) {
-            if (item.model_id && item.object_runtime_id) {
-              if (!byModel[item.model_id]) byModel[item.model_id] = [];
-              byModel[item.model_id].push(item.object_runtime_id);
-            }
-          }
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: 255, g: 255, b: 255, a: 255 } }
-            );
+          const guids = itemsToRemove
+            .map(item => item.guid_ifc)
+            .filter((g): g is string => !!g);
+          if (guids.length > 0) {
+            await colorObjectsByGuid(api, guids, { r: 255, g: 255, b: 255, a: 255 });
           }
         } catch (colorError) {
           console.error('Error coloring removed items white:', colorError);
@@ -3609,15 +3579,31 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     try {
       console.log(`🔄 Refreshing ${items.length} items from model...`);
 
-      // Group items by model_id
-      const itemsByModel = new Map<string, typeof items>();
+      // Collect all GUIDs and find them in loaded models
+      const guids = items
+        .map(item => item.guid_ifc)
+        .filter((g): g is string => !!g);
+
+      setMessage('Otsime objekte mudelist...');
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+      console.log(`📦 Found ${foundObjects.size} objects in loaded models`);
+
+      // Create a map from guid to item for quick lookup
+      const itemByGuid = new Map<string, DeliveryItem>();
       for (const item of items) {
-        if (item.model_id && item.object_runtime_id) {
-          if (!itemsByModel.has(item.model_id)) {
-            itemsByModel.set(item.model_id, []);
-          }
-          itemsByModel.get(item.model_id)!.push(item);
+        if (item.guid_ifc) itemByGuid.set(item.guid_ifc, item);
+      }
+
+      // Group items by FOUND modelId (not stored one)
+      const itemsByModel = new Map<string, { item: DeliveryItem; runtimeId: number }[]>();
+      for (const [guid, found] of foundObjects) {
+        const item = itemByGuid.get(guid);
+        if (!item) continue;
+
+        if (!itemsByModel.has(found.modelId)) {
+          itemsByModel.set(found.modelId, []);
         }
+        itemsByModel.get(found.modelId)!.push({ item, runtimeId: found.runtimeId });
       }
 
       console.log(`📦 Grouped into ${itemsByModel.size} models`);
@@ -3626,7 +3612,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const totalItems = items.length;
 
       for (const [modelId, modelItems] of itemsByModel) {
-        const runtimeIds = modelItems.map(i => i.object_runtime_id!);
+        const runtimeIds = modelItems.map(m => m.runtimeId);
         console.log(`🔍 Fetching ${runtimeIds.length} objects from model ${modelId}...`);
 
         try {
@@ -3635,7 +3621,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           if (props && props.length > 0) {
             for (let idx = 0; idx < props.length; idx++) {
               const objProps = props[idx];
-              const item = modelItems[idx];
+              const { item } = modelItems[idx];
 
               let assemblyMark: string | undefined;
               let productName: string | undefined;
@@ -4234,62 +4220,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setPlaybackVehicleColors(vColors);
     setPlaybackDateColors(dColors);
 
-    // Clear all colors first
+    // Color all objects white in all loaded models (model-independent approach)
+    setMessage('Playback: Värvin kõik valged...');
     try {
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
     } catch (e) {
-      console.error('Error clearing colors:', e);
-    }
-
-    // Step 1: Fetch all objects from Supabase
-    setMessage('Playback: Loen Supabasest...');
-    const PAGE_SIZE = 5000;
-    const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-    let lastId = -1;
-
-    while (true) {
-      const { data, error } = await supabase
-        .from('trimble_model_objects')
-        .select('model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId)
-        .gt('object_runtime_id', lastId)
-        .order('object_runtime_id', { ascending: true })
-        .limit(PAGE_SIZE);
-
-      if (error) { console.error('Supabase error:', error); break; }
-      if (!data || data.length === 0) break;
-
-      allModelObjects.push(...data);
-      lastId = data[data.length - 1].object_runtime_id;
-      setMessage(`Playback: Loetud ${allModelObjects.length} kirjet...`);
-      if (data.length < PAGE_SIZE) break;
-    }
-
-    // Step 2: Color ALL objects WHITE (including schedule items - they start gray/white)
-    if (allModelObjects.length > 0) {
-      const byModel: Record<string, number[]> = {};
-      for (const obj of allModelObjects) {
-        if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
-        byModel[obj.model_id].push(obj.object_runtime_id);
-      }
-
-      const BATCH_SIZE = 5000;
-      let count = 0;
-      const total = allModelObjects.length;
-
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          try {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-              { color: { r: 255, g: 255, b: 255, a: 255 } }
-            );
-          } catch (e) { console.error('Error coloring white:', e); }
-          count += batch.length;
-          setMessage(`Playback: Valged ${count}/${total}...`);
-        }
-      }
+      console.error('Error coloring all white:', e);
     }
 
     setMessage('Playback alustab...');
@@ -4330,45 +4266,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }, 50);
 
-        // Collect ALL items from ALL vehicles of this date
-        const allDateItems: { modelId: string; runtimeId: number }[] = [];
-        const byModel: Record<string, number[]> = {};
-
+        // Collect ALL items from ALL vehicles of this date - use GUID-based lookup
+        const dateGuids: string[] = [];
         for (const vehicle of dateVehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
           for (const item of vehicleItems) {
-            if (item.model_id && item.object_runtime_id) {
-              if (!byModel[item.model_id]) byModel[item.model_id] = [];
-              byModel[item.model_id].push(item.object_runtime_id);
-              allDateItems.push({ modelId: item.model_id, runtimeId: item.object_runtime_id });
-            }
+            if (item.guid_ifc) dateGuids.push(item.guid_ifc);
           }
         }
 
-        // Color all items of this date
-        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        if (dateGuids.length > 0) {
+          // Color all items of this date
           try {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-            );
+            await colorObjectsByGuid(api, dateGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
           } catch (e) { console.error('Error coloring date:', e); }
-        }
 
-        // Select ALL items from this date in model (if enabled)
-        if (playbackSettings.selectItemsInModel && Object.keys(byModel).length > 0) {
-          try {
-            const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
-              modelId,
-              objectRuntimeIds: runtimeIds
-            }));
-            await api.viewer.setSelection({ modelObjectIds }, 'set');
+          // Select ALL items from this date in model (if enabled)
+          if (playbackSettings.selectItemsInModel) {
+            try {
+              await selectObjectsByGuid(api, dateGuids, 'set');
 
-            // Zoom to selection if not disabled
-            if (!playbackSettings.disableZoom) {
-              await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
-            }
-          } catch (e) { console.error('Error selecting date items:', e); }
+              // Zoom to selection if not disabled
+              if (!playbackSettings.disableZoom) {
+                await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+              }
+            } catch (e) { console.error('Error selecting date items:', e); }
+          }
         }
 
         setMessage(`Kuupäev ${dateIndex + 1}/${sortedDatesForPlayback.length}: ${date === UNASSIGNED_DATE ? 'MÄÄRAMATA' : date}`);
@@ -4417,39 +4340,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           setCollapsedVehicles(prev => { const next = new Set(prev); next.delete(vehicle.id); return next; });
         }
 
-        // Color vehicle items
-        const byModel: Record<string, number[]> = {};
-        for (const item of vehicleItems) {
-          if (item.model_id && item.object_runtime_id) {
-            if (!byModel[item.model_id]) byModel[item.model_id] = [];
-            byModel[item.model_id].push(item.object_runtime_id);
-          }
-        }
+        // Collect vehicle item GUIDs
+        const vehicleGuids = vehicleItems
+          .map(item => item.guid_ifc)
+          .filter((g): g is string => !!g);
 
-        // Apply colors to items
-        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        if (vehicleGuids.length > 0) {
+          // Color vehicle items
           try {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-            );
+            await colorObjectsByGuid(api, vehicleGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
           } catch (e) { console.error('Error coloring vehicle:', e); }
-        }
 
-        // Select items in model (if enabled)
-        if (playbackSettings.selectItemsInModel && Object.keys(byModel).length > 0) {
-          try {
-            const modelObjectIds = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
-              modelId,
-              objectRuntimeIds: runtimeIds
-            }));
-            await api.viewer.setSelection({ modelObjectIds }, 'set');
+          // Select items in model (if enabled)
+          if (playbackSettings.selectItemsInModel) {
+            try {
+              await selectObjectsByGuid(api, vehicleGuids, 'set');
 
-            // Zoom to selection if not disabled
-            if (!playbackSettings.disableZoom) {
-              await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
-            }
-          } catch (e) { console.error('Error selecting vehicle items:', e); }
+              // Zoom to selection if not disabled
+              if (!playbackSettings.disableZoom) {
+                await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+              }
+            } catch (e) { console.error('Error selecting vehicle items:', e); }
+          }
         }
 
         setCurrentPlayVehicleIndex(vehicleIndex);
@@ -4545,9 +4457,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const applyColorMode = async (mode: 'none' | 'vehicle' | 'date') => {
     try {
       // Reset colors first
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
-
       if (mode === 'none') {
+        // Just reset all colors
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
         setColorMode('none');
         setVehicleColors({});
         setDateColors({});
@@ -4555,71 +4467,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       setColorMode(mode);
-      setMessage('Värvin... Loen Supabasest...');
+      setMessage('Värvin kõik valged...');
 
-      // Step 1: Fetch ALL objects from Supabase with pagination
-      const PAGE_SIZE = 5000;
-      const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let lastId = -1;
+      // Step 1: Color ALL objects white in all loaded models (model-independent approach)
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('model_id, object_runtime_id')
-          .eq('trimble_project_id', projectId)
-          .gt('object_runtime_id', lastId)
-          .order('object_runtime_id', { ascending: true })
-          .limit(PAGE_SIZE);
+      // For counting colored items
+      const scheduleGuidsCount = items.filter(i => i.guid_ifc).length;
 
-        if (error) {
-          console.error('Supabase error:', error);
-          setMessage('Viga Supabase lugemisel');
-          return;
-        }
-
-        if (!data || data.length === 0) break;
-
-        allModelObjects.push(...data);
-        lastId = data[data.length - 1].object_runtime_id;
-
-        setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
-
-        if (data.length < PAGE_SIZE) break;
-      }
-
-      console.log(`Total fetched for coloring: ${allModelObjects.length}`);
-
-      // Step 2: Get schedule item IDs
-      const scheduleRuntimeIds = new Set(
-        items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
-      );
-
-      // Step 3: Color non-schedule items WHITE first
-      const whiteByModel: Record<string, number[]> = {};
-      for (const obj of allModelObjects) {
-        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
-          if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
-          whiteByModel[obj.model_id].push(obj.object_runtime_id);
-        }
-      }
-
-      const BATCH_SIZE = 5000;
-      let whiteCount = 0;
-      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-
-      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-          whiteCount += batch.length;
-          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
-        }
-      }
-
-      // Step 4: Color schedule items by vehicle or date
+      // Step 2: Color schedule items by vehicle or date
       if (mode === 'vehicle') {
         // Generate colors for each vehicle
         const vehicleIds = vehicles.map(v => v.id);
@@ -4627,7 +4483,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setVehicleColors(colors);
         setDateColors({});
 
-        // Apply colors to items in model
+        // Apply colors to items in model using GUID-based lookup
         let coloredCount = 0;
         for (const vehicle of vehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
@@ -4636,22 +4492,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const color = colors[vehicle.id];
           if (!color) continue;
 
-          // Group by model
-          const byModel: Record<string, number[]> = {};
-          for (const item of vehicleItems) {
-            if (item.model_id && item.object_runtime_id) {
-              if (!byModel[item.model_id]) byModel[item.model_id] = [];
-              byModel[item.model_id].push(item.object_runtime_id);
-            }
-          }
+          // Collect GUIDs for this vehicle's items
+          const vehicleGuids = vehicleItems
+            .map(item => item.guid_ifc)
+            .filter((g): g is string => !!g);
 
-          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-            );
-            coloredCount += runtimeIds.length;
-            setMessage(`Värvin veokid... ${coloredCount}/${scheduleRuntimeIds.size}`);
+          if (vehicleGuids.length > 0) {
+            const colored = await colorObjectsByGuid(api, vehicleGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
+            coloredCount += colored;
+            setMessage(`Värvin veokid... ${coloredCount}/${scheduleGuidsCount}`);
           }
         }
       } else if (mode === 'date') {
@@ -4663,38 +4512,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setDateColors(colors);
         setVehicleColors({});
 
-        // Apply colors by date
+        // Apply colors by date using GUID-based lookup
         let coloredCount = 0;
         for (const date of dates) {
           const dateVehicles = vehicles.filter(v => v.scheduled_date === date);
           const color = colors[date];
           if (!color) continue;
 
+          // Collect all GUIDs for items on this date
+          const dateGuids: string[] = [];
           for (const vehicle of dateVehicles) {
             const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
-
-            // Group by model
-            const byModel: Record<string, number[]> = {};
             for (const item of vehicleItems) {
-              if (item.model_id && item.object_runtime_id) {
-                if (!byModel[item.model_id]) byModel[item.model_id] = [];
-                byModel[item.model_id].push(item.object_runtime_id);
+              if (item.guid_ifc) {
+                dateGuids.push(item.guid_ifc);
               }
             }
+          }
 
-            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-                { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-              );
-              coloredCount += runtimeIds.length;
-              setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleRuntimeIds.size}`);
-            }
+          if (dateGuids.length > 0) {
+            const colored = await colorObjectsByGuid(api, dateGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
+            coloredCount += colored;
+            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuidsCount}`);
           }
         }
       }
 
-      setMessage(`✓ Värvitud! Valged=${whiteCount}, Värvilised=${scheduleRuntimeIds.size}`);
+      setMessage(`✓ Värvitud! Graafikudetaile=${scheduleGuidsCount}`);
     } catch (e) {
       console.error('Error applying color mode:', e);
       setMessage('Viga värvimisel');
@@ -4706,16 +4550,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     if (colorMode === 'none') return;
 
     try {
-      // Group items by model
-      const byModel: Record<string, number[]> = {};
-      for (const item of itemsToColor) {
-        if (item.model_id && item.object_runtime_id) {
-          if (!byModel[item.model_id]) byModel[item.model_id] = [];
-          byModel[item.model_id].push(item.object_runtime_id);
-        }
-      }
+      // Collect GUIDs from items
+      const guidsToColor = itemsToColor
+        .map(item => item.guid_ifc)
+        .filter((g): g is string => !!g);
 
-      if (Object.keys(byModel).length === 0) return;
+      if (guidsToColor.length === 0) return;
 
       // Determine the color to use
       let color: { r: number; g: number; b: number } | null = null;
@@ -4747,13 +4587,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (!color) return;
 
-      // Apply color to items
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-          { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-        );
-      }
+      // Apply color to items using GUID-based lookup
+      await colorObjectsByGuid(api, guidsToColor, { r: color.r, g: color.g, b: color.b, a: 255 });
     } catch (e) {
       console.error('Error coloring moved items:', e);
     }
@@ -4799,20 +4634,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setSelectedItemIds(new Set([item.id]));
       setActiveItemId(item.id);
 
-      // Select in viewer
-      if (isPopupMode) {
-        // In popup mode, send selection to main window via BroadcastChannel
-        if (item.model_id && item.object_runtime_id) {
-          broadcastSelectInModel(item.model_id, item.object_runtime_id);
-        }
-      } else if (item.model_id && item.object_runtime_id) {
-        try {
-          await api.viewer.setSelection({
-            modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }]
-          }, 'set');
-          await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
-        } catch (e) {
-          console.error('Error selecting in viewer:', e);
+      // Select in viewer using GUID-based lookup
+      if (item.guid_ifc) {
+        if (isPopupMode) {
+          // In popup mode, send GUID to main window via BroadcastChannel
+          broadcastSelectInModel(item.guid_ifc);
+        } else {
+          try {
+            const count = await selectObjectsByGuid(api, [item.guid_ifc], 'set');
+            if (count > 0) {
+              await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+            }
+          } catch (e) {
+            console.error('Error selecting in viewer:', e);
+          }
         }
       }
     }
@@ -4849,23 +4684,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       });
     }
 
-    // Also select in 3D viewer
-    const runtimeIds: number[] = [];
-    let modelId = '';
+    // Also select in 3D viewer using GUID-based lookup
+    const vehicleGuids = vehicleItems
+      .map(item => item.guid_ifc)
+      .filter((g): g is string => !!g);
 
-    vehicleItems.forEach(item => {
-      if (item.object_runtime_id) {
-        runtimeIds.push(item.object_runtime_id);
-        if (item.model_id) modelId = item.model_id;
-      }
-    });
-
-    if (runtimeIds.length > 0 && modelId && !allSelected) {
+    if (vehicleGuids.length > 0 && !allSelected) {
       try {
-        await api.viewer.setSelection({
-          modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
-        }, 'set');
-        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+        const count = await selectObjectsByGuid(api, vehicleGuids, 'set');
+        if (count > 0) {
+          await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+        }
       } catch (e) {
         console.error('Error selecting vehicle items:', e);
       }
@@ -4890,27 +4719,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     if (dateItems.length === 0) return;
 
-    // Group by model_id
-    const byModel: Record<string, number[]> = {};
-    for (const item of dateItems) {
-      if (item.model_id && item.object_runtime_id) {
-        if (!byModel[item.model_id]) {
-          byModel[item.model_id] = [];
-        }
-        byModel[item.model_id].push(item.object_runtime_id);
-      }
-    }
+    // Collect GUIDs for all items on this date
+    const dateGuids = dateItems
+      .map(item => item.guid_ifc)
+      .filter((g): g is string => !!g);
 
-    // Select in viewer
-    const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
-      modelId,
-      objectRuntimeIds
-    }));
-
-    if (modelObjectIds.length > 0) {
+    // Select in viewer using GUID-based lookup
+    if (dateGuids.length > 0) {
       try {
-        await api.viewer.setSelection({ modelObjectIds }, 'set');
-        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+        const count = await selectObjectsByGuid(api, dateGuids, 'set');
+        if (count > 0) {
+          await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+        }
       } catch (e) {
         console.error('Error selecting date items:', e);
       }
@@ -5901,18 +5721,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     // Color removed items white if color mode is active
                                     if (colorMode !== 'none') {
                                       try {
-                                        const byModel: Record<string, number[]> = {};
-                                        for (const item of selectedInThisVehicle) {
-                                          if (item.model_id && item.object_runtime_id) {
-                                            if (!byModel[item.model_id]) byModel[item.model_id] = [];
-                                            byModel[item.model_id].push(item.object_runtime_id);
-                                          }
-                                        }
-                                        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-                                          await api.viewer.setObjectState(
-                                            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-                                            { color: { r: 255, g: 255, b: 255, a: 255 } }
-                                          );
+                                        const guidsToColor = selectedInThisVehicle
+                                          .map(item => item.guid_ifc)
+                                          .filter((g): g is string => !!g);
+                                        if (guidsToColor.length > 0) {
+                                          await colorObjectsByGuid(api, guidsToColor, { r: 255, g: 255, b: 255, a: 255 });
                                         }
                                       } catch (colorError) {
                                         console.error('Error coloring removed items:', colorError);
@@ -5951,18 +5764,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     // Color removed items white if color mode is active
                                     if (colorMode !== 'none') {
                                       try {
-                                        const byModel: Record<string, number[]> = {};
-                                        for (const item of modelSelectedInThisVehicle) {
-                                          if (item.model_id && item.object_runtime_id) {
-                                            if (!byModel[item.model_id]) byModel[item.model_id] = [];
-                                            byModel[item.model_id].push(item.object_runtime_id);
-                                          }
-                                        }
-                                        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-                                          await api.viewer.setObjectState(
-                                            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-                                            { color: { r: 255, g: 255, b: 255, a: 255 } }
-                                          );
+                                        const guidsToColor = modelSelectedInThisVehicle
+                                          .map(item => item.guid_ifc)
+                                          .filter((g): g is string => !!g);
+                                        if (guidsToColor.length > 0) {
+                                          await colorObjectsByGuid(api, guidsToColor, { r: 255, g: 255, b: 255, a: 255 });
                                         }
                                       } catch (colorError) {
                                         console.error('Error coloring removed items:', colorError);
