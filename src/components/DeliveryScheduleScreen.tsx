@@ -4220,12 +4220,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setPlaybackVehicleColors(vColors);
     setPlaybackDateColors(dColors);
 
-    // Color all objects white in all loaded models (model-independent approach)
-    setMessage('Playback: Värvin kõik valged...');
-    try {
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
-    } catch (e) {
-      console.error('Error coloring all white:', e);
+    // Step 1: Fetch all GUIDs from Supabase and color them white
+    setMessage('Playback: Loen Supabasest...');
+    const PAGE_SIZE = 5000;
+    const allGuids: string[] = [];
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .not('guid_ifc', 'is', null)
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) { console.error('Supabase error:', error); break; }
+      if (!data || data.length === 0) break;
+
+      for (const obj of data) {
+        if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+      }
+      offset += data.length;
+      setMessage(`Playback: Loetud ${allGuids.length} objekti...`);
+      if (data.length < PAGE_SIZE) break;
+    }
+
+    // Step 2: Color ALL objects WHITE using GUID-based lookup
+    if (allGuids.length > 0) {
+      setMessage('Playback: Värvin valged...');
+      const BATCH_SIZE = 500;
+      let count = 0;
+      for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
+        const batch = allGuids.slice(i, i + BATCH_SIZE);
+        try {
+          await colorObjectsByGuid(api, batch, { r: 255, g: 255, b: 255, a: 255 });
+        } catch (e) { console.error('Error coloring white:', e); }
+        count += batch.length;
+        setMessage(`Playback: Valged ${count}/${allGuids.length}...`);
+      }
     }
 
     setMessage('Playback alustab...');
@@ -4271,7 +4303,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         for (const vehicle of dateVehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
           for (const item of vehicleItems) {
-            if (item.guid_ifc) dateGuids.push(item.guid_ifc);
+            const guidToUse = item.guid_ifc || item.guid;
+            if (guidToUse) dateGuids.push(guidToUse);
           }
         }
 
@@ -4340,9 +4373,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           setCollapsedVehicles(prev => { const next = new Set(prev); next.delete(vehicle.id); return next; });
         }
 
-        // Collect vehicle item GUIDs
+        // Collect vehicle item GUIDs (fallback to guid if guid_ifc not available)
         const vehicleGuids = vehicleItems
-          .map(item => item.guid_ifc)
+          .map(item => item.guid_ifc || item.guid)
           .filter((g): g is string => !!g);
 
         if (vehicleGuids.length > 0) {
@@ -4492,9 +4525,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const color = colors[vehicle.id];
           if (!color) continue;
 
-          // Collect GUIDs for this vehicle's items
+          // Collect GUIDs for this vehicle's items (fallback to guid if guid_ifc not available)
           const vehicleGuids = vehicleItems
-            .map(item => item.guid_ifc)
+            .map(item => item.guid_ifc || item.guid)
             .filter((g): g is string => !!g);
 
           if (vehicleGuids.length > 0) {
@@ -4519,13 +4552,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const color = colors[date];
           if (!color) continue;
 
-          // Collect all GUIDs for items on this date
+          // Collect all GUIDs for items on this date (fallback to guid if guid_ifc not available)
           const dateGuids: string[] = [];
           for (const vehicle of dateVehicles) {
             const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
             for (const item of vehicleItems) {
-              if (item.guid_ifc) {
-                dateGuids.push(item.guid_ifc);
+              const guidToUse = item.guid_ifc || item.guid;
+              if (guidToUse) {
+                dateGuids.push(guidToUse);
               }
             }
           }
@@ -4550,9 +4584,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     if (colorMode === 'none') return;
 
     try {
-      // Collect GUIDs from items
+      // Collect GUIDs from items (fallback to guid if guid_ifc not available)
       const guidsToColor = itemsToColor
-        .map(item => item.guid_ifc)
+        .map(item => item.guid_ifc || item.guid)
         .filter((g): g is string => !!g);
 
       if (guidsToColor.length === 0) return;
@@ -4634,14 +4668,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setSelectedItemIds(new Set([item.id]));
       setActiveItemId(item.id);
 
-      // Select in viewer using GUID-based lookup
-      if (item.guid_ifc) {
+      // Select in viewer using GUID-based lookup (fallback to guid if guid_ifc not available)
+      const guidToUse = item.guid_ifc || item.guid;
+      if (guidToUse) {
         if (isPopupMode) {
           // In popup mode, send GUID to main window via BroadcastChannel
-          broadcastSelectInModel(item.guid_ifc);
+          broadcastSelectInModel(guidToUse);
         } else {
           try {
-            const count = await selectObjectsByGuid(api, [item.guid_ifc], 'set');
+            const count = await selectObjectsByGuid(api, [guidToUse], 'set');
             if (count > 0) {
               await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
             }
@@ -4684,9 +4719,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       });
     }
 
-    // Also select in 3D viewer using GUID-based lookup
+    // Also select in 3D viewer using GUID-based lookup (fallback to guid if guid_ifc not available)
     const vehicleGuids = vehicleItems
-      .map(item => item.guid_ifc)
+      .map(item => item.guid_ifc || item.guid)
       .filter((g): g is string => !!g);
 
     if (vehicleGuids.length > 0 && !allSelected) {
@@ -4719,9 +4754,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     if (dateItems.length === 0) return;
 
-    // Collect GUIDs for all items on this date
+    // Collect GUIDs for all items on this date (fallback to guid if guid_ifc not available)
     const dateGuids = dateItems
-      .map(item => item.guid_ifc)
+      .map(item => item.guid_ifc || item.guid)
       .filter((g): g is string => !!g);
 
     // Select in viewer using GUID-based lookup
@@ -5722,7 +5757,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     if (colorMode !== 'none') {
                                       try {
                                         const guidsToColor = selectedInThisVehicle
-                                          .map(item => item.guid_ifc)
+                                          .map(item => item.guid_ifc || item.guid)
                                           .filter((g): g is string => !!g);
                                         if (guidsToColor.length > 0) {
                                           await colorObjectsByGuid(api, guidsToColor, { r: 255, g: 255, b: 255, a: 255 });
@@ -5765,7 +5800,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     if (colorMode !== 'none') {
                                       try {
                                         const guidsToColor = modelSelectedInThisVehicle
-                                          .map(item => item.guid_ifc)
+                                          .map(item => item.guid_ifc || item.guid)
                                           .filter((g): g is string => !!g);
                                         if (guidsToColor.length > 0) {
                                           await colorObjectsByGuid(api, guidsToColor, { r: 255, g: 255, b: 255, a: 255 });
