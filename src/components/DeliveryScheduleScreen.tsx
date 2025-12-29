@@ -357,16 +357,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // ============================================
 
   // Property mappings for reading Tekla properties
-  const { mappings: propertyMappings, isLoading: mappingsLoading } = useProjectPropertyMappings(projectId);
-
-  // DEBUG: Log property mappings
-  useEffect(() => {
-    console.log('📋 Property Mappings loaded:', {
-      loading: mappingsLoading,
-      assembly_mark: `${propertyMappings.assembly_mark_set}.${propertyMappings.assembly_mark_prop}`,
-      weight: `${propertyMappings.weight_set}.${propertyMappings.weight_prop}`,
-    });
-  }, [propertyMappings, mappingsLoading]);
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
   // Data state
   const [factories, setFactories] = useState<DeliveryFactory[]>([]);
@@ -407,6 +398,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Multi-select
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
+  const programmaticSelectionRef = useRef(false); // Track when we're selecting from schedule
 
   // Drag and drop
   const [isDragging, setIsDragging] = useState(false);
@@ -1466,20 +1458,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   const posSetNorm = normalize(propertyMappings.position_code_set);
                   const posPropNorm = normalize(propertyMappings.position_code_prop);
 
-                  // DEBUG: Log property matching
-                  if (rawNameNorm.includes('ebe') || rawNameNorm.includes('pos') || rawNameNorm.includes('kaal')) {
-                    console.log(`🔍 Property: ${setName}.${rawName} = ${propValue}`);
-                    console.log(`   Normalized: ${setNameNorm}.${rawNameNorm}`);
-                    console.log(`   Mapping assembly: ${mappingSetNorm}.${mappingPropNorm}`);
-                    console.log(`   Mapping weight: ${weightSetNorm}.${weightPropNorm}`);
-                    console.log(`   Match assembly: ${setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm}`);
-                    console.log(`   Match weight: ${setNameNorm === weightSetNorm && rawNameNorm === weightPropNorm}`);
-                  }
-
                   // Assembly/Cast unit Mark - configured mapping first (normalized comparison)
                   if (assemblyMark.startsWith('Object_')) {
                     if (setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm) {
-                      console.log(`✅ Found assembly mark via mapping: ${propValue}`);
                       assemblyMark = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
@@ -1491,7 +1472,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   // Weight - configured mapping first (normalized comparison)
                   if (!castUnitWeight) {
                     if (setNameNorm === weightSetNorm && rawNameNorm === weightPropNorm) {
-                      console.log(`✅ Found weight via mapping: ${propValue}`);
                       castUnitWeight = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('weight')) {
                       castUnitWeight = String(propValue);
@@ -1538,7 +1518,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setSelectedObjects(objects);
 
         // Only clear schedule selection when model selection actually CHANGES to something new
-        if (objects.length > 0 && selectionActuallyChanged) {
+        // BUT not when the change was triggered by our own code (programmatic selection from schedule)
+        if (objects.length > 0 && selectionActuallyChanged && !programmaticSelectionRef.current) {
           setSelectedItemIds(new Set());
         }
       } catch (e: any) {
@@ -1586,8 +1567,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         .filter((g): g is string => !!g);
 
       if (guids.length > 0) {
+        // Mark as programmatic selection so the selection handler doesn't clear selectedItemIds
+        programmaticSelectionRef.current = true;
         // Use GUID-based selection
-        selectObjectsByGuid(api, guids, 'set').catch(() => {});
+        selectObjectsByGuid(api, guids, 'set').catch(() => {}).finally(() => {
+          // Reset flag after a short delay to allow selection handler to run
+          setTimeout(() => { programmaticSelectionRef.current = false; }, 500);
+        });
       }
     }
     // NOTE: We do NOT clear viewer selection when selectedItemIds is empty
