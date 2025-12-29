@@ -418,43 +418,27 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
     const applyColorsToModel = async () => {
       try {
-        // Group items by color and model for batch processing
-        const colorBatches: Map<string, Map<string, number[]>> = new Map();
+        // Group items by color for batch processing
+        const colorBatches: Map<string, string[]> = new Map();
 
         for (const item of scheduleItems) {
           const color = playbackDateColors[item.scheduled_date];
-          if (!color || !item.model_id || !item.object_runtime_id) continue;
+          const guidIfc = item.guid_ifc || item.guid;
+          if (!color || !guidIfc) continue;
 
           const colorKey = `${color.r}-${color.g}-${color.b}`;
 
           if (!colorBatches.has(colorKey)) {
-            colorBatches.set(colorKey, new Map());
+            colorBatches.set(colorKey, []);
           }
-
-          const modelMap = colorBatches.get(colorKey)!;
-          if (!modelMap.has(item.model_id)) {
-            modelMap.set(item.model_id, []);
-          }
-          modelMap.get(item.model_id)!.push(item.object_runtime_id);
+          colorBatches.get(colorKey)!.push(guidIfc);
         }
 
-        // Execute all color operations in parallel
-        const colorPromises: Promise<void>[] = [];
-
-        for (const [colorKey, modelMap] of colorBatches) {
+        // Execute all color operations - use GUID-based lookup
+        for (const [colorKey, guids] of colorBatches) {
           const [r, g, b] = colorKey.split('-').map(Number);
-
-          for (const [modelId, runtimeIds] of modelMap) {
-            colorPromises.push(
-              api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-                { color: { r, g, b, a: 255 } }
-              )
-            );
-          }
+          await colorObjectsByGuid(api, guids, { r, g, b, a: 255 });
         }
-
-        await Promise.all(colorPromises);
       } catch (e) {
         console.error('Error applying colors to model:', e);
       }
@@ -2063,13 +2047,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     try {
       const itemIds = itemsToRemove.map(i => i.id);
 
-      // Get runtime IDs before deletion for coloring
-      const runtimeIdsToColor: { modelId: string; runtimeId: number }[] = [];
+      // Collect GUIDs before deletion for coloring
+      const guidsToColor: string[] = [];
       if (playbackSettings.colorEachDayDifferent) {
         for (const item of itemsToRemove) {
-          if (item.model_id && item.object_runtime_id) {
-            runtimeIdsToColor.push({ modelId: item.model_id, runtimeId: item.object_runtime_id });
-          }
+          const guidIfc = item.guid_ifc || item.guid;
+          if (guidIfc) guidsToColor.push(guidIfc);
         }
       }
 
@@ -2099,19 +2082,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       if (error) throw error;
 
       // Color removed items white if coloring is enabled
-      if (playbackSettings.colorEachDayDifferent && runtimeIdsToColor.length > 0) {
-        const byModel: Record<string, number[]> = {};
-        for (const { modelId, runtimeId } of runtimeIdsToColor) {
-          if (!byModel[modelId]) byModel[modelId] = [];
-          byModel[modelId].push(runtimeId);
-        }
-
-        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-        }
+      if (playbackSettings.colorEachDayDifferent && guidsToColor.length > 0) {
+        await colorObjectsByGuid(api, guidsToColor, { r: 255, g: 255, b: 255, a: 255 });
       }
 
       // Clear model selection
@@ -2538,23 +2510,28 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           else markupColor = '#FFFFFF';
         }
 
+        // Collect all GUIDs and find objects in loaded models
+        const dayGuids = dayItems
+          .map(item => item.guid_ifc || item.guid)
+          .filter((g): g is string => !!g);
+
+        const foundObjects = await findObjectsInLoadedModels(api, dayGuids);
+
         // Group items by model for batch processing
         const itemsByModel = new Map<string, { item: ScheduleItem; itemIdx: number; runtimeId: number }[]>();
 
         for (let itemIdx = 0; itemIdx < dayItems.length; itemIdx++) {
           const item = dayItems[itemIdx];
-          const modelId = item.model_id;
           const guidIfc = item.guid_ifc || item.guid;
+          if (!guidIfc) continue;
 
-          if (!modelId || !guidIfc) continue;
+          const found = foundObjects.get(guidIfc);
+          if (!found) continue;
 
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-          if (!runtimeIds || runtimeIds.length === 0) continue;
-
-          if (!itemsByModel.has(modelId)) {
-            itemsByModel.set(modelId, []);
+          if (!itemsByModel.has(found.modelId)) {
+            itemsByModel.set(found.modelId, []);
           }
-          itemsByModel.get(modelId)!.push({ item, itemIdx, runtimeId: runtimeIds[0] });
+          itemsByModel.get(found.modelId)!.push({ item, itemIdx, runtimeId: found.runtimeId });
         }
 
         for (const [modelId, modelItems] of itemsByModel) {
