@@ -3,6 +3,13 @@ import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
+  findObjectsInLoadedModels,
+  colorObjectsByGuid,
+  selectObjectsByGuid,
+  zoomToObjectsByGuid,
+  showObjectsByGuid
+} from '../utils/navigationHelper';
+import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
@@ -2123,26 +2130,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Select and zoom to item in viewer
   const selectInViewer = async (item: ScheduleItem, skipZoom: boolean = false) => {
     try {
-      const modelId = item.model_id;
       const guidIfc = item.guid_ifc || item.guid;
 
-      if (!modelId || !guidIfc) {
+      if (!guidIfc) {
         setMessage('Objekti identifikaator puudub');
         return;
       }
 
-      const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-      if (!runtimeIds || runtimeIds.length === 0) {
+      // Use GUID-based lookup - works with any loaded model
+      const count = skipZoom
+        ? await selectObjectsByGuid(api, [guidIfc])
+        : await zoomToObjectsByGuid(api, [guidIfc], 300);
+
+      if (count === 0) {
         setMessage('Objekti ei leitud mudelist');
         return;
-      }
-
-      await api.viewer.setSelection({
-        modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }]
-      }, 'set');
-
-      if (!skipZoom) {
-        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
       }
 
       setActiveItemId(item.id);
@@ -2157,30 +2159,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     if (!items || items.length === 0) return;
 
     try {
-      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      // Collect all GUIDs for this date
+      const guids = items
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
 
-      for (const item of items) {
-        const modelId = item.model_id;
-        const guidIfc = item.guid_ifc || item.guid;
+      if (guids.length === 0) return;
 
-        if (!modelId || !guidIfc) continue;
-
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
-
-        const existing = modelObjects.find(m => m.modelId === modelId);
-        if (existing) {
-          existing.objectRuntimeIds.push(...runtimeIds);
-        } else {
-          modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
-        }
-      }
-
-      if (modelObjects.length > 0) {
-        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
-        if (!skipZoom) {
-          await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
-        }
+      // Use GUID-based lookup - works with any loaded model
+      if (skipZoom) {
+        await selectObjectsByGuid(api, guids);
+      } else {
+        await zoomToObjectsByGuid(api, guids, 500);
       }
     } catch (e) {
       console.error('Error selecting date items:', e);
@@ -2195,30 +2185,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
 
     try {
-      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
       const itemsToSelect = scheduleItems.filter(item => itemIds.has(item.id));
+      const guids = itemsToSelect
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
 
-      for (const item of itemsToSelect) {
-        const modelId = item.model_id;
-        const guidIfc = item.guid_ifc || item.guid;
-        if (!modelId || !guidIfc) continue;
+      if (guids.length === 0) return;
 
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
-
-        const existing = modelObjects.find(m => m.modelId === modelId);
-        if (existing) {
-          existing.objectRuntimeIds.push(...runtimeIds);
-        } else {
-          modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
-        }
-      }
-
-      if (modelObjects.length > 0) {
-        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
-        if (!skipZoom) {
-          await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
-        }
+      // Use GUID-based lookup - works with any loaded model
+      if (skipZoom) {
+        await selectObjectsByGuid(api, guids);
+      } else {
+        await zoomToObjectsByGuid(api, guids, 500);
       }
     } catch (e) {
       console.error('Error selecting items in viewer:', e);
@@ -2233,33 +2211,21 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
 
     try {
-      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
-
+      // Collect all GUIDs from all selected dates
+      const guids: string[] = [];
       for (const date of dates) {
         const items = itemsByDate[date];
         if (!items) continue;
-
         for (const item of items) {
-          const modelId = item.model_id;
-          const guidIfc = item.guid_ifc || item.guid;
-          if (!modelId || !guidIfc) continue;
-
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-          if (!runtimeIds || runtimeIds.length === 0) continue;
-
-          const existing = modelObjects.find(m => m.modelId === modelId);
-          if (existing) {
-            existing.objectRuntimeIds.push(...runtimeIds);
-          } else {
-            modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
-          }
+          const guid = item.guid_ifc || item.guid;
+          if (guid) guids.push(guid);
         }
       }
 
-      if (modelObjects.length > 0) {
-        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
-        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
-      }
+      if (guids.length === 0) return;
+
+      // Use GUID-based lookup - works with any loaded model
+      await zoomToObjectsByGuid(api, guids, 500);
     } catch (e) {
       console.error('Error selecting multiple date items:', e);
     }
@@ -2273,55 +2239,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
 
     try {
-      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
-      const models = await api.viewer.getModels();
-
+      // Collect all GUIDs from selected items
+      const guids: string[] = [];
       for (const itemId of itemIds) {
         const item = scheduleItems.find(i => i.id === itemId);
         if (!item) continue;
-
-        const guidIfc = item.guid_ifc || item.guid;
-        if (!guidIfc) continue;
-
-        // Try with stored model_id first
-        if (item.model_id) {
-          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
-          if (runtimeIds && runtimeIds.length > 0) {
-            const existing = modelObjects.find(m => m.modelId === item.model_id);
-            if (existing) {
-              existing.objectRuntimeIds.push(...runtimeIds);
-            } else {
-              modelObjects.push({ modelId: item.model_id, objectRuntimeIds: [...runtimeIds] });
-            }
-            continue;
-          }
-        }
-
-        // Fallback: try all loaded models
-        if (models && models.length > 0) {
-          for (const model of models) {
-            try {
-              const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
-              if (runtimeIds && runtimeIds.length > 0) {
-                const existing = modelObjects.find(m => m.modelId === model.id);
-                if (existing) {
-                  existing.objectRuntimeIds.push(...runtimeIds);
-                } else {
-                  modelObjects.push({ modelId: model.id, objectRuntimeIds: [...runtimeIds] });
-                }
-                break;
-              }
-            } catch {
-              // Try next model
-            }
-          }
-        }
+        const guid = item.guid_ifc || item.guid;
+        if (guid) guids.push(guid);
       }
 
-      if (modelObjects.length > 0) {
-        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
-        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
-      }
+      if (guids.length === 0) return;
+
+      // Use GUID-based lookup - works with any loaded model
+      await zoomToObjectsByGuid(api, guids, 300);
     } catch (e) {
       console.error('Error selecting items in viewer:', e);
     }
@@ -2333,31 +2263,17 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     if (!items || items.length === 0) return;
 
     try {
-      const modelObjects: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      // Collect all GUIDs for this date
+      const guids = items
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
 
-      for (const item of items) {
-        const modelId = item.model_id;
-        const guidIfc = item.guid_ifc || item.guid;
+      if (guids.length === 0) return;
 
-        if (!modelId || !guidIfc) continue;
+      // Use GUID-based lookup - works with any loaded model
+      const count = await zoomToObjectsByGuid(api, guids, 300);
 
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
-
-        const existing = modelObjects.find(m => m.modelId === modelId);
-        if (existing) {
-          existing.objectRuntimeIds.push(...runtimeIds);
-        } else {
-          modelObjects.push({ modelId, objectRuntimeIds: [...runtimeIds] });
-        }
-      }
-
-      if (modelObjects.length > 0) {
-        // Select items
-        await api.viewer.setSelection({ modelObjectIds: modelObjects }, 'set');
-        // Zoom to selected
-        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
-
+      if (count > 0) {
         // Wait for camera animation to finish
         await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -2406,23 +2322,28 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       setMessage('Loon markupe...');
 
+      // Collect all GUIDs and find objects in loaded models
+      const guids = items
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
+
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
       // Group items by model for batch processing
       const itemsByModel = new Map<string, { item: ScheduleItem; idx: number; runtimeId: number }[]>();
 
       for (let idx = 0; idx < items.length; idx++) {
         const item = items[idx];
-        const modelId = item.model_id;
         const guidIfc = item.guid_ifc || item.guid;
+        if (!guidIfc) continue;
 
-        if (!modelId || !guidIfc) continue;
+        const found = foundObjects.get(guidIfc);
+        if (!found) continue;
 
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-        if (!runtimeIds || runtimeIds.length === 0) continue;
-
-        if (!itemsByModel.has(modelId)) {
-          itemsByModel.set(modelId, []);
+        if (!itemsByModel.has(found.modelId)) {
+          itemsByModel.set(found.modelId, []);
         }
-        itemsByModel.get(modelId)!.push({ item, idx, runtimeId: runtimeIds[0] });
+        itemsByModel.get(found.modelId)!.push({ item, idx, runtimeId: found.runtimeId });
       }
 
       const markupsToCreate: any[] = [];
@@ -3131,31 +3052,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color item green in viewer using object_runtime_id from Supabase
+  // Color item green in viewer using GUID-based lookup
   const colorItemGreen = async (item: ScheduleItem) => {
     try {
-      // Use object_runtime_id directly if available
-      if (item.model_id && item.object_runtime_id) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] },
-          { color: { r: 34, g: 197, b: 94, a: 255 } }
-        );
-        return;
-      }
-
-      // Fallback: use convertToObjectRuntimeIds
-      const modelId = item.model_id;
       const guidIfc = item.guid_ifc || item.guid;
+      if (!guidIfc) return;
 
-      if (!modelId || !guidIfc) return;
-
-      const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
-      if (!runtimeIds || runtimeIds.length === 0) return;
-
-      await api.viewer.setObjectState(
-        { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-        { color: { r: 34, g: 197, b: 94, a: 255 } }
-      );
+      // Use GUID-based lookup - works with any loaded model
+      await colorObjectsByGuid(api, [guidIfc], { r: 34, g: 197, b: 94, a: 255 });
     } catch (e) {
       console.error('Error coloring item:', e);
     }
@@ -3449,57 +3353,31 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   // Show a specific item (make visible) using object_runtime_id from Supabase
   const showItem = async (item: ScheduleItem) => {
     try {
-      // Use object_runtime_id directly if available (from Supabase)
-      if (item.model_id && item.object_runtime_id) {
-        const modelObjectIds = { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: [item.object_runtime_id] }] };
-        // First reset visibility, then set visible
-        await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
-        // Then explicitly set to visible
-        await api.viewer.setObjectState(modelObjectIds, { visible: true });
-        return;
-      }
-
-      // Fallback: use convertToObjectRuntimeIds if object_runtime_id not available
       const guidIfc = item.guid_ifc || item.guid;
       if (!guidIfc) return;
 
-      if (item.model_id) {
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(item.model_id, [guidIfc]);
-        if (runtimeIds && runtimeIds.length > 0) {
-          const modelObjectIds = { modelObjectIds: [{ modelId: item.model_id, objectRuntimeIds: runtimeIds }] };
-          await api.viewer.setObjectState(modelObjectIds, { visible: 'reset' });
-          await api.viewer.setObjectState(modelObjectIds, { visible: true });
-          return;
-        }
-      }
+      // Use GUID-based lookup - works with any loaded model
+      await showObjectsByGuid(api, [guidIfc]);
     } catch (e) {
       console.error('Error showing item:', e);
     }
   };
 
-  // Color all items for a specific date using object_runtime_id from Supabase
+  // Color all items for a specific date using GUID-based lookup
   const colorDateItems = async (date: string, color: { r: number; g: number; b: number }) => {
     const dateItems = itemsByDate[date];
     if (!dateItems) return;
 
     try {
-      // Group items by model for batch processing
-      const byModel: Record<string, number[]> = {};
+      // Collect all GUIDs for this date
+      const guids = dateItems
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
 
-      for (const item of dateItems) {
-        if (item.model_id && item.object_runtime_id) {
-          if (!byModel[item.model_id]) byModel[item.model_id] = [];
-          byModel[item.model_id].push(item.object_runtime_id);
-        }
-      }
+      if (guids.length === 0) return;
 
-      // Color items in batches by model
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        await api.viewer.setObjectState(
-          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-          { color: { ...color, a: 255 } }
-        );
-      }
+      // Use GUID-based lookup - works with any loaded model
+      await colorObjectsByGuid(api, guids, { ...color, a: 255 });
     } catch (e) {
       console.error('Error coloring date items:', e);
     }
