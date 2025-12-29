@@ -2130,12 +2130,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (error) throw error;
 
       // Color deleted item white if color mode is active
-      if (colorMode !== 'none' && itemToDelete?.model_id && itemToDelete?.object_runtime_id) {
+      if (colorMode !== 'none' && itemToDelete?.guid_ifc) {
         try {
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId: itemToDelete.model_id, objectRuntimeIds: [itemToDelete.object_runtime_id] }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
+          await colorObjectsByGuid(api, [itemToDelete.guid_ifc], { r: 255, g: 255, b: 255, a: 255 });
         } catch (colorError) {
           console.error('Error coloring deleted item white:', colorError);
         }
@@ -4223,62 +4220,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setPlaybackVehicleColors(vColors);
     setPlaybackDateColors(dColors);
 
-    // Clear all colors first
+    // Color all objects white in all loaded models (model-independent approach)
+    setMessage('Playback: Värvin kõik valged...');
     try {
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
     } catch (e) {
-      console.error('Error clearing colors:', e);
-    }
-
-    // Step 1: Fetch all objects from Supabase
-    setMessage('Playback: Loen Supabasest...');
-    const PAGE_SIZE = 5000;
-    const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-    let lastId = -1;
-
-    while (true) {
-      const { data, error } = await supabase
-        .from('trimble_model_objects')
-        .select('model_id, object_runtime_id')
-        .eq('trimble_project_id', projectId)
-        .gt('object_runtime_id', lastId)
-        .order('object_runtime_id', { ascending: true })
-        .limit(PAGE_SIZE);
-
-      if (error) { console.error('Supabase error:', error); break; }
-      if (!data || data.length === 0) break;
-
-      allModelObjects.push(...data);
-      lastId = data[data.length - 1].object_runtime_id;
-      setMessage(`Playback: Loetud ${allModelObjects.length} kirjet...`);
-      if (data.length < PAGE_SIZE) break;
-    }
-
-    // Step 2: Color ALL objects WHITE (including schedule items - they start gray/white)
-    if (allModelObjects.length > 0) {
-      const byModel: Record<string, number[]> = {};
-      for (const obj of allModelObjects) {
-        if (!byModel[obj.model_id]) byModel[obj.model_id] = [];
-        byModel[obj.model_id].push(obj.object_runtime_id);
-      }
-
-      const BATCH_SIZE = 5000;
-      let count = 0;
-      const total = allModelObjects.length;
-
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          try {
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-              { color: { r: 255, g: 255, b: 255, a: 255 } }
-            );
-          } catch (e) { console.error('Error coloring white:', e); }
-          count += batch.length;
-          setMessage(`Playback: Valged ${count}/${total}...`);
-        }
-      }
+      console.error('Error coloring all white:', e);
     }
 
     setMessage('Playback alustab...');
@@ -4510,9 +4457,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const applyColorMode = async (mode: 'none' | 'vehicle' | 'date') => {
     try {
       // Reset colors first
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
-
       if (mode === 'none') {
+        // Just reset all colors
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
         setColorMode('none');
         setVehicleColors({});
         setDateColors({});
@@ -4520,71 +4467,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       setColorMode(mode);
-      setMessage('Värvin... Loen Supabasest...');
+      setMessage('Värvin kõik valged...');
 
-      // Step 1: Fetch ALL objects from Supabase with pagination
-      const PAGE_SIZE = 5000;
-      const allModelObjects: { model_id: string; object_runtime_id: number }[] = [];
-      let lastId = -1;
+      // Step 1: Color ALL objects white in all loaded models (model-independent approach)
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('model_id, object_runtime_id')
-          .eq('trimble_project_id', projectId)
-          .gt('object_runtime_id', lastId)
-          .order('object_runtime_id', { ascending: true })
-          .limit(PAGE_SIZE);
+      // For counting colored items
+      const scheduleGuidsCount = items.filter(i => i.guid_ifc).length;
 
-        if (error) {
-          console.error('Supabase error:', error);
-          setMessage('Viga Supabase lugemisel');
-          return;
-        }
-
-        if (!data || data.length === 0) break;
-
-        allModelObjects.push(...data);
-        lastId = data[data.length - 1].object_runtime_id;
-
-        setMessage(`Värvin... Loetud ${allModelObjects.length} kirjet`);
-
-        if (data.length < PAGE_SIZE) break;
-      }
-
-      console.log(`Total fetched for coloring: ${allModelObjects.length}`);
-
-      // Step 2: Get schedule item IDs
-      const scheduleRuntimeIds = new Set(
-        items.filter(i => i.object_runtime_id).map(i => i.object_runtime_id!)
-      );
-
-      // Step 3: Color non-schedule items WHITE first
-      const whiteByModel: Record<string, number[]> = {};
-      for (const obj of allModelObjects) {
-        if (!scheduleRuntimeIds.has(obj.object_runtime_id)) {
-          if (!whiteByModel[obj.model_id]) whiteByModel[obj.model_id] = [];
-          whiteByModel[obj.model_id].push(obj.object_runtime_id);
-        }
-      }
-
-      const BATCH_SIZE = 5000;
-      let whiteCount = 0;
-      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-
-      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-          whiteCount += batch.length;
-          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
-        }
-      }
-
-      // Step 4: Color schedule items by vehicle or date
+      // Step 2: Color schedule items by vehicle or date
       if (mode === 'vehicle') {
         // Generate colors for each vehicle
         const vehicleIds = vehicles.map(v => v.id);
@@ -4609,7 +4500,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           if (vehicleGuids.length > 0) {
             const colored = await colorObjectsByGuid(api, vehicleGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
             coloredCount += colored;
-            setMessage(`Värvin veokid... ${coloredCount}/${scheduleRuntimeIds.size}`);
+            setMessage(`Värvin veokid... ${coloredCount}/${scheduleGuidsCount}`);
           }
         }
       } else if (mode === 'date') {
@@ -4642,12 +4533,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           if (dateGuids.length > 0) {
             const colored = await colorObjectsByGuid(api, dateGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
             coloredCount += colored;
-            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleRuntimeIds.size}`);
+            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuidsCount}`);
           }
         }
       }
 
-      setMessage(`✓ Värvitud! Valged=${whiteCount}, Värvilised=${scheduleRuntimeIds.size}`);
+      setMessage(`✓ Värvitud! Graafikudetaile=${scheduleGuidsCount}`);
     } catch (e) {
       console.error('Error applying color mode:', e);
       setMessage('Viga värvimisel');
