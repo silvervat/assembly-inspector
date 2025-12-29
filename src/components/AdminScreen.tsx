@@ -1367,7 +1367,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     setAvailableProperties([]);
 
     try {
-      // Get loaded models
+      // Get loaded models with their objects
       const loadedModels = await api.viewer.getModels('loaded');
       if (loadedModels.length === 0) {
         setMessage('Ühtegi mudelit pole laetud!');
@@ -1377,62 +1377,71 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
       const propertiesMap = new Map<string, { setName: string; propName: string; sampleValue: string }>();
 
-      // For each model, get some objects and their properties
+      // For each model, get objects and their properties
       for (const model of loadedModels) {
-        setMessage(`Skanneerin mudelit ${model.name || model.id}...`);
+        const modelId = model.id;
+        const modelName = model.name || model.id;
+        setMessage(`Skanneerin mudelit ${modelName}...`);
 
-        // Get some objects from the model (first 100)
         try {
-          // Use selection to get objects - select all and then limit
-          // Actually, let's try to get objects with properties directly
-          // We'll get a sample of objects to discover properties
+          // Get objects from model (same approach as export function)
+          const modelObj = model as any;
+          const objects = modelObj.objects || [];
+          const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
 
-          // Get model structure to find objects
-          const structure = await (api.viewer as any).getModelStructure?.(model.id);
-          if (!structure) continue;
-
-          // Collect object IDs from structure (limit to 100)
-          const objectIds: number[] = [];
-          const collectIds = (node: any) => {
-            if (objectIds.length >= 100) return;
-            if (node.id) objectIds.push(node.id);
-            if (node.children) {
-              for (const child of node.children) {
-                collectIds(child);
-                if (objectIds.length >= 100) break;
-              }
-            }
-          };
-
-          if (structure.children) {
-            for (const child of structure.children) {
-              collectIds(child);
-            }
+          if (runtimeIds.length === 0) {
+            console.log(`No objects found in model ${modelName}`);
+            continue;
           }
 
-          if (objectIds.length === 0) continue;
+          console.log(`Scanning ${runtimeIds.length} objects in model ${modelName}...`);
 
-          // Get properties for these objects
-          const properties = await (api.viewer as any).getObjectProperties(model.id, objectIds, { includeHidden: true });
+          // Get properties for first 100 objects (sample)
+          const sampleIds = runtimeIds.slice(0, 100);
+          const propsArray = await api.viewer.getObjectProperties(modelId, sampleIds);
 
           // Extract all property sets and properties
-          for (const objProps of properties) {
-            if (!objProps?.propertySets) continue;
+          for (const props of propsArray) {
+            if (!props) continue;
+            const propsAny = props as any;
 
-            for (const pset of objProps.propertySets) {
-              if (!pset?.name || !pset?.properties) continue;
+            // Format 1: props.properties is array of property sets
+            if (propsAny.properties && Array.isArray(propsAny.properties)) {
+              for (const pset of propsAny.properties) {
+                const setName = pset.name || '';
+                const propsArr = pset.properties || [];
 
-              for (const prop of pset.properties) {
-                if (!prop?.name) continue;
+                for (const prop of propsArr) {
+                  if (!prop?.name) continue;
+                  const key = `${setName}|${prop.name}`;
+                  if (!propertiesMap.has(key)) {
+                    const value = prop.displayValue ?? prop.value ?? '';
+                    propertiesMap.set(key, {
+                      setName,
+                      propName: prop.name,
+                      sampleValue: String(value).substring(0, 50),
+                    });
+                  }
+                }
+              }
+            }
 
-                const key = `${pset.name}|${prop.name}`;
-                if (!propertiesMap.has(key)) {
-                  const value = prop.displayValue ?? prop.value ?? '';
-                  propertiesMap.set(key, {
-                    setName: pset.name,
-                    propName: prop.name,
-                    sampleValue: String(value).substring(0, 50),
-                  });
+            // Format 2: props.propertySets
+            if (propsAny.propertySets && Array.isArray(propsAny.propertySets)) {
+              for (const pset of propsAny.propertySets) {
+                if (!pset?.name || !pset?.properties) continue;
+
+                for (const prop of pset.properties) {
+                  if (!prop?.name) continue;
+                  const key = `${pset.name}|${prop.name}`;
+                  if (!propertiesMap.has(key)) {
+                    const value = prop.displayValue ?? prop.value ?? '';
+                    propertiesMap.set(key, {
+                      setName: pset.name,
+                      propName: prop.name,
+                      sampleValue: String(value).substring(0, 50),
+                    });
+                  }
                 }
               }
             }
