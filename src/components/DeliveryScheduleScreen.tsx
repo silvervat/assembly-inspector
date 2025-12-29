@@ -4220,7 +4220,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setPlaybackVehicleColors(vColors);
     setPlaybackDateColors(dColors);
 
-    // Step 1: Fetch all GUIDs from Supabase and color them white
+    // Step 1: Fetch all GUIDs from Supabase
     setMessage('Playback: Loen Supabasest...');
     const PAGE_SIZE = 5000;
     const allGuids: string[] = [];
@@ -4245,22 +4245,87 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       if (data.length < PAGE_SIZE) break;
     }
 
-    // Step 2: Color ALL objects WHITE using GUID-based lookup
-    if (allGuids.length > 0) {
-      setMessage('Playback: Värvin valged...');
-      const BATCH_SIZE = 500;
-      let count = 0;
-      for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
-        const batch = allGuids.slice(i, i + BATCH_SIZE);
+    // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
+    setMessage('Playback: Otsin mudelitest...');
+    const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+    console.log(`Playback: Found ${foundObjects.size} objects in loaded models`);
+
+    // Step 3: Color ALL objects WHITE in batches (using runtime IDs directly)
+    setMessage('Playback: Värvin valged...');
+    const whiteByModel: Record<string, number[]> = {};
+    for (const [, found] of foundObjects) {
+      if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+      whiteByModel[found.modelId].push(found.runtimeId);
+    }
+
+    const BATCH_SIZE = 5000;
+    let whiteCount = 0;
+    const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+    for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+      for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+        const batch = runtimeIds.slice(i, i + BATCH_SIZE);
         try {
-          await colorObjectsByGuid(api, batch, { r: 255, g: 255, b: 255, a: 255 });
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
         } catch (e) { console.error('Error coloring white:', e); }
-        count += batch.length;
-        setMessage(`Playback: Valged ${count}/${allGuids.length}...`);
+        whiteCount += batch.length;
+        setMessage(`Playback: Valged ${whiteCount}/${totalWhite}...`);
+      }
+    }
+
+    // Step 4: Build runtime ID mapping for schedule items (for fast lookup during playback)
+    const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+    for (const item of items) {
+      const guid = item.guid_ifc || item.guid;
+      if (guid && foundObjects.has(guid)) {
+        const found = foundObjects.get(guid)!;
+        scheduleByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
       }
     }
 
     setMessage('Playback alustab...');
+
+    // Helper function to color items by model/runtimeId
+    const colorItemsByGuids = async (guids: string[], color: { r: number; g: number; b: number }) => {
+      const byModel: Record<string, number[]> = {};
+      for (const guid of guids) {
+        if (scheduleByGuid.has(guid)) {
+          const found = scheduleByGuid.get(guid)!;
+          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+          byModel[found.modelId].push(found.runtimeId);
+        }
+      }
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+        );
+      }
+      return Object.values(byModel).reduce((sum, arr) => sum + arr.length, 0);
+    };
+
+    // Helper function to select items by guids
+    const selectItemsByGuids = async (guids: string[]) => {
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      const byModel: Record<string, number[]> = {};
+      for (const guid of guids) {
+        if (scheduleByGuid.has(guid)) {
+          const found = scheduleByGuid.get(guid)!;
+          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+          byModel[found.modelId].push(found.runtimeId);
+        }
+      }
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        modelObjectIds.push({ modelId, objectRuntimeIds: runtimeIds });
+      }
+      if (modelObjectIds.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+      }
+      return modelObjectIds.length > 0;
+    };
 
     // Playback by DATE
     if (playbackSettings.playbackMode === 'date') {
@@ -4298,7 +4363,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }, 50);
 
-        // Collect ALL items from ALL vehicles of this date - use GUID-based lookup
+        // Collect ALL items from ALL vehicles of this date
         const dateGuids: string[] = [];
         for (const vehicle of dateVehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
@@ -4309,18 +4374,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
 
         if (dateGuids.length > 0) {
-          // Color all items of this date
+          // Color all items of this date (using cached runtime IDs)
           try {
-            await colorObjectsByGuid(api, dateGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
+            await colorItemsByGuids(dateGuids, color);
           } catch (e) { console.error('Error coloring date:', e); }
 
           // Select ALL items from this date in model (if enabled)
           if (playbackSettings.selectItemsInModel) {
             try {
-              await selectObjectsByGuid(api, dateGuids, 'set');
-
+              const hasSelection = await selectItemsByGuids(dateGuids);
               // Zoom to selection if not disabled
-              if (!playbackSettings.disableZoom) {
+              if (hasSelection && !playbackSettings.disableZoom) {
                 await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
               }
             } catch (e) { console.error('Error selecting date items:', e); }
@@ -4373,24 +4437,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           setCollapsedVehicles(prev => { const next = new Set(prev); next.delete(vehicle.id); return next; });
         }
 
-        // Collect vehicle item GUIDs (fallback to guid if guid_ifc not available)
+        // Collect vehicle item GUIDs
         const vehicleGuids = vehicleItems
           .map(item => item.guid_ifc || item.guid)
           .filter((g): g is string => !!g);
 
         if (vehicleGuids.length > 0) {
-          // Color vehicle items
+          // Color vehicle items (using cached runtime IDs)
           try {
-            await colorObjectsByGuid(api, vehicleGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
+            await colorItemsByGuids(vehicleGuids, color);
           } catch (e) { console.error('Error coloring vehicle:', e); }
 
           // Select items in model (if enabled)
           if (playbackSettings.selectItemsInModel) {
             try {
-              await selectObjectsByGuid(api, vehicleGuids, 'set');
-
+              const hasSelection = await selectItemsByGuids(vehicleGuids);
               // Zoom to selection if not disabled
-              if (!playbackSettings.disableZoom) {
+              if (hasSelection && !playbackSettings.disableZoom) {
                 await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
               }
             } catch (e) { console.error('Error selecting vehicle items:', e); }
@@ -4500,15 +4563,76 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       }
 
       setColorMode(mode);
-      setMessage('Värvin kõik valged...');
+      setMessage('Värvin... Loen Supabasest...');
 
-      // Step 1: Color ALL objects white in all loaded models (model-independent approach)
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+      // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
 
-      // For counting colored items
-      const scheduleGuidsCount = items.filter(i => i.guid_ifc).length;
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
 
-      // Step 2: Color schedule items by vehicle or date
+        if (error) {
+          console.error('Supabase error:', error);
+          setMessage('Viga Supabase lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
+
+      // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
+      setMessage('Värvin... Otsin mudelitest...');
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`Found ${foundObjects.size} objects in loaded models`);
+
+      // Step 3: Get schedule item GUIDs (for identifying which to color)
+      const scheduleGuids = new Set(
+        items.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
+      );
+
+      // Step 4: Build arrays for white coloring (non-schedule items) and collect by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of foundObjects) {
+        if (!scheduleGuids.has(guid)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      // Step 5: Color non-schedule items WHITE in batches
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+        }
+      }
+
+      // Step 6: Color schedule items by vehicle or date
       if (mode === 'vehicle') {
         // Generate colors for each vehicle
         const vehicleIds = vehicles.map(v => v.id);
@@ -4516,7 +4640,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setVehicleColors(colors);
         setDateColors({});
 
-        // Apply colors to items in model using GUID-based lookup
+        // Build runtime ID mapping for schedule items
+        const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const item of items) {
+          const guid = item.guid_ifc || item.guid;
+          if (guid && foundObjects.has(guid)) {
+            const found = foundObjects.get(guid)!;
+            scheduleByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+          }
+        }
+
+        // Apply colors to items by vehicle
         let coloredCount = 0;
         for (const vehicle of vehicles) {
           const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
@@ -4525,15 +4659,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           const color = colors[vehicle.id];
           if (!color) continue;
 
-          // Collect GUIDs for this vehicle's items (fallback to guid if guid_ifc not available)
-          const vehicleGuids = vehicleItems
-            .map(item => item.guid_ifc || item.guid)
-            .filter((g): g is string => !!g);
+          // Group by model
+          const byModel: Record<string, number[]> = {};
+          for (const item of vehicleItems) {
+            const guid = item.guid_ifc || item.guid;
+            if (guid && scheduleByGuid.has(guid)) {
+              const found = scheduleByGuid.get(guid)!;
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+          }
 
-          if (vehicleGuids.length > 0) {
-            const colored = await colorObjectsByGuid(api, vehicleGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
-            coloredCount += colored;
-            setMessage(`Värvin veokid... ${coloredCount}/${scheduleGuidsCount}`);
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin veokid... ${coloredCount}/${scheduleGuids.size}`);
           }
         }
       } else if (mode === 'date') {
@@ -4545,34 +4688,49 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setDateColors(colors);
         setVehicleColors({});
 
-        // Apply colors by date using GUID-based lookup
+        // Build runtime ID mapping for schedule items
+        const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const item of items) {
+          const guid = item.guid_ifc || item.guid;
+          if (guid && foundObjects.has(guid)) {
+            const found = foundObjects.get(guid)!;
+            scheduleByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+          }
+        }
+
+        // Apply colors by date
         let coloredCount = 0;
         for (const date of dates) {
           const dateVehicles = vehicles.filter(v => v.scheduled_date === date);
           const color = colors[date];
           if (!color) continue;
 
-          // Collect all GUIDs for items on this date (fallback to guid if guid_ifc not available)
-          const dateGuids: string[] = [];
+          // Group by model
+          const byModel: Record<string, number[]> = {};
           for (const vehicle of dateVehicles) {
             const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
             for (const item of vehicleItems) {
-              const guidToUse = item.guid_ifc || item.guid;
-              if (guidToUse) {
-                dateGuids.push(guidToUse);
+              const guid = item.guid_ifc || item.guid;
+              if (guid && scheduleByGuid.has(guid)) {
+                const found = scheduleByGuid.get(guid)!;
+                if (!byModel[found.modelId]) byModel[found.modelId] = [];
+                byModel[found.modelId].push(found.runtimeId);
               }
             }
           }
 
-          if (dateGuids.length > 0) {
-            const colored = await colorObjectsByGuid(api, dateGuids, { r: color.r, g: color.g, b: color.b, a: 255 });
-            coloredCount += colored;
-            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuidsCount}`);
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuids.size}`);
           }
         }
       }
 
-      setMessage(`✓ Värvitud! Graafikudetaile=${scheduleGuidsCount}`);
+      setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${scheduleGuids.size}`);
     } catch (e) {
       console.error('Error applying color mode:', e);
       setMessage('Viga värvimisel');
