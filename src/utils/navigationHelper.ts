@@ -267,3 +267,230 @@ export function parseInspectionIdFromHash(): string | null {
     return null;
   }
 }
+
+// ============================================
+// MODEL-INDEPENDENT OBJECT LOOKUP FUNCTIONS
+// ============================================
+// These functions find objects by GUID in ANY loaded model,
+// making schedules work regardless of which model is loaded.
+
+/**
+ * Result of finding an object in loaded models
+ */
+export interface FoundObject {
+  modelId: string;
+  runtimeId: number;
+  guidIfc: string;
+}
+
+/**
+ * Find a single object by GUID in any loaded model
+ * Searches all loaded models until the object is found
+ */
+export async function findObjectInLoadedModels(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidIfc: string
+): Promise<FoundObject | null> {
+  if (!guidIfc) return null;
+
+  try {
+    const loadedModels = await api.viewer.getModels('loaded');
+    if (!loadedModels || loadedModels.length === 0) return null;
+
+    for (const model of loadedModels) {
+      try {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guidIfc]);
+        if (runtimeIds && runtimeIds[0]) {
+          return {
+            modelId: model.id,
+            runtimeId: runtimeIds[0],
+            guidIfc
+          };
+        }
+      } catch {
+        // Object not in this model, try next
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error('Error finding object in loaded models:', e);
+    return null;
+  }
+}
+
+/**
+ * Find multiple objects by GUIDs in any loaded model
+ * Returns map of guidIfc -> FoundObject
+ */
+export async function findObjectsInLoadedModels(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[]
+): Promise<Map<string, FoundObject>> {
+  const results = new Map<string, FoundObject>();
+  if (!guidsIfc || guidsIfc.length === 0) return results;
+
+  try {
+    const loadedModels = await api.viewer.getModels('loaded');
+    if (!loadedModels || loadedModels.length === 0) return results;
+
+    // Track which GUIDs we still need to find
+    const remaining = new Set(guidsIfc.filter(g => g));
+
+    for (const model of loadedModels) {
+      if (remaining.size === 0) break;
+
+      try {
+        const guidsToSearch = Array.from(remaining);
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guidsToSearch);
+
+        for (let i = 0; i < guidsToSearch.length; i++) {
+          if (runtimeIds[i]) {
+            const guid = guidsToSearch[i];
+            results.set(guid, {
+              modelId: model.id,
+              runtimeId: runtimeIds[i],
+              guidIfc: guid
+            });
+            remaining.delete(guid);
+          }
+        }
+      } catch {
+        // Error with this model, try next
+      }
+    }
+
+    return results;
+  } catch (e) {
+    console.error('Error finding objects in loaded models:', e);
+    return results;
+  }
+}
+
+/**
+ * Build modelObjectIds structure for API calls from found objects
+ */
+export function buildModelObjectIds(
+  foundObjects: FoundObject[] | Map<string, FoundObject>
+): { modelId: string; objectRuntimeIds: number[] }[] {
+  const byModel = new Map<string, number[]>();
+
+  const objects = foundObjects instanceof Map
+    ? Array.from(foundObjects.values())
+    : foundObjects;
+
+  for (const obj of objects) {
+    if (!byModel.has(obj.modelId)) {
+      byModel.set(obj.modelId, []);
+    }
+    byModel.get(obj.modelId)!.push(obj.runtimeId);
+  }
+
+  return Array.from(byModel.entries()).map(([modelId, objectRuntimeIds]) => ({
+    modelId,
+    objectRuntimeIds
+  }));
+}
+
+/**
+ * Color objects by their GUIDs - searches all loaded models
+ */
+export async function colorObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[],
+  color: { r: number; g: number; b: number; a: number }
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelObjectIds = buildModelObjectIds(found);
+  await api.viewer.setObjectState({ modelObjectIds }, { color });
+
+  return found.size;
+}
+
+/**
+ * Select objects by their GUIDs - searches all loaded models
+ */
+export async function selectObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[],
+  mode: 'set' | 'add' | 'remove' = 'set'
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelObjectIds = buildModelObjectIds(found);
+  await api.viewer.setSelection({ modelObjectIds }, mode);
+
+  return found.size;
+}
+
+/**
+ * Zoom to objects by their GUIDs - searches all loaded models
+ */
+export async function zoomToObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[],
+  animationTime: number = 300
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelObjectIds = buildModelObjectIds(found);
+  await api.viewer.setSelection({ modelObjectIds }, 'set');
+  await api.viewer.setCamera({ modelObjectIds }, { animationTime });
+
+  return found.size;
+}
+
+/**
+ * Isolate objects by their GUIDs - shows only these objects
+ */
+export async function isolateObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[]
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelEntities = buildModelObjectIds(found).map(mo => ({
+    modelId: mo.modelId,
+    entityIds: mo.objectRuntimeIds
+  }));
+
+  await api.viewer.isolateEntities(modelEntities);
+
+  return found.size;
+}
+
+/**
+ * Show objects (make visible) by their GUIDs
+ */
+export async function showObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[]
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelObjectIds = buildModelObjectIds(found);
+  await api.viewer.setObjectState({ modelObjectIds }, { visible: true });
+
+  return found.size;
+}
+
+/**
+ * Hide objects by their GUIDs
+ */
+export async function hideObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[]
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelObjectIds = buildModelObjectIds(found);
+  await api.viewer.setObjectState({ modelObjectIds }, { visible: false });
+
+  return found.size;
+}
