@@ -356,8 +356,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // STATE
   // ============================================
 
-  // Property mappings for reading Tekla properties
-  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+  // Property mappings for reading Tekla properties (wait for loading before processing selections)
+  const { mappings: propertyMappings, isLoading: mappingsLoading } = useProjectPropertyMappings(projectId);
 
   // Data state
   const [factories, setFactories] = useState<DeliveryFactory[]>([]);
@@ -1387,11 +1387,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const selectionInProgressRef = useRef(false);
   // Track previous model selection to detect actual changes
   const previousModelSelectionRef = useRef<string>('');
+  // Ref to always get latest propertyMappings in selection handler (avoids stale closure)
+  const propertyMappingsRef = useRef(propertyMappings);
+  propertyMappingsRef.current = propertyMappings;
 
   useEffect(() => {
     const handleSelectionChange = async () => {
       // Skip if already processing
       if (selectionInProgressRef.current) return;
+      // Skip if mappings are still loading (will re-run when loaded)
+      if (mappingsLoading) return;
       selectionInProgressRef.current = true;
 
       try {
@@ -1451,12 +1456,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
                   const setNameNorm = normalize(setName);
                   const rawNameNorm = normalize(rawName);
-                  const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
-                  const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
-                  const weightSetNorm = normalize(propertyMappings.weight_set);
-                  const weightPropNorm = normalize(propertyMappings.weight_prop);
-                  const posSetNorm = normalize(propertyMappings.position_code_set);
-                  const posPropNorm = normalize(propertyMappings.position_code_prop);
+                  // Use ref to get latest mappings (avoids stale closure issue when mappings load async)
+                  const currentMappings = propertyMappingsRef.current;
+                  const mappingSetNorm = normalize(currentMappings.assembly_mark_set);
+                  const mappingPropNorm = normalize(currentMappings.assembly_mark_prop);
+                  const weightSetNorm = normalize(currentMappings.weight_set);
+                  const weightPropNorm = normalize(currentMappings.weight_prop);
+                  const posSetNorm = normalize(currentMappings.position_code_set);
+                  const posPropNorm = normalize(currentMappings.position_code_prop);
 
                   // Assembly/Cast unit Mark - configured mapping first (normalized comparison)
                   if (assemblyMark.startsWith('Object_')) {
@@ -1552,7 +1559,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Silent
       }
     };
-  }, [api]);
+  }, [api, mappingsLoading]); // Re-run when mappings finish loading to process pending selection
 
   // Sync schedule selection to model viewer
   // Only syncs WHEN schedule items are selected - does NOT clear model selection otherwise
