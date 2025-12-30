@@ -1239,18 +1239,63 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   }, [api, projectId, loadModelObjectsInfo, propertyMappings]);
 
   // Save ALL assemblies from model to database (not just selection)
+  // Uses Assembly Selection mode: enables it, selects all, gets parent assemblies
   const saveAllAssembliesToSupabase = useCallback(async () => {
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Skanneerin mudelit...');
+    setModelObjectsStatus('Lülitan Assembly Selection sisse...');
 
     try {
-      // Get all objects from all models
+      // Step 1: Enable Assembly Selection mode
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+
+      // Step 2: Get all objects from all models
+      setModelObjectsStatus('Laadin mudeli objekte...');
       const allModelObjects = await api.viewer.getObjects();
       if (!allModelObjects || allModelObjects.length === 0) {
         setModelObjectsStatus('Ühtegi mudelit pole laetud!');
         setModelObjectsLoading(false);
         return;
       }
+
+      // Step 3: Build selection with ALL object IDs
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      let totalObjects = 0;
+
+      for (const modelObj of allModelObjects) {
+        const modelId = modelObj.modelId;
+        const objects = (modelObj as any).objects || [];
+        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+        if (runtimeIds.length > 0) {
+          modelObjectIds.push({ modelId, objectRuntimeIds: runtimeIds });
+          totalObjects += runtimeIds.length;
+        }
+      }
+
+      setModelObjectsStatus(`Valin ${totalObjects} objekti (Assembly Selection sees)...`);
+
+      // Step 4: Select all objects - with Assembly Selection ON, this consolidates to parent assemblies
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Small delay to let selection settle
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Step 5: Get the selection back - now only parent assemblies
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setModelObjectsStatus('Valik on tühi! Kontrolli, kas mudel on laetud.');
+        setModelObjectsLoading(false);
+        return;
+      }
+
+      // Count unique parent assemblies
+      let assemblyCount = 0;
+      for (const sel of selection) {
+        assemblyCount += sel.objectRuntimeIds?.length || 0;
+      }
+
+      setModelObjectsStatus(`Leitud ${assemblyCount} assembly-t. Laadin propertiseid...`);
 
       // Helper to normalize property names
       const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
@@ -1267,39 +1312,40 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         product_name: string | null;
       }[] = [];
 
-      // Process each model
-      for (const modelObj of allModelObjects) {
-        const modelId = modelObj.modelId;
-        const objects = (modelObj as any).objects || [];
-        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+      // Process the selection (parent assemblies only due to Assembly Selection mode)
+      let processed = 0;
+      for (const sel of selection) {
+        const modelId = sel.modelId;
+        const runtimeIds = sel.objectRuntimeIds || [];
 
         if (runtimeIds.length === 0) continue;
 
-        setModelObjectsStatus(`Skanneerin mudelit... (${runtimeIds.length} objekti)`);
-
         // Process in batches
-        const BATCH_SIZE = 500;
+        const BATCH_SIZE = 100;
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          processed += batch.length;
+
+          setModelObjectsStatus(`Laadin propertiseid... ${processed}/${assemblyCount}`);
 
           // Get properties for batch
           let propsArray: any[] = [];
           try {
             propsArray = await (api.viewer as any).getObjectProperties(modelId, batch, { includeHidden: true });
           } catch (e) {
-            console.warn('Error getting properties for batch:', e);
+            console.warn('Error getting properties:', e);
             continue;
           }
 
-          // Get IFC GUIDs for batch
+          // Get GUIDs for batch
           let guidsArray: string[] = [];
           try {
             guidsArray = await api.viewer.convertToObjectIds(modelId, batch);
           } catch (e) {
-            console.warn('Error getting GUIDs for batch:', e);
+            console.warn('Error getting GUIDs:', e);
           }
 
-          // Process each object in batch
+          // Process each assembly
           for (let j = 0; j < batch.length; j++) {
             const runtimeId = batch[j];
             const props = propsArray[j];
@@ -1335,7 +1381,6 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
               }
             }
 
-            // Include all objects with valid IFC GUID (assembly mark may be empty)
             if (ifcGuid) {
               allRecords.push({
                 trimble_project_id: projectId,
@@ -1348,13 +1393,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
               });
             }
           }
-
-          setModelObjectsStatus(`Skanneerin... ${allRecords.length} objekti leitud`);
         }
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi objekti IFC GUID-ga ei leitud!');
+        setModelObjectsStatus('Ühtegi assembly-t ei leitud! Kontrolli, kas Assembly Selection on sees.');
         setModelObjectsLoading(false);
         return;
       }
@@ -1420,11 +1463,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
       // Report results
       const withMarkCount = allRecords.filter(r => r.assembly_mark).length;
-      const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
+      const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark || r.product_name).filter(Boolean).join(', ');
       const moreNew = newRecords.length > 5 ? ` (+${newRecords.length - 5} veel)` : '';
 
       setModelObjectsStatus(
-        `✓ Kokku: ${allRecords.length} objekti (${withMarkCount} assembly mark-iga)\n` +
+        `✓ ${allRecords.length} assembly-t (${withMarkCount} mark-iga)\n` +
         `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 && newMarks ? ` (${newMarks}${moreNew})` : ''}\n` +
         `   🔄 Uuendatud: ${existingRecords.length}`
       );
