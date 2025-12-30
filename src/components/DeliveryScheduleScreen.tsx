@@ -6352,6 +6352,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       }}
                                     />
 
+                                    {/* Sequence number */}
+                                    <span className="item-seq-nr">{idx + 1}</span>
+
                                     {/* Mark + Product on same line */}
                                     <div className="item-info inline">
                                       <span
@@ -6683,6 +6686,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         setLastClickedId(item.id);
                                       }}
                                     />
+                                    {/* Sequence number */}
+                                    <span className="item-seq-nr">{idx + 1}</span>
+
                                     <div className="item-info inline">
                                       <span
                                         className="item-mark clickable"
