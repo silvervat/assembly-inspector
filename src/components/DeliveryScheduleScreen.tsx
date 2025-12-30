@@ -6978,7 +6978,50 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             <div className="vehicle-edit-panel">
               <div className="vehicle-edit-header">
                 <FiTruck />
-                <span className="vehicle-edit-code">{activeVehicle.vehicle_code}</span>
+                <input
+                  type="text"
+                  className="vehicle-edit-code-input"
+                  defaultValue={activeVehicle.vehicle_code}
+                  onBlur={async (e) => {
+                    const newCode = e.target.value.trim();
+                    if (!newCode) {
+                      e.target.value = activeVehicle.vehicle_code;
+                      setMessage('Veoki kood ei saa olla tühi');
+                      return;
+                    }
+                    if (newCode === activeVehicle.vehicle_code) return;
+
+                    // Check for duplicates
+                    const existingWithCode = vehicles.find(v => v.vehicle_code === newCode && v.id !== activeVehicleId);
+                    if (existingWithCode) {
+                      e.target.value = activeVehicle.vehicle_code;
+                      setMessage(`Veok koodiga "${newCode}" on juba olemas!`);
+                      return;
+                    }
+
+                    // Extract number from code
+                    const numMatch = newCode.match(/\d+$/);
+                    const vehicleNumber = numMatch ? parseInt(numMatch[0], 10) : undefined;
+
+                    // Optimistic update
+                    setVehicles(prev => prev.map(v =>
+                      v.id === activeVehicleId ? { ...v, vehicle_code: newCode, vehicle_number: vehicleNumber ?? v.vehicle_number } : v
+                    ));
+                    // Save to DB
+                    await supabase
+                      .from('trimble_delivery_vehicles')
+                      .update({ vehicle_code: newCode, vehicle_number: vehicleNumber })
+                      .eq('id', activeVehicleId);
+                    setMessage('Veoki kood muudetud');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur();
+                    if (e.key === 'Escape') {
+                      e.currentTarget.value = activeVehicle.vehicle_code;
+                      e.currentTarget.blur();
+                    }
+                  }}
+                />
                 <div className="header-date-field">
                   <input
                     type="date"

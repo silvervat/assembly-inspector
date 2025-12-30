@@ -882,6 +882,23 @@
   font-size: 14px;
 }
 
+.vehicle-edit-header .vehicle-edit-code-input {
+  font-weight: 700;
+  font-size: 14px;
+  padding: 4px 8px;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  background: white;
+  width: 90px;
+  color: #1e40af;
+}
+
+.vehicle-edit-header .vehicle-edit-code-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
 .vehicle-edit-header .header-date-field {
   display: flex;
   align-items: center;
