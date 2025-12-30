@@ -3108,7 +3108,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return colors;
   };
 
-  // Toggle color by date mode (on/off) - reads from database like delivery schedule
+  // Toggle color by date mode (on/off) - uses database-based approach like delivery schedule
   const toggleColorByDate = async () => {
     const newValue = !playbackSettings.colorEachDayDifferent;
     setPlaybackSettings(prev => ({
@@ -3118,7 +3118,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }));
 
     if (newValue) {
-      // Turning ON - color schedule items by date
+      // Turning ON - color by date using DATABASE-BASED approach (same as delivery schedule)
       try {
         const dates = Object.keys(itemsByDate);
         if (dates.length === 0) return;
@@ -3126,48 +3126,115 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const dateColors = generateDateColors(dates);
         setPlaybackDateColors(dateColors);
 
-        // Step 1: Color ALL objects white in all loaded models (model-independent approach)
-        setMessage('Värvin mudeli valgeks...');
-        try {
-          await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
-        } catch (e) {
-          console.error('Error coloring all white:', e);
+        setMessage('Värvin... Loen Supabasest...');
+
+        // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
+        const PAGE_SIZE = 5000;
+        const allGuids: string[] = [];
+        let offset = 0;
+
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null)
+            .range(offset, offset + PAGE_SIZE - 1);
+
+          if (error) {
+            console.error('Supabase error:', error);
+            setMessage('Viga Supabase lugemisel');
+            return;
+          }
+
+          if (!data || data.length === 0) break;
+
+          for (const obj of data) {
+            if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+          }
+          offset += data.length;
+          setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
+          if (data.length < PAGE_SIZE) break;
         }
 
-        setMessage('Värvin päevi...');
+        console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
 
-        // Step 4: Color scheduled items by date using GUID-based lookup
-        const colorBatches: Map<string, { guids: string[]; color: { r: number; g: number; b: number } }> = new Map();
+        // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
+        setMessage('Värvin... Otsin mudelitest...');
+        const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+        console.log(`Found ${foundObjects.size} objects in loaded models`);
 
-        for (const [date, items] of Object.entries(itemsByDate)) {
+        // Step 3: Get schedule item GUIDs (for identifying which to color)
+        const scheduleGuids = new Set(
+          scheduleItems.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
+        );
+
+        // Step 4: Build arrays for white coloring (non-schedule items) and collect by model
+        const whiteByModel: Record<string, number[]> = {};
+        for (const [guid, found] of foundObjects) {
+          if (!scheduleGuids.has(guid)) {
+            if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+            whiteByModel[found.modelId].push(found.runtimeId);
+          }
+        }
+
+        // Step 5: Color non-schedule items WHITE in batches
+        const BATCH_SIZE = 5000;
+        let whiteCount = 0;
+        const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+        for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+          for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+            const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+              { color: { r: 255, g: 255, b: 255, a: 255 } }
+            );
+            whiteCount += batch.length;
+            setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+          }
+        }
+
+        // Step 6: Color schedule items by date
+        // Build runtime ID mapping for schedule items
+        const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const item of scheduleItems) {
+          const guid = item.guid_ifc || item.guid;
+          if (guid && foundObjects.has(guid)) {
+            const found = foundObjects.get(guid)!;
+            scheduleByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+          }
+        }
+
+        // Apply colors by date
+        let coloredCount = 0;
+        for (const [date, dateItems] of Object.entries(itemsByDate)) {
           const color = dateColors[date];
           if (!color) continue;
 
-          const colorKey = `${color.r}-${color.g}-${color.b}`;
-
-          if (!colorBatches.has(colorKey)) {
-            colorBatches.set(colorKey, { guids: [], color });
+          // Group by model
+          const byModel: Record<string, number[]> = {};
+          for (const item of dateItems) {
+            const guid = item.guid_ifc || item.guid;
+            if (guid && scheduleByGuid.has(guid)) {
+              const found = scheduleByGuid.get(guid)!;
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
           }
 
-          const batch = colorBatches.get(colorKey)!;
-          for (const item of items) {
-            const guidIfc = item.guid_ifc || item.guid;
-            if (guidIfc) batch.guids.push(guidIfc);
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin kuupäevad... ${coloredCount}/${scheduleGuids.size}`);
           }
         }
 
-        // Execute all color batches using GUID-based lookup
-        let totalItems = 0;
-        for (const batch of colorBatches.values()) {
-          if (batch.guids.length === 0) continue;
-          totalItems += batch.guids.length;
-          try {
-            await colorObjectsByGuid(api, batch.guids, { r: batch.color.r, g: batch.color.g, b: batch.color.b, a: 255 });
-          } catch (e) { console.error('Error coloring by date:', e); }
-        }
-
-        setMessage(`Värvitud ${totalItems} detaili`);
-        setTimeout(() => setMessage(null), 2000);
+        setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${coloredCount}`);
+        setTimeout(() => setMessage(null), 3000);
       } catch (e) {
         console.error('Error coloring by date:', e);
         setMessage('Viga värvimisel');
@@ -3222,11 +3289,61 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Color ENTIRE model white (model-independent approach)
+  // Color objects from database white (database-based approach like delivery schedule)
   const colorEntireModelWhite = async () => {
     try {
-      // Color ALL objects white in all loaded models
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+      setMessage('Värvin valged... Loen Supabasest...');
+
+      // Fetch ALL objects from Supabase with pagination
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      // Convert GUIDs to runtime IDs
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+      // Group by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
+      }
+
+      // Color in batches
+      const BATCH_SIZE = 5000;
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      setMessage(null);
     } catch (e) {
       console.error('Error coloring model white:', e);
     }

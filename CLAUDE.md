@@ -124,12 +124,8 @@ gh pr merge --squash
 - Toeta mõlemat formaati: `propertySets` ja `properties` array
 - Normaliseeri nimesid: `s.replace(/\s+/g, '').toLowerCase()`
 
-### Paigaldusgraafiku värvimine EI TÖÖTA (AVATUD PROBLEEM)
-**Probleem:** Praegune värvimine värvib terve mudeli ja seejärel ei saa üksikuid detaile üle kirjutada.
-
-**Lahendus vajalik:** Peab kasutama sama loogikat mis tarnegraafikus:
-- Tarnegraafik kasutab `trimble_model_objects` tabelit andmebaasis
+### Värvimine graafikutes (LAHENDATUD)
+Mõlemad graafikud (tarne- ja paigaldusgraafik) kasutavad nüüd andmebaasi-põhist värvimise loogikat:
+- Loetakse kõik objektid `trimble_model_objects` tabelist
 - Värvimine toimub ainult nende objektide põhjal mis on andmebaasis
-- Paigaldusgraafik peab samuti kasutama andmebaasi-põhist lähenemist
-
-**Vt:** `DeliveryScheduleScreen.tsx` - kuidas värvimine seal töötab
+- Graafiku-välised objektid värvitakse valgeks, graafikus olevad oma kuupäeva järgi
