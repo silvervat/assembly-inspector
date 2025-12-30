@@ -965,6 +965,91 @@
   color: var(--modus-text-secondary);
 }
 
+/* Playback Progress Bar (YouTube-style scrubber) */
+.playback-scrubber {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+  max-width: 400px;
+}
+
+.scrubber-time {
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.scrubber-time.current {
+  text-align: right;
+}
+
+.scrubber-time.total {
+  text-align: left;
+}
+
+.scrubber-track {
+  flex: 1;
+  height: 6px;
+  background: var(--modus-border);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: height 0.15s ease;
+}
+
+.scrubber-track:hover {
+  height: 10px;
+}
+
+.scrubber-progress {
+  height: 100%;
+  background: var(--modus-primary);
+  border-radius: 3px;
+  position: relative;
+  transition: width 0.1s ease;
+}
+
+.scrubber-handle {
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 12px;
+  height: 12px;
+  background: var(--modus-primary);
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.scrubber-track:hover .scrubber-handle {
+  opacity: 1;
+}
+
+.scrubber-track.dragging .scrubber-handle {
+  opacity: 1;
+}
+
+.scrubber-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  margin-bottom: 8px;
+  pointer-events: none;
+}
+
 .export-btn {
   margin-left: auto;
   display: flex;
