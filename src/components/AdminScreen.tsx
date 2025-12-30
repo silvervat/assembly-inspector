@@ -1186,11 +1186,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
         setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${allRecords.length})...`);
 
+        // Use upsert to update existing records with new property values
+        // (important when property mappings are changed and objects are re-sent)
         const { error } = await supabase
           .from('trimble_model_objects')
           .upsert(batch, {
-            onConflict: 'trimble_project_id,model_id,object_runtime_id',
-            ignoreDuplicates: true
+            onConflict: 'trimble_project_id,model_id,object_runtime_id'
+            // ignoreDuplicates removed - now updates existing records
           });
 
         if (error) {
