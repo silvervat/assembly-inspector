@@ -381,6 +381,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const versionDropdownRef = useRef<HTMLDivElement>(null);
+  const hamburgerMenuRef = useRef<HTMLDivElement>(null);
 
   // Assembly selection state
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
@@ -837,6 +838,22 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showVersionDropdown]);
+
+  // Close hamburger menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (hamburgerMenuRef.current && !hamburgerMenuRef.current.contains(event.target as Node)) {
+        setShowHamburgerMenu(false);
+        setShowMarkupSubmenu(false);
+      }
+    };
+    if (showHamburgerMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showHamburgerMenu]);
 
   // Load delivery info for all items (date and truck code)
   const loadDeliveryInfo = useCallback(async () => {
@@ -2435,12 +2452,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setMessage('Eemaldan vanad markupid...');
 
     try {
-      // First remove all existing markups
+      // First remove all existing markups (in batches)
       const existingMarkups = await api.markup?.getTextMarkups?.();
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await api.markup?.removeMarkups?.(existingIds);
+          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
         }
       }
 
@@ -2548,19 +2565,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      // Create markups
-      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
-
-      // Extract created IDs
-      let createdIds: number[] = [];
-      if (Array.isArray(result)) {
-        result.forEach((r: any) => {
-          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-          else if (typeof r === 'number') createdIds.push(r);
-        });
-      } else if (result?.ids) {
-        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
-      }
+      // Create markups (in batches)
+      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
 
       // Set color - use contrasting color based on day color
       let markupColor = '#FF0000'; // Default red
@@ -2592,13 +2598,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         }
       }
 
-      for (const id of createdIds) {
-        try {
-          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
-        } catch (err) {
-          console.warn('Color set error:', err);
-        }
-      }
+      // Set colors (in batches)
+      await batchEditMarkupColors(createdIds, markupColor, 'Värvin markupe...');
 
       setMessage(`${createdIds.length} markupit loodud`);
       setDateMenuId(null);
@@ -2622,12 +2623,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     setMessage('Eemaldan vanad markupid...');
 
     try {
-      // First remove all existing markups
+      // First remove all existing markups (in batches)
       const existingMarkups = await api.markup?.getTextMarkups?.();
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await api.markup?.removeMarkups?.(existingIds);
+          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
         }
       }
 
@@ -2730,37 +2731,113 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      // Create markups
-      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+      // Create markups (in batches)
+      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
 
-      // Extract created IDs
-      let createdIds: number[] = [];
-      if (Array.isArray(result)) {
-        result.forEach((r: any) => {
-          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-          else if (typeof r === 'number') createdIds.push(r);
-        });
-      } else if (result?.ids) {
-        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
-      }
-
-      // Set colors
+      // Group IDs by color for batch color editing
+      const idsByColor = new Map<string, number[]>();
       for (let i = 0; i < createdIds.length; i++) {
         const id = createdIds[i];
         const colorInfo = markupDateColors[i];
-        if (colorInfo) {
-          try {
-            await (api.markup as any)?.editMarkup?.(id, { color: colorInfo.color });
-          } catch (err) {
-            console.warn('Color set error:', err);
+        if (id && colorInfo) {
+          if (!idsByColor.has(colorInfo.color)) {
+            idsByColor.set(colorInfo.color, []);
           }
+          idsByColor.get(colorInfo.color)!.push(id);
         }
+      }
+
+      // Set colors (in batches, grouped by color)
+      let coloredCount = 0;
+      for (const [color, ids] of idsByColor) {
+        await batchEditMarkupColors(ids, color);
+        coloredCount += ids.length;
+        setMessage(`Värvin markupe... ${coloredCount}/${createdIds.length}`);
       }
 
       setMessage(`${createdIds.length} markupit loodud (${allDates.length} päeva)`);
     } catch (e) {
       console.error('Error creating markups for all days:', e);
       setMessage('Viga markupite loomisel');
+    }
+  };
+
+  // Batch size for markup operations (to avoid crashes with large models)
+  const MARKUP_BATCH_SIZE = 100;
+
+  // Helper: Remove markups in batches
+  const batchRemoveMarkups = async (ids: number[], progressPrefix?: string) => {
+    if (ids.length === 0) return;
+
+    for (let i = 0; i < ids.length; i += MARKUP_BATCH_SIZE) {
+      const batch = ids.slice(i, i + MARKUP_BATCH_SIZE);
+      try {
+        await api.markup?.removeMarkups?.(batch);
+        if (progressPrefix) {
+          setMessage(`${progressPrefix} ${Math.min(i + MARKUP_BATCH_SIZE, ids.length)}/${ids.length}`);
+        }
+      } catch (e) {
+        console.error('Error removing markup batch:', e);
+      }
+      // Small delay between batches
+      if (i + MARKUP_BATCH_SIZE < ids.length) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+    }
+  };
+
+  // Helper: Create markups in batches
+  const batchCreateMarkups = async (markups: any[], progressPrefix?: string): Promise<number[]> => {
+    const allCreatedIds: number[] = [];
+
+    for (let i = 0; i < markups.length; i += MARKUP_BATCH_SIZE) {
+      const batch = markups.slice(i, i + MARKUP_BATCH_SIZE);
+      try {
+        const result = await api.markup?.addTextMarkup?.(batch) as any;
+
+        // Extract created IDs
+        if (Array.isArray(result)) {
+          result.forEach((r: any) => {
+            if (typeof r === 'object' && r?.id) allCreatedIds.push(Number(r.id));
+            else if (typeof r === 'number') allCreatedIds.push(r);
+          });
+        } else if (result?.ids) {
+          allCreatedIds.push(...result.ids.map((id: any) => Number(id)).filter(Boolean));
+        }
+
+        if (progressPrefix) {
+          setMessage(`${progressPrefix} ${Math.min(i + MARKUP_BATCH_SIZE, markups.length)}/${markups.length}`);
+        }
+      } catch (e) {
+        console.error('Error creating markup batch:', e);
+      }
+      // Small delay between batches
+      if (i + MARKUP_BATCH_SIZE < markups.length) {
+        await new Promise(r => setTimeout(r, 50));
+      }
+    }
+
+    return allCreatedIds;
+  };
+
+  // Helper: Edit markup colors in batches
+  const batchEditMarkupColors = async (ids: number[], color: string, progressPrefix?: string) => {
+    for (let i = 0; i < ids.length; i += MARKUP_BATCH_SIZE) {
+      const batch = ids.slice(i, i + MARKUP_BATCH_SIZE);
+      for (const id of batch) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color });
+        } catch (e) {
+          // Silent - color errors are not critical
+        }
+      }
+      if (progressPrefix) {
+        setMessage(`${progressPrefix} ${Math.min(i + MARKUP_BATCH_SIZE, ids.length)}/${ids.length}`);
+      }
+      // Small delay between batches
+      if (i + MARKUP_BATCH_SIZE < ids.length) {
+        await new Promise(r => setTimeout(r, 30));
+      }
     }
   };
 
@@ -2781,7 +2858,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      await api.markup?.removeMarkups?.(allIds);
+      await batchRemoveMarkups(allIds, 'Eemaldan markupe...');
       setMessage(`${allIds.length} markupit eemaldatud`);
       setDateMenuId(null);
     } catch (e) {
@@ -2838,12 +2915,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} planeerimata detaili)`);
 
-      // 4. Remove all existing markups
+      // 4. Remove all existing markups (in batches)
       const existingMarkups = await api.markup?.getTextMarkups?.();
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await api.markup?.removeMarkups?.(existingIds);
+          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
         }
       }
 
@@ -2937,19 +3014,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      // 6. Create markups
-      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
-
-      // Extract created IDs
-      let createdIds: number[] = [];
-      if (Array.isArray(result)) {
-        result.forEach((r: any) => {
-          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-          else if (typeof r === 'number') createdIds.push(r);
-        });
-      } else if (result?.ids) {
-        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
-      }
+      // 6. Create markups (in batches)
+      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
 
       // Build map of guid_ifc -> markup_id for later removal
       const newMarkupMap = new Map<string, number>();
@@ -2960,15 +3026,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
       setDeliveryMarkupMap(newMarkupMap);
 
-      // 7. Set color - orange for delivery dates
-      const markupColor = '#FF6600';
-      for (const id of createdIds) {
-        try {
-          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
-        } catch (err) {
-          console.warn('Color set error:', err);
-        }
-      }
+      // 7. Set color - orange for delivery dates (in batches)
+      await batchEditMarkupColors(createdIds, '#FF6600', 'Värvin markupe...');
 
       setMessage(`${createdIds.length} tarnekuupäeva markupit loodud`);
     } catch (e) {
@@ -3031,12 +3090,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} detaili ilma ERP)`);
 
-      // 4. Remove all existing markups
+      // 4. Remove all existing markups (in batches)
       const existingMarkups = await api.markup?.getTextMarkups?.();
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await api.markup?.removeMarkups?.(existingIds);
+          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
         }
       }
 
@@ -3129,18 +3188,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      // 6. Create markups
-      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
-
-      let createdIds: number[] = [];
-      if (Array.isArray(result)) {
-        result.forEach((r: any) => {
-          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-          else if (typeof r === 'number') createdIds.push(r);
-        });
-      } else if (result?.ids) {
-        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
-      }
+      // 6. Create markups (in batches)
+      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
 
       // Build map of guid_ifc -> markup_id for later removal
       const newMarkupMap = new Map<string, number>();
@@ -3151,15 +3200,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
       setDeliveryMarkupMap(newMarkupMap);
 
-      // 7. Set color - green for non-ERP items
-      const markupColor = '#22C55E';
-      for (const id of createdIds) {
-        try {
-          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
-        } catch (err) {
-          console.warn('Color set error:', err);
-        }
-      }
+      // 7. Set color - green for non-ERP items (in batches)
+      await batchEditMarkupColors(createdIds, '#22C55E', 'Värvin markupe...');
 
       setMessage(`${createdIds.length} markupit loodud (ilma ERP)`);
     } catch (e) {
@@ -3227,14 +3269,37 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
+      // 4.1. Group items by vehicle_id to calculate positions
+      const itemsByVehicle = new Map<string, typeof unplannedItems>();
+      for (const item of unplannedItems) {
+        const vId = item.vehicle_id;
+        if (!vId) continue;
+        if (!itemsByVehicle.has(vId)) {
+          itemsByVehicle.set(vId, []);
+        }
+        itemsByVehicle.get(vId)!.push(item);
+      }
+
+      // Create position lookup: guid_ifc -> { position, total }
+      const positionLookup = new Map<string, { position: number; total: number }>();
+      for (const vItems of itemsByVehicle.values()) {
+        const total = vItems.length;
+        for (let i = 0; i < vItems.length; i++) {
+          const guidKey = (vItems[i].guid_ifc || vItems[i].guid || '').toLowerCase();
+          if (guidKey) {
+            positionLookup.set(guidKey, { position: i + 1, total });
+          }
+        }
+      }
+
       setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} planeerimata detaili)`);
 
-      // 5. Remove all existing markups
+      // 5. Remove all existing markups (in batches)
       const existingMarkups = await api.markup?.getTextMarkups?.();
       if (existingMarkups && existingMarkups.length > 0) {
         const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
         if (existingIds.length > 0) {
-          await api.markup?.removeMarkups?.(existingIds);
+          await batchRemoveMarkups(existingIds, 'Eemaldan vanu markupe...');
         }
       }
 
@@ -3298,8 +3363,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             positionZ: midPoint.z * 1000,
           };
 
-          // Line 1: Vehicle code (e.g., EBE-15)
+          // Line 1: Vehicle code + position (e.g., EBE-15 | 2/15)
           const vehicleCode = vehicle.vehicle_code || '?';
+          const guidKey = (item.guid_ifc || item.guid || '').toLowerCase();
+          const posInfo = positionLookup.get(guidKey);
+          const positionStr = posInfo ? ` | ${posInfo.position}/${posInfo.total}` : '';
+          const line1 = `${vehicleCode}${positionStr}`;
 
           // Line 2: Date + time (e.g., 15.01.25 08:30)
           const dateStr = vehicle.scheduled_date || '';
@@ -3319,7 +3388,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           if (!formattedDate) continue;
 
           // Create 2-line markup
-          const markupText = `${vehicleCode}\n${dateTimeLine}`;
+          const markupText = `${line1}\n${dateTimeLine}`;
 
           markupsToCreate.push({
             text: markupText,
@@ -3335,18 +3404,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         return;
       }
 
-      // 7. Create markups
-      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
-
-      let createdIds: number[] = [];
-      if (Array.isArray(result)) {
-        result.forEach((r: any) => {
-          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-          else if (typeof r === 'number') createdIds.push(r);
-        });
-      } else if (result?.ids) {
-        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
-      }
+      // 7. Create markups (in batches)
+      const createdIds = await batchCreateMarkups(markupsToCreate, 'Loon markupe...');
 
       // Build map
       const newMarkupMap = new Map<string, number>();
@@ -3357,15 +3416,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
       setDeliveryMarkupMap(newMarkupMap);
 
-      // 8. Set color - blue for vehicle info
-      const markupColor = '#3B82F6';
-      for (const id of createdIds) {
-        try {
-          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
-        } catch (err) {
-          console.warn('Color set error:', err);
-        }
-      }
+      // 8. Set color - blue for vehicle info (in batches)
+      await batchEditMarkupColors(createdIds, '#3B82F6', 'Värvin markupe...');
 
       setMessage(`${createdIds.length} veoki markupit loodud`);
     } catch (e) {
@@ -5708,7 +5760,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <span className="mode-title">Paigaldusgraafik</span>
 
         {/* Hamburger menu */}
-        <div className="hamburger-menu-wrapper">
+        <div className="hamburger-menu-wrapper" ref={hamburgerMenuRef}>
           <button
             className="hamburger-btn"
             onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
