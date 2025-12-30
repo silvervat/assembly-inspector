@@ -80,6 +80,17 @@ clearMappingsCache(projectId);
 - `refreshFromModel` - Property'd mudelist uuesti
 - `exportToExcel` - Excel eksport (kaalud 1 komakohaga)
 - `addSelectedToVehicle` - Lisa valitud veokisse
+- `naturalSortVehicleCode` - Numbriline veokikoodide sorteerimine (EBE-8, EBE-9, EBE-10)
+
+**Veokite sorteerimine:**
+```typescript
+// Natural sort: EBE-8, EBE-9, EBE-10 (mitte EBE-10, EBE-8, EBE-9)
+.sort((a, b) => {
+  const orderDiff = (a.vehicle?.sort_order || 0) - (b.vehicle?.sort_order || 0);
+  if (orderDiff !== 0) return orderDiff;
+  return naturalSortVehicleCode(a.vehicle?.vehicle_code, b.vehicle?.vehicle_code);
+})
+```
 
 **Checkbox Multi-Select Loogika:**
 ```
@@ -123,14 +134,34 @@ clearMappingsCache(projectId);
 **"Saada andmebaasi" Funktsioonid:**
 | Funktsioon | Kirjeldus |
 |------------|-----------|
-| `saveModelSelectionToSupabase` | Valitud objektid → andmebaasi |
-| `saveAllAssembliesToSupabase` | KÕIK assemblyd → andmebaasi |
+| `saveModelSelectionToSupabase` | Valitud objektid → andmebaasi (delete + insert pattern) |
+| `saveAllAssembliesToSupabase` | KÕIK mudeli objektid → andmebaasi (IFC GUID alusel) |
 | `deleteAllModelObjects` | Kustuta kõik kirjed |
+
+**Saada andmebaasi loogika:**
+```
+1. "Mudeli valik → Andmebaasi":
+   - Loeb valitud objektide property'd (kasutab propertyMappings)
+   - Kustutab sama GUID-ga vanad kirjed
+   - Lisab uued kirjed
+   - Näitab veateateid, kui insert ebaõnnestub
+
+2. "KÕIK assemblyd → Andmebaasi":
+   - Skaneerib KÕIK mudeli objektid (mitte ainult assembly mark-iga)
+   - Salvestab kõik, millel on kehtiv IFC GUID
+   - Näitab: kokku objektid, uued, uuendatud, assembly mark-iga arv
+   - Kasutab delete + insert pattern GUID unikaalsuse tagamiseks
+```
 
 **Property Mappings:**
 - `loadPropertyMappings` - Laadi seaded andmebaasist
 - `savePropertyMappings` - Salvesta seaded
 - `scanAvailableProperties` - Skaneeri mudelist property'd
+
+**Vigade käsitlemine:**
+- Batch insert vead logitakse konsooli
+- Kasutajale näidatakse veateateid status väljal
+- Vea korral: `⚠️ Salvestatud X/Y objekti (Z viga - vaata konsooli)`
 
 ---
 

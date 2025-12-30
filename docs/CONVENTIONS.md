@@ -269,6 +269,31 @@ console.log('Processing batch:', batchNum);
 console.error('Error saving:', error);
 ```
 
+## Sorteerimine
+
+### Numbriline Sorteerimine (Natural Sort)
+```typescript
+// Veokikoodide sorteerimine: EBE-8, EBE-9, EBE-10 (mitte EBE-10, EBE-8, EBE-9)
+const naturalSortVehicleCode = (a: string | undefined, b: string | undefined): number => {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+
+  // Eraldab prefiksi ja numbri: "EBE-10" -> ["EBE-", "10"]
+  const regex = /^(.*?)(\d+)$/;
+  const matchA = a.match(regex);
+  const matchB = b.match(regex);
+
+  if (matchA && matchB) {
+    const prefixCompare = matchA[1].localeCompare(matchB[1]);
+    if (prefixCompare !== 0) return prefixCompare;
+    return parseInt(matchA[2], 10) - parseInt(matchB[2], 10);
+  }
+
+  return a.localeCompare(b);
+};
+```
+
 ## Debug Logid
 
 ### Property Matching Debug

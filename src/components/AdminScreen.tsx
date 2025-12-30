@@ -1213,6 +1213,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         if (error) {
           console.error(`Batch ${batchNum} error:`, error);
           errorCount += batch.length;
+          // Show error details immediately
+          setModelObjectsStatus(`Viga partii ${batchNum} salvestamisel: ${error.message}`);
         } else {
           savedCount += batch.length;
         }
@@ -1222,7 +1224,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       await loadModelObjectsInfo();
 
       if (errorCount > 0) {
-        setModelObjectsStatus(`Salvestatud ${savedCount}/${allRecords.length} objekti (${errorCount} viga)`);
+        setModelObjectsStatus(`⚠️ Salvestatud ${savedCount}/${allRecords.length} objekti (${errorCount} viga - vaata konsooli)`);
       } else {
         const marks = allRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
         const more = allRecords.length > 5 ? ` (+${allRecords.length - 5} veel)` : '';
@@ -1333,8 +1335,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
               }
             }
 
-            // Only include objects with assembly mark (these are the assemblies we care about)
-            if (assemblyMark) {
+            // Include all objects with valid IFC GUID (assembly mark may be empty)
+            if (ifcGuid) {
               allRecords.push({
                 trimble_project_id: projectId,
                 model_id: modelId,
@@ -1347,12 +1349,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
             }
           }
 
-          setModelObjectsStatus(`Skanneerin... ${allRecords.length} assembly-t leitud`);
+          setModelObjectsStatus(`Skanneerin... ${allRecords.length} objekti leitud`);
         }
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi assembly-t ei leitud! Kontrolli property mappings seadeid.');
+        setModelObjectsStatus('Ühtegi objekti IFC GUID-ga ei leitud!');
         setModelObjectsLoading(false);
         return;
       }
@@ -1405,7 +1407,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           .from('trimble_model_objects')
           .insert(batch);
 
-        if (!error) {
+        if (error) {
+          console.error(`KÕIK assemblyd batch error:`, error);
+          setModelObjectsStatus(`Viga salvesamisel: ${error.message}`);
+        } else {
           savedCount += batch.length;
         }
       }
@@ -1414,12 +1419,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       await loadModelObjectsInfo();
 
       // Report results
-      const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark).join(', ');
+      const withMarkCount = allRecords.filter(r => r.assembly_mark).length;
+      const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
       const moreNew = newRecords.length > 5 ? ` (+${newRecords.length - 5} veel)` : '';
 
       setModelObjectsStatus(
-        `✓ Kokku: ${allRecords.length} assembly-t\n` +
-        `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 ? ` (${newMarks}${moreNew})` : ''}\n` +
+        `✓ Kokku: ${allRecords.length} objekti (${withMarkCount} assembly mark-iga)\n` +
+        `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 && newMarks ? ` (${newMarks}${moreNew})` : ''}\n` +
         `   🔄 Uuendatud: ${existingRecords.length}`
       );
 
