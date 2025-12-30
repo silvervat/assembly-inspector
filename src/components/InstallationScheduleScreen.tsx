@@ -10,6 +10,7 @@ import {
   showObjectsByGuid,
   hideObjectsByGuid
 } from '../utils/navigationHelper';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
@@ -191,6 +192,9 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
 };
 
 export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu }: Props) {
+  // Property mappings for reading Tekla properties
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
   // State
   const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1133,9 +1137,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
               const propertiesList = objProps?.properties;
               console.log('[Schedule] propertiesList type:', typeof propertiesList, Array.isArray(propertiesList), propertiesList);
 
+              // Helper to normalize property names for comparison
+              const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+              const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+              const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+              const weightSetNorm = normalize(propertyMappings.weight_set);
+              const weightPropNorm = normalize(propertyMappings.weight_prop);
+              const posSetNorm = normalize(propertyMappings.position_code_set);
+              const posPropNorm = normalize(propertyMappings.position_code_prop);
+
               if (propertiesList && Array.isArray(propertiesList)) {
                 for (const pset of propertiesList) {
-                  const setName = ((pset as any).name || (pset as any).set || '').toLowerCase();
+                  const setName = ((pset as any).name || (pset as any).set || '');
+                  const setNameNorm = normalize(setName);
                   console.log('[Schedule] Processing property set:', setName);
 
                   // Handle property set that has a properties array
@@ -1147,42 +1161,55 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                   for (const prop of psetProps) {
                     const rawName = ((prop as any).name || '');
+                    const rawNameNorm = normalize(rawName);
                     const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                     const propValue = (prop as any).displayValue ?? (prop as any).value;
 
-                    console.log('[Schedule] Property:', rawName, '=', propValue);
-
                     if (propValue === undefined || propValue === null || propValue === '') continue;
 
-                    // Assembly/Cast unit Mark OR ASSEMBLY_POS
+                    // Assembly/Cast unit Mark - use configured mapping first (normalized comparison)
                     if (assemblyMark.startsWith('Object_')) {
-                      // Check various patterns for assembly mark
-                      if (propName.includes('cast') && propName.includes('mark')) {
+                      // First try configured property mapping
+                      if (setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm) {
+                        assemblyMark = String(propValue);
+                        console.log('[Schedule] Found assembly mark via mapping:', assemblyMark);
+                      }
+                      // Fallback patterns
+                      else if (propName.includes('cast') && propName.includes('mark')) {
                         assemblyMark = String(propValue);
                         console.log('[Schedule] Found assembly mark (cast+mark):', assemblyMark);
                       } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
                         assemblyMark = String(propValue);
                         console.log('[Schedule] Found assembly mark (assembly_pos/mark):', assemblyMark);
-                      } else if (rawName.toLowerCase().includes('mark') && setName.includes('tekla')) {
-                        // Also check raw name for "Mark" in Tekla property sets
+                      } else if (rawName.toLowerCase().includes('mark') && setName.toLowerCase().includes('tekla')) {
                         assemblyMark = String(propValue);
                         console.log('[Schedule] Found assembly mark (tekla+mark):', assemblyMark);
                       }
                     }
 
                     // Product Name from property set (fallback)
-                    if (!productName && propName === 'name' && setName.includes('product')) {
+                    if (!productName && propName === 'name' && setName.toLowerCase().includes('product')) {
                       productName = String(propValue);
                     }
 
-                    // Assembly/Cast unit weight
-                    if (propName.includes('weight') && (propName.includes('cast') || setName.includes('tekla'))) {
-                      castUnitWeight = String(propValue);
+                    // Assembly/Cast unit weight - use configured mapping first
+                    if (!castUnitWeight) {
+                      if (setNameNorm === weightSetNorm && rawNameNorm === weightPropNorm) {
+                        castUnitWeight = String(propValue);
+                        console.log('[Schedule] Found weight via mapping:', castUnitWeight);
+                      } else if (propName.includes('weight') && (propName.includes('cast') || setName.toLowerCase().includes('tekla'))) {
+                        castUnitWeight = String(propValue);
+                      }
                     }
 
-                    // Assembly/Cast unit position code
-                    if (propName.includes('position') && propName.includes('code')) {
-                      if (!positionCode) positionCode = String(propValue);
+                    // Assembly/Cast unit position code - use configured mapping first
+                    if (!positionCode) {
+                      if (setNameNorm === posSetNorm && rawNameNorm === posPropNorm) {
+                        positionCode = String(propValue);
+                        console.log('[Schedule] Found position code via mapping:', positionCode);
+                      } else if (propName.includes('position') && propName.includes('code')) {
+                        positionCode = String(propValue);
+                      }
                     }
                   }
                 }
