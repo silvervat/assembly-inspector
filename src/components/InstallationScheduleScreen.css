@@ -1567,7 +1567,7 @@
   gap: 4px;
 }
 
-.color-by-date-btn, .reset-colors-btn {
+.color-by-date-btn, .reset-colors-btn, .refresh-marks-btn {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1602,9 +1602,16 @@
   color: var(--modus-primary);
 }
 
-.color-by-date-btn:disabled {
+.color-by-date-btn:disabled,
+.refresh-marks-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.refresh-marks-btn:hover:not(:disabled) {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #6ee7b7;
 }
 
 /* Multi-select bar */

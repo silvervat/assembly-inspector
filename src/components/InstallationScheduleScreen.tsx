@@ -1991,6 +1991,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const itemIds = [...selectedItemIds];
     const itemIdSet = new Set(itemIds);
 
+    // Collect GUIDs of items to delete for coloring white after deletion
+    const guidsToColorWhite: string[] = [];
+    for (const itemId of itemIds) {
+      const item = scheduleItems.find(i => i.id === itemId);
+      if (item) {
+        const guid = item.guid_ifc || item.guid;
+        if (guid) guidsToColorWhite.push(guid);
+      }
+    }
+
     // Find dates that will have no items after deletion
     const affectedDates = new Set<string>();
     for (const itemId of itemIds) {
@@ -2030,6 +2040,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .in('id', itemIds);
 
       if (error) throw error;
+
+      // Color deleted items white in the model
+      if (guidsToColorWhite.length > 0 && playbackSettings.colorEachDayDifferent) {
+        try {
+          await colorObjectsByGuid(api, guidsToColorWhite, { r: 255, g: 255, b: 255, a: 255 });
+        } catch (e) {
+          console.error('Error coloring deleted items white:', e);
+        }
+      }
 
       setSelectedItemIds(new Set());
       setMessage(`${count} detaili kustutatud`);
@@ -2124,6 +2143,111 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e) {
       console.error('Error removing items from date:', e);
       setMessage('Viga eemaldamisel');
+    }
+  };
+
+  // Refresh assembly marks from trimble_model_objects table (fixes Object_xxx items)
+  const refreshAssemblyMarks = async () => {
+    // Find items with Object_ prefix that need updating
+    const itemsToFix = scheduleItems.filter(item =>
+      item.assembly_mark?.startsWith('Object_') ||
+      item.assembly_mark?.startsWith('Import-')
+    );
+
+    if (itemsToFix.length === 0) {
+      setMessage('Kõik assembly markid on korras');
+      return;
+    }
+
+    setMessage(`Uuendan ${itemsToFix.length} assembly marki...`);
+
+    try {
+      // Collect all GUIDs from items that need fixing
+      const guidMap = new Map<string, ScheduleItem>();
+      for (const item of itemsToFix) {
+        const guid = item.guid_ifc || item.guid;
+        if (guid) {
+          guidMap.set(guid, item);
+        }
+      }
+
+      const allGuids = Array.from(guidMap.keys());
+      if (allGuids.length === 0) {
+        setMessage('Detailidel puuduvad GUID-id');
+        return;
+      }
+
+      // Lookup GUIDs in trimble_model_objects table (in batches)
+      const BATCH_SIZE = 100;
+      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; model_id: string | null; object_runtime_id: string | null }>();
+
+      for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
+        const batch = allGuids.slice(i, i + BATCH_SIZE);
+        const { data: batchObjects, error: lookupError } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', batch);
+
+        if (lookupError) {
+          console.error('Error looking up model objects batch:', lookupError);
+          continue;
+        }
+
+        for (const obj of batchObjects || []) {
+          objectMap.set(obj.guid_ifc, obj);
+        }
+
+        setMessage(`Otsin... ${Math.min(i + BATCH_SIZE, allGuids.length)}/${allGuids.length}`);
+      }
+
+      console.log('Found in trimble_model_objects:', objectMap.size);
+
+      // Prepare updates
+      const updates: { id: string; assembly_mark: string; product_name?: string; model_id?: string; object_runtime_id?: number }[] = [];
+
+      for (const [guid, item] of guidMap) {
+        const modelObj = objectMap.get(guid);
+        if (modelObj && modelObj.assembly_mark && !modelObj.assembly_mark.startsWith('Object_')) {
+          updates.push({
+            id: item.id,
+            assembly_mark: modelObj.assembly_mark,
+            product_name: modelObj.product_name || undefined,
+            model_id: modelObj.model_id || undefined,
+            object_runtime_id: modelObj.object_runtime_id ? parseInt(modelObj.object_runtime_id) : undefined
+          });
+        }
+      }
+
+      if (updates.length === 0) {
+        setMessage(`Leiti ${objectMap.size} objekti, aga ükski ei sisaldanud õiget assembly marki`);
+        return;
+      }
+
+      // Apply updates in batches
+      let updatedCount = 0;
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('installation_schedule')
+          .update({
+            assembly_mark: update.assembly_mark,
+            product_name: update.product_name,
+            model_id: update.model_id,
+            object_runtime_id: update.object_runtime_id,
+            updated_by: tcUserEmail,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', update.id);
+
+        if (!error) updatedCount++;
+        setMessage(`Uuendan... ${updatedCount}/${updates.length}`);
+      }
+
+      setMessage(`✓ ${updatedCount} assembly marki uuendatud`);
+      await loadSchedule();
+    } catch (e) {
+      console.error('Error refreshing assembly marks:', e);
+      setMessage('Viga assembly markide uuendamisel');
     }
   };
 
@@ -5399,6 +5523,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <FiBarChart2 size={14} />
                 <span>Ressursside statistika</span>
               </div>
+
+              {/* Uuenda assembly markid */}
+              {scheduleItems.some(i => i.assembly_mark?.startsWith('Object_')) && (
+                <div
+                  className="dropdown-item"
+                  onClick={() => {
+                    setShowHamburgerMenu(false);
+                    refreshAssemblyMarks();
+                  }}
+                >
+                  <FiRefreshCw size={14} />
+                  <span>Uuenda Object_xxx markid</span>
+                </div>
+              )}
 
               {/* Märgistused submenu - expands inline */}
               <div
