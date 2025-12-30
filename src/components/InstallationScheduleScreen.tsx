@@ -4175,7 +4175,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           case 'mark': return item.assembly_mark || '';
           case 'position': return item.cast_unit_position_code || '';
           case 'product': return item.product_name || '';
-          case 'weight': return item.cast_unit_weight || '';
+          case 'weight': {
+            const w = parseFloat(item.cast_unit_weight || '0');
+            return isNaN(w) ? '' : w.toFixed(1);
+          }
           case 'truck_nr': {
             const dInfo = getDeliveryInfo(item);
             return dInfo?.truckCode || '';

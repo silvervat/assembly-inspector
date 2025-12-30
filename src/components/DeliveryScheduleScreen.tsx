@@ -1395,6 +1395,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const selectionInProgressRef = useRef(false);
   // Track previous model selection to detect actual changes
   const previousModelSelectionRef = useRef<string>('');
+  // Flag to track when WE are syncing selectedItemIds to model (don't clear selection in this case)
+  const syncingToModelRef = useRef(false);
 
   useEffect(() => {
     const handleSelectionChange = async () => {
@@ -1538,7 +1540,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setSelectedObjects(objects);
 
         // Only clear schedule selection when model selection actually CHANGES to something new
-        if (objects.length > 0 && selectionActuallyChanged) {
+        // AND when the change was NOT triggered by our own sync (from checkbox selections)
+        if (objects.length > 0 && selectionActuallyChanged && !syncingToModelRef.current) {
           setSelectedItemIds(new Set());
         }
       } catch (e: any) {
@@ -1586,8 +1589,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         .filter((g): g is string => !!g);
 
       if (guids.length > 0) {
+        // Set flag to prevent the selection change handler from clearing our selection
+        syncingToModelRef.current = true;
         // Use GUID-based selection
-        selectObjectsByGuid(api, guids, 'set').catch(() => {});
+        selectObjectsByGuid(api, guids, 'set')
+          .catch(() => {})
+          .finally(() => {
+            // Clear flag after a short delay to ensure selection change event is processed
+            setTimeout(() => { syncingToModelRef.current = false; }, 100);
+          });
       }
     }
     // NOTE: We do NOT clear viewer selection when selectedItemIds is empty
@@ -3687,6 +3697,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       let updatedCount = 0;
       const totalItems = items.length;
 
+      // Collect all updates first, then batch them
+      const pendingUpdates: Array<{ id: string; updates: Record<string, string> }> = [];
+
       for (const [modelId, modelItems] of itemsByModel) {
         const runtimeIds = modelItems.map(m => m.runtimeId);
         console.log(`🔍 Fetching ${runtimeIds.length} objects from model ${modelId}...`);
@@ -3769,34 +3782,46 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 }
               }
 
-              // Update database with fresh data
-              const updates: any = {};
+              // Collect updates for batch processing
+              const updates: Record<string, string> = {};
               if (assemblyMark) updates.assembly_mark = assemblyMark;
               if (productName !== undefined) updates.product_name = productName;
               if (weight !== undefined) updates.cast_unit_weight = weight;
               if (positionCode !== undefined) updates.cast_unit_position_code = positionCode;
-              // NOTE: Uncomment after running migration
-              // if (bottomElevation !== undefined) updates.cast_unit_bottom_elevation = bottomElevation;
-              // if (topElevation !== undefined) updates.cast_unit_top_elevation = topElevation;
 
               if (Object.keys(updates).length > 0) {
-                const { error } = await supabase
-                  .from('trimble_delivery_items')
-                  .update(updates)
-                  .eq('id', item.id);
-
-                if (error) {
-                  console.error(`Error updating item ${item.id}:`, error);
-                } else {
-                  updatedCount++;
-                }
+                pendingUpdates.push({ id: item.id, updates });
               }
             }
           }
 
-          setMessage(`Värskendame... ${updatedCount}/${totalItems}`);
+          setMessage(`Loeme mudelist... ${pendingUpdates.length}/${totalItems}`);
         } catch (error) {
           console.error(`Error fetching properties for model ${modelId}:`, error);
+        }
+      }
+
+      // Batch update database - process in parallel batches of 5 with delay to avoid rate limits
+      const BATCH_SIZE = 5;
+      const BATCH_DELAY_MS = 100;
+      setMessage(`Salvestame ${pendingUpdates.length} uuendust...`);
+
+      for (let i = 0; i < pendingUpdates.length; i += BATCH_SIZE) {
+        const batch = pendingUpdates.slice(i, i + BATCH_SIZE);
+        const results = await Promise.all(
+          batch.map(({ id, updates }) =>
+            supabase
+              .from('trimble_delivery_items')
+              .update(updates)
+              .eq('id', id)
+              .then(({ error }) => !error)
+          )
+        );
+        updatedCount += results.filter(Boolean).length;
+        setMessage(`Salvestame... ${updatedCount}/${pendingUpdates.length}`);
+        // Small delay between batches to avoid rate limits
+        if (i + BATCH_SIZE < pendingUpdates.length) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
@@ -3889,7 +3914,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             case 'mark': row.push(item.assembly_mark); break;
             case 'position': row.push(item.cast_unit_position_code || ''); break;
             case 'product': row.push(item.product_name || ''); break;
-            case 'weight': row.push(item.cast_unit_weight || ''); break;
+            case 'weight': {
+              const w = parseFloat(item.cast_unit_weight || '0');
+              row.push(isNaN(w) ? '' : w.toFixed(1));
+              break;
+            }
             case 'status': row.push(isEnglish ? (ITEM_STATUS_EN[item.status] || item.status) : (ITEM_STATUS_CONFIG[item.status]?.label || item.status)); break;
             case 'crane': row.push(itemMethods?.crane || ''); break;
             case 'telescopic': row.push(itemMethods?.telescopic || ''); break;
@@ -4139,11 +4168,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           }
         }
 
+        const weightVal = parseFloat(item.cast_unit_weight || '0');
         return [
           idx + 1,
           item.assembly_mark,
           item.product_name || '',
-          item.cast_unit_weight || '',
+          isNaN(weightVal) ? '' : weightVal.toFixed(1),
           item.guid || item.guid_ifc || '',
           telescopicCount > 0 ? telescopicCount : '',
           duplicateInfo
@@ -4233,6 +4263,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         const durationMins = vehicle?.unload_duration_minutes || 0;
         const durationStr = durationMins > 0 ? `${(durationMins / 60).toFixed(1)}h` : '-';
 
+        const weightVal = parseFloat(item.cast_unit_weight || '0');
         return [
           idx + 1,
           vehicle?.vehicle_code || '-',
@@ -4240,7 +4271,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           durationStr,
           item.assembly_mark,
           item.product_name || '',
-          item.cast_unit_weight || '',
+          isNaN(weightVal) ? '' : weightVal.toFixed(1),
           ITEM_STATUS_CONFIG[item.status]?.label || item.status
         ];
       });
