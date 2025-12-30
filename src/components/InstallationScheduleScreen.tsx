@@ -240,6 +240,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [currentDayIndex, setCurrentDayIndex] = useState(0);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
   const processingDayRef = useRef<number>(-1); // Track which day is being processed to avoid re-runs
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   // Multi-select state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -3895,6 +3897,166 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Seek to a specific position in the playback (for scrubber)
+  const seekToPosition = async (targetIndex: number) => {
+    // Pause playback during seek
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+    setIsPaused(true);
+
+    const allItems = getAllItemsSorted();
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex >= allItems.length) targetIndex = allItems.length - 1;
+
+    // Color all items white first if using day colors
+    if (playbackSettings.colorEachDayDifferent) {
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+    }
+
+    // For day-by-day mode, find which day index we're on
+    if (playbackSettings.playByDay) {
+      const sortedDates = Object.keys(itemsByDate).sort();
+      let itemsSeen = 0;
+      let targetDayIndex = 0;
+
+      for (let d = 0; d < sortedDates.length; d++) {
+        const dayItems = itemsByDate[sortedDates[d]] || [];
+        if (itemsSeen + dayItems.length > targetIndex) {
+          targetDayIndex = d;
+          break;
+        }
+        itemsSeen += dayItems.length;
+        targetDayIndex = d;
+      }
+
+      // Color all days up to and including target day
+      for (let d = 0; d <= targetDayIndex; d++) {
+        const date = sortedDates[d];
+        const dayItems = itemsByDate[date] || [];
+        const guids = dayItems
+          .map(item => item.guid_ifc || item.guid)
+          .filter((g): g is string => !!g);
+
+        if (guids.length > 0 && playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
+          const dayColor = playbackDateColors[date];
+          await colorObjectsByGuid(api, guids, { ...dayColor, a: 255 });
+        }
+
+        // Expand date group
+        if (collapsedDates.has(date)) {
+          setCollapsedDates(prev => {
+            const next = new Set(prev);
+            next.delete(date);
+            return next;
+          });
+        }
+      }
+
+      setCurrentDayIndex(targetDayIndex);
+      processingDayRef.current = -1; // Reset so it will process this day
+
+      // Select current day items
+      const currentDate = sortedDates[targetDayIndex];
+      if (currentDate) {
+        setCurrentPlaybackDate(currentDate);
+        const dayItemIds = new Set((itemsByDate[currentDate] || []).map(item => item.id));
+        setSelectedItemIds(dayItemIds);
+        await selectDateInViewer(currentDate, true);
+        scrollToDateInList(currentDate);
+      }
+    } else {
+      // Item-by-item mode: color all items up to targetIndex
+      const itemsToColor = allItems.slice(0, targetIndex + 1);
+
+      // Group by date for efficient coloring
+      const itemsByDateTemp: Record<string, typeof allItems> = {};
+      for (const item of itemsToColor) {
+        if (!itemsByDateTemp[item.scheduled_date]) {
+          itemsByDateTemp[item.scheduled_date] = [];
+        }
+        itemsByDateTemp[item.scheduled_date].push(item);
+      }
+
+      // Color each date's items
+      for (const [date, items] of Object.entries(itemsByDateTemp)) {
+        const guids = items
+          .map(item => item.guid_ifc || item.guid)
+          .filter((g): g is string => !!g);
+
+        if (guids.length > 0) {
+          if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
+            const dayColor = playbackDateColors[date];
+            await colorObjectsByGuid(api, guids, { ...dayColor, a: 255 });
+          } else {
+            await colorObjectsByGuid(api, guids, { r: 34, g: 197, b: 94, a: 255 }); // Green
+          }
+        }
+      }
+
+      setCurrentPlayIndex(targetIndex);
+
+      // Select and highlight current item
+      const currentItem = allItems[targetIndex];
+      if (currentItem) {
+        setCurrentPlaybackDate(currentItem.scheduled_date);
+        setSelectedItemIds(new Set([currentItem.id]));
+
+        // Expand date group if collapsed
+        if (collapsedDates.has(currentItem.scheduled_date)) {
+          setCollapsedDates(prev => {
+            const next = new Set(prev);
+            next.delete(currentItem.scheduled_date);
+            return next;
+          });
+        }
+
+        // Select in viewer without zoom
+        await selectInViewer(currentItem, true);
+      }
+    }
+  };
+
+  // Handle scrubber click/drag
+  const handleScrubberInteraction = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!scrubberRef.current) return;
+
+    const rect = scrubberRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const percentage = Math.max(0, Math.min(1, x / rect.width));
+    const allItems = getAllItemsSorted();
+    const targetIndex = Math.round(percentage * (allItems.length - 1));
+
+    seekToPosition(targetIndex);
+  };
+
+  // Handle scrubber mouse down (start dragging)
+  const handleScrubberMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsScrubbing(true);
+    handleScrubberInteraction(e);
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!scrubberRef.current) return;
+      const rect = scrubberRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const allItems = getAllItemsSorted();
+      const targetIndex = Math.round(percentage * (allItems.length - 1));
+      seekToPosition(targetIndex);
+    };
+
+    const handleMouseUp = () => {
+      setIsScrubbing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
   // Day overview function - show all day items selected and zoomed
   const showDayOverviewFor = async (date: string) => {
     const dateItems = itemsByDate[date];
@@ -6559,11 +6721,29 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           ))}
         </div>
 
+        {/* Scrubber / Progress Bar (YouTube-style) */}
         {isPlaying && (
-          <span className="play-progress">
-            {currentPlayIndex + 1} / {scheduleItems.length}
-            {isPaused && ' (paus)'}
-          </span>
+          <div className="playback-scrubber">
+            <span className="scrubber-time current">
+              {currentPlayIndex + 1}
+            </span>
+            <div
+              ref={scrubberRef}
+              className={`scrubber-track ${isScrubbing ? 'dragging' : ''}`}
+              onMouseDown={handleScrubberMouseDown}
+            >
+              <div
+                className="scrubber-progress"
+                style={{ width: `${scheduleItems.length > 0 ? ((currentPlayIndex + 1) / scheduleItems.length) * 100 : 0}%` }}
+              >
+                <div className="scrubber-handle" />
+              </div>
+            </div>
+            <span className="scrubber-time total">
+              {scheduleItems.length}
+            </span>
+            {isPaused && <span className="play-progress">(paus)</span>}
+          </div>
         )}
 
         <button
