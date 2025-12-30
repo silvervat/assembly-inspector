@@ -21,6 +21,15 @@ export interface PropertyMappings {
 const mappingsCache = new Map<string, PropertyMappings>();
 const loadingPromises = new Map<string, Promise<PropertyMappings>>();
 
+// Cache version to trigger re-renders when cache is invalidated
+let cacheVersion = 0;
+const cacheListeners = new Set<() => void>();
+
+function notifyCacheChange() {
+  cacheVersion++;
+  cacheListeners.forEach(listener => listener());
+}
+
 // Helper type for property set structure from API
 interface PropertySet {
   name: string;
@@ -237,7 +246,8 @@ export function useProjectPropertyMappings(projectId: string) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
+  // Load mappings when projectId changes or cache is invalidated
+  const loadMappings = useCallback(async () => {
     if (!projectId) {
       setMappings(DEFAULT_PROPERTY_MAPPINGS);
       setIsLoading(false);
@@ -252,13 +262,30 @@ export function useProjectPropertyMappings(projectId: string) {
     }
 
     setIsLoading(true);
-    loadMappingsFromDb(projectId).then(result => {
-      if (mountedRef.current) {
-        setMappings(result);
-        setIsLoading(false);
-      }
-    });
+    const result = await loadMappingsFromDb(projectId);
+    if (mountedRef.current) {
+      setMappings(result);
+      setIsLoading(false);
+    }
   }, [projectId]);
+
+  useEffect(() => {
+    loadMappings();
+  }, [loadMappings]);
+
+  // Listen for cache invalidation and reload
+  useEffect(() => {
+    const handleCacheChange = () => {
+      // Cache was cleared, reload from database
+      if (projectId && !mappingsCache.has(projectId)) {
+        loadMappings();
+      }
+    };
+    cacheListeners.add(handleCacheChange);
+    return () => {
+      cacheListeners.delete(handleCacheChange);
+    };
+  }, [projectId, loadMappings]);
 
   // Helper function to get property value from property sets
   const getProperty = useCallback((
@@ -304,4 +331,6 @@ export function clearMappingsCache(projectId?: string) {
   } else {
     mappingsCache.clear();
   }
+  // Notify all listeners that cache was invalidated
+  notifyCacheChange();
 }
