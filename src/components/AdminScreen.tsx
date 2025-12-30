@@ -1239,6 +1239,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   }, [api, projectId, loadModelObjectsInfo, propertyMappings]);
 
   // Save ALL assemblies from model to database (not just selection)
+  // Uses hierarchy: only saves objects that HAVE children (parent assemblies)
   const saveAllAssembliesToSupabase = useCallback(async () => {
     setModelObjectsLoading(true);
     setModelObjectsStatus('Skanneerin mudelit...');
@@ -1267,6 +1268,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         product_name: string | null;
       }[] = [];
 
+      let totalScanned = 0;
+      let parentsFound = 0;
+
       // Process each model
       for (const modelObj of allModelObjects) {
         const modelId = modelObj.modelId;
@@ -1277,85 +1281,88 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
         setModelObjectsStatus(`Skanneerin mudelit... (${runtimeIds.length} objekti)`);
 
-        // Process in batches
-        const BATCH_SIZE = 500;
+        // Process in smaller batches for hierarchy check
+        const BATCH_SIZE = 50;
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          totalScanned += batch.length;
 
-          // Get properties for batch
-          let propsArray: any[] = [];
-          try {
-            propsArray = await (api.viewer as any).getObjectProperties(modelId, batch, { includeHidden: true });
-          } catch (e) {
-            console.warn('Error getting properties for batch:', e);
-            continue;
-          }
+          // Check hierarchy for each object - only include those WITH children
+          for (const runtimeId of batch) {
+            try {
+              const children = await (api.viewer as any).getHierarchyChildren(modelId, [runtimeId]);
+              const childCount = children?.[0]?.length || 0;
 
-          // Get IFC GUIDs for batch
-          let guidsArray: string[] = [];
-          try {
-            guidsArray = await api.viewer.convertToObjectIds(modelId, batch);
-          } catch (e) {
-            console.warn('Error getting GUIDs for batch:', e);
-          }
+              // Only include objects WITH children (parent assemblies)
+              if (childCount > 0) {
+                parentsFound++;
 
-          // Process each object in batch
-          for (let j = 0; j < batch.length; j++) {
-            const runtimeId = batch[j];
-            const props = propsArray[j];
-            const ifcGuid = guidsArray[j] || '';
+                // Get properties
+                const propsArray = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
+                const props = propsArray?.[0];
 
-            let assemblyMark: string | null = null;
-            let productName: string | null = null;
+                // Get IFC GUID
+                let ifcGuid = '';
+                try {
+                  const guids = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
+                  ifcGuid = guids[0] || '';
+                } catch (e) {
+                  // Ignore
+                }
 
-            // Check properties array structure
-            if (props?.properties && Array.isArray(props.properties)) {
-              for (const pset of props.properties) {
-                const setName = (pset as any).set || (pset as any).name || '';
-                const setNameNorm = normalize(setName);
-                const propArray = (pset as any).properties || [];
+                let assemblyMark: string | null = null;
+                let productName: string | null = null;
 
-                for (const prop of propArray) {
-                  const propNameOriginal = (prop as any).name || '';
-                  const propNameNorm = normalize(propNameOriginal);
-                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+                // Check properties array structure
+                if (props?.properties && Array.isArray(props.properties)) {
+                  for (const pset of props.properties) {
+                    const setName = (pset as any).set || (pset as any).name || '';
+                    const setNameNorm = normalize(setName);
+                    const propArray = (pset as any).properties || [];
 
-                  if (!propValue) continue;
+                    for (const prop of propArray) {
+                      const propNameOriginal = (prop as any).name || '';
+                      const propNameNorm = normalize(propNameOriginal);
+                      const propValue = (prop as any).displayValue ?? (prop as any).value;
 
-                  // Assembly Mark using configured mapping
-                  if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
-                    assemblyMark = String(propValue);
-                  }
+                      if (!propValue) continue;
 
-                  // Product name
-                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                    productName = String(propValue);
+                      // Assembly Mark using configured mapping
+                      if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+                        assemblyMark = String(propValue);
+                      }
+
+                      // Product name
+                      if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                        productName = String(propValue);
+                      }
+                    }
                   }
                 }
-              }
-            }
 
-            // Include parent objects: those with assembly mark OR product name
-            // (child parts typically have neither)
-            if (ifcGuid && (assemblyMark || productName)) {
-              allRecords.push({
-                trimble_project_id: projectId,
-                model_id: modelId,
-                object_runtime_id: runtimeId,
-                guid: ifcGuid,
-                guid_ifc: ifcGuid,
-                assembly_mark: assemblyMark,
-                product_name: productName
-              });
+                if (ifcGuid) {
+                  allRecords.push({
+                    trimble_project_id: projectId,
+                    model_id: modelId,
+                    object_runtime_id: runtimeId,
+                    guid: ifcGuid,
+                    guid_ifc: ifcGuid,
+                    assembly_mark: assemblyMark,
+                    product_name: productName
+                  });
+                }
+              }
+            } catch (e) {
+              // Ignore hierarchy errors
             }
           }
 
-          setModelObjectsStatus(`Skanneerin... ${allRecords.length} objekti leitud`);
+          setModelObjectsStatus(`Skanneerin... ${totalScanned} objekti, ${parentsFound} vanem-assembly-t leitud`);
         }
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi objekti assembly mark või product name-ga ei leitud!');
+        setModelObjectsStatus('Ühtegi vanem-assembly-t ei leitud!');
         setModelObjectsLoading(false);
         return;
       }
@@ -1421,12 +1428,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
       // Report results
       const withMarkCount = allRecords.filter(r => r.assembly_mark).length;
-      const withProductCount = allRecords.filter(r => r.product_name && !r.assembly_mark).length;
       const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark || r.product_name).filter(Boolean).join(', ');
       const moreNew = newRecords.length > 5 ? ` (+${newRecords.length - 5} veel)` : '';
 
       setModelObjectsStatus(
-        `✓ Kokku: ${allRecords.length} objekti (${withMarkCount} mark, ${withProductCount} product)\n` +
+        `✓ Kokku: ${allRecords.length} vanem-assembly-t (${withMarkCount} mark-iga)\n` +
         `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 && newMarks ? ` (${newMarks}${moreNew})` : ''}\n` +
         `   🔄 Uuendatud: ${existingRecords.length}`
       );

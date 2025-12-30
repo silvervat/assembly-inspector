@@ -148,8 +148,9 @@ clearMappingsCache(projectId);
 
 2. "KÕIK assemblyd → Andmebaasi":
    - Skaneerib KÕIK mudeli objektid
-   - Salvestab AINULT objektid, millel on assembly mark (vanem-assemblyd)
-   - Alam-detailid (osad, poldid) jäetakse välja
+   - Kasutab `getHierarchyChildren` API-t hierarhia kontrolliks
+   - Salvestab AINULT objektid, millel ON laps-objekte (vanem-assemblyd)
+   - Alam-detailid (osad, poldid) jäetakse välja (neil pole lapsi)
    - Kasutab delete + insert pattern GUID unikaalsuse tagamiseks
 ```
 
