@@ -203,7 +203,28 @@ async function loadMappingsFromDb(projectId: string): Promise<PropertyMappings> 
         return DEFAULT_PROPERTY_MAPPINGS;
       }
 
+      // No record found for this project
+      if (error && error.code === 'PGRST116') {
+        console.log(`⚠️ Property mappings: No record in database for project, using defaults`);
+        return DEFAULT_PROPERTY_MAPPINGS;
+      }
+
       if (data) {
+        // Check for empty fields that will fallback to defaults
+        const emptyFields: string[] = [];
+        if (!data.weight_set) emptyFields.push('weight_set');
+        if (!data.weight_prop) emptyFields.push('weight_prop');
+        if (!data.assembly_mark_set) emptyFields.push('assembly_mark_set');
+        if (!data.assembly_mark_prop) emptyFields.push('assembly_mark_prop');
+
+        if (emptyFields.length > 0) {
+          console.warn(`⚠️ Property mappings: Some fields are empty in DB, using defaults for: ${emptyFields.join(', ')}`);
+        }
+
+        console.log(`✅ Property mappings loaded from DB:`, {
+          weight: `${data.weight_set || '(default)'}.${data.weight_prop || '(default)'}`,
+          assembly: `${data.assembly_mark_set || '(default)'}.${data.assembly_mark_prop || '(default)'}`,
+        });
         const mappings: PropertyMappings = {
           assembly_mark_set: data.assembly_mark_set || DEFAULT_PROPERTY_MAPPINGS.assembly_mark_set,
           assembly_mark_prop: data.assembly_mark_prop || DEFAULT_PROPERTY_MAPPINGS.assembly_mark_prop,
