@@ -426,6 +426,35 @@ export async function selectObjectsByGuid(
 }
 
 /**
+ * Color and select objects by their GUIDs in a single lookup - more efficient for playback
+ */
+export async function colorAndSelectObjectsByGuid(
+  api: WorkspaceAPI.WorkspaceAPI,
+  guidsIfc: string[],
+  color: { r: number; g: number; b: number; a: number },
+  skipZoom: boolean = false,
+  animationTime: number = 500
+): Promise<number> {
+  const found = await findObjectsInLoadedModels(api, guidsIfc);
+  if (found.size === 0) return 0;
+
+  const modelObjectIds = buildModelObjectIds(found);
+
+  // Color and select in parallel for better sync
+  await Promise.all([
+    api.viewer.setObjectState({ modelObjectIds }, { color }),
+    api.viewer.setSelection({ modelObjectIds }, 'set')
+  ]);
+
+  // Zoom if not skipped
+  if (!skipZoom) {
+    await api.viewer.setCamera({ modelObjectIds }, { animationTime });
+  }
+
+  return found.size;
+}
+
+/**
  * Zoom to objects by their GUIDs - searches all loaded models
  */
 export async function zoomToObjectsByGuid(
