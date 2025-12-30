@@ -607,7 +607,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Inline editing state for vehicle list
   const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
-  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | 'date' | null>(null);
+  const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | 'date' | 'vehicle_code' | null>(null);
 
   // Assembly selection mode
   const [_assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(false);
@@ -1849,10 +1849,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const separator = factory.vehicle_separator || '';
 
       if (!vehicleCode) {
-        // Get max vehicle number for this factory across ALL dates (not just current date)
+        // Find first available vehicle number (fill gaps instead of always using max+1)
         const factoryVehicles = vehicles.filter(v => v.factory_id === factoryId);
-        const maxNumber = factoryVehicles.reduce((max, v) => Math.max(max, v.vehicle_number || 0), 0);
-        vehicleNumber = maxNumber + 1;
+        const usedNumbers = new Set(factoryVehicles.map(v => v.vehicle_number || 0));
+
+        // Find the first gap starting from 1
+        vehicleNumber = 1;
+        while (usedNumbers.has(vehicleNumber)) {
+          vehicleNumber++;
+        }
         vehicleCode = `${factory.factory_code}${separator}${vehicleNumber}`;
       } else if (customCode) {
         // Extract number from custom code if possible
@@ -2023,6 +2028,26 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         updateData.status = value;
       } else if (field === 'date') {
         updateData.scheduled_date = value;
+      } else if (field === 'vehicle_code') {
+        // Validate: check if code already exists (except for this vehicle)
+        const newCode = String(value || '').trim();
+        if (!newCode) {
+          setMessage('Veoki kood ei saa olla tühi');
+          setSaving(false);
+          return;
+        }
+        const existingWithCode = vehicles.find(v => v.vehicle_code === newCode && v.id !== vehicleId);
+        if (existingWithCode) {
+          setMessage(`Veok koodiga "${newCode}" on juba olemas!`);
+          setSaving(false);
+          return;
+        }
+        updateData.vehicle_code = newCode;
+        // Extract number from code if possible
+        const numMatch = newCode.match(/\d+$/);
+        if (numMatch) {
+          updateData.vehicle_number = parseInt(numMatch[0], 10);
+        }
       }
 
       const { error } = await supabase
@@ -5677,14 +5702,47 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                             {/* Vehicle title section - LEFT */}
                             <div className="vehicle-title-section">
-                              <span
-                                className="vehicle-code clickable"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (vehicle) handleVehicleClick(vehicle);
-                                }}
-                                title="Märgista mudelis"
-                              >{vehicle?.vehicle_code || 'Määramata'}</span>
+                              {inlineEditVehicleId === vehicleId && inlineEditField === 'vehicle_code' ? (
+                                <input
+                                  type="text"
+                                  className="inline-input vehicle-code-input"
+                                  autoFocus
+                                  defaultValue={vehicle?.vehicle_code || ''}
+                                  placeholder="nt. EBE-1"
+                                  onBlur={(e) => {
+                                    const newCode = e.target.value.trim();
+                                    if (newCode && newCode !== vehicle?.vehicle_code) {
+                                      updateVehicleInline(vehicleId, 'vehicle_code', newCode);
+                                    }
+                                    setInlineEditVehicleId(null);
+                                    setInlineEditField(null);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.currentTarget.blur();
+                                    } else if (e.key === 'Escape') {
+                                      setInlineEditVehicleId(null);
+                                      setInlineEditField(null);
+                                    }
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  style={{ fontWeight: 600, width: 80 }}
+                                />
+                              ) : (
+                                <span
+                                  className="vehicle-code clickable"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (vehicle) handleVehicleClick(vehicle);
+                                  }}
+                                  onDoubleClick={(e) => {
+                                    e.stopPropagation();
+                                    setInlineEditVehicleId(vehicleId);
+                                    setInlineEditField('vehicle_code');
+                                  }}
+                                  title="Topeltklikk muutmiseks, klikk märgistamiseks"
+                                >{vehicle?.vehicle_code || 'Määramata'}</span>
+                              )}
                               {inlineEditVehicleId === vehicleId && inlineEditField === 'status' ? (
                                 <select
                                   className="inline-select status-select"
@@ -7860,6 +7918,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
             </div>
             <div className="modal-body">
+              {/* Vehicle code edit */}
+              <div className="form-row">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label><FiTruck style={{ marginRight: 4 }} />Veoki kood</label>
+                  <input
+                    type="text"
+                    value={editingVehicle.vehicle_code}
+                    onChange={(e) => setEditingVehicle({
+                      ...editingVehicle,
+                      vehicle_code: e.target.value
+                    })}
+                    placeholder="nt. EBE-1"
+                    style={{ fontWeight: 600 }}
+                  />
+                </div>
+              </div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label>Staatus</label>
@@ -8045,7 +8120,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 className="submit-btn primary"
                 disabled={saving}
                 onClick={async () => {
+                  // Validate vehicle code uniqueness
+                  const newCode = editingVehicle.vehicle_code?.trim();
+                  if (!newCode) {
+                    setMessage('Veoki kood ei saa olla tühi');
+                    return;
+                  }
+                  const existingWithCode = vehicles.find(v => v.vehicle_code === newCode && v.id !== editingVehicle.id);
+                  if (existingWithCode) {
+                    setMessage(`Veok koodiga "${newCode}" on juba olemas!`);
+                    return;
+                  }
+
+                  // Extract number from code if possible
+                  const numMatch = newCode.match(/\d+$/);
+                  const vehicleNumber = numMatch ? parseInt(numMatch[0], 10) : undefined;
+
                   await updateVehicle(editingVehicle.id, {
+                    vehicle_code: newCode,
+                    vehicle_number: vehicleNumber,
                     scheduled_date: editingVehicle.scheduled_date,
                     status: editingVehicle.status,
                     vehicle_type: vehicleType as any,

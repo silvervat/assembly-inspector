@@ -3959,6 +3959,12 @@
   padding: 2px 6px;
 }
 
+.inline-input.vehicle-code-input {
+  font-weight: 600;
+  width: 80px;
+  font-size: 13px;
+}
+
 .time-primary.clickable,
 .time-secondary.clickable,
 .status-badge.clickable {
