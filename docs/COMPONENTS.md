@@ -147,9 +147,9 @@ clearMappingsCache(projectId);
    - Näitab veateateid, kui insert ebaõnnestub
 
 2. "KÕIK assemblyd → Andmebaasi":
-   - Skaneerib KÕIK mudeli objektid (mitte ainult assembly mark-iga)
-   - Salvestab kõik, millel on kehtiv IFC GUID
-   - Näitab: kokku objektid, uued, uuendatud, assembly mark-iga arv
+   - Skaneerib KÕIK mudeli objektid
+   - Salvestab AINULT objektid, millel on assembly mark (vanem-assemblyd)
+   - Alam-detailid (osad, poldid) jäetakse välja
    - Kasutab delete + insert pattern GUID unikaalsuse tagamiseks
 ```
 
