@@ -1991,6 +1991,16 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     const itemIds = [...selectedItemIds];
     const itemIdSet = new Set(itemIds);
 
+    // Collect GUIDs of items to delete for coloring white after deletion
+    const guidsToColorWhite: string[] = [];
+    for (const itemId of itemIds) {
+      const item = scheduleItems.find(i => i.id === itemId);
+      if (item) {
+        const guid = item.guid_ifc || item.guid;
+        if (guid) guidsToColorWhite.push(guid);
+      }
+    }
+
     // Find dates that will have no items after deletion
     const affectedDates = new Set<string>();
     for (const itemId of itemIds) {
@@ -2030,6 +2040,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .in('id', itemIds);
 
       if (error) throw error;
+
+      // Color deleted items white in the model
+      if (guidsToColorWhite.length > 0 && playbackSettings.colorEachDayDifferent) {
+        try {
+          await colorObjectsByGuid(api, guidsToColorWhite, { r: 255, g: 255, b: 255, a: 255 });
+        } catch (e) {
+          console.error('Error coloring deleted items white:', e);
+        }
+      }
 
       setSelectedItemIds(new Set());
       setMessage(`${count} detaili kustutatud`);
@@ -2124,6 +2143,111 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e) {
       console.error('Error removing items from date:', e);
       setMessage('Viga eemaldamisel');
+    }
+  };
+
+  // Refresh assembly marks from trimble_model_objects table (fixes Object_xxx items)
+  const refreshAssemblyMarks = async () => {
+    // Find items with Object_ prefix that need updating
+    const itemsToFix = scheduleItems.filter(item =>
+      item.assembly_mark?.startsWith('Object_') ||
+      item.assembly_mark?.startsWith('Import-')
+    );
+
+    if (itemsToFix.length === 0) {
+      setMessage('Kõik assembly markid on korras');
+      return;
+    }
+
+    setMessage(`Uuendan ${itemsToFix.length} assembly marki...`);
+
+    try {
+      // Collect all GUIDs from items that need fixing
+      const guidMap = new Map<string, ScheduleItem>();
+      for (const item of itemsToFix) {
+        const guid = item.guid_ifc || item.guid;
+        if (guid) {
+          guidMap.set(guid, item);
+        }
+      }
+
+      const allGuids = Array.from(guidMap.keys());
+      if (allGuids.length === 0) {
+        setMessage('Detailidel puuduvad GUID-id');
+        return;
+      }
+
+      // Lookup GUIDs in trimble_model_objects table (in batches)
+      const BATCH_SIZE = 100;
+      const objectMap = new Map<string, { guid_ifc: string; assembly_mark: string; product_name: string | null; model_id: string | null; object_runtime_id: string | null }>();
+
+      for (let i = 0; i < allGuids.length; i += BATCH_SIZE) {
+        const batch = allGuids.slice(i, i + BATCH_SIZE);
+        const { data: batchObjects, error: lookupError } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, model_id, object_runtime_id')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', batch);
+
+        if (lookupError) {
+          console.error('Error looking up model objects batch:', lookupError);
+          continue;
+        }
+
+        for (const obj of batchObjects || []) {
+          objectMap.set(obj.guid_ifc, obj);
+        }
+
+        setMessage(`Otsin... ${Math.min(i + BATCH_SIZE, allGuids.length)}/${allGuids.length}`);
+      }
+
+      console.log('Found in trimble_model_objects:', objectMap.size);
+
+      // Prepare updates
+      const updates: { id: string; assembly_mark: string; product_name?: string; model_id?: string; object_runtime_id?: number }[] = [];
+
+      for (const [guid, item] of guidMap) {
+        const modelObj = objectMap.get(guid);
+        if (modelObj && modelObj.assembly_mark && !modelObj.assembly_mark.startsWith('Object_')) {
+          updates.push({
+            id: item.id,
+            assembly_mark: modelObj.assembly_mark,
+            product_name: modelObj.product_name || undefined,
+            model_id: modelObj.model_id || undefined,
+            object_runtime_id: modelObj.object_runtime_id ? parseInt(modelObj.object_runtime_id) : undefined
+          });
+        }
+      }
+
+      if (updates.length === 0) {
+        setMessage(`Leiti ${objectMap.size} objekti, aga ükski ei sisaldanud õiget assembly marki`);
+        return;
+      }
+
+      // Apply updates in batches
+      let updatedCount = 0;
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('installation_schedule')
+          .update({
+            assembly_mark: update.assembly_mark,
+            product_name: update.product_name,
+            model_id: update.model_id,
+            object_runtime_id: update.object_runtime_id,
+            updated_by: tcUserEmail,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', update.id);
+
+        if (!error) updatedCount++;
+        setMessage(`Uuendan... ${updatedCount}/${updates.length}`);
+      }
+
+      setMessage(`✓ ${updatedCount} assembly marki uuendatud`);
+      await loadSchedule();
+    } catch (e) {
+      console.error('Error refreshing assembly marks:', e);
+      setMessage('Viga assembly markide uuendamisel');
     }
   };
 
@@ -3040,6 +3164,212 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${createdIds.length} markupit loodud (ilma ERP)`);
     } catch (e) {
       console.error('Error creating delivery date markups (no ERP):', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
+  // Create markups for unplanned items showing vehicle code + delivery time
+  const createVehicleTimeMarkups = async () => {
+    setShowHamburgerMenu(false);
+    setShowMarkupSubmenu(false);
+
+    try {
+      setMessage('Laadin tarnegraafiku andmeid...');
+
+      // 1. Get all delivery items with vehicle_id
+      const { data: deliveryItems, error: itemsError } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, guid_ifc, guid_ms, model_id, vehicle_id')
+        .eq('trimble_project_id', projectId)
+        .not('vehicle_id', 'is', null);
+
+      if (itemsError) throw itemsError;
+
+      if (!deliveryItems || deliveryItems.length === 0) {
+        setMessage('Tarnegraafikus pole detaile veokitega');
+        return;
+      }
+
+      // 2. Get all vehicles with dates and times
+      const vehicleIds = [...new Set(deliveryItems.map(i => i.vehicle_id).filter(Boolean))];
+      const { data: vehicles, error: vehiclesError } = await supabase
+        .from('trimble_delivery_vehicles')
+        .select('id, vehicle_code, scheduled_date, unload_start_time')
+        .in('id', vehicleIds);
+
+      if (vehiclesError) throw vehiclesError;
+
+      // Create vehicle lookup map
+      const vehicleMap = new Map(vehicles?.map(v => [v.id, v]) || []);
+
+      // 3. Get guids of items already in installation schedule
+      const scheduledGuidsIfc = new Set(
+        scheduleItems
+          .filter(item => item.guid_ifc)
+          .map(item => item.guid_ifc!.toLowerCase())
+      );
+      const scheduledGuids = new Set(
+        scheduleItems
+          .filter(item => item.guid)
+          .map(item => item.guid.toLowerCase())
+      );
+
+      // 4. Filter to only unplanned items with vehicle info
+      const unplannedItems = deliveryItems.filter(item => {
+        const guidIfc = (item.guid_ifc || '').toLowerCase();
+        const guid = (item.guid || '').toLowerCase();
+        const vehicle = vehicleMap.get(item.vehicle_id);
+        return !scheduledGuidsIfc.has(guidIfc) && !scheduledGuids.has(guid) && vehicle?.scheduled_date;
+      });
+
+      if (unplannedItems.length === 0) {
+        setMessage('Kõik veokitega detailid on juba paigaldusgraafikus');
+        return;
+      }
+
+      setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} planeerimata detaili)`);
+
+      // 5. Remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe...');
+
+      // 6. Group by model for batch processing
+      const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number; vehicle: typeof vehicles[0] }[]>();
+
+      for (const item of unplannedItems) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        const vehicle = vehicleMap.get(item.vehicle_id);
+
+        if (!modelId || !guidIfc || !vehicle) continue;
+
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (!runtimeIds || runtimeIds.length === 0) continue;
+
+          if (!itemsByModel.has(modelId)) {
+            itemsByModel.set(modelId, []);
+          }
+          itemsByModel.get(modelId)!.push({ item, runtimeId: runtimeIds[0], vehicle });
+        } catch (err) {
+          // Object not found in model, skip
+        }
+      }
+
+      const markupsToCreate: any[] = [];
+      const markupGuidIfcs: string[] = [];
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        for (const { item, runtimeId, vehicle } of modelItems) {
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Line 1: Vehicle code (e.g., EBE-15)
+          const vehicleCode = vehicle.vehicle_code || '?';
+
+          // Line 2: Date + time (e.g., 15.01.25 08:30)
+          const dateStr = vehicle.scheduled_date || '';
+          let formattedDate = '';
+          if (dateStr) {
+            const dateParts = dateStr.split('-'); // YYYY-MM-DD
+            if (dateParts.length === 3) {
+              const dd = dateParts[2];
+              const mm = dateParts[1];
+              const yy = dateParts[0].slice(-2);
+              formattedDate = `${dd}.${mm}.${yy}`;
+            }
+          }
+          const timeStr = vehicle.unload_start_time || '';
+          const dateTimeLine = timeStr ? `${formattedDate} ${timeStr}` : formattedDate;
+
+          if (!formattedDate) continue;
+
+          // Create 2-line markup
+          const markupText = `${vehicleCode}\n${dateTimeLine}`;
+
+          markupsToCreate.push({
+            text: markupText,
+            start: pos,
+            end: pos,
+          });
+          markupGuidIfcs.push((item.guid_ifc || item.guid || '').toLowerCase());
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        return;
+      }
+
+      // 7. Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // Build map
+      const newMarkupMap = new Map<string, number>();
+      for (let i = 0; i < Math.min(createdIds.length, markupGuidIfcs.length); i++) {
+        if (markupGuidIfcs[i] && createdIds[i]) {
+          newMarkupMap.set(markupGuidIfcs[i], createdIds[i]);
+        }
+      }
+      setDeliveryMarkupMap(newMarkupMap);
+
+      // 8. Set color - blue for vehicle info
+      const markupColor = '#3B82F6';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+        } catch (err) {
+          console.warn('Color set error:', err);
+        }
+      }
+
+      setMessage(`${createdIds.length} veoki markupit loodud`);
+    } catch (e) {
+      console.error('Error creating vehicle time markups:', e);
       setMessage('Viga markupite loomisel');
     }
   };
@@ -5400,6 +5730,20 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <span>Ressursside statistika</span>
               </div>
 
+              {/* Uuenda assembly markid */}
+              {scheduleItems.some(i => i.assembly_mark?.startsWith('Object_')) && (
+                <div
+                  className="dropdown-item"
+                  onClick={() => {
+                    setShowHamburgerMenu(false);
+                    refreshAssemblyMarks();
+                  }}
+                >
+                  <FiRefreshCw size={14} />
+                  <span>Uuenda Object_xxx markid</span>
+                </div>
+              )}
+
               {/* Märgistused submenu - expands inline */}
               <div
                 className={`dropdown-item with-submenu ${showMarkupSubmenu ? 'expanded' : ''}`}
@@ -5423,6 +5767,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <button onClick={createDeliveryDateMarkupsNoERP}>
                     <FiPackage size={14} />
                     <span>Ilma ERP-ideta (planeerimata)</span>
+                  </button>
+                  <button onClick={createVehicleTimeMarkups}>
+                    <FiTruck size={14} />
+                    <span>Veoki nr & tarneaeg</span>
                   </button>
                   <div className="submenu-divider" />
                   <button onClick={() => {
