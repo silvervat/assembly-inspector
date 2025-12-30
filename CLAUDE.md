@@ -1,105 +1,116 @@
 # Assembly Inspector - Claude Memory
 
-## Version Management
+## Kiire Ülevaade
 
-**IMPORTANT:** When making changes to this project, always update the version number in TWO places:
+**Trimble Connect laiendus** kvaliteedikontrolliks, tarnegraafiku ja paigaldusgraafiku halduseks.
 
-1. `src/App.tsx` - Update `APP_VERSION` constant
-2. `package.json` - Update `version` field
+| Tehnoloogia | Versioon |
+|-------------|----------|
+| React + TypeScript | 18.x / 5.x |
+| Vite | 5.x |
+| Trimble Connect Workspace API | 0.3.33 |
+| Supabase | PostgreSQL |
 
-Keep both versions in sync!
+## Dokumentatsioon
 
-### Version Format
-Use semantic versioning: `MAJOR.MINOR.PATCH`
-- MAJOR: Breaking changes
-- MINOR: New features
-- PATCH: Bug fixes
+| Fail | Sisu |
+|------|------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Süsteemi arhitektuur, andmevoog |
+| [docs/DATABASE.md](docs/DATABASE.md) | Andmebaasi skeem, tabelid |
+| [docs/API.md](docs/API.md) | Trimble API, Supabase, GUID teisendused |
+| [docs/COMPONENTS.md](docs/COMPONENTS.md) | Komponentide hierarhia, state'd |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Koodireeglid, patterns |
 
-## Project Overview
+## Versioonihaldus
 
-This is a Trimble Connect extension for quality control inspection of assemblies.
+**ALATI** uuenda versiooni kahes kohas:
+1. `src/App.tsx` → `APP_VERSION`
+2. `package.json` → `version`
 
-### Key Technologies
-- React 18 + TypeScript
-- Vite build system
-- Trimble Connect Workspace API (v0.3.33)
-- Supabase for backend/database
-- GitHub Pages deployment
+```bash
+# Commit formaat
+v3.0.XXX: Lühike kirjeldus
+```
 
-### Important Files
-- `src/App.tsx` - Main app component with version constant, Trimble user auth
-- `src/components/MainMenu.tsx` - Main menu with inspection type selection
-- `src/components/InspectorScreen.tsx` - Main inspection logic
-- `src/supabase.ts` - Database types and client
+## Peamised Komponendid
 
-### Authentication (v2.1.0+)
-- **NO PIN code** - Uses Trimble Connect user email for authentication
-- User's email must exist in `trimble_ex_users` table (column: `user_email`)
-- User initials (e.g., "S.V") shown in header from Trimble Connect firstName/lastName
-- If user not in table, shows "Ligipääs keelatud" (Access denied) screen
+| Komponent | Funktsioon |
+|-----------|------------|
+| `App.tsx` | Autentimine, navigatsioon |
+| `DeliveryScheduleScreen.tsx` | Tarnegraafik, veokid, eksport |
+| `InstallationScheduleScreen.tsx` | Paigaldusgraafik |
+| `AdminScreen.tsx` | Seaded, "Saada andmebaasi" |
+| `PropertyMappingsContext.tsx` | Tekla property seaded |
 
-### Database Tables
-1. `trimble_ex_users` - Authorized users
-   - `id` - UUID primary key
-   - `user_email` - Trimble Connect user email (UNIQUE)
-   - `name` - Optional display name
-   - `role` - 'inspector' | 'admin' | 'viewer'
+## Olulised Mehhanismid
 
-2. `inspections` - Inspection records
+### Property Mappings
+- Projekti-põhised Tekla property seaded
+- Tabel: `project_property_mappings`
+- Cache + invalidation listeners
+- Admin lehel konfigureeritav
 
-### Inspection Modes
-- **Paigaldatud detailide inspektsioon** - Assembly selection ON, uses Cast_unit_Mark
-- **Poltide inspektsioon** - Assembly selection OFF, uses Tekla_Bolt.Bolt_Name
-- Other modes: Muu, Mitte vastavus, Värviparandus, Keevis, etc. (developing)
+### GUID Unikaalsus
+- Unikaalsus: `(trimble_project_id, guid_ifc)`
+- Sama GUID erinevates mudeliversioonides → uuendatakse
+- Delete + Insert pattern (mitte upsert ignoreDuplicates)
 
-### Tekla Properties Saved
-Each inspection saves these Tekla properties:
-- `file_name` - Model file name
-- `guid`, `guid_ifc`, `guid_ms` - Object identifiers
-- `object_id` - Object ID
-- `cast_unit_bottom_elevation`, `cast_unit_top_elevation`
-- `cast_unit_position_code`
-- `cast_unit_weight`
-- `assembly_mark` (Cast_unit_Mark OR Bolt_Name depending on mode)
-- `product_name` - From Property Set "Product" > "Name"
+### Checkbox Multi-Select (Tarnegraafik)
+- `syncingToModelRef` lipp hoiab ära valiku tühistamise
+- Timeout 2000ms (katab 1.5s polling)
+- `e.stopPropagation()` checkbox onClick'is
 
-### Database
-Run `supabase-update.sql` when:
-- Adding new columns to the inspections table
-- Creating the `trimble_ex_users` table (new in v2.1.0)
+### Excel Eksport
+- Kaalud ümardatud 1 komakohani
+- `xlsx-js-style` teek
+
+## Andmebaasi Tabelid
+
+| Tabel | Kirjeldus |
+|-------|-----------|
+| `trimble_model_objects` | Mudeli objektide cache |
+| `project_property_mappings` | Property seaded |
+| `trimble_delivery_vehicles` | Veokid |
+| `trimble_delivery_items` | Tarnedetailid |
+| `trimble_delivery_factories` | Tehased |
+| `installation_schedule_items` | Paigaldusgraafik |
+| `inspections` | Kvaliteedikontroll |
+| `trimble_ex_users` | Kasutajad |
 
 ## Development Workflow
 
-### Making Changes
-1. Make code changes
-2. Update version in `src/App.tsx` and `package.json`
-3. Run `npm run build` to verify build works
-4. Commit changes with message format: `v3.0.XXX: Description of changes`
-5. Push to branch
-
-### Deploying to Production
-1. Create Pull Request: `gh pr create --title "v3.0.XXX: Title" --body "Description"`
-2. Merge PR: `gh pr merge --squash`
-3. GitHub Actions automatically deploys to GitHub Pages
-4. Wait ~1-2 minutes for deployment to complete
-5. Hard refresh browser (Ctrl+Shift+R) to see changes
-
-### Quick Deploy Commands
 ```bash
-# Create and merge PR in one go
-gh pr create --title "v3.0.XXX: Title" --body "Description" && gh pr merge --squash
+# 1. Tee muudatused
+# 2. Uuenda versioon (App.tsx + package.json)
+# 3. Build
+npm run build
 
-# Or merge existing PR
+# 4. Commit
+git add -A && git commit -m "v3.0.XXX: Kirjeldus"
+
+# 5. Push
+git push -u origin branch-name
+
+# 6. Deploy (PR + merge)
+gh pr create --title "v3.0.XXX: Title" --body "Description"
 gh pr merge --squash
 ```
 
-### Debugging
-- Check browser console for errors (F12)
-- API errors often show column names that don't exist in database
-- Database schema is in Supabase dashboard
+## Sagedased Probleemid
 
-### Database Tables Reference
-- `trimble_model_objects` - Cached model data (guid_ifc, model_id, object_runtime_id, trimble_project_id)
-- `delivery_schedule` - Delivery schedule entries
-- `inspections` - Inspection records
-- `trimble_ex_users` - Authorized users
+### "Object_xxx" assembly mark asemel
+- Property mappings pole õigesti seadistatud
+- Kontrolli Admin → Tekla property seaded
+- Kontrolli, et mappings laaditakse enne operatsiooni
+
+### Checkbox valik tühistub
+- `syncingToModelRef` timeout liiga lühike
+- Peaks olema 2000ms (katab polling 1.5s)
+
+### Duplikaadid andmebaasis
+- Kasuta delete + insert, mitte upsert ignoreDuplicates
+- Unikaalsus peab olema `(project_id, guid_ifc)`
+
+### Property'd ei leia
+- Toeta mõlemat formaati: `propertySets` ja `properties` array
+- Normaliseeri nimesid: `s.replace(/\s+/g, '').toLowerCase()`
