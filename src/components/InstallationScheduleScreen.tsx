@@ -7,6 +7,7 @@ import {
   colorObjectsByGuid,
   selectObjectsByGuid,
   zoomToObjectsByGuid,
+  colorAndSelectObjectsByGuid,
   showObjectsByGuid,
   hideObjectsByGuid
 } from '../utils/navigationHelper';
@@ -3972,26 +3973,34 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           }
         }
 
-        // Color all items of this day using GUID-based lookup
+        // Collect all GUIDs for this date
+        const guids = dateItems
+          .map(item => item.guid_ifc || item.guid)
+          .filter((g): g is string => !!g);
+
+        // Color and select all items of this day using single GUID lookup (synchronized)
         if (playbackSettings.colorEachDayDifferent && playbackDateColors[currentDate]) {
           const dayColor = playbackDateColors[currentDate];
-          // Collect all GUIDs for this date
-          const guids = dateItems
-            .map(item => item.guid_ifc || item.guid)
-            .filter((g): g is string => !!g);
-
           if (guids.length > 0) {
-            await colorObjectsByGuid(api, guids, { ...dayColor, a: 255 });
+            // Single call for both color and select - ensures they happen together
+            await colorAndSelectObjectsByGuid(
+              api,
+              guids,
+              { ...dayColor, a: 255 },
+              playbackSettings.disableZoom,
+              500
+            );
           }
         } else {
           // Color all day items green
           for (const item of dateItems) {
             await colorItemGreen(item);
           }
+          // Then select (separate call only when not using day colors)
+          await selectDateInViewer(currentDate, playbackSettings.disableZoom);
         }
 
-        // Select all day items in viewer and list
-        await selectDateInViewer(currentDate, playbackSettings.disableZoom);
+        // Update list selection
         const dayItemIds = new Set(dateItems.map(item => item.id));
         setSelectedItemIds(dayItemIds);
         setCurrentPlaybackDate(currentDate);
@@ -4082,18 +4091,24 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Option 3: Color items with their day's color using GUID-based lookup
+      const guidIfc = item.guid_ifc || item.guid;
       if (playbackSettings.colorEachDayDifferent && playbackDateColors[item.scheduled_date]) {
         const dayColor = playbackDateColors[item.scheduled_date];
-        const guidIfc = item.guid_ifc || item.guid;
         if (guidIfc) {
-          await colorObjectsByGuid(api, [guidIfc], { ...dayColor, a: 255 });
+          // Single call for both color and select - ensures they happen together
+          await colorAndSelectObjectsByGuid(
+            api,
+            [guidIfc],
+            { ...dayColor, a: 255 },
+            playbackSettings.disableZoom,
+            300
+          );
         }
       } else {
-        // Default: color item green
+        // Default: color item green, then select
         await colorItemGreen(item);
+        await selectInViewer(item, playbackSettings.disableZoom);
       }
-
-      await selectInViewer(item, playbackSettings.disableZoom);
 
       // Update current playback date (if not already updated above for new day)
       if (!isNewDay) {
