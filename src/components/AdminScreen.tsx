@@ -1174,6 +1174,25 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         return;
       }
 
+      // Delete existing records with same guid_ifc to ensure uniqueness by GUID
+      // (handles multiple model versions with same physical elements)
+      const guidsToSave = allRecords
+        .map(r => r.guid_ifc)
+        .filter((g): g is string => !!g);
+
+      if (guidsToSave.length > 0) {
+        setModelObjectsStatus('Eemaldan vanad kirjed samade GUIDide jaoks...');
+        // Delete in batches of 100 GUIDs
+        for (let i = 0; i < guidsToSave.length; i += 100) {
+          const guidBatch = guidsToSave.slice(i, i + 100);
+          await supabase
+            .from('trimble_model_objects')
+            .delete()
+            .eq('trimble_project_id', projectId)
+            .in('guid_ifc', guidBatch);
+        }
+      }
+
       // Save in batches
       const BATCH_SIZE = 1000;
       let savedCount = 0;
@@ -1186,14 +1205,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
         setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${allRecords.length})...`);
 
-        // Use upsert to update existing records with new property values
-        // (important when property mappings are changed and objects are re-sent)
+        // Insert new records (old ones with same GUID were deleted above)
         const { error } = await supabase
           .from('trimble_model_objects')
-          .upsert(batch, {
-            onConflict: 'trimble_project_id,model_id,object_runtime_id'
-            // ignoreDuplicates removed - now updates existing records
-          });
+          .insert(batch);
 
         if (error) {
           console.error(`Batch ${batchNum} error:`, error);
