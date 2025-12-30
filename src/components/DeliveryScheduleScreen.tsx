@@ -1395,6 +1395,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const selectionInProgressRef = useRef(false);
   // Track previous model selection to detect actual changes
   const previousModelSelectionRef = useRef<string>('');
+  // Flag to track when WE are syncing selectedItemIds to model (don't clear selection in this case)
+  const syncingToModelRef = useRef(false);
 
   useEffect(() => {
     const handleSelectionChange = async () => {
@@ -1538,7 +1540,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         setSelectedObjects(objects);
 
         // Only clear schedule selection when model selection actually CHANGES to something new
-        if (objects.length > 0 && selectionActuallyChanged) {
+        // AND when the change was NOT triggered by our own sync (from checkbox selections)
+        if (objects.length > 0 && selectionActuallyChanged && !syncingToModelRef.current) {
           setSelectedItemIds(new Set());
         }
       } catch (e: any) {
@@ -1586,8 +1589,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         .filter((g): g is string => !!g);
 
       if (guids.length > 0) {
+        // Set flag to prevent the selection change handler from clearing our selection
+        syncingToModelRef.current = true;
         // Use GUID-based selection
-        selectObjectsByGuid(api, guids, 'set').catch(() => {});
+        selectObjectsByGuid(api, guids, 'set')
+          .catch(() => {})
+          .finally(() => {
+            // Clear flag after a short delay to ensure selection change event is processed
+            setTimeout(() => { syncingToModelRef.current = false; }, 100);
+          });
       }
     }
     // NOTE: We do NOT clear viewer selection when selectedItemIds is empty
