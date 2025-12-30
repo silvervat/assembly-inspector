@@ -18,7 +18,7 @@ import {
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
-  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle
+  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -1066,6 +1066,33 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       broadcastChannelRef.current.postMessage({ type: 'selectInModel', guidIfc });
     }
   }, [isPopupMode]);
+
+  // Open popup window with full delivery schedule table
+  const openPopupWindow = useCallback(() => {
+    // Get base URL (works in both development and production)
+    const baseUrl = window.location.origin + window.location.pathname;
+    const popupUrl = `${baseUrl}?popup=delivery&projectId=${encodeURIComponent(projectId)}`;
+
+    // Calculate popup dimensions (80% of screen)
+    const width = Math.min(1600, Math.floor(window.screen.width * 0.85));
+    const height = Math.min(1000, Math.floor(window.screen.height * 0.85));
+    const left = Math.floor((window.screen.width - width) / 2);
+    const top = Math.floor((window.screen.height - height) / 2);
+
+    // Open popup window
+    const popup = window.open(
+      popupUrl,
+      'DeliverySchedulePopup',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,menubar=no,toolbar=no,location=no,status=no`
+    );
+
+    if (popup) {
+      popup.focus();
+    } else {
+      // Popup blocked - open in new tab instead
+      window.open(popupUrl, '_blank');
+    }
+  }, [projectId]);
 
   // Link items with model - fetch real assembly marks from trimble_model_objects table
   // Note: Currently unused as import now looks up data directly, but kept for potential manual re-link feature
@@ -6694,6 +6721,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           >
             <FiLayers />
           </button>
+          {/* Open full table in popup window - only show in extension mode */}
+          {!isPopupMode && (
+            <button
+              className="view-toggle-btn popup-btn"
+              onClick={openPopupWindow}
+              title="Ava täisvaade eraldi aknas"
+            >
+              <FiExternalLink />
+            </button>
+          )}
         </div>
       </header>
 
