@@ -92,6 +92,17 @@
   color: var(--modus-primary-darker, #0a3a67);
 }
 
+.delivery-header .view-toggle-btn.popup-btn {
+  background: rgba(16, 185, 129, 0.25);
+  color: #10b981;
+  margin-left: 8px;
+}
+
+.delivery-header .view-toggle-btn.popup-btn:hover {
+  background: rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
 /* ============================================
    COMPACT TOOLBAR (combined stats + icons)
    ============================================ */
@@ -3946,6 +3957,12 @@
 .inline-select.status-select {
   font-size: 11px;
   padding: 2px 6px;
+}
+
+.inline-input.vehicle-code-input {
+  font-weight: 600;
+  width: 80px;
+  font-size: 13px;
 }
 
 .time-primary.clickable,
