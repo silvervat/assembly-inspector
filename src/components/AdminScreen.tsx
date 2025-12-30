@@ -1239,19 +1239,63 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   }, [api, projectId, loadModelObjectsInfo, propertyMappings]);
 
   // Save ALL assemblies from model to database (not just selection)
-  // Uses hierarchy: only saves objects that HAVE children (parent assemblies)
+  // Uses Assembly Selection mode: enables it, selects all, gets parent assemblies
   const saveAllAssembliesToSupabase = useCallback(async () => {
     setModelObjectsLoading(true);
-    setModelObjectsStatus('Skanneerin mudelit...');
+    setModelObjectsStatus('Lülitan Assembly Selection sisse...');
 
     try {
-      // Get all objects from all models
+      // Step 1: Enable Assembly Selection mode
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+
+      // Step 2: Get all objects from all models
+      setModelObjectsStatus('Laadin mudeli objekte...');
       const allModelObjects = await api.viewer.getObjects();
       if (!allModelObjects || allModelObjects.length === 0) {
         setModelObjectsStatus('Ühtegi mudelit pole laetud!');
         setModelObjectsLoading(false);
         return;
       }
+
+      // Step 3: Build selection with ALL object IDs
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+      let totalObjects = 0;
+
+      for (const modelObj of allModelObjects) {
+        const modelId = modelObj.modelId;
+        const objects = (modelObj as any).objects || [];
+        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+        if (runtimeIds.length > 0) {
+          modelObjectIds.push({ modelId, objectRuntimeIds: runtimeIds });
+          totalObjects += runtimeIds.length;
+        }
+      }
+
+      setModelObjectsStatus(`Valin ${totalObjects} objekti (Assembly Selection sees)...`);
+
+      // Step 4: Select all objects - with Assembly Selection ON, this consolidates to parent assemblies
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+      // Small delay to let selection settle
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // Step 5: Get the selection back - now only parent assemblies
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setModelObjectsStatus('Valik on tühi! Kontrolli, kas mudel on laetud.');
+        setModelObjectsLoading(false);
+        return;
+      }
+
+      // Count unique parent assemblies
+      let assemblyCount = 0;
+      for (const sel of selection) {
+        assemblyCount += sel.objectRuntimeIds?.length || 0;
+      }
+
+      setModelObjectsStatus(`Leitud ${assemblyCount} assembly-t. Laadin propertiseid...`);
 
       // Helper to normalize property names
       const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
@@ -1268,101 +1312,92 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         product_name: string | null;
       }[] = [];
 
-      let totalScanned = 0;
-      let parentsFound = 0;
-
-      // Process each model
-      for (const modelObj of allModelObjects) {
-        const modelId = modelObj.modelId;
-        const objects = (modelObj as any).objects || [];
-        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+      // Process the selection (parent assemblies only due to Assembly Selection mode)
+      let processed = 0;
+      for (const sel of selection) {
+        const modelId = sel.modelId;
+        const runtimeIds = sel.objectRuntimeIds || [];
 
         if (runtimeIds.length === 0) continue;
 
-        setModelObjectsStatus(`Skanneerin mudelit... (${runtimeIds.length} objekti)`);
-
-        // Process in smaller batches for hierarchy check
-        const BATCH_SIZE = 50;
+        // Process in batches
+        const BATCH_SIZE = 100;
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          totalScanned += batch.length;
+          processed += batch.length;
 
-          // Check hierarchy for each object - only include those WITH children
-          for (const runtimeId of batch) {
-            try {
-              const children = await (api.viewer as any).getHierarchyChildren(modelId, [runtimeId]);
-              const childCount = children?.[0]?.length || 0;
+          setModelObjectsStatus(`Laadin propertiseid... ${processed}/${assemblyCount}`);
 
-              // Only include objects WITH children (parent assemblies)
-              if (childCount > 0) {
-                parentsFound++;
-
-                // Get properties
-                const propsArray = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
-                const props = propsArray?.[0];
-
-                // Get IFC GUID
-                let ifcGuid = '';
-                try {
-                  const guids = await api.viewer.convertToObjectIds(modelId, [runtimeId]);
-                  ifcGuid = guids[0] || '';
-                } catch (e) {
-                  // Ignore
-                }
-
-                let assemblyMark: string | null = null;
-                let productName: string | null = null;
-
-                // Check properties array structure
-                if (props?.properties && Array.isArray(props.properties)) {
-                  for (const pset of props.properties) {
-                    const setName = (pset as any).set || (pset as any).name || '';
-                    const setNameNorm = normalize(setName);
-                    const propArray = (pset as any).properties || [];
-
-                    for (const prop of propArray) {
-                      const propNameOriginal = (prop as any).name || '';
-                      const propNameNorm = normalize(propNameOriginal);
-                      const propValue = (prop as any).displayValue ?? (prop as any).value;
-
-                      if (!propValue) continue;
-
-                      // Assembly Mark using configured mapping
-                      if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
-                        assemblyMark = String(propValue);
-                      }
-
-                      // Product name
-                      if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                        productName = String(propValue);
-                      }
-                    }
-                  }
-                }
-
-                if (ifcGuid) {
-                  allRecords.push({
-                    trimble_project_id: projectId,
-                    model_id: modelId,
-                    object_runtime_id: runtimeId,
-                    guid: ifcGuid,
-                    guid_ifc: ifcGuid,
-                    assembly_mark: assemblyMark,
-                    product_name: productName
-                  });
-                }
-              }
-            } catch (e) {
-              // Ignore hierarchy errors
-            }
+          // Get properties for batch
+          let propsArray: any[] = [];
+          try {
+            propsArray = await (api.viewer as any).getObjectProperties(modelId, batch, { includeHidden: true });
+          } catch (e) {
+            console.warn('Error getting properties:', e);
+            continue;
           }
 
-          setModelObjectsStatus(`Skanneerin... ${totalScanned} objekti, ${parentsFound} vanem-assembly-t leitud`);
+          // Get GUIDs for batch
+          let guidsArray: string[] = [];
+          try {
+            guidsArray = await api.viewer.convertToObjectIds(modelId, batch);
+          } catch (e) {
+            console.warn('Error getting GUIDs:', e);
+          }
+
+          // Process each assembly
+          for (let j = 0; j < batch.length; j++) {
+            const runtimeId = batch[j];
+            const props = propsArray[j];
+            const ifcGuid = guidsArray[j] || '';
+
+            let assemblyMark: string | null = null;
+            let productName: string | null = null;
+
+            // Check properties array structure
+            if (props?.properties && Array.isArray(props.properties)) {
+              for (const pset of props.properties) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
+                const propArray = (pset as any).properties || [];
+
+                for (const prop of propArray) {
+                  const propNameOriginal = (prop as any).name || '';
+                  const propNameNorm = normalize(propNameOriginal);
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  // Assembly Mark using configured mapping
+                  if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+                    assemblyMark = String(propValue);
+                  }
+
+                  // Product name
+                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                    productName = String(propValue);
+                  }
+                }
+              }
+            }
+
+            if (ifcGuid) {
+              allRecords.push({
+                trimble_project_id: projectId,
+                model_id: modelId,
+                object_runtime_id: runtimeId,
+                guid: ifcGuid,
+                guid_ifc: ifcGuid,
+                assembly_mark: assemblyMark,
+                product_name: productName
+              });
+            }
+          }
         }
       }
 
       if (allRecords.length === 0) {
-        setModelObjectsStatus('Ühtegi vanem-assembly-t ei leitud!');
+        setModelObjectsStatus('Ühtegi assembly-t ei leitud! Kontrolli, kas Assembly Selection on sees.');
         setModelObjectsLoading(false);
         return;
       }
@@ -1432,7 +1467,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       const moreNew = newRecords.length > 5 ? ` (+${newRecords.length - 5} veel)` : '';
 
       setModelObjectsStatus(
-        `✓ Kokku: ${allRecords.length} vanem-assembly-t (${withMarkCount} mark-iga)\n` +
+        `✓ ${allRecords.length} assembly-t (${withMarkCount} mark-iga)\n` +
         `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 && newMarks ? ` (${newMarks}${moreNew})` : ''}\n` +
         `   🔄 Uuendatud: ${existingRecords.length}`
       );

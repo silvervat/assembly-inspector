@@ -147,10 +147,10 @@ clearMappingsCache(projectId);
    - Näitab veateateid, kui insert ebaõnnestub
 
 2. "KÕIK assemblyd → Andmebaasi":
-   - Skaneerib KÕIK mudeli objektid
-   - Kasutab `getHierarchyChildren` API-t hierarhia kontrolliks
-   - Salvestab AINULT objektid, millel ON laps-objekte (vanem-assemblyd)
-   - Alam-detailid (osad, poldid) jäetakse välja (neil pole lapsi)
+   - Lülitab Assembly Selection režiimi SISSE
+   - Valib KÕIK mudeli objektid (`setSelection`)
+   - Assembly Selection režiimis tagastatakse ainult ema-assemblyd
+   - Salvestab ainult valik (ema-assemblyd, mitte alam-osad)
    - Kasutab delete + insert pattern GUID unikaalsuse tagamiseks
 ```
 
