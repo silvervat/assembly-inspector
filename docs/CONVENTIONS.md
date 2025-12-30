@@ -136,6 +136,29 @@ await supabase.from('table').upsert(records, { ignoreDuplicates: true });
 
 ## Property Mappings
 
+### OLULINE: Kasuta Alati Property Mappingute Süsteemi
+
+**REEGL:** Kõik komponendid, mis loevad Tekla/IFC property väärtusi mudelist, PEAVAD kasutama `useProjectPropertyMappings` hook'i. See tagab, et projekti-spetsiifilised property seaded (Admin lehelt) töötavad kõikjal.
+
+**Miks?** Eri projektidel võivad olla erinevad property nimed:
+- Projekt A: `TeklaAssembly.CAST_UNIT_MARK`
+- Projekt B: `EBE_Tootmine.1EBE_Pos_number`
+
+### Hook Kasutamine
+```typescript
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+
+export default function MyComponent({ projectId }: Props) {
+  // ALATI lisa see iga komponendi algusesse mis loeb mudeli properteid
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
+  // Kasuta mappinguid property väärtuste leidmiseks
+  const assemblyMarkSet = propertyMappings.assembly_mark_set;  // nt "EBE_Tootmine"
+  const assemblyMarkProp = propertyMappings.assembly_mark_prop; // nt "1EBE_Pos_number"
+  // ...
+}
+```
+
 ### Normaliseeritud Võrdlus
 ```typescript
 // ALATI normaliseeri property nimesid enne võrdlemist
@@ -146,6 +169,18 @@ const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
 
 if (setNameNorm === mappingSetNorm) {
   // Match!
+}
+```
+
+### Fallback Loogika
+```typescript
+// Proovi ESMALT konfigureeritud mappingut, siis fallback hardcoded patterns
+if (setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm) {
+  assemblyMark = String(propValue);
+  console.log('✅ Found assembly mark via mapping:', assemblyMark);
+} else if (propName.includes('cast') && propName.includes('mark')) {
+  // Fallback hardcoded pattern
+  assemblyMark = String(propValue);
 }
 ```
 

@@ -44,11 +44,20 @@ v3.0.XXX: Lühike kirjeldus
 
 ## Olulised Mehhanismid
 
-### Property Mappings
-- Projekti-põhised Tekla property seaded
+### Property Mappings (KRIITILINE!)
+**REEGL:** KÕIK komponendid mis loevad mudeli properteid PEAVAD kasutama `useProjectPropertyMappings` hook'i!
+
+```typescript
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+
+const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+```
+
+- Projekti-põhised Tekla property seaded (Admin → Tekla property seaded)
 - Tabel: `project_property_mappings`
 - Cache + invalidation listeners
-- Admin lehel konfigureeritav
+- Ilma selleta näidatakse `Object_xxx` õige assembly marki asemel
+- Vt `docs/CONVENTIONS.md` detailsema juhendi jaoks
 
 ### GUID Unikaalsus
 - Unikaalsus: `(trimble_project_id, guid_ifc)`
