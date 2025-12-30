@@ -967,19 +967,19 @@
 
 /* Playback Progress Bar (YouTube-style scrubber) */
 .playback-scrubber {
-  flex: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 150px;
-  max-width: 400px;
+  padding: 6px 12px;
+  background: var(--modus-bg-secondary);
+  border-bottom: 1px solid var(--modus-border);
 }
 
 .scrubber-time {
   font-size: 11px;
   color: var(--modus-text-secondary);
   white-space: nowrap;
-  min-width: 70px;
+  min-width: 40px;
 }
 
 .scrubber-time.current {

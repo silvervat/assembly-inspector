@@ -242,6 +242,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const processingDayRef = useRef<number>(-1); // Track which day is being processed to avoid re-runs
   const scrubberRef = useRef<HTMLDivElement>(null);
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const scrubberDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingScrubIndexRef = useRef<number | null>(null);
 
   // Multi-select state
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -4018,24 +4020,51 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Handle scrubber click/drag
-  const handleScrubberInteraction = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!scrubberRef.current) return;
-
-    const rect = scrubberRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const percentage = Math.max(0, Math.min(1, x / rect.width));
+  // Update scrubber position visually (without coloring)
+  const updateScrubberPosition = (targetIndex: number) => {
     const allItems = getAllItemsSorted();
-    const targetIndex = Math.round(percentage * (allItems.length - 1));
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex >= allItems.length) targetIndex = allItems.length - 1;
 
-    seekToPosition(targetIndex);
+    // Update play index immediately for visual feedback
+    setCurrentPlayIndex(targetIndex);
+    pendingScrubIndexRef.current = targetIndex;
+
+    // Pause playback
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+    setIsPaused(true);
+  };
+
+  // Execute the actual seek with coloring (called after debounce)
+  const executeScrubSeek = async (targetIndex: number) => {
+    setMessage('Värvin mudelit...');
+    await seekToPosition(targetIndex);
+    setMessage('');
   };
 
   // Handle scrubber mouse down (start dragging)
   const handleScrubberMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsScrubbing(true);
-    handleScrubberInteraction(e);
+
+    // Clear any pending debounce
+    if (scrubberDebounceRef.current) {
+      clearTimeout(scrubberDebounceRef.current);
+      scrubberDebounceRef.current = null;
+    }
+
+    // Calculate initial position
+    if (scrubberRef.current) {
+      const rect = scrubberRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const allItems = getAllItemsSorted();
+      const targetIndex = Math.round(percentage * (allItems.length - 1));
+      updateScrubberPosition(targetIndex);
+    }
 
     const handleMouseMove = (e: MouseEvent) => {
       if (!scrubberRef.current) return;
@@ -4044,13 +4073,22 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       const percentage = Math.max(0, Math.min(1, x / rect.width));
       const allItems = getAllItemsSorted();
       const targetIndex = Math.round(percentage * (allItems.length - 1));
-      seekToPosition(targetIndex);
+      updateScrubberPosition(targetIndex);
     };
 
     const handleMouseUp = () => {
       setIsScrubbing(false);
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+
+      // After drag ends, wait a moment then execute the coloring
+      if (pendingScrubIndexRef.current !== null) {
+        const targetIndex = pendingScrubIndexRef.current;
+        scrubberDebounceRef.current = setTimeout(() => {
+          executeScrubSeek(targetIndex);
+          scrubberDebounceRef.current = null;
+        }, 300); // 300ms delay after releasing
+      }
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -6721,31 +6759,6 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           ))}
         </div>
 
-        {/* Scrubber / Progress Bar (YouTube-style) */}
-        {isPlaying && (
-          <div className="playback-scrubber">
-            <span className="scrubber-time current">
-              {currentPlayIndex + 1}
-            </span>
-            <div
-              ref={scrubberRef}
-              className={`scrubber-track ${isScrubbing ? 'dragging' : ''}`}
-              onMouseDown={handleScrubberMouseDown}
-            >
-              <div
-                className="scrubber-progress"
-                style={{ width: `${scheduleItems.length > 0 ? ((currentPlayIndex + 1) / scheduleItems.length) * 100 : 0}%` }}
-              >
-                <div className="scrubber-handle" />
-              </div>
-            </div>
-            <span className="scrubber-time total">
-              {scheduleItems.length}
-            </span>
-            {isPaused && <span className="play-progress">(paus)</span>}
-          </div>
-        )}
-
         <button
           className="export-btn"
           onClick={() => setShowExportModal(true)}
@@ -6755,6 +6768,31 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           <FiDownload size={16} />
         </button>
       </div>
+
+      {/* Scrubber / Progress Bar (YouTube-style) - Separate row below controls */}
+      {isPlaying && (
+        <div className="playback-scrubber">
+          <span className="scrubber-time current">
+            {currentPlayIndex + 1}
+          </span>
+          <div
+            ref={scrubberRef}
+            className={`scrubber-track ${isScrubbing ? 'dragging' : ''}`}
+            onMouseDown={handleScrubberMouseDown}
+          >
+            <div
+              className="scrubber-progress"
+              style={{ width: `${scheduleItems.length > 0 ? ((currentPlayIndex + 1) / scheduleItems.length) * 100 : 0}%` }}
+            >
+              <div className="scrubber-handle" />
+            </div>
+          </div>
+          <span className="scrubber-time total">
+            {scheduleItems.length}
+          </span>
+          {isPaused && <span className="play-progress">(paus)</span>}
+        </div>
+      )}
 
       {/* Version Modal */}
       {showVersionModal && (

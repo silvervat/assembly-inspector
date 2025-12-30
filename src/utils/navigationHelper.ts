@@ -321,10 +321,12 @@ export async function findObjectInLoadedModels(
 /**
  * Find multiple objects by GUIDs in any loaded model
  * Returns map of guidIfc -> FoundObject
+ * Includes retry logic for flaky API calls
  */
 export async function findObjectsInLoadedModels(
   api: WorkspaceAPI.WorkspaceAPI,
-  guidsIfc: string[]
+  guidsIfc: string[],
+  maxRetries: number = 2
 ): Promise<Map<string, FoundObject>> {
   const results = new Map<string, FoundObject>();
   if (!guidsIfc || guidsIfc.length === 0) return results;
@@ -339,23 +341,40 @@ export async function findObjectsInLoadedModels(
     for (const model of loadedModels) {
       if (remaining.size === 0) break;
 
-      try {
-        const guidsToSearch = Array.from(remaining);
-        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guidsToSearch);
+      const guidsToSearch = Array.from(remaining);
 
-        for (let i = 0; i < guidsToSearch.length; i++) {
-          if (runtimeIds[i]) {
-            const guid = guidsToSearch[i];
-            results.set(guid, {
-              modelId: model.id,
-              runtimeId: runtimeIds[i],
-              guidIfc: guid
-            });
-            remaining.delete(guid);
+      // Retry logic for flaky API
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guidsToSearch);
+
+          if (!runtimeIds || !Array.isArray(runtimeIds)) {
+            if (attempt < maxRetries) {
+              await new Promise(r => setTimeout(r, 50));
+              continue;
+            }
+            break;
+          }
+
+          for (let i = 0; i < guidsToSearch.length; i++) {
+            // Check for valid runtime ID (must be a positive number)
+            const runtimeId = runtimeIds[i];
+            if (runtimeId !== undefined && runtimeId !== null && runtimeId > 0) {
+              const guid = guidsToSearch[i];
+              results.set(guid, {
+                modelId: model.id,
+                runtimeId: runtimeId,
+                guidIfc: guid
+              });
+              remaining.delete(guid);
+            }
+          }
+          break; // Success, no need to retry
+        } catch (err) {
+          if (attempt < maxRetries) {
+            await new Promise(r => setTimeout(r, 50));
           }
         }
-      } catch {
-        // Error with this model, try next
       }
     }
 
