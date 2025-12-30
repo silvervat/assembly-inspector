@@ -1174,9 +1174,26 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         return;
       }
 
+      // Deduplicate by GUID - keep record with assembly_mark if available
+      const guidMap = new Map<string, typeof allRecords[0]>();
+      for (const record of allRecords) {
+        if (!record.guid_ifc) continue;
+
+        const existing = guidMap.get(record.guid_ifc);
+        if (!existing) {
+          guidMap.set(record.guid_ifc, record);
+        } else {
+          // Prefer record with assembly_mark
+          if (record.assembly_mark && !existing.assembly_mark) {
+            guidMap.set(record.guid_ifc, record);
+          }
+        }
+      }
+      const uniqueRecords = Array.from(guidMap.values());
+
       // Delete existing records with same guid_ifc to ensure uniqueness by GUID
       // (handles multiple model versions with same physical elements)
-      const guidsToSave = allRecords
+      const guidsToSave = uniqueRecords
         .map(r => r.guid_ifc)
         .filter((g): g is string => !!g);
 
@@ -1193,17 +1210,17 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         }
       }
 
-      // Save in batches
+      // Save deduplicated records in batches
       const BATCH_SIZE = 1000;
       let savedCount = 0;
       let errorCount = 0;
 
-      for (let i = 0; i < allRecords.length; i += BATCH_SIZE) {
-        const batch = allRecords.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < uniqueRecords.length; i += BATCH_SIZE) {
+        const batch = uniqueRecords.slice(i, i + BATCH_SIZE);
         const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        const totalBatches = Math.ceil(allRecords.length / BATCH_SIZE);
+        const totalBatches = Math.ceil(uniqueRecords.length / BATCH_SIZE);
 
-        setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${allRecords.length})...`);
+        setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${uniqueRecords.length})...`);
 
         // Insert new records (old ones with same GUID were deleted above)
         const { error } = await supabase
@@ -1223,12 +1240,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       // Reload info
       await loadModelObjectsInfo();
 
+      const duplicateCount = allRecords.length - uniqueRecords.length;
       if (errorCount > 0) {
-        setModelObjectsStatus(`⚠️ Salvestatud ${savedCount}/${allRecords.length} objekti (${errorCount} viga - vaata konsooli)`);
+        setModelObjectsStatus(`⚠️ Salvestatud ${savedCount}/${uniqueRecords.length} objekti (${errorCount} viga - vaata konsooli)`);
       } else {
-        const marks = allRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
-        const more = allRecords.length > 5 ? ` (+${allRecords.length - 5} veel)` : '';
-        setModelObjectsStatus(`✓ Salvestatud ${savedCount} objekti: ${marks}${more}`);
+        const marks = uniqueRecords.slice(0, 5).map(r => r.assembly_mark).filter(Boolean).join(', ');
+        const more = uniqueRecords.length > 5 ? ` (+${uniqueRecords.length - 5} veel)` : '';
+        const dupInfo = duplicateCount > 0 ? ` (${duplicateCount} duplikaati eemaldatud)` : '';
+        setModelObjectsStatus(`✓ Salvestatud ${savedCount} objekti: ${marks}${more}${dupInfo}`);
       }
     } catch (e: any) {
       setModelObjectsStatus(`Viga: ${e.message}`);
@@ -1402,9 +1421,29 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         return;
       }
 
+      // Deduplicate by GUID - keep record with assembly_mark if available
+      setModelObjectsStatus('Deduplitseerin GUID alusel...');
+      const guidMap = new Map<string, typeof allRecords[0]>();
+      for (const record of allRecords) {
+        if (!record.guid_ifc) continue;
+
+        const existing = guidMap.get(record.guid_ifc);
+        if (!existing) {
+          guidMap.set(record.guid_ifc, record);
+        } else {
+          // Prefer record with assembly_mark
+          if (record.assembly_mark && !existing.assembly_mark) {
+            guidMap.set(record.guid_ifc, record);
+          }
+        }
+      }
+      const uniqueRecords = Array.from(guidMap.values());
+
+      console.log(`Deduplicated: ${allRecords.length} → ${uniqueRecords.length} records`);
+
       // Get existing records from database to compare
       setModelObjectsStatus('Võrdlen andmebaasiga...');
-      const guidsToCheck = allRecords.map(r => r.guid_ifc).filter((g): g is string => !!g);
+      const guidsToCheck = uniqueRecords.map(r => r.guid_ifc).filter((g): g is string => !!g);
 
       let existingGuids = new Set<string>();
       // Fetch in batches of 500
@@ -1422,8 +1461,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       }
 
       // Separate new vs existing
-      const newRecords = allRecords.filter(r => r.guid_ifc && !existingGuids.has(r.guid_ifc));
-      const existingRecords = allRecords.filter(r => r.guid_ifc && existingGuids.has(r.guid_ifc));
+      const newRecords = uniqueRecords.filter(r => r.guid_ifc && !existingGuids.has(r.guid_ifc));
+      const existingRecords = uniqueRecords.filter(r => r.guid_ifc && existingGuids.has(r.guid_ifc));
 
       // Delete existing records with same guid_ifc (to update them)
       if (guidsToCheck.length > 0) {
@@ -1438,13 +1477,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         }
       }
 
-      // Insert all records
+      // Insert deduplicated records
       const BATCH_SIZE = 1000;
       let savedCount = 0;
 
-      for (let i = 0; i < allRecords.length; i += BATCH_SIZE) {
-        const batch = allRecords.slice(i, i + BATCH_SIZE);
-        setModelObjectsStatus(`Salvestan... ${savedCount}/${allRecords.length}`);
+      for (let i = 0; i < uniqueRecords.length; i += BATCH_SIZE) {
+        const batch = uniqueRecords.slice(i, i + BATCH_SIZE);
+        setModelObjectsStatus(`Salvestan... ${savedCount}/${uniqueRecords.length}`);
 
         const { error } = await supabase
           .from('trimble_model_objects')
@@ -1462,13 +1501,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       await loadModelObjectsInfo();
 
       // Report results
-      const withMarkCount = allRecords.filter(r => r.assembly_mark).length;
+      const withMarkCount = uniqueRecords.filter(r => r.assembly_mark).length;
       const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark || r.product_name).filter(Boolean).join(', ');
       const moreNew = newRecords.length > 5 ? ` (+${newRecords.length - 5} veel)` : '';
 
+      const duplicateCount = allRecords.length - uniqueRecords.length;
       setModelObjectsStatus(
-        `✓ ${allRecords.length} assembly-t (${withMarkCount} mark-iga)\n` +
-        `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 && newMarks ? ` (${newMarks}${moreNew})` : ''}\n` +
+        `✓ ${uniqueRecords.length} unikaalset GUID-i (${withMarkCount} mark-iga)\n` +
+        `   ${duplicateCount > 0 ? `⚠️ Duplikaate eemaldatud: ${duplicateCount}\n   ` : ''}` +
+        `🆕 Uusi: ${newRecords.length}${newRecords.length > 0 && newMarks ? ` (${newMarks}${moreNew})` : ''}\n` +
         `   🔄 Uuendatud: ${existingRecords.length}`
       );
 
