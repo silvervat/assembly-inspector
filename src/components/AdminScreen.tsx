@@ -1095,21 +1095,63 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           const props = properties && properties[i];
           const ifcGuid = externalIds[i] || null;
 
-          // Find MS GUID from Reference Object property set
+          // Find properties using configured mappings
           let msGuid: string | null = null;
           let assemblyMark: string | null = null;
           let productName: string | null = null;
 
+          // Helper to normalize names for comparison
+          const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+          const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+          const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+
+          // Try propertySets structure first (older API)
           if (props && props.propertySets) {
             for (const ps of props.propertySets) {
-              if (ps.name === 'Reference Object' && ps.properties) {
+              const setName = ps.name || '';
+              const setNameNorm = normalize(setName);
+              if (setName === 'Reference Object' && ps.properties) {
                 msGuid = ps.properties['GUID'] as string || msGuid;
               }
-              if (ps.name === 'Tekla Common' && ps.properties) {
-                assemblyMark = ps.properties['Cast_unit_Mark'] as string || assemblyMark;
+              // Use configured mapping for assembly mark
+              if (setNameNorm === mappingSetNorm && ps.properties) {
+                const propValue = ps.properties[propertyMappings.assembly_mark_prop];
+                if (propValue) assemblyMark = String(propValue);
               }
-              if (ps.name === 'Product' && ps.properties) {
+              if (setName === 'Product' && ps.properties) {
                 productName = ps.properties['Name'] as string || productName;
+              }
+            }
+          }
+
+          // Also try properties array structure (newer API) - like DeliveryScheduleScreen
+          if (props && props.properties && Array.isArray(props.properties)) {
+            for (const pset of props.properties) {
+              const setName = (pset as any).set || (pset as any).name || '';
+              const setNameNorm = normalize(setName);
+              const propArray = (pset as any).properties || [];
+
+              for (const prop of propArray) {
+                const propNameOriginal = (prop as any).name || '';
+                const propNameNorm = normalize(propNameOriginal);
+                const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                if (!propValue) continue;
+
+                // MS GUID from Reference Object
+                if (setName === 'Reference Object' && propNameOriginal === 'GUID') {
+                  msGuid = String(propValue);
+                }
+
+                // Assembly Mark - use configured mapping
+                if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+                  assemblyMark = String(propValue);
+                }
+
+                // Product name
+                if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                  productName = String(propValue);
+                }
               }
             }
           }
@@ -1132,6 +1174,25 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         return;
       }
 
+      // Delete existing records with same guid_ifc to ensure uniqueness by GUID
+      // (handles multiple model versions with same physical elements)
+      const guidsToSave = allRecords
+        .map(r => r.guid_ifc)
+        .filter((g): g is string => !!g);
+
+      if (guidsToSave.length > 0) {
+        setModelObjectsStatus('Eemaldan vanad kirjed samade GUIDide jaoks...');
+        // Delete in batches of 100 GUIDs
+        for (let i = 0; i < guidsToSave.length; i += 100) {
+          const guidBatch = guidsToSave.slice(i, i + 100);
+          await supabase
+            .from('trimble_model_objects')
+            .delete()
+            .eq('trimble_project_id', projectId)
+            .in('guid_ifc', guidBatch);
+        }
+      }
+
       // Save in batches
       const BATCH_SIZE = 1000;
       let savedCount = 0;
@@ -1144,12 +1205,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
         setModelObjectsStatus(`Salvestan partii ${batchNum}/${totalBatches} (${savedCount}/${allRecords.length})...`);
 
+        // Insert new records (old ones with same GUID were deleted above)
         const { error } = await supabase
           .from('trimble_model_objects')
-          .upsert(batch, {
-            onConflict: 'trimble_project_id,model_id,object_runtime_id',
-            ignoreDuplicates: true
-          });
+          .insert(batch);
 
         if (error) {
           console.error(`Batch ${batchNum} error:`, error);
@@ -1175,7 +1234,202 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     } finally {
       setModelObjectsLoading(false);
     }
-  }, [api, projectId, loadModelObjectsInfo]);
+  }, [api, projectId, loadModelObjectsInfo, propertyMappings]);
+
+  // Save ALL assemblies from model to database (not just selection)
+  const saveAllAssembliesToSupabase = useCallback(async () => {
+    setModelObjectsLoading(true);
+    setModelObjectsStatus('Skanneerin mudelit...');
+
+    try {
+      // Get all objects from all models
+      const allModelObjects = await api.viewer.getObjects();
+      if (!allModelObjects || allModelObjects.length === 0) {
+        setModelObjectsStatus('Ühtegi mudelit pole laetud!');
+        setModelObjectsLoading(false);
+        return;
+      }
+
+      // Helper to normalize property names
+      const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+      const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+      const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+
+      const allRecords: {
+        trimble_project_id: string;
+        model_id: string;
+        object_runtime_id: number;
+        guid: string | null;
+        guid_ifc: string | null;
+        assembly_mark: string | null;
+        product_name: string | null;
+      }[] = [];
+
+      // Process each model
+      for (const modelObj of allModelObjects) {
+        const modelId = modelObj.modelId;
+        const objects = (modelObj as any).objects || [];
+        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+        if (runtimeIds.length === 0) continue;
+
+        setModelObjectsStatus(`Skanneerin mudelit... (${runtimeIds.length} objekti)`);
+
+        // Process in batches
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+
+          // Get properties for batch
+          let propsArray: any[] = [];
+          try {
+            propsArray = await (api.viewer as any).getObjectProperties(modelId, batch, { includeHidden: true });
+          } catch (e) {
+            console.warn('Error getting properties for batch:', e);
+            continue;
+          }
+
+          // Get IFC GUIDs for batch
+          let guidsArray: string[] = [];
+          try {
+            guidsArray = await api.viewer.convertToObjectIds(modelId, batch);
+          } catch (e) {
+            console.warn('Error getting GUIDs for batch:', e);
+          }
+
+          // Process each object in batch
+          for (let j = 0; j < batch.length; j++) {
+            const runtimeId = batch[j];
+            const props = propsArray[j];
+            const ifcGuid = guidsArray[j] || '';
+
+            let assemblyMark: string | null = null;
+            let productName: string | null = null;
+
+            // Check properties array structure
+            if (props?.properties && Array.isArray(props.properties)) {
+              for (const pset of props.properties) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
+                const propArray = (pset as any).properties || [];
+
+                for (const prop of propArray) {
+                  const propNameOriginal = (prop as any).name || '';
+                  const propNameNorm = normalize(propNameOriginal);
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                  if (!propValue) continue;
+
+                  // Assembly Mark using configured mapping
+                  if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+                    assemblyMark = String(propValue);
+                  }
+
+                  // Product name
+                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                    productName = String(propValue);
+                  }
+                }
+              }
+            }
+
+            // Only include objects with assembly mark (these are the assemblies we care about)
+            if (assemblyMark) {
+              allRecords.push({
+                trimble_project_id: projectId,
+                model_id: modelId,
+                object_runtime_id: runtimeId,
+                guid: ifcGuid,
+                guid_ifc: ifcGuid,
+                assembly_mark: assemblyMark,
+                product_name: productName
+              });
+            }
+          }
+
+          setModelObjectsStatus(`Skanneerin... ${allRecords.length} assembly-t leitud`);
+        }
+      }
+
+      if (allRecords.length === 0) {
+        setModelObjectsStatus('Ühtegi assembly-t ei leitud! Kontrolli property mappings seadeid.');
+        setModelObjectsLoading(false);
+        return;
+      }
+
+      // Get existing records from database to compare
+      setModelObjectsStatus('Võrdlen andmebaasiga...');
+      const guidsToCheck = allRecords.map(r => r.guid_ifc).filter((g): g is string => !!g);
+
+      let existingGuids = new Set<string>();
+      // Fetch in batches of 500
+      for (let i = 0; i < guidsToCheck.length; i += 500) {
+        const guidBatch = guidsToCheck.slice(i, i + 500);
+        const { data } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', guidBatch);
+
+        if (data) {
+          data.forEach(r => existingGuids.add(r.guid_ifc));
+        }
+      }
+
+      // Separate new vs existing
+      const newRecords = allRecords.filter(r => r.guid_ifc && !existingGuids.has(r.guid_ifc));
+      const existingRecords = allRecords.filter(r => r.guid_ifc && existingGuids.has(r.guid_ifc));
+
+      // Delete existing records with same guid_ifc (to update them)
+      if (guidsToCheck.length > 0) {
+        setModelObjectsStatus('Uuendan olemasolevaid kirjeid...');
+        for (let i = 0; i < guidsToCheck.length; i += 100) {
+          const guidBatch = guidsToCheck.slice(i, i + 100);
+          await supabase
+            .from('trimble_model_objects')
+            .delete()
+            .eq('trimble_project_id', projectId)
+            .in('guid_ifc', guidBatch);
+        }
+      }
+
+      // Insert all records
+      const BATCH_SIZE = 1000;
+      let savedCount = 0;
+
+      for (let i = 0; i < allRecords.length; i += BATCH_SIZE) {
+        const batch = allRecords.slice(i, i + BATCH_SIZE);
+        setModelObjectsStatus(`Salvestan... ${savedCount}/${allRecords.length}`);
+
+        const { error } = await supabase
+          .from('trimble_model_objects')
+          .insert(batch);
+
+        if (!error) {
+          savedCount += batch.length;
+        }
+      }
+
+      // Reload info
+      await loadModelObjectsInfo();
+
+      // Report results
+      const newMarks = newRecords.slice(0, 5).map(r => r.assembly_mark).join(', ');
+      const moreNew = newRecords.length > 5 ? ` (+${newRecords.length - 5} veel)` : '';
+
+      setModelObjectsStatus(
+        `✓ Kokku: ${allRecords.length} assembly-t\n` +
+        `   🆕 Uusi: ${newRecords.length}${newRecords.length > 0 ? ` (${newMarks}${moreNew})` : ''}\n` +
+        `   🔄 Uuendatud: ${existingRecords.length}`
+      );
+
+    } catch (e: any) {
+      setModelObjectsStatus(`Viga: ${e.message}`);
+      console.error('Save all error:', e);
+    } finally {
+      setModelObjectsLoading(false);
+    }
+  }, [api, projectId, loadModelObjectsInfo, propertyMappings]);
 
   // Delete all model objects for this project
   const deleteAllModelObjects = useCallback(async () => {
@@ -1313,6 +1567,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       setPropertyMappingsLoading(false);
     }
   }, [projectId]);
+
+  // Load property mappings when entering modelObjects view (so we use correct property names)
+  useEffect(() => {
+    if (adminView === 'modelObjects') {
+      loadPropertyMappings();
+    }
+  }, [adminView, loadPropertyMappings]);
 
   // Save property mappings to database
   const savePropertyMappings = useCallback(async () => {
@@ -7040,6 +7301,25 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 <>
                   <FiUpload size={16} />
                   Mudeli valik → Andmebaasi
+                </>
+              )}
+            </button>
+
+            <button
+              className="btn-primary"
+              onClick={saveAllAssembliesToSupabase}
+              disabled={modelObjectsLoading}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#16a34a' }}
+            >
+              {modelObjectsLoading ? (
+                <>
+                  <FiRefreshCw className="spin" size={16} />
+                  Skanneerin...
+                </>
+              ) : (
+                <>
+                  <FiDatabase size={16} />
+                  KÕIK assemblyd → Andmebaasi
                 </>
               )}
             </button>
