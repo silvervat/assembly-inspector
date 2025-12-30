@@ -3168,6 +3168,212 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Create markups for unplanned items showing vehicle code + delivery time
+  const createVehicleTimeMarkups = async () => {
+    setShowHamburgerMenu(false);
+    setShowMarkupSubmenu(false);
+
+    try {
+      setMessage('Laadin tarnegraafiku andmeid...');
+
+      // 1. Get all delivery items with vehicle_id
+      const { data: deliveryItems, error: itemsError } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, guid_ifc, guid_ms, model_id, vehicle_id')
+        .eq('trimble_project_id', projectId)
+        .not('vehicle_id', 'is', null);
+
+      if (itemsError) throw itemsError;
+
+      if (!deliveryItems || deliveryItems.length === 0) {
+        setMessage('Tarnegraafikus pole detaile veokitega');
+        return;
+      }
+
+      // 2. Get all vehicles with dates and times
+      const vehicleIds = [...new Set(deliveryItems.map(i => i.vehicle_id).filter(Boolean))];
+      const { data: vehicles, error: vehiclesError } = await supabase
+        .from('trimble_delivery_vehicles')
+        .select('id, vehicle_code, scheduled_date, unload_start_time')
+        .in('id', vehicleIds);
+
+      if (vehiclesError) throw vehiclesError;
+
+      // Create vehicle lookup map
+      const vehicleMap = new Map(vehicles?.map(v => [v.id, v]) || []);
+
+      // 3. Get guids of items already in installation schedule
+      const scheduledGuidsIfc = new Set(
+        scheduleItems
+          .filter(item => item.guid_ifc)
+          .map(item => item.guid_ifc!.toLowerCase())
+      );
+      const scheduledGuids = new Set(
+        scheduleItems
+          .filter(item => item.guid)
+          .map(item => item.guid.toLowerCase())
+      );
+
+      // 4. Filter to only unplanned items with vehicle info
+      const unplannedItems = deliveryItems.filter(item => {
+        const guidIfc = (item.guid_ifc || '').toLowerCase();
+        const guid = (item.guid || '').toLowerCase();
+        const vehicle = vehicleMap.get(item.vehicle_id);
+        return !scheduledGuidsIfc.has(guidIfc) && !scheduledGuids.has(guid) && vehicle?.scheduled_date;
+      });
+
+      if (unplannedItems.length === 0) {
+        setMessage('Kõik veokitega detailid on juba paigaldusgraafikus');
+        return;
+      }
+
+      setMessage(`Eemaldan vanad markupid... (${unplannedItems.length} planeerimata detaili)`);
+
+      // 5. Remove all existing markups
+      const existingMarkups = await api.markup?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          await api.markup?.removeMarkups?.(existingIds);
+        }
+      }
+
+      setMessage('Loon markupe...');
+
+      // 6. Group by model for batch processing
+      const itemsByModel = new Map<string, { item: typeof unplannedItems[0]; runtimeId: number; vehicle: typeof vehicles[0] }[]>();
+
+      for (const item of unplannedItems) {
+        const modelId = item.model_id;
+        const guidIfc = item.guid_ifc || item.guid;
+        const vehicle = vehicleMap.get(item.vehicle_id);
+
+        if (!modelId || !guidIfc || !vehicle) continue;
+
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [guidIfc]);
+          if (!runtimeIds || runtimeIds.length === 0) continue;
+
+          if (!itemsByModel.has(modelId)) {
+            itemsByModel.set(modelId, []);
+          }
+          itemsByModel.get(modelId)!.push({ item, runtimeId: runtimeIds[0], vehicle });
+        } catch (err) {
+          // Object not found in model, skip
+        }
+      }
+
+      const markupsToCreate: any[] = [];
+      const markupGuidIfcs: string[] = [];
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        for (const { item, runtimeId, vehicle } of modelItems) {
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Line 1: Vehicle code (e.g., EBE-15)
+          const vehicleCode = vehicle.vehicle_code || '?';
+
+          // Line 2: Date + time (e.g., 15.01.25 08:30)
+          const dateStr = vehicle.scheduled_date || '';
+          let formattedDate = '';
+          if (dateStr) {
+            const dateParts = dateStr.split('-'); // YYYY-MM-DD
+            if (dateParts.length === 3) {
+              const dd = dateParts[2];
+              const mm = dateParts[1];
+              const yy = dateParts[0].slice(-2);
+              formattedDate = `${dd}.${mm}.${yy}`;
+            }
+          }
+          const timeStr = vehicle.unload_start_time || '';
+          const dateTimeLine = timeStr ? `${formattedDate} ${timeStr}` : formattedDate;
+
+          if (!formattedDate) continue;
+
+          // Create 2-line markup
+          const markupText = `${vehicleCode}\n${dateTimeLine}`;
+
+          markupsToCreate.push({
+            text: markupText,
+            start: pos,
+            end: pos,
+          });
+          markupGuidIfcs.push((item.guid_ifc || item.guid || '').toLowerCase());
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        return;
+      }
+
+      // 7. Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate) as any;
+
+      let createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (result?.ids) {
+        createdIds = result.ids.map((id: any) => Number(id)).filter(Boolean);
+      }
+
+      // Build map
+      const newMarkupMap = new Map<string, number>();
+      for (let i = 0; i < Math.min(createdIds.length, markupGuidIfcs.length); i++) {
+        if (markupGuidIfcs[i] && createdIds[i]) {
+          newMarkupMap.set(markupGuidIfcs[i], createdIds[i]);
+        }
+      }
+      setDeliveryMarkupMap(newMarkupMap);
+
+      // 8. Set color - blue for vehicle info
+      const markupColor = '#3B82F6';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+        } catch (err) {
+          console.warn('Color set error:', err);
+        }
+      }
+
+      setMessage(`${createdIds.length} veoki markupit loodud`);
+    } catch (e) {
+      console.error('Error creating vehicle time markups:', e);
+      setMessage('Viga markupite loomisel');
+    }
+  };
+
   // Copy all assembly marks for a date to clipboard
   const copyDateMarksToClipboard = async (date: string) => {
     const dateItems = scheduleItems.filter(item => item.scheduled_date === date);
@@ -5561,6 +5767,10 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   <button onClick={createDeliveryDateMarkupsNoERP}>
                     <FiPackage size={14} />
                     <span>Ilma ERP-ideta (planeerimata)</span>
+                  </button>
+                  <button onClick={createVehicleTimeMarkups}>
+                    <FiTruck size={14} />
+                    <span>Veoki nr & tarneaeg</span>
                   </button>
                   <div className="submenu-divider" />
                   <button onClick={() => {
