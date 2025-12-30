@@ -1095,21 +1095,63 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           const props = properties && properties[i];
           const ifcGuid = externalIds[i] || null;
 
-          // Find MS GUID from Reference Object property set
+          // Find properties using configured mappings
           let msGuid: string | null = null;
           let assemblyMark: string | null = null;
           let productName: string | null = null;
 
+          // Helper to normalize names for comparison
+          const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+          const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+          const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+
+          // Try propertySets structure first (older API)
           if (props && props.propertySets) {
             for (const ps of props.propertySets) {
-              if (ps.name === 'Reference Object' && ps.properties) {
+              const setName = ps.name || '';
+              const setNameNorm = normalize(setName);
+              if (setName === 'Reference Object' && ps.properties) {
                 msGuid = ps.properties['GUID'] as string || msGuid;
               }
-              if (ps.name === 'Tekla Common' && ps.properties) {
-                assemblyMark = ps.properties['Cast_unit_Mark'] as string || assemblyMark;
+              // Use configured mapping for assembly mark
+              if (setNameNorm === mappingSetNorm && ps.properties) {
+                const propValue = ps.properties[propertyMappings.assembly_mark_prop];
+                if (propValue) assemblyMark = String(propValue);
               }
-              if (ps.name === 'Product' && ps.properties) {
+              if (setName === 'Product' && ps.properties) {
                 productName = ps.properties['Name'] as string || productName;
+              }
+            }
+          }
+
+          // Also try properties array structure (newer API) - like DeliveryScheduleScreen
+          if (props && props.properties && Array.isArray(props.properties)) {
+            for (const pset of props.properties) {
+              const setName = (pset as any).set || (pset as any).name || '';
+              const setNameNorm = normalize(setName);
+              const propArray = (pset as any).properties || [];
+
+              for (const prop of propArray) {
+                const propNameOriginal = (prop as any).name || '';
+                const propNameNorm = normalize(propNameOriginal);
+                const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                if (!propValue) continue;
+
+                // MS GUID from Reference Object
+                if (setName === 'Reference Object' && propNameOriginal === 'GUID') {
+                  msGuid = String(propValue);
+                }
+
+                // Assembly Mark - use configured mapping
+                if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+                  assemblyMark = String(propValue);
+                }
+
+                // Product name
+                if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                  productName = String(propValue);
+                }
               }
             }
           }
@@ -1313,6 +1355,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       setPropertyMappingsLoading(false);
     }
   }, [projectId]);
+
+  // Load property mappings when entering modelObjects view (so we use correct property names)
+  useEffect(() => {
+    if (adminView === 'modelObjects') {
+      loadPropertyMappings();
+    }
+  }, [adminView, loadPropertyMappings]);
 
   // Save property mappings to database
   const savePropertyMappings = useCallback(async () => {

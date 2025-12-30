@@ -1590,13 +1590,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       if (guids.length > 0) {
         // Set flag to prevent the selection change handler from clearing our selection
+        // Keep it true for longer to handle async selection events and polling
         syncingToModelRef.current = true;
         // Use GUID-based selection
         selectObjectsByGuid(api, guids, 'set')
           .catch(() => {})
           .finally(() => {
-            // Clear flag after a short delay to ensure selection change event is processed
-            setTimeout(() => { syncingToModelRef.current = false; }, 100);
+            // Clear flag after a longer delay to ensure all selection change events are processed
+            // (including the 1.5s polling interval)
+            setTimeout(() => { syncingToModelRef.current = false; }, 2000);
           });
       }
     }
