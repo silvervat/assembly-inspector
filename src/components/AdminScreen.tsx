@@ -1176,13 +1176,23 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
       // Deduplicate by GUID - keep record with assembly_mark if available
       const guidMap = new Map<string, typeof allRecords[0]>();
+      const noGuidRecords: typeof allRecords = [];
+      const duplicateGuids: string[] = [];
+
       for (const record of allRecords) {
-        if (!record.guid_ifc) continue;
+        if (!record.guid_ifc) {
+          noGuidRecords.push(record);
+          continue;
+        }
 
         const existing = guidMap.get(record.guid_ifc);
         if (!existing) {
           guidMap.set(record.guid_ifc, record);
         } else {
+          // Track duplicate GUIDs for logging
+          if (!duplicateGuids.includes(record.guid_ifc)) {
+            duplicateGuids.push(record.guid_ifc);
+          }
           // Prefer record with assembly_mark
           if (record.assembly_mark && !existing.assembly_mark) {
             guidMap.set(record.guid_ifc, record);
@@ -1190,6 +1200,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         }
       }
       const uniqueRecords = Array.from(guidMap.values());
+
+      // Debug logging
+      console.log(`📊 Deduplication stats:`);
+      console.log(`   Total records: ${allRecords.length}`);
+      console.log(`   Records without GUID: ${noGuidRecords.length}`);
+      console.log(`   Unique GUIDs: ${uniqueRecords.length}`);
+      console.log(`   Duplicate GUIDs found: ${duplicateGuids.length}`);
+      if (duplicateGuids.length > 0) {
+        console.log(`   First 5 duplicate GUIDs: ${duplicateGuids.slice(0, 5).join(', ')}`);
+      }
 
       // Delete existing records with same guid_ifc to ensure uniqueness by GUID
       // (handles multiple model versions with same physical elements)
