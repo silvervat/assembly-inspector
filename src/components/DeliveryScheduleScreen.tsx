@@ -128,6 +128,28 @@ const VEHICLE_TYPES = [
   { key: 'extralong', label: 'Ekstra pikk haagis' }
 ];
 
+// Natural sort helper for vehicle codes (EBE-8, EBE-9, EBE-10 instead of EBE-10, EBE-8, EBE-9)
+const naturalSortVehicleCode = (a: string | undefined, b: string | undefined): number => {
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+
+  // Extract prefix and number parts: "EBE-10" -> ["EBE-", "10"]
+  const regex = /^(.*?)(\d+)$/;
+  const matchA = a.match(regex);
+  const matchB = b.match(regex);
+
+  // If both have number suffixes, compare prefix then number
+  if (matchA && matchB) {
+    const prefixCompare = matchA[1].localeCompare(matchB[1]);
+    if (prefixCompare !== 0) return prefixCompare;
+    return parseInt(matchA[2], 10) - parseInt(matchB[2], 10);
+  }
+
+  // Fall back to string comparison
+  return a.localeCompare(b);
+};
+
 // ============================================
 // TIME AND DURATION OPTIONS
 // ============================================
@@ -5550,7 +5572,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       vehicleItems,
                       vehicle: getVehicle(vehicleId)
                     }))
-                    .sort((a, b) => (a.vehicle?.sort_order || 0) - (b.vehicle?.sort_order || 0))
+                    .sort((a, b) => {
+                      // Primary sort by sort_order
+                      const orderDiff = (a.vehicle?.sort_order || 0) - (b.vehicle?.sort_order || 0);
+                      if (orderDiff !== 0) return orderDiff;
+                      // Secondary sort by vehicle code (natural/numeric)
+                      return naturalSortVehicleCode(a.vehicle?.vehicle_code, b.vehicle?.vehicle_code);
+                    })
                     .map(({ vehicleId, vehicleItems, vehicle }, vehicleIndex, sortedVehicles) => {
                     const vehicleWeight = vehicleItems.reduce(
                       (sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0
@@ -7067,8 +7095,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         {/* Selection bars - between calendar and search */}
         {(selectedObjects.length > 0 || selectedItemIds.size > 0) && (
           <div className="selection-bars">
-            {/* Selected objects from model - show add options based on item status */}
+            {/* Selected objects from model - ONLY show if no checkboxes are selected */}
             {(() => {
+              // Don't show model selection bar when items are selected via checkboxes
+              if (selectedItemIds.size > 0) return null;
               if (selectedObjects.length === 0) return null;
 
               // Build lookup maps for items
@@ -8032,11 +8062,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   onChange={(e) => setMoveTargetVehicleId(e.target.value)}
                 >
                   <option value="">Vali veok...</option>
-                  {vehicles.map(v => {
+                  {[...vehicles]
+                    .sort((a, b) => {
+                      // Sort by date first
+                      const dateA = a.scheduled_date || '';
+                      const dateB = b.scheduled_date || '';
+                      if (dateA !== dateB) return dateA.localeCompare(dateB);
+                      // Then by sort_order
+                      const orderDiff = (a.sort_order || 0) - (b.sort_order || 0);
+                      if (orderDiff !== 0) return orderDiff;
+                      // Then by vehicle code (natural/numeric)
+                      return naturalSortVehicleCode(a.vehicle_code, b.vehicle_code);
+                    })
+                    .map(v => {
                     const factory = getFactory(v.factory_id);
+                    const vehicleItems = items.filter(i => i.vehicle_id === v.id);
+                    const vehicleWeight = vehicleItems.reduce((sum, i) => sum + (parseFloat(i.cast_unit_weight || '0') || 0), 0);
                     return (
                       <option key={v.id} value={v.id}>
-                        {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'MÄÄRAMATA'})
+                        {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'MÄÄRAMATA'}) | {vehicleItems.length} tk, {Math.round(vehicleWeight)} kg
                       </option>
                     );
                   })}
