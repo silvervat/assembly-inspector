@@ -966,6 +966,10 @@ export default function OrganizerScreen({
       resetFieldForm();
       setShowFieldForm(false);
       await loadData();
+      // Refresh editingGroup if we're editing, so the modal shows updated fields
+      if (editingGroup && editingGroup.id === rootGroup.id) {
+        setEditingGroup(prev => prev ? { ...prev, custom_fields: updatedFields } : null);
+      }
     } catch (e) {
       console.error('Error adding field:', e);
       showToast('Viga välja lisamisel');
@@ -1001,6 +1005,10 @@ export default function OrganizerScreen({
       setShowFieldForm(false);
       setEditingField(null);
       await loadData();
+      // Refresh editingGroup if we're editing, so the modal shows updated fields
+      if (editingGroup && editingGroup.id === rootGroup.id) {
+        setEditingGroup(prev => prev ? { ...prev, custom_fields: updatedFields } : null);
+      }
     } catch (e) {
       console.error('Error updating field:', e);
       showToast('Viga välja uuendamisel');
@@ -1081,6 +1089,10 @@ export default function OrganizerScreen({
 
       showToast('Väli kustutatud');
       await loadData();
+      // Refresh editingGroup if we're editing, so the modal shows updated fields
+      if (editingGroup && editingGroup.id === rootGroup.id) {
+        setEditingGroup(prev => prev ? { ...prev, custom_fields: updatedFields } : null);
+      }
     } catch (e) {
       console.error('Error deleting field:', e);
       showToast('Viga välja kustutamisel');
@@ -2326,13 +2338,14 @@ export default function OrganizerScreen({
                                     onBlur={() => {
                                       // Delay to allow clicking suggestions
                                       setTimeout(() => {
-                                        if (showTagSuggestions) {
-                                          setShowTagSuggestions(false);
-                                          if (editingTags.length > 0 || tagInput) {
-                                            saveTagsField();
-                                          } else {
-                                            setEditingItemField(null);
-                                          }
+                                        setShowTagSuggestions(false);
+                                        // Always save if we have tags or were editing
+                                        if (editingTags.length > 0) {
+                                          saveTagsField();
+                                        } else {
+                                          setEditingItemField(null);
+                                          setEditingTags([]);
+                                          setTagInput('');
                                         }
                                       }, 200);
                                     }}
