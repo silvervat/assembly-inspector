@@ -22,6 +22,7 @@ CREATE TABLE organizer_groups (
   is_private BOOLEAN DEFAULT false,
   allowed_users TEXT[] DEFAULT '{}',  -- Array of user emails who can see private group
   display_properties JSONB DEFAULT '[]',  -- Max 3 properties to display [{set, prop, label}]
+  custom_fields JSONB DEFAULT '[]',  -- Custom field definitions [{id, name, type, required, showInList, sortOrder, options}]
   assembly_selection_required BOOLEAN DEFAULT true,
   color JSONB,  -- {r, g, b} for model coloring
   created_by TEXT NOT NULL,  -- User email
@@ -75,6 +76,8 @@ CREATE INDEX idx_organizer_items_group ON organizer_group_items(group_id);
 CREATE INDEX idx_organizer_items_guid ON organizer_group_items(guid_ifc);
 CREATE INDEX idx_organizer_items_sort ON organizer_group_items(group_id, sort_order);
 CREATE INDEX idx_organizer_items_mark ON organizer_group_items(assembly_mark) WHERE assembly_mark IS NOT NULL;
+-- GIN index for custom_properties full-text search
+CREATE INDEX idx_organizer_items_custom_props ON organizer_group_items USING GIN (custom_properties);
 
 -- ============================================
 -- TRIGGERS
@@ -153,5 +156,6 @@ COMMENT ON TABLE organizer_groups IS 'Hierarhilised grupid detailide organiseeri
 COMMENT ON TABLE organizer_group_items IS 'Detailid gruppides, seotud IFC GUID-iga';
 COMMENT ON COLUMN organizer_groups.level IS '0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp';
 COMMENT ON COLUMN organizer_groups.display_properties IS 'Maksimaalselt 3 propertyt kuvamiseks [{set, prop, label}]';
+COMMENT ON COLUMN organizer_groups.custom_fields IS 'Kohandatud väljade definitsioonid [{id, name, type, required, showInList, sortOrder, options}]. Tüübid: text, number, currency, date, tags, dropdown';
 COMMENT ON COLUMN organizer_groups.color IS 'RGB värv mudeli värvimiseks {r, g, b}';
-COMMENT ON COLUMN organizer_group_items.custom_properties IS 'Dünaamilised property väärtused';
+COMMENT ON COLUMN organizer_group_items.custom_properties IS 'Kohandatud väljade väärtused {fieldId: value}. Väärtused vastavad grupi custom_fields definitsioonidele';
