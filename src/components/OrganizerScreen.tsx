@@ -628,40 +628,117 @@ export default function OrganizerScreen({
                 let castUnitWeight = '';
                 let castUnitPositionCode = '';
 
+                // Use custom mappings or fall back to defaults
+                const mappings = propertyMappings || DEFAULT_PROPERTY_MAPPINGS;
+
+                // Helper to normalize property names for comparison
+                const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+                const mappingMarkSetNorm = normalize(mappings.assembly_mark_set);
+                const mappingMarkPropNorm = normalize(mappings.assembly_mark_prop);
+                const mappingWeightSetNorm = normalize(mappings.weight_set);
+                const mappingWeightPropNorm = normalize(mappings.weight_prop);
+                const mappingPosSetNorm = normalize(mappings.position_code_set);
+                const mappingPosPropNorm = normalize(mappings.position_code_prop);
+
                 const propertySets = objProps.propertySets || objProps.properties;
                 if (propertySets) {
-                  // Use custom mappings or fall back to defaults
-                  const mappings = propertyMappings || DEFAULT_PROPERTY_MAPPINGS;
+                  // Iterate over all property sets
+                  for (const [setName, setData] of Object.entries(propertySets)) {
+                    const setNameNorm = normalize(setName);
 
-                  // Assembly mark
-                  const markSet = propertySets[mappings.assembly_mark_set];
-                  if (markSet) {
-                    assemblyMark = markSet[mappings.assembly_mark_prop] || '';
-                  }
+                    // Handle both array format and object format
+                    if (Array.isArray(setData)) {
+                      // Array format (Trimble viewer style)
+                      for (const prop of setData as any[]) {
+                        const propNameOriginal = prop?.name || '';
+                        const propNameNorm = normalize(propNameOriginal);
+                        const propValue = prop?.displayValue ?? prop?.value;
 
-                  // Product name - check multiple common locations
-                  for (const [setName, setProps] of Object.entries(propertySets)) {
-                    const sp = setProps as Record<string, unknown>;
-                    // Check common Tekla properties
-                    if (sp['Name'] && !productName) productName = String(sp['Name']);
-                    if (sp['Product_name']) productName = String(sp['Product_name']);
-                    if (sp['PRODUCT_NAME']) productName = String(sp['PRODUCT_NAME']);
-                    // Also check in Tekla Common
-                    if (setName === 'Tekla Common' && sp['Name']) {
-                      productName = String(sp['Name']);
+                        if (!propValue) continue;
+
+                        // Assembly Mark
+                        if (!assemblyMark) {
+                          if (setNameNorm === mappingMarkSetNorm && propNameNorm === mappingMarkPropNorm) {
+                            assemblyMark = String(propValue);
+                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('mark')) {
+                            assemblyMark = String(propValue);
+                          }
+                        }
+
+                        // Weight
+                        if (!castUnitWeight) {
+                          if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
+                            castUnitWeight = String(propValue);
+                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('weight')) {
+                            castUnitWeight = String(propValue);
+                          } else if (propNameNorm === 'weight' || propNameNorm === 'kaal') {
+                            castUnitWeight = String(propValue);
+                          }
+                        }
+
+                        // Position code
+                        if (!castUnitPositionCode) {
+                          if (setNameNorm === mappingPosSetNorm && propNameNorm === mappingPosPropNorm) {
+                            castUnitPositionCode = String(propValue);
+                          } else if (propNameNorm.includes('position') && propNameNorm.includes('code')) {
+                            castUnitPositionCode = String(propValue);
+                          }
+                        }
+
+                        // Product name
+                        if (!productName) {
+                          if (propNameNorm === 'name' && setNameNorm.includes('common')) {
+                            productName = String(propValue);
+                          } else if (propNameNorm === 'productname' || propNameNorm === 'product_name') {
+                            productName = String(propValue);
+                          }
+                        }
+                      }
+                    } else if (typeof setData === 'object' && setData !== null) {
+                      // Object format
+                      for (const [propName, propValue] of Object.entries(setData as Record<string, unknown>)) {
+                        if (!propValue) continue;
+                        const propNameNorm = normalize(propName);
+
+                        // Assembly Mark
+                        if (!assemblyMark) {
+                          if (setNameNorm === mappingMarkSetNorm && propNameNorm === mappingMarkPropNorm) {
+                            assemblyMark = String(propValue);
+                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('mark')) {
+                            assemblyMark = String(propValue);
+                          }
+                        }
+
+                        // Weight
+                        if (!castUnitWeight) {
+                          if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
+                            castUnitWeight = String(propValue);
+                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('weight')) {
+                            castUnitWeight = String(propValue);
+                          } else if (propNameNorm === 'weight' || propNameNorm === 'kaal') {
+                            castUnitWeight = String(propValue);
+                          }
+                        }
+
+                        // Position code
+                        if (!castUnitPositionCode) {
+                          if (setNameNorm === mappingPosSetNorm && propNameNorm === mappingPosPropNorm) {
+                            castUnitPositionCode = String(propValue);
+                          } else if (propNameNorm.includes('position') && propNameNorm.includes('code')) {
+                            castUnitPositionCode = String(propValue);
+                          }
+                        }
+
+                        // Product name
+                        if (!productName) {
+                          if (propNameNorm === 'name' && setNameNorm.includes('common')) {
+                            productName = String(propValue);
+                          } else if (propNameNorm === 'productname' || propNameNorm === 'product_name') {
+                            productName = String(propValue);
+                          }
+                        }
+                      }
                     }
-                  }
-
-                  // Weight
-                  const weightSet = propertySets[mappings.weight_set];
-                  if (weightSet) {
-                    castUnitWeight = String(weightSet[mappings.weight_prop] || '');
-                  }
-
-                  // Position code
-                  const posSet = propertySets[mappings.position_code_set];
-                  if (posSet) {
-                    castUnitPositionCode = String(posSet[mappings.position_code_prop] || '');
                   }
                 }
 
