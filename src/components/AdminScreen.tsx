@@ -4097,6 +4097,53 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                   }}
                 />
                 <FunctionButton
+                  name="🔍 Kontrolli hierarhiat"
+                  result={functionResults["checkHierarchy"]}
+                  onClick={async () => {
+                    updateFunctionResult("checkHierarchy", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("checkHierarchy", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      let totalObjects = 0;
+                      let objectsWithChildren = 0;
+                      let totalChildren = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        totalObjects += objects.length;
+
+                        // Sample first 100 objects to check for children
+                        const sampleIds = objects.slice(0, 100).map((o: any) => o.id).filter((id: any) => id > 0);
+
+                        for (const id of sampleIds) {
+                          try {
+                            const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
+                            if (children && children.length > 0 && children[0].objectRuntimeIds?.length > 0) {
+                              objectsWithChildren++;
+                              totalChildren += children[0].objectRuntimeIds.length;
+                            }
+                          } catch { /* ignore */ }
+                        }
+                      }
+
+                      const hasHierarchy = objectsWithChildren > 0;
+                      updateFunctionResult("checkHierarchy", {
+                        status: 'success',
+                        result: hasHierarchy
+                          ? `Hierarhia OLEMAS: ${objectsWithChildren}/100 objektil on alamobjekte (kokku ${totalChildren} alamobjekti)`
+                          : `Hierarhia PUUDUB: Mudel on lame - kõik ${totalObjects} objekti on samal tasemel`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("checkHierarchy", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="Assembly Selection ON"
                   result={functionResults["Assembly Selection ON"]}
                   onClick={() => testFunction("Assembly Selection ON", () => (api.viewer as any).setSettings?.({ assemblySelection: true }))}
