@@ -4122,10 +4122,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
                         for (const id of sampleIds) {
                           try {
+                            // getHierarchyChildren returns array of child objects directly with .id property
                             const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
-                            if (children && children.length > 0 && children[0].objectRuntimeIds?.length > 0) {
+                            if (children && Array.isArray(children) && children.length > 0) {
                               objectsWithChildren++;
-                              totalChildren += children[0].objectRuntimeIds.length;
+                              totalChildren += children.length;
                             }
                           } catch { /* ignore */ }
                         }
@@ -4172,11 +4173,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                           totalChecked++;
 
                           try {
+                            // getHierarchyChildren returns array of child objects directly with .id property
                             const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
-                            if (children && children.length > 0 && children[0].objectRuntimeIds?.length > 0) {
+                            if (children && Array.isArray(children) && children.length > 0) {
                               assemblyIds.push(id);
                               assembliesFound++;
-                              totalChildren += children[0].objectRuntimeIds.length;
+                              totalChildren += children.length;
                             }
                           } catch { /* ignore */ }
 
