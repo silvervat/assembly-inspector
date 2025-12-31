@@ -852,3 +852,71 @@ export function getPropertyFromSets(
   return null;
 }
 
+// ============================================
+// ORGANIZER SYSTEM (Group Management v3.0.314)
+// ============================================
+
+// Property display configuration for groups
+export interface GroupPropertyDisplay {
+  set: string;      // Property set name (e.g., "Tekla Assembly")
+  prop: string;     // Property name (e.g., "Cast_unit_Weight")
+  label: string;    // Display label (e.g., "Kaal")
+}
+
+// RGB color for group visualization
+export interface GroupColor {
+  r: number;
+  g: number;
+  b: number;
+}
+
+// Organizer group
+export interface OrganizerGroup {
+  id: string;
+  trimble_project_id: string;
+  parent_id: string | null;
+  name: string;
+  description: string | null;
+  is_private: boolean;
+  allowed_users: string[];          // Array of user emails who can see private group
+  display_properties: GroupPropertyDisplay[];  // Max 3 properties to display
+  assembly_selection_required: boolean;  // Whether assembly selection is needed
+  color: GroupColor | null;         // For model coloring
+  created_by: string;               // User email
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+  sort_order: number;
+  level: number;                    // 0, 1, or 2 (max 3 levels)
+  // Computed/joined fields (not in DB)
+  children?: OrganizerGroup[];
+  items?: OrganizerGroupItem[];
+  itemCount?: number;
+  totalWeight?: number;
+}
+
+// Organizer group item
+export interface OrganizerGroupItem {
+  id: string;
+  group_id: string;
+  guid_ifc: string;
+  assembly_mark: string | null;
+  product_name: string | null;
+  cast_unit_weight: string | null;
+  cast_unit_position_code: string | null;
+  custom_properties: Record<string, string>;  // Dynamic property values
+  added_by: string;                 // User email
+  added_at: string;
+  sort_order: number;
+  notes: string | null;
+  // Computed fields (not in DB)
+  group?: OrganizerGroup;
+}
+
+// Hierarchical group with children (for tree rendering)
+export interface OrganizerGroupTree extends OrganizerGroup {
+  children: OrganizerGroupTree[];
+  itemCount: number;
+  totalWeight: number;
+}
+

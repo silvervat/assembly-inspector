@@ -3,7 +3,7 @@ import { TrimbleExUser, supabase } from '../supabase';
 import {
   FiSearch, FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
   FiShield, FiClipboard, FiBox, FiDroplet, FiZap, FiLayers,
-  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiTruck, FiCalendar
+  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiTruck, FiCalendar, FiFolder
 } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 
@@ -21,7 +21,8 @@ export type InspectionMode =
   | 'inspection_type'
   | 'installations' // Paigaldamiste süsteem
   | 'schedule' // Paigaldusgraafik
-  | 'delivery_schedule'; // Tarnegraafik
+  | 'delivery_schedule' // Tarnegraafik
+  | 'organizer'; // Organiseeri (gruppide haldus)
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -312,6 +313,23 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Tarnegraafik</span>
                 <span className="menu-item-desc">Planeeri ja jälgi tarneid veokite kaupa</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Organiseeri - group management */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('organizer')}
+            >
+              <span className="menu-item-icon" style={{ color: '#7c3aed' }}>
+                <FiFolder size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Organiseeri</span>
+                <span className="menu-item-desc">Grupeeri ja organiseeri detaile</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
