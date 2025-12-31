@@ -3912,10 +3912,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     if (targetIndex < 0) targetIndex = 0;
     if (targetIndex >= allItems.length) targetIndex = allItems.length - 1;
 
-    // Color all items white first if using day colors
-    if (playbackSettings.colorEachDayDifferent) {
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
-    }
+    // Reset all items to white first
+    await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
 
     // For day-by-day mode, find which day index we're on
     if (playbackSettings.playByDay) {
@@ -3941,9 +3939,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .map(item => item.guid_ifc || item.guid)
           .filter((g): g is string => !!g);
 
-        if (guids.length > 0 && playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
-          const dayColor = playbackDateColors[date];
-          await colorObjectsByGuid(api, guids, { ...dayColor, a: 255 });
+        if (guids.length > 0) {
+          if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
+            const dayColor = playbackDateColors[date];
+            await colorObjectsByGuid(api, guids, { ...dayColor, a: 255 });
+          } else {
+            // Default green color when day colors not enabled
+            await colorObjectsByGuid(api, guids, { r: 34, g: 197, b: 94, a: 255 });
+          }
         }
 
         // Expand date group

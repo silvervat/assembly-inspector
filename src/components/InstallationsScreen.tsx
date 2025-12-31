@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare } from 'react-icons/fi';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -236,6 +237,15 @@ const formatDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+// Get ISO week number for a date
+const getWeekNumber = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
 // Worker group for grouping installations by team
 interface WorkerGroup {
   key: string;
@@ -300,6 +310,9 @@ export default function InstallationsScreen({
   tcUserName,
   onBackToMenu
 }: InstallationsScreenProps) {
+  // Property mappings for this project
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
   // Type for installed GUID details
   type InstalledGuidInfo = {
     installedAt: string;
@@ -388,6 +401,15 @@ export default function InstallationsScreen({
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
+
+  // Playback state for installed items
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
+  const [playbackSpeed] = useState(800);
+  const playbackRef = useRef<NodeJS.Timeout | null>(null);
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const [, setIsScrubbing] = useState(false);
 
   // Assembly selection state
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
@@ -631,9 +653,15 @@ export default function InstallationsScreen({
                 productName = String((objProps as any).product.name);
               }
 
+              // Helper to normalize property names for comparison
+              const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+              const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+              const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+
               // Search all property sets
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
                 const propArray = pset.properties || [];
 
                 // Check for nested product.name directly on property set
@@ -642,14 +670,27 @@ export default function InstallationsScreen({
                 }
 
                 for (const prop of propArray) {
-                  const propName = ((prop as any).name || '').toLowerCase();
+                  const rawName = ((prop as any).name || '');
+                  const rawNameNorm = normalize(rawName);
+                  const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
 
-                  // Cast_unit_Mark
-                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
-                    assemblyMark = String(propValue);
+                  // Assembly/Cast unit Mark - use configured mapping first
+                  if (!assemblyMark) {
+                    // First try configured property mapping
+                    if (setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm) {
+                      assemblyMark = String(propValue);
+                    }
+                    // Fallback patterns
+                    else if (propName.includes('cast') && propName.includes('mark')) {
+                      assemblyMark = String(propValue);
+                    } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
+                      assemblyMark = String(propValue);
+                    } else if (rawName.toLowerCase().includes('mark') && setName.toLowerCase().includes('tekla')) {
+                      assemblyMark = String(propValue);
+                    }
                   }
 
                   // GUID detection - check standard guid fields (only if not already from convertToObjectIds)
@@ -1331,6 +1372,213 @@ export default function InstallationsScreen({
     }
   };
 
+  // ==================== PLAYBACK FUNCTIONS ====================
+
+  // Get all installations sorted by date (oldest first)
+  const getAllInstallationsSorted = (): Installation[] => {
+    return [...installations].sort((a, b) =>
+      new Date(a.installed_at).getTime() - new Date(b.installed_at).getTime()
+    );
+  };
+
+  // Color a single installation item
+  const colorInstallationItem = async (item: Installation, color: { r: number; g: number; b: number; a: number }) => {
+    const guid = item.guid_ifc || item.guid;
+    if (!guid) return;
+
+    try {
+      const models = await api.viewer.getModels('loaded');
+      for (const model of models || []) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+        if (runtimeIds && runtimeIds[0] && runtimeIds[0] > 0) {
+          await api.viewer.setObjectState({
+            modelObjectIds: [{ modelId: model.id, objectRuntimeIds: [runtimeIds[0]] }]
+          }, { color });
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn('Error coloring item:', e);
+    }
+  };
+
+  // Select and zoom to a single installation
+  const selectAndZoomToInstallation = async (item: Installation, skipZoom: boolean = false) => {
+    const guid = item.guid_ifc || item.guid;
+    if (!guid) return;
+
+    try {
+      const models = await api.viewer.getModels('loaded');
+      for (const model of models || []) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+        if (runtimeIds && runtimeIds[0] && runtimeIds[0] > 0) {
+          const modelObjectIds = [{ modelId: model.id, objectRuntimeIds: [runtimeIds[0]] }];
+          await api.viewer.setSelection({ modelObjectIds }, 'set');
+          if (!skipZoom) {
+            await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn('Error selecting item:', e);
+    }
+  };
+
+  // Start playback
+  const startPlayback = () => {
+    if (installations.length === 0) return;
+    setIsPlaying(true);
+    setIsPaused(false);
+    setCurrentPlayIndex(0);
+    // Reset model to white
+    api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+  };
+
+  // Pause playback
+  const pausePlayback = () => {
+    setIsPaused(true);
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+  };
+
+  // Resume playback
+  const resumePlayback = () => {
+    setIsPaused(false);
+  };
+
+  // Stop playback
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentPlayIndex(0);
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+  };
+
+  // Seek to position (for scrubber)
+  const seekToPosition = async (targetIndex: number) => {
+    const allItems = getAllInstallationsSorted();
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex >= allItems.length) targetIndex = allItems.length - 1;
+
+    // Pause during seek
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+    setIsPaused(true);
+
+    // Reset to white first
+    await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+
+    // Color all items up to target in green
+    const itemsToColor = allItems.slice(0, targetIndex + 1);
+    const guids = itemsToColor
+      .map(item => item.guid_ifc || item.guid)
+      .filter((g): g is string => !!g);
+
+    if (guids.length > 0) {
+      const models = await api.viewer.getModels('loaded');
+      for (const model of models || []) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guids);
+        const validIds = runtimeIds?.filter((id: number) => id && id > 0) || [];
+        if (validIds.length > 0) {
+          await api.viewer.setObjectState({
+            modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validIds }]
+          }, { color: { r: 34, g: 197, b: 94, a: 255 } }); // Green
+        }
+      }
+    }
+
+    setCurrentPlayIndex(targetIndex);
+
+    // Select current item
+    const currentItem = allItems[targetIndex];
+    if (currentItem) {
+      await selectAndZoomToInstallation(currentItem, true);
+    }
+  };
+
+  // Handle scrubber mouse down
+  const handleScrubberMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsScrubbing(true);
+
+    const updatePosition = (clientX: number) => {
+      if (!scrubberRef.current) return;
+      const rect = scrubberRef.current.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const allItems = getAllInstallationsSorted();
+      const targetIndex = Math.round(percentage * (allItems.length - 1));
+      setCurrentPlayIndex(targetIndex);
+    };
+
+    // Initial position
+    if (scrubberRef.current) {
+      updatePosition(e.clientX);
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      updatePosition(e.clientX);
+    };
+
+    const handleMouseUp = () => {
+      setIsScrubbing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      // Execute seek after mouse up
+      seekToPosition(currentPlayIndex);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Playback effect
+  useEffect(() => {
+    if (!isPlaying || isPaused) return;
+
+    const allItems = getAllInstallationsSorted();
+
+    // End of playback
+    if (currentPlayIndex >= allItems.length) {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setMessage('Esitus lõpetatud');
+      return;
+    }
+
+    const currentItem = allItems[currentPlayIndex];
+
+    const playNext = async () => {
+      // Color current item green
+      await colorInstallationItem(currentItem, { r: 34, g: 197, b: 94, a: 255 });
+      // Select and zoom
+      await selectAndZoomToInstallation(currentItem, false);
+
+      // Schedule next
+      playbackRef.current = setTimeout(() => {
+        setCurrentPlayIndex(prev => prev + 1);
+      }, playbackSpeed);
+    };
+
+    playNext();
+
+    return () => {
+      if (playbackRef.current) {
+        clearTimeout(playbackRef.current);
+      }
+    };
+  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, installations]);
+
+  // ==================== END PLAYBACK FUNCTIONS ====================
+
   const deleteInstallation = async (id: string) => {
     if (!confirm('Kas oled kindel, et soovid selle paigalduse kustutada?')) {
       return;
@@ -1636,7 +1884,25 @@ export default function InstallationsScreen({
               }}
             />
           )}
-          <span className="date-label">{day.dayLabel}</span>
+          <span
+            className="date-label"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              // Parse date from dayKey (YYYY-MM-DD format)
+              const dateParts = day.dayKey.split('-');
+              if (dateParts.length === 3) {
+                const year = parseInt(dateParts[0]);
+                const month = parseInt(dateParts[1]) - 1;
+                // Navigate calendar to this month and expand it
+                setCurrentMonth(new Date(year, month, 1));
+                setCalendarCollapsed(false);
+              }
+            }}
+            title="Topeltklõps avab kalendri"
+            style={{ cursor: 'pointer' }}
+          >
+            {day.dayLabel}
+          </span>
           <button
             className="date-count clickable"
             onClick={(e) => selectInstallations(day.items, e)}
@@ -2155,7 +2421,141 @@ export default function InstallationsScreen({
                 </button>
               )}
             </div>
+
+            {/* Playback Controls */}
+            <div className="playback-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+              {!isPlaying ? (
+                <button
+                  onClick={startPlayback}
+                  disabled={installations.length === 0}
+                  title="Esita"
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#22c55e',
+                    color: '#fff',
+                    cursor: installations.length === 0 ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: installations.length === 0 ? 0.5 : 1
+                  }}
+                >
+                  <FiPlay size={14} />
+                </button>
+              ) : (
+                <>
+                  {isPaused ? (
+                    <button
+                      onClick={resumePlayback}
+                      title="Jätka"
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: '#22c55e',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <FiPlay size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={pausePlayback}
+                      title="Paus"
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: '#f59e0b',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <FiPause size={14} />
+                    </button>
+                  )}
+                  <button
+                    onClick={stopPlayback}
+                    title="Peata"
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: '#dc2626',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <FiSquare size={14} />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Playback Scrubber */}
+          {isPlaying && (
+            <div className="playback-scrubber" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              background: '#f3f4f6',
+              borderBottom: '1px solid #e5e7eb'
+            }}>
+              <span style={{ fontSize: '11px', color: '#6b7280', minWidth: '30px', textAlign: 'right' }}>
+                {currentPlayIndex + 1}
+              </span>
+              <div
+                ref={scrubberRef}
+                onMouseDown={handleScrubberMouseDown}
+                style={{
+                  flex: 1,
+                  height: '6px',
+                  background: '#e5e7eb',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  position: 'relative'
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    background: '#22c55e',
+                    borderRadius: '3px',
+                    width: `${installations.length > 0 ? ((currentPlayIndex + 1) / installations.length) * 100 : 0}%`,
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    right: '-5px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '10px',
+                    height: '10px',
+                    background: '#22c55e',
+                    border: '2px solid #fff',
+                    borderRadius: '50%',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                  }} />
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', color: '#6b7280', minWidth: '30px' }}>
+                {installations.length}
+              </span>
+              {isPaused && <span style={{ fontSize: '11px', color: '#f59e0b' }}>(paus)</span>}
+            </div>
+          )}
 
           {/* Calendar */}
           <div className="installations-calendar" style={{ padding: '0 12px 12px', borderBottom: '1px solid #e5e7eb' }}>
@@ -2184,72 +2584,105 @@ export default function InstallationsScreen({
             {!calendarCollapsed && (
               <div className="calendar-grid" style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
+                gridTemplateColumns: '24px repeat(7, 1fr)',
                 gap: '2px',
                 fontSize: '11px'
               }}>
-                {/* Day names */}
+                {/* Week number header + Day names */}
+                <div style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#9ca3af', fontSize: '9px' }}>Nd</div>
                 {DAY_NAMES.map(day => (
                   <div key={day} style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#6b7280' }}>
                     {day}
                   </div>
                 ))}
-                {/* Calendar days */}
-                {calendarDays.map((date, idx) => {
-                  const dateKey = formatDateKey(date);
-                  const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                  const isToday = dateKey === today;
-                  const itemCount = itemsByDate[dateKey]?.length || 0;
-                  const dayColor = colorByDay && dayColors[dateKey];
+                {/* Calendar days with week numbers */}
+                {(() => {
+                  const todayDate = new Date();
+                  todayDate.setHours(0, 0, 0, 0);
+                  const rows: JSX.Element[] = [];
 
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        // Select items for this day in viewer
-                        const dayItems = itemsByDate[dateKey];
-                        if (dayItems && dayItems.length > 0) {
-                          selectInstallations(dayItems);
-                          // Scroll to this date in list
-                          const dayKey = getDayKey(dateKey);
-                          setExpandedDays(prev => new Set([...prev, dayKey]));
-                          // Expand the month containing this date
-                          const monthKey = getMonthKey(dateKey);
-                          setExpandedMonths(prev => new Set([...prev, monthKey]));
-                        }
-                      }}
-                      style={{
+                  for (let i = 0; i < calendarDays.length; i += 7) {
+                    const weekDays = calendarDays.slice(i, i + 7);
+                    const weekNum = getWeekNumber(weekDays[0]);
+
+                    // Week number cell
+                    rows.push(
+                      <div key={`week-${i}`} style={{
                         textAlign: 'center',
                         padding: '4px 2px',
-                        borderRadius: '4px',
-                        cursor: itemCount > 0 ? 'pointer' : 'default',
-                        background: isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
-                        border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                        color: isCurrentMonth ? '#111827' : '#9ca3af',
-                        position: 'relative',
-                        opacity: isCurrentMonth ? 1 : 0.6
-                      }}
-                    >
-                      <span style={{ fontSize: '11px' }}>{date.getDate()}</span>
-                      {itemCount > 0 && (
-                        <span
+                        color: '#9ca3af',
+                        fontSize: '9px',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {weekNum}
+                      </div>
+                    );
+
+                    // Day cells for this week
+                    weekDays.forEach((date, dayIdx) => {
+                      const dateKey = formatDateKey(date);
+                      const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                      const isToday = dateKey === today;
+                      const itemCount = itemsByDate[dateKey]?.length || 0;
+                      const dayColor = colorByDay && dayColors[dateKey];
+                      const isFuture = date > todayDate;
+
+                      rows.push(
+                        <div
+                          key={`day-${i}-${dayIdx}`}
+                          onClick={() => {
+                            // Don't allow clicking on future dates
+                            if (isFuture) return;
+                            // Select items for this day in viewer
+                            const dayItems = itemsByDate[dateKey];
+                            if (dayItems && dayItems.length > 0) {
+                              selectInstallations(dayItems);
+                              // Scroll to this date in list
+                              const dayKey = getDayKey(dateKey);
+                              setExpandedDays(prev => new Set([...prev, dayKey]));
+                              // Expand the month containing this date
+                              const monthKey = getMonthKey(dateKey);
+                              setExpandedMonths(prev => new Set([...prev, monthKey]));
+                            }
+                          }}
                           style={{
-                            display: 'block',
-                            fontSize: '9px',
-                            fontWeight: 600,
-                            marginTop: '1px',
-                            padding: '1px 4px',
-                            borderRadius: '8px',
-                            background: dayColor ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})` : '#006400',
-                            color: dayColor ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000') : '#fff'
+                            textAlign: 'center',
+                            padding: '4px 2px',
+                            borderRadius: '4px',
+                            cursor: isFuture ? 'not-allowed' : (itemCount > 0 ? 'pointer' : 'default'),
+                            background: isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
+                            border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                            color: isFuture ? '#d1d5db' : (isCurrentMonth ? '#111827' : '#9ca3af'),
+                            position: 'relative',
+                            opacity: isFuture ? 0.5 : (isCurrentMonth ? 1 : 0.6)
                           }}
                         >
-                          {itemCount}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                          <span style={{ fontSize: '11px' }}>{date.getDate()}</span>
+                          {itemCount > 0 && (
+                            <span
+                              style={{
+                                display: 'block',
+                                fontSize: '9px',
+                                fontWeight: 600,
+                                marginTop: '1px',
+                                padding: '1px 4px',
+                                borderRadius: '8px',
+                                background: dayColor ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})` : '#006400',
+                                color: dayColor ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000') : '#fff'
+                              }}
+                            >
+                              {itemCount}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    });
+                  }
+                  return rows;
+                })()}
               </div>
             )}
 
