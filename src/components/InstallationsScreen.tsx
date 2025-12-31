@@ -119,7 +119,8 @@ function getDayLabel(dateStr: string): string {
   const date = new Date(dateStr);
   const day = String(date.getDate()).padStart(2, '0');
   const month = String(date.getMonth() + 1).padStart(2, '0');
-  return `${day}.${month}`;
+  const year = date.getFullYear();
+  return `${day}.${month}.${year}`;
 }
 
 // Text color contrast helper - returns '000000' or 'FFFFFF' based on background
@@ -202,6 +203,14 @@ const generateMonthColors = (months: string[]): Record<string, { r: number; g: n
 
 // Estonian weekday short names for calendar
 const DAY_NAMES = ['E', 'T', 'K', 'N', 'R', 'L', 'P'];
+
+// Playback speed options
+const PLAYBACK_SPEEDS = [
+  { value: 300, label: '0.3s' },
+  { value: 500, label: '0.5s' },
+  { value: 800, label: '0.8s' },
+  { value: 1200, label: '1.2s' },
+];
 
 // Get days in a month for calendar (Monday-first week)
 const getDaysForMonth = (monthDate: Date): Date[] => {
@@ -406,7 +415,7 @@ export default function InstallationsScreen({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
-  const [playbackSpeed] = useState(800);
+  const [playbackSpeed, setPlaybackSpeed] = useState(800);
   const playbackRef = useRef<NodeJS.Timeout | null>(null);
   const scrubberRef = useRef<HTMLDivElement>(null);
   const [, setIsScrubbing] = useState(false);
@@ -922,10 +931,10 @@ export default function InstallationsScreen({
       }
       console.log(`Colored ${totalWhite} objects white`);
 
-      // Step 4: Color installed objects dark green ON TOP (overrides white)
-      console.log('Step 4: Coloring installed objects dark green...');
+      // Step 4: Color installed objects black ON TOP (overrides white)
+      console.log('Step 4: Coloring installed objects black...');
       coloredObjectsRef.current = new Map();
-      let totalGreen = 0;
+      let totalColored = 0;
 
       for (const modelObj of allModelObjects) {
         const modelId = modelObj.modelId;
@@ -936,13 +945,13 @@ export default function InstallationsScreen({
             const validInstalledIds = (installedIds || []).filter((id: number) => id && id > 0);
 
             if (validInstalledIds.length > 0) {
-              totalGreen += validInstalledIds.length;
+              totalColored += validInstalledIds.length;
               coloredObjectsRef.current.set(modelId, validInstalledIds);
 
-              console.log(`Model ${modelId}: coloring ${validInstalledIds.length} installed objects dark green`);
+              console.log(`Model ${modelId}: coloring ${validInstalledIds.length} installed objects black`);
               await api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId, objectRuntimeIds: validInstalledIds }] },
-                { color: { r: 0, g: 100, b: 0, a: 255 } } // Dark green
+                { color: { r: 0, g: 0, b: 0, a: 255 } } // Black
               );
             }
           } catch (e) {
@@ -951,7 +960,7 @@ export default function InstallationsScreen({
         }
       }
 
-      console.log(`Colored ${totalGreen} installed objects dark green`);
+      console.log(`Colored ${totalColored} installed objects black`);
       console.log('=== COLORING COMPLETE ===');
     } catch (e) {
       console.error('Error applying installation coloring:', e);
@@ -2554,6 +2563,25 @@ export default function InstallationsScreen({
                 {installations.length}
               </span>
               {isPaused && <span style={{ fontSize: '11px', color: '#f59e0b' }}>(paus)</span>}
+              <div className="speed-selector" style={{ display: 'flex', gap: '2px', marginLeft: '8px' }}>
+                {PLAYBACK_SPEEDS.map(speed => (
+                  <button
+                    key={speed.value}
+                    onClick={() => setPlaybackSpeed(speed.value)}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: '10px',
+                      border: 'none',
+                      borderRadius: '3px',
+                      background: playbackSpeed === speed.value ? '#22c55e' : '#e5e7eb',
+                      color: playbackSpeed === speed.value ? '#fff' : '#374151',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {speed.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
