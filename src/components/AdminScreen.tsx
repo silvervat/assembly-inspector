@@ -4039,12 +4039,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                   onClick={() => testFunction("clearSelection()", () => api.viewer.setSelection({ modelObjectIds: [] }, 'set'))}
                 />
                 <FunctionButton
-                  name="🔲 Vali KÕIK mudelist"
+                  name="🔲 Vali KÕIK mudelist (Assembly)"
                   result={functionResults["selectAllFromModel"]}
                   onClick={async () => {
                     updateFunctionResult("selectAllFromModel", { status: 'pending' });
                     try {
-                      // Get all objects from all models using getObjects() without arguments
+                      // Step 1: Enable Assembly Selection mode
+                      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+
+                      // Step 2: Get all objects from all models
                       const allModelObjects = await api.viewer.getObjects();
                       if (!allModelObjects || allModelObjects.length === 0) {
                         updateFunctionResult("selectAllFromModel", { status: 'error', error: 'Mudeleid pole laetud' });
@@ -4070,12 +4073,22 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                         return;
                       }
 
-                      // Select all objects
+                      // Step 3: Select all objects (with Assembly Selection ON, this consolidates to parent assemblies)
                       await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+                      // Step 4: Wait for selection to consolidate
+                      await new Promise(resolve => setTimeout(resolve, 300));
+
+                      // Step 5: Get the selection back to count assemblies
+                      const selection = await api.viewer.getSelection();
+                      let assemblyCount = 0;
+                      for (const sel of selection || []) {
+                        assemblyCount += sel.objectRuntimeIds?.length || 0;
+                      }
 
                       updateFunctionResult("selectAllFromModel", {
                         status: 'success',
-                        result: `Valitud ${totalCount} objekti ${allModelObjects.length} mudelist`
+                        result: `Valitud ${assemblyCount} assembly't (${totalCount} detaili) ${allModelObjects.length} mudelist`
                       });
                     } catch (e: any) {
                       console.error('Select all error:', e);
