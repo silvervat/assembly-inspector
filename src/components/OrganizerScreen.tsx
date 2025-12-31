@@ -416,6 +416,53 @@ export default function OrganizerScreen({
   }, [groupMenuId]);
 
   // ============================================
+  // ESC KEY HANDLER
+  // ============================================
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Close any open modals first
+        if (showGroupForm) {
+          setShowGroupForm(false);
+          setEditingGroup(null);
+          return;
+        }
+        if (showFieldForm) {
+          setShowFieldForm(false);
+          setEditingField(null);
+          return;
+        }
+        if (showBulkEdit) {
+          setShowBulkEdit(false);
+          return;
+        }
+        if (showDeleteConfirm) {
+          setShowDeleteConfirm(false);
+          setDeleteGroupData(null);
+          return;
+        }
+        // Clear menu
+        if (groupMenuId) {
+          setGroupMenuId(null);
+          return;
+        }
+        // Clear selections
+        if (selectedItemIds.size > 0) {
+          setSelectedItemIds(new Set());
+          return;
+        }
+        if (selectedGroupId) {
+          setSelectedGroupId(null);
+          return;
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, groupMenuId, selectedItemIds.size, selectedGroupId]);
+
+  // ============================================
   // DATA LOADING
   // ============================================
 
@@ -792,8 +839,9 @@ export default function OrganizerScreen({
       return;
     }
 
-    const group = groups.find(g => g.id === selectedGroupId);
-    if (!group) return;
+    // Always add field to root parent group (fields are inherited by subgroups)
+    const rootGroup = getRootParent(selectedGroupId);
+    if (!rootGroup) return;
 
     setSaving(true);
     try {
@@ -803,19 +851,19 @@ export default function OrganizerScreen({
         type: fieldType,
         required: fieldRequired,
         showInList: fieldShowInList,
-        sortOrder: (group.custom_fields || []).length,
+        sortOrder: (rootGroup.custom_fields || []).length,
         options: {
           decimals: fieldDecimals,
           dropdownOptions: fieldDropdownOptions.split('\n').map(s => s.trim()).filter(Boolean)
         }
       };
 
-      const updatedFields = [...(group.custom_fields || []), newField];
+      const updatedFields = [...(rootGroup.custom_fields || []), newField];
 
       const { error } = await supabase
         .from('organizer_groups')
         .update({ custom_fields: updatedFields, updated_at: new Date().toISOString(), updated_by: tcUserEmail })
-        .eq('id', selectedGroupId);
+        .eq('id', rootGroup.id);
 
       if (error) throw error;
 
@@ -834,12 +882,13 @@ export default function OrganizerScreen({
   const updateCustomField = async () => {
     if (!selectedGroupId || !editingField || !fieldName.trim()) return;
 
-    const group = groups.find(g => g.id === selectedGroupId);
-    if (!group) return;
+    // Always update field in root parent group
+    const rootGroup = getRootParent(selectedGroupId);
+    if (!rootGroup) return;
 
     setSaving(true);
     try {
-      const updatedFields = (group.custom_fields || []).map(f =>
+      const updatedFields = (rootGroup.custom_fields || []).map(f =>
         f.id === editingField.id
           ? { ...f, name: fieldName.trim(), type: fieldType, required: fieldRequired, showInList: fieldShowInList, options: { decimals: fieldDecimals, dropdownOptions: fieldDropdownOptions.split('\n').map(s => s.trim()).filter(Boolean) } }
           : f
@@ -848,7 +897,7 @@ export default function OrganizerScreen({
       const { error } = await supabase
         .from('organizer_groups')
         .update({ custom_fields: updatedFields, updated_at: new Date().toISOString(), updated_by: tcUserEmail })
-        .eq('id', selectedGroupId);
+        .eq('id', rootGroup.id);
 
       if (error) throw error;
 
@@ -1504,7 +1553,12 @@ export default function OrganizerScreen({
           </button>
 
           {node.color && (
-            <span className="org-color-dot" style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})` }} />
+            <span
+              className="org-color-dot"
+              style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: 'pointer' }}
+              onDoubleClick={(e) => { e.stopPropagation(); openEditGroupForm(node); }}
+              title="Topeltklõps värvi muutmiseks"
+            />
           )}
 
           <div className="org-group-info">
@@ -1581,19 +1635,20 @@ export default function OrganizerScreen({
                 {sortedItems.length > 3 && (
                   <div className="org-items-header">
                     <span className="org-item-index">#</span>
-                    <span className="org-item-sort-col" onClick={() => {
+                    <span className="org-header-spacer" /> {/* For drag handle */}
+                    <span className="org-item-mark sortable" onClick={() => {
                       if (itemSortField === 'assembly_mark') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
                       else { setItemSortField('assembly_mark'); setItemSortDir('asc'); }
                     }}>
                       Mark {itemSortField === 'assembly_mark' && (itemSortDir === 'asc' ? '↑' : '↓')}
                     </span>
-                    <span className="org-item-sort-col" onClick={() => {
+                    <span className="org-item-product sortable" onClick={() => {
                       if (itemSortField === 'product_name') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
                       else { setItemSortField('product_name'); setItemSortDir('asc'); }
                     }}>
                       Toode {itemSortField === 'product_name' && (itemSortDir === 'asc' ? '↑' : '↓')}
                     </span>
-                    <span className="org-item-sort-col" onClick={() => {
+                    <span className="org-item-weight sortable" onClick={() => {
                       if (itemSortField === 'cast_unit_weight') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
                       else { setItemSortField('cast_unit_weight'); setItemSortDir('asc'); }
                     }}>
@@ -1690,6 +1745,7 @@ export default function OrganizerScreen({
                             }
                           </span>
                         ))}
+                        <span className="separator">|</span>
                       </span>
                     )}
                     <span className="org-total-sum">

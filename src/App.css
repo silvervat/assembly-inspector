@@ -8085,6 +8085,7 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-left: 16px;
   font-size: 12px;
   color: #6b7280;
 }
@@ -8975,6 +8976,19 @@ button.stat-toggle.off:hover {
   color: #6b7280;
 }
 
+.org-items-header .sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.org-items-header .sortable:hover {
+  color: #374151;
+}
+
+.org-header-spacer {
+  width: 10px;
+}
+
 .org-item-sort-col {
   cursor: pointer;
   user-select: none;
@@ -9004,6 +9018,39 @@ button.stat-toggle.off:hover {
   background: #f3f4f6;
   border-color: #9ca3af;
   color: #374151;
+}
+
+/* Items footer with sums */
+.org-items-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-radius: 4px;
+}
+
+.org-items-footer .org-selected-sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.org-items-footer .org-total-sum {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.org-items-footer .sum-item {
+  font-weight: 500;
+}
+
+.org-items-footer .separator {
+  color: #d1d5db;
 }
 
 /* Batch progress */
