@@ -8237,11 +8237,27 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
-.org-group-header .group-name {
+.org-group-info {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.org-group-info .group-name {
   font-size: 13px;
   font-weight: 500;
   color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-group-info .group-desc {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -8912,4 +8928,111 @@ button.stat-toggle.off:hover {
 .org-group-header.drop-target {
   background: #dcfce7;
   border: 2px dashed #22c55e;
+}
+
+/* Sorting controls */
+.org-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 12px;
+}
+
+.org-sort-controls select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+  cursor: pointer;
+}
+
+.org-sort-dir-btn {
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.org-sort-dir-btn:hover {
+  background: #f3f4f6;
+}
+
+/* Items header for sorting */
+.org-items-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.org-item-sort-col {
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+.org-item-sort-col:hover {
+  background: #e5e7eb;
+}
+
+/* Load more button */
+.org-load-more-btn {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  border: 1px dashed #d1d5db;
+  border-radius: 4px;
+  background: #f9fafb;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.org-load-more-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+/* Batch progress */
+.org-batch-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: #f0f9ff;
+  border-bottom: 1px solid #e0f2fe;
+}
+
+.org-batch-progress .progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #e0f2fe;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.org-batch-progress .progress-fill {
+  height: 100%;
+  background: #0a3a67;
+  transition: width 0.2s;
+}
+
+.org-batch-progress span {
+  font-size: 12px;
+  color: #0a3a67;
+  font-weight: 500;
+  white-space: nowrap;
 }
