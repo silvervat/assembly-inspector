@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
 import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw } from 'react-icons/fi';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -236,6 +237,15 @@ const formatDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`;
 };
 
+// Get ISO week number for a date
+const getWeekNumber = (date: Date): number => {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+};
+
 // Worker group for grouping installations by team
 interface WorkerGroup {
   key: string;
@@ -300,6 +310,9 @@ export default function InstallationsScreen({
   tcUserName,
   onBackToMenu
 }: InstallationsScreenProps) {
+  // Property mappings for this project
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
   // Type for installed GUID details
   type InstalledGuidInfo = {
     installedAt: string;
@@ -631,9 +644,15 @@ export default function InstallationsScreen({
                 productName = String((objProps as any).product.name);
               }
 
+              // Helper to normalize property names for comparison
+              const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+              const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
+              const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
+
               // Search all property sets
               for (const pset of objProps.properties || []) {
                 const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
                 const propArray = pset.properties || [];
 
                 // Check for nested product.name directly on property set
@@ -642,14 +661,27 @@ export default function InstallationsScreen({
                 }
 
                 for (const prop of propArray) {
-                  const propName = ((prop as any).name || '').toLowerCase();
+                  const rawName = ((prop as any).name || '');
+                  const rawNameNorm = normalize(rawName);
+                  const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
                   const propValue = (prop as any).displayValue ?? (prop as any).value;
 
                   if (!propValue) continue;
 
-                  // Cast_unit_Mark
-                  if (propName.includes('cast') && propName.includes('mark') && !assemblyMark) {
-                    assemblyMark = String(propValue);
+                  // Assembly/Cast unit Mark - use configured mapping first
+                  if (!assemblyMark) {
+                    // First try configured property mapping
+                    if (setNameNorm === mappingSetNorm && rawNameNorm === mappingPropNorm) {
+                      assemblyMark = String(propValue);
+                    }
+                    // Fallback patterns
+                    else if (propName.includes('cast') && propName.includes('mark')) {
+                      assemblyMark = String(propValue);
+                    } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
+                      assemblyMark = String(propValue);
+                    } else if (rawName.toLowerCase().includes('mark') && setName.toLowerCase().includes('tekla')) {
+                      assemblyMark = String(propValue);
+                    }
                   }
 
                   // GUID detection - check standard guid fields (only if not already from convertToObjectIds)
@@ -2184,72 +2216,105 @@ export default function InstallationsScreen({
             {!calendarCollapsed && (
               <div className="calendar-grid" style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(7, 1fr)',
+                gridTemplateColumns: '24px repeat(7, 1fr)',
                 gap: '2px',
                 fontSize: '11px'
               }}>
-                {/* Day names */}
+                {/* Week number header + Day names */}
+                <div style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#9ca3af', fontSize: '9px' }}>Nd</div>
                 {DAY_NAMES.map(day => (
                   <div key={day} style={{ textAlign: 'center', fontWeight: 600, padding: '4px', color: '#6b7280' }}>
                     {day}
                   </div>
                 ))}
-                {/* Calendar days */}
-                {calendarDays.map((date, idx) => {
-                  const dateKey = formatDateKey(date);
-                  const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                  const isToday = dateKey === today;
-                  const itemCount = itemsByDate[dateKey]?.length || 0;
-                  const dayColor = colorByDay && dayColors[dateKey];
+                {/* Calendar days with week numbers */}
+                {(() => {
+                  const todayDate = new Date();
+                  todayDate.setHours(0, 0, 0, 0);
+                  const rows: JSX.Element[] = [];
 
-                  return (
-                    <div
-                      key={idx}
-                      onClick={() => {
-                        // Select items for this day in viewer
-                        const dayItems = itemsByDate[dateKey];
-                        if (dayItems && dayItems.length > 0) {
-                          selectInstallations(dayItems);
-                          // Scroll to this date in list
-                          const dayKey = getDayKey(dateKey);
-                          setExpandedDays(prev => new Set([...prev, dayKey]));
-                          // Expand the month containing this date
-                          const monthKey = getMonthKey(dateKey);
-                          setExpandedMonths(prev => new Set([...prev, monthKey]));
-                        }
-                      }}
-                      style={{
+                  for (let i = 0; i < calendarDays.length; i += 7) {
+                    const weekDays = calendarDays.slice(i, i + 7);
+                    const weekNum = getWeekNumber(weekDays[0]);
+
+                    // Week number cell
+                    rows.push(
+                      <div key={`week-${i}`} style={{
                         textAlign: 'center',
                         padding: '4px 2px',
-                        borderRadius: '4px',
-                        cursor: itemCount > 0 ? 'pointer' : 'default',
-                        background: isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
-                        border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-                        color: isCurrentMonth ? '#111827' : '#9ca3af',
-                        position: 'relative',
-                        opacity: isCurrentMonth ? 1 : 0.6
-                      }}
-                    >
-                      <span style={{ fontSize: '11px' }}>{date.getDate()}</span>
-                      {itemCount > 0 && (
-                        <span
+                        color: '#9ca3af',
+                        fontSize: '9px',
+                        fontWeight: 500,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {weekNum}
+                      </div>
+                    );
+
+                    // Day cells for this week
+                    weekDays.forEach((date, dayIdx) => {
+                      const dateKey = formatDateKey(date);
+                      const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                      const isToday = dateKey === today;
+                      const itemCount = itemsByDate[dateKey]?.length || 0;
+                      const dayColor = colorByDay && dayColors[dateKey];
+                      const isFuture = date > todayDate;
+
+                      rows.push(
+                        <div
+                          key={`day-${i}-${dayIdx}`}
+                          onClick={() => {
+                            // Don't allow clicking on future dates
+                            if (isFuture) return;
+                            // Select items for this day in viewer
+                            const dayItems = itemsByDate[dateKey];
+                            if (dayItems && dayItems.length > 0) {
+                              selectInstallations(dayItems);
+                              // Scroll to this date in list
+                              const dayKey = getDayKey(dateKey);
+                              setExpandedDays(prev => new Set([...prev, dayKey]));
+                              // Expand the month containing this date
+                              const monthKey = getMonthKey(dateKey);
+                              setExpandedMonths(prev => new Set([...prev, monthKey]));
+                            }
+                          }}
                           style={{
-                            display: 'block',
-                            fontSize: '9px',
-                            fontWeight: 600,
-                            marginTop: '1px',
-                            padding: '1px 4px',
-                            borderRadius: '8px',
-                            background: dayColor ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})` : '#006400',
-                            color: dayColor ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000') : '#fff'
+                            textAlign: 'center',
+                            padding: '4px 2px',
+                            borderRadius: '4px',
+                            cursor: isFuture ? 'not-allowed' : (itemCount > 0 ? 'pointer' : 'default'),
+                            background: isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
+                            border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                            color: isFuture ? '#d1d5db' : (isCurrentMonth ? '#111827' : '#9ca3af'),
+                            position: 'relative',
+                            opacity: isFuture ? 0.5 : (isCurrentMonth ? 1 : 0.6)
                           }}
                         >
-                          {itemCount}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                          <span style={{ fontSize: '11px' }}>{date.getDate()}</span>
+                          {itemCount > 0 && (
+                            <span
+                              style={{
+                                display: 'block',
+                                fontSize: '9px',
+                                fontWeight: 600,
+                                marginTop: '1px',
+                                padding: '1px 4px',
+                                borderRadius: '8px',
+                                background: dayColor ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})` : '#006400',
+                                color: dayColor ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000') : '#fff'
+                              }}
+                            >
+                              {itemCount}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    });
+                  }
+                  return rows;
+                })()}
               </div>
             )}
 
