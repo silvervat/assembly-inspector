@@ -853,7 +853,7 @@ export function getPropertyFromSets(
 }
 
 // ============================================
-// ORGANIZER SYSTEM (Group Management v3.0.314)
+// ORGANIZER SYSTEM (Group Management v3.0.315)
 // ============================================
 
 // Property display configuration for groups
@@ -870,6 +870,33 @@ export interface GroupColor {
   b: number;
 }
 
+// Custom field types
+export type CustomFieldType = 'text' | 'number' | 'currency' | 'date' | 'tags' | 'dropdown';
+
+// Custom field definition for groups
+export interface CustomFieldDefinition {
+  id: string;                       // Unique field ID (UUID)
+  name: string;                     // Display name (e.g., "Kommentaarid", "Hind")
+  type: CustomFieldType;            // Field type
+  required: boolean;                // Is field required
+  showInList: boolean;              // Show in items list
+  sortOrder: number;                // Display order
+  // Type-specific options
+  options?: {
+    decimals?: number;              // For number: 0, 1, 2, 3 decimal places
+    currency?: string;              // For currency: 'EUR', 'USD', etc.
+    dropdownOptions?: string[];     // For dropdown: available options
+    tagOptions?: string[];          // For tags: predefined tags (optional)
+    defaultValue?: string | number; // Default value for new items
+  };
+}
+
+// Custom field value (stored per item)
+export interface CustomFieldValue {
+  fieldId: string;                  // References CustomFieldDefinition.id
+  value: string | number | string[] | null;  // Actual value
+}
+
 // Organizer group
 export interface OrganizerGroup {
   id: string;
@@ -880,6 +907,7 @@ export interface OrganizerGroup {
   is_private: boolean;
   allowed_users: string[];          // Array of user emails who can see private group
   display_properties: GroupPropertyDisplay[];  // Max 3 properties to display
+  custom_fields: CustomFieldDefinition[];  // Custom field definitions for this group
   assembly_selection_required: boolean;  // Whether assembly selection is needed
   color: GroupColor | null;         // For model coloring
   created_by: string;               // User email
