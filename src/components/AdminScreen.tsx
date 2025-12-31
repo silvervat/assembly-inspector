@@ -4039,6 +4039,52 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                   onClick={() => testFunction("clearSelection()", () => api.viewer.setSelection({ modelObjectIds: [] }, 'set'))}
                 />
                 <FunctionButton
+                  name="🔲 Vali KÕIK mudelist"
+                  result={functionResults["selectAllFromModel"]}
+                  onClick={async () => {
+                    updateFunctionResult("selectAllFromModel", { status: 'pending' });
+                    try {
+                      // Get all loaded models
+                      const loadedModels = await api.viewer.getModels('loaded');
+                      if (!loadedModels || loadedModels.length === 0) {
+                        updateFunctionResult("selectAllFromModel", { status: 'error', error: 'Mudeleid pole laetud' });
+                        return;
+                      }
+
+                      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+                      let totalCount = 0;
+
+                      for (const model of loadedModels) {
+                        // Get all objects from this model using getObjects
+                        const objects = await (api.viewer as any).getObjects?.(model.id);
+                        if (objects && Array.isArray(objects) && objects.length > 0) {
+                          const runtimeIds = objects.map((o: any) => o.id || o.runtimeId).filter((id: any) => id != null);
+                          if (runtimeIds.length > 0) {
+                            modelObjectIds.push({ modelId: model.id, objectRuntimeIds: runtimeIds });
+                            totalCount += runtimeIds.length;
+                          }
+                        }
+                      }
+
+                      if (totalCount === 0) {
+                        updateFunctionResult("selectAllFromModel", { status: 'error', error: 'Objekte ei leitud' });
+                        return;
+                      }
+
+                      // Select all objects
+                      await api.viewer.setSelection({ modelObjectIds }, 'set');
+
+                      updateFunctionResult("selectAllFromModel", {
+                        status: 'success',
+                        result: `Valitud ${totalCount} objekti ${loadedModels.length} mudelist`
+                      });
+                    } catch (e: any) {
+                      console.error('Select all error:', e);
+                      updateFunctionResult("selectAllFromModel", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="Assembly Selection ON"
                   result={functionResults["Assembly Selection ON"]}
                   onClick={() => testFunction("Assembly Selection ON", () => (api.viewer as any).setSettings?.({ assemblySelection: true }))}
