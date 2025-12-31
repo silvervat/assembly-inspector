@@ -347,6 +347,10 @@ export default function OrganizerScreen({
   // Inline editing
   const [editingItemField, setEditingItemField] = useState<{itemId: string; fieldId: string} | null>(null);
   const [editingItemValue, setEditingItemValue] = useState('');
+  // Tags editing
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
   // Group form state
   const [formName, setFormName] = useState('');
@@ -373,6 +377,7 @@ export default function OrganizerScreen({
   // Group settings
   const [formAssemblySelectionOn, setFormAssemblySelectionOn] = useState(true);
   const [formUniqueItems, setFormUniqueItems] = useState(true);
+  const [formCustomFields, setFormCustomFields] = useState<CustomFieldDefinition[]>([]);
 
   // Drag & Drop
   const [draggedItems, setDraggedItems] = useState<OrganizerGroupItem[]>([]);
@@ -742,7 +747,7 @@ export default function OrganizerScreen({
     setSaving(true);
     try {
       let level = 0;
-      let parentCustomFields: CustomFieldDefinition[] = [];
+      let finalCustomFields: CustomFieldDefinition[] = formCustomFields;
 
       if (formParentId) {
         const parent = groups.find(g => g.id === formParentId);
@@ -753,7 +758,8 @@ export default function OrganizerScreen({
             setSaving(false);
             return;
           }
-          parentCustomFields = [...(parent.custom_fields || [])];
+          // Subgroups inherit parent's custom fields
+          finalCustomFields = [...(parent.custom_fields || [])];
         }
       }
 
@@ -765,7 +771,7 @@ export default function OrganizerScreen({
         is_private: formIsPrivate,
         allowed_users: [],
         display_properties: [],
-        custom_fields: parentCustomFields,
+        custom_fields: finalCustomFields,
         assembly_selection_on: formAssemblySelectionOn,
         unique_items: formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
@@ -894,6 +900,7 @@ export default function OrganizerScreen({
     setFormParentId(null);
     setFormAssemblySelectionOn(true);
     setFormUniqueItems(true);
+    setFormCustomFields([]);
   };
 
   const openEditGroupForm = (group: OrganizerGroup) => {
@@ -1009,6 +1016,88 @@ export default function OrganizerScreen({
     setFieldShowInList(true);
     setFieldDecimals(0);
     setFieldDropdownOptions('');
+  };
+
+  // Add/update/delete custom fields during group creation (uses formCustomFields state)
+  const addFormCustomField = () => {
+    if (!fieldName.trim()) {
+      showToast('Välja nimi on kohustuslik');
+      return;
+    }
+    const newField: CustomFieldDefinition = {
+      id: generateUUID(),
+      name: fieldName.trim(),
+      type: fieldType,
+      required: fieldRequired,
+      showInList: fieldShowInList,
+      sortOrder: formCustomFields.length,
+      options: {
+        decimals: fieldDecimals,
+        dropdownOptions: fieldDropdownOptions.split('\n').map(s => s.trim()).filter(Boolean)
+      }
+    };
+    setFormCustomFields(prev => [...prev, newField]);
+    resetFieldForm();
+    setShowFieldForm(false);
+    showToast('Väli lisatud');
+  };
+
+  const updateFormCustomField = () => {
+    if (!editingField || !fieldName.trim()) return;
+    setFormCustomFields(prev => prev.map(f =>
+      f.id === editingField.id
+        ? { ...f, name: fieldName.trim(), type: fieldType, required: fieldRequired, showInList: fieldShowInList, options: { decimals: fieldDecimals, dropdownOptions: fieldDropdownOptions.split('\n').map(s => s.trim()).filter(Boolean) } }
+        : f
+    ));
+    resetFieldForm();
+    setShowFieldForm(false);
+    setEditingField(null);
+    showToast('Väli uuendatud');
+  };
+
+  const deleteFormCustomField = (fieldId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle välja kustutada?')) return;
+    setFormCustomFields(prev => prev.filter(f => f.id !== fieldId));
+    showToast('Väli kustutatud');
+  };
+
+  const deleteCustomField = async (fieldId: string, groupId: string) => {
+    // Always update field in root parent group
+    const rootGroup = getRootParent(groupId);
+    if (!rootGroup) return;
+
+    if (!confirm('Kas oled kindel, et soovid selle välja kustutada?')) return;
+
+    setSaving(true);
+    try {
+      const updatedFields = (rootGroup.custom_fields || []).filter(f => f.id !== fieldId);
+
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({ custom_fields: updatedFields, updated_at: new Date().toISOString(), updated_by: tcUserEmail })
+        .eq('id', rootGroup.id);
+
+      if (error) throw error;
+
+      showToast('Väli kustutatud');
+      await loadData();
+    } catch (e) {
+      console.error('Error deleting field:', e);
+      showToast('Viga välja kustutamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const startEditingField = (field: CustomFieldDefinition) => {
+    setEditingField(field);
+    setFieldName(field.name);
+    setFieldType(field.type);
+    setFieldRequired(field.required);
+    setFieldShowInList(field.showInList);
+    setFieldDecimals(field.options?.decimals || 0);
+    setFieldDropdownOptions((field.options?.dropdownOptions || []).join('\n'));
+    setShowFieldForm(true);
   };
 
   // ============================================
@@ -1130,7 +1219,18 @@ export default function OrganizerScreen({
     const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
     if (!item) return;
 
-    const updatedProps = { ...(item.custom_properties || {}), [fieldId]: value };
+    // Try to parse JSON for arrays (tags)
+    let parsedValue: any = value;
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        parsedValue = parsed;
+      }
+    } catch {
+      // Not JSON, use as string
+    }
+
+    const updatedProps = { ...(item.custom_properties || {}), [fieldId]: parsedValue };
     try {
       await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
       await loadData();
@@ -1274,6 +1374,86 @@ export default function OrganizerScreen({
     } else if (e.key === 'Escape') {
       setEditingItemField(null);
       setEditingItemValue('');
+    }
+  };
+
+  // Get all unique tags used in the project (for suggestions)
+  const getAllProjectTags = useCallback((): string[] => {
+    const tags = new Set<string>();
+    for (const items of groupItems.values()) {
+      for (const item of items) {
+        if (item.custom_properties) {
+          for (const val of Object.values(item.custom_properties)) {
+            if (Array.isArray(val)) {
+              val.forEach(t => tags.add(String(t)));
+            }
+          }
+        }
+      }
+    }
+    return Array.from(tags).sort();
+  }, [groupItems]);
+
+  // Handle tag field double click
+  const handleTagFieldDoubleClick = (itemId: string, fieldId: string, currentValue: any) => {
+    setEditingItemField({ itemId, fieldId });
+    const tags = Array.isArray(currentValue) ? currentValue : (currentValue ? [String(currentValue)] : []);
+    setEditingTags(tags);
+    setTagInput('');
+    setShowTagSuggestions(false);
+  };
+
+  // Filter tag suggestions based on input
+  const getFilteredTagSuggestions = useCallback((input: string): string[] => {
+    if (!input.trim()) return [];
+    const allTags = getAllProjectTags();
+    const lowerInput = input.toLowerCase();
+    return allTags.filter(t =>
+      t.toLowerCase().includes(lowerInput) && !editingTags.includes(t)
+    ).slice(0, 8);
+  }, [getAllProjectTags, editingTags]);
+
+  // Add a tag
+  const addTag = (tag: string) => {
+    const trimmed = tag.trim();
+    if (trimmed && !editingTags.includes(trimmed)) {
+      setEditingTags(prev => [...prev, trimmed]);
+    }
+    setTagInput('');
+    setShowTagSuggestions(false);
+  };
+
+  // Remove a tag
+  const removeTag = (tag: string) => {
+    setEditingTags(prev => prev.filter(t => t !== tag));
+  };
+
+  // Save tags
+  const saveTagsField = async () => {
+    if (editingItemField) {
+      await updateItemField(editingItemField.itemId, editingItemField.fieldId, JSON.stringify(editingTags));
+      setEditingItemField(null);
+      setEditingTags([]);
+      setTagInput('');
+    }
+  };
+
+  // Handle tag input key down
+  const handleTagInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (tagInput.trim()) {
+        addTag(tagInput);
+      } else {
+        saveTagsField();
+      }
+    } else if (e.key === 'Escape') {
+      setEditingItemField(null);
+      setEditingTags([]);
+      setTagInput('');
+    } else if (e.key === 'Backspace' && !tagInput && editingTags.length > 0) {
+      // Remove last tag on backspace when input is empty
+      setEditingTags(prev => prev.slice(0, -1));
     }
   };
 
@@ -2047,7 +2227,7 @@ export default function OrganizerScreen({
               const hasMore = sortedItems.length > visibleCount;
 
               return (
-              <div className="org-items" style={{ marginLeft: `${8 + depth * 20}px` }}>
+              <div className="org-items" style={{ marginLeft: '8px' }}>
                 {/* Item sort header */}
                 {sortedItems.length > 3 && (
                   <div className="org-items-header">
@@ -2095,11 +2275,89 @@ export default function OrganizerScreen({
                         const val = item.custom_properties?.[field.id];
 
                         if (isEditing) {
+                          // Show dropdown for dropdown fields
+                          if (field.type === 'dropdown' && field.options?.dropdownOptions?.length) {
+                            return (
+                              <select
+                                key={field.id}
+                                className="org-item-custom-edit org-item-dropdown"
+                                value={editingItemValue}
+                                onChange={(e) => {
+                                  setEditingItemValue(e.target.value);
+                                  // Auto-save on selection
+                                  updateItemField(item.id, field.id, e.target.value);
+                                  setEditingItemField(null);
+                                  setEditingItemValue('');
+                                }}
+                                onBlur={() => {
+                                  setEditingItemField(null);
+                                  setEditingItemValue('');
+                                }}
+                                autoFocus
+                              >
+                                <option value="">-- Vali --</option>
+                                {field.options.dropdownOptions.map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            );
+                          }
+                          // Show tags input for tags fields
+                          if (field.type === 'tags') {
+                            const suggestions = getFilteredTagSuggestions(tagInput);
+                            return (
+                              <div key={field.id} className="org-tags-editor">
+                                <div className="org-tags-container">
+                                  {editingTags.map(tag => (
+                                    <span key={tag} className="org-tag">
+                                      {tag}
+                                      <button onClick={() => removeTag(tag)} className="org-tag-remove">×</button>
+                                    </span>
+                                  ))}
+                                  <input
+                                    type="text"
+                                    className="org-tag-input"
+                                    value={tagInput}
+                                    onChange={(e) => {
+                                      setTagInput(e.target.value);
+                                      setShowTagSuggestions(true);
+                                    }}
+                                    onKeyDown={handleTagInputKeyDown}
+                                    onBlur={() => {
+                                      // Delay to allow clicking suggestions
+                                      setTimeout(() => {
+                                        if (showTagSuggestions) {
+                                          setShowTagSuggestions(false);
+                                          if (editingTags.length > 0 || tagInput) {
+                                            saveTagsField();
+                                          } else {
+                                            setEditingItemField(null);
+                                          }
+                                        }
+                                      }, 200);
+                                    }}
+                                    placeholder="Lisa silt..."
+                                    autoFocus
+                                  />
+                                </div>
+                                {showTagSuggestions && suggestions.length > 0 && (
+                                  <div className="org-tag-suggestions">
+                                    {suggestions.map(s => (
+                                      <div key={s} className="org-tag-suggestion" onMouseDown={() => addTag(s)}>
+                                        {s}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+                          // Default input for other field types
                           return (
                             <input
                               key={field.id}
                               className="org-item-custom-edit"
-                              type="text"
+                              type={field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'date' ? 'date' : 'text'}
                               value={editingItemValue}
                               onChange={(e) => setEditingItemValue(e.target.value)}
                               onBlur={handleFieldEditSave}
@@ -2113,7 +2371,10 @@ export default function OrganizerScreen({
                           <span
                             key={field.id}
                             className="org-item-custom"
-                            onDoubleClick={() => handleFieldDoubleClick(item.id, field.id, String(val || ''))}
+                            onDoubleClick={() => field.type === 'tags'
+                              ? handleTagFieldDoubleClick(item.id, field.id, val)
+                              : handleFieldDoubleClick(item.id, field.id, String(val || ''))
+                            }
                             title="Topeltklõps muutmiseks"
                           >
                             {formatFieldValue(val, field)}
@@ -2380,17 +2641,54 @@ export default function OrganizerScreen({
                 </>
               )}
 
-              {/* Show custom fields if editing */}
-              {editingGroup && editingGroup.custom_fields && editingGroup.custom_fields.length > 0 && (
+              {/* Show custom fields section - visible for main groups (editing or creating) */}
+              {!formParentId && (
                 <div className="org-field">
-                  <label>Lisaväljad</label>
+                  <label>Lisaväljad ({editingGroup ? (editingGroup.custom_fields || []).length : formCustomFields.length})</label>
                   <div className="org-custom-fields-list">
-                    {editingGroup.custom_fields.map(f => (
-                      <div key={f.id} className="custom-field-item">
-                        <span>{f.name}</span>
-                        <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
-                      </div>
-                    ))}
+                    {editingGroup ? (
+                      // Editing existing group
+                      <>
+                        {(editingGroup.custom_fields || []).length === 0 ? (
+                          <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                        ) : (
+                          editingGroup.custom_fields.map(f => (
+                            <div key={f.id} className="custom-field-item">
+                              <span className="field-name">{f.name}</span>
+                              <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
+                              <div className="field-actions">
+                                <button className="field-edit-btn" onClick={() => startEditingField(f)} title="Muuda"><FiEdit2 size={12} /></button>
+                                <button className="field-delete-btn" onClick={() => deleteCustomField(f.id, editingGroup.id)} title="Kustuta"><FiTrash2 size={12} /></button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        <button className="org-add-field-btn" onClick={() => { resetFieldForm(); setShowFieldForm(true); }}>
+                          <FiPlus size={14} /> Lisa väli
+                        </button>
+                      </>
+                    ) : (
+                      // Creating new group
+                      <>
+                        {formCustomFields.length === 0 ? (
+                          <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                        ) : (
+                          formCustomFields.map(f => (
+                            <div key={f.id} className="custom-field-item">
+                              <span className="field-name">{f.name}</span>
+                              <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
+                              <div className="field-actions">
+                                <button className="field-edit-btn" onClick={() => startEditingField(f)} title="Muuda"><FiEdit2 size={12} /></button>
+                                <button className="field-delete-btn" onClick={() => deleteFormCustomField(f.id)} title="Kustuta"><FiTrash2 size={12} /></button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                        <button className="org-add-field-btn" onClick={() => { resetFieldForm(); setShowFieldForm(true); }}>
+                          <FiPlus size={14} /> Lisa väli
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -2447,7 +2745,20 @@ export default function OrganizerScreen({
             </div>
             <div className="org-modal-footer">
               <button className="cancel" onClick={() => { setShowFieldForm(false); setEditingField(null); resetFieldForm(); }}>Tühista</button>
-              <button className="save" onClick={editingField ? updateCustomField : addCustomField} disabled={saving || !fieldName.trim()}>
+              <button
+                className="save"
+                onClick={() => {
+                  // Determine which function to use based on context
+                  if (showGroupForm && !editingGroup) {
+                    // Creating new group - use form state functions
+                    editingField ? updateFormCustomField() : addFormCustomField();
+                  } else {
+                    // Editing existing group or adding from menu - use DB functions
+                    editingField ? updateCustomField() : addCustomField();
+                  }
+                }}
+                disabled={saving || !fieldName.trim()}
+              >
                 {saving ? 'Salvestan...' : (editingField ? 'Salvesta' : 'Lisa väli')}
               </button>
             </div>
