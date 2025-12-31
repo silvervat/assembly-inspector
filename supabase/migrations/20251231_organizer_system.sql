@@ -23,7 +23,8 @@ CREATE TABLE organizer_groups (
   allowed_users TEXT[] DEFAULT '{}',  -- Array of user emails who can see private group
   display_properties JSONB DEFAULT '[]',  -- Max 3 properties to display [{set, prop, label}]
   custom_fields JSONB DEFAULT '[]',  -- Custom field definitions [{id, name, type, required, showInList, sortOrder, options}]
-  assembly_selection_required BOOLEAN DEFAULT true,
+  assembly_selection_on BOOLEAN DEFAULT true,  -- Whether model selection is enabled for adding items
+  unique_items BOOLEAN DEFAULT true,  -- Whether items must be unique in group and subgroups
   color JSONB,  -- {r, g, b} for model coloring
   created_by TEXT NOT NULL,  -- User email
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -157,5 +158,7 @@ COMMENT ON TABLE organizer_group_items IS 'Detailid gruppides, seotud IFC GUID-i
 COMMENT ON COLUMN organizer_groups.level IS '0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp';
 COMMENT ON COLUMN organizer_groups.display_properties IS 'Maksimaalselt 3 propertyt kuvamiseks [{set, prop, label}]';
 COMMENT ON COLUMN organizer_groups.custom_fields IS 'Kohandatud väljade definitsioonid [{id, name, type, required, showInList, sortOrder, options}]. Tüübid: text, number, currency, date, tags, dropdown';
+COMMENT ON COLUMN organizer_groups.assembly_selection_on IS 'Kas mudelist valimine on lubatud. Kui false, saab detaile lisada ainult käsitsi';
+COMMENT ON COLUMN organizer_groups.unique_items IS 'Kas detailid peavad olema unikaalsed selles grupis ja alamgruppides';
 COMMENT ON COLUMN organizer_groups.color IS 'RGB värv mudeli värvimiseks {r, g, b}';
 COMMENT ON COLUMN organizer_group_items.custom_properties IS 'Kohandatud väljade väärtused {fieldId: value}. Väärtused vastavad grupi custom_fields definitsioonidele';

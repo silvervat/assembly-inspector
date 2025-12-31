@@ -18,9 +18,9 @@ import {
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
-  FiFolder, FiEdit2, FiTrash2, FiX, FiDroplet,
+  FiEdit2, FiTrash2, FiX, FiDroplet,
   FiRefreshCw, FiDownload, FiLock, FiMoreVertical, FiMove,
-  FiList
+  FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus
 } from 'react-icons/fi';
 
 // ============================================
@@ -56,11 +56,24 @@ const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   dropdown: 'Valik'
 };
 
+// Preset colors for group color picker
+const PRESET_COLORS: GroupColor[] = [
+  { r: 239, g: 68, b: 68 },   // Red
+  { r: 249, g: 115, b: 22 },  // Orange
+  { r: 234, g: 179, b: 8 },   // Yellow
+  { r: 34, g: 197, b: 94 },   // Green
+  { r: 6, g: 182, b: 212 },   // Cyan
+  { r: 59, g: 130, b: 246 },  // Blue
+  { r: 139, g: 92, b: 246 },  // Purple
+  { r: 236, g: 72, b: 153 },  // Pink
+  { r: 107, g: 114, b: 128 }, // Gray
+  { r: 30, g: 64, b: 175 },   // Indigo
+];
+
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
 
-// Generate UUID
 function generateUUID(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
     const r = Math.random() * 16 | 0;
@@ -69,7 +82,6 @@ function generateUUID(): string {
   });
 }
 
-// Build hierarchical tree from flat groups
 function buildGroupTree(
   groups: OrganizerGroup[],
   groupItems: Map<string, OrganizerGroupItem[]>
@@ -77,7 +89,6 @@ function buildGroupTree(
   const groupMap = new Map<string, OrganizerGroupTree>();
   const roots: OrganizerGroupTree[] = [];
 
-  // Initialize all groups with computed fields
   for (const g of groups) {
     const items = groupItems.get(g.id) || [];
     const totalWeight = items.reduce((sum, item) => {
@@ -93,7 +104,6 @@ function buildGroupTree(
     });
   }
 
-  // Build parent-child relationships
   for (const g of groups) {
     const node = groupMap.get(g.id)!;
     if (g.parent_id && groupMap.has(g.parent_id)) {
@@ -103,17 +113,15 @@ function buildGroupTree(
     }
   }
 
-  // Sort by sort_order
   const sortChildren = (nodes: OrganizerGroupTree[]) => {
     nodes.sort((a, b) => a.sort_order - b.sort_order);
     nodes.forEach(n => sortChildren(n.children));
   };
   sortChildren(roots);
 
-  // Calculate total counts including children
   const calculateTotals = (node: OrganizerGroupTree): { count: number; weight: number } => {
-    let count = node.itemCount;
-    let weight = node.totalWeight;
+    let count = groupItems.get(node.id)?.length || 0;
+    let weight = (groupItems.get(node.id) || []).reduce((sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0);
     for (const child of node.children) {
       const childTotals = calculateTotals(child);
       count += childTotals.count;
@@ -125,61 +133,42 @@ function buildGroupTree(
   };
 
   roots.forEach(calculateTotals);
-
   return roots;
 }
 
-// Collect all GUIDs from a group and its descendants
 function collectGroupGuids(
   groupId: string,
   groups: OrganizerGroup[],
   groupItems: Map<string, OrganizerGroupItem[]>
 ): string[] {
   const guids: string[] = [];
-
   const group = groups.find(g => g.id === groupId);
   if (!group) return guids;
 
-  // Add this group's items
   const items = groupItems.get(groupId) || [];
   guids.push(...items.map(i => i.guid_ifc).filter(Boolean));
 
-  // Add children's items recursively
   const children = groups.filter(g => g.parent_id === groupId);
   for (const child of children) {
     guids.push(...collectGroupGuids(child.id, groups, groupItems));
   }
-
   return guids;
 }
 
-// Generate unique color based on index
-function generateGroupColor(index: number): GroupColor {
-  const goldenRatio = 0.618033988749895;
-  const hue = (index * goldenRatio) % 1;
-  const saturation = 0.65;
-  const lightness = 0.55;
-
-  const c = (1 - Math.abs(2 * lightness - 1)) * saturation;
-  const x = c * (1 - Math.abs((hue * 6) % 2 - 1));
-  const m = lightness - c / 2;
-
-  let r = 0, g = 0, b = 0;
-  if (hue < 1/6) { r = c; g = x; b = 0; }
-  else if (hue < 2/6) { r = x; g = c; b = 0; }
-  else if (hue < 3/6) { r = 0; g = c; b = x; }
-  else if (hue < 4/6) { r = 0; g = x; b = c; }
-  else if (hue < 5/6) { r = x; g = 0; b = c; }
-  else { r = c; g = 0; b = x; }
-
-  return {
-    r: Math.round((r + m) * 255),
-    g: Math.round((g + m) * 255),
-    b: Math.round((b + m) * 255)
-  };
+function collectAllGuids(groupItems: Map<string, OrganizerGroupItem[]>): Set<string> {
+  const guids = new Set<string>();
+  for (const items of groupItems.values()) {
+    for (const item of items) {
+      if (item.guid_ifc) guids.add(item.guid_ifc.toLowerCase());
+    }
+  }
+  return guids;
 }
 
-// Format weight for display
+function generateGroupColor(index: number): GroupColor {
+  return PRESET_COLORS[index % PRESET_COLORS.length];
+}
+
 function formatWeight(weight: string | null | undefined): string {
   if (!weight) return '';
   const num = parseFloat(weight);
@@ -187,7 +176,6 @@ function formatWeight(weight: string | null | undefined): string {
   return num.toFixed(1);
 }
 
-// Format custom field value for display
 function formatFieldValue(value: any, field: CustomFieldDefinition): string {
   if (value === null || value === undefined || value === '') return '-';
 
@@ -213,24 +201,24 @@ function formatFieldValue(value: any, field: CustomFieldDefinition): string {
   }
 }
 
+function getNumericFieldSum(items: OrganizerGroupItem[], fieldId: string): number {
+  return items.reduce((sum, item) => {
+    const val = parseFloat(item.custom_properties?.[fieldId] || '0') || 0;
+    return sum + val;
+  }, 0);
+}
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
 
 export default function OrganizerScreen({
   api,
-  user: _user,
   projectId,
   tcUserEmail,
-  tcUserName: _tcUserName,
   onBackToMenu
 }: OrganizerScreenProps) {
-  // Property mappings (CRITICAL - must use for reading model properties)
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
-
-  // ============================================
-  // STATE
-  // ============================================
 
   // Data
   const [groups, setGroups] = useState<OrganizerGroup[]>([]);
@@ -238,7 +226,10 @@ export default function OrganizerScreen({
   const [groupTree, setGroupTree] = useState<OrganizerGroupTree[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+
+  // Toast
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Selection
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -248,6 +239,7 @@ export default function OrganizerScreen({
 
   // UI State
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [allExpanded, setAllExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
@@ -257,6 +249,10 @@ export default function OrganizerScreen({
   const [showFieldForm, setShowFieldForm] = useState(false);
   const [editingField, setEditingField] = useState<CustomFieldDefinition | null>(null);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+
+  // Inline editing
+  const [editingItemField, setEditingItemField] = useState<{itemId: string; fieldId: string} | null>(null);
+  const [editingItemValue, setEditingItemValue] = useState('');
 
   // Group form state
   const [formName, setFormName] = useState('');
@@ -274,8 +270,15 @@ export default function OrganizerScreen({
   const [fieldDropdownOptions, setFieldDropdownOptions] = useState('');
 
   // Bulk edit state
-  const [bulkFieldId, setBulkFieldId] = useState<string>('');
-  const [bulkValue, setBulkValue] = useState<string>('');
+  const [bulkFieldValues, setBulkFieldValues] = useState<Record<string, string>>({});
+
+  // Delete confirmation
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteGroupData, setDeleteGroupData] = useState<{group: OrganizerGroup; childCount: number; itemCount: number} | null>(null);
+
+  // Group settings
+  const [formAssemblySelectionOn, setFormAssemblySelectionOn] = useState(true);
+  const [formUniqueItems, setFormUniqueItems] = useState(true);
 
   // Drag & Drop
   const [draggedItems, setDraggedItems] = useState<OrganizerGroupItem[]>([]);
@@ -285,13 +288,37 @@ export default function OrganizerScreen({
   const [colorByGroup, setColorByGroup] = useState(false);
   const [coloringInProgress, setColoringInProgress] = useState(false);
 
-  // Sort (reserved for future use)
-  const [sortField, _setSortField] = useState<string>('');
-  const [sortDirection, _setSortDirection] = useState<'asc' | 'desc'>('asc');
-
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // ============================================
+  // TOAST
+  // ============================================
+
+  const showToast = useCallback((msg: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast(msg);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // ============================================
+  // CLICK OUTSIDE HANDLER
+  // ============================================
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (groupMenuId && containerRef.current) {
+        const target = e.target as HTMLElement;
+        if (!target.closest('.org-group-menu') && !target.closest('.org-menu-btn')) {
+          setGroupMenuId(null);
+        }
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [groupMenuId]);
 
   // ============================================
   // DATA LOADING
@@ -307,7 +334,6 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      // Filter by visibility
       const visibleGroups = (data || []).filter((g: OrganizerGroup) => {
         if (!g.is_private) return true;
         if (g.created_by === tcUserEmail) return true;
@@ -315,7 +341,6 @@ export default function OrganizerScreen({
         return false;
       });
 
-      // Ensure custom_fields is always an array
       const normalizedGroups = visibleGroups.map((g: OrganizerGroup) => ({
         ...g,
         custom_fields: g.custom_fields || []
@@ -439,7 +464,7 @@ export default function OrganizerScreen({
                     assemblyMark = markSet[propertyMappings.assembly_mark_prop] || '';
                   }
 
-                  for (const [_setName, setProps] of Object.entries(propertySets)) {
+                  for (const [, setProps] of Object.entries(propertySets)) {
                     const sp = setProps as Record<string, unknown>;
                     if (sp['Name']) productName = String(sp['Name']);
                     if (sp['Product_name']) productName = String(sp['Product_name']);
@@ -460,15 +485,7 @@ export default function OrganizerScreen({
                   assemblyMark = objProps.name || `Object_${runtimeId}`;
                 }
 
-                objects.push({
-                  modelId,
-                  runtimeId,
-                  guidIfc,
-                  assemblyMark,
-                  productName,
-                  castUnitWeight,
-                  castUnitPositionCode
-                });
+                objects.push({ modelId, runtimeId, guidIfc, assemblyMark, productName, castUnitWeight, castUnitPositionCode });
               }
             } catch (e) {
               console.warn('Error getting object properties:', e);
@@ -496,7 +513,7 @@ export default function OrganizerScreen({
 
   const createGroup = async () => {
     if (!formName.trim()) {
-      setMessage('Grupi nimi on kohustuslik');
+      showToast('Grupi nimi on kohustuslik');
       return;
     }
 
@@ -510,11 +527,10 @@ export default function OrganizerScreen({
         if (parent) {
           level = parent.level + 1;
           if (level > 2) {
-            setMessage('Maksimaalselt 3 taset on lubatud');
+            showToast('Maksimaalselt 3 taset on lubatud');
             setSaving(false);
             return;
           }
-          // Inherit parent's custom fields
           parentCustomFields = [...(parent.custom_fields || [])];
         }
       }
@@ -528,22 +544,18 @@ export default function OrganizerScreen({
         allowed_users: [],
         display_properties: [],
         custom_fields: parentCustomFields,
-        assembly_selection_required: true,
+        assembly_selection_on: formAssemblySelectionOn,
+        unique_items: formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
         sort_order: groups.length,
         level
       };
 
-      const { error } = await supabase
-        .from('organizer_groups')
-        .insert(newGroup)
-        .select()
-        .single();
-
+      const { error } = await supabase.from('organizer_groups').insert(newGroup).select().single();
       if (error) throw error;
 
-      setMessage('Grupp loodud');
+      showToast('Grupp loodud');
       resetGroupForm();
       setShowGroupForm(false);
       await loadData();
@@ -553,7 +565,7 @@ export default function OrganizerScreen({
       }
     } catch (e) {
       console.error('Error creating group:', e);
-      setMessage('Viga grupi loomisel');
+      showToast('Viga grupi loomisel');
     } finally {
       setSaving(false);
     }
@@ -571,6 +583,9 @@ export default function OrganizerScreen({
           description: formDescription.trim() || null,
           is_private: formIsPrivate,
           color: formColor,
+          custom_fields: editingGroup.custom_fields,
+          assembly_selection_on: formAssemblySelectionOn,
+          unique_items: formUniqueItems,
           updated_at: new Date().toISOString(),
           updated_by: tcUserEmail
         })
@@ -578,51 +593,79 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      setMessage('Grupp uuendatud');
+      showToast('Grupp uuendatud');
       resetGroupForm();
       setShowGroupForm(false);
       setEditingGroup(null);
       await loadData();
     } catch (e) {
       console.error('Error updating group:', e);
-      setMessage('Viga grupi uuendamisel');
+      showToast('Viga grupi uuendamisel');
     } finally {
       setSaving(false);
     }
   };
 
-  const deleteGroup = async (groupId: string) => {
-    const group = groups.find(g => g.id === groupId);
-    if (!group) return;
+  // Count all children and items recursively
+  const countGroupContents = useCallback((groupId: string): { childCount: number; itemCount: number } => {
+    let childCount = 0;
+    let itemCount = groupItems.get(groupId)?.length || 0;
 
-    const hasChildren = groups.some(g => g.parent_id === groupId);
-    if (hasChildren) {
-      setMessage('Kustuta esmalt alamgrupid');
-      return;
-    }
+    const countChildren = (parentId: string) => {
+      const children = groups.filter(g => g.parent_id === parentId);
+      for (const child of children) {
+        childCount++;
+        itemCount += groupItems.get(child.id)?.length || 0;
+        countChildren(child.id);
+      }
+    };
 
-    if (!confirm(`Kas oled kindel, et soovid kustutada grupi "${group.name}"?`)) {
-      return;
-    }
+    countChildren(groupId);
+    return { childCount, itemCount };
+  }, [groups, groupItems]);
+
+  const openDeleteConfirm = (group: OrganizerGroup) => {
+    const { childCount, itemCount } = countGroupContents(group.id);
+    setDeleteGroupData({ group, childCount, itemCount });
+    setShowDeleteConfirm(true);
+    setGroupMenuId(null);
+  };
+
+  const deleteGroup = async () => {
+    if (!deleteGroupData) return;
+    const { group, childCount } = deleteGroupData;
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('organizer_groups')
-        .delete()
-        .eq('id', groupId);
+      // Delete all child groups first (recursively)
+      const deleteChildren = async (parentId: string) => {
+        const children = groups.filter(g => g.parent_id === parentId);
+        for (const child of children) {
+          await deleteChildren(child.id);
+          // Delete items first
+          await supabase.from('organizer_group_items').delete().eq('group_id', child.id);
+          await supabase.from('organizer_groups').delete().eq('id', child.id);
+        }
+      };
 
+      if (childCount > 0) {
+        await deleteChildren(group.id);
+      }
+
+      // Delete items of the main group
+      await supabase.from('organizer_group_items').delete().eq('group_id', group.id);
+      // Delete the main group
+      const { error } = await supabase.from('organizer_groups').delete().eq('id', group.id);
       if (error) throw error;
 
-      setMessage('Grupp kustutatud');
-      if (selectedGroupId === groupId) {
-        setSelectedGroupId(null);
-      }
-      setGroupMenuId(null);
+      showToast('Grupp ja sisu kustutatud');
+      if (selectedGroupId === group.id) setSelectedGroupId(null);
+      setShowDeleteConfirm(false);
+      setDeleteGroupData(null);
       await loadData();
     } catch (e) {
       console.error('Error deleting group:', e);
-      setMessage('Viga grupi kustutamisel');
+      showToast('Viga grupi kustutamisel');
     } finally {
       setSaving(false);
     }
@@ -634,6 +677,8 @@ export default function OrganizerScreen({
     setFormIsPrivate(false);
     setFormColor(null);
     setFormParentId(null);
+    setFormAssemblySelectionOn(true);
+    setFormUniqueItems(true);
   };
 
   const openEditGroupForm = (group: OrganizerGroup) => {
@@ -643,6 +688,16 @@ export default function OrganizerScreen({
     setFormIsPrivate(group.is_private);
     setFormColor(group.color);
     setFormParentId(group.parent_id);
+    setFormAssemblySelectionOn(group.assembly_selection_on !== false);
+    setFormUniqueItems(group.unique_items !== false);
+    setShowGroupForm(true);
+    setGroupMenuId(null);
+  };
+
+  const openAddSubgroupForm = (parentId: string) => {
+    resetGroupForm();
+    setFormParentId(parentId);
+    setEditingGroup(null);
     setShowGroupForm(true);
     setGroupMenuId(null);
   };
@@ -653,7 +708,7 @@ export default function OrganizerScreen({
 
   const addCustomField = async () => {
     if (!selectedGroupId || !fieldName.trim()) {
-      setMessage('Välja nimi on kohustuslik');
+      showToast('Välja nimi on kohustuslik');
       return;
     }
 
@@ -679,22 +734,18 @@ export default function OrganizerScreen({
 
       const { error } = await supabase
         .from('organizer_groups')
-        .update({
-          custom_fields: updatedFields,
-          updated_at: new Date().toISOString(),
-          updated_by: tcUserEmail
-        })
+        .update({ custom_fields: updatedFields, updated_at: new Date().toISOString(), updated_by: tcUserEmail })
         .eq('id', selectedGroupId);
 
       if (error) throw error;
 
-      setMessage('Väli lisatud');
+      showToast('Väli lisatud');
       resetFieldForm();
       setShowFieldForm(false);
       await loadData();
     } catch (e) {
       console.error('Error adding field:', e);
-      setMessage('Viga välja lisamisel');
+      showToast('Viga välja lisamisel');
     } finally {
       setSaving(false);
     }
@@ -710,39 +761,25 @@ export default function OrganizerScreen({
     try {
       const updatedFields = (group.custom_fields || []).map(f =>
         f.id === editingField.id
-          ? {
-              ...f,
-              name: fieldName.trim(),
-              type: fieldType,
-              required: fieldRequired,
-              showInList: fieldShowInList,
-              options: {
-                decimals: fieldDecimals,
-                dropdownOptions: fieldDropdownOptions.split('\n').map(s => s.trim()).filter(Boolean)
-              }
-            }
+          ? { ...f, name: fieldName.trim(), type: fieldType, required: fieldRequired, showInList: fieldShowInList, options: { decimals: fieldDecimals, dropdownOptions: fieldDropdownOptions.split('\n').map(s => s.trim()).filter(Boolean) } }
           : f
       );
 
       const { error } = await supabase
         .from('organizer_groups')
-        .update({
-          custom_fields: updatedFields,
-          updated_at: new Date().toISOString(),
-          updated_by: tcUserEmail
-        })
+        .update({ custom_fields: updatedFields, updated_at: new Date().toISOString(), updated_by: tcUserEmail })
         .eq('id', selectedGroupId);
 
       if (error) throw error;
 
-      setMessage('Väli uuendatud');
+      showToast('Väli uuendatud');
       resetFieldForm();
       setShowFieldForm(false);
       setEditingField(null);
       await loadData();
     } catch (e) {
       console.error('Error updating field:', e);
-      setMessage('Viga välja uuendamisel');
+      showToast('Viga välja uuendamisel');
     } finally {
       setSaving(false);
     }
@@ -761,20 +798,41 @@ export default function OrganizerScreen({
   // ITEM OPERATIONS
   // ============================================
 
-  const addSelectedToGroup = async (targetGroupId?: string) => {
-    const groupId = targetGroupId || selectedGroupId;
-    if (!groupId || selectedObjects.length === 0) return;
+  const addSelectedToGroup = async (targetGroupId: string) => {
+    if (selectedObjects.length === 0) return;
 
-    const group = groups.find(g => g.id === groupId);
+    const group = groups.find(g => g.id === targetGroupId);
     if (!group) return;
+
+    // Check if unique items are required
+    const uniqueRequired = requiresUniqueItems(targetGroupId);
+    let objectsToAdd = [...selectedObjects];
+    let skippedCount = 0;
+
+    if (uniqueRequired) {
+      const existingGuids = collectTreeGuids(targetGroupId);
+      objectsToAdd = selectedObjects.filter(obj => {
+        if (!obj.guidIfc) return true;
+        if (existingGuids.has(obj.guidIfc.toLowerCase())) {
+          skippedCount++;
+          return false;
+        }
+        return true;
+      });
+
+      if (objectsToAdd.length === 0) {
+        showToast('Kõik valitud detailid on juba grupis');
+        return;
+      }
+    }
 
     setSaving(true);
     try {
-      const existingItems = groupItems.get(groupId) || [];
+      const existingItems = groupItems.get(targetGroupId) || [];
       const startIndex = existingItems.length;
 
-      const items = selectedObjects.map((obj, index) => ({
-        group_id: groupId,
+      const items = objectsToAdd.map((obj, index) => ({
+        group_id: targetGroupId,
         guid_ifc: obj.guidIfc,
         assembly_mark: obj.assemblyMark,
         product_name: obj.productName || null,
@@ -785,28 +843,24 @@ export default function OrganizerScreen({
         sort_order: startIndex + index
       }));
 
-      // Delete existing items with same GUIDs
+      // Delete existing items in this specific group (allow overwrite within same group)
       const guids = items.map(i => i.guid_ifc).filter(Boolean);
       if (guids.length > 0) {
-        await supabase
-          .from('organizer_group_items')
-          .delete()
-          .eq('group_id', groupId)
-          .in('guid_ifc', guids);
+        await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', guids);
       }
 
-      const { error } = await supabase
-        .from('organizer_group_items')
-        .insert(items);
-
+      const { error } = await supabase.from('organizer_group_items').insert(items);
       if (error) throw error;
 
-      setMessage(`${items.length} detaili lisatud`);
-      setExpandedGroups(prev => new Set([...prev, groupId]));
+      const message = skippedCount > 0
+        ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
+        : `${items.length} detaili lisatud`;
+      showToast(message);
+      setExpandedGroups(prev => new Set([...prev, targetGroupId]));
       await loadData();
     } catch (e) {
       console.error('Error adding items to group:', e);
-      setMessage('Viga detailide lisamisel');
+      showToast('Viga detailide lisamisel');
     } finally {
       setSaving(false);
     }
@@ -817,48 +871,75 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('organizer_group_items')
-        .delete()
-        .in('id', itemIds);
-
+      const { error } = await supabase.from('organizer_group_items').delete().in('id', itemIds);
       if (error) throw error;
 
-      setMessage(`${itemIds.length} detaili eemaldatud`);
+      showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
       await loadData();
     } catch (e) {
       console.error('Error removing items:', e);
-      setMessage('Viga detailide eemaldamisel');
+      showToast('Viga detailide eemaldamisel');
     } finally {
       setSaving(false);
     }
   };
 
+  const updateItemField = async (itemId: string, fieldId: string, value: string) => {
+    const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+    if (!item) return;
+
+    const updatedProps = { ...(item.custom_properties || {}), [fieldId]: value };
+    try {
+      await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
+      await loadData();
+    } catch (e) {
+      console.error('Error updating field:', e);
+    }
+  };
+
   const bulkUpdateItems = async () => {
-    if (!bulkFieldId || selectedItemIds.size === 0) return;
+    if (selectedItemIds.size === 0) return;
+
+    const hasValues = Object.values(bulkFieldValues).some(v => v !== '');
+    if (!hasValues) {
+      showToast('Sisesta vähemalt üks väärtus');
+      return;
+    }
+
+    const existingCount = Array.from(selectedItemIds).filter(id => {
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === id);
+      if (!item) return false;
+      for (const [fieldId, newVal] of Object.entries(bulkFieldValues)) {
+        if (newVal && item.custom_properties?.[fieldId]) return true;
+      }
+      return false;
+    }).length;
+
+    if (existingCount > 0) {
+      if (!confirm(`${existingCount} detailil on juba väärtused. Kas kirjutad üle?`)) return;
+    }
 
     setSaving(true);
     try {
       for (const itemId of selectedItemIds) {
         const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
         if (item) {
-          const updatedProps = { ...(item.custom_properties || {}), [bulkFieldId]: bulkValue };
-          await supabase
-            .from('organizer_group_items')
-            .update({ custom_properties: updatedProps })
-            .eq('id', itemId);
+          const updatedProps = { ...(item.custom_properties || {}) };
+          for (const [fieldId, val] of Object.entries(bulkFieldValues)) {
+            if (val !== '') updatedProps[fieldId] = val;
+          }
+          await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
         }
       }
 
-      setMessage(`${selectedItemIds.size} detaili uuendatud`);
+      showToast(`${selectedItemIds.size} detaili uuendatud`);
       setShowBulkEdit(false);
-      setBulkFieldId('');
-      setBulkValue('');
+      setBulkFieldValues({});
       await loadData();
     } catch (e) {
       console.error('Error bulk updating:', e);
-      setMessage('Viga massuuendamisel');
+      showToast('Viga massuuendamisel');
     } finally {
       setSaving(false);
     }
@@ -869,61 +950,85 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('organizer_group_items')
-        .update({ group_id: targetGroupId })
-        .in('id', itemIds);
-
+      const { error } = await supabase.from('organizer_group_items').update({ group_id: targetGroupId }).in('id', itemIds);
       if (error) throw error;
 
-      setMessage(`${itemIds.length} detaili liigutatud`);
+      showToast(`${itemIds.length} detaili liigutatud`);
       setSelectedItemIds(new Set());
       await loadData();
     } catch (e) {
       console.error('Error moving items:', e);
-      setMessage('Viga detailide liigutamisel');
+      showToast('Viga detailide liigutamisel');
     } finally {
       setSaving(false);
     }
   };
 
   // ============================================
-  // SELECTION (Ctrl/Shift)
+  // SELECTION
   // ============================================
 
-  const handleItemClick = (e: React.MouseEvent, item: OrganizerGroupItem, allItems: OrganizerGroupItem[]) => {
+  const handleItemClick = async (e: React.MouseEvent, item: OrganizerGroupItem, allItems: OrganizerGroupItem[]) => {
     e.stopPropagation();
 
+    let newSelectedIds: Set<string>;
+
     if (e.ctrlKey || e.metaKey) {
-      // Ctrl+click: toggle single item
-      setSelectedItemIds(prev => {
-        const next = new Set(prev);
-        if (next.has(item.id)) {
-          next.delete(item.id);
-        } else {
-          next.add(item.id);
-        }
-        return next;
-      });
+      newSelectedIds = new Set(selectedItemIds);
+      if (newSelectedIds.has(item.id)) {
+        newSelectedIds.delete(item.id);
+      } else {
+        newSelectedIds.add(item.id);
+      }
       setLastSelectedItemId(item.id);
     } else if (e.shiftKey && lastSelectedItemId) {
-      // Shift+click: range selection
       const lastIndex = allItems.findIndex(i => i.id === lastSelectedItemId);
       const currentIndex = allItems.findIndex(i => i.id === item.id);
       if (lastIndex >= 0 && currentIndex >= 0) {
         const start = Math.min(lastIndex, currentIndex);
         const end = Math.max(lastIndex, currentIndex);
         const rangeIds = allItems.slice(start, end + 1).map(i => i.id);
-        setSelectedItemIds(prev => new Set([...prev, ...rangeIds]));
+        newSelectedIds = new Set([...selectedItemIds, ...rangeIds]);
+      } else {
+        newSelectedIds = new Set([item.id]);
       }
     } else {
-      // Normal click: select single, deselect others
-      setSelectedItemIds(new Set([item.id]));
+      newSelectedIds = new Set([item.id]);
       setLastSelectedItemId(item.id);
-      // Also select in model
-      if (item.guid_ifc) {
-        selectObjectsByGuid(api, [item.guid_ifc], 'set').catch(console.error);
+    }
+
+    setSelectedItemIds(newSelectedIds);
+
+    // Also select in model
+    const guidsToSelect = allItems.filter(i => newSelectedIds.has(i.id)).map(i => i.guid_ifc).filter(Boolean);
+    if (guidsToSelect.length > 0) {
+      try {
+        await selectObjectsByGuid(api, guidsToSelect, 'set');
+      } catch (err) {
+        console.error('Error selecting in model:', err);
       }
+    }
+  };
+
+  const handleFieldDoubleClick = (itemId: string, fieldId: string, currentValue: string) => {
+    setEditingItemField({ itemId, fieldId });
+    setEditingItemValue(currentValue || '');
+  };
+
+  const handleFieldEditSave = async () => {
+    if (editingItemField) {
+      await updateItemField(editingItemField.itemId, editingItemField.fieldId, editingItemValue);
+      setEditingItemField(null);
+      setEditingItemValue('');
+    }
+  };
+
+  const handleFieldEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleFieldEditSave();
+    } else if (e.key === 'Escape') {
+      setEditingItemField(null);
+      setEditingItemValue('');
     }
   };
 
@@ -935,7 +1040,7 @@ export default function OrganizerScreen({
     if (groups.length === 0) return;
 
     setColoringInProgress(true);
-    setMessage('Värvin mudelit...');
+    showToast('Värvin mudelit...');
 
     try {
       await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
@@ -946,19 +1051,14 @@ export default function OrganizerScreen({
         const guids = collectGroupGuids(group.id, groups, groupItems);
         if (guids.length === 0) continue;
 
-        await colorObjectsByGuid(api, guids, {
-          r: group.color.r,
-          g: group.color.g,
-          b: group.color.b,
-          a: 255
-        });
+        await colorObjectsByGuid(api, guids, { r: group.color.r, g: group.color.g, b: group.color.b, a: 255 });
       }
 
       setColorByGroup(true);
-      setMessage('Mudel värvitud');
+      showToast('Mudel värvitud');
     } catch (e) {
       console.error('Error coloring model:', e);
-      setMessage('Viga värvimisel');
+      showToast('Viga värvimisel');
     } finally {
       setColoringInProgress(false);
     }
@@ -969,7 +1069,7 @@ export default function OrganizerScreen({
     try {
       await api.viewer.setObjectState(undefined, { color: 'reset' });
       setColorByGroup(false);
-      setMessage('Värvid lähtestatud');
+      showToast('Värvid lähtestatud');
     } catch (e) {
       console.error('Error resetting colors:', e);
     } finally {
@@ -978,18 +1078,16 @@ export default function OrganizerScreen({
   };
 
   // ============================================
-  // GROUP/EXPAND HANDLERS
+  // GROUP/EXPAND
   // ============================================
 
   const handleGroupClick = async (e: React.MouseEvent, groupId: string) => {
-    if (e.target !== e.currentTarget && !(e.target as HTMLElement).classList.contains('group-name')) {
-      return;
-    }
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('.org-group-menu')) return;
 
     setSelectedGroupId(groupId);
     setSelectedItemIds(new Set());
 
-    // Select all items in model
     const guids = collectGroupGuids(groupId, groups, groupItems);
     if (guids.length > 0) {
       try {
@@ -1004,13 +1102,20 @@ export default function OrganizerScreen({
     e.stopPropagation();
     setExpandedGroups(prev => {
       const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
       return next;
     });
+  };
+
+  const toggleAllExpanded = () => {
+    if (allExpanded) {
+      setExpandedGroups(new Set());
+      setAllExpanded(false);
+    } else {
+      setExpandedGroups(new Set(groups.map(g => g.id)));
+      setAllExpanded(true);
+    }
   };
 
   // ============================================
@@ -1025,42 +1130,22 @@ export default function OrganizerScreen({
     const customFields = group.custom_fields || [];
 
     const wb = XLSX.utils.book_new();
-
-    // Build headers
     const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
 
     const data: any[][] = [headers];
-
     items.forEach((item, idx) => {
-      const row: any[] = [
-        idx + 1,
-        item.assembly_mark || '',
-        item.product_name || '',
-        formatWeight(item.cast_unit_weight),
-        item.cast_unit_position_code || ''
-      ];
-
-      customFields.forEach(f => {
-        const val = item.custom_properties?.[f.id];
-        row.push(formatFieldValue(val, f));
-      });
-
+      const row: any[] = [idx + 1, item.assembly_mark || '', item.product_name || '', formatWeight(item.cast_unit_weight), item.cast_unit_position_code || ''];
+      customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
       data.push(row);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-
-    // Set column widths
-    const cols = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
-    customFields.forEach(() => cols.push({ wch: 15 }));
-    ws['!cols'] = cols;
-
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 }))];
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
-    const fileName = `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-    setMessage('Eksport loodud');
+    XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+    showToast('Eksport loodud');
     setGroupMenuId(null);
   };
 
@@ -1094,38 +1179,6 @@ export default function OrganizerScreen({
   };
 
   // ============================================
-  // SORT
-  // ============================================
-
-  const sortItems = (items: OrganizerGroupItem[], _group: OrganizerGroup): OrganizerGroupItem[] => {
-    if (!sortField) return items;
-
-    return [...items].sort((a, b) => {
-      let aVal: any, bVal: any;
-
-      if (sortField === 'assembly_mark') {
-        aVal = a.assembly_mark || '';
-        bVal = b.assembly_mark || '';
-      } else if (sortField === 'cast_unit_weight') {
-        aVal = parseFloat(a.cast_unit_weight || '0') || 0;
-        bVal = parseFloat(b.cast_unit_weight || '0') || 0;
-      } else {
-        // Custom field
-        aVal = a.custom_properties?.[sortField] || '';
-        bVal = b.custom_properties?.[sortField] || '';
-      }
-
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-
-      const strA = String(aVal).toLowerCase();
-      const strB = String(bVal).toLowerCase();
-      return sortDirection === 'asc' ? strA.localeCompare(strB) : strB.localeCompare(strA);
-    });
-  };
-
-  // ============================================
   // SEARCH
   // ============================================
 
@@ -1137,19 +1190,88 @@ export default function OrganizerScreen({
       if (item.assembly_mark?.toLowerCase().includes(q)) return true;
       if (item.product_name?.toLowerCase().includes(q)) return true;
 
-      // Search in custom properties
       const customFields = group.custom_fields || [];
       for (const field of customFields) {
         const val = item.custom_properties?.[field.id];
         if (val && String(val).toLowerCase().includes(q)) return true;
       }
-
       return false;
     });
   };
 
   // ============================================
-  // RENDER GROUP NODE (RECURSIVE)
+  // HELPER: Get root parent group for settings
+  // ============================================
+
+  const getRootParent = useCallback((groupId: string): OrganizerGroup | null => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return null;
+    if (!group.parent_id) return group;
+
+    let current = group;
+    while (current.parent_id) {
+      const parent = groups.find(g => g.id === current.parent_id);
+      if (!parent) break;
+      current = parent;
+    }
+    return current;
+  }, [groups]);
+
+  // ============================================
+  // HELPER: Check if selection is enabled for group
+  // ============================================
+
+  const isSelectionEnabled = useCallback((groupId: string): boolean => {
+    const root = getRootParent(groupId);
+    return root?.assembly_selection_on !== false;
+  }, [getRootParent]);
+
+  // ============================================
+  // HELPER: Check if unique items required for group
+  // ============================================
+
+  const requiresUniqueItems = useCallback((groupId: string): boolean => {
+    const root = getRootParent(groupId);
+    return root?.unique_items !== false;
+  }, [getRootParent]);
+
+  // ============================================
+  // HELPER: Collect all guids in a group tree (for uniqueness check)
+  // ============================================
+
+  const collectTreeGuids = useCallback((rootGroupId: string): Set<string> => {
+    const guids = new Set<string>();
+    const root = getRootParent(rootGroupId);
+    if (!root) return guids;
+
+    const collectFromGroup = (gId: string) => {
+      const items = groupItems.get(gId) || [];
+      for (const item of items) {
+        if (item.guid_ifc) guids.add(item.guid_ifc.toLowerCase());
+      }
+      // Check children
+      const children = groups.filter(g => g.parent_id === gId);
+      for (const child of children) {
+        collectFromGroup(child.id);
+      }
+    };
+
+    collectFromGroup(root.id);
+    return guids;
+  }, [groups, groupItems, getRootParent]);
+
+  // ============================================
+  // HELPER: Check if selected objects are already in group
+  // ============================================
+
+  const getNewItemsCount = (groupId: string): number => {
+    const uniqueRequired = requiresUniqueItems(groupId);
+    const existingGuids = uniqueRequired ? collectTreeGuids(groupId) : collectAllGuids(groupItems);
+    return selectedObjects.filter(obj => obj.guidIfc && !existingGuids.has(obj.guidIfc.toLowerCase())).length;
+  };
+
+  // ============================================
+  // RENDER GROUP NODE
   // ============================================
 
   const renderGroupNode = (node: OrganizerGroupTree, depth: number = 0): JSX.Element => {
@@ -1160,13 +1282,16 @@ export default function OrganizerScreen({
     const items = groupItems.get(node.id) || [];
     const customFields = (node.custom_fields || []).filter(f => f.showInList);
 
-    // Filter and sort items
     const filteredItems = filterItems(items, node);
-    const sortedItems = sortItems(filteredItems, node);
+    const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
+    const newItemsCount = getNewItemsCount(node.id);
+
+    // Calculate sums for numeric/currency fields
+    const numericFields = (node.custom_fields || []).filter(f => f.type === 'number' || f.type === 'currency');
+    const selectedFilteredItems = filteredItems.filter(i => selectedItemIds.has(i.id));
 
     return (
-      <div key={node.id} className="org-group-section">
-        {/* Group Header */}
+      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''}`}
           style={{ paddingLeft: `${8 + depth * 20}px` }}
@@ -1175,55 +1300,49 @@ export default function OrganizerScreen({
           onDragLeave={handleDragLeave}
           onDrop={(e) => handleDrop(e, node.id)}
         >
-          <button
-            className="org-collapse-btn"
-            onClick={(e) => toggleGroupExpand(e, node.id)}
-          >
+          <button className="org-collapse-btn" onClick={(e) => toggleGroupExpand(e, node.id)}>
             {isExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
           </button>
 
           {node.color && (
-            <span
-              className="org-color-dot"
-              style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})` }}
-            />
+            <span className="org-color-dot" style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})` }} />
           )}
 
-          <FiFolder size={14} className="org-folder-icon" />
-
-          <span className="group-name">{node.name}</span>
+          <div className="org-group-info">
+            <span className="group-name">{node.name}</span>
+            {node.description && <span className="group-desc">{node.description}</span>}
+          </div>
 
           {node.is_private && <FiLock size={11} className="org-lock-icon" />}
 
-          <span className="org-group-count">{items.length} tk</span>
-
+          <span className="org-group-count">{node.itemCount} tk</span>
           <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
 
-          {/* Quick add button when objects selected from model */}
-          {selectedObjects.length > 0 && (
+          {selectedObjects.length > 0 && newItemsCount > 0 && isSelectionEnabled(node.id) && (
             <button
               className="org-quick-add-btn"
               onClick={(e) => { e.stopPropagation(); addSelectedToGroup(node.id); }}
-              title={`Lisa ${selectedObjects.length} valitud detaili`}
+              title={`Lisa ${newItemsCount} uut detaili`}
             >
               <FiPlus size={12} />
-              <span>{selectedObjects.length}</span>
+              <span>{newItemsCount}</span>
             </button>
           )}
 
           <button
             className={`org-menu-btn ${groupMenuId === node.id ? 'active' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              setGroupMenuId(groupMenuId === node.id ? null : node.id);
-            }}
+            onClick={(e) => { e.stopPropagation(); setGroupMenuId(groupMenuId === node.id ? null : node.id); }}
           >
             <FiMoreVertical size={14} />
           </button>
 
-          {/* Group menu dropdown */}
           {groupMenuId === node.id && (
             <div className="org-group-menu" onClick={(e) => e.stopPropagation()}>
+              {node.level < 2 && (
+                <button onClick={() => openAddSubgroupForm(node.id)}>
+                  <FiFolderPlus size={12} /> Lisa alamgrupp
+                </button>
+              )}
               <button onClick={() => openEditGroupForm(node)}>
                 <FiEdit2 size={12} /> Muuda gruppi
               </button>
@@ -1233,29 +1352,24 @@ export default function OrganizerScreen({
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
               </button>
-              {node.children.length === 0 && (
-                <button className="delete" onClick={() => deleteGroup(node.id)}>
-                  <FiTrash2 size={12} /> Kustuta
-                </button>
-              )}
+              <button className="delete" onClick={() => openDeleteConfirm(node)}>
+                <FiTrash2 size={12} /> Kustuta
+              </button>
             </div>
           )}
         </div>
 
-        {/* Expanded content: children + items */}
         {isExpanded && (
           <>
-            {/* Child groups */}
             {hasChildren && (
               <div className="org-subgroups">
                 {node.children.map(child => renderGroupNode(child, depth + 1))}
               </div>
             )}
 
-            {/* Items */}
-            {sortedItems.length > 0 && (
+            {filteredItems.length > 0 && (
               <div className="org-items" style={{ marginLeft: `${8 + depth * 20}px` }}>
-                {sortedItems.map((item, idx) => {
+                {filteredItems.map((item, idx) => {
                   const isItemSelected = selectedItemIds.has(item.id);
                   return (
                     <div
@@ -1263,7 +1377,7 @@ export default function OrganizerScreen({
                       className={`org-item ${isItemSelected ? 'selected' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, [item])}
-                      onClick={(e) => handleItemClick(e, item, sortedItems)}
+                      onClick={(e) => handleItemClick(e, item, filteredItems)}
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />
@@ -1271,12 +1385,36 @@ export default function OrganizerScreen({
                       <span className="org-item-product">{item.product_name || ''}</span>
                       <span className="org-item-weight">{formatWeight(item.cast_unit_weight)}</span>
 
-                      {/* Custom field values */}
-                      {customFields.map(field => (
-                        <span key={field.id} className="org-item-custom">
-                          {formatFieldValue(item.custom_properties?.[field.id], field)}
-                        </span>
-                      ))}
+                      {customFields.map(field => {
+                        const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
+                        const val = item.custom_properties?.[field.id];
+
+                        if (isEditing) {
+                          return (
+                            <input
+                              key={field.id}
+                              className="org-item-custom-edit"
+                              type="text"
+                              value={editingItemValue}
+                              onChange={(e) => setEditingItemValue(e.target.value)}
+                              onBlur={handleFieldEditSave}
+                              onKeyDown={handleFieldEditKeyDown}
+                              autoFocus
+                            />
+                          );
+                        }
+
+                        return (
+                          <span
+                            key={field.id}
+                            className="org-item-custom"
+                            onDoubleClick={() => handleFieldDoubleClick(item.id, field.id, String(val || ''))}
+                            title="Topeltklõps muutmiseks"
+                          >
+                            {formatFieldValue(val, field)}
+                          </span>
+                        );
+                      })}
 
                       <button
                         className="org-item-remove"
@@ -1287,6 +1425,36 @@ export default function OrganizerScreen({
                     </div>
                   );
                 })}
+
+                {/* Sums for numeric fields */}
+                {numericFields.length > 0 && (
+                  <div className="org-items-footer">
+                    {selectedFilteredItems.length > 0 && (
+                      <span className="org-selected-sum">
+                        Valitud ({selectedFilteredItems.length}):
+                        {numericFields.map(f => (
+                          <span key={f.id} className="sum-item">
+                            {f.name}: {f.type === 'currency'
+                              ? `${getNumericFieldSum(selectedFilteredItems, f.id).toFixed(2)} €`
+                              : getNumericFieldSum(selectedFilteredItems, f.id).toFixed(f.options?.decimals ?? 0)
+                            }
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    <span className="org-total-sum">
+                      Kokku:
+                      {numericFields.map(f => (
+                        <span key={f.id} className="sum-item">
+                          {f.name}: {f.type === 'currency'
+                            ? `${getNumericFieldSum(filteredItems, f.id).toFixed(2)} €`
+                            : getNumericFieldSum(filteredItems, f.id).toFixed(f.options?.decimals ?? 0)
+                          }
+                        </span>
+                      ))}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </>
@@ -1302,14 +1470,19 @@ export default function OrganizerScreen({
   const selectedGroup = selectedGroupId ? groups.find(g => g.id === selectedGroupId) : null;
 
   return (
-    <div className="organizer-screen">
+    <div className="organizer-screen" ref={containerRef}>
       {/* Header */}
       <div className="org-header">
-        <button className="org-back-btn" onClick={onBackToMenu}>
-          <FiArrowLeft size={18} />
-        </button>
+        <button className="org-back-btn" onClick={onBackToMenu}><FiArrowLeft size={18} /></button>
         <h1>Organiseeri</h1>
         <div className="org-header-actions">
+          <button
+            className="org-icon-btn"
+            onClick={toggleAllExpanded}
+            title={allExpanded ? 'Voldi kokku' : 'Voldi lahti'}
+          >
+            {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
+          </button>
           <button
             className={`org-icon-btn ${colorByGroup ? 'active' : ''}`}
             onClick={colorByGroup ? resetColors : colorModelByGroups}
@@ -1318,70 +1491,44 @@ export default function OrganizerScreen({
           >
             {colorByGroup ? <FiRefreshCw size={16} /> : <FiDroplet size={16} />}
           </button>
-          <button
-            className="org-add-btn"
-            onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}
-          >
-            <FiPlus size={16} />
-            <span>Uus grupp</span>
+          <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
+            <FiPlus size={16} /><span>Uus grupp</span>
           </button>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="org-toolbar">
+      {/* Search bar - separate row */}
+      <div className="org-search-bar">
         <div className="org-search">
           <FiSearch size={14} />
-          <input
-            type="text"
-            placeholder="Otsi..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>
-          )}
+          <input type="text" placeholder="Otsi detaile..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+          {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
         </div>
-
         <div className="org-toolbar-stats">
           <span>{groups.length} gruppi</span>
           <span className="separator">|</span>
           <span>{Array.from(groupItems.values()).flat().length} detaili</span>
         </div>
-
-        {/* Bulk edit button */}
         {selectedItemIds.size > 0 && selectedGroup && (
           <div className="org-bulk-actions">
             <span>{selectedItemIds.size} valitud</span>
-            <button onClick={() => setShowBulkEdit(true)}>
-              <FiEdit2 size={12} /> Muuda
-            </button>
-            <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}>
-              <FiTrash2 size={12} />
-            </button>
+            <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
+            <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
           </div>
         )}
       </div>
 
-      {/* Message */}
-      {message && (
-        <div className="org-message">
-          {message}
-          <button onClick={() => setMessage('')}><FiX size={14} /></button>
-        </div>
-      )}
+      {/* Toast */}
+      {toast && <div className="org-toast">{toast}</div>}
 
-      {/* Main content - single column tree */}
+      {/* Content */}
       <div className="org-content">
         {loading ? (
           <div className="org-loading">Laadin...</div>
         ) : groups.length === 0 ? (
           <div className="org-empty">
-            <FiFolder size={40} />
             <p>Gruppe pole veel loodud</p>
-            <button onClick={() => setShowGroupForm(true)}>
-              <FiPlus size={14} /> Lisa esimene grupp
-            </button>
+            <button onClick={() => setShowGroupForm(true)}><FiPlus size={14} /> Lisa esimene grupp</button>
           </div>
         ) : (
           <div className="org-tree">
@@ -1390,7 +1537,7 @@ export default function OrganizerScreen({
         )}
       </div>
 
-      {/* Bottom bar - model selection */}
+      {/* Selection bar */}
       {selectedObjects.length > 0 && !selectedGroupId && (
         <div className="org-selection-bar">
           <span>Valitud mudelist: {selectedObjects.length} detaili</span>
@@ -1407,36 +1554,35 @@ export default function OrganizerScreen({
         <div className="org-modal-overlay" onClick={() => setShowGroupForm(false)}>
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
-              <h2>{editingGroup ? 'Muuda gruppi' : 'Uus grupp'}</h2>
+              <h2>{editingGroup ? 'Muuda gruppi' : formParentId ? 'Lisa alamgrupp' : 'Uus grupp'}</h2>
               <button onClick={() => setShowGroupForm(false)}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
               <div className="org-field">
                 <label>Nimi *</label>
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Grupi nimi"
-                  autoFocus
-                />
+                <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Grupi nimi" autoFocus />
               </div>
               <div className="org-field">
                 <label>Kirjeldus</label>
-                <textarea
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="Valikuline kirjeldus"
-                  rows={2}
-                />
+                <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} placeholder="Valikuline kirjeldus" rows={2} />
               </div>
-              {!editingGroup && (
+              <div className="org-field">
+                <label>Värv</label>
+                <div className="org-color-picker">
+                  {PRESET_COLORS.map((c, i) => (
+                    <button
+                      key={i}
+                      className={`color-option ${formColor?.r === c.r && formColor?.g === c.g && formColor?.b === c.b ? 'selected' : ''}`}
+                      style={{ backgroundColor: `rgb(${c.r}, ${c.g}, ${c.b})` }}
+                      onClick={() => setFormColor(c)}
+                    />
+                  ))}
+                </div>
+              </div>
+              {!editingGroup && !formParentId && (
                 <div className="org-field">
                   <label>Ülemgrupp</label>
-                  <select
-                    value={formParentId || ''}
-                    onChange={(e) => setFormParentId(e.target.value || null)}
-                  >
+                  <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
                     <option value="">Peagrupp</option>
                     {groups.filter(g => g.level < 2).map(g => (
                       <option key={g.id} value={g.id}>{'—'.repeat(g.level + 1)} {g.name}</option>
@@ -1445,23 +1591,47 @@ export default function OrganizerScreen({
                 </div>
               )}
               <div className="org-field checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formIsPrivate}
-                    onChange={(e) => setFormIsPrivate(e.target.checked)}
-                  />
-                  Privaatne grupp
-                </label>
+                <label><input type="checkbox" checked={formIsPrivate} onChange={(e) => setFormIsPrivate(e.target.checked)} /> Privaatne grupp</label>
               </div>
+
+              {/* Settings only for main groups (not subgroups) */}
+              {!formParentId && (
+                <>
+                  <div className="org-toggle-field">
+                    <div className="org-toggle-label">
+                      <div className="title">Mudelist valimine sees</div>
+                      <div className="description">Detaile saab lisada mudelist valides. Kui väljas, saab ainult käsitsi lisada.</div>
+                    </div>
+                    <div className={`org-toggle ${formAssemblySelectionOn ? 'active' : ''}`} onClick={() => setFormAssemblySelectionOn(!formAssemblySelectionOn)} />
+                  </div>
+                  <div className="org-toggle-field">
+                    <div className="org-toggle-label">
+                      <div className="title">Unikaalsed detailid</div>
+                      <div className="description">Sama detaili ei saa lisada mitu korda sellesse gruppi või alamgruppidesse.</div>
+                    </div>
+                    <div className={`org-toggle ${formUniqueItems ? 'active' : ''}`} onClick={() => setFormUniqueItems(!formUniqueItems)} />
+                  </div>
+                </>
+              )}
+
+              {/* Show custom fields if editing */}
+              {editingGroup && editingGroup.custom_fields && editingGroup.custom_fields.length > 0 && (
+                <div className="org-field">
+                  <label>Lisaväljad</label>
+                  <div className="org-custom-fields-list">
+                    {editingGroup.custom_fields.map(f => (
+                      <div key={f.id} className="custom-field-item">
+                        <span>{f.name}</span>
+                        <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="org-modal-footer">
               <button className="cancel" onClick={() => setShowGroupForm(false)}>Tühista</button>
-              <button
-                className="save"
-                onClick={editingGroup ? updateGroup : createGroup}
-                disabled={saving || !formName.trim()}
-              >
+              <button className="save" onClick={editingGroup ? updateGroup : createGroup} disabled={saving || !formName.trim()}>
                 {saving ? 'Salvestan...' : (editingGroup ? 'Salvesta' : 'Loo grupp')}
               </button>
             </div>
@@ -1480,72 +1650,38 @@ export default function OrganizerScreen({
             <div className="org-modal-body">
               <div className="org-field">
                 <label>Välja nimi *</label>
-                <input
-                  type="text"
-                  value={fieldName}
-                  onChange={(e) => setFieldName(e.target.value)}
-                  placeholder="nt. Kommentaarid, Hind, Kogus"
-                  autoFocus
-                />
+                <input type="text" value={fieldName} onChange={(e) => setFieldName(e.target.value)} placeholder="nt. Kommentaarid, Hind" autoFocus />
               </div>
               <div className="org-field">
                 <label>Tüüp</label>
                 <select value={fieldType} onChange={(e) => setFieldType(e.target.value as CustomFieldType)}>
-                  {Object.entries(FIELD_TYPE_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
+                  {Object.entries(FIELD_TYPE_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
                 </select>
               </div>
               {fieldType === 'number' && (
                 <div className="org-field">
                   <label>Komakohti</label>
                   <select value={fieldDecimals} onChange={(e) => setFieldDecimals(Number(e.target.value))}>
-                    <option value={0}>0 (täisarv)</option>
-                    <option value={1}>1</option>
-                    <option value={2}>2</option>
-                    <option value={3}>3</option>
+                    <option value={0}>0</option><option value={1}>1</option><option value={2}>2</option><option value={3}>3</option>
                   </select>
                 </div>
               )}
               {fieldType === 'dropdown' && (
                 <div className="org-field">
                   <label>Valikud (üks rea kohta)</label>
-                  <textarea
-                    value={fieldDropdownOptions}
-                    onChange={(e) => setFieldDropdownOptions(e.target.value)}
-                    placeholder="Valik 1&#10;Valik 2&#10;Valik 3"
-                    rows={4}
-                  />
+                  <textarea value={fieldDropdownOptions} onChange={(e) => setFieldDropdownOptions(e.target.value)} rows={4} />
                 </div>
               )}
               <div className="org-field checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={fieldShowInList}
-                    onChange={(e) => setFieldShowInList(e.target.checked)}
-                  />
-                  Näita listis
-                </label>
+                <label><input type="checkbox" checked={fieldShowInList} onChange={(e) => setFieldShowInList(e.target.checked)} /> Näita listis</label>
               </div>
               <div className="org-field checkbox">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={fieldRequired}
-                    onChange={(e) => setFieldRequired(e.target.checked)}
-                  />
-                  Kohustuslik
-                </label>
+                <label><input type="checkbox" checked={fieldRequired} onChange={(e) => setFieldRequired(e.target.checked)} /> Kohustuslik</label>
               </div>
             </div>
             <div className="org-modal-footer">
               <button className="cancel" onClick={() => { setShowFieldForm(false); setEditingField(null); resetFieldForm(); }}>Tühista</button>
-              <button
-                className="save"
-                onClick={editingField ? updateCustomField : addCustomField}
-                disabled={saving || !fieldName.trim()}
-              >
+              <button className="save" onClick={editingField ? updateCustomField : addCustomField} disabled={saving || !fieldName.trim()}>
                 {saving ? 'Salvestan...' : (editingField ? 'Salvesta' : 'Lisa väli')}
               </button>
             </div>
@@ -1556,41 +1692,84 @@ export default function OrganizerScreen({
       {/* Bulk edit modal */}
       {showBulkEdit && selectedGroup && (
         <div className="org-modal-overlay" onClick={() => setShowBulkEdit(false)}>
-          <div className="org-modal" onClick={e => e.stopPropagation()}>
+          <div className="org-modal org-modal-wide" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
               <h2>Muuda {selectedItemIds.size} detaili</h2>
               <button onClick={() => setShowBulkEdit(false)}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
-              <div className="org-field">
-                <label>Väli</label>
-                <select value={bulkFieldId} onChange={(e) => setBulkFieldId(e.target.value)}>
-                  <option value="">Vali väli...</option>
-                  {(selectedGroup.custom_fields || []).map(f => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
-                </select>
-              </div>
-              {bulkFieldId && (
-                <div className="org-field">
-                  <label>Uus väärtus</label>
+              <p className="org-bulk-hint">Täida väljad, mida soovid muuta. Tühjad väljad jäetakse vahele.</p>
+              {(selectedGroup.custom_fields || []).map(f => (
+                <div key={f.id} className="org-field">
+                  <label>{f.name} <span className="field-type-hint">({FIELD_TYPE_LABELS[f.type]})</span></label>
                   <input
-                    type="text"
-                    value={bulkValue}
-                    onChange={(e) => setBulkValue(e.target.value)}
-                    placeholder="Sisesta väärtus"
+                    type={f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
+                    value={bulkFieldValues[f.id] || ''}
+                    onChange={(e) => setBulkFieldValues(prev => ({ ...prev, [f.id]: e.target.value }))}
+                    placeholder="Jäta tühjaks, et mitte muuta"
                   />
                 </div>
+              ))}
+              {(selectedGroup.custom_fields || []).length === 0 && (
+                <p className="org-empty-hint">Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst.</p>
               )}
             </div>
             <div className="org-modal-footer">
               <button className="cancel" onClick={() => setShowBulkEdit(false)}>Tühista</button>
+              <button className="save" onClick={bulkUpdateItems} disabled={saving || (selectedGroup.custom_fields || []).length === 0}>
+                {saving ? 'Salvestan...' : 'Uuenda kõik'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && deleteGroupData && (
+        <div className="org-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="org-modal" onClick={e => e.stopPropagation()}>
+            <div className="org-modal-header">
+              <h2>Kustuta grupp</h2>
+              <button onClick={() => setShowDeleteConfirm(false)}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body">
+              <div className="org-delete-confirm">
+                <div className="icon">⚠️</div>
+                <h3>Kas oled kindel?</h3>
+                <p>Sa oled kustutamas gruppi <strong>"{deleteGroupData.group.name}"</strong></p>
+
+                {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
+                  <>
+                    <div className="stats">
+                      {deleteGroupData.childCount > 0 && (
+                        <div className="stat">
+                          <div className="stat-value">{deleteGroupData.childCount}</div>
+                          <div className="stat-label">alamgruppi</div>
+                        </div>
+                      )}
+                      <div className="stat">
+                        <div className="stat-value">{deleteGroupData.itemCount}</div>
+                        <div className="stat-label">detaili</div>
+                      </div>
+                    </div>
+                    <p className="warning">Kõik alamgrupid ja detailid kustutatakse jäädavalt!</p>
+                  </>
+                )}
+
+                {deleteGroupData.childCount === 0 && deleteGroupData.itemCount === 0 && (
+                  <p>See grupp on tühi.</p>
+                )}
+              </div>
+            </div>
+            <div className="org-modal-footer">
+              <button className="cancel" onClick={() => setShowDeleteConfirm(false)}>Tühista</button>
               <button
                 className="save"
-                onClick={bulkUpdateItems}
-                disabled={saving || !bulkFieldId}
+                style={{ background: '#dc2626' }}
+                onClick={deleteGroup}
+                disabled={saving}
               >
-                {saving ? 'Salvestan...' : 'Uuenda kõik'}
+                {saving ? 'Kustutan...' : 'Kustuta kõik'}
               </button>
             </div>
           </div>

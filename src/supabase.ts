@@ -908,7 +908,8 @@ export interface OrganizerGroup {
   allowed_users: string[];          // Array of user emails who can see private group
   display_properties: GroupPropertyDisplay[];  // Max 3 properties to display
   custom_fields: CustomFieldDefinition[];  // Custom field definitions for this group
-  assembly_selection_required: boolean;  // Whether assembly selection is needed
+  assembly_selection_on: boolean;   // Whether model selection is enabled for adding items
+  unique_items: boolean;            // Whether items must be unique in group and subgroups
   color: GroupColor | null;         // For model coloring
   created_by: string;               // User email
   created_at: string;
