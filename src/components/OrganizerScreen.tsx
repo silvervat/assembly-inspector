@@ -619,11 +619,11 @@ export default function OrganizerScreen({
             const guidIfc = externalIds[i] || '';
 
             try {
-              const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
+              const props = await api.viewer.getObjectProperties(modelId, [runtimeId]);
 
               if (props && props.length > 0) {
                 const objProps = props[0];
-                let assemblyMark = '';
+                let assemblyMark = `Object_${runtimeId}`;
                 let productName = '';
                 let castUnitWeight = '';
                 let castUnitPositionCode = '';
@@ -640,110 +640,71 @@ export default function OrganizerScreen({
                 const mappingPosSetNorm = normalize(mappings.position_code_set);
                 const mappingPosPropNorm = normalize(mappings.position_code_prop);
 
-                const propertySets = objProps.propertySets || objProps.properties;
-                if (propertySets) {
-                  // Iterate over all property sets
-                  for (const [setName, setData] of Object.entries(propertySets)) {
+                // Get product name from top-level product object (like DeliveryScheduleScreen)
+                const productObj = (objProps as any)?.product;
+                if (productObj?.name) {
+                  productName = String(productObj.name);
+                }
+
+                // Check if objProps.properties exists and is array (Trimble API format)
+                const propertiesList = (objProps as any)?.properties;
+                if (propertiesList && Array.isArray(propertiesList)) {
+                  for (const pset of propertiesList) {
+                    const setName = (pset as any).set || (pset as any).name || '';
+                    const psetProps = (pset as any).properties;
+                    if (!psetProps || !Array.isArray(psetProps)) continue;
+
                     const setNameNorm = normalize(setName);
 
-                    // Handle both array format and object format
-                    if (Array.isArray(setData)) {
-                      // Array format (Trimble viewer style)
-                      for (const prop of setData as any[]) {
-                        const propNameOriginal = prop?.name || '';
-                        const propNameNorm = normalize(propNameOriginal);
-                        const propValue = prop?.displayValue ?? prop?.value;
+                    for (const prop of psetProps) {
+                      const rawName = ((prop as any).name || '');
+                      const propName = rawName.toLowerCase().replace(/[\s\/]+/g, '_');
+                      const propNameNorm = normalize(rawName);
+                      const propValue = (prop as any).displayValue ?? (prop as any).value;
 
-                        if (!propValue) continue;
+                      if (propValue === undefined || propValue === null || propValue === '') continue;
 
-                        // Assembly Mark
-                        if (!assemblyMark) {
-                          if (setNameNorm === mappingMarkSetNorm && propNameNorm === mappingMarkPropNorm) {
-                            assemblyMark = String(propValue);
-                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('mark')) {
-                            assemblyMark = String(propValue);
-                          }
-                        }
-
-                        // Weight
-                        if (!castUnitWeight) {
-                          if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
-                            castUnitWeight = String(propValue);
-                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('weight')) {
-                            castUnitWeight = String(propValue);
-                          } else if (propNameNorm === 'weight' || propNameNorm === 'kaal') {
-                            castUnitWeight = String(propValue);
-                          }
-                        }
-
-                        // Position code
-                        if (!castUnitPositionCode) {
-                          if (setNameNorm === mappingPosSetNorm && propNameNorm === mappingPosPropNorm) {
-                            castUnitPositionCode = String(propValue);
-                          } else if (propNameNorm.includes('position') && propNameNorm.includes('code')) {
-                            castUnitPositionCode = String(propValue);
-                          }
-                        }
-
-                        // Product name
-                        if (!productName) {
-                          if (propNameNorm === 'name' && setNameNorm.includes('common')) {
-                            productName = String(propValue);
-                          } else if (propNameNorm === 'productname' || propNameNorm === 'product_name') {
-                            productName = String(propValue);
-                          }
+                      // Assembly Mark - configured mapping first (normalized comparison)
+                      if (assemblyMark.startsWith('Object_')) {
+                        if (setNameNorm === mappingMarkSetNorm && propNameNorm === mappingMarkPropNorm) {
+                          assemblyMark = String(propValue);
+                        } else if (propName.includes('cast') && propName.includes('mark')) {
+                          assemblyMark = String(propValue);
+                        } else if (propName === 'assembly_pos' || propName === 'assembly_mark') {
+                          assemblyMark = String(propValue);
                         }
                       }
-                    } else if (typeof setData === 'object' && setData !== null) {
-                      // Object format
-                      for (const [propName, propValue] of Object.entries(setData as Record<string, unknown>)) {
-                        if (!propValue) continue;
-                        const propNameNorm = normalize(propName);
 
-                        // Assembly Mark
-                        if (!assemblyMark) {
-                          if (setNameNorm === mappingMarkSetNorm && propNameNorm === mappingMarkPropNorm) {
-                            assemblyMark = String(propValue);
-                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('mark')) {
-                            assemblyMark = String(propValue);
-                          }
+                      // Weight - configured mapping first (normalized comparison)
+                      if (!castUnitWeight) {
+                        if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
+                          castUnitWeight = String(propValue);
+                        } else if (propName.includes('cast') && propName.includes('weight')) {
+                          castUnitWeight = String(propValue);
+                        } else if (propName === 'weight' || propName === 'kaal') {
+                          castUnitWeight = String(propValue);
                         }
+                      }
 
-                        // Weight
-                        if (!castUnitWeight) {
-                          if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
-                            castUnitWeight = String(propValue);
-                          } else if (propNameNorm.includes('cast') && propNameNorm.includes('weight')) {
-                            castUnitWeight = String(propValue);
-                          } else if (propNameNorm === 'weight' || propNameNorm === 'kaal') {
-                            castUnitWeight = String(propValue);
-                          }
+                      // Position code - configured mapping first (normalized comparison)
+                      if (!castUnitPositionCode) {
+                        if (setNameNorm === mappingPosSetNorm && propNameNorm === mappingPosPropNorm) {
+                          castUnitPositionCode = String(propValue);
+                        } else if (propName.includes('position') && propName.includes('code')) {
+                          castUnitPositionCode = String(propValue);
                         }
+                      }
 
-                        // Position code
-                        if (!castUnitPositionCode) {
-                          if (setNameNorm === mappingPosSetNorm && propNameNorm === mappingPosPropNorm) {
-                            castUnitPositionCode = String(propValue);
-                          } else if (propNameNorm.includes('position') && propNameNorm.includes('code')) {
-                            castUnitPositionCode = String(propValue);
-                          }
-                        }
-
-                        // Product name
-                        if (!productName) {
-                          if (propNameNorm === 'name' && setNameNorm.includes('common')) {
-                            productName = String(propValue);
-                          } else if (propNameNorm === 'productname' || propNameNorm === 'product_name') {
-                            productName = String(propValue);
-                          }
+                      // Product name
+                      if (!productName) {
+                        if (propNameNorm === 'name' && setNameNorm.includes('common')) {
+                          productName = String(propValue);
+                        } else if (propName === 'product_name' || propName === 'productname') {
+                          productName = String(propValue);
                         }
                       }
                     }
                   }
-                }
-
-                if (!assemblyMark) {
-                  assemblyMark = objProps.name || `Object_${runtimeId}`;
                 }
 
                 objects.push({ modelId, runtimeId, guidIfc, assemblyMark, productName, castUnitWeight, castUnitPositionCode });
@@ -1356,6 +1317,12 @@ export default function OrganizerScreen({
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`Found ${foundObjects.size} objects in loaded models`);
 
+      // Build case-insensitive lookup for foundObjects
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of foundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
+      }
+
       // Step 3: Determine which groups to process
       let groupsToProcess: OrganizerGroup[];
       if (targetGroupId) {
@@ -1366,7 +1333,7 @@ export default function OrganizerScreen({
         groupsToProcess = groups;
       }
 
-      // Step 4: Get all grouped GUIDs with their colors
+      // Step 4: Get all grouped GUIDs with their colors (using lowercase for consistent lookup)
       const guidToColor = new Map<string, GroupColor>();
 
       for (const group of groupsToProcess) {
@@ -1397,10 +1364,12 @@ export default function OrganizerScreen({
         }
       }
 
+      console.log(`Grouped items to color: ${guidToColor.size}`);
+
       // Step 5: Build arrays for white coloring (non-grouped items) and by model
       const whiteByModel: Record<string, number[]> = {};
-      for (const [guid, found] of foundObjects) {
-        if (!guidToColor.has(guid.toLowerCase())) {
+      for (const [guidLower, found] of foundByLowercase) {
+        if (!guidToColor.has(guidLower)) {
           if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
           whiteByModel[found.modelId].push(found.runtimeId);
         }
@@ -1426,22 +1395,22 @@ export default function OrganizerScreen({
       // Step 7: Color grouped items by their group color
       // First collect by color to minimize API calls
       const colorToGuids = new Map<string, { color: GroupColor; guids: string[] }>();
-      for (const [guid, color] of guidToColor) {
+      for (const [guidLower, color] of guidToColor) {
         const colorKey = `${color.r}-${color.g}-${color.b}`;
         if (!colorToGuids.has(colorKey)) {
           colorToGuids.set(colorKey, { color, guids: [] });
         }
-        colorToGuids.get(colorKey)!.guids.push(guid);
+        colorToGuids.get(colorKey)!.guids.push(guidLower);
       }
 
       let coloredCount = 0;
       const totalToColor = guidToColor.size;
 
       for (const { color, guids } of colorToGuids.values()) {
-        // Group by model
+        // Group by model - use the lowercase lookup map
         const byModel: Record<string, number[]> = {};
-        for (const guid of guids) {
-          const found = foundObjects.get(guid) || foundObjects.get(guid.toLowerCase());
+        for (const guidLower of guids) {
+          const found = foundByLowercase.get(guidLower);
           if (found) {
             if (!byModel[found.modelId]) byModel[found.modelId] = [];
             byModel[found.modelId].push(found.runtimeId);
@@ -1689,11 +1658,15 @@ export default function OrganizerScreen({
 
       setMarkupProgress({ current: 0, total: allIds.length, action: 'removing' });
 
-      // Remove in batches
+      // Remove in batches with delay to avoid overloading
       for (let i = 0; i < allIds.length; i += MARKUP_BATCH_SIZE) {
         const batch = allIds.slice(i, i + MARKUP_BATCH_SIZE);
         await (api.markup as any)?.removeMarkups?.(batch);
         setMarkupProgress({ current: Math.min(i + MARKUP_BATCH_SIZE, allIds.length), total: allIds.length, action: 'removing' });
+        // Small delay between batches to prevent API overload
+        if (i + MARKUP_BATCH_SIZE < allIds.length) {
+          await new Promise(r => setTimeout(r, 100));
+        }
       }
 
       setMarkupProgress(null);
@@ -1900,6 +1873,20 @@ export default function OrganizerScreen({
     return selectedObjects.filter(obj => obj.guidIfc && !existingGuids.has(obj.guidIfc.toLowerCase())).length;
   };
 
+  // Count how many selected objects are already in this specific group (for removal)
+  const getExistingItemsCount = (groupId: string): number => {
+    const items = groupItems.get(groupId) || [];
+    const groupGuids = new Set(items.map(i => i.guid_ifc?.toLowerCase()).filter(Boolean));
+    return selectedObjects.filter(obj => obj.guidIfc && groupGuids.has(obj.guidIfc.toLowerCase())).length;
+  };
+
+  // Get item IDs for selected objects that are in this group
+  const getSelectedItemIdsInGroup = (groupId: string): string[] => {
+    const items = groupItems.get(groupId) || [];
+    const selectedGuids = new Set(selectedObjects.map(o => o.guidIfc?.toLowerCase()).filter(Boolean));
+    return items.filter(i => i.guid_ifc && selectedGuids.has(i.guid_ifc.toLowerCase())).map(i => i.id);
+  };
+
   // ============================================
   // RENDER GROUP NODE
   // ============================================
@@ -1919,6 +1906,7 @@ export default function OrganizerScreen({
     const filteredItems = filterItems(items, node);
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
     const newItemsCount = getNewItemsCount(node.id);
+    const existingItemsCount = getExistingItemsCount(node.id);
 
     // Calculate sums for numeric/currency fields
     const numericFields = effectiveCustomFields.filter(f => f.type === 'number' || f.type === 'currency');
@@ -1957,15 +1945,29 @@ export default function OrganizerScreen({
           <span className="org-group-count">{node.itemCount} tk</span>
           <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
 
-          {selectedObjects.length > 0 && newItemsCount > 0 && isSelectionEnabled(node.id) && (
-            <button
-              className="org-quick-add-btn"
-              onClick={(e) => { e.stopPropagation(); addSelectedToGroup(node.id); }}
-              title={`Lisa ${newItemsCount} uut detaili`}
-            >
-              <FiPlus size={12} />
-              <span>{newItemsCount}</span>
-            </button>
+          {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
+            <>
+              {newItemsCount > 0 && (
+                <button
+                  className="org-quick-add-btn"
+                  onClick={(e) => { e.stopPropagation(); addSelectedToGroup(node.id); }}
+                  title={`Lisa ${newItemsCount} uut detaili`}
+                >
+                  <FiPlus size={12} />
+                  <span>{newItemsCount}</span>
+                </button>
+              )}
+              {existingItemsCount > 0 && (
+                <button
+                  className="org-quick-add-btn org-quick-remove-btn"
+                  onClick={(e) => { e.stopPropagation(); removeItemsFromGroup(getSelectedItemIdsInGroup(node.id)); }}
+                  title={`Eemalda ${existingItemsCount} detaili`}
+                >
+                  <FiX size={12} />
+                  <span>{existingItemsCount}</span>
+                </button>
+              )}
+            </>
           )}
 
           <button

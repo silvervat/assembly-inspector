@@ -8314,6 +8314,14 @@ button.stat-toggle.off:hover {
   background: #16a34a;
 }
 
+.org-quick-remove-btn {
+  background: #dc2626;
+}
+
+.org-quick-remove-btn:hover {
+  background: #b91c1c;
+}
+
 .org-menu-btn {
   padding: 4px;
   border: none;
