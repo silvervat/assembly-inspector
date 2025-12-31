@@ -820,6 +820,10 @@ export default function OrganizerScreen({
       setShowGroupForm(false);
       setEditingGroup(null);
       await loadData();
+      // Auto-recolor if coloring mode is active
+      if (colorByGroup) {
+        setTimeout(() => colorModelByGroups(), 150);
+      }
     } catch (e) {
       console.error('Error updating group:', e);
       showToast('Viga grupi uuendamisel');
@@ -870,6 +874,10 @@ export default function OrganizerScreen({
       setShowDeleteConfirm(false);
       setDeleteGroupData(null);
       await loadData();
+      // Auto-recolor if coloring mode is active
+      if (colorByGroup) {
+        setTimeout(() => colorModelByGroups(), 150);
+      }
     } catch (e) {
       console.error('Error deleting group:', e);
       showToast('Viga grupi kustutamisel');
@@ -1082,6 +1090,10 @@ export default function OrganizerScreen({
       showToast(message);
       setExpandedGroups(prev => new Set([...prev, targetGroupId]));
       await loadData();
+      // Auto-recolor if coloring mode is active
+      if (colorByGroup) {
+        setTimeout(() => colorModelByGroups(), 150);
+      }
     } catch (e) {
       console.error('Error adding items to group:', e);
       showToast('Viga detailide lisamisel');
@@ -1102,6 +1114,10 @@ export default function OrganizerScreen({
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
       await loadData();
+      // Auto-recolor if coloring mode is active
+      if (colorByGroup) {
+        setTimeout(() => colorModelByGroups(), 150);
+      }
     } catch (e) {
       console.error('Error removing items:', e);
       showToast('Viga detailide eemaldamisel');
@@ -1181,6 +1197,10 @@ export default function OrganizerScreen({
       showToast(`${itemIds.length} detaili liigutatud`);
       setSelectedItemIds(new Set());
       await loadData();
+      // Auto-recolor if coloring mode is active
+      if (colorByGroup) {
+        setTimeout(() => colorModelByGroups(), 150);
+      }
     } catch (e) {
       console.error('Error moving items:', e);
       showToast('Viga detailide liigutamisel');
