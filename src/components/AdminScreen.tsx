@@ -4122,10 +4122,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
                         for (const id of sampleIds) {
                           try {
+                            // getHierarchyChildren returns array of child objects directly with .id property
                             const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
-                            if (children && children.length > 0 && children[0].objectRuntimeIds?.length > 0) {
+                            if (children && Array.isArray(children) && children.length > 0) {
                               objectsWithChildren++;
-                              totalChildren += children[0].objectRuntimeIds.length;
+                              totalChildren += children.length;
                             }
                           } catch { /* ignore */ }
                         }
@@ -4140,6 +4141,79 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                       });
                     } catch (e: any) {
                       updateFunctionResult("checkHierarchy", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🔲 Vali AINULT assemblyd (kellel on alamdetailid)"
+                  result={functionResults["selectOnlyAssemblies"]}
+                  onClick={async () => {
+                    updateFunctionResult("selectOnlyAssemblies", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("selectOnlyAssemblies", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      const assembliesToSelect: { modelId: string; objectRuntimeIds: number[] }[] = [];
+                      let totalChecked = 0;
+                      let assembliesFound = 0;
+                      let totalChildren = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const assemblyIds: number[] = [];
+
+                        // Check ALL objects for children
+                        for (const obj of objects) {
+                          const id = obj.id;
+                          if (!id || id <= 0) continue;
+                          totalChecked++;
+
+                          try {
+                            // getHierarchyChildren returns array of child objects directly with .id property
+                            const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
+                            if (children && Array.isArray(children) && children.length > 0) {
+                              assemblyIds.push(id);
+                              assembliesFound++;
+                              totalChildren += children.length;
+                            }
+                          } catch { /* ignore */ }
+
+                          // Progress update every 500 objects
+                          if (totalChecked % 500 === 0) {
+                            updateFunctionResult("selectOnlyAssemblies", {
+                              status: 'pending',
+                              result: `Kontrollin... ${totalChecked}/${objects.length} (leitud ${assembliesFound} assemblyt)`
+                            });
+                          }
+                        }
+
+                        if (assemblyIds.length > 0) {
+                          assembliesToSelect.push({ modelId, objectRuntimeIds: assemblyIds });
+                        }
+                      }
+
+                      if (assembliesToSelect.length === 0) {
+                        updateFunctionResult("selectOnlyAssemblies", {
+                          status: 'success',
+                          result: `Hierarhilisi assemblysid ei leitud! Kõik ${totalChecked} objekti on samal tasemel.`
+                        });
+                        return;
+                      }
+
+                      // Select only the assemblies
+                      await api.viewer.setSelection({ modelObjectIds: assembliesToSelect }, 'set');
+
+                      updateFunctionResult("selectOnlyAssemblies", {
+                        status: 'success',
+                        result: `Valitud ${assembliesFound} assemblyt (kokku ${totalChildren} alamdetaili). Kontrolli: ${totalChecked} objekti.`
+                      });
+                    } catch (e: any) {
+                      console.error('Select assemblies error:', e);
+                      updateFunctionResult("selectOnlyAssemblies", { status: 'error', error: e.message });
                     }
                   }}
                 />
