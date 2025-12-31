@@ -8590,6 +8590,98 @@ button.stat-toggle.off:hover {
   font-weight: 400;
 }
 
+/* Custom fields list in group modal */
+.org-custom-fields-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.org-custom-fields-list .custom-field-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.org-custom-fields-list .field-name {
+  flex: 1;
+  font-weight: 500;
+  font-size: 13px;
+  color: #1f2937;
+}
+
+.org-custom-fields-list .field-type {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.org-custom-fields-list .field-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.org-custom-fields-list .field-edit-btn,
+.org-custom-fields-list .field-delete-btn {
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.org-custom-fields-list .field-edit-btn:hover {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.org-custom-fields-list .field-delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.org-add-field-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed #d1d5db;
+  background: white;
+  color: #6b7280;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.org-add-field-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.org-empty-hint {
+  color: #9ca3af;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+}
+
 .org-modal-footer {
   display: flex;
   justify-content: flex-end;
@@ -8695,6 +8787,12 @@ button.stat-toggle.off:hover {
 
 .org-item-custom-edit:focus {
   box-shadow: 0 0 0 2px rgba(10, 58, 103, 0.2);
+}
+
+.org-item-dropdown {
+  cursor: pointer;
+  min-width: 80px;
+  appearance: auto;
 }
 
 /* Selected group highlight */
