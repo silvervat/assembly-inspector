@@ -4044,9 +4044,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                   onClick={async () => {
                     updateFunctionResult("selectAllFromModel", { status: 'pending' });
                     try {
-                      // Get all loaded models
-                      const loadedModels = await api.viewer.getModels('loaded');
-                      if (!loadedModels || loadedModels.length === 0) {
+                      // Get all objects from all models using getObjects() without arguments
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
                         updateFunctionResult("selectAllFromModel", { status: 'error', error: 'Mudeleid pole laetud' });
                         return;
                       }
@@ -4054,15 +4054,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                       const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
                       let totalCount = 0;
 
-                      for (const model of loadedModels) {
-                        // Get all objects from this model using getObjects
-                        const objects = await (api.viewer as any).getObjects?.(model.id);
-                        if (objects && Array.isArray(objects) && objects.length > 0) {
-                          const runtimeIds = objects.map((o: any) => o.id || o.runtimeId).filter((id: any) => id != null);
-                          if (runtimeIds.length > 0) {
-                            modelObjectIds.push({ modelId: model.id, objectRuntimeIds: runtimeIds });
-                            totalCount += runtimeIds.length;
-                          }
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                        if (runtimeIds.length > 0) {
+                          modelObjectIds.push({ modelId, objectRuntimeIds: runtimeIds });
+                          totalCount += runtimeIds.length;
                         }
                       }
 
@@ -4076,7 +4075,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
                       updateFunctionResult("selectAllFromModel", {
                         status: 'success',
-                        result: `Valitud ${totalCount} objekti ${loadedModels.length} mudelist`
+                        result: `Valitud ${totalCount} objekti ${allModelObjects.length} mudelist`
                       });
                     } catch (e: any) {
                       console.error('Select all error:', e);

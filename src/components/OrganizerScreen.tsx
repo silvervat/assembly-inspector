@@ -347,6 +347,10 @@ export default function OrganizerScreen({
   // Inline editing
   const [editingItemField, setEditingItemField] = useState<{itemId: string; fieldId: string} | null>(null);
   const [editingItemValue, setEditingItemValue] = useState('');
+  // Tags editing
+  const [editingTags, setEditingTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
   // Group form state
   const [formName, setFormName] = useState('');
@@ -1215,7 +1219,18 @@ export default function OrganizerScreen({
     const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
     if (!item) return;
 
-    const updatedProps = { ...(item.custom_properties || {}), [fieldId]: value };
+    // Try to parse JSON for arrays (tags)
+    let parsedValue: any = value;
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        parsedValue = parsed;
+      }
+    } catch {
+      // Not JSON, use as string
+    }
+
+    const updatedProps = { ...(item.custom_properties || {}), [fieldId]: parsedValue };
     try {
       await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
       await loadData();
@@ -1359,6 +1374,86 @@ export default function OrganizerScreen({
     } else if (e.key === 'Escape') {
       setEditingItemField(null);
       setEditingItemValue('');
+    }
+  };
+
+  // Get all unique tags used in the project (for suggestions)
+  const getAllProjectTags = useCallback((): string[] => {
+    const tags = new Set<string>();
+    for (const items of groupItems.values()) {
+      for (const item of items) {
+        if (item.custom_properties) {
+          for (const val of Object.values(item.custom_properties)) {
+            if (Array.isArray(val)) {
+              val.forEach(t => tags.add(String(t)));
+            }
+          }
+        }
+      }
+    }
+    return Array.from(tags).sort();
+  }, [groupItems]);
+
+  // Handle tag field double click
+  const handleTagFieldDoubleClick = (itemId: string, fieldId: string, currentValue: any) => {
+    setEditingItemField({ itemId, fieldId });
+    const tags = Array.isArray(currentValue) ? currentValue : (currentValue ? [String(currentValue)] : []);
+    setEditingTags(tags);
+    setTagInput('');
+    setShowTagSuggestions(false);
+  };
+
+  // Filter tag suggestions based on input
+  const getFilteredTagSuggestions = useCallback((input: string): string[] => {
+    if (!input.trim()) return [];
+    const allTags = getAllProjectTags();
+    const lowerInput = input.toLowerCase();
+    return allTags.filter(t =>
+      t.toLowerCase().includes(lowerInput) && !editingTags.includes(t)
+    ).slice(0, 8);
+  }, [getAllProjectTags, editingTags]);
+
+  // Add a tag
+  const addTag = (tag: string) => {
+    const trimmed = tag.trim();
+    if (trimmed && !editingTags.includes(trimmed)) {
+      setEditingTags(prev => [...prev, trimmed]);
+    }
+    setTagInput('');
+    setShowTagSuggestions(false);
+  };
+
+  // Remove a tag
+  const removeTag = (tag: string) => {
+    setEditingTags(prev => prev.filter(t => t !== tag));
+  };
+
+  // Save tags
+  const saveTagsField = async () => {
+    if (editingItemField) {
+      await updateItemField(editingItemField.itemId, editingItemField.fieldId, JSON.stringify(editingTags));
+      setEditingItemField(null);
+      setEditingTags([]);
+      setTagInput('');
+    }
+  };
+
+  // Handle tag input key down
+  const handleTagInputKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (tagInput.trim()) {
+        addTag(tagInput);
+      } else {
+        saveTagsField();
+      }
+    } else if (e.key === 'Escape') {
+      setEditingItemField(null);
+      setEditingTags([]);
+      setTagInput('');
+    } else if (e.key === 'Backspace' && !tagInput && editingTags.length > 0) {
+      // Remove last tag on backspace when input is empty
+      setEditingTags(prev => prev.slice(0, -1));
     }
   };
 
@@ -2207,6 +2302,56 @@ export default function OrganizerScreen({
                               </select>
                             );
                           }
+                          // Show tags input for tags fields
+                          if (field.type === 'tags') {
+                            const suggestions = getFilteredTagSuggestions(tagInput);
+                            return (
+                              <div key={field.id} className="org-tags-editor">
+                                <div className="org-tags-container">
+                                  {editingTags.map(tag => (
+                                    <span key={tag} className="org-tag">
+                                      {tag}
+                                      <button onClick={() => removeTag(tag)} className="org-tag-remove">×</button>
+                                    </span>
+                                  ))}
+                                  <input
+                                    type="text"
+                                    className="org-tag-input"
+                                    value={tagInput}
+                                    onChange={(e) => {
+                                      setTagInput(e.target.value);
+                                      setShowTagSuggestions(true);
+                                    }}
+                                    onKeyDown={handleTagInputKeyDown}
+                                    onBlur={() => {
+                                      // Delay to allow clicking suggestions
+                                      setTimeout(() => {
+                                        if (showTagSuggestions) {
+                                          setShowTagSuggestions(false);
+                                          if (editingTags.length > 0 || tagInput) {
+                                            saveTagsField();
+                                          } else {
+                                            setEditingItemField(null);
+                                          }
+                                        }
+                                      }, 200);
+                                    }}
+                                    placeholder="Lisa silt..."
+                                    autoFocus
+                                  />
+                                </div>
+                                {showTagSuggestions && suggestions.length > 0 && (
+                                  <div className="org-tag-suggestions">
+                                    {suggestions.map(s => (
+                                      <div key={s} className="org-tag-suggestion" onMouseDown={() => addTag(s)}>
+                                        {s}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
                           // Default input for other field types
                           return (
                             <input
@@ -2226,7 +2371,10 @@ export default function OrganizerScreen({
                           <span
                             key={field.id}
                             className="org-item-custom"
-                            onDoubleClick={() => handleFieldDoubleClick(item.id, field.id, String(val || ''))}
+                            onDoubleClick={() => field.type === 'tags'
+                              ? handleTagFieldDoubleClick(item.id, field.id, val)
+                              : handleFieldDoubleClick(item.id, field.id, String(val || ''))
+                            }
                             title="Topeltklõps muutmiseks"
                           >
                             {formatFieldValue(val, field)}
