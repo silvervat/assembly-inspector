@@ -7556,7 +7556,7 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   gap: var(--modus-spacing-xs);
-  padding: 6px 8px;
+  padding: 4px 8px;
   background: var(--modus-bg-light);
   cursor: pointer;
   transition: background 0.15s;
@@ -7608,8 +7608,8 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   gap: var(--modus-spacing-xs);
-  padding: 4px 8px;
-  padding-left: 16px;
+  padding: 3px 8px;
+  padding-left: 12px;
   background: white;
   cursor: pointer;
   transition: background 0.15s;
@@ -7672,11 +7672,11 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 6px;
+  padding: 2px 6px;
   border-bottom: 1px solid var(--modus-border-light);
   cursor: pointer;
   transition: background 0.15s;
-  min-height: 32px;
+  min-height: 24px;
 }
 
 .installation-item:hover {
