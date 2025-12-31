@@ -1225,12 +1225,16 @@ export default function OrganizerScreen({
       console.log(`Found ${foundObjects.size} objects in loaded models`);
 
       // Step 3: Get all grouped GUIDs with their colors
+      // Each group colors ONLY its own direct items (not recursive)
       const guidToColor = new Map<string, GroupColor>();
       for (const group of groups) {
         if (!group.color) continue;
-        const guids = collectGroupGuids(group.id, groups, groupItems);
-        for (const guid of guids) {
-          guidToColor.set(guid.toLowerCase(), group.color);
+        // Only get direct items from this group, not children
+        const directItems = groupItems.get(group.id) || [];
+        for (const item of directItems) {
+          if (item.guid_ifc) {
+            guidToColor.set(item.guid_ifc.toLowerCase(), group.color);
+          }
         }
       }
 
