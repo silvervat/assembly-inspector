@@ -8,7 +8,8 @@ import {
   OrganizerGroupTree,
   GroupColor,
   CustomFieldDefinition,
-  CustomFieldType
+  CustomFieldType,
+  DEFAULT_PROPERTY_MAPPINGS
 } from '../supabase';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import {
@@ -370,6 +371,7 @@ export default function OrganizerScreen({
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
   const [coloringInProgress, setColoringInProgress] = useState(false);
+  const [colorMode, setColorMode] = useState<'all' | 'parents-only'>('all'); // 'all' = each group own color, 'parents-only' = subgroups get parent color
 
   // Sorting
   const [groupSortField, setGroupSortField] = useState<SortField>('sort_order' as SortField);
@@ -600,26 +602,39 @@ export default function OrganizerScreen({
                 let castUnitPositionCode = '';
 
                 const propertySets = objProps.propertySets || objProps.properties;
-                if (propertySets && propertyMappings) {
-                  const markSet = propertySets[propertyMappings.assembly_mark_set];
+                if (propertySets) {
+                  // Use custom mappings or fall back to defaults
+                  const mappings = propertyMappings || DEFAULT_PROPERTY_MAPPINGS;
+
+                  // Assembly mark
+                  const markSet = propertySets[mappings.assembly_mark_set];
                   if (markSet) {
-                    assemblyMark = markSet[propertyMappings.assembly_mark_prop] || '';
+                    assemblyMark = markSet[mappings.assembly_mark_prop] || '';
                   }
 
-                  for (const [, setProps] of Object.entries(propertySets)) {
+                  // Product name - check multiple common locations
+                  for (const [setName, setProps] of Object.entries(propertySets)) {
                     const sp = setProps as Record<string, unknown>;
-                    if (sp['Name']) productName = String(sp['Name']);
+                    // Check common Tekla properties
+                    if (sp['Name'] && !productName) productName = String(sp['Name']);
                     if (sp['Product_name']) productName = String(sp['Product_name']);
+                    if (sp['PRODUCT_NAME']) productName = String(sp['PRODUCT_NAME']);
+                    // Also check in Tekla Common
+                    if (setName === 'Tekla Common' && sp['Name']) {
+                      productName = String(sp['Name']);
+                    }
                   }
 
-                  const weightSet = propertySets[propertyMappings.weight_set];
+                  // Weight
+                  const weightSet = propertySets[mappings.weight_set];
                   if (weightSet) {
-                    castUnitWeight = String(weightSet[propertyMappings.weight_prop] || '');
+                    castUnitWeight = String(weightSet[mappings.weight_prop] || '');
                   }
 
-                  const posSet = propertySets[propertyMappings.position_code_set];
+                  // Position code
+                  const posSet = propertySets[mappings.position_code_set];
                   if (posSet) {
-                    castUnitPositionCode = String(posSet[propertyMappings.position_code_prop] || '');
+                    castUnitPositionCode = String(posSet[mappings.position_code_prop] || '');
                   }
                 }
 
@@ -1181,11 +1196,24 @@ export default function OrganizerScreen({
   // COLORING - Database-based approach
   // ============================================
 
-  const colorModelByGroups = async () => {
+  // Helper: get all group IDs in a subtree (group + all descendants)
+  const getGroupSubtreeIds = (groupId: string): string[] => {
+    const ids = [groupId];
+    const children = groups.filter(g => g.parent_id === groupId);
+    for (const child of children) {
+      ids.push(...getGroupSubtreeIds(child.id));
+    }
+    return ids;
+  };
+
+  // Main coloring function
+  // targetGroupId: if provided, only color this group and its children
+  const colorModelByGroups = async (targetGroupId?: string) => {
     if (groups.length === 0) return;
 
     setColoringInProgress(true);
-    showToast('Värvin... Loen andmebaasist...');
+    const modeLabel = targetGroupId ? 'gruppi' : (colorMode === 'parents-only' ? 'peagruppide järgi' : 'kõiki gruppe');
+    showToast(`Värvin ${modeLabel}... Loen andmebaasist...`);
 
     try {
       // Step 1: Fetch ALL objects from Supabase with pagination
@@ -1224,21 +1252,48 @@ export default function OrganizerScreen({
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`Found ${foundObjects.size} objects in loaded models`);
 
-      // Step 3: Get all grouped GUIDs with their colors
-      // Each group colors ONLY its own direct items (not recursive)
+      // Step 3: Determine which groups to process
+      let groupsToProcess: OrganizerGroup[];
+      if (targetGroupId) {
+        // Only process target group and its children
+        const subtreeIds = new Set(getGroupSubtreeIds(targetGroupId));
+        groupsToProcess = groups.filter(g => subtreeIds.has(g.id));
+      } else {
+        groupsToProcess = groups;
+      }
+
+      // Step 4: Get all grouped GUIDs with their colors
       const guidToColor = new Map<string, GroupColor>();
-      for (const group of groups) {
-        if (!group.color) continue;
-        // Only get direct items from this group, not children
+
+      for (const group of groupsToProcess) {
+        // Determine which color to use
+        let colorToUse: GroupColor | null | undefined;
+
+        if (colorMode === 'parents-only' && !targetGroupId) {
+          // Use root parent's color for all items
+          const rootParent = getRootParent(group.id);
+          colorToUse = rootParent?.color;
+        } else {
+          // Use group's own color (or parent's if no color set)
+          colorToUse = group.color;
+          if (!colorToUse && group.parent_id) {
+            const parent = groups.find(g => g.id === group.parent_id);
+            colorToUse = parent?.color;
+          }
+        }
+
+        if (!colorToUse) continue;
+
+        // Get direct items from this group
         const directItems = groupItems.get(group.id) || [];
         for (const item of directItems) {
           if (item.guid_ifc) {
-            guidToColor.set(item.guid_ifc.toLowerCase(), group.color);
+            guidToColor.set(item.guid_ifc.toLowerCase(), colorToUse);
           }
         }
       }
 
-      // Step 4: Build arrays for white coloring (non-grouped items) and by model
+      // Step 5: Build arrays for white coloring (non-grouped items) and by model
       const whiteByModel: Record<string, number[]> = {};
       for (const [guid, found] of foundObjects) {
         if (!guidToColor.has(guid.toLowerCase())) {
@@ -1247,7 +1302,7 @@ export default function OrganizerScreen({
         }
       }
 
-      // Step 5: Color non-grouped items WHITE in batches
+      // Step 6: Color non-grouped items WHITE in batches
       const BATCH_SIZE = 5000;
       let whiteCount = 0;
       const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
@@ -1264,7 +1319,7 @@ export default function OrganizerScreen({
         }
       }
 
-      // Step 6: Color grouped items by their group color
+      // Step 7: Color grouped items by their group color
       // First collect by color to minimize API calls
       const colorToGuids = new Map<string, { color: GroupColor; guids: string[] }>();
       for (const [guid, color] of guidToColor) {
@@ -1606,6 +1661,9 @@ export default function OrganizerScreen({
               <button onClick={() => { setSelectedGroupId(node.id); setShowFieldForm(true); setGroupMenuId(null); }}>
                 <FiList size={12} /> Lisa väli
               </button>
+              <button onClick={() => { setGroupMenuId(null); colorModelByGroups(node.id); }}>
+                <FiDroplet size={12} /> Värvi see grupp
+              </button>
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
               </button>
@@ -1794,9 +1852,18 @@ export default function OrganizerScreen({
           >
             {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
           </button>
+          <select
+            className="org-color-mode-select"
+            value={colorMode}
+            onChange={(e) => setColorMode(e.target.value as 'all' | 'parents-only')}
+            title="Värvimise režiim"
+          >
+            <option value="all">Kõik grupid</option>
+            <option value="parents-only">Ainult peagrupid</option>
+          </select>
           <button
             className={`org-icon-btn ${colorByGroup ? 'active' : ''}`}
-            onClick={colorByGroup ? resetColors : colorModelByGroups}
+            onClick={() => colorByGroup ? resetColors() : colorModelByGroups()}
             disabled={coloringInProgress || groups.length === 0}
             title={colorByGroup ? 'Lähtesta värvid' : 'Värvi gruppide kaupa'}
           >

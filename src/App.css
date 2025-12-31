@@ -8025,6 +8025,21 @@ button.stat-toggle.off:hover {
   color: white;
 }
 
+.org-color-mode-select {
+  padding: 6px 8px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.org-color-mode-select option {
+  background: #0a3a67;
+  color: white;
+}
+
 .org-add-btn {
   display: flex;
   align-items: center;
