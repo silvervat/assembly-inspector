@@ -4218,6 +4218,84 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                   }}
                 />
                 <FunctionButton
+                  name="🔲 Vali ILMA hierarhiata objektid"
+                  result={functionResults["selectNoHierarchy"]}
+                  onClick={async () => {
+                    updateFunctionResult("selectNoHierarchy", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("selectNoHierarchy", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      const noChildrenToSelect: { modelId: string; objectRuntimeIds: number[] }[] = [];
+                      let totalChecked = 0;
+                      let noChildrenFound = 0;
+                      let withChildrenFound = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const noChildrenIds: number[] = [];
+
+                        // Check ALL objects for children
+                        for (const obj of objects) {
+                          const id = obj.id;
+                          if (!id || id <= 0) continue;
+                          totalChecked++;
+
+                          try {
+                            // getHierarchyChildren returns array of child objects directly with .id property
+                            const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
+                            if (children && Array.isArray(children) && children.length > 0) {
+                              withChildrenFound++;
+                            } else {
+                              noChildrenIds.push(id);
+                              noChildrenFound++;
+                            }
+                          } catch {
+                            // If error, assume no children
+                            noChildrenIds.push(id);
+                            noChildrenFound++;
+                          }
+
+                          // Progress update every 500 objects
+                          if (totalChecked % 500 === 0) {
+                            updateFunctionResult("selectNoHierarchy", {
+                              status: 'pending',
+                              result: `Kontrollin... ${totalChecked}/${objects.length} (leitud ${noChildrenFound} ilma hierarhiata)`
+                            });
+                          }
+                        }
+
+                        if (noChildrenIds.length > 0) {
+                          noChildrenToSelect.push({ modelId, objectRuntimeIds: noChildrenIds });
+                        }
+                      }
+
+                      if (noChildrenToSelect.length === 0) {
+                        updateFunctionResult("selectNoHierarchy", {
+                          status: 'success',
+                          result: `Kõik ${totalChecked} objekti omavad alamobjekte!`
+                        });
+                        return;
+                      }
+
+                      // Select only objects without children
+                      await api.viewer.setSelection({ modelObjectIds: noChildrenToSelect }, 'set');
+
+                      updateFunctionResult("selectNoHierarchy", {
+                        status: 'success',
+                        result: `Valitud ${noChildrenFound} objekti ILMA alamdetailideta (${withChildrenFound} assemblyt jäeti välja). Kokku: ${totalChecked}`
+                      });
+                    } catch (e: any) {
+                      console.error('Select no hierarchy error:', e);
+                      updateFunctionResult("selectNoHierarchy", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="Assembly Selection ON"
                   result={functionResults["Assembly Selection ON"]}
                   onClick={() => testFunction("Assembly Selection ON", () => (api.viewer as any).setSettings?.({ assemblySelection: true }))}
