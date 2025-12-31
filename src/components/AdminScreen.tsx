@@ -4296,6 +4296,170 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
                   }}
                 />
                 <FunctionButton
+                  name="🔲 Vali Revit objektid"
+                  result={functionResults["selectRevitObjects"]}
+                  onClick={async () => {
+                    updateFunctionResult("selectRevitObjects", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("selectRevitObjects", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      const revitToSelect: { modelId: string; objectRuntimeIds: number[] }[] = [];
+                      let totalChecked = 0;
+                      let revitFound = 0;
+                      let teklaFound = 0;
+                      let otherFound = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const revitIds: number[] = [];
+
+                        // Get properties for all objects in batches
+                        const batchSize = 100;
+                        for (let i = 0; i < objects.length; i += batchSize) {
+                          const batch = objects.slice(i, i + batchSize);
+                          const batchIds = batch.map((o: any) => o.id).filter((id: any) => id > 0);
+
+                          if (batchIds.length === 0) continue;
+
+                          try {
+                            const props = await (api.viewer as any).getObjectProperties(modelId, batchIds, { includeHidden: true });
+
+                            for (const prop of props) {
+                              totalChecked++;
+                              const appId = prop?.product?.applicationIdentifier?.toLowerCase() || '';
+                              const appName = prop?.product?.applicationFullName?.toLowerCase() || '';
+
+                              if (appId.includes('revit') || appName.includes('revit')) {
+                                revitIds.push(prop.id);
+                                revitFound++;
+                              } else if (appId.includes('tekla') || appName.includes('tekla')) {
+                                teklaFound++;
+                              } else {
+                                otherFound++;
+                              }
+                            }
+                          } catch { /* ignore */ }
+
+                          // Progress update
+                          updateFunctionResult("selectRevitObjects", {
+                            status: 'pending',
+                            result: `Kontrollin... ${totalChecked}/${objects.length} (Revit: ${revitFound}, Tekla: ${teklaFound})`
+                          });
+                        }
+
+                        if (revitIds.length > 0) {
+                          revitToSelect.push({ modelId, objectRuntimeIds: revitIds });
+                        }
+                      }
+
+                      if (revitToSelect.length === 0) {
+                        updateFunctionResult("selectRevitObjects", {
+                          status: 'success',
+                          result: `Revit objekte ei leitud! Tekla: ${teklaFound}, Muu: ${otherFound}`
+                        });
+                        return;
+                      }
+
+                      await api.viewer.setSelection({ modelObjectIds: revitToSelect }, 'set');
+
+                      updateFunctionResult("selectRevitObjects", {
+                        status: 'success',
+                        result: `Valitud ${revitFound} Revit objekti. (Tekla: ${teklaFound}, Muu: ${otherFound})`
+                      });
+                    } catch (e: any) {
+                      console.error('Select Revit error:', e);
+                      updateFunctionResult("selectRevitObjects", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🔲 Vali Tekla objektid"
+                  result={functionResults["selectTeklaObjects"]}
+                  onClick={async () => {
+                    updateFunctionResult("selectTeklaObjects", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("selectTeklaObjects", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      const teklaToSelect: { modelId: string; objectRuntimeIds: number[] }[] = [];
+                      let totalChecked = 0;
+                      let teklaFound = 0;
+                      let revitFound = 0;
+                      let otherFound = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const teklaIds: number[] = [];
+
+                        // Get properties for all objects in batches
+                        const batchSize = 100;
+                        for (let i = 0; i < objects.length; i += batchSize) {
+                          const batch = objects.slice(i, i + batchSize);
+                          const batchIds = batch.map((o: any) => o.id).filter((id: any) => id > 0);
+
+                          if (batchIds.length === 0) continue;
+
+                          try {
+                            const props = await (api.viewer as any).getObjectProperties(modelId, batchIds, { includeHidden: true });
+
+                            for (const prop of props) {
+                              totalChecked++;
+                              const appId = prop?.product?.applicationIdentifier?.toLowerCase() || '';
+                              const appName = prop?.product?.applicationFullName?.toLowerCase() || '';
+
+                              if (appId.includes('tekla') || appName.includes('tekla')) {
+                                teklaIds.push(prop.id);
+                                teklaFound++;
+                              } else if (appId.includes('revit') || appName.includes('revit')) {
+                                revitFound++;
+                              } else {
+                                otherFound++;
+                              }
+                            }
+                          } catch { /* ignore */ }
+
+                          // Progress update
+                          updateFunctionResult("selectTeklaObjects", {
+                            status: 'pending',
+                            result: `Kontrollin... ${totalChecked}/${objects.length} (Tekla: ${teklaFound}, Revit: ${revitFound})`
+                          });
+                        }
+
+                        if (teklaIds.length > 0) {
+                          teklaToSelect.push({ modelId, objectRuntimeIds: teklaIds });
+                        }
+                      }
+
+                      if (teklaToSelect.length === 0) {
+                        updateFunctionResult("selectTeklaObjects", {
+                          status: 'success',
+                          result: `Tekla objekte ei leitud! Revit: ${revitFound}, Muu: ${otherFound}`
+                        });
+                        return;
+                      }
+
+                      await api.viewer.setSelection({ modelObjectIds: teklaToSelect }, 'set');
+
+                      updateFunctionResult("selectTeklaObjects", {
+                        status: 'success',
+                        result: `Valitud ${teklaFound} Tekla objekti. (Revit: ${revitFound}, Muu: ${otherFound})`
+                      });
+                    } catch (e: any) {
+                      console.error('Select Tekla error:', e);
+                      updateFunctionResult("selectTeklaObjects", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="Assembly Selection ON"
                   result={functionResults["Assembly Selection ON"]}
                   onClick={() => testFunction("Assembly Selection ON", () => (api.viewer as any).setSettings?.({ assemblySelection: true }))}
