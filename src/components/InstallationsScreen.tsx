@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare } from 'react-icons/fi';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // ============================================
@@ -401,6 +401,15 @@ export default function InstallationsScreen({
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [calendarCollapsed, setCalendarCollapsed] = useState(false);
+
+  // Playback state for installed items
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [currentPlayIndex, setCurrentPlayIndex] = useState(0);
+  const [playbackSpeed] = useState(800);
+  const playbackRef = useRef<NodeJS.Timeout | null>(null);
+  const scrubberRef = useRef<HTMLDivElement>(null);
+  const [, setIsScrubbing] = useState(false);
 
   // Assembly selection state
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
@@ -1363,6 +1372,213 @@ export default function InstallationsScreen({
     }
   };
 
+  // ==================== PLAYBACK FUNCTIONS ====================
+
+  // Get all installations sorted by date (oldest first)
+  const getAllInstallationsSorted = (): Installation[] => {
+    return [...installations].sort((a, b) =>
+      new Date(a.installed_at).getTime() - new Date(b.installed_at).getTime()
+    );
+  };
+
+  // Color a single installation item
+  const colorInstallationItem = async (item: Installation, color: { r: number; g: number; b: number; a: number }) => {
+    const guid = item.guid_ifc || item.guid;
+    if (!guid) return;
+
+    try {
+      const models = await api.viewer.getModels('loaded');
+      for (const model of models || []) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+        if (runtimeIds && runtimeIds[0] && runtimeIds[0] > 0) {
+          await api.viewer.setObjectState({
+            modelObjectIds: [{ modelId: model.id, objectRuntimeIds: [runtimeIds[0]] }]
+          }, { color });
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn('Error coloring item:', e);
+    }
+  };
+
+  // Select and zoom to a single installation
+  const selectAndZoomToInstallation = async (item: Installation, skipZoom: boolean = false) => {
+    const guid = item.guid_ifc || item.guid;
+    if (!guid) return;
+
+    try {
+      const models = await api.viewer.getModels('loaded');
+      for (const model of models || []) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+        if (runtimeIds && runtimeIds[0] && runtimeIds[0] > 0) {
+          const modelObjectIds = [{ modelId: model.id, objectRuntimeIds: [runtimeIds[0]] }];
+          await api.viewer.setSelection({ modelObjectIds }, 'set');
+          if (!skipZoom) {
+            await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      console.warn('Error selecting item:', e);
+    }
+  };
+
+  // Start playback
+  const startPlayback = () => {
+    if (installations.length === 0) return;
+    setIsPlaying(true);
+    setIsPaused(false);
+    setCurrentPlayIndex(0);
+    // Reset model to white
+    api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+  };
+
+  // Pause playback
+  const pausePlayback = () => {
+    setIsPaused(true);
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+  };
+
+  // Resume playback
+  const resumePlayback = () => {
+    setIsPaused(false);
+  };
+
+  // Stop playback
+  const stopPlayback = () => {
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentPlayIndex(0);
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+  };
+
+  // Seek to position (for scrubber)
+  const seekToPosition = async (targetIndex: number) => {
+    const allItems = getAllInstallationsSorted();
+    if (targetIndex < 0) targetIndex = 0;
+    if (targetIndex >= allItems.length) targetIndex = allItems.length - 1;
+
+    // Pause during seek
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+      playbackRef.current = null;
+    }
+    setIsPaused(true);
+
+    // Reset to white first
+    await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+
+    // Color all items up to target in green
+    const itemsToColor = allItems.slice(0, targetIndex + 1);
+    const guids = itemsToColor
+      .map(item => item.guid_ifc || item.guid)
+      .filter((g): g is string => !!g);
+
+    if (guids.length > 0) {
+      const models = await api.viewer.getModels('loaded');
+      for (const model of models || []) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guids);
+        const validIds = runtimeIds?.filter((id: number) => id && id > 0) || [];
+        if (validIds.length > 0) {
+          await api.viewer.setObjectState({
+            modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validIds }]
+          }, { color: { r: 34, g: 197, b: 94, a: 255 } }); // Green
+        }
+      }
+    }
+
+    setCurrentPlayIndex(targetIndex);
+
+    // Select current item
+    const currentItem = allItems[targetIndex];
+    if (currentItem) {
+      await selectAndZoomToInstallation(currentItem, true);
+    }
+  };
+
+  // Handle scrubber mouse down
+  const handleScrubberMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsScrubbing(true);
+
+    const updatePosition = (clientX: number) => {
+      if (!scrubberRef.current) return;
+      const rect = scrubberRef.current.getBoundingClientRect();
+      const x = clientX - rect.left;
+      const percentage = Math.max(0, Math.min(1, x / rect.width));
+      const allItems = getAllInstallationsSorted();
+      const targetIndex = Math.round(percentage * (allItems.length - 1));
+      setCurrentPlayIndex(targetIndex);
+    };
+
+    // Initial position
+    if (scrubberRef.current) {
+      updatePosition(e.clientX);
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+      updatePosition(e.clientX);
+    };
+
+    const handleMouseUp = () => {
+      setIsScrubbing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      // Execute seek after mouse up
+      seekToPosition(currentPlayIndex);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Playback effect
+  useEffect(() => {
+    if (!isPlaying || isPaused) return;
+
+    const allItems = getAllInstallationsSorted();
+
+    // End of playback
+    if (currentPlayIndex >= allItems.length) {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setMessage('Esitus lõpetatud');
+      return;
+    }
+
+    const currentItem = allItems[currentPlayIndex];
+
+    const playNext = async () => {
+      // Color current item green
+      await colorInstallationItem(currentItem, { r: 34, g: 197, b: 94, a: 255 });
+      // Select and zoom
+      await selectAndZoomToInstallation(currentItem, false);
+
+      // Schedule next
+      playbackRef.current = setTimeout(() => {
+        setCurrentPlayIndex(prev => prev + 1);
+      }, playbackSpeed);
+    };
+
+    playNext();
+
+    return () => {
+      if (playbackRef.current) {
+        clearTimeout(playbackRef.current);
+      }
+    };
+  }, [isPlaying, isPaused, currentPlayIndex, playbackSpeed, installations]);
+
+  // ==================== END PLAYBACK FUNCTIONS ====================
+
   const deleteInstallation = async (id: string) => {
     if (!confirm('Kas oled kindel, et soovid selle paigalduse kustutada?')) {
       return;
@@ -1668,7 +1884,25 @@ export default function InstallationsScreen({
               }}
             />
           )}
-          <span className="date-label">{day.dayLabel}</span>
+          <span
+            className="date-label"
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              // Parse date from dayKey (YYYY-MM-DD format)
+              const dateParts = day.dayKey.split('-');
+              if (dateParts.length === 3) {
+                const year = parseInt(dateParts[0]);
+                const month = parseInt(dateParts[1]) - 1;
+                // Navigate calendar to this month and expand it
+                setCurrentMonth(new Date(year, month, 1));
+                setCalendarCollapsed(false);
+              }
+            }}
+            title="Topeltklõps avab kalendri"
+            style={{ cursor: 'pointer' }}
+          >
+            {day.dayLabel}
+          </span>
           <button
             className="date-count clickable"
             onClick={(e) => selectInstallations(day.items, e)}
@@ -2187,7 +2421,141 @@ export default function InstallationsScreen({
                 </button>
               )}
             </div>
+
+            {/* Playback Controls */}
+            <div className="playback-controls" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+              {!isPlaying ? (
+                <button
+                  onClick={startPlayback}
+                  disabled={installations.length === 0}
+                  title="Esita"
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#22c55e',
+                    color: '#fff',
+                    cursor: installations.length === 0 ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    opacity: installations.length === 0 ? 0.5 : 1
+                  }}
+                >
+                  <FiPlay size={14} />
+                </button>
+              ) : (
+                <>
+                  {isPaused ? (
+                    <button
+                      onClick={resumePlayback}
+                      title="Jätka"
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: '#22c55e',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <FiPlay size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={pausePlayback}
+                      title="Paus"
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        border: 'none',
+                        background: '#f59e0b',
+                        color: '#fff',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      <FiPause size={14} />
+                    </button>
+                  )}
+                  <button
+                    onClick={stopPlayback}
+                    title="Peata"
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      border: 'none',
+                      background: '#dc2626',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <FiSquare size={14} />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
+
+          {/* Playback Scrubber */}
+          {isPlaying && (
+            <div className="playback-scrubber" style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              background: '#f3f4f6',
+              borderBottom: '1px solid #e5e7eb'
+            }}>
+              <span style={{ fontSize: '11px', color: '#6b7280', minWidth: '30px', textAlign: 'right' }}>
+                {currentPlayIndex + 1}
+              </span>
+              <div
+                ref={scrubberRef}
+                onMouseDown={handleScrubberMouseDown}
+                style={{
+                  flex: 1,
+                  height: '6px',
+                  background: '#e5e7eb',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  position: 'relative'
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    background: '#22c55e',
+                    borderRadius: '3px',
+                    width: `${installations.length > 0 ? ((currentPlayIndex + 1) / installations.length) * 100 : 0}%`,
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{
+                    position: 'absolute',
+                    right: '-5px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    width: '10px',
+                    height: '10px',
+                    background: '#22c55e',
+                    border: '2px solid #fff',
+                    borderRadius: '50%',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.3)'
+                  }} />
+                </div>
+              </div>
+              <span style={{ fontSize: '11px', color: '#6b7280', minWidth: '30px' }}>
+                {installations.length}
+              </span>
+              {isPaused && <span style={{ fontSize: '11px', color: '#f59e0b' }}>(paus)</span>}
+            </div>
+          )}
 
           {/* Calendar */}
           <div className="installations-calendar" style={{ padding: '0 12px 12px', borderBottom: '1px solid #e5e7eb' }}>
