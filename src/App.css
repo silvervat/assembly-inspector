@@ -7124,17 +7124,21 @@ button.stat-toggle.off:hover {
 .selected-objects-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
 }
 
 .selected-object-row {
   display: flex;
   align-items: center;
-  gap: var(--modus-spacing-sm);
-  padding: 6px 8px;
+  gap: 6px;
+  padding: 3px 6px;
   background: var(--modus-bg-light);
-  border-radius: var(--modus-radius-xs);
-  font-size: var(--modus-font-size-sm);
+  font-size: 11px;
+  border-bottom: 1px dotted var(--modus-border);
+}
+
+.selected-object-row:last-child {
+  border-bottom: none;
 }
 
 .selected-object-row.installed {
@@ -7146,11 +7150,12 @@ button.stat-toggle.off:hover {
 .selected-object-row .object-mark {
   font-weight: 600;
   color: var(--modus-text-primary);
+  font-size: 11px;
 }
 
 .selected-object-row .object-product {
   color: var(--modus-text-secondary);
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .selected-object-row .installed-badge {
@@ -7169,9 +7174,9 @@ button.stat-toggle.off:hover {
 
 .selected-object-row .object-info-btn,
 .selected-object-row .object-unselect-btn {
-  padding: 4px;
+  padding: 2px;
   border: none;
-  border-radius: var(--modus-radius-xs);
+  border-radius: 3px;
   cursor: pointer;
   display: flex;
   align-items: center;
