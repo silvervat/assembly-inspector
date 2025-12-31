@@ -22,7 +22,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet,
   FiRefreshCw, FiDownload, FiLock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiArrowUp, FiArrowDown
+  FiArrowUp, FiArrowDown, FiTag
 } from 'react-icons/fi';
 
 // ============================================
@@ -61,6 +61,16 @@ const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
 // Performance constants
 const BATCH_SIZE = 100;  // Items per database batch insert
 const VIRTUAL_PAGE_SIZE = 50;  // Items to load per page
+const MARKUP_BATCH_SIZE = 50;  // Markups to create/remove per batch
+
+// Markup settings
+interface MarkupSettings {
+  includeGroupName: boolean;
+  includeCustomFields: string[]; // field IDs to include
+  applyToSubgroups: boolean;
+  separator: 'newline' | 'comma' | 'space' | 'dash';
+  useGroupColors: boolean;
+}
 
 // Sorting options
 type SortField = 'name' | 'itemCount' | 'totalWeight' | 'created_at';
@@ -385,6 +395,18 @@ export default function OrganizerScreen({
   // Batch insert progress
   const [batchProgress, setBatchProgress] = useState<{current: number; total: number} | null>(null);
 
+  // Markup state
+  const [showMarkupModal, setShowMarkupModal] = useState(false);
+  const [markupGroupId, setMarkupGroupId] = useState<string | null>(null);
+  const [markupSettings, setMarkupSettings] = useState<MarkupSettings>({
+    includeGroupName: true,
+    includeCustomFields: [],
+    applyToSubgroups: true,
+    separator: 'newline',
+    useGroupColors: true
+  });
+  const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -444,6 +466,11 @@ export default function OrganizerScreen({
           setDeleteGroupData(null);
           return;
         }
+        if (showMarkupModal) {
+          setShowMarkupModal(false);
+          setMarkupGroupId(null);
+          return;
+        }
         // Clear menu
         if (groupMenuId) {
           setGroupMenuId(null);
@@ -462,7 +489,7 @@ export default function OrganizerScreen({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, groupMenuId, selectedItemIds.size, selectedGroupId]);
+  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, groupMenuId, selectedItemIds.size, selectedGroupId]);
 
   // ============================================
   // DATA LOADING
@@ -1381,6 +1408,229 @@ export default function OrganizerScreen({
   };
 
   // ============================================
+  // MARKUPS
+  // ============================================
+
+  const getSeparator = (sep: MarkupSettings['separator']): string => {
+    switch (sep) {
+      case 'newline': return '\n';
+      case 'comma': return ', ';
+      case 'space': return ' ';
+      case 'dash': return ' - ';
+      default: return '\n';
+    }
+  };
+
+  const openMarkupModal = (groupId: string) => {
+    setMarkupGroupId(groupId);
+    // Reset settings but keep some defaults
+    setMarkupSettings({
+      includeGroupName: true,
+      includeCustomFields: [],
+      applyToSubgroups: true,
+      separator: 'newline',
+      useGroupColors: true
+    });
+    setShowMarkupModal(true);
+    setGroupMenuId(null);
+  };
+
+  const addMarkupsToGroup = async () => {
+    if (!markupGroupId) return;
+
+    const group = groups.find(g => g.id === markupGroupId);
+    if (!group) return;
+
+    setSaving(true);
+    try {
+      // Collect items from group and optionally subgroups
+      const groupsToProcess: OrganizerGroup[] = [group];
+      if (markupSettings.applyToSubgroups) {
+        const subtreeIds = getGroupSubtreeIds(markupGroupId);
+        subtreeIds.forEach(id => {
+          const g = groups.find(gr => gr.id === id);
+          if (g && g.id !== markupGroupId) groupsToProcess.push(g);
+        });
+      }
+
+      // Get all items with their group info
+      const itemsWithGroup: Array<{ item: OrganizerGroupItem; group: OrganizerGroup }> = [];
+      for (const g of groupsToProcess) {
+        const items = groupItems.get(g.id) || [];
+        items.forEach(item => itemsWithGroup.push({ item, group: g }));
+      }
+
+      if (itemsWithGroup.length === 0) {
+        showToast('Grupis pole detaile');
+        setSaving(false);
+        return;
+      }
+
+      // Get custom fields from root parent
+      const rootParent = getRootParent(markupGroupId);
+      const customFields = rootParent?.custom_fields || [];
+
+      // Fetch bounding boxes for all items
+      showToast(`Laen ${itemsWithGroup.length} detaili asukohti...`);
+
+      const guidsToFetch = itemsWithGroup.map(i => i.item.guid_ifc).filter(Boolean);
+      const foundObjects = await findObjectsInLoadedModels(api, guidsToFetch);
+
+      // Build markups to create
+      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: string }> = [];
+      const separator = getSeparator(markupSettings.separator);
+
+      let processedCount = 0;
+      for (const { item, group: itemGroup } of itemsWithGroup) {
+        if (!item.guid_ifc) continue;
+
+        const found = foundObjects.get(item.guid_ifc) || foundObjects.get(item.guid_ifc.toLowerCase());
+        if (!found) continue;
+
+        // Get bounding box for position
+        try {
+          const bboxes = await api.viewer.getObjectBoundingBoxes(found.modelId, [found.runtimeId]);
+          if (bboxes && bboxes.length > 0) {
+            const box = bboxes[0].boundingBox;
+            // Calculate center point (convert meters to mm)
+            const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+            const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+            const centerZ = box.max.z * 1000; // Top of object
+
+            // Build markup text
+            const textParts: string[] = [];
+            if (markupSettings.includeGroupName) {
+              textParts.push(itemGroup.name);
+            }
+            // Add custom field values
+            for (const fieldId of markupSettings.includeCustomFields) {
+              const field = customFields.find(f => f.id === fieldId);
+              if (field) {
+                const val = item.custom_properties?.[fieldId];
+                if (val !== undefined && val !== null && val !== '') {
+                  textParts.push(`${field.name}: ${formatFieldValue(val, field)}`);
+                }
+              }
+            }
+
+            if (textParts.length === 0) {
+              // If nothing selected, at least add assembly mark
+              textParts.push(item.assembly_mark || 'Tundmatu');
+            }
+
+            const text = textParts.join(separator);
+            const pos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
+
+            // Get color if using group colors
+            let colorHex: string | undefined;
+            if (markupSettings.useGroupColors && itemGroup.color) {
+              const { r, g, b } = itemGroup.color;
+              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+
+            markupsToCreate.push({ text, start: pos, end: pos, color: colorHex });
+          }
+        } catch (e) {
+          console.warn('Could not get bounding box for', item.guid_ifc, e);
+        }
+
+        processedCount++;
+        if (processedCount % 20 === 0) {
+          showToast(`Töötlen... ${processedCount}/${itemsWithGroup.length}`);
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        showToast('Ei leidnud detaile mudelis');
+        setSaving(false);
+        return;
+      }
+
+      // Create markups in batches
+      showToast(`Loon ${markupsToCreate.length} markupit...`);
+      setMarkupProgress({ current: 0, total: markupsToCreate.length, action: 'adding' });
+
+      const createdIds: number[] = [];
+      for (let i = 0; i < markupsToCreate.length; i += MARKUP_BATCH_SIZE) {
+        const batch = markupsToCreate.slice(i, i + MARKUP_BATCH_SIZE);
+        const batchData = batch.map(m => ({ text: m.text, start: m.start, end: m.end }));
+
+        try {
+          const result = await (api.markup as any)?.addTextMarkup?.(batchData);
+          if (Array.isArray(result)) {
+            result.forEach((r: any) => {
+              if (r?.id != null) createdIds.push(r.id);
+            });
+          }
+
+          // Apply colors
+          for (let j = 0; j < batch.length; j++) {
+            if (batch[j].color && createdIds[i + j] != null) {
+              try {
+                await (api.markup as any)?.editMarkup?.(createdIds[i + j], { color: batch[j].color });
+              } catch (e) {
+                console.warn('Could not set markup color', e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error creating markups batch:', e);
+        }
+
+        setMarkupProgress({ current: Math.min(i + MARKUP_BATCH_SIZE, markupsToCreate.length), total: markupsToCreate.length, action: 'adding' });
+      }
+
+      setMarkupProgress(null);
+      setShowMarkupModal(false);
+      setMarkupGroupId(null);
+      showToast(`✓ ${createdIds.length} markupit loodud`);
+    } catch (e) {
+      console.error('Error adding markups:', e);
+      showToast('Viga markupite loomisel');
+    } finally {
+      setSaving(false);
+      setMarkupProgress(null);
+    }
+  };
+
+  const removeAllMarkups = async () => {
+    setSaving(true);
+    try {
+      const allMarkups = await (api.markup as any)?.getTextMarkups?.();
+      if (!allMarkups || allMarkups.length === 0) {
+        showToast('Markupe pole');
+        setSaving(false);
+        return;
+      }
+
+      const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+      if (allIds.length === 0) {
+        showToast('Markupe pole');
+        setSaving(false);
+        return;
+      }
+
+      setMarkupProgress({ current: 0, total: allIds.length, action: 'removing' });
+
+      // Remove in batches
+      for (let i = 0; i < allIds.length; i += MARKUP_BATCH_SIZE) {
+        const batch = allIds.slice(i, i + MARKUP_BATCH_SIZE);
+        await (api.markup as any)?.removeMarkups?.(batch);
+        setMarkupProgress({ current: Math.min(i + MARKUP_BATCH_SIZE, allIds.length), total: allIds.length, action: 'removing' });
+      }
+
+      setMarkupProgress(null);
+      showToast(`✓ ${allIds.length} markupit eemaldatud`);
+    } catch (e) {
+      console.error('Error removing markups:', e);
+      showToast('Viga markupite eemaldamisel');
+    } finally {
+      setSaving(false);
+      setMarkupProgress(null);
+    }
+  };
+
+  // ============================================
   // GROUP/EXPAND
   // ============================================
 
@@ -1663,6 +1913,12 @@ export default function OrganizerScreen({
               </button>
               <button onClick={() => { setGroupMenuId(null); colorModelByGroups(node.id); }}>
                 <FiDroplet size={12} /> Värvi see grupp
+              </button>
+              <button onClick={() => openMarkupModal(node.id)}>
+                <FiTag size={12} /> Lisa markupid
+              </button>
+              <button onClick={() => { setGroupMenuId(null); removeAllMarkups(); }}>
+                <FiTag size={12} /> Eemalda markupid
               </button>
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
@@ -2186,6 +2442,135 @@ export default function OrganizerScreen({
           </div>
         </div>
       )}
+
+      {/* Markup modal */}
+      {showMarkupModal && markupGroupId && (() => {
+        const markupGroup = groups.find(g => g.id === markupGroupId);
+        const rootParent = getRootParent(markupGroupId);
+        const customFields = rootParent?.custom_fields || [];
+        const itemCount = (() => {
+          let count = groupItems.get(markupGroupId)?.length || 0;
+          if (markupSettings.applyToSubgroups) {
+            const subtreeIds = getGroupSubtreeIds(markupGroupId);
+            subtreeIds.forEach(id => {
+              if (id !== markupGroupId) {
+                count += groupItems.get(id)?.length || 0;
+              }
+            });
+          }
+          return count;
+        })();
+
+        return (
+          <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
+            <div className="org-modal" onClick={e => e.stopPropagation()}>
+              <div className="org-modal-header">
+                <h2>Lisa markupid</h2>
+                <button onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body">
+                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                  Grupp: <strong>{markupGroup?.name}</strong> ({itemCount} detaili)
+                </p>
+
+                <div className="org-field checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={markupSettings.includeGroupName}
+                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, includeGroupName: e.target.checked }))}
+                    />
+                    Lisa grupi nimi
+                  </label>
+                </div>
+
+                <div className="org-field checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={markupSettings.applyToSubgroups}
+                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, applyToSubgroups: e.target.checked }))}
+                    />
+                    Rakenda ka alamgruppidele
+                  </label>
+                </div>
+
+                <div className="org-field checkbox">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={markupSettings.useGroupColors}
+                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
+                    />
+                    Kasuta grupi värve
+                  </label>
+                </div>
+
+                {customFields.length > 0 && (
+                  <div className="org-field">
+                    <label>Lisa väljad:</label>
+                    <div className="org-markup-fields">
+                      {customFields.map(f => (
+                        <div key={f.id} className="org-field checkbox" style={{ marginBottom: '4px' }}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={markupSettings.includeCustomFields.includes(f.id)}
+                              onChange={(e) => {
+                                setMarkupSettings(prev => ({
+                                  ...prev,
+                                  includeCustomFields: e.target.checked
+                                    ? [...prev.includeCustomFields, f.id]
+                                    : prev.includeCustomFields.filter(id => id !== f.id)
+                                }));
+                              }}
+                            />
+                            {f.name}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="org-field">
+                  <label>Eraldaja:</label>
+                  <select
+                    value={markupSettings.separator}
+                    onChange={(e) => setMarkupSettings(prev => ({ ...prev, separator: e.target.value as MarkupSettings['separator'] }))}
+                  >
+                    <option value="newline">Uus rida</option>
+                    <option value="comma">Koma (,)</option>
+                    <option value="space">Tühik</option>
+                    <option value="dash">Kriips (-)</option>
+                  </select>
+                </div>
+
+                {markupProgress && (
+                  <div className="org-batch-progress" style={{ marginTop: '12px' }}>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${(markupProgress.current / markupProgress.total) * 100}%` }} />
+                    </div>
+                    <span>
+                      {markupProgress.action === 'adding' ? 'Loon' : 'Eemaldan'} markupe: {markupProgress.current} / {markupProgress.total}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>Tühista</button>
+                <button
+                  className="save"
+                  onClick={addMarkupsToGroup}
+                  disabled={saving || itemCount === 0}
+                >
+                  {saving ? 'Loon markupe...' : `Lisa ${itemCount} markupit`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
