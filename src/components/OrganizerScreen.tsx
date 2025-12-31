@@ -12,15 +12,16 @@ import {
 } from '../supabase';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import {
-  colorObjectsByGuid,
-  selectObjectsByGuid
+  selectObjectsByGuid,
+  findObjectsInLoadedModels
 } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiDroplet,
   FiRefreshCw, FiDownload, FiLock, FiMoreVertical, FiMove,
-  FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus
+  FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
+  FiArrowUp, FiArrowDown
 } from 'react-icons/fi';
 
 // ============================================
@@ -55,6 +56,15 @@ const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   tags: 'Sildid',
   dropdown: 'Valik'
 };
+
+// Performance constants
+const BATCH_SIZE = 100;  // Items per database batch insert
+const VIRTUAL_PAGE_SIZE = 50;  // Items to load per page
+
+// Sorting options
+type SortField = 'name' | 'itemCount' | 'totalWeight' | 'created_at';
+type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
+type SortDirection = 'asc' | 'desc';
 
 // Preset colors for group color picker
 const PRESET_COLORS: GroupColor[] = [
@@ -208,6 +218,79 @@ function getNumericFieldSum(items: OrganizerGroupItem[], fieldId: string): numbe
   }, 0);
 }
 
+// Sorting comparators
+function sortItems(items: OrganizerGroupItem[], field: ItemSortField, dir: SortDirection): OrganizerGroupItem[] {
+  const sorted = [...items].sort((a, b) => {
+    let aVal: string | number = '';
+    let bVal: string | number = '';
+
+    switch (field) {
+      case 'assembly_mark':
+        aVal = (a.assembly_mark || '').toLowerCase();
+        bVal = (b.assembly_mark || '').toLowerCase();
+        break;
+      case 'product_name':
+        aVal = (a.product_name || '').toLowerCase();
+        bVal = (b.product_name || '').toLowerCase();
+        break;
+      case 'cast_unit_weight':
+        aVal = parseFloat(a.cast_unit_weight || '0') || 0;
+        bVal = parseFloat(b.cast_unit_weight || '0') || 0;
+        break;
+      case 'sort_order':
+      default:
+        aVal = a.sort_order;
+        bVal = b.sort_order;
+        break;
+    }
+
+    if (aVal < bVal) return dir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  return sorted;
+}
+
+function sortGroupTree(nodes: OrganizerGroupTree[], field: SortField, dir: SortDirection): OrganizerGroupTree[] {
+  const sorted = [...nodes].sort((a, b) => {
+    let aVal: string | number = '';
+    let bVal: string | number = '';
+
+    switch (field) {
+      case 'name':
+        aVal = a.name.toLowerCase();
+        bVal = b.name.toLowerCase();
+        break;
+      case 'itemCount':
+        aVal = a.itemCount;
+        bVal = b.itemCount;
+        break;
+      case 'totalWeight':
+        aVal = a.totalWeight;
+        bVal = b.totalWeight;
+        break;
+      case 'created_at':
+        aVal = a.created_at;
+        bVal = b.created_at;
+        break;
+      default:
+        aVal = a.sort_order;
+        bVal = b.sort_order;
+        break;
+    }
+
+    if (aVal < bVal) return dir === 'asc' ? -1 : 1;
+    if (aVal > bVal) return dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  // Recursively sort children
+  return sorted.map(node => ({
+    ...node,
+    children: sortGroupTree(node.children, field, dir)
+  }));
+}
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -287,6 +370,18 @@ export default function OrganizerScreen({
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
   const [coloringInProgress, setColoringInProgress] = useState(false);
+
+  // Sorting
+  const [groupSortField, setGroupSortField] = useState<SortField>('sort_order' as SortField);
+  const [groupSortDir, setGroupSortDir] = useState<SortDirection>('asc');
+  const [itemSortField, setItemSortField] = useState<ItemSortField>('sort_order');
+  const [itemSortDir, setItemSortDir] = useState<SortDirection>('asc');
+
+  // Virtualization - track visible items per group
+  const [visibleItemCounts, setVisibleItemCounts] = useState<Map<string, number>>(new Map());
+
+  // Batch insert progress
+  const [batchProgress, setBatchProgress] = useState<{current: number; total: number} | null>(null);
 
   // Refs
   const lastSelectionRef = useRef<string>('');
@@ -633,28 +728,13 @@ export default function OrganizerScreen({
 
   const deleteGroup = async () => {
     if (!deleteGroupData) return;
-    const { group, childCount } = deleteGroupData;
+    const { group } = deleteGroupData;
 
     setSaving(true);
     try {
-      // Delete all child groups first (recursively)
-      const deleteChildren = async (parentId: string) => {
-        const children = groups.filter(g => g.parent_id === parentId);
-        for (const child of children) {
-          await deleteChildren(child.id);
-          // Delete items first
-          await supabase.from('organizer_group_items').delete().eq('group_id', child.id);
-          await supabase.from('organizer_groups').delete().eq('id', child.id);
-        }
-      };
-
-      if (childCount > 0) {
-        await deleteChildren(group.id);
-      }
-
-      // Delete items of the main group
-      await supabase.from('organizer_group_items').delete().eq('group_id', group.id);
-      // Delete the main group
+      // Use cascade delete - DB handles children and items automatically
+      // (organizer_groups has ON DELETE CASCADE for parent_id)
+      // (organizer_group_items has ON DELETE CASCADE for group_id)
       const { error } = await supabase.from('organizer_groups').delete().eq('id', group.id);
       if (error) throw error;
 
@@ -843,14 +923,29 @@ export default function OrganizerScreen({
         sort_order: startIndex + index
       }));
 
-      // Delete existing items in this specific group (allow overwrite within same group)
+      // Delete existing items in this specific group first (single query)
       const guids = items.map(i => i.guid_ifc).filter(Boolean);
       if (guids.length > 0) {
         await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', guids);
       }
 
-      const { error } = await supabase.from('organizer_group_items').insert(items);
-      if (error) throw error;
+      // Batch insert for large datasets
+      if (items.length > BATCH_SIZE) {
+        setBatchProgress({ current: 0, total: items.length });
+
+        for (let i = 0; i < items.length; i += BATCH_SIZE) {
+          const batch = items.slice(i, i + BATCH_SIZE);
+          const { error } = await supabase.from('organizer_group_items').insert(batch);
+          if (error) throw error;
+          setBatchProgress({ current: Math.min(i + BATCH_SIZE, items.length), total: items.length });
+        }
+
+        setBatchProgress(null);
+      } else {
+        // Small dataset - single insert
+        const { error } = await supabase.from('organizer_group_items').insert(items);
+        if (error) throw error;
+      }
 
       const message = skippedCount > 0
         ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
@@ -861,6 +956,7 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error adding items to group:', e);
       showToast('Viga detailide lisamisel');
+      setBatchProgress(null);
     } finally {
       setSaving(false);
     }
@@ -1033,29 +1129,128 @@ export default function OrganizerScreen({
   };
 
   // ============================================
-  // COLORING
+  // COLORING - Database-based approach
   // ============================================
 
   const colorModelByGroups = async () => {
     if (groups.length === 0) return;
 
     setColoringInProgress(true);
-    showToast('Värvin mudelit...');
+    showToast('Värvin... Loen andmebaasist...');
 
     try {
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+      // Step 1: Fetch ALL objects from Supabase with pagination
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
 
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          showToast('Viga andmebaasi lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        showToast(`Värvin... Loetud ${allGuids.length} objekti`);
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
+
+      // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
+      showToast('Värvin... Otsin mudelitest...');
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`Found ${foundObjects.size} objects in loaded models`);
+
+      // Step 3: Get all grouped GUIDs with their colors
+      const guidToColor = new Map<string, GroupColor>();
       for (const group of groups) {
         if (!group.color) continue;
-
         const guids = collectGroupGuids(group.id, groups, groupItems);
-        if (guids.length === 0) continue;
+        for (const guid of guids) {
+          guidToColor.set(guid.toLowerCase(), group.color);
+        }
+      }
 
-        await colorObjectsByGuid(api, guids, { r: group.color.r, g: group.color.g, b: group.color.b, a: 255 });
+      // Step 4: Build arrays for white coloring (non-grouped items) and by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of foundObjects) {
+        if (!guidToColor.has(guid.toLowerCase())) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      // Step 5: Color non-grouped items WHITE in batches
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          showToast(`Värvin valged... ${whiteCount}/${totalWhite}`);
+        }
+      }
+
+      // Step 6: Color grouped items by their group color
+      // First collect by color to minimize API calls
+      const colorToGuids = new Map<string, { color: GroupColor; guids: string[] }>();
+      for (const [guid, color] of guidToColor) {
+        const colorKey = `${color.r}-${color.g}-${color.b}`;
+        if (!colorToGuids.has(colorKey)) {
+          colorToGuids.set(colorKey, { color, guids: [] });
+        }
+        colorToGuids.get(colorKey)!.guids.push(guid);
+      }
+
+      let coloredCount = 0;
+      const totalToColor = guidToColor.size;
+
+      for (const { color, guids } of colorToGuids.values()) {
+        // Group by model
+        const byModel: Record<string, number[]> = {};
+        for (const guid of guids) {
+          const found = foundObjects.get(guid) || foundObjects.get(guid.toLowerCase());
+          if (found) {
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
+          }
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+            const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += batch.length;
+            showToast(`Värvin gruppe... ${coloredCount}/${totalToColor}`);
+          }
+        }
       }
 
       setColorByGroup(true);
-      showToast('Mudel värvitud');
+      showToast(`✓ Värvitud! Valged=${whiteCount}, Grupeeritud=${coloredCount}`);
     } catch (e) {
       console.error('Error coloring model:', e);
       showToast('Viga värvimisel');
@@ -1280,14 +1475,18 @@ export default function OrganizerScreen({
     const isDragOver = dragOverGroupId === node.id;
     const hasChildren = node.children.length > 0;
     const items = groupItems.get(node.id) || [];
-    const customFields = (node.custom_fields || []).filter(f => f.showInList);
+
+    // Get custom fields from root parent (subgroups inherit from parent)
+    const rootParent = getRootParent(node.id);
+    const effectiveCustomFields = (rootParent?.custom_fields || node.custom_fields || []);
+    const customFields = effectiveCustomFields.filter(f => f.showInList);
 
     const filteredItems = filterItems(items, node);
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
     const newItemsCount = getNewItemsCount(node.id);
 
     // Calculate sums for numeric/currency fields
-    const numericFields = (node.custom_fields || []).filter(f => f.type === 'number' || f.type === 'currency');
+    const numericFields = effectiveCustomFields.filter(f => f.type === 'number' || f.type === 'currency');
     const selectedFilteredItems = filteredItems.filter(i => selectedItemIds.has(i.id));
 
     return (
@@ -1309,8 +1508,8 @@ export default function OrganizerScreen({
           )}
 
           <div className="org-group-info">
-            <span className="group-name">{node.name}</span>
-            {node.description && <span className="group-desc">{node.description}</span>}
+            <div className="group-name">{node.name}</div>
+            {node.description && <div className="group-desc">{node.description}</div>}
           </div>
 
           {node.is_private && <FiLock size={11} className="org-lock-icon" />}
@@ -1367,9 +1566,43 @@ export default function OrganizerScreen({
               </div>
             )}
 
-            {filteredItems.length > 0 && (
+            {filteredItems.length > 0 && (() => {
+              // Sort items
+              const sortedItems = sortItems(filteredItems, itemSortField, itemSortDir);
+
+              // Virtualization - get visible count for this group
+              const visibleCount = visibleItemCounts.get(node.id) || VIRTUAL_PAGE_SIZE;
+              const displayItems = sortedItems.slice(0, visibleCount);
+              const hasMore = sortedItems.length > visibleCount;
+
+              return (
               <div className="org-items" style={{ marginLeft: `${8 + depth * 20}px` }}>
-                {filteredItems.map((item, idx) => {
+                {/* Item sort header */}
+                {sortedItems.length > 3 && (
+                  <div className="org-items-header">
+                    <span className="org-item-index">#</span>
+                    <span className="org-item-sort-col" onClick={() => {
+                      if (itemSortField === 'assembly_mark') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                      else { setItemSortField('assembly_mark'); setItemSortDir('asc'); }
+                    }}>
+                      Mark {itemSortField === 'assembly_mark' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                    </span>
+                    <span className="org-item-sort-col" onClick={() => {
+                      if (itemSortField === 'product_name') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                      else { setItemSortField('product_name'); setItemSortDir('asc'); }
+                    }}>
+                      Toode {itemSortField === 'product_name' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                    </span>
+                    <span className="org-item-sort-col" onClick={() => {
+                      if (itemSortField === 'cast_unit_weight') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                      else { setItemSortField('cast_unit_weight'); setItemSortDir('asc'); }
+                    }}>
+                      Kaal {itemSortField === 'cast_unit_weight' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                    </span>
+                  </div>
+                )}
+
+                {displayItems.map((item, idx) => {
                   const isItemSelected = selectedItemIds.has(item.id);
                   return (
                     <div
@@ -1377,7 +1610,7 @@ export default function OrganizerScreen({
                       className={`org-item ${isItemSelected ? 'selected' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, [item])}
-                      onClick={(e) => handleItemClick(e, item, filteredItems)}
+                      onClick={(e) => handleItemClick(e, item, sortedItems)}
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />
@@ -1426,6 +1659,23 @@ export default function OrganizerScreen({
                   );
                 })}
 
+                {/* Load more button for virtualization */}
+                {hasMore && (
+                  <button
+                    className="org-load-more-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setVisibleItemCounts(prev => {
+                        const next = new Map(prev);
+                        next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                        return next;
+                      });
+                    }}
+                  >
+                    Näita veel {Math.min(VIRTUAL_PAGE_SIZE, sortedItems.length - visibleCount)} (kokku {sortedItems.length})
+                  </button>
+                )}
+
                 {/* Sums for numeric fields */}
                 {numericFields.length > 0 && (
                   <div className="org-items-footer">
@@ -1456,7 +1706,8 @@ export default function OrganizerScreen({
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>
@@ -1504,6 +1755,29 @@ export default function OrganizerScreen({
           <input type="text" placeholder="Otsi detaile..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
         </div>
+
+        {/* Sorting controls */}
+        <div className="org-sort-controls">
+          <select
+            value={groupSortField}
+            onChange={(e) => setGroupSortField(e.target.value as SortField)}
+            title="Gruppide sortimine"
+          >
+            <option value="sort_order">Järjekord</option>
+            <option value="name">Nimi</option>
+            <option value="itemCount">Kogus</option>
+            <option value="totalWeight">Kaal</option>
+            <option value="created_at">Loodud</option>
+          </select>
+          <button
+            className="org-sort-dir-btn"
+            onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}
+            title={groupSortDir === 'asc' ? 'Kasvav' : 'Kahanev'}
+          >
+            {groupSortDir === 'asc' ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />}
+          </button>
+        </div>
+
         <div className="org-toolbar-stats">
           <span>{groups.length} gruppi</span>
           <span className="separator">|</span>
@@ -1517,6 +1791,16 @@ export default function OrganizerScreen({
           </div>
         )}
       </div>
+
+      {/* Batch progress */}
+      {batchProgress && (
+        <div className="org-batch-progress">
+          <div className="progress-bar">
+            <div className="progress-fill" style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }} />
+          </div>
+          <span>{batchProgress.current} / {batchProgress.total}</span>
+        </div>
+      )}
 
       {/* Toast */}
       {toast && <div className="org-toast">{toast}</div>}
@@ -1532,7 +1816,7 @@ export default function OrganizerScreen({
           </div>
         ) : (
           <div className="org-tree">
-            {groupTree.map(node => renderGroupNode(node))}
+            {sortGroupTree(groupTree, groupSortField, groupSortDir).map(node => renderGroupNode(node))}
           </div>
         )}
       </div>
@@ -1572,7 +1856,7 @@ export default function OrganizerScreen({
                   {PRESET_COLORS.map((c, i) => (
                     <button
                       key={i}
-                      className={`color-option ${formColor?.r === c.r && formColor?.g === c.g && formColor?.b === c.b ? 'selected' : ''}`}
+                      className={`org-color-option ${formColor?.r === c.r && formColor?.g === c.g && formColor?.b === c.b ? 'selected' : ''}`}
                       style={{ backgroundColor: `rgb(${c.r}, ${c.g}, ${c.b})` }}
                       onClick={() => setFormColor(c)}
                     />
