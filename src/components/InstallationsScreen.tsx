@@ -3,6 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
 import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare } from 'react-icons/fi';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -968,7 +969,7 @@ export default function InstallationsScreen({
   };
 
   // Toggle color by day - colors installations by day with unique colors
-  // Uses database-based approach like DeliveryScheduleScreen: fetch guid_ifc, convert to runtime IDs
+  // Uses EXACT same approach as DeliveryScheduleScreen: fetch guid_ifc, use findObjectsInLoadedModels
   const toggleColorByDay = async () => {
     if (coloringInProgress) return;
 
@@ -990,18 +991,13 @@ export default function InstallationsScreen({
     }
 
     setColoringInProgress(true);
-    setMessage('Värvin päevade kaupa...');
+    setMessage('Värvin... Loen Supabasest...');
 
     try {
-      // Step 1: Get all unique days from installations and generate colors
-      const uniqueDays = [...new Set(installations.map(inst => getDayKey(inst.installed_at)))];
-      const colors = generateDateColors(uniqueDays);
-      setDayColors(colors);
-
-      // Step 2: Fetch ALL guid_ifc from database and color white (like DeliveryScheduleScreen)
+      // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
       const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
       let offset = 0;
-      const allDbGuids: string[] = [];
 
       while (true) {
         const { data, error } = await supabase
@@ -1011,79 +1007,107 @@ export default function InstallationsScreen({
           .not('guid_ifc', 'is', null)
           .range(offset, offset + PAGE_SIZE - 1);
 
-        if (error || !data || data.length === 0) break;
-        allDbGuids.push(...data.map(d => d.guid_ifc));
-        offset += PAGE_SIZE;
+        if (error) {
+          console.error('Supabase error:', error);
+          setMessage('Viga Supabase lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
         if (data.length < PAGE_SIZE) break;
       }
 
-      console.log(`Loaded ${allDbGuids.length} GUIDs from database for white coloring`);
+      console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
 
-      // Step 3: Convert all database GUIDs to runtime IDs and color white
-      const models = await api.viewer.getModels();
+      // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
+      setMessage('Värvin... Otsin mudelitest...');
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`Found ${foundObjects.size} objects in loaded models`);
+
+      // Step 3: Get installed item GUIDs (for identifying which to color)
       const installedGuidSet = new Set(
         installations.map(inst => inst.guid_ifc || inst.guid).filter((g): g is string => !!g)
       );
 
-      // Color ALL objects white first (non-installed items)
-      for (const model of models) {
-        const BATCH = 2000;
-        for (let i = 0; i < allDbGuids.length; i += BATCH) {
-          const batch = allDbGuids.slice(i, i + BATCH);
-          const nonInstalledBatch = batch.filter(guid => !installedGuidSet.has(guid));
-          if (nonInstalledBatch.length === 0) continue;
-
-          try {
-            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, nonInstalledBatch);
-            const validIds = (runtimeIds || []).filter((id: number) => id && id > 0);
-            if (validIds.length > 0) {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validIds }] },
-                { color: { r: 255, g: 255, b: 255, a: 255 } }
-              );
-            }
-          } catch (e) {
-            console.warn('White coloring batch error:', e);
-          }
+      // Step 4: Build arrays for white coloring (non-installed items) and collect by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of foundObjects) {
+        if (!installedGuidSet.has(guid)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
         }
       }
 
-      // Step 4: Color installations by day
-      const itemsByDay: Record<string, Installation[]> = {};
-      for (const inst of installations) {
-        const dayKey = getDayKey(inst.installed_at);
-        if (!itemsByDay[dayKey]) itemsByDay[dayKey] = [];
-        itemsByDay[dayKey].push(inst);
+      // Step 5: Color non-installed items WHITE in batches
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+        }
       }
 
-      for (const [dayKey, items] of Object.entries(itemsByDay)) {
+      // Step 6: Generate colors for each day
+      const uniqueDays = [...new Set(installations.map(inst => getDayKey(inst.installed_at)))].sort();
+      const colors = generateDateColors(uniqueDays);
+      setDayColors(colors);
+
+      // Step 7: Build runtime ID mapping for installed items
+      const installedByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const inst of installations) {
+        const guid = inst.guid_ifc || inst.guid;
+        if (guid && foundObjects.has(guid)) {
+          const found = foundObjects.get(guid)!;
+          installedByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+        }
+      }
+
+      // Step 8: Color installations by day
+      let coloredCount = 0;
+      for (const dayKey of uniqueDays) {
+        const dayInstallations = installations.filter(inst => getDayKey(inst.installed_at) === dayKey);
+        if (dayInstallations.length === 0) continue;
+
         const color = colors[dayKey];
         if (!color) continue;
 
-        const guids = items
-          .map(item => item.guid_ifc || item.guid)
-          .filter((g): g is string => !!g && classifyGuid(g) === 'IFC');
-
-        if (guids.length === 0) continue;
-
-        for (const model of models) {
-          try {
-            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guids);
-            const validIds = (runtimeIds || []).filter((id: number) => id && id > 0);
-            if (validIds.length > 0) {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validIds }] },
-                { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-              );
-            }
-          } catch (e) {
-            console.warn('Color by day error for model:', model.id, e);
+        // Group by model
+        const byModel: Record<string, number[]> = {};
+        for (const inst of dayInstallations) {
+          const guid = inst.guid_ifc || inst.guid;
+          if (guid && installedByGuid.has(guid)) {
+            const found = installedByGuid.get(guid)!;
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
           }
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+          );
+          coloredCount += runtimeIds.length;
+          setMessage(`Värvin päevad... ${coloredCount}/${installedGuidSet.size}`);
         }
       }
 
       setColorByDay(true);
-      setMessage(`Värvitud ${uniqueDays.length} päeva`);
+      setMessage(`✓ Värvitud! Valged=${whiteCount}, Paigaldatud=${coloredCount}`);
     } catch (e) {
       console.error('Error coloring by day:', e);
       setMessage('Viga värvimisel');
@@ -1093,7 +1117,7 @@ export default function InstallationsScreen({
   };
 
   // Toggle color by month - colors installations by month with unique colors
-  // Uses database-based approach like DeliveryScheduleScreen: fetch guid_ifc, convert to runtime IDs
+  // Uses EXACT same approach as DeliveryScheduleScreen: fetch guid_ifc, use findObjectsInLoadedModels
   const toggleColorByMonth = async () => {
     if (coloringInProgress) return;
 
@@ -1115,18 +1139,13 @@ export default function InstallationsScreen({
     }
 
     setColoringInProgress(true);
-    setMessage('Värvin kuude kaupa...');
+    setMessage('Värvin... Loen Supabasest...');
 
     try {
-      // Step 1: Get all unique months from installations and generate colors
-      const uniqueMonths = [...new Set(installations.map(inst => getMonthKey(inst.installed_at)))];
-      const colors = generateMonthColors(uniqueMonths);
-      setMonthColors(colors);
-
-      // Step 2: Fetch ALL guid_ifc from database and color white (like DeliveryScheduleScreen)
+      // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
       const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
       let offset = 0;
-      const allDbGuids: string[] = [];
 
       while (true) {
         const { data, error } = await supabase
@@ -1136,79 +1155,107 @@ export default function InstallationsScreen({
           .not('guid_ifc', 'is', null)
           .range(offset, offset + PAGE_SIZE - 1);
 
-        if (error || !data || data.length === 0) break;
-        allDbGuids.push(...data.map(d => d.guid_ifc));
-        offset += PAGE_SIZE;
+        if (error) {
+          console.error('Supabase error:', error);
+          setMessage('Viga Supabase lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
         if (data.length < PAGE_SIZE) break;
       }
 
-      console.log(`Loaded ${allDbGuids.length} GUIDs from database for white coloring`);
+      console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
 
-      // Step 3: Convert all database GUIDs to runtime IDs and color white
-      const models = await api.viewer.getModels();
+      // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
+      setMessage('Värvin... Otsin mudelitest...');
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`Found ${foundObjects.size} objects in loaded models`);
+
+      // Step 3: Get installed item GUIDs (for identifying which to color)
       const installedGuidSet = new Set(
         installations.map(inst => inst.guid_ifc || inst.guid).filter((g): g is string => !!g)
       );
 
-      // Color ALL objects white first (non-installed items)
-      for (const model of models) {
-        const BATCH = 2000;
-        for (let i = 0; i < allDbGuids.length; i += BATCH) {
-          const batch = allDbGuids.slice(i, i + BATCH);
-          const nonInstalledBatch = batch.filter(guid => !installedGuidSet.has(guid));
-          if (nonInstalledBatch.length === 0) continue;
-
-          try {
-            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, nonInstalledBatch);
-            const validIds = (runtimeIds || []).filter((id: number) => id && id > 0);
-            if (validIds.length > 0) {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validIds }] },
-                { color: { r: 255, g: 255, b: 255, a: 255 } }
-              );
-            }
-          } catch (e) {
-            console.warn('White coloring batch error:', e);
-          }
+      // Step 4: Build arrays for white coloring (non-installed items) and collect by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of foundObjects) {
+        if (!installedGuidSet.has(guid)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
         }
       }
 
-      // Step 4: Color installations by month
-      const itemsByMonth: Record<string, Installation[]> = {};
-      for (const inst of installations) {
-        const monthKey = getMonthKey(inst.installed_at);
-        if (!itemsByMonth[monthKey]) itemsByMonth[monthKey] = [];
-        itemsByMonth[monthKey].push(inst);
+      // Step 5: Color non-installed items WHITE in batches
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+        }
       }
 
-      for (const [monthKey, items] of Object.entries(itemsByMonth)) {
+      // Step 6: Generate colors for each month
+      const uniqueMonths = [...new Set(installations.map(inst => getMonthKey(inst.installed_at)))].sort();
+      const colors = generateMonthColors(uniqueMonths);
+      setMonthColors(colors);
+
+      // Step 7: Build runtime ID mapping for installed items
+      const installedByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const inst of installations) {
+        const guid = inst.guid_ifc || inst.guid;
+        if (guid && foundObjects.has(guid)) {
+          const found = foundObjects.get(guid)!;
+          installedByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+        }
+      }
+
+      // Step 8: Color installations by month
+      let coloredCount = 0;
+      for (const monthKey of uniqueMonths) {
+        const monthInstallations = installations.filter(inst => getMonthKey(inst.installed_at) === monthKey);
+        if (monthInstallations.length === 0) continue;
+
         const color = colors[monthKey];
         if (!color) continue;
 
-        const guids = items
-          .map(item => item.guid_ifc || item.guid)
-          .filter((g): g is string => !!g && classifyGuid(g) === 'IFC');
-
-        if (guids.length === 0) continue;
-
-        for (const model of models) {
-          try {
-            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guids);
-            const validIds = (runtimeIds || []).filter((id: number) => id && id > 0);
-            if (validIds.length > 0) {
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId: model.id, objectRuntimeIds: validIds }] },
-                { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
-              );
-            }
-          } catch (e) {
-            console.warn('Color by month error for model:', model.id, e);
+        // Group by model
+        const byModel: Record<string, number[]> = {};
+        for (const inst of monthInstallations) {
+          const guid = inst.guid_ifc || inst.guid;
+          if (guid && installedByGuid.has(guid)) {
+            const found = installedByGuid.get(guid)!;
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
           }
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+          );
+          coloredCount += runtimeIds.length;
+          setMessage(`Värvin kuud... ${coloredCount}/${installedGuidSet.size}`);
         }
       }
 
       setColorByMonth(true);
-      setMessage(`Värvitud ${uniqueMonths.length} kuud`);
+      setMessage(`✓ Värvitud! Valged=${whiteCount}, Paigaldatud=${coloredCount}`);
     } catch (e) {
       console.error('Error coloring by month:', e);
       setMessage('Viga värvimisel');
