@@ -1844,11 +1844,11 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Check if the month is locked
+    // Check if the month is locked - no one can delete from locked month
     const monthKey = getMonthKey(installationToDelete.installed_at);
-    if (isMonthLocked(monthKey) && user.role !== 'admin') {
+    if (isMonthLocked(monthKey)) {
       const lockInfo = getMonthLockInfo(monthKey);
-      setMessage(`🔒 Kuu ${monthKey} on lukustatud (${lockInfo?.locked_by_name || lockInfo?.locked_by || 'administraatori poolt'})`);
+      setMessage(`🔒 Kuu on lukustatud - kustutamine keelatud (${lockInfo?.locked_by_name || lockInfo?.locked_by || 'administraatori poolt'})`);
       return;
     }
 
@@ -2091,7 +2091,9 @@ export default function InstallationsScreen({
 
   // Render a single installation item
   const renderInstallationItem = (inst: Installation) => {
-    const canDelete = isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase();
+    const monthKey = getMonthKey(inst.installed_at);
+    const monthLocked = isMonthLocked(monthKey);
+    const canDelete = !monthLocked && (isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase());
     const isSelected = selectedInstallationIds.has(inst.id);
     return (
       <div className="installation-item" key={inst.id}>
