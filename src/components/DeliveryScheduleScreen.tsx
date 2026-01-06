@@ -18,7 +18,7 @@ import {
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
-  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink
+  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -596,6 +596,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [menuFlipUp, setMenuFlipUp] = useState(false);
   const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
   const [quickHoveredMethod, setQuickHoveredMethod] = useState<string | null>(null); // For hover on method in quick assign
+  const [showMarkupSubmenu, setShowMarkupSubmenu] = useState<string | null>(null); // Vehicle ID for markup submenu
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -3927,6 +3928,254 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   };
 
   // ============================================
+  // MARKUPS
+  // ============================================
+
+  // Create markups for vehicle items
+  // markupType: 'position' = just sequence number
+  //            'position_mark' = sequence + assembly mark
+  //            'position_mark_weight' = sequence + assembly mark + weight
+  const createMarkupsForVehicle = async (vehicleId: string, markupType: 'position' | 'position_mark' | 'position_mark_weight') => {
+    const vehicleItems = items.filter(i => i.vehicle_id === vehicleId);
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+
+    if (vehicleItems.length === 0) {
+      setMessage('Veokis pole detaile');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('Eemaldan vanad markupid...');
+
+    try {
+      // First remove all existing markups
+      const existingMarkups = await (api.markup as any)?.getTextMarkups?.();
+      if (existingMarkups && existingMarkups.length > 0) {
+        const existingIds = existingMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+        if (existingIds.length > 0) {
+          // Remove in batches
+          const BATCH_SIZE = 50;
+          for (let i = 0; i < existingIds.length; i += BATCH_SIZE) {
+            const batch = existingIds.slice(i, i + BATCH_SIZE);
+            await (api.markup as any)?.removeMarkups?.(batch);
+          }
+        }
+      }
+
+      setMessage('Loon markupe...');
+
+      // Collect all GUIDs and find objects in loaded models
+      const guids = vehicleItems
+        .map(item => item.guid_ifc || item.guid)
+        .filter((g): g is string => !!g);
+
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      // Create lookup by GUID for items
+      const itemByGuid = new Map<string, DeliveryItem>();
+      for (const item of vehicleItems) {
+        const guid = item.guid_ifc || item.guid;
+        if (guid) itemByGuid.set(guid, item);
+      }
+
+      // Group by model
+      const itemsByModel = new Map<string, { item: DeliveryItem; idx: number; runtimeId: number }[]>();
+      for (let idx = 0; idx < vehicleItems.length; idx++) {
+        const item = vehicleItems[idx];
+        const guid = item.guid_ifc || item.guid;
+        if (!guid) continue;
+
+        const found = foundObjects.get(guid);
+        if (!found) continue;
+
+        if (!itemsByModel.has(found.modelId)) {
+          itemsByModel.set(found.modelId, []);
+        }
+        itemsByModel.get(found.modelId)!.push({ item, idx, runtimeId: found.runtimeId });
+      }
+
+      const markupsToCreate: any[] = [];
+      const currentMappings = propertyMappingsRef.current;
+
+      for (const [modelId, modelItems] of itemsByModel) {
+        const runtimeIds = modelItems.map(m => m.runtimeId);
+
+        // Get bounding boxes for positioning
+        let bBoxes: any[] = [];
+        try {
+          bBoxes = await api.viewer?.getObjectBoundingBoxes?.(modelId, runtimeIds);
+        } catch (err) {
+          console.warn('Bounding boxes error:', err);
+          bBoxes = runtimeIds.map(id => ({
+            id,
+            boundingBox: { min: { x: 0, y: 0, z: 0 }, max: { x: 1, y: 1, z: 1 } }
+          }));
+        }
+
+        // Get properties for weight if needed
+        let propsArray: any[] = [];
+        if (markupType === 'position_mark_weight') {
+          try {
+            propsArray = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+          } catch (err) {
+            console.warn('Properties error:', err);
+          }
+        }
+
+        for (let i = 0; i < modelItems.length; i++) {
+          const { item, idx, runtimeId } = modelItems[i];
+          const bBox = bBoxes.find((b: any) => b.id === runtimeId);
+          if (!bBox) continue;
+
+          const bb = bBox.boundingBox;
+          const midPoint = {
+            x: (bb.min.x + bb.max.x) / 2,
+            y: (bb.min.y + bb.max.y) / 2,
+            z: (bb.min.z + bb.max.z) / 2,
+          };
+
+          // Position in millimeters
+          const pos = {
+            positionX: midPoint.x * 1000,
+            positionY: midPoint.y * 1000,
+            positionZ: midPoint.z * 1000,
+          };
+
+          // Build markup text
+          const lines: string[] = [];
+          const positionNum = idx + 1;
+
+          // Line 1: Position number
+          lines.push(String(positionNum));
+
+          // Line 2: Assembly mark (if needed)
+          if (markupType === 'position_mark' || markupType === 'position_mark_weight') {
+            const assemblyMark = item.assembly_mark || '';
+            if (assemblyMark && !assemblyMark.startsWith('Object_')) {
+              lines.push(assemblyMark);
+            }
+          }
+
+          // Line 3: Weight (if needed)
+          if (markupType === 'position_mark_weight') {
+            // Try to get weight from item first, then from properties
+            let weight = item.cast_unit_weight;
+
+            // If not in item, try to get from model properties
+            if (!weight && propsArray[i]?.properties) {
+              const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+              for (const pset of propsArray[i].properties) {
+                const setName = (pset as any).set || (pset as any).name || '';
+                const setNameNorm = normalize(setName);
+                for (const prop of (pset.properties || [])) {
+                  const propNameNorm = normalize((prop as any).name || '');
+                  if (setNameNorm === normalize(currentMappings.weight_set) &&
+                      propNameNorm === normalize(currentMappings.weight_prop)) {
+                    weight = String((prop as any).displayValue ?? (prop as any).value ?? '');
+                    break;
+                  }
+                }
+                if (weight) break;
+              }
+            }
+
+            if (weight) {
+              // Format weight (round to 1 decimal)
+              const numWeight = parseFloat(weight);
+              if (!isNaN(numWeight)) {
+                lines.push(`${numWeight.toFixed(1)} kg`);
+              } else {
+                lines.push(weight);
+              }
+            }
+          }
+
+          const text = lines.join('\n');
+          if (!text) continue;
+
+          markupsToCreate.push({
+            text,
+            start: pos,
+            end: pos,
+          });
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setMessage('Markupe pole võimalik luua (objekte ei leitud mudelist)');
+        return;
+      }
+
+      // Create markups in batches
+      const BATCH_SIZE = 50;
+      const createdIds: number[] = [];
+      for (let i = 0; i < markupsToCreate.length; i += BATCH_SIZE) {
+        const batch = markupsToCreate.slice(i, i + BATCH_SIZE);
+        const batchData = batch.map(m => ({ text: m.text, start: m.start, end: m.end }));
+        try {
+          const result = await (api.markup as any)?.addTextMarkup?.(batchData);
+          if (Array.isArray(result)) {
+            createdIds.push(...result);
+          }
+        } catch (err) {
+          console.error('Error creating markups batch:', err);
+        }
+      }
+
+      // Set markup color (red)
+      const redColor = '#FF0000';
+      for (const id of createdIds) {
+        try {
+          await (api.markup as any)?.editMarkup?.(id, { color: redColor });
+        } catch (err) {
+          console.warn('Could not set markup color', err);
+        }
+      }
+
+      setMessage(`✅ ${createdIds.length} markupit loodud veokile ${vehicle?.vehicle_code || ''}`);
+    } catch (error: any) {
+      console.error('Error creating markups:', error);
+      setMessage(`Viga markupite loomisel: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Remove all markups
+  const removeAllMarkups = async () => {
+    setSaving(true);
+    setMessage('Eemaldan markupe...');
+    try {
+      const allMarkups = await (api.markup as any)?.getTextMarkups?.();
+      if (!allMarkups || allMarkups.length === 0) {
+        setMessage('Markupe pole');
+        setSaving(false);
+        return;
+      }
+      const allIds = allMarkups.map((m: any) => m?.id).filter((id: any) => id != null);
+      if (allIds.length === 0) {
+        setMessage('Markupe pole');
+        setSaving(false);
+        return;
+      }
+
+      // Remove in batches
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+        const batch = allIds.slice(i, i + BATCH_SIZE);
+        await (api.markup as any)?.removeMarkups?.(batch);
+      }
+
+      setMessage(`✅ ${allIds.length} markupit eemaldatud`);
+    } catch (error: any) {
+      console.error('Error removing markups:', error);
+      setMessage(`Viga markupite eemaldamisel: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================
   // EXPORT
   // ============================================
 
@@ -6148,6 +6397,50 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             }}>
                               <FiClock /> Ajalugu
                             </button>
+                            {/* Markup submenu */}
+                            <div
+                              className="context-menu-item-with-submenu"
+                              onMouseEnter={() => setShowMarkupSubmenu(vehicleId)}
+                              onMouseLeave={() => setShowMarkupSubmenu(null)}
+                            >
+                              <button>
+                                <FiTag /> Markupid
+                                <FiChevronRight style={{ marginLeft: 'auto' }} />
+                              </button>
+                              {showMarkupSubmenu === vehicleId && (
+                                <div className="context-submenu">
+                                  <button onClick={() => {
+                                    setVehicleMenuId(null);
+                                    setShowMarkupSubmenu(null);
+                                    createMarkupsForVehicle(vehicleId, 'position');
+                                  }}>
+                                    Järjekord
+                                  </button>
+                                  <button onClick={() => {
+                                    setVehicleMenuId(null);
+                                    setShowMarkupSubmenu(null);
+                                    createMarkupsForVehicle(vehicleId, 'position_mark');
+                                  }}>
+                                    Järjekord + Mark
+                                  </button>
+                                  <button onClick={() => {
+                                    setVehicleMenuId(null);
+                                    setShowMarkupSubmenu(null);
+                                    createMarkupsForVehicle(vehicleId, 'position_mark_weight');
+                                  }}>
+                                    Järjekord + Mark + Kaal
+                                  </button>
+                                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }} />
+                                  <button onClick={() => {
+                                    setVehicleMenuId(null);
+                                    setShowMarkupSubmenu(null);
+                                    removeAllMarkups();
+                                  }}>
+                                    <FiTrash2 size={12} /> Eemalda markupid
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                             {/* Add selected model items to this vehicle */}
                             {selectedObjects.length > 0 && (() => {
                               const existingGuids = new Set(items.map(i => i.guid));
