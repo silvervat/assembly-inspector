@@ -7578,13 +7578,18 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <button
               className="btn-primary"
               onClick={saveModelSelectionToSupabase}
-              disabled={modelObjectsLoading}
+              disabled={modelObjectsLoading || propertyMappingsLoading}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px' }}
             >
               {modelObjectsLoading ? (
                 <>
                   <FiRefreshCw className="spin" size={16} />
                   Salvestan...
+                </>
+              ) : propertyMappingsLoading ? (
+                <>
+                  <FiRefreshCw className="spin" size={16} />
+                  Laadin seadeid...
                 </>
               ) : (
                 <>
@@ -7597,13 +7602,18 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <button
               className="btn-primary"
               onClick={saveAllAssembliesToSupabase}
-              disabled={modelObjectsLoading}
+              disabled={modelObjectsLoading || propertyMappingsLoading}
               style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', backgroundColor: '#16a34a' }}
             >
               {modelObjectsLoading ? (
                 <>
                   <FiRefreshCw className="spin" size={16} />
                   Skanneerin...
+                </>
+              ) : propertyMappingsLoading ? (
+                <>
+                  <FiRefreshCw className="spin" size={16} />
+                  Laadin seadeid...
                 </>
               ) : (
                 <>

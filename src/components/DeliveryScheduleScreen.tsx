@@ -381,6 +381,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings, isLoading: mappingsLoading } = useProjectPropertyMappings(projectId);
 
+  // Ref to always have current propertyMappings (for use in event handlers that capture closures)
+  const propertyMappingsRef = useRef(propertyMappings);
+  useEffect(() => {
+    propertyMappingsRef.current = propertyMappings;
+  }, [propertyMappings]);
+
   // DEBUG: Log property mappings
   useEffect(() => {
     console.log('📋 Property Mappings loaded:', {
@@ -1510,12 +1516,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
                   const setNameNorm = normalize(setName);
                   const rawNameNorm = normalize(rawName);
-                  const mappingSetNorm = normalize(propertyMappings.assembly_mark_set);
-                  const mappingPropNorm = normalize(propertyMappings.assembly_mark_prop);
-                  const weightSetNorm = normalize(propertyMappings.weight_set);
-                  const weightPropNorm = normalize(propertyMappings.weight_prop);
-                  const posSetNorm = normalize(propertyMappings.position_code_set);
-                  const posPropNorm = normalize(propertyMappings.position_code_prop);
+                  // Use ref to get current mappings (not stale closure value)
+                  const currentMappings = propertyMappingsRef.current;
+                  const mappingSetNorm = normalize(currentMappings.assembly_mark_set);
+                  const mappingPropNorm = normalize(currentMappings.assembly_mark_prop);
+                  const weightSetNorm = normalize(currentMappings.weight_set);
+                  const weightPropNorm = normalize(currentMappings.weight_prop);
+                  const posSetNorm = normalize(currentMappings.position_code_set);
+                  const posPropNorm = normalize(currentMappings.position_code_prop);
 
                   // DEBUG: Log property matching
                   if (rawNameNorm.includes('ebe') || rawNameNorm.includes('pos') || rawNameNorm.includes('kaal')) {
