@@ -2390,16 +2390,26 @@
 
 .context-submenu {
   position: absolute;
-  left: 0;
-  top: 100%;
-  min-width: 160px;
+  right: calc(100% + 4px);
+  top: -4px;
+  min-width: 180px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border: 1px solid #e5e7eb;
   padding: 4px;
   z-index: 1001;
-  margin-top: 2px;
+}
+
+/* Invisible bridge for smooth mouse transition to submenu */
+.context-menu-item-with-submenu::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 16px;
+  height: 100%;
+  background: transparent;
 }
 
 .context-submenu button {

@@ -6438,8 +6438,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               onMouseLeave={() => setShowMarkupSubmenu(null)}
                             >
                               <button>
+                                <FiChevronLeft style={{ marginRight: '4px' }} />
                                 <FiTag /> Markupid
-                                <FiChevronDown style={{ marginLeft: 'auto' }} />
                               </button>
                               {showMarkupSubmenu === vehicleId && (
                                 <div className="context-submenu">
