@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare } from 'react-icons/fi';
+import { supabase, TrimbleExUser, Installation, InstallMethods, InstallMethodType, InstallationMonthLock } from '../supabase';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiList, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload } from 'react-icons/fi';
+import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
@@ -388,6 +389,10 @@ export default function InstallationsScreen({
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedInstallationIds, setSelectedInstallationIds] = useState<Set<string>>(new Set());
 
+  // Month locks state
+  const [monthLocks, setMonthLocks] = useState<Map<string, InstallationMonthLock>>(new Map());
+  const [monthMenuOpen, setMonthMenuOpen] = useState<string | null>(null);
+
   // Property discovery state
   const [showProperties, setShowProperties] = useState(false);
   const [discoveredProperties, setDiscoveredProperties] = useState<any>(null);
@@ -462,6 +467,7 @@ export default function InstallationsScreen({
   useEffect(() => {
     loadInstallations();
     loadInstalledGuids();
+    loadMonthLocks();
 
     // Enable assembly selection on mount
     const initAssemblySelection = async () => {
@@ -808,6 +814,192 @@ export default function InstallationsScreen({
     } finally {
       setLoading(false);
     }
+  };
+
+  // Load month locks from database
+  const loadMonthLocks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('installation_month_locks')
+        .select('*')
+        .eq('project_id', projectId);
+
+      if (error) throw error;
+
+      const locksMap = new Map<string, InstallationMonthLock>();
+      for (const lock of data || []) {
+        locksMap.set(lock.month_key, lock);
+      }
+      setMonthLocks(locksMap);
+    } catch (e) {
+      console.error('Error loading month locks:', e);
+    }
+  };
+
+  // Lock a month (admin only)
+  const lockMonth = async (monthKey: string) => {
+    if (user.role !== 'admin') {
+      setMessage('Ainult administraatorid saavad kuud lukustada');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('installation_month_locks')
+        .insert({
+          project_id: projectId,
+          month_key: monthKey,
+          locked_by: tcUserEmail || user.email,
+          locked_by_name: tcUserName || user.name || user.email.split('@')[0],
+          locked_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setMonthLocks(prev => new Map(prev).set(monthKey, data));
+      setMessage(`🔒 Kuu ${getMonthLabel(monthKey + '-01')} on lukustatud`);
+    } catch (e) {
+      console.error('Error locking month:', e);
+      setMessage('Viga kuu lukustamisel');
+    }
+    setMonthMenuOpen(null);
+  };
+
+  // Unlock a month (admin only)
+  const unlockMonth = async (monthKey: string) => {
+    if (user.role !== 'admin') {
+      setMessage('Ainult administraatorid saavad kuud avada');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('installation_month_locks')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('month_key', monthKey);
+
+      if (error) throw error;
+
+      setMonthLocks(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(monthKey);
+        return newMap;
+      });
+      setMessage(`🔓 Kuu ${getMonthLabel(monthKey + '-01')} on avatud`);
+    } catch (e) {
+      console.error('Error unlocking month:', e);
+      setMessage('Viga kuu avamisel');
+    }
+    setMonthMenuOpen(null);
+  };
+
+  // Export month to Excel
+  const exportMonthToExcel = (month: MonthGroup) => {
+    const wb = XLSX.utils.book_new();
+
+    // Main data sheet
+    const mainData = month.allItems.map(inst => ({
+      'Assembly Mark': inst.assembly_mark || '',
+      'Product Name': inst.product_name || '',
+      'GUID': inst.guid || '',
+      'GUID IFC': inst.guid_ifc || '',
+      'Kaal (kg)': inst.cast_unit_weight || '',
+      'Paigaldatud': new Date(inst.installed_at).toLocaleString('et-EE'),
+      'Paigaldaja': inst.installer_name || '',
+      'Meeskond': inst.team_members || '',
+      'Kirje tegi': inst.user_email || '',
+      'Meetod': inst.installation_method_name || '',
+      'Märkmed': inst.notes || '',
+      'Põhja kõrgus': inst.cast_unit_bottom_elevation || '',
+      'Üla kõrgus': inst.cast_unit_top_elevation || '',
+      'Positsioonikood': inst.cast_unit_position_code || ''
+    }));
+    const mainSheet = XLSX.utils.json_to_sheet(mainData);
+    XLSX.utils.book_append_sheet(wb, mainSheet, 'Paigaldused');
+
+    // Statistics sheet
+    const byRecorder = new Map<string, number>();
+    const byInstaller = new Map<string, number>();
+    const byMethod = new Map<string, number>();
+    const workingDays = new Set<string>();
+    let totalWeight = 0;
+
+    month.allItems.forEach(inst => {
+      const recorder = inst.user_email || 'Tundmatu';
+      byRecorder.set(recorder, (byRecorder.get(recorder) || 0) + 1);
+
+      const method = inst.installation_method_name || 'Määramata';
+      byMethod.set(method, (byMethod.get(method) || 0) + 1);
+
+      const installers = inst.team_members
+        ? inst.team_members.split(',').map(s => s.trim())
+        : [inst.installer_name || 'Tundmatu'];
+      installers.forEach(installer => {
+        byInstaller.set(installer, (byInstaller.get(installer) || 0) + 1);
+      });
+
+      workingDays.add(new Date(inst.installed_at).toDateString());
+      totalWeight += parseFloat(inst.cast_unit_weight || '0') || 0;
+    });
+
+    const statsData = [
+      { 'Statistika': 'Kokku detaile', 'Väärtus': month.allItems.length },
+      { 'Statistika': 'Tööpäevi', 'Väärtus': workingDays.size },
+      { 'Statistika': 'Paigaldajaid', 'Väärtus': byInstaller.size },
+      { 'Statistika': 'Kogukaal (kg)', 'Väärtus': Math.round(totalWeight * 10) / 10 },
+      { 'Statistika': '', 'Väärtus': '' },
+      { 'Statistika': '--- Kirjed tegid ---', 'Väärtus': '' },
+      ...Array.from(byRecorder.entries()).map(([name, count]) => ({
+        'Statistika': name.split('@')[0],
+        'Väärtus': count
+      })),
+      { 'Statistika': '', 'Väärtus': '' },
+      { 'Statistika': '--- Paigaldajad ---', 'Väärtus': '' },
+      ...Array.from(byInstaller.entries()).map(([name, count]) => ({
+        'Statistika': name,
+        'Väärtus': count
+      })),
+      { 'Statistika': '', 'Väärtus': '' },
+      { 'Statistika': '--- Meetodid ---', 'Väärtus': '' },
+      ...Array.from(byMethod.entries()).map(([name, count]) => ({
+        'Statistika': name,
+        'Väärtus': count
+      }))
+    ];
+    const statsSheet = XLSX.utils.json_to_sheet(statsData);
+    XLSX.utils.book_append_sheet(wb, statsSheet, 'Statistika');
+
+    // Days breakdown sheet
+    const daysData = month.days.flatMap(day =>
+      day.items.map(inst => ({
+        'Kuupäev': day.dayLabel,
+        'Assembly Mark': inst.assembly_mark || '',
+        'Kaal (kg)': inst.cast_unit_weight || '',
+        'Paigaldaja': inst.installer_name || '',
+        'Meeskond': inst.team_members || ''
+      }))
+    );
+    const daysSheet = XLSX.utils.json_to_sheet(daysData);
+    XLSX.utils.book_append_sheet(wb, daysSheet, 'Päevade kaupa');
+
+    // Download
+    const fileName = `Paigaldused_${month.monthLabel.replace(' ', '_')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    setMessage(`✓ Eksporditud: ${fileName}`);
+    setMonthMenuOpen(null);
+  };
+
+  // Check if a month is locked
+  const isMonthLocked = (monthKey: string): boolean => {
+    return monthLocks.has(monthKey);
+  };
+
+  // Get lock info for a month
+  const getMonthLockInfo = (monthKey: string): InstallationMonthLock | undefined => {
+    return monthLocks.get(monthKey);
   };
 
   const loadInstalledGuids = async (skipColoring = false) => {
@@ -1270,6 +1462,14 @@ export default function InstallationsScreen({
       return;
     }
 
+    // Check if the month is locked
+    const monthKey = getMonthKey(installDate);
+    if (isMonthLocked(monthKey) && user.role !== 'admin') {
+      const lockInfo = getMonthLockInfo(monthKey);
+      setMessage(`🔒 Kuu ${monthKey} on lukustatud (${lockInfo?.locked_by_name || lockInfo?.locked_by || 'administraatori poolt'})`);
+      return;
+    }
+
     // Clear previous warning
     setDuplicateWarning(null);
 
@@ -1637,13 +1837,26 @@ export default function InstallationsScreen({
   // ==================== END PLAYBACK FUNCTIONS ====================
 
   const deleteInstallation = async (id: string) => {
+    // Find the installation first to get its GUID for coloring
+    const installationToDelete = installations.find(inst => inst.id === id);
+    if (!installationToDelete) {
+      setMessage('Paigaldust ei leitud');
+      return;
+    }
+
+    // Check if the month is locked
+    const monthKey = getMonthKey(installationToDelete.installed_at);
+    if (isMonthLocked(monthKey) && user.role !== 'admin') {
+      const lockInfo = getMonthLockInfo(monthKey);
+      setMessage(`🔒 Kuu ${monthKey} on lukustatud (${lockInfo?.locked_by_name || lockInfo?.locked_by || 'administraatori poolt'})`);
+      return;
+    }
+
     if (!confirm('Kas oled kindel, et soovid selle paigalduse kustutada?')) {
       return;
     }
 
-    // Find the installation first to get its GUID for coloring
-    const installationToDelete = installations.find(inst => inst.id === id);
-    const guidToColor = installationToDelete?.guid_ifc || installationToDelete?.guid;
+    const guidToColor = installationToDelete.guid_ifc || installationToDelete.guid;
 
     try {
       const { error } = await supabase
@@ -2851,6 +3064,58 @@ export default function InstallationsScreen({
                     >
                       <FiInfo size={12} />
                     </button>
+
+                    {/* Lock status icon */}
+                    <div
+                      className="month-lock-indicator"
+                      title={isMonthLocked(month.monthKey)
+                        ? `🔒 Lukustatud\n👤 ${getMonthLockInfo(month.monthKey)?.locked_by_name || getMonthLockInfo(month.monthKey)?.locked_by || 'Tundmatu'}\n📅 ${getMonthLockInfo(month.monthKey)?.locked_at ? new Date(getMonthLockInfo(month.monthKey)!.locked_at).toLocaleString('et-EE') : ''}\n\nAvada saavad ainult administraatorid`
+                        : 'Kuu pole lukustatud'
+                      }
+                    >
+                      {isMonthLocked(month.monthKey) ? (
+                        <FiLock size={14} style={{ color: '#f44336' }} />
+                      ) : (
+                        <FiUnlock size={14} style={{ color: '#9e9e9e' }} />
+                      )}
+                    </div>
+
+                    {/* Three-dot menu */}
+                    <div className="month-menu-container" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="month-menu-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMonthMenuOpen(monthMenuOpen === month.monthKey ? null : month.monthKey);
+                        }}
+                        title="Rohkem valikuid"
+                      >
+                        <FiMoreVertical size={14} />
+                      </button>
+                      {monthMenuOpen === month.monthKey && (
+                        <div className="month-menu-dropdown">
+                          {user.role === 'admin' && (
+                            <>
+                              {isMonthLocked(month.monthKey) ? (
+                                <button onClick={() => unlockMonth(month.monthKey)}>
+                                  <FiUnlock size={14} />
+                                  <span>Ava kuu</span>
+                                </button>
+                              ) : (
+                                <button onClick={() => lockMonth(month.monthKey)}>
+                                  <FiLock size={14} />
+                                  <span>Lukusta kuu</span>
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button onClick={() => exportMonthToExcel(month)}>
+                            <FiDownload size={14} />
+                            <span>Ekspordi Excelisse</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                   {expandedMonths.has(month.monthKey) && (
                     <div className="month-group-days">
@@ -2873,15 +3138,15 @@ export default function InstallationsScreen({
 
       {/* Duplicate warning modal */}
       {duplicateWarning && duplicateWarning.length > 0 && (
-        <div className="properties-modal-overlay" onClick={() => setDuplicateWarning(null)}>
-          <div className="properties-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="properties-modal-header" style={{ background: '#ff9800' }}>
+        <div className="modal-overlay" onClick={() => setDuplicateWarning(null)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header" style={{ background: '#fff3e0' }}>
               <h3>⚠️ Juba paigaldatud detailid</h3>
-              <button className="close-modal-btn" onClick={() => setDuplicateWarning(null)}>
+              <button onClick={() => setDuplicateWarning(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
+            <div className="modal-body">
               <p style={{ marginBottom: '12px', color: '#666' }}>
                 Järgmised detailid on juba varem paigaldatud:
               </p>
@@ -2918,15 +3183,15 @@ export default function InstallationsScreen({
 
       {/* Installation Info Modal */}
       {showInstallInfo && (
-        <div className="properties-modal-overlay" onClick={() => setShowInstallInfo(null)}>
-          <div className="properties-modal install-info-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header" style={{ background: 'var(--modus-success)' }}>
-              <h3>{showInstallInfo.assembly_mark}</h3>
-              <button className="close-modal-btn" onClick={() => setShowInstallInfo(null)}>
+        <div className="modal-overlay" onClick={() => setShowInstallInfo(null)}>
+          <div className="settings-modal install-info-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🔧 {showInstallInfo.assembly_mark}</h3>
+              <button onClick={() => setShowInstallInfo(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '12px 16px' }}>
+            <div className="modal-body">
               <div className="install-info-rows">
                 <div className="install-info-row">
                   <span className="install-info-label">Paigaldatud</span>
@@ -2960,15 +3225,15 @@ export default function InstallationsScreen({
 
       {/* Properties Discovery Modal */}
       {showProperties && discoveredProperties && (
-        <div className="properties-modal-overlay" onClick={() => setShowProperties(false)}>
-          <div className="properties-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header">
-              <h3>Leitud {selectedObjects.length} objekti propertised</h3>
-              <button className="close-modal-btn" onClick={() => setShowProperties(false)}>
+        <div className="modal-overlay" onClick={() => setShowProperties(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3>📋 Leitud {selectedObjects.length} objekti propertised</h3>
+              <button onClick={() => setShowProperties(false)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content">
+            <div className="modal-body">
               {/* Object Info */}
               <div className="prop-object-info">
                 <div className="prop-info-row">
@@ -3131,15 +3396,15 @@ export default function InstallationsScreen({
 
       {/* Day Info Modal */}
       {showDayInfo && (
-        <div className="properties-modal-overlay" onClick={() => setShowDayInfo(null)}>
-          <div className="properties-modal stats-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header">
-              <h3>Päeva info: {showDayInfo.dayLabel}</h3>
-              <button className="close-modal-btn" onClick={() => setShowDayInfo(null)}>
+        <div className="modal-overlay" onClick={() => setShowDayInfo(null)}>
+          <div className="settings-modal stats-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📆 Päeva info: {showDayInfo.dayLabel}</h3>
+              <button onClick={() => setShowDayInfo(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
+            <div className="modal-body">
               {(() => {
                 // Group by recorder (user_email) and time
                 const byRecorder = new Map<string, Installation[]>();
@@ -3217,15 +3482,15 @@ export default function InstallationsScreen({
 
       {/* Month Stats Modal */}
       {showMonthStats && (
-        <div className="properties-modal-overlay" onClick={() => setShowMonthStats(null)}>
-          <div className="properties-modal stats-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header" style={{ background: '#1976d2' }}>
-              <h3>Kuu statistika: {showMonthStats.monthLabel}</h3>
-              <button className="close-modal-btn" onClick={() => setShowMonthStats(null)}>
+        <div className="modal-overlay" onClick={() => setShowMonthStats(null)}>
+          <div className="settings-modal stats-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📅 Kuu statistika: {showMonthStats.monthLabel}</h3>
+              <button onClick={() => setShowMonthStats(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
+            <div className="modal-body">
               {(() => {
                 const byRecorder = new Map<string, number>();
                 const byInstaller = new Map<string, number>();

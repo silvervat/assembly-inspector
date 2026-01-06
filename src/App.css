@@ -5372,6 +5372,62 @@ button.stat-toggle.off:hover {
   padding: var(--modus-spacing-md);
 }
 
+/* Standard modal container */
+.settings-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.settings-modal.stats-modal {
+  max-width: 450px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--modus-bg-secondary);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--modus-text-primary);
+}
+
+.modal-header button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--modus-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.modal-header button:hover {
+  background: #e5e7eb;
+  color: var(--modus-text-primary);
+}
+
+.modal-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
 .modal-content {
   background: white;
   border-radius: var(--modus-radius-lg);
@@ -7680,6 +7736,81 @@ button.stat-toggle.off:hover {
   transform: scale(1.05);
 }
 
+/* Month lock indicator */
+.month-lock-indicator {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  cursor: help;
+  margin-left: 4px;
+}
+
+.month-lock-indicator:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+/* Month three-dot menu */
+.month-menu-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.month-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+}
+
+.month-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--modus-text-primary);
+}
+
+.month-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.month-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--modus-text-primary);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.month-menu-dropdown button:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.month-menu-dropdown button:not(:last-child) {
+  border-bottom: 1px solid var(--modus-border-light);
+}
+
 .installation-date-group .date-group-items {
   padding-left: 8px;
 }
@@ -7851,9 +7982,14 @@ button.stat-toggle.off:hover {
 
 .stats-section-title {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   margin-bottom: 8px;
-  color: var(--modus-text-primary);
+  padding: 8px 12px;
+  background: var(--modus-bg-secondary);
+  border-radius: var(--modus-radius-sm);
+  color: var(--modus-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .stats-row {

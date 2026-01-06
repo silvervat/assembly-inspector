@@ -391,6 +391,17 @@ export interface InstallerStats {
   working_days: number;
 }
 
+// Kuu lukustamine (adminid saavad lukustada kuud)
+export interface InstallationMonthLock {
+  id: string;
+  project_id: string;
+  month_key: string;            // Format: "2026-01"
+  locked_by: string;            // User email who locked
+  locked_by_name?: string;      // User display name
+  locked_at: string;            // Timestamp
+  created_at: string;
+}
+
 // ============================================
 // PAIGALDUSGRAAFIK (Installation Schedule v2.10.0)
 // ============================================

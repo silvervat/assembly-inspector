@@ -141,6 +141,21 @@ Kvaliteedikontrolli kirjed.
 | `inspector_email` | TEXT | Inspektori email |
 | `created_at` | TIMESTAMP | Loomise aeg |
 
+### 9. installation_month_locks
+Paigalduste kuu lukustused - võimaldab administraatoritel lukustada kuu, et tavakasutajad ei saaks lisada/kustutada paigaldusi.
+
+| Veerg | Tüüp | Kirjeldus |
+|-------|------|-----------|
+| `id` | UUID | Primary key |
+| `project_id` | TEXT | Projekti ID |
+| `month_key` | TEXT | Kuu võti (formaat: "2026-01") |
+| `locked_by` | TEXT | Lukustaja email |
+| `locked_by_name` | TEXT | Lukustaja nimi |
+| `locked_at` | TIMESTAMP | Lukustamise aeg |
+| `created_at` | TIMESTAMP | Loomise aeg |
+
+**Unikaalsus:** `(project_id, month_key)` - sama kuu saab lukustada ainult üks kord projekti kohta.
+
 ## Suhted (ER Diagramm)
 
 ```
