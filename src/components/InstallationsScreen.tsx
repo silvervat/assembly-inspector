@@ -919,6 +919,7 @@ export default function InstallationsScreen({
   // Apply coloring: non-installed objects WHITE, installed objects BLACK
   // Uses database-based approach (same as toggleColorByDay) - fetches guid_ifc from trimble_model_objects
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
+    setColoringInProgress(true);
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
@@ -927,6 +928,8 @@ export default function InstallationsScreen({
         // Retry up to 5 times with increasing delay if models not yet loaded
         if (retryCount < 5) {
           setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
+        } else {
+          setColoringInProgress(false);
         }
         return;
       }
@@ -1038,6 +1041,8 @@ export default function InstallationsScreen({
       console.log('[INSTALL] === COLORING COMPLETE ===');
     } catch (e) {
       console.error('[INSTALL] Error applying installation coloring:', e);
+    } finally {
+      setColoringInProgress(false);
     }
   };
 
@@ -2177,6 +2182,14 @@ export default function InstallationsScreen({
         </button>
         <span className="mode-title">Paigaldamised</span>
       </div>
+
+      {/* Coloring progress indicator */}
+      {coloringInProgress && (
+        <div className="coloring-progress-bar">
+          <FiRefreshCw size={14} className="spinning" />
+          <span>Värvin mudelit paigalduste andmete järgi...</span>
+        </div>
+      )}
 
       {!showList ? (
         /* Form View */
