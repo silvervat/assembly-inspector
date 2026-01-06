@@ -1037,12 +1037,24 @@ export default function InstallationsScreen({
       console.log(`[DAY] Found ${foundObjects.size} objects in loaded models`);
 
       // Step 3: Get installed item GUIDs (for identifying which to color)
-      const installedGuidSet = new Set(
+      // Use the already-loaded installedGuids map which has both guid_ifc and guid stored
+      const installedGuidSet = new Set(installedGuids.keys());
+      console.log(`[DAY] Installed GUIDs count (from installedGuids map): ${installedGuidSet.size}`);
+
+      // Also create a set from installations for comparison
+      const installationsGuidSet = new Set(
         installations.map(inst => inst.guid_ifc || inst.guid).filter((g): g is string => !!g)
       );
-      console.log(`[DAY] Installed GUIDs count: ${installedGuidSet.size}`);
-      console.log(`[DAY] Sample installed GUIDs:`, Array.from(installedGuidSet).slice(0, 3));
+      console.log(`[DAY] Installations array GUIDs count: ${installationsGuidSet.size}`);
+      console.log(`[DAY] Sample installedGuids map keys:`, Array.from(installedGuidSet).slice(0, 3));
       console.log(`[DAY] Sample foundObjects GUIDs:`, Array.from(foundObjects.keys()).slice(0, 3));
+
+      // Check overlap
+      let overlapCount = 0;
+      for (const guid of installedGuidSet) {
+        if (foundObjects.has(guid)) overlapCount++;
+      }
+      console.log(`[DAY] GUIDs that exist in BOTH installedGuids AND foundObjects: ${overlapCount}`);
 
       // Step 4: Build arrays for white coloring (non-installed items) and collect by model
       const whiteByModel: Record<string, number[]> = {};
