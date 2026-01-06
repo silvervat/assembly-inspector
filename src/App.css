@@ -7736,6 +7736,81 @@ button.stat-toggle.off:hover {
   transform: scale(1.05);
 }
 
+/* Month lock indicator */
+.month-lock-indicator {
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  cursor: help;
+  margin-left: 4px;
+}
+
+.month-lock-indicator:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+/* Month three-dot menu */
+.month-menu-container {
+  position: relative;
+  margin-left: auto;
+}
+
+.month-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+}
+
+.month-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--modus-text-primary);
+}
+
+.month-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 180px;
+  overflow: hidden;
+}
+
+.month-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--modus-text-primary);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.month-menu-dropdown button:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.month-menu-dropdown button:not(:last-child) {
+  border-bottom: 1px solid var(--modus-border-light);
+}
+
 .installation-date-group .date-group-items {
   padding-left: 8px;
 }
