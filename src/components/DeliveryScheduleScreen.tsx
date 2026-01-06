@@ -6437,8 +6437,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 e.stopPropagation();
                                 setShowMarkupSubmenu(prev => prev === vehicleId ? null : vehicleId);
                               }}>
+                                <FiChevronLeft style={{ opacity: 0.5 }} />
                                 <FiTag /> Markupid
-                                <FiChevronRight style={{ marginLeft: 'auto', opacity: 0.5 }} />
                               </button>
                               {showMarkupSubmenu === vehicleId && (
                                 <div className="context-submenu"
