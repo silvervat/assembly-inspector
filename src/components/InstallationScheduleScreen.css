@@ -141,6 +141,32 @@
   margin: 2px 0;
 }
 
+/* Dropdown divider */
+.hamburger-dropdown .dropdown-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+/* Dropdown section label */
+.hamburger-dropdown .dropdown-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 2px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Active dropdown item */
+.hamburger-dropdown .dropdown-item.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
 /* Version bar */
 .version-bar {
   display: flex;

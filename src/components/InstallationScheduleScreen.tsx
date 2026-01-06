@@ -325,6 +325,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [currentPlaybackDate, setCurrentPlaybackDate] = useState<string | null>(null);
   const [playbackDateColors, setPlaybackDateColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
 
+  // Color mode state (like DeliveryScheduleScreen)
+  const [colorMode, setColorMode] = useState<'none' | 'day' | 'month'>('none');
+  const [_dayColors, setDayColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+  const [_monthColors, setMonthColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
+  const initialColorApplied = useRef(false);
+
   // Hamburger menu state
   const [showHamburgerMenu, setShowHamburgerMenu] = useState(false);
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState(false);
@@ -651,6 +657,17 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setCollapsedDates(new Set(allDates));
     }
   }, [scheduleItems]);
+
+  // Apply initial colors when page loads (scheduled items BLACK, others WHITE)
+  useEffect(() => {
+    if (!loading && scheduleItems.length > 0 && !initialColorApplied.current) {
+      initialColorApplied.current = true;
+      // Small delay to ensure viewer is ready
+      setTimeout(() => {
+        colorScheduleItemsBlack();
+      }, 1000);
+    }
+  }, [loading, scheduleItems.length]);
 
   // Switch to a different version
   const switchVersion = async (versionId: string) => {
@@ -3736,6 +3753,293 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Generate colors for months (YYYY-MM format)
+  const generateMonthColors = (months: string[]): Record<string, { r: number; g: number; b: number }> => {
+    const colors: Record<string, { r: number; g: number; b: number }> = {};
+    const sortedMonths = [...months].sort();
+
+    const goldenRatio = 0.618033988749895;
+    let hue = 0;
+
+    sortedMonths.forEach((month) => {
+      hue = (hue + goldenRatio) % 1;
+      const h = hue * 360;
+      const s = 0.7;
+      const l = 0.5;
+
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+      const m = l - c / 2;
+
+      let r = 0, g = 0, b = 0;
+      if (h < 60) { r = c; g = x; b = 0; }
+      else if (h < 120) { r = x; g = c; b = 0; }
+      else if (h < 180) { r = 0; g = c; b = x; }
+      else if (h < 240) { r = 0; g = x; b = c; }
+      else if (h < 300) { r = x; g = 0; b = c; }
+      else { r = c; g = 0; b = x; }
+
+      colors[month] = {
+        r: Math.round((r + m) * 255),
+        g: Math.round((g + m) * 255),
+        b: Math.round((b + m) * 255)
+      };
+    });
+
+    return colors;
+  };
+
+  // Apply color mode - database-based coloring like DeliveryScheduleScreen
+  const applyColorMode = async (mode: 'none' | 'day' | 'month') => {
+    try {
+      // Reset colors first
+      if (mode === 'none') {
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
+        setColorMode('none');
+        setDayColors({});
+        setMonthColors({});
+        return;
+      }
+
+      setColorMode(mode);
+      setMessage('Värvin... Loen Supabasest...');
+
+      // Step 1: Fetch ALL objects from Supabase with pagination
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          setMessage('Viga Supabase lugemisel');
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      // Step 2: Find objects in loaded models
+      setMessage('Värvin... Otsin mudelitest...');
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+      // Step 3: Get schedule item GUIDs
+      const scheduleGuids = new Set(
+        scheduleItems.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
+      );
+
+      // Step 4: Color non-schedule items WHITE
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of foundObjects) {
+        if (!scheduleGuids.has(guid)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
+        }
+      }
+
+      // Step 5: Build runtime ID mapping for schedule items
+      const scheduleByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const item of scheduleItems) {
+        const guid = item.guid_ifc || item.guid;
+        if (guid && foundObjects.has(guid)) {
+          const found = foundObjects.get(guid)!;
+          scheduleByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+        }
+      }
+
+      // Step 6: Color schedule items by day or month
+      if (mode === 'day') {
+        // Generate colors for each date
+        const dates = [...new Set(scheduleItems.map(i => i.scheduled_date))].sort();
+        const colors = generateDateColors(dates);
+        setDayColors(colors);
+        setMonthColors({});
+
+        // Apply colors by date
+        let coloredCount = 0;
+        for (const date of dates) {
+          const dateItems = scheduleItems.filter(i => i.scheduled_date === date);
+          const color = colors[date];
+          if (!color || dateItems.length === 0) continue;
+
+          // Group by model
+          const byModel: Record<string, number[]> = {};
+          for (const item of dateItems) {
+            const guid = item.guid_ifc || item.guid;
+            if (guid && scheduleByGuid.has(guid)) {
+              const found = scheduleByGuid.get(guid)!;
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+          }
+
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin päevad... ${coloredCount}/${scheduleGuids.size}`);
+          }
+        }
+      } else if (mode === 'month') {
+        // Generate colors for each month (YYYY-MM)
+        const months = [...new Set(scheduleItems.map(i => i.scheduled_date.substring(0, 7)))].sort();
+        const colors = generateMonthColors(months);
+        setMonthColors(colors);
+        setDayColors({});
+
+        // Apply colors by month
+        let coloredCount = 0;
+        for (const month of months) {
+          const monthItems = scheduleItems.filter(i => i.scheduled_date.startsWith(month));
+          const color = colors[month];
+          if (!color || monthItems.length === 0) continue;
+
+          // Group by model
+          const byModel: Record<string, number[]> = {};
+          for (const item of monthItems) {
+            const guid = item.guid_ifc || item.guid;
+            if (guid && scheduleByGuid.has(guid)) {
+              const found = scheduleByGuid.get(guid)!;
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+          }
+
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+            );
+            coloredCount += runtimeIds.length;
+            setMessage(`Värvin kuud... ${coloredCount}/${scheduleGuids.size}`);
+          }
+        }
+      }
+
+      setMessage(`✓ Värvitud! Valged=${whiteCount}, Graafikudetaile=${scheduleGuids.size}`);
+      setTimeout(() => setMessage(null), 3000);
+    } catch (e) {
+      console.error('Error applying color mode:', e);
+      setMessage('Viga värvimisel');
+    }
+  };
+
+  // Color all schedule items BLACK (used on initial page load)
+  const colorScheduleItemsBlack = async () => {
+    try {
+      setMessage('Värvin graafiku detailid mustaks...');
+
+      // Step 1: Fetch ALL objects from Supabase
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) break;
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      // Step 2: Find objects in loaded models
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+      // Step 3: Get schedule item GUIDs
+      const scheduleGuids = new Set(
+        scheduleItems.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
+      );
+
+      // Step 4: Color non-schedule items WHITE
+      const whiteByModel: Record<string, number[]> = {};
+      const blackByModel: Record<string, number[]> = {};
+
+      for (const [guid, found] of foundObjects) {
+        if (scheduleGuids.has(guid)) {
+          // Schedule item -> BLACK
+          if (!blackByModel[found.modelId]) blackByModel[found.modelId] = [];
+          blackByModel[found.modelId].push(found.runtimeId);
+        } else {
+          // Non-schedule item -> WHITE
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+
+      // Color non-schedule items white
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      // Color schedule items BLACK
+      for (const [modelId, runtimeIds] of Object.entries(blackByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 30, g: 30, b: 30, a: 255 } }
+          );
+        }
+      }
+
+      setMessage(`✓ Värvitud! Mustaks=${Object.values(blackByModel).reduce((s, a) => s + a.length, 0)}`);
+      setTimeout(() => setMessage(null), 2000);
+    } catch (e) {
+      console.error('Error coloring schedule items black:', e);
+      setMessage(null);
+    }
+  };
+
   // Hide all scheduled items using GUID-based lookup
   const hideAllItems = async () => {
     try {
@@ -6053,6 +6357,56 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                   </button>
                 </div>
               )}
+
+              {/* Color mode divider */}
+              <div className="dropdown-divider" />
+
+              {/* Color mode controls */}
+              <div className="dropdown-section-label">
+                <FiDroplet size={12} />
+                <span>Värvimisrežiim</span>
+              </div>
+              <div
+                className={`dropdown-item ${colorMode === 'none' ? 'active' : ''}`}
+                onClick={() => {
+                  applyColorMode('none');
+                }}
+              >
+                <span>Värvimine väljas</span>
+                {colorMode === 'none' && <FiCheck size={14} />}
+              </div>
+              <div
+                className={`dropdown-item ${colorMode === 'day' ? 'active' : ''}`}
+                onClick={() => {
+                  applyColorMode('day');
+                }}
+              >
+                <FiCalendar size={14} />
+                <span>Päevade kaupa</span>
+                {colorMode === 'day' && <FiCheck size={14} />}
+              </div>
+              <div
+                className={`dropdown-item ${colorMode === 'month' ? 'active' : ''}`}
+                onClick={() => {
+                  applyColorMode('month');
+                }}
+              >
+                <FiCalendar size={14} />
+                <span>Kuude kaupa</span>
+                {colorMode === 'month' && <FiCheck size={14} />}
+              </div>
+
+              {/* Reset to black */}
+              <div
+                className="dropdown-item"
+                onClick={() => {
+                  setShowHamburgerMenu(false);
+                  colorScheduleItemsBlack();
+                }}
+              >
+                <FiDroplet size={14} />
+                <span>Värvi graafik mustaks</span>
+              </div>
             </div>
           )}
         </div>
