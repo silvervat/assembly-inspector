@@ -7623,6 +7623,12 @@ button.stat-toggle.off:hover {
   border-radius: var(--modus-radius-sm);
   border: 1px solid var(--modus-border);
   overflow: hidden;
+  position: relative;
+}
+
+.installation-month-group.menu-open {
+  overflow: visible;
+  z-index: 100;
 }
 
 .installation-month-group .month-group-header {

@@ -3027,7 +3027,7 @@ export default function InstallationsScreen({
               monthGroups.map(month => {
                 const mColor = colorByMonth ? monthColors[month.monthKey] : null;
                 return (
-                <div key={month.monthKey} className="installation-month-group">
+                <div key={month.monthKey} className={`installation-month-group ${monthMenuOpen === month.monthKey ? 'menu-open' : ''}`}>
                   <div className="month-group-header" onClick={() => toggleMonth(month.monthKey)}>
                     <button className="month-group-toggle">
                       {expandedMonths.has(month.monthKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
