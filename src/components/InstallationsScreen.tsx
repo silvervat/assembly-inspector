@@ -864,6 +864,23 @@ export default function InstallationsScreen({
     }
   };
 
+  // Color specific GUIDs WHITE (for deleted items - no reset needed)
+  const colorGuidsWhite = async (guids: string[]) => {
+    if (guids.length === 0) return;
+    const foundObjects = await findObjectsInLoadedModels(api, guids);
+    const byModel: Record<string, number[]> = {};
+    for (const [, found] of foundObjects) {
+      if (!byModel[found.modelId]) byModel[found.modelId] = [];
+      byModel[found.modelId].push(found.runtimeId);
+    }
+    for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+      await api.viewer.setObjectState(
+        { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+        { color: { r: 255, g: 255, b: 255, a: 255 } }
+      );
+    }
+  };
+
   // Reset colors on all colored objects (call before leaving the screen)
   const resetColors = async () => {
     try {
@@ -1745,6 +1762,10 @@ export default function InstallationsScreen({
       return;
     }
 
+    // Find the installation first to get its GUID for coloring
+    const installationToDelete = installations.find(inst => inst.id === id);
+    const guidToColor = installationToDelete?.guid_ifc || installationToDelete?.guid;
+
     try {
       const { error } = await supabase
         .from('installations')
@@ -1753,7 +1774,14 @@ export default function InstallationsScreen({
 
       if (error) throw error;
 
-      await Promise.all([loadInstallations(), loadInstalledGuids()]);
+      // Reload data - skip full recoloring
+      await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
+
+      // Color only the deleted item WHITE (no full reset needed)
+      if (guidToColor) {
+        await colorGuidsWhite([guidToColor]);
+      }
+
       setMessage('Paigaldus kustutatud');
     } catch (e) {
       console.error('Error deleting installation:', e);
