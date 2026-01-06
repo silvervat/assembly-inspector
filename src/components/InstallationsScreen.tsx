@@ -810,7 +810,7 @@ export default function InstallationsScreen({
     }
   };
 
-  const loadInstalledGuids = async () => {
+  const loadInstalledGuids = async (skipColoring = false) => {
     try {
       const { data, error } = await supabase
         .from('installations')
@@ -840,10 +840,27 @@ export default function InstallationsScreen({
       console.log('Loaded installed GUIDs:', guidsMap.size, 'total,', ifcCount, 'IFC format');
       setInstalledGuids(guidsMap);
 
-      // Apply coloring after loading GUIDs
-      applyInstallationColoring(guidsMap);
+      // Apply coloring after loading GUIDs (skip when adding single items)
+      if (!skipColoring) {
+        applyInstallationColoring(guidsMap);
+      }
     } catch (e) {
       console.error('Error loading installed GUIDs:', e);
+    }
+  };
+
+  // Color specific objects BLACK (for newly installed items - no reset needed)
+  const colorObjectsBlack = async (objects: { modelId: string; runtimeId: number }[]) => {
+    const byModel: Record<string, number[]> = {};
+    for (const obj of objects) {
+      if (!byModel[obj.modelId]) byModel[obj.modelId] = [];
+      byModel[obj.modelId].push(obj.runtimeId);
+    }
+    for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+      await api.viewer.setObjectState(
+        { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+        { color: { r: 0, g: 0, b: 0, a: 255 } }
+      );
     }
   };
 
@@ -1444,8 +1461,11 @@ export default function InstallationsScreen({
         setNotes('');
         // Don't reset teamMembers and method - keep them for next installation
 
-        // Reload data - this will also apply coloring via loadInstalledGuids
-        await Promise.all([loadInstallations(), loadInstalledGuids()]);
+        // Reload data - skip full recoloring (we'll just color the new objects)
+        await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
+
+        // Color only the newly installed objects BLACK (no full reset needed)
+        await colorObjectsBlack(newObjects.map(obj => ({ modelId: obj.modelId, runtimeId: obj.runtimeId })));
 
         // Clear selection
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
