@@ -1111,6 +1111,7 @@
 }
 
 /* Allow dropdown menu to overflow when open */
+.date-group.menu-open,
 .date-group:has(.menu-open),
 .date-group:has(.date-menu-btn.active),
 .date-group:has(.item-menu-dropdown) {
