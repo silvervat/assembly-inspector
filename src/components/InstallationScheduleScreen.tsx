@@ -7612,7 +7612,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <div
                   key={date}
                   ref={(el) => { dateGroupRefs.current[date] = el; }}
-                  className={`date-group ${dragOverDate === date ? 'drag-over' : ''} ${selectedDate === date ? 'selected' : ''}`}
+                  className={`date-group ${dragOverDate === date ? 'drag-over' : ''} ${selectedDate === date ? 'selected' : ''} ${dateMenuId === date ? 'menu-open' : ''}`}
                   onDragOver={(e) => handleDragOver(e, date)}
                   onDrop={(e) => handleDrop(e, date)}
                 >
