@@ -3312,6 +3312,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
               // Helper to normalize property names (remove spaces, lowercase)
               const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+              // Use ref to get current mappings (not stale closure value)
+              const currentMappings = propertyMappingsRef.current;
 
               // Search all property sets for Tekla data
               // First try configured property mappings, then fall back to pattern matching
@@ -3330,7 +3332,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   // Assembly Mark - check configured mapping first (normalized comparison)
                   if (!assemblyMark) {
-                    if (setNameNorm === normalize(propertyMappings.assembly_mark_set) && propNameNorm === normalize(propertyMappings.assembly_mark_prop)) {
+                    if (setNameNorm === normalize(currentMappings.assembly_mark_set) && propNameNorm === normalize(currentMappings.assembly_mark_prop)) {
                       assemblyMark = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
@@ -3339,7 +3341,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   // Weight - check configured mapping first (normalized comparison)
                   if (!weight) {
-                    if (setNameNorm === normalize(propertyMappings.weight_set) && propNameNorm === normalize(propertyMappings.weight_prop)) {
+                    if (setNameNorm === normalize(currentMappings.weight_set) && propNameNorm === normalize(currentMappings.weight_prop)) {
                       weight = String(propValue);
                     } else if (propName.includes('weight')) {
                       weight = String(propValue);
@@ -3348,7 +3350,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   // Position code - check configured mapping first (normalized comparison)
                   if (!positionCode) {
-                    if (setNameNorm === normalize(propertyMappings.position_code_set) && propNameNorm === normalize(propertyMappings.position_code_prop)) {
+                    if (setNameNorm === normalize(currentMappings.position_code_set) && propNameNorm === normalize(currentMappings.position_code_prop)) {
                       positionCode = String(propValue);
                     } else if (propName.includes('position') && propName.includes('code')) {
                       positionCode = String(propValue);
@@ -3357,7 +3359,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   // Bottom elevation - check configured mapping first (normalized comparison)
                   if (!bottomElevation) {
-                    if (setNameNorm === normalize(propertyMappings.bottom_elevation_set) && propNameNorm === normalize(propertyMappings.bottom_elevation_prop)) {
+                    if (setNameNorm === normalize(currentMappings.bottom_elevation_set) && propNameNorm === normalize(currentMappings.bottom_elevation_prop)) {
                       bottomElevation = String(propValue);
                     } else if (propName.includes('bottom') && propName.includes('elevation')) {
                       bottomElevation = String(propValue);
@@ -3366,7 +3368,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                   // Top elevation - check configured mapping first (normalized comparison)
                   if (!topElevation) {
-                    if (setNameNorm === normalize(propertyMappings.top_elevation_set) && propNameNorm === normalize(propertyMappings.top_elevation_prop)) {
+                    if (setNameNorm === normalize(currentMappings.top_elevation_set) && propNameNorm === normalize(currentMappings.top_elevation_prop)) {
                       topElevation = String(propValue);
                     } else if (propName.includes('top') && propName.includes('elevation')) {
                       topElevation = String(propValue);
@@ -3821,8 +3823,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   if (!propValue) continue;
 
                   // Assembly Mark - configured mapping first (normalized)
+                  // Use ref to get current mappings (not stale closure value)
+                  const currentMappings = propertyMappingsRef.current;
                   if (!assemblyMark) {
-                    if (setNameNorm === normalize(propertyMappings.assembly_mark_set) && propNameNorm === normalize(propertyMappings.assembly_mark_prop)) {
+                    if (setNameNorm === normalize(currentMappings.assembly_mark_set) && propNameNorm === normalize(currentMappings.assembly_mark_prop)) {
                       assemblyMark = String(propValue);
                     } else if (propName.includes('cast') && propName.includes('mark')) {
                       assemblyMark = String(propValue);
@@ -3830,7 +3834,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
                   // Weight - configured mapping first (normalized)
                   if (!weight) {
-                    if (setNameNorm === normalize(propertyMappings.weight_set) && propNameNorm === normalize(propertyMappings.weight_prop)) {
+                    if (setNameNorm === normalize(currentMappings.weight_set) && propNameNorm === normalize(currentMappings.weight_prop)) {
                       weight = String(propValue);
                     } else if (propName.includes('weight')) {
                       weight = String(propValue);
@@ -3838,7 +3842,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
                   // Position code - configured mapping first (normalized)
                   if (!positionCode) {
-                    if (setNameNorm === normalize(propertyMappings.position_code_set) && propNameNorm === normalize(propertyMappings.position_code_prop)) {
+                    if (setNameNorm === normalize(currentMappings.position_code_set) && propNameNorm === normalize(currentMappings.position_code_prop)) {
                       positionCode = String(propValue);
                     } else if (propName.includes('position') && propName.includes('code')) {
                       positionCode = String(propValue);
@@ -3846,7 +3850,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
                   // Bottom elevation - configured mapping first (normalized)
                   if (!bottomElevation) {
-                    if (setNameNorm === normalize(propertyMappings.bottom_elevation_set) && propNameNorm === normalize(propertyMappings.bottom_elevation_prop)) {
+                    if (setNameNorm === normalize(currentMappings.bottom_elevation_set) && propNameNorm === normalize(currentMappings.bottom_elevation_prop)) {
                       bottomElevation = String(propValue);
                     } else if (propName.includes('bottom') && propName.includes('elevation')) {
                       bottomElevation = String(propValue);
@@ -3854,7 +3858,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
                   // Top elevation - configured mapping first (normalized)
                   if (!topElevation) {
-                    if (setNameNorm === normalize(propertyMappings.top_elevation_set) && propNameNorm === normalize(propertyMappings.top_elevation_prop)) {
+                    if (setNameNorm === normalize(currentMappings.top_elevation_set) && propNameNorm === normalize(currentMappings.top_elevation_prop)) {
                       topElevation = String(propValue);
                     } else if (propName.includes('top') && propName.includes('elevation')) {
                       topElevation = String(propValue);
