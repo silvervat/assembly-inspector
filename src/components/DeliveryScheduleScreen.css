@@ -2421,6 +2421,43 @@
   background: #f3f4f6;
 }
 
+/* Inline submenu - expands below the parent item */
+.context-menu .submenu-inline {
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid #e5e7eb;
+  margin-left: 12px;
+  margin-bottom: 4px;
+}
+
+.context-menu .submenu-inline button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #374151;
+  font-size: 12px;
+  text-align: left;
+}
+
+.context-menu .submenu-inline button:hover {
+  background: #f3f4f6;
+}
+
+.context-menu .submenu-inline .submenu-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+.context-menu button.expanded {
+  background: #f3f4f6;
+}
+
 .menu-backdrop {
   position: fixed;
   inset: 0;

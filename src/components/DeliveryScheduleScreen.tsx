@@ -6431,51 +6431,57 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             }}>
                               <FiClock /> Ajalugu
                             </button>
-                            {/* Markup submenu */}
-                            <div className="context-menu-item-with-submenu">
-                              <button onClick={(e) => {
+                            {/* Markup submenu - inline expansion */}
+                            <button
+                              className={showMarkupSubmenu === vehicleId ? 'expanded' : ''}
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 setShowMarkupSubmenu(prev => prev === vehicleId ? null : vehicleId);
-                              }}>
-                                <FiChevronLeft style={{ opacity: 0.5 }} />
-                                <FiTag /> Markupid
-                              </button>
-                              {showMarkupSubmenu === vehicleId && (
-                                <div className="context-submenu"
-                                  onMouseLeave={() => setShowMarkupSubmenu(null)}
-                                >
-                                  <button onClick={() => {
-                                    setVehicleMenuId(null);
-                                    setShowMarkupSubmenu(null);
-                                    createMarkupsForVehicle(vehicleId, 'position');
-                                  }}>
-                                    Järjekord
-                                  </button>
-                                  <button onClick={() => {
-                                    setVehicleMenuId(null);
-                                    setShowMarkupSubmenu(null);
-                                    createMarkupsForVehicle(vehicleId, 'position_mark');
-                                  }}>
-                                    Järjekord + Mark
-                                  </button>
-                                  <button onClick={() => {
-                                    setVehicleMenuId(null);
-                                    setShowMarkupSubmenu(null);
-                                    createMarkupsForVehicle(vehicleId, 'position_mark_weight');
-                                  }}>
-                                    Järjekord + Mark + Kaal
-                                  </button>
-                                  <div style={{ borderTop: '1px solid #e5e7eb', margin: '4px 0' }} />
-                                  <button onClick={() => {
-                                    setVehicleMenuId(null);
-                                    setShowMarkupSubmenu(null);
-                                    removeAllMarkups();
-                                  }}>
-                                    <FiTrash2 size={12} /> Eemalda markupid
-                                  </button>
-                                </div>
-                              )}
-                            </div>
+                              }}
+                            >
+                              <FiChevronDown
+                                size={12}
+                                style={{
+                                  opacity: 0.5,
+                                  transition: 'transform 0.15s',
+                                  transform: showMarkupSubmenu === vehicleId ? 'rotate(180deg)' : 'rotate(0deg)'
+                                }}
+                              />
+                              <FiTag /> Markupid
+                            </button>
+                            {showMarkupSubmenu === vehicleId && (
+                              <div className="submenu-inline">
+                                <button onClick={() => {
+                                  setVehicleMenuId(null);
+                                  setShowMarkupSubmenu(null);
+                                  createMarkupsForVehicle(vehicleId, 'position');
+                                }}>
+                                  Järjekord
+                                </button>
+                                <button onClick={() => {
+                                  setVehicleMenuId(null);
+                                  setShowMarkupSubmenu(null);
+                                  createMarkupsForVehicle(vehicleId, 'position_mark');
+                                }}>
+                                  Järjekord + Mark
+                                </button>
+                                <button onClick={() => {
+                                  setVehicleMenuId(null);
+                                  setShowMarkupSubmenu(null);
+                                  createMarkupsForVehicle(vehicleId, 'position_mark_weight');
+                                }}>
+                                  Järjekord + Mark + Kaal
+                                </button>
+                                <div className="submenu-divider" />
+                                <button onClick={() => {
+                                  setVehicleMenuId(null);
+                                  setShowMarkupSubmenu(null);
+                                  removeAllMarkups();
+                                }}>
+                                  <FiTrash2 size={12} /> Eemalda markupid
+                                </button>
+                              </div>
+                            )}
                             {/* Add selected model items to this vehicle */}
                             {selectedObjects.length > 0 && (() => {
                               const existingGuids = new Set(items.map(i => i.guid));
