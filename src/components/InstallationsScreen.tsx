@@ -882,13 +882,14 @@ export default function InstallationsScreen({
     onBackToMenu();
   };
 
-  // Apply coloring: non-installed objects gray, installed objects green
+  // Apply coloring: non-installed objects WHITE, installed objects BLACK
+  // Uses database-based approach (same as toggleColorByDay) - fetches guid_ifc from trimble_model_objects
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
-        console.log('No models loaded for coloring, retry:', retryCount);
+        console.log('[INSTALL] No models loaded for coloring, retry:', retryCount);
         // Retry up to 5 times with increasing delay if models not yet loaded
         if (retryCount < 5) {
           setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
@@ -896,75 +897,113 @@ export default function InstallationsScreen({
         return;
       }
 
-      // Collect only IFC format GUIDs (convertToObjectRuntimeIds only works with IFC GUIDs)
-      const installedIfcGuids = Array.from(guidsMap.keys()).filter(guid => {
-        const guidType = classifyGuid(guid);
-        return guidType === 'IFC';
-      });
-
-      console.log('Installed IFC GUIDs for coloring:', installedIfcGuids.length);
+      console.log('[INSTALL] Starting database-based coloring...');
 
       // Step 1: Reset all colors first (required to allow new colors!)
-      console.log('Step 1: Resetting colors...');
+      console.log('[INSTALL] Step 1: Resetting colors...');
       await api.viewer.setObjectState(undefined, { color: "reset" });
 
-      // Step 2: Get all objects from all models
-      console.log('Step 2: Getting all objects...');
-      const allModelObjects = await api.viewer.getObjects();
-      if (!allModelObjects || allModelObjects.length === 0) {
-        console.log('No objects returned from getObjects()');
-        return;
+      // Step 2: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
+      console.log('[INSTALL] Step 2: Fetching GUIDs from database...');
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('[INSTALL] Supabase error:', error);
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
       }
 
-      // Step 3: Color ALL objects white first
-      console.log('Step 3: Coloring ALL objects white...');
-      let totalWhite = 0;
-      for (const modelObj of allModelObjects) {
-        const modelId = modelObj.modelId;
-        const allIds = modelObj.objects?.map((obj: any) => obj.id).filter((id: any) => id && id > 0) || [];
-        if (allIds.length > 0) {
-          totalWhite += allIds.length;
+      console.log(`[INSTALL] Total GUIDs fetched from database: ${allGuids.length}`);
+
+      // Step 3: Do ONE lookup for ALL GUIDs to get runtime IDs
+      console.log('[INSTALL] Step 3: Finding objects in loaded models...');
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`[INSTALL] Found ${foundObjects.size} objects in loaded models`);
+
+      // Step 4: Get installed item GUIDs (from the guidsMap)
+      const installedGuidSet = new Set(guidsMap.keys());
+      console.log(`[INSTALL] Installed GUIDs count: ${installedGuidSet.size}`);
+
+      // Step 5: Build arrays for white coloring (non-installed items) and black coloring (installed items)
+      const whiteByModel: Record<string, number[]> = {};
+      const blackByModel: Record<string, number[]> = {};
+
+      for (const [guid, found] of foundObjects) {
+        if (installedGuidSet.has(guid)) {
+          // Installed - color BLACK
+          if (!blackByModel[found.modelId]) blackByModel[found.modelId] = [];
+          blackByModel[found.modelId].push(found.runtimeId);
+        } else {
+          // Not installed - color WHITE
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      const totalToWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+      const totalToBlack = Object.values(blackByModel).reduce((sum, arr) => sum + arr.length, 0);
+      console.log(`[INSTALL] Objects to color: ${totalToWhite} white, ${totalToBlack} black`);
+
+      // Step 6: Color non-installed items WHITE in batches
+      console.log('[INSTALL] Step 6: Coloring non-installed objects white...');
+      const BATCH_SIZE = 5000;
+      let whiteCount = 0;
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: allIds }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } } // White
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
           );
+          whiteCount += batch.length;
         }
       }
-      console.log(`Colored ${totalWhite} objects white`);
+      console.log(`[INSTALL] White coloring done: ${whiteCount}`);
 
-      // Step 4: Color installed objects black ON TOP (overrides white)
-      console.log('Step 4: Coloring installed objects black...');
+      // Step 7: Color installed items BLACK
+      console.log('[INSTALL] Step 7: Coloring installed objects black...');
       coloredObjectsRef.current = new Map();
-      let totalColored = 0;
+      let blackCount = 0;
 
-      for (const modelObj of allModelObjects) {
-        const modelId = modelObj.modelId;
-
-        if (installedIfcGuids.length > 0) {
-          try {
-            const installedIds = await api.viewer.convertToObjectRuntimeIds(modelId, installedIfcGuids);
-            const validInstalledIds = (installedIds || []).filter((id: number) => id && id > 0);
-
-            if (validInstalledIds.length > 0) {
-              totalColored += validInstalledIds.length;
-              coloredObjectsRef.current.set(modelId, validInstalledIds);
-
-              console.log(`Model ${modelId}: coloring ${validInstalledIds.length} installed objects black`);
-              await api.viewer.setObjectState(
-                { modelObjectIds: [{ modelId, objectRuntimeIds: validInstalledIds }] },
-                { color: { r: 0, g: 0, b: 0, a: 255 } } // Black
-              );
-            }
-          } catch (e) {
-            console.warn(`Could not convert GUIDs for model ${modelId}:`, e);
+      for (const [modelId, runtimeIds] of Object.entries(blackByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 0, g: 0, b: 0, a: 255 } }
+          );
+          blackCount += batch.length;
+          // Track colored objects for reference
+          if (!coloredObjectsRef.current.has(modelId)) {
+            coloredObjectsRef.current.set(modelId, []);
           }
+          coloredObjectsRef.current.get(modelId)!.push(...batch);
         }
       }
 
-      console.log(`Colored ${totalColored} installed objects black`);
-      console.log('=== COLORING COMPLETE ===');
+      console.log(`[INSTALL] Black coloring done: ${blackCount}`);
+      console.log('[INSTALL] === COLORING COMPLETE ===');
     } catch (e) {
-      console.error('Error applying installation coloring:', e);
+      console.error('[INSTALL] Error applying installation coloring:', e);
     }
   };
 
@@ -2435,7 +2474,17 @@ export default function InstallationsScreen({
           <div className="list-controls">
             <button
               className="list-back-btn"
-              onClick={() => setShowList(false)}
+              onClick={async () => {
+                setShowList(false);
+                // Reset day/month colors and reapply default coloring (installed=BLACK, non-installed=WHITE)
+                if (colorByDay || colorByMonth) {
+                  setColorByDay(false);
+                  setColorByMonth(false);
+                  setDayColors({});
+                  setMonthColors({});
+                  await applyInstallationColoring(installedGuids);
+                }
+              }}
               title="Tagasi"
             >
               <FiArrowLeft size={16} />
