@@ -6432,17 +6432,18 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               <FiClock /> Ajalugu
                             </button>
                             {/* Markup submenu */}
-                            <div
-                              className="context-menu-item-with-submenu"
-                              onMouseEnter={() => setShowMarkupSubmenu(vehicleId)}
-                              onMouseLeave={() => setShowMarkupSubmenu(null)}
-                            >
-                              <button>
-                                <FiChevronLeft style={{ marginRight: '4px' }} />
+                            <div className="context-menu-item-with-submenu">
+                              <button onClick={(e) => {
+                                e.stopPropagation();
+                                setShowMarkupSubmenu(prev => prev === vehicleId ? null : vehicleId);
+                              }}>
                                 <FiTag /> Markupid
+                                <FiChevronRight style={{ marginLeft: 'auto', opacity: 0.5 }} />
                               </button>
                               {showMarkupSubmenu === vehicleId && (
-                                <div className="context-submenu">
+                                <div className="context-submenu"
+                                  onMouseLeave={() => setShowMarkupSubmenu(null)}
+                                >
                                   <button onClick={() => {
                                     setVehicleMenuId(null);
                                     setShowMarkupSubmenu(null);
