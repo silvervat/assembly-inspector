@@ -6317,6 +6317,23 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg);
 }
 
+/* Coloring progress indicator */
+.coloring-progress-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(90deg, #0063a3 0%, #0089e0 100%);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.coloring-progress-bar .spinning {
+  animation: spin 1s linear infinite;
+}
+
 /* Header list button */
 .header-list-btn {
   margin-left: auto;

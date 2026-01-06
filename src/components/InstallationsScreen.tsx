@@ -881,6 +881,24 @@ export default function InstallationsScreen({
     }
   };
 
+  // Color installed GUIDs BLACK (for reverting from day/month coloring - no reset needed)
+  const colorInstalledGuidsBlack = async () => {
+    const guids = Array.from(installedGuids.keys());
+    if (guids.length === 0) return;
+    const foundObjects = await findObjectsInLoadedModels(api, guids);
+    const byModel: Record<string, number[]> = {};
+    for (const [, found] of foundObjects) {
+      if (!byModel[found.modelId]) byModel[found.modelId] = [];
+      byModel[found.modelId].push(found.runtimeId);
+    }
+    for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+      await api.viewer.setObjectState(
+        { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+        { color: { r: 0, g: 0, b: 0, a: 255 } }
+      );
+    }
+  };
+
   // Reset colors on all colored objects (call before leaving the screen)
   const resetColors = async () => {
     try {
@@ -919,6 +937,7 @@ export default function InstallationsScreen({
   // Apply coloring: non-installed objects WHITE, installed objects BLACK
   // Uses database-based approach (same as toggleColorByDay) - fetches guid_ifc from trimble_model_objects
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
+    setColoringInProgress(true);
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
@@ -927,6 +946,8 @@ export default function InstallationsScreen({
         // Retry up to 5 times with increasing delay if models not yet loaded
         if (retryCount < 5) {
           setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
+        } else {
+          setColoringInProgress(false);
         }
         return;
       }
@@ -1038,6 +1059,8 @@ export default function InstallationsScreen({
       console.log('[INSTALL] === COLORING COMPLETE ===');
     } catch (e) {
       console.error('[INSTALL] Error applying installation coloring:', e);
+    } finally {
+      setColoringInProgress(false);
     }
   };
 
@@ -1047,12 +1070,11 @@ export default function InstallationsScreen({
     if (coloringInProgress) return;
 
     if (colorByDay) {
-      // Turn off - revert to default state (installed=BLACK, non-installed=WHITE)
+      // Turn off - just recolor installed items BLACK (no reset needed, whites stay white)
       setColoringInProgress(true);
       setColorByDay(false);
       setDayColors({});
-      // Reapply default coloring instead of just resetting
-      await applyInstallationColoring(installedGuids);
+      await colorInstalledGuidsBlack();
       setColoringInProgress(false);
       return;
     }
@@ -1064,103 +1086,18 @@ export default function InstallationsScreen({
     }
 
     setColoringInProgress(true);
-    setMessage('Värvin... Resetin...');
+    setMessage('Värvin päevade järgi...');
 
     try {
-      // Step 0: Reset ALL colors first (required to allow new colors!)
-      console.log('[DAY] Step 0: Resetting all colors...');
-      await api.viewer.setObjectState(undefined, { color: 'reset' });
-      console.log('[DAY] Colors reset done');
+      // No reset or white coloring needed - we're already in default state (white/black)
+      // Just find installed items and color them by day
 
-      // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
-      setMessage('Värvin... Loen Supabasest...');
-      const PAGE_SIZE = 5000;
-      const allGuids: string[] = [];
-      let offset = 0;
+      // Step 1: Get installed item GUIDs and find them in loaded models
+      const guids = Array.from(installedGuids.keys());
+      console.log(`[DAY] Installed GUIDs count: ${guids.length}`);
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('guid_ifc')
-          .eq('trimble_project_id', projectId)
-          .not('guid_ifc', 'is', null)
-          .range(offset, offset + PAGE_SIZE - 1);
-
-        if (error) {
-          console.error('Supabase error:', error);
-          setMessage('Viga Supabase lugemisel');
-          return;
-        }
-
-        if (!data || data.length === 0) break;
-
-        for (const obj of data) {
-          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
-        }
-        offset += data.length;
-        setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
-        if (data.length < PAGE_SIZE) break;
-      }
-
-      console.log(`[DAY] Total GUIDs fetched for coloring: ${allGuids.length}`);
-
-      // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
-      setMessage('Värvin... Otsin mudelitest...');
-      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
       console.log(`[DAY] Found ${foundObjects.size} objects in loaded models`);
-
-      // Step 3: Get installed item GUIDs (for identifying which to color)
-      // Use the already-loaded installedGuids map which has both guid_ifc and guid stored
-      const installedGuidSet = new Set(installedGuids.keys());
-      console.log(`[DAY] Installed GUIDs count (from installedGuids map): ${installedGuidSet.size}`);
-
-      // Also create a set from installations for comparison
-      const installationsGuidSet = new Set(
-        installations.map(inst => inst.guid_ifc || inst.guid).filter((g): g is string => !!g)
-      );
-      console.log(`[DAY] Installations array GUIDs count: ${installationsGuidSet.size}`);
-      console.log(`[DAY] Sample installedGuids map keys:`, Array.from(installedGuidSet).slice(0, 3));
-      console.log(`[DAY] Sample foundObjects GUIDs:`, Array.from(foundObjects.keys()).slice(0, 3));
-
-      // Check overlap
-      let overlapCount = 0;
-      for (const guid of installedGuidSet) {
-        if (foundObjects.has(guid)) overlapCount++;
-      }
-      console.log(`[DAY] GUIDs that exist in BOTH installedGuids AND foundObjects: ${overlapCount}`);
-
-      // Step 4: Build arrays for white coloring (non-installed items) and collect by model
-      const whiteByModel: Record<string, number[]> = {};
-      let installedFoundCount = 0;
-      for (const [guid, found] of foundObjects) {
-        if (!installedGuidSet.has(guid)) {
-          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-          whiteByModel[found.modelId].push(found.runtimeId);
-        } else {
-          installedFoundCount++;
-        }
-      }
-      console.log(`[DAY] Installed objects found in model: ${installedFoundCount}`);
-      const totalToWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-      console.log(`[DAY] Objects to color white: ${totalToWhite}`);
-
-      // Step 5: Color non-installed items WHITE in batches
-      const BATCH_SIZE = 5000;
-      let whiteCount = 0;
-      const totalWhite = totalToWhite;
-
-      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-          whiteCount += batch.length;
-          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
-        }
-      }
-      console.log(`[DAY] White coloring done: ${whiteCount}`);
 
       // Step 6: Generate colors for each day
       const uniqueDays = [...new Set(installations.map(inst => getDayKey(inst.installed_at)))].sort();
@@ -1210,13 +1147,13 @@ export default function InstallationsScreen({
             { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
           );
           coloredCount += runtimeIds.length;
-          setMessage(`Värvin päevad... ${coloredCount}/${installedGuidSet.size}`);
+          setMessage(`Värvin päevad... ${coloredCount}/${guids.length}`);
         }
       }
 
       console.log(`[DAY] DONE! Total colored: ${coloredCount}`);
       setColorByDay(true);
-      setMessage(`✓ Värvitud! Valged=${whiteCount}, Paigaldatud=${coloredCount}`);
+      setMessage(`✓ Värvitud ${coloredCount} detaili päevade järgi`);
     } catch (e) {
       console.error('Error coloring by day:', e);
       setMessage('Viga värvimisel');
@@ -1231,12 +1168,11 @@ export default function InstallationsScreen({
     if (coloringInProgress) return;
 
     if (colorByMonth) {
-      // Turn off - revert to default state (installed=BLACK, non-installed=WHITE)
+      // Turn off - just recolor installed items BLACK (no reset needed, whites stay white)
       setColoringInProgress(true);
       setColorByMonth(false);
       setMonthColors({});
-      // Reapply default coloring instead of just resetting
-      await applyInstallationColoring(installedGuids);
+      await colorInstalledGuidsBlack();
       setColoringInProgress(false);
       return;
     }
@@ -1248,77 +1184,20 @@ export default function InstallationsScreen({
     }
 
     setColoringInProgress(true);
-    setMessage('Värvin... Loen Supabasest...');
+    setMessage('Värvin kuude järgi...');
 
     try {
-      // Step 1: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
-      const PAGE_SIZE = 5000;
-      const allGuids: string[] = [];
-      let offset = 0;
+      // No reset or white coloring needed - we're already in default state (white/black)
+      // Just find installed items and color them by month
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('guid_ifc')
-          .eq('trimble_project_id', projectId)
-          .not('guid_ifc', 'is', null)
-          .range(offset, offset + PAGE_SIZE - 1);
+      // Step 1: Get installed item GUIDs and find them in loaded models
+      const guids = Array.from(installedGuids.keys());
+      console.log(`[MONTH] Installed GUIDs count: ${guids.length}`);
 
-        if (error) {
-          console.error('Supabase error:', error);
-          setMessage('Viga Supabase lugemisel');
-          return;
-        }
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+      console.log(`[MONTH] Found ${foundObjects.size} objects in loaded models`);
 
-        if (!data || data.length === 0) break;
-
-        for (const obj of data) {
-          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
-        }
-        offset += data.length;
-        setMessage(`Värvin... Loetud ${allGuids.length} objekti`);
-        if (data.length < PAGE_SIZE) break;
-      }
-
-      console.log(`Total GUIDs fetched for coloring: ${allGuids.length}`);
-
-      // Step 2: Do ONE lookup for ALL GUIDs to get runtime IDs
-      setMessage('Värvin... Otsin mudelitest...');
-      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
-      console.log(`Found ${foundObjects.size} objects in loaded models`);
-
-      // Step 3: Get installed item GUIDs (for identifying which to color)
-      const installedGuidSet = new Set(
-        installations.map(inst => inst.guid_ifc || inst.guid).filter((g): g is string => !!g)
-      );
-
-      // Step 4: Build arrays for white coloring (non-installed items) and collect by model
-      const whiteByModel: Record<string, number[]> = {};
-      for (const [guid, found] of foundObjects) {
-        if (!installedGuidSet.has(guid)) {
-          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-          whiteByModel[found.modelId].push(found.runtimeId);
-        }
-      }
-
-      // Step 5: Color non-installed items WHITE in batches
-      const BATCH_SIZE = 5000;
-      let whiteCount = 0;
-      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-
-      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-          whiteCount += batch.length;
-          setMessage(`Värvin valged... ${whiteCount}/${totalWhite}`);
-        }
-      }
-
-      // Step 6: Generate colors for each month
+      // Step 2: Generate colors for each month
       const uniqueMonths = [...new Set(installations.map(inst => getMonthKey(inst.installed_at)))].sort();
       const colors = generateMonthColors(uniqueMonths);
       setMonthColors(colors);
@@ -1359,12 +1238,12 @@ export default function InstallationsScreen({
             { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
           );
           coloredCount += runtimeIds.length;
-          setMessage(`Värvin kuud... ${coloredCount}/${installedGuidSet.size}`);
+          setMessage(`Värvin kuud... ${coloredCount}/${guids.length}`);
         }
       }
 
       setColorByMonth(true);
-      setMessage(`✓ Värvitud! Valged=${whiteCount}, Paigaldatud=${coloredCount}`);
+      setMessage(`✓ Värvitud ${coloredCount} detaili kuude järgi`);
     } catch (e) {
       console.error('Error coloring by month:', e);
       setMessage('Viga värvimisel');
@@ -2178,6 +2057,14 @@ export default function InstallationsScreen({
         <span className="mode-title">Paigaldamised</span>
       </div>
 
+      {/* Coloring progress indicator */}
+      {coloringInProgress && (
+        <div className="coloring-progress-bar">
+          <FiRefreshCw size={14} className="spinning" />
+          <span>Värvin mudelit paigalduste andmete järgi...</span>
+        </div>
+      )}
+
       {!showList ? (
         /* Form View */
         <div className="installations-form-view">
@@ -2524,13 +2411,13 @@ export default function InstallationsScreen({
               className="list-back-btn"
               onClick={async () => {
                 setShowList(false);
-                // Reset day/month colors and reapply default coloring (installed=BLACK, non-installed=WHITE)
+                // Just recolor installed items BLACK (no full reset needed, whites stay white)
                 if (colorByDay || colorByMonth) {
                   setColorByDay(false);
                   setColorByMonth(false);
                   setDayColors({});
                   setMonthColors({});
-                  await applyInstallationColoring(installedGuids);
+                  await colorInstalledGuidsBlack();
                 }
               }}
               title="Tagasi"
