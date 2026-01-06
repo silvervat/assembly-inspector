@@ -2873,15 +2873,15 @@ export default function InstallationsScreen({
 
       {/* Duplicate warning modal */}
       {duplicateWarning && duplicateWarning.length > 0 && (
-        <div className="properties-modal-overlay" onClick={() => setDuplicateWarning(null)}>
-          <div className="properties-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="properties-modal-header" style={{ background: '#ff9800' }}>
+        <div className="modal-overlay" onClick={() => setDuplicateWarning(null)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header" style={{ background: '#fff3e0' }}>
               <h3>⚠️ Juba paigaldatud detailid</h3>
-              <button className="close-modal-btn" onClick={() => setDuplicateWarning(null)}>
+              <button onClick={() => setDuplicateWarning(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
+            <div className="modal-body">
               <p style={{ marginBottom: '12px', color: '#666' }}>
                 Järgmised detailid on juba varem paigaldatud:
               </p>
@@ -2918,15 +2918,15 @@ export default function InstallationsScreen({
 
       {/* Installation Info Modal */}
       {showInstallInfo && (
-        <div className="properties-modal-overlay" onClick={() => setShowInstallInfo(null)}>
-          <div className="properties-modal install-info-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header" style={{ background: 'var(--modus-success)' }}>
-              <h3>{showInstallInfo.assembly_mark}</h3>
-              <button className="close-modal-btn" onClick={() => setShowInstallInfo(null)}>
+        <div className="modal-overlay" onClick={() => setShowInstallInfo(null)}>
+          <div className="settings-modal install-info-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>🔧 {showInstallInfo.assembly_mark}</h3>
+              <button onClick={() => setShowInstallInfo(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '12px 16px' }}>
+            <div className="modal-body">
               <div className="install-info-rows">
                 <div className="install-info-row">
                   <span className="install-info-label">Paigaldatud</span>
@@ -2960,15 +2960,15 @@ export default function InstallationsScreen({
 
       {/* Properties Discovery Modal */}
       {showProperties && discoveredProperties && (
-        <div className="properties-modal-overlay" onClick={() => setShowProperties(false)}>
-          <div className="properties-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header">
-              <h3>Leitud {selectedObjects.length} objekti propertised</h3>
-              <button className="close-modal-btn" onClick={() => setShowProperties(false)}>
+        <div className="modal-overlay" onClick={() => setShowProperties(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3>📋 Leitud {selectedObjects.length} objekti propertised</h3>
+              <button onClick={() => setShowProperties(false)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content">
+            <div className="modal-body">
               {/* Object Info */}
               <div className="prop-object-info">
                 <div className="prop-info-row">
@@ -3131,15 +3131,15 @@ export default function InstallationsScreen({
 
       {/* Day Info Modal */}
       {showDayInfo && (
-        <div className="properties-modal-overlay" onClick={() => setShowDayInfo(null)}>
-          <div className="properties-modal stats-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header">
-              <h3>Päeva info: {showDayInfo.dayLabel}</h3>
-              <button className="close-modal-btn" onClick={() => setShowDayInfo(null)}>
+        <div className="modal-overlay" onClick={() => setShowDayInfo(null)}>
+          <div className="settings-modal stats-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📆 Päeva info: {showDayInfo.dayLabel}</h3>
+              <button onClick={() => setShowDayInfo(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
+            <div className="modal-body">
               {(() => {
                 // Group by recorder (user_email) and time
                 const byRecorder = new Map<string, Installation[]>();
@@ -3217,15 +3217,15 @@ export default function InstallationsScreen({
 
       {/* Month Stats Modal */}
       {showMonthStats && (
-        <div className="properties-modal-overlay" onClick={() => setShowMonthStats(null)}>
-          <div className="properties-modal stats-modal" onClick={e => e.stopPropagation()}>
-            <div className="properties-modal-header" style={{ background: '#1976d2' }}>
-              <h3>Kuu statistika: {showMonthStats.monthLabel}</h3>
-              <button className="close-modal-btn" onClick={() => setShowMonthStats(null)}>
+        <div className="modal-overlay" onClick={() => setShowMonthStats(null)}>
+          <div className="settings-modal stats-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>📅 Kuu statistika: {showMonthStats.monthLabel}</h3>
+              <button onClick={() => setShowMonthStats(null)}>
                 <FiX size={18} />
               </button>
             </div>
-            <div className="properties-modal-content" style={{ padding: '16px' }}>
+            <div className="modal-body">
               {(() => {
                 const byRecorder = new Map<string, number>();
                 const byInstaller = new Map<string, number>();
