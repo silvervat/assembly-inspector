@@ -2390,8 +2390,8 @@
 
 .context-submenu {
   position: absolute;
-  left: 100%;
-  top: 0;
+  left: 0;
+  top: 100%;
   min-width: 160px;
   background: white;
   border-radius: 8px;
@@ -2399,6 +2399,7 @@
   border: 1px solid #e5e7eb;
   padding: 4px;
   z-index: 1001;
+  margin-top: 2px;
 }
 
 .context-submenu button {

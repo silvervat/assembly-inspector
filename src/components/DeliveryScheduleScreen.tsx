@@ -597,6 +597,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
   const [quickHoveredMethod, setQuickHoveredMethod] = useState<string | null>(null); // For hover on method in quick assign
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState<string | null>(null); // Vehicle ID for markup submenu
+  // Track active markup state for auto-update on reorder
+  const [activeMarkupVehicleId, setActiveMarkupVehicleId] = useState<string | null>(null);
+  const [activeMarkupType, setActiveMarkupType] = useState<'position' | 'position_mark' | 'position_mark_weight' | null>(null);
 
   // Comment modal state
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -2283,6 +2286,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       await Promise.all([loadItems(), loadVehicles()]);
       broadcastReload();
       setMessage('Detail kustutatud');
+
+      // Auto-update markups if item was in vehicle with active markups
+      if (itemToDelete?.vehicle_id && activeMarkupVehicleId === itemToDelete.vehicle_id && activeMarkupType) {
+        setTimeout(() => {
+          createMarkupsForVehicle(activeMarkupVehicleId, activeMarkupType);
+        }, 300);
+      }
     } catch (e: any) {
       console.error('Error deleting item:', e);
       setMessage('Viga kustutamisel: ' + e.message);
@@ -2326,6 +2336,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       broadcastReload();
       setSelectedItemIds(new Set());
       setMessage(`${deleteCount} detaili kustutatud`);
+
+      // Auto-update markups if any deleted items were in vehicle with active markups
+      const affectedVehicleIds = new Set(itemsToDelete.map(i => i.vehicle_id).filter(Boolean));
+      if (activeMarkupVehicleId && activeMarkupType && affectedVehicleIds.has(activeMarkupVehicleId)) {
+        setTimeout(() => {
+          createMarkupsForVehicle(activeMarkupVehicleId, activeMarkupType);
+        }, 300);
+      }
     } catch (e: any) {
       console.error('Error deleting items:', e);
       setMessage('Viga kustutamisel: ' + e.message);
@@ -2740,6 +2758,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setTimeout(() => {
         loadVehicles();
       }, 500);
+
+      // Auto-update markups if reordering in vehicle with active markups
+      if (isSameVehicle && activeMarkupVehicleId === targetVehicleId && activeMarkupType) {
+        // Small delay to let state update settle
+        setTimeout(() => {
+          createMarkupsForVehicle(targetVehicleId, activeMarkupType);
+        }, 600);
+      }
     } catch (e) {
       console.error('Error saving drag changes:', e);
       loadItems();
@@ -4132,6 +4158,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         }
       }
 
+      // Store active markup state for auto-update on reorder
+      setActiveMarkupVehicleId(vehicleId);
+      setActiveMarkupType(markupType);
+
       setMessage(`✅ ${createdIds.length} markupit loodud veokile ${vehicle?.vehicle_code || ''}`);
     } catch (error: any) {
       console.error('Error creating markups:', error);
@@ -4143,6 +4173,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   // Remove all markups
   const removeAllMarkups = async () => {
+    // Clear active markup state
+    setActiveMarkupVehicleId(null);
+    setActiveMarkupType(null);
+
     setSaving(true);
     setMessage('Eemaldan markupe...');
     try {
@@ -6405,7 +6439,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                             >
                               <button>
                                 <FiTag /> Markupid
-                                <FiChevronRight style={{ marginLeft: 'auto' }} />
+                                <FiChevronDown style={{ marginLeft: 'auto' }} />
                               </button>
                               {showMarkupSubmenu === vehicleId && (
                                 <div className="context-submenu">
