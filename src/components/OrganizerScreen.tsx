@@ -1328,6 +1328,11 @@ export default function OrganizerScreen({
   const handleItemClick = async (e: React.MouseEvent, item: OrganizerGroupItem, allItems: OrganizerGroupItem[]) => {
     e.stopPropagation();
 
+    // Auto-select the group when clicking on an item (enables bulk edit button)
+    if (selectedGroupId !== item.group_id) {
+      setSelectedGroupId(item.group_id);
+    }
+
     let newSelectedIds: Set<string>;
 
     if (e.ctrlKey || e.metaKey) {
