@@ -15,10 +15,41 @@ export interface TrimbleExUser {
   user_id?: string;
   email: string;
   name?: string;
-  role: 'admin' | 'moderator' | 'inspector';
+  role: 'admin' | 'moderator' | 'inspector' | 'viewer';
+
+  // Legacy permissions (for backwards compatibility)
   can_assembly_inspection: boolean;
   can_bolt_inspection: boolean;
   is_active: boolean;
+
+  // Delivery Schedule permissions
+  can_view_delivery: boolean;
+  can_edit_delivery: boolean;
+  can_delete_delivery: boolean;
+
+  // Installation Schedule permissions
+  can_view_installation_schedule: boolean;
+  can_edit_installation_schedule: boolean;
+  can_delete_installation_schedule: boolean;
+
+  // Installations (Paigaldused) permissions
+  can_view_installations: boolean;
+  can_edit_installations: boolean;
+  can_delete_installations: boolean;
+
+  // Organizer permissions
+  can_view_organizer: boolean;
+  can_edit_organizer: boolean;
+  can_delete_organizer: boolean;
+
+  // Inspections permissions
+  can_view_inspections: boolean;
+  can_edit_inspections: boolean;
+  can_delete_inspections: boolean;
+
+  // Admin access
+  can_access_admin: boolean;
+
   created_at: string;
   updated_at?: string;
   trimble_project_id: string;
