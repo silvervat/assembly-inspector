@@ -2780,7 +2780,10 @@ export default function OrganizerScreen({
       )}
 
       {/* Bulk edit modal */}
-      {showBulkEdit && selectedGroup && (
+      {showBulkEdit && selectedGroup && (() => {
+        const rootParent = getRootParent(selectedGroup.id);
+        const effectiveCustomFields = rootParent?.custom_fields || selectedGroup.custom_fields || [];
+        return (
         <div className="org-modal-overlay" onClick={() => setShowBulkEdit(false)}>
           <div className="org-modal org-modal-wide" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
@@ -2789,7 +2792,7 @@ export default function OrganizerScreen({
             </div>
             <div className="org-modal-body">
               <p className="org-bulk-hint">Täida väljad, mida soovid muuta. Tühjad väljad jäetakse vahele.</p>
-              {(selectedGroup.custom_fields || []).map(f => (
+              {effectiveCustomFields.map(f => (
                 <div key={f.id} className="org-field">
                   <label>{f.name} <span className="field-type-hint">({FIELD_TYPE_LABELS[f.type]})</span></label>
                   <input
@@ -2800,19 +2803,20 @@ export default function OrganizerScreen({
                   />
                 </div>
               ))}
-              {(selectedGroup.custom_fields || []).length === 0 && (
+              {effectiveCustomFields.length === 0 && (
                 <p className="org-empty-hint">Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst.</p>
               )}
             </div>
             <div className="org-modal-footer">
               <button className="cancel" onClick={() => setShowBulkEdit(false)}>Tühista</button>
-              <button className="save" onClick={bulkUpdateItems} disabled={saving || (selectedGroup.custom_fields || []).length === 0}>
+              <button className="save" onClick={bulkUpdateItems} disabled={saving || effectiveCustomFields.length === 0}>
                 {saving ? 'Salvestan...' : 'Uuenda kõik'}
               </button>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && deleteGroupData && (
