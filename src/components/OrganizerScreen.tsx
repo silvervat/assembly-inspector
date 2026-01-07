@@ -1273,29 +1273,62 @@ export default function OrganizerScreen({
       if (!confirm(`${existingCount} detailil on juba väärtused. Kas kirjutad üle?`)) return;
     }
 
-    setSaving(true);
-    try {
-      for (const itemId of selectedItemIds) {
-        const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
-        if (item) {
-          const updatedProps = { ...(item.custom_properties || {}) };
-          for (const [fieldId, val] of Object.entries(bulkFieldValues)) {
-            if (val !== '') updatedProps[fieldId] = val;
-          }
-          await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
-        }
-      }
+    // Optimistic update - update local state immediately
+    const updatedItemIds = Array.from(selectedItemIds);
+    const valuesToUpdate = { ...bulkFieldValues };
 
-      showToast(`${selectedItemIds.size} detaili uuendatud`);
-      setShowBulkEdit(false);
-      setBulkFieldValues({});
-      await loadData();
-    } catch (e) {
-      console.error('Error bulk updating:', e);
-      showToast('Viga massuuendamisel');
-    } finally {
-      setSaving(false);
-    }
+    setGroupItems(prev => {
+      const newMap = new Map(prev);
+      for (const [groupId, items] of newMap) {
+        const updatedItems = items.map(item => {
+          if (updatedItemIds.includes(item.id)) {
+            const updatedProps = { ...(item.custom_properties || {}) };
+            for (const [fieldId, val] of Object.entries(valuesToUpdate)) {
+              if (val !== '') updatedProps[fieldId] = val;
+            }
+            return { ...item, custom_properties: updatedProps };
+          }
+          return item;
+        });
+        newMap.set(groupId, updatedItems);
+      }
+      return newMap;
+    });
+
+    // Close modal and show toast immediately
+    setShowBulkEdit(false);
+    setBulkFieldValues({});
+    showToast(`${selectedItemIds.size} detaili uuendatud`);
+
+    // Database update in background (no await blocking UI)
+    (async () => {
+      try {
+        // Prepare all updates
+        const updates: { id: string; custom_properties: Record<string, any> }[] = [];
+        for (const itemId of updatedItemIds) {
+          const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+          if (item) {
+            const updatedProps = { ...(item.custom_properties || {}) };
+            for (const [fieldId, val] of Object.entries(valuesToUpdate)) {
+              if (val !== '') updatedProps[fieldId] = val;
+            }
+            updates.push({ id: itemId, custom_properties: updatedProps });
+          }
+        }
+
+        // Execute updates in parallel batches
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+          const batch = updates.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(u =>
+            supabase.from('organizer_group_items').update({ custom_properties: u.custom_properties }).eq('id', u.id)
+          ));
+        }
+      } catch (e) {
+        console.error('Error bulk updating in background:', e);
+        showToast('Viga salvestamisel - värskenda lehte');
+      }
+    })();
   };
 
   const moveItemsToGroup = async (itemIds: string[], targetGroupId: string) => {
@@ -1327,6 +1360,11 @@ export default function OrganizerScreen({
 
   const handleItemClick = async (e: React.MouseEvent, item: OrganizerGroupItem, allItems: OrganizerGroupItem[]) => {
     e.stopPropagation();
+
+    // Auto-select the group when clicking on an item (enables bulk edit button)
+    if (selectedGroupId !== item.group_id) {
+      setSelectedGroupId(item.group_id);
+    }
 
     let newSelectedIds: Set<string>;
 
@@ -2796,10 +2834,10 @@ export default function OrganizerScreen({
                 <div key={f.id} className="org-field">
                   <label>{f.name} <span className="field-type-hint">({FIELD_TYPE_LABELS[f.type]})</span></label>
                   <input
-                    type={f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
+                    type={f.type === 'date' ? 'date' : f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
                     value={bulkFieldValues[f.id] || ''}
                     onChange={(e) => setBulkFieldValues(prev => ({ ...prev, [f.id]: e.target.value }))}
-                    placeholder="Jäta tühjaks, et mitte muuta"
+                    placeholder={f.type === 'date' ? '' : 'Jäta tühjaks, et mitte muuta'}
                   />
                 </div>
               ))}
