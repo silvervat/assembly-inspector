@@ -187,10 +187,32 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   const [userFormData, setUserFormData] = useState({
     email: '',
     name: '',
-    role: 'inspector' as 'admin' | 'moderator' | 'inspector',
+    role: 'inspector' as 'admin' | 'moderator' | 'inspector' | 'viewer',
     can_assembly_inspection: true,
     can_bolt_inspection: false,
-    is_active: true
+    is_active: true,
+    // Delivery
+    can_view_delivery: true,
+    can_edit_delivery: true,
+    can_delete_delivery: false,
+    // Installation Schedule
+    can_view_installation_schedule: true,
+    can_edit_installation_schedule: true,
+    can_delete_installation_schedule: false,
+    // Installations
+    can_view_installations: true,
+    can_edit_installations: true,
+    can_delete_installations: false,
+    // Organizer
+    can_view_organizer: true,
+    can_edit_organizer: true,
+    can_delete_organizer: false,
+    // Inspections
+    can_view_inspections: true,
+    can_edit_inspections: true,
+    can_delete_inspections: false,
+    // Admin
+    can_access_admin: false
   });
 
   // GUID Controller popup state
@@ -1680,6 +1702,36 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       return;
     }
 
+    const permissionFields = {
+      name: userFormData.name.trim() || null,
+      role: userFormData.role,
+      can_assembly_inspection: userFormData.can_assembly_inspection,
+      can_bolt_inspection: userFormData.can_bolt_inspection,
+      is_active: userFormData.is_active,
+      // Delivery
+      can_view_delivery: userFormData.can_view_delivery,
+      can_edit_delivery: userFormData.can_edit_delivery,
+      can_delete_delivery: userFormData.can_delete_delivery,
+      // Installation Schedule
+      can_view_installation_schedule: userFormData.can_view_installation_schedule,
+      can_edit_installation_schedule: userFormData.can_edit_installation_schedule,
+      can_delete_installation_schedule: userFormData.can_delete_installation_schedule,
+      // Installations
+      can_view_installations: userFormData.can_view_installations,
+      can_edit_installations: userFormData.can_edit_installations,
+      can_delete_installations: userFormData.can_delete_installations,
+      // Organizer
+      can_view_organizer: userFormData.can_view_organizer,
+      can_edit_organizer: userFormData.can_edit_organizer,
+      can_delete_organizer: userFormData.can_delete_organizer,
+      // Inspections
+      can_view_inspections: userFormData.can_view_inspections,
+      can_edit_inspections: userFormData.can_edit_inspections,
+      can_delete_inspections: userFormData.can_delete_inspections,
+      // Admin
+      can_access_admin: userFormData.can_access_admin
+    };
+
     setUsersLoading(true);
     try {
       if (editingUser) {
@@ -1687,11 +1739,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         const { error } = await supabase
           .from('trimble_ex_users')
           .update({
-            name: userFormData.name.trim() || null,
-            role: userFormData.role,
-            can_assembly_inspection: userFormData.can_assembly_inspection,
-            can_bolt_inspection: userFormData.can_bolt_inspection,
-            is_active: userFormData.is_active,
+            ...permissionFields,
             updated_at: new Date().toISOString()
           })
           .eq('id', editingUser.id);
@@ -1705,11 +1753,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           .insert({
             trimble_project_id: projectId,
             email: userFormData.email.trim().toLowerCase(),
-            name: userFormData.name.trim() || null,
-            role: userFormData.role,
-            can_assembly_inspection: userFormData.can_assembly_inspection,
-            can_bolt_inspection: userFormData.can_bolt_inspection,
-            is_active: userFormData.is_active
+            ...permissionFields
           });
 
         if (error) throw error;
@@ -1718,14 +1762,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
       setShowUserForm(false);
       setEditingUser(null);
-      setUserFormData({
-        email: '',
-        name: '',
-        role: 'inspector',
-        can_assembly_inspection: true,
-        can_bolt_inspection: false,
-        is_active: true
-      });
+      resetUserForm();
       await loadProjectUsers();
     } catch (e: any) {
       console.error('Error saving user:', e);
@@ -1733,6 +1770,34 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     } finally {
       setUsersLoading(false);
     }
+  };
+
+  // Reset user form to defaults
+  const resetUserForm = () => {
+    setUserFormData({
+      email: '',
+      name: '',
+      role: 'inspector',
+      can_assembly_inspection: true,
+      can_bolt_inspection: false,
+      is_active: true,
+      can_view_delivery: true,
+      can_edit_delivery: true,
+      can_delete_delivery: false,
+      can_view_installation_schedule: true,
+      can_edit_installation_schedule: true,
+      can_delete_installation_schedule: false,
+      can_view_installations: true,
+      can_edit_installations: true,
+      can_delete_installations: false,
+      can_view_organizer: true,
+      can_edit_organizer: true,
+      can_delete_organizer: false,
+      can_view_inspections: true,
+      can_edit_inspections: true,
+      can_delete_inspections: false,
+      can_access_admin: false
+    });
   };
 
   // Delete user
@@ -1764,9 +1829,25 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       email: user.email,
       name: user.name || '',
       role: user.role,
-      can_assembly_inspection: user.can_assembly_inspection,
-      can_bolt_inspection: user.can_bolt_inspection,
-      is_active: user.is_active
+      can_assembly_inspection: user.can_assembly_inspection ?? true,
+      can_bolt_inspection: user.can_bolt_inspection ?? false,
+      is_active: user.is_active ?? true,
+      can_view_delivery: user.can_view_delivery ?? true,
+      can_edit_delivery: user.can_edit_delivery ?? true,
+      can_delete_delivery: user.can_delete_delivery ?? false,
+      can_view_installation_schedule: user.can_view_installation_schedule ?? true,
+      can_edit_installation_schedule: user.can_edit_installation_schedule ?? true,
+      can_delete_installation_schedule: user.can_delete_installation_schedule ?? false,
+      can_view_installations: user.can_view_installations ?? true,
+      can_edit_installations: user.can_edit_installations ?? true,
+      can_delete_installations: user.can_delete_installations ?? false,
+      can_view_organizer: user.can_view_organizer ?? true,
+      can_edit_organizer: user.can_edit_organizer ?? true,
+      can_delete_organizer: user.can_delete_organizer ?? false,
+      can_view_inspections: user.can_view_inspections ?? true,
+      can_edit_inspections: user.can_edit_inspections ?? true,
+      can_delete_inspections: user.can_delete_inspections ?? false,
+      can_access_admin: user.can_access_admin ?? false
     });
     setShowUserForm(true);
   };
@@ -1774,14 +1855,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   // Open new user form
   const openNewUserForm = () => {
     setEditingUser(null);
-    setUserFormData({
-      email: '',
-      name: '',
-      role: 'inspector',
-      can_assembly_inspection: true,
-      can_bolt_inspection: false,
-      is_active: true
-    });
+    resetUserForm();
     setShowUserForm(true);
   };
 
@@ -8228,7 +8302,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 borderRadius: '12px',
                 padding: '24px',
                 width: '100%',
-                maxWidth: '450px',
+                maxWidth: '550px',
                 maxHeight: '90vh',
                 overflow: 'auto'
               }} onClick={e => e.stopPropagation()}>
@@ -8240,93 +8314,175 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Email *</label>
-                    <input
-                      type="email"
-                      value={userFormData.email}
-                      onChange={e => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
-                      disabled={!!editingUser}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border-color)',
-                        backgroundColor: editingUser ? 'var(--bg-tertiary)' : 'var(--bg-primary)',
-                        fontSize: '14px'
-                      }}
-                      placeholder="kasutaja@email.com"
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Nimi</label>
-                    <input
-                      type="text"
-                      value={userFormData.name}
-                      onChange={e => setUserFormData(prev => ({ ...prev, name: e.target.value }))}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border-color)',
-                        backgroundColor: 'var(--bg-primary)',
-                        fontSize: '14px'
-                      }}
-                      placeholder="Kasutaja nimi"
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Roll</label>
-                    <select
-                      value={userFormData.role}
-                      onChange={e => setUserFormData(prev => ({ ...prev, role: e.target.value as 'admin' | 'moderator' | 'inspector' }))}
-                      style={{
-                        width: '100%',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid var(--border-color)',
-                        backgroundColor: 'var(--bg-primary)',
-                        fontSize: '14px'
-                      }}
-                    >
-                      <option value="inspector">Inspektor</option>
-                      <option value="moderator">Moderaator</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#6b7280' }}>
-                      Admin - täielikud õigused | Moderaator - saab teiste andmeid muuta | Inspektor - ainult enda andmed
-                    </p>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  {/* Basic Info */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Email *</label>
                       <input
-                        type="checkbox"
-                        checked={userFormData.can_assembly_inspection}
-                        onChange={e => setUserFormData(prev => ({ ...prev, can_assembly_inspection: e.target.checked }))}
+                        type="email"
+                        value={userFormData.email}
+                        onChange={e => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
+                        disabled={!!editingUser}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: editingUser ? 'var(--bg-tertiary)' : 'var(--bg-primary)',
+                          fontSize: '13px'
+                        }}
+                        placeholder="kasutaja@email.com"
                       />
-                      <span style={{ fontSize: '13px' }}>Assembly inspektsioon</span>
-                    </label>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Nimi</label>
                       <input
-                        type="checkbox"
-                        checked={userFormData.can_bolt_inspection}
-                        onChange={e => setUserFormData(prev => ({ ...prev, can_bolt_inspection: e.target.checked }))}
+                        type="text"
+                        value={userFormData.name}
+                        onChange={e => setUserFormData(prev => ({ ...prev, name: e.target.value }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-primary)',
+                          fontSize: '13px'
+                        }}
+                        placeholder="Kasutaja nimi"
                       />
-                      <span style={{ fontSize: '13px' }}>Poltide inspektsioon</span>
-                    </label>
+                    </div>
                   </div>
 
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={userFormData.is_active}
-                      onChange={e => setUserFormData(prev => ({ ...prev, is_active: e.target.checked }))}
-                    />
-                    <span style={{ fontSize: '13px' }}>Aktiivne kasutaja</span>
-                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Roll</label>
+                      <select
+                        value={userFormData.role}
+                        onChange={e => setUserFormData(prev => ({ ...prev, role: e.target.value as 'admin' | 'moderator' | 'inspector' | 'viewer' }))}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-primary)',
+                          fontSize: '13px'
+                        }}
+                      >
+                        <option value="viewer">Vaatleja (ainult vaatab)</option>
+                        <option value="inspector">Inspektor</option>
+                        <option value="moderator">Moderaator</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={userFormData.is_active}
+                          onChange={e => setUserFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                        />
+                        <span style={{ fontSize: '13px', fontWeight: '500' }}>Aktiivne kasutaja</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Permissions Table */}
+                  <div style={{ marginTop: '8px' }}>
+                    <h4 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '600' }}>Õigused moodulite kaupa</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
+                          <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid var(--border-color)' }}>Moodul</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid var(--border-color)', width: '60px' }}>Vaata</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid var(--border-color)', width: '60px' }}>Muuda</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid var(--border-color)', width: '60px' }}>Kustuta</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Tarnegraafik */}
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>🚚 Tarnegraafik</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_view_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_view_delivery: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_edit_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_delivery: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_delete_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_delivery: e.target.checked }))} />
+                          </td>
+                        </tr>
+                        {/* Paigaldusgraafik */}
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>📅 Paigaldusgraafik</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_view_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_view_installation_schedule: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_edit_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_installation_schedule: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_delete_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_installation_schedule: e.target.checked }))} />
+                          </td>
+                        </tr>
+                        {/* Paigaldused */}
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>🔧 Paigaldused</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_view_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_view_installations: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_edit_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_installations: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_delete_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_installations: e.target.checked }))} />
+                          </td>
+                        </tr>
+                        {/* Organiseerija */}
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>📁 Organiseerija</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_view_organizer} onChange={e => setUserFormData(prev => ({ ...prev, can_view_organizer: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_edit_organizer} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_organizer: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_delete_organizer} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_organizer: e.target.checked }))} />
+                          </td>
+                        </tr>
+                        {/* Inspektsioonid */}
+                        <tr>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>🔍 Inspektsioonid</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_view_inspections} onChange={e => setUserFormData(prev => ({ ...prev, can_view_inspections: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_edit_inspections} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_inspections: e.target.checked }))} />
+                          </td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                            <input type="checkbox" checked={userFormData.can_delete_inspections} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_inspections: e.target.checked }))} />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Legacy permissions */}
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginTop: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                      <input type="checkbox" checked={userFormData.can_assembly_inspection} onChange={e => setUserFormData(prev => ({ ...prev, can_assembly_inspection: e.target.checked }))} />
+                      Assembly inspektsioon
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                      <input type="checkbox" checked={userFormData.can_bolt_inspection} onChange={e => setUserFormData(prev => ({ ...prev, can_bolt_inspection: e.target.checked }))} />
+                      Poltide inspektsioon
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                      <input type="checkbox" checked={userFormData.can_access_admin} onChange={e => setUserFormData(prev => ({ ...prev, can_access_admin: e.target.checked }))} />
+                      Admin ligipääs
+                    </label>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '24px', justifyContent: 'flex-end' }}>
