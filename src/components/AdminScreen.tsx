@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase } from '../supabase';
+import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
 
@@ -142,8 +142,8 @@ function FunctionButton({
 }
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -178,6 +178,20 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   // Team members state
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [teamMembersLoading, setTeamMembersLoading] = useState(false);
+
+  // User permissions state
+  const [projectUsers, setProjectUsers] = useState<TrimbleExUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [editingUser, setEditingUser] = useState<TrimbleExUser | null>(null);
+  const [showUserForm, setShowUserForm] = useState(false);
+  const [userFormData, setUserFormData] = useState({
+    email: '',
+    name: '',
+    role: 'inspector' as 'admin' | 'moderator' | 'inspector',
+    can_assembly_inspection: true,
+    can_bolt_inspection: false,
+    is_active: true
+  });
 
   // GUID Controller popup state
   const [showGuidController, setShowGuidController] = useState(false);
@@ -1638,6 +1652,139 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     );
   }, [projectId]);
 
+  // Load project users from database
+  const loadProjectUsers = useCallback(async () => {
+    if (!projectId) return;
+    setUsersLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('trimble_ex_users')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setProjectUsers(data || []);
+    } catch (e: any) {
+      console.error('Error loading users:', e);
+      setMessage(`Viga kasutajate laadimisel: ${e.message}`);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [projectId]);
+
+  // Save user (create or update)
+  const saveUser = async () => {
+    if (!userFormData.email.trim()) {
+      setMessage('Email on kohustuslik');
+      return;
+    }
+
+    setUsersLoading(true);
+    try {
+      if (editingUser) {
+        // Update existing user
+        const { error } = await supabase
+          .from('trimble_ex_users')
+          .update({
+            name: userFormData.name.trim() || null,
+            role: userFormData.role,
+            can_assembly_inspection: userFormData.can_assembly_inspection,
+            can_bolt_inspection: userFormData.can_bolt_inspection,
+            is_active: userFormData.is_active,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingUser.id);
+
+        if (error) throw error;
+        setMessage('Kasutaja uuendatud');
+      } else {
+        // Create new user
+        const { error } = await supabase
+          .from('trimble_ex_users')
+          .insert({
+            trimble_project_id: projectId,
+            email: userFormData.email.trim().toLowerCase(),
+            name: userFormData.name.trim() || null,
+            role: userFormData.role,
+            can_assembly_inspection: userFormData.can_assembly_inspection,
+            can_bolt_inspection: userFormData.can_bolt_inspection,
+            is_active: userFormData.is_active
+          });
+
+        if (error) throw error;
+        setMessage('Kasutaja lisatud');
+      }
+
+      setShowUserForm(false);
+      setEditingUser(null);
+      setUserFormData({
+        email: '',
+        name: '',
+        role: 'inspector',
+        can_assembly_inspection: true,
+        can_bolt_inspection: false,
+        is_active: true
+      });
+      await loadProjectUsers();
+    } catch (e: any) {
+      console.error('Error saving user:', e);
+      setMessage(`Viga salvestamisel: ${e.message}`);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  // Delete user
+  const deleteUser = async (userId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle kasutaja kustutada?')) return;
+
+    setUsersLoading(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_ex_users')
+        .delete()
+        .eq('id', userId);
+
+      if (error) throw error;
+      setMessage('Kasutaja kustutatud');
+      await loadProjectUsers();
+    } catch (e: any) {
+      console.error('Error deleting user:', e);
+      setMessage(`Viga kustutamisel: ${e.message}`);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  // Open user edit form
+  const openEditUserForm = (user: TrimbleExUser) => {
+    setEditingUser(user);
+    setUserFormData({
+      email: user.email,
+      name: user.name || '',
+      role: user.role,
+      can_assembly_inspection: user.can_assembly_inspection,
+      can_bolt_inspection: user.can_bolt_inspection,
+      is_active: user.is_active
+    });
+    setShowUserForm(true);
+  };
+
+  // Open new user form
+  const openNewUserForm = () => {
+    setEditingUser(null);
+    setUserFormData({
+      email: '',
+      name: '',
+      role: 'inspector',
+      can_assembly_inspection: true,
+      can_bolt_inspection: false,
+      is_active: true
+    });
+    setShowUserForm(true);
+  };
+
   // Load property mappings from database
   const loadPropertyMappings = useCallback(async () => {
     if (!projectId) return;
@@ -2486,6 +2633,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           {adminView === 'guidImport' && 'Import GUID (MS)'}
           {adminView === 'modelObjects' && 'Saada andmebaasi'}
           {adminView === 'propertyMappings' && 'Tekla property seaded'}
+          {adminView === 'userPermissions' && 'Kasutajate õigused'}
         </h2>
       </div>
 
@@ -2546,6 +2694,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           >
             <FiDatabase size={18} />
             <span>Tekla property seaded</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('userPermissions');
+              loadProjectUsers();
+            }}
+            style={{ background: '#059669', color: 'white' }}
+          >
+            <FiUsers size={18} />
+            <span>Kasutajate õigused</span>
           </button>
         </div>
 
@@ -7921,6 +8081,289 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* User Permissions View */}
+      {adminView === 'userPermissions' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button
+                className="inspector-button primary"
+                onClick={openNewUserForm}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <FiPlus size={14} /> Lisa kasutaja
+              </button>
+              <button
+                className="inspector-button"
+                onClick={loadProjectUsers}
+                disabled={usersLoading}
+              >
+                <FiRefreshCw size={14} className={usersLoading ? 'spin' : ''} />
+              </button>
+            </div>
+            <span style={{ fontSize: '12px', color: '#6b7280' }}>
+              {projectUsers.length} kasutajat
+            </span>
+          </div>
+
+          {usersLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <FiLoader size={24} className="spin" />
+              <p style={{ marginTop: '8px', color: '#6b7280' }}>Laadin...</p>
+            </div>
+          ) : projectUsers.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+              <FiUsers size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
+              <p>Kasutajaid pole veel lisatud</p>
+              <button className="inspector-button primary" onClick={openNewUserForm} style={{ marginTop: '12px' }}>
+                <FiPlus size={14} /> Lisa esimene kasutaja
+              </button>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'var(--bg-tertiary)', borderBottom: '2px solid var(--border-color)' }}>
+                    <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600' }}>Nimi</th>
+                    <th style={{ textAlign: 'left', padding: '10px 12px', fontWeight: '600' }}>Email</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Roll</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Assembly</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Poldid</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Aktiivne</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', fontWeight: '600' }}>Tegevused</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectUsers.map(user => (
+                    <tr key={user.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '10px 12px', fontWeight: '500' }}>{user.name || '-'}</td>
+                      <td style={{ padding: '10px 12px', color: '#6b7280' }}>{user.email}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          backgroundColor: user.role === 'admin' ? '#fef2f2' : user.role === 'moderator' ? '#fffbeb' : '#f0fdf4',
+                          color: user.role === 'admin' ? '#dc2626' : user.role === 'moderator' ? '#d97706' : '#16a34a'
+                        }}>
+                          {user.role === 'admin' ? 'Admin' : user.role === 'moderator' ? 'Moderaator' : 'Inspektor'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        {user.can_assembly_inspection ? <FiCheck color="#16a34a" /> : <FiX color="#dc2626" />}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        {user.can_bolt_inspection ? <FiCheck color="#16a34a" /> : <FiX color="#dc2626" />}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        {user.is_active ? <FiCheck color="#16a34a" /> : <FiX color="#dc2626" />}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                          <button
+                            onClick={() => openEditUserForm(user)}
+                            style={{
+                              padding: '4px 8px',
+                              border: '1px solid var(--border-color)',
+                              borderRadius: '4px',
+                              background: 'var(--bg-secondary)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px'
+                            }}
+                          >
+                            <FiEdit2 size={12} /> Muuda
+                          </button>
+                          <button
+                            onClick={() => deleteUser(user.id)}
+                            style={{
+                              padding: '4px 8px',
+                              border: '1px solid #fecaca',
+                              borderRadius: '4px',
+                              background: '#fef2f2',
+                              color: '#dc2626',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontSize: '11px'
+                            }}
+                          >
+                            <FiTrash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* User Form Modal */}
+          {showUserForm && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 1000
+            }} onClick={() => setShowUserForm(false)}>
+              <div style={{
+                backgroundColor: 'var(--bg-primary)',
+                borderRadius: '12px',
+                padding: '24px',
+                width: '100%',
+                maxWidth: '450px',
+                maxHeight: '90vh',
+                overflow: 'auto'
+              }} onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                  <h3 style={{ margin: 0 }}>{editingUser ? 'Muuda kasutajat' : 'Lisa uus kasutaja'}</h3>
+                  <button onClick={() => setShowUserForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
+                    <FiX size={20} />
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Email *</label>
+                    <input
+                      type="email"
+                      value={userFormData.email}
+                      onChange={e => setUserFormData(prev => ({ ...prev, email: e.target.value }))}
+                      disabled={!!editingUser}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: editingUser ? 'var(--bg-tertiary)' : 'var(--bg-primary)',
+                        fontSize: '14px'
+                      }}
+                      placeholder="kasutaja@email.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Nimi</label>
+                    <input
+                      type="text"
+                      value={userFormData.name}
+                      onChange={e => setUserFormData(prev => ({ ...prev, name: e.target.value }))}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'var(--bg-primary)',
+                        fontSize: '14px'
+                      }}
+                      placeholder="Kasutaja nimi"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: '500' }}>Roll</label>
+                    <select
+                      value={userFormData.role}
+                      onChange={e => setUserFormData(prev => ({ ...prev, role: e.target.value as 'admin' | 'moderator' | 'inspector' }))}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-color)',
+                        backgroundColor: 'var(--bg-primary)',
+                        fontSize: '14px'
+                      }}
+                    >
+                      <option value="inspector">Inspektor</option>
+                      <option value="moderator">Moderaator</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#6b7280' }}>
+                      Admin - täielikud õigused | Moderaator - saab teiste andmeid muuta | Inspektor - ainult enda andmed
+                    </p>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={userFormData.can_assembly_inspection}
+                        onChange={e => setUserFormData(prev => ({ ...prev, can_assembly_inspection: e.target.checked }))}
+                      />
+                      <span style={{ fontSize: '13px' }}>Assembly inspektsioon</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={userFormData.can_bolt_inspection}
+                        onChange={e => setUserFormData(prev => ({ ...prev, can_bolt_inspection: e.target.checked }))}
+                      />
+                      <span style={{ fontSize: '13px' }}>Poltide inspektsioon</span>
+                    </label>
+                  </div>
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={userFormData.is_active}
+                      onChange={e => setUserFormData(prev => ({ ...prev, is_active: e.target.checked }))}
+                    />
+                    <span style={{ fontSize: '13px' }}>Aktiivne kasutaja</span>
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginTop: '24px', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => setShowUserForm(false)}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      background: 'var(--bg-secondary)',
+                      cursor: 'pointer',
+                      fontSize: '14px'
+                    }}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    onClick={saveUser}
+                    disabled={usersLoading}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: '#059669',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <FiSave size={14} />
+                    {usersLoading ? 'Salvestan...' : 'Salvesta'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
