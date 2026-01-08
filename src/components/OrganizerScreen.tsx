@@ -1681,38 +1681,31 @@ export default function OrganizerScreen({
       console.log(`Grouped items to color: ${guidToColor.size}`);
 
       // Step 5 & 6: Color non-grouped items WHITE
+      // IMPORTANT: This logic is the SAME for both "Värvi see grupp" and "Värvi gruppide kaupa"
+      // - Items NOT in guidToColor get colored white
+      // - For single group (targetGroupId): guidToColor only has that group's items, so other groups become white
+      // - For all groups (no targetGroupId): guidToColor has all grouped items, so only non-grouped become white
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guidLower, found] of foundByLowercase) {
+        if (!guidToColor.has(guidLower)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
       const BATCH_SIZE = 5000;
       let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
 
-      if (targetGroupId) {
-        // For single group coloring, use simple "color all white" first approach
-        // This is faster and ensures consistent behavior
-        showToast('Värvin kõik valgeks...');
-        await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
-        whiteCount = allGuids.length;
-      } else {
-        // For all groups, color non-grouped items white one by one
-        // Build arrays for white coloring (non-grouped items)
-        const whiteByModel: Record<string, number[]> = {};
-        for (const [guidLower, found] of foundByLowercase) {
-          if (!guidToColor.has(guidLower)) {
-            if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-            whiteByModel[found.modelId].push(found.runtimeId);
-          }
-        }
-
-        const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-
-        for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-          for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-            const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-            await api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-              { color: { r: 255, g: 255, b: 255, a: 255 } }
-            );
-            whiteCount += batch.length;
-            showToast(`Värvin valged... ${whiteCount}/${totalWhite}`);
-          }
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          showToast(`Värvin valged... ${whiteCount}/${totalWhite}`);
         }
       }
 

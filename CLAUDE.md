@@ -129,3 +129,34 @@ Mõlemad graafikud (tarne- ja paigaldusgraafik) kasutavad nüüd andmebaasi-põh
 - Loetakse kõik objektid `trimble_model_objects` tabelist
 - Värvimine toimub ainult nende objektide põhjal mis on andmebaasis
 - Graafiku-välised objektid värvitakse valgeks, graafikus olevad oma kuupäeva järgi
+
+### Organiseeri lehe grupi värvimine (KRIITILINE!)
+**REEGL:** "Värvi see grupp" ja "Värvi gruppide kaupa" kasutavad SAMA loogikat!
+
+Funktsioon `colorModelByGroups(targetGroupId?: string)` töötab nii:
+1. **Loe andmebaasist** - kõik GUID-id `trimble_model_objects` tabelist
+2. **Otsi mudelist** - `findObjectsInLoadedModels()` leiab runtime ID-d
+3. **Määra grupid** - `groupsToProcess` = kas kõik grupid või ainult sihtgrupp
+4. **Kogu värvid** - `guidToColor` Map sisaldab ainult `groupsToProcess` gruppide elemente
+5. **Värvi valgeks** - KÕIK objektid mis EI OLE `guidToColor`-is värvitakse valgeks
+6. **Värvi grupid** - `guidToColor` elemendid saavad grupi värvi
+
+```typescript
+// Valge värvimise loogika - SAMA mõlemal juhul:
+const whiteByModel: Record<string, number[]> = {};
+for (const [guidLower, found] of foundByLowercase) {
+  if (!guidToColor.has(guidLower)) {  // Kui pole grupeeritud
+    whiteByModel[found.modelId].push(found.runtimeId);
+  }
+}
+// Värvi valgeks batchides
+await api.viewer.setObjectState({ modelObjectIds: [...] }, { color: white });
+```
+
+**Erinevus:**
+- `colorModelByGroups()` - kõik grupid → `guidToColor` sisaldab KÕIKI grupeeritud elemente → ainult mitte-grupeeritud valgeks
+- `colorModelByGroups(groupId)` - üks grupp → `guidToColor` sisaldab AINULT selle grupi elemente → KÕIK TEISED (sh teised grupid) valgeks
+
+**Elementide lisamisel gruppi:**
+- Kasuta `colorItemsDirectly()` funktsiooni AINULT lisatud elementide värvimiseks
+- Kasuta `refreshData()` (mitte `loadData()`) et vältida UI vilkumist
