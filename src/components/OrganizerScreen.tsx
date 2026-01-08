@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   supabase,
@@ -416,6 +416,48 @@ export default function OrganizerScreen({
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Computed: Selected GUIDs that are already in groups (for highlighting)
+  const selectedGuidsInGroups = useMemo(() => {
+    const selectedGuids = new Set(
+      selectedObjects.map(obj => obj.guidIfc?.toLowerCase()).filter(Boolean)
+    );
+
+    // Map from GUID to group ID for items that are selected in the model
+    const guidToGroupId = new Map<string, string>();
+
+    for (const [groupId, items] of groupItems) {
+      for (const item of items) {
+        const guidLower = item.guid_ifc?.toLowerCase();
+        if (guidLower && selectedGuids.has(guidLower)) {
+          guidToGroupId.set(guidLower, groupId);
+        }
+      }
+    }
+
+    return guidToGroupId;
+  }, [selectedObjects, groupItems]);
+
+  // Auto-expand groups that contain selected items from model
+  useEffect(() => {
+    if (selectedGuidsInGroups.size > 0) {
+      const groupsWithSelectedItems = new Set(selectedGuidsInGroups.values());
+      setExpandedGroups(prev => {
+        const newExpanded = new Set(prev);
+        for (const groupId of groupsWithSelectedItems) {
+          newExpanded.add(groupId);
+          // Also expand parent groups
+          const group = groups.find(g => g.id === groupId);
+          if (group?.parent_id) {
+            newExpanded.add(group.parent_id);
+            const parent = groups.find(g => g.id === group.parent_id);
+            if (parent?.parent_id) newExpanded.add(parent.parent_id);
+          }
+        }
+        return newExpanded;
+      });
+    }
+  }, [selectedGuidsInGroups, groups]);
 
   // ============================================
   // TOAST
@@ -2222,6 +2264,9 @@ export default function OrganizerScreen({
 
     const filteredItems = filterItems(items, node);
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
+    const hasModelSelectedItems = filteredItems.some(item =>
+      item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase())
+    );
     const newItemsCount = getNewItemsCount(node.id);
     const existingItemsCount = getExistingItemsCount(node.id);
 
@@ -2232,7 +2277,7 @@ export default function OrganizerScreen({
     return (
       <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''}`}>
         <div
-          className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''}`}
+          className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''}`}
           style={{ paddingLeft: `${8 + depth * 20}px` }}
           onClick={(e) => handleGroupClick(e, node.id)}
           onDragOver={(e) => handleDragOver(e, node.id)}
@@ -2344,7 +2389,7 @@ export default function OrganizerScreen({
               const hasMore = sortedItems.length > visibleCount;
 
               return (
-              <div className="org-items" style={{ marginLeft: '8px' }}>
+              <div className="org-items">
                 {/* Item sort header */}
                 {sortedItems.length > 3 && (
                   <div className="org-items-header">
@@ -2373,10 +2418,11 @@ export default function OrganizerScreen({
 
                 {displayItems.map((item, idx) => {
                   const isItemSelected = selectedItemIds.has(item.id);
+                  const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
                   return (
                     <div
                       key={item.id}
-                      className={`org-item ${isItemSelected ? 'selected' : ''}`}
+                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, [item])}
                       onClick={(e) => handleItemClick(e, item, sortedItems)}

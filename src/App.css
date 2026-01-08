@@ -8385,6 +8385,15 @@ button.stat-toggle.off:hover {
   background: #dbeafe;
 }
 
+.org-group-header.has-model-selected {
+  background: #fef9c3;
+  border-left: 3px solid #eab308;
+}
+
+.org-group-header.has-model-selected .org-group-name {
+  color: #a16207;
+}
+
 .org-group-header.drag-over {
   background: #dcfce7;
   outline: 2px dashed #22c55e;
@@ -8548,7 +8557,7 @@ button.stat-toggle.off:hover {
 
 /* Items list */
 .org-items {
-  padding: 0 0 4px 24px;
+  padding: 0 0 4px 18px;
   margin-top: 2px;
 }
 
@@ -8581,6 +8590,22 @@ button.stat-toggle.off:hover {
 
 .org-item.selected {
   background: #dbeafe;
+}
+
+.org-item.model-selected {
+  background: #fef3c7;
+  animation: highlight-pulse 1.5s ease-in-out;
+}
+
+.org-item.model-selected .org-item-mark {
+  font-weight: 600;
+  color: #d97706;
+}
+
+@keyframes highlight-pulse {
+  0% { background: #fde68a; }
+  50% { background: #fef3c7; }
+  100% { background: #fef3c7; }
 }
 
 .org-item-index {
