@@ -1190,11 +1190,18 @@ export default function OrganizerScreen({
         : `${items.length} detaili lisatud`;
       showToast(message);
       setExpandedGroups(prev => new Set([...prev, targetGroupId]));
-      await loadData();
-      // Auto-recolor if coloring mode is active
-      if (colorByGroup) {
-        setTimeout(() => colorModelByGroups(), 150);
+
+      // Get the group's color (including parent's color if group doesn't have one)
+      const groupColor = group.color || (group.parent_id ? groups.find(g => g.id === group.parent_id)?.color : null);
+      const addedGuids = objectsToAdd.map(obj => obj.guidIfc).filter(Boolean);
+
+      // Color newly added items directly if coloring mode is active and group has a color
+      // Do this BEFORE loadData to prevent visual flash
+      if (colorByGroup && groupColor && addedGuids.length > 0) {
+        await colorItemsDirectly(addedGuids, groupColor);
       }
+
+      await loadData();
     } catch (e) {
       console.error('Error adding items to group:', e);
       showToast('Viga detailide lisamisel');
@@ -1209,16 +1216,25 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
+      // Get GUIDs before deleting for coloring
+      const guidsToRemove: string[] = [];
+      for (const itemId of itemIds) {
+        const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+        if (item?.guid_ifc) guidsToRemove.push(item.guid_ifc);
+      }
+
       const { error } = await supabase.from('organizer_group_items').delete().in('id', itemIds);
       if (error) throw error;
 
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
-      await loadData();
-      // Auto-recolor if coloring mode is active
-      if (colorByGroup) {
-        setTimeout(() => colorModelByGroups(), 150);
+
+      // Color removed items WHITE if coloring mode is active
+      if (colorByGroup && guidsToRemove.length > 0) {
+        await colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
       }
+
+      await loadData();
     } catch (e) {
       console.error('Error removing items:', e);
       showToast('Viga detailide eemaldamisel');
@@ -1521,6 +1537,38 @@ export default function OrganizerScreen({
     return ids;
   };
 
+  // Quick function to color specific items without full database read
+  // Used when adding items to a group that already has a color
+  const colorItemsDirectly = async (guids: string[], color: GroupColor) => {
+    if (guids.length === 0 || !color) return;
+
+    try {
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+      if (foundObjects.size === 0) return;
+
+      // Group by model
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+
+      // Color in batches
+      const BATCH_SIZE = 5000;
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+          );
+        }
+      }
+    } catch (e) {
+      console.error('Error coloring items directly:', e);
+    }
+  };
+
   // Main coloring function
   // targetGroupId: if provided, only color this group and its children
   const colorModelByGroups = async (targetGroupId?: string) => {
@@ -1616,29 +1664,33 @@ export default function OrganizerScreen({
 
       console.log(`Grouped items to color: ${guidToColor.size}`);
 
-      // Step 5: Build arrays for white coloring (non-grouped items) and by model
-      const whiteByModel: Record<string, number[]> = {};
-      for (const [guidLower, found] of foundByLowercase) {
-        if (!guidToColor.has(guidLower)) {
-          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-          whiteByModel[found.modelId].push(found.runtimeId);
-        }
-      }
-
-      // Step 6: Color non-grouped items WHITE in batches
+      // Step 5 & 6: Color non-grouped items WHITE - ONLY when coloring all groups
+      // Skip this when targeting a specific group to avoid overwriting other colors
       const BATCH_SIZE = 5000;
       let whiteCount = 0;
-      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
 
-      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
-        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 255, g: 255, b: 255, a: 255 } }
-          );
-          whiteCount += batch.length;
-          showToast(`Värvin valged... ${whiteCount}/${totalWhite}`);
+      if (!targetGroupId) {
+        // Build arrays for white coloring (non-grouped items)
+        const whiteByModel: Record<string, number[]> = {};
+        for (const [guidLower, found] of foundByLowercase) {
+          if (!guidToColor.has(guidLower)) {
+            if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+            whiteByModel[found.modelId].push(found.runtimeId);
+          }
+        }
+
+        const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+        for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+          for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+            const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+              { color: { r: 255, g: 255, b: 255, a: 255 } }
+            );
+            whiteCount += batch.length;
+            showToast(`Värvin valged... ${whiteCount}/${totalWhite}`);
+          }
         }
       }
 
