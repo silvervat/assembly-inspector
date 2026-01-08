@@ -576,6 +576,18 @@ export default function OrganizerScreen({
     }
   }, [loadGroups, loadAllGroupItems]);
 
+  // Silent refresh - updates data without showing loading state (no UI flash)
+  const refreshData = useCallback(async () => {
+    try {
+      const loadedGroups = await loadGroups();
+      const loadedItems = await loadAllGroupItems(loadedGroups);
+      const tree = buildGroupTree(loadedGroups, loadedItems);
+      setGroupTree(tree);
+    } catch (e) {
+      console.error('Error refreshing data:', e);
+    }
+  }, [loadGroups, loadAllGroupItems]);
+
   useEffect(() => {
     loadData();
   }, [loadData]);
@@ -1196,12 +1208,12 @@ export default function OrganizerScreen({
       const addedGuids = objectsToAdd.map(obj => obj.guidIfc).filter(Boolean);
 
       // Color newly added items directly if coloring mode is active and group has a color
-      // Do this BEFORE loadData to prevent visual flash
       if (colorByGroup && groupColor && addedGuids.length > 0) {
         await colorItemsDirectly(addedGuids, groupColor);
       }
 
-      await loadData();
+      // Use silent refresh to avoid UI flash (no "Laadin..." state)
+      await refreshData();
     } catch (e) {
       console.error('Error adding items to group:', e);
       showToast('Viga detailide lisamisel');
@@ -1234,7 +1246,8 @@ export default function OrganizerScreen({
         await colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
       }
 
-      await loadData();
+      // Use silent refresh to avoid UI flash
+      await refreshData();
     } catch (e) {
       console.error('Error removing items:', e);
       showToast('Viga detailide eemaldamisel');
@@ -1261,7 +1274,7 @@ export default function OrganizerScreen({
     const updatedProps = { ...(item.custom_properties || {}), [fieldId]: parsedValue };
     try {
       await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
-      await loadData();
+      await refreshData();
     } catch (e) {
       console.error('Error updating field:', e);
     }
@@ -1357,8 +1370,11 @@ export default function OrganizerScreen({
 
       showToast(`${itemIds.length} detaili liigutatud`);
       setSelectedItemIds(new Set());
-      await loadData();
-      // Auto-recolor if coloring mode is active
+
+      // Use silent refresh to avoid UI flash
+      await refreshData();
+
+      // Auto-recolor if coloring mode is active (items may have new group color)
       if (colorByGroup) {
         setTimeout(() => colorModelByGroups(), 150);
       }
@@ -1664,12 +1680,18 @@ export default function OrganizerScreen({
 
       console.log(`Grouped items to color: ${guidToColor.size}`);
 
-      // Step 5 & 6: Color non-grouped items WHITE - ONLY when coloring all groups
-      // Skip this when targeting a specific group to avoid overwriting other colors
+      // Step 5 & 6: Color non-grouped items WHITE
       const BATCH_SIZE = 5000;
       let whiteCount = 0;
 
-      if (!targetGroupId) {
+      if (targetGroupId) {
+        // For single group coloring, use simple "color all white" first approach
+        // This is faster and ensures consistent behavior
+        showToast('Värvin kõik valgeks...');
+        await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+        whiteCount = allGuids.length;
+      } else {
+        // For all groups, color non-grouped items white one by one
         // Build arrays for white coloring (non-grouped items)
         const whiteByModel: Record<string, number[]> = {};
         for (const [guidLower, found] of foundByLowercase) {
