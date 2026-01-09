@@ -91,6 +91,10 @@ CREATE POLICY "Allow all for arrival_photos" ON trimble_arrival_photos FOR ALL U
 -- Add is_unplanned column to delivery vehicles (for unplanned arrivals)
 ALTER TABLE trimble_delivery_vehicles ADD COLUMN IF NOT EXISTS is_unplanned BOOLEAN DEFAULT FALSE;
 
+-- Add vehicle registration and trailer number to arrived vehicles
+ALTER TABLE trimble_arrived_vehicles ADD COLUMN IF NOT EXISTS reg_number TEXT;
+ALTER TABLE trimble_arrived_vehicles ADD COLUMN IF NOT EXISTS trailer_number TEXT;
+
 -- Storage bucket for photos
 -- Run this in Supabase dashboard SQL editor:
 /*

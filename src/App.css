@@ -6317,49 +6317,76 @@ button.stat-toggle.off:hover {
   height: 16px;
 }
 
-/* Compact items list */
+/* Compact items list - same style as delivery schedule */
+.arrived-deliveries .items-list.compact {
+  gap: 2px;
+}
+
 .arrived-deliveries .items-list.compact .item-row {
-  padding: 4px 8px;
-  gap: 8px;
+  padding: 3px 8px;
+  gap: 6px;
+  min-height: 26px;
 }
 
 .arrived-deliveries .items-list.compact .item-checkbox {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   margin: 0;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .arrived-deliveries .items-list.compact .item-index {
   font-size: 10px;
   color: var(--modus-text-tertiary);
-  min-width: 36px;
+  min-width: 30px;
   font-family: monospace;
+  flex-shrink: 0;
 }
 
-.arrived-deliveries .items-list.compact .item-info {
+/* Inline item info - single line like delivery schedule */
+.arrived-deliveries .items-list.compact .item-info.inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
   gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .arrived-deliveries .items-list.compact .item-mark {
   font-size: 12px;
+  font-weight: 600;
+  color: var(--modus-text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.arrived-deliveries .items-list.compact .item-name {
+.arrived-deliveries .items-list.compact .item-product {
   font-size: 11px;
-  max-width: 120px;
+  color: var(--modus-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 
 .arrived-deliveries .items-list.compact .item-weight {
   font-size: 10px;
+  color: var(--modus-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.arrived-deliveries .items-list.compact .item-actions {
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .arrived-deliveries .items-list.compact .action-btn {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
 }
 
 .arrived-deliveries .item-row.selected {

@@ -800,6 +800,9 @@ export interface ArrivedVehicle {
   unload_resources?: ArrivalUnloadResources;
   // Asukoht
   unload_location?: string;              // Mahalaadimise asukoht (tekstiväli)
+  // Veoki info
+  reg_number?: string;                   // Veoki registri number
+  trailer_number?: string;               // Haagise number
   // Staatus
   is_confirmed: boolean;                 // Kas kinnitus on lõpetatud
   confirmed_at?: string;

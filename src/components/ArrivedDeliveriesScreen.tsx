@@ -4,6 +4,7 @@ import {
   ArrivedVehicle, ArrivalItemConfirmation, ArrivalPhoto,
   ArrivalItemStatus
 } from '../supabase';
+import { selectObjectsByGuid } from '../utils/navigationHelper';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiCheck, FiX,
   FiCamera, FiClock, FiMapPin, FiTruck,
@@ -66,7 +67,7 @@ const formatDateFull = (dateStr: string) => {
 };
 
 export default function ArrivedDeliveriesScreen({
-  api: _api,
+  api,
   user,
   projectId,
   onBack
@@ -115,6 +116,7 @@ export default function ArrivedDeliveriesScreen({
 
   // State - Bulk item selection for confirmation
   const [selectedItemsForConfirm, setSelectedItemsForConfirm] = useState<Set<string>>(new Set());
+  const [lastClickedItemId, setLastClickedItemId] = useState<string | null>(null);
 
   // Photo upload ref
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -300,6 +302,36 @@ export default function ArrivedDeliveriesScreen({
     );
     return confirmation?.status || 'pending';
   };
+
+  // Select items in 3D model based on selection
+  const selectItemsInModel = useCallback(async (selectedIds: Set<string>) => {
+    if (selectedIds.size === 0) {
+      // Clear selection in model
+      try {
+        await api.viewer.setSelection([]);
+      } catch (e) {
+        console.error('Error clearing model selection:', e);
+      }
+      return;
+    }
+
+    // Get GUIDs for selected items
+    const guids: string[] = [];
+    selectedIds.forEach(itemId => {
+      const item = items.find(i => i.id === itemId);
+      if (item?.guid_ifc) {
+        guids.push(item.guid_ifc);
+      }
+    });
+
+    if (guids.length > 0) {
+      try {
+        await selectObjectsByGuid(api, guids);
+      } catch (e) {
+        console.error('Error selecting items in model:', e);
+      }
+    }
+  }, [api, items]);
 
   // ============================================
   // ARRIVAL ACTIONS
@@ -1060,6 +1092,24 @@ export default function ArrivedDeliveriesScreen({
                           </div>
 
                           <div className="detail-row">
+                            <div className="detail-field">
+                              <label><FiTruck /> Registri number</label>
+                              <input
+                                type="text"
+                                value={arrivedVehicle.reg_number || ''}
+                                onChange={(e) => updateArrival(arrivedVehicle.id, { reg_number: e.target.value })}
+                                placeholder="Nt. 123ABC"
+                              />
+                            </div>
+                            <div className="detail-field">
+                              <label><FiTruck /> Haagise number</label>
+                              <input
+                                type="text"
+                                value={arrivedVehicle.trailer_number || ''}
+                                onChange={(e) => updateArrival(arrivedVehicle.id, { trailer_number: e.target.value })}
+                                placeholder="Nt. 456DEF"
+                              />
+                            </div>
                             <div className="detail-field wide">
                               <label><FiMapPin /> Mahalaadimise asukoht</label>
                               <input
@@ -1231,6 +1281,12 @@ export default function ArrivedDeliveriesScreen({
                               const status = getItemConfirmationStatus(arrivedVehicle.id, item.id);
                               const isSelected = selectedItemsForConfirm.has(item.id);
                               const totalCount = vehicleItems.length;
+
+                              // Get pending items for shift-click range selection
+                              const pendingItems = vehicleItems.filter(i =>
+                                getItemConfirmationStatus(arrivedVehicle.id, i.id) === 'pending'
+                              );
+
                               return (
                                 <div key={item.id} className={`item-row ${status} ${isSelected ? 'selected' : ''}`}>
                                   {/* Checkbox for pending items */}
@@ -1239,23 +1295,52 @@ export default function ArrivedDeliveriesScreen({
                                       type="checkbox"
                                       className="item-checkbox"
                                       checked={isSelected}
-                                      onChange={(e) => {
-                                        const next = new Set(selectedItemsForConfirm);
-                                        if (e.target.checked) {
-                                          next.add(item.id);
+                                      onChange={() => {}}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+
+                                        // Shift+click for range selection
+                                        if (e.shiftKey && lastClickedItemId) {
+                                          const lastIdx = pendingItems.findIndex(i => i.id === lastClickedItemId);
+                                          const currentIdx = pendingItems.findIndex(i => i.id === item.id);
+
+                                          if (lastIdx >= 0 && currentIdx >= 0) {
+                                            const start = Math.min(lastIdx, currentIdx);
+                                            const end = Math.max(lastIdx, currentIdx);
+                                            const rangeIds = pendingItems.slice(start, end + 1).map(i => i.id);
+
+                                            setSelectedItemsForConfirm(prev => {
+                                              const next = new Set(prev);
+                                              rangeIds.forEach(id => next.add(id));
+                                              // Select items in model
+                                              selectItemsInModel(next);
+                                              return next;
+                                            });
+                                          }
                                         } else {
-                                          next.delete(item.id);
+                                          // Normal click - toggle single item
+                                          setSelectedItemsForConfirm(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(item.id)) {
+                                              next.delete(item.id);
+                                            } else {
+                                              next.add(item.id);
+                                            }
+                                            // Select items in model
+                                            selectItemsInModel(next);
+                                            return next;
+                                          });
                                         }
-                                        setSelectedItemsForConfirm(next);
+                                        setLastClickedItemId(item.id);
                                       }}
-                                      onClick={(e) => e.stopPropagation()}
                                     />
                                   )}
                                   {/* Item index */}
                                   <span className="item-index">{idx + 1}/{totalCount}</span>
-                                  <div className="item-info">
+                                  {/* Inline item info - same as delivery schedule */}
+                                  <div className="item-info inline">
                                     <span className="item-mark">{item.assembly_mark}</span>
-                                    <span className="item-name">{item.product_name}</span>
+                                    {item.product_name && <span className="item-product">{item.product_name}</span>}
                                     {item.cast_unit_weight && (
                                       <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
                                     )}
