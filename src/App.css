@@ -5655,12 +5655,12 @@ button.stat-toggle.off:hover {
   overflow: hidden;
 }
 
-/* Arrived deliveries uses same header as Tarnegraafik (dark blue) */
+/* Arrived deliveries - compact header for narrow width (280-300px) */
 .arrived-deliveries .delivery-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 8px 10px;
   background: var(--modus-primary-darker, #0a3a67);
   flex-shrink: 0;
 }
@@ -5669,14 +5669,15 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border: none;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   color: white;
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 
 .arrived-deliveries .delivery-header .back-btn:hover {
@@ -5685,26 +5686,30 @@ button.stat-toggle.off:hover {
 
 .arrived-deliveries .delivery-header h1 {
   margin: 0;
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
   color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .arrived-deliveries .delivery-header .header-actions {
   display: flex;
   gap: 4px;
   margin-left: auto;
+  flex-shrink: 0;
 }
 
 .arrived-deliveries .delivery-header .view-toggle-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border: none;
   background: rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
   color: rgba(255, 255, 255, 0.7);
   transition: all 0.15s;
@@ -5719,12 +5724,12 @@ button.stat-toggle.off:hover {
   animation: spin 1s linear infinite;
 }
 
-/* Message toast */
+/* Message toast - compact */
 .arrived-deliveries .message {
-  padding: 10px 16px;
-  margin: 8px 16px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 6px 10px;
+  margin: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
   text-align: center;
 }
 
@@ -5738,23 +5743,25 @@ button.stat-toggle.off:hover {
   color: #991b1b;
 }
 
-/* Calendar navigation */
+/* Calendar navigation - compact */
 .arrived-deliveries .calendar-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 6px;
+  padding: 8px;
   background: var(--modus-bg-secondary);
   border-bottom: 1px solid var(--modus-border);
+  flex-wrap: wrap;
 }
 
 .arrived-deliveries .nav-btn {
-  padding: 8px;
+  padding: 5px;
   background: white;
   border: 1px solid var(--modus-border);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .arrived-deliveries .nav-btn:hover:not(:disabled) {
@@ -5767,26 +5774,26 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .date-selector select {
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 5px 10px;
+  font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--modus-border);
-  border-radius: 6px;
+  border-radius: 4px;
   background: white;
 }
 
 .arrived-deliveries .playback-controls {
   display: flex;
-  gap: 8px;
+  gap: 4px;
 }
 
 .arrived-deliveries .play-btn,
 .arrived-deliveries .stop-btn {
-  padding: 8px 12px;
+  padding: 5px 8px;
   background: var(--modus-primary);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
@@ -5794,11 +5801,11 @@ button.stat-toggle.off:hover {
   background: #dc2626;
 }
 
-/* Vehicles container */
+/* Vehicles container - compact */
 .arrived-deliveries .vehicles-container {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 8px;
 }
 
 .arrived-deliveries .no-vehicles {
@@ -5806,25 +5813,26 @@ button.stat-toggle.off:hover {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 30px 12px;
   color: var(--modus-text-secondary);
 }
 
 .arrived-deliveries .no-vehicles p {
-  margin-top: 12px;
+  margin-top: 8px;
+  font-size: 12px;
 }
 
-/* Vehicle card */
+/* Vehicle card - compact */
 .arrived-deliveries .vehicle-card {
   background: white;
   border: 1px solid var(--modus-border);
-  border-radius: 8px;
-  margin-bottom: 12px;
+  border-radius: 6px;
+  margin-bottom: 8px;
   overflow: hidden;
 }
 
 .arrived-deliveries .vehicle-card.confirmed {
-  border-left: 4px solid #10b981;
+  border-left: 3px solid #10b981;
 }
 
 .arrived-deliveries .vehicle-card.active {
@@ -5835,10 +5843,10 @@ button.stat-toggle.off:hover {
 .arrived-deliveries .vehicle-header {
   display: flex;
   align-items: center;
-  padding: 12px 16px;
+  padding: 8px 10px;
   background: var(--modus-bg-secondary);
   cursor: pointer;
-  gap: 12px;
+  gap: 8px;
 }
 
 .arrived-deliveries .vehicle-header:hover {
@@ -5848,33 +5856,36 @@ button.stat-toggle.off:hover {
 .arrived-deliveries .vehicle-title {
   flex: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 4px 8px;
+  min-width: 0;
 }
 
 .arrived-deliveries .vehicle-code {
   font-weight: 600;
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .arrived-deliveries .vehicle-factory {
   color: var(--modus-text-secondary);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .arrived-deliveries .vehicle-stats {
   color: var(--modus-text-tertiary);
-  font-size: 12px;
+  font-size: 10px;
 }
 
 .arrived-deliveries .vehicle-status .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  font-size: 12px;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .arrived-deliveries .status-badge.confirmed {
@@ -5900,31 +5911,32 @@ button.stat-toggle.off:hover {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px;
+  padding: 2px;
   color: var(--modus-text-secondary);
+  flex-shrink: 0;
 }
 
-/* Vehicle content */
+/* Vehicle content - compact for narrow width (280-300px) */
 .arrived-deliveries .vehicle-content {
-  padding: 16px;
+  padding: 10px;
   border-top: 1px solid var(--modus-border);
 }
 
 .arrived-deliveries .arrival-start {
   text-align: center;
-  padding: 20px;
+  padding: 12px;
 }
 
 .arrived-deliveries .start-arrival-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
+  gap: 6px;
+  padding: 8px 16px;
   background: #3b82f6;
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
 }
@@ -5933,40 +5945,49 @@ button.stat-toggle.off:hover {
   background: #2563eb;
 }
 
-/* Arrival details form */
+/* Arrival details form - compact layout */
 .arrived-deliveries .arrival-details {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .arrived-deliveries .detail-row {
   display: flex;
-  gap: 16px;
-  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-bottom: 8px;
 }
 
 .arrived-deliveries .detail-field {
-  flex: 1;
+  flex: 1 1 calc(50% - 4px);
+  min-width: 70px;
 }
 
 .arrived-deliveries .detail-field.wide {
-  flex: 2;
+  flex: 1 1 100%;
 }
 
 .arrived-deliveries .detail-field label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 3px;
+  font-size: 10px;
   color: var(--modus-text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.arrived-deliveries .detail-field label svg {
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
 }
 
 .arrived-deliveries .detail-field input {
   width: 100%;
-  padding: 8px 12px;
+  padding: 4px 6px;
   border: 1px solid var(--modus-border);
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 4px;
+  font-size: 12px;
 }
 
 /* Resources row */
@@ -6012,38 +6033,38 @@ button.stat-toggle.off:hover {
   font-size: 13px;
 }
 
-/* Photos section */
+/* Photos section - compact */
 .arrived-deliveries .photos-section {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--modus-border);
 }
 
 .arrived-deliveries .photos-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .arrived-deliveries .photos-header label {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 4px;
+  font-size: 11px;
   font-weight: 500;
 }
 
 .arrived-deliveries .upload-photo-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 4px 8px;
   background: var(--modus-bg-secondary);
   border: 1px solid var(--modus-border);
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .arrived-deliveries .upload-photo-btn:hover {
@@ -6052,14 +6073,14 @@ button.stat-toggle.off:hover {
 
 .arrived-deliveries .photos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+  gap: 6px;
 }
 
 .arrived-deliveries .photo-item {
   position: relative;
   aspect-ratio: 1;
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
   border: 1px solid var(--modus-border);
 }
@@ -6072,14 +6093,14 @@ button.stat-toggle.off:hover {
 
 .arrived-deliveries .delete-photo-btn {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 24px;
-  height: 24px;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
   background: rgba(0, 0, 0, 0.6);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -6090,16 +6111,16 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 20px;
+  gap: 6px;
+  padding: 12px;
   color: var(--modus-text-tertiary);
-  font-size: 13px;
+  font-size: 11px;
 }
 
-/* Items section */
+/* Items section - compact */
 .arrived-deliveries .items-section {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--modus-border);
 }
 
@@ -6107,28 +6128,31 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .arrived-deliveries .items-header h3 {
   margin: 0;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
 }
 
 .arrived-deliveries .items-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .arrived-deliveries .confirm-all-btn,
 .arrived-deliveries .add-item-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
+  gap: 3px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
   cursor: pointer;
 }
 
@@ -6437,44 +6461,44 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg-secondary);
 }
 
-/* Add unplanned vehicle button */
+/* Add unplanned vehicle button - compact */
 .arrived-deliveries .add-unplanned-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 5px 8px;
   background: #10b981;
   color: white;
   border: none;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  margin-left: auto;
+  white-space: nowrap;
 }
 
 .arrived-deliveries .add-unplanned-btn:hover {
   background: #059669;
 }
 
-/* Resources section - same style as installation schedule */
+/* Resources section - compact */
 .arrived-deliveries .resources-section {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
   border-top: 1px solid var(--modus-border);
 }
 
 .arrived-deliveries .resources-label {
   display: block;
-  font-size: 12px;
+  font-size: 10px;
   color: var(--modus-text-secondary);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .arrived-deliveries .resources-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .arrived-deliveries .resource-button {
@@ -6482,9 +6506,9 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -6494,21 +6518,21 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .resource-button .resource-img {
-  width: 20px;
-  height: 20px;
+  width: 17px;
+  height: 17px;
 }
 
 .arrived-deliveries .resource-button .resource-count {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 16px;
-  height: 16px;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
   background: white;
   color: #1f2937;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 7px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6520,12 +6544,12 @@ button.stat-toggle.off:hover {
   top: 100%;
   left: 50%;
   transform: translateX(-50%);
-  margin-top: 4px;
+  margin-top: 3px;
   background: white;
   border: 1px solid var(--modus-border);
-  border-radius: 6px;
+  border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  padding: 4px;
+  padding: 3px;
   display: none;
   z-index: 100;
 }
@@ -6536,8 +6560,8 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .resource-qty-dropdown .qty-btn {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: none;
   background: var(--modus-bg-secondary);
   border-radius: 4px;
