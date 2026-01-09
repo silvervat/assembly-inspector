@@ -5655,56 +5655,67 @@ button.stat-toggle.off:hover {
   overflow: hidden;
 }
 
+/* Arrived deliveries uses same header as Tarnegraafik (dark blue) */
 .arrived-deliveries .delivery-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 12px 16px;
-  background: var(--modus-bg-primary);
-  border-bottom: 1px solid var(--modus-border);
+  background: var(--modus-primary-darker, #0a3a67);
+  flex-shrink: 0;
 }
 
-.arrived-deliveries .header-left {
+.arrived-deliveries .delivery-header .back-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  cursor: pointer;
+  color: white;
+  transition: all 0.15s;
 }
 
-.arrived-deliveries .header-left h1 {
+.arrived-deliveries .delivery-header .back-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.arrived-deliveries .delivery-header h1 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  color: white;
 }
 
-.arrived-deliveries .back-btn {
+.arrived-deliveries .delivery-header .header-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.arrived-deliveries .delivery-header .view-toggle-btn {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: var(--modus-bg-secondary);
-  border: 1px solid var(--modus-border);
-  border-radius: 6px;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.15s;
 }
 
-.arrived-deliveries .back-btn:hover {
-  background: var(--modus-bg-tertiary);
+.arrived-deliveries .delivery-header .view-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: white;
 }
 
-.arrived-deliveries .refresh-btn {
-  padding: 8px;
-  background: none;
-  border: 1px solid var(--modus-border);
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.arrived-deliveries .refresh-btn:hover {
-  background: var(--modus-bg-secondary);
-}
-
-.arrived-deliveries .refresh-btn .spinning {
+.arrived-deliveries .delivery-header .view-toggle-btn .spinning {
   animation: spin 1s linear infinite;
 }
 
