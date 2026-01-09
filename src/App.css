@@ -5501,6 +5501,811 @@ button.stat-toggle.off:hover {
   justify-content: flex-end;
 }
 
+/* Date change modal */
+.date-change-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.date-change-modal .modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.date-change-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--modus-bg-secondary);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.date-change-info .date-old {
+  color: var(--modus-text-secondary);
+  font-size: 14px;
+}
+
+.date-change-info .date-arrow {
+  color: var(--modus-text-secondary);
+  font-size: 16px;
+}
+
+.date-change-info .date-new {
+  color: var(--modus-primary);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.date-change-modal .modal-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+/* History modal enhancements */
+.history-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-modal .modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.history-item {
+  padding: 12px;
+  background: var(--modus-bg-secondary);
+  border-radius: 8px;
+  border-left: 3px solid var(--modus-primary);
+}
+
+.history-date {
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+  margin-bottom: 4px;
+}
+
+.history-type {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--modus-text-primary);
+  margin-bottom: 4px;
+}
+
+.history-comment {
+  font-size: 13px;
+  color: var(--modus-text-secondary);
+  font-style: italic;
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  background: white;
+  border-radius: 4px;
+  border-left: 2px solid var(--modus-border);
+}
+
+.history-user {
+  font-size: 11px;
+  color: var(--modus-text-tertiary);
+}
+
+.no-history {
+  text-align: center;
+  color: var(--modus-text-secondary);
+  padding: 20px;
+}
+
+.history-modal .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.history-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--modus-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.history-btn:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-primary);
+}
+
+/* ============================================
+   ARRIVED DELIVERIES SCREEN STYLES
+   ============================================ */
+
+.arrived-deliveries {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.arrived-deliveries .delivery-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--modus-bg-primary);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.arrived-deliveries .header-left h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.arrived-deliveries .back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.arrived-deliveries .back-btn:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.arrived-deliveries .refresh-btn {
+  padding: 8px;
+  background: none;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .refresh-btn:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.arrived-deliveries .refresh-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Message toast */
+.arrived-deliveries .message {
+  padding: 10px 16px;
+  margin: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.arrived-deliveries .message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.arrived-deliveries .message.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Calendar navigation */
+.arrived-deliveries .calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--modus-bg-secondary);
+  border-bottom: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .nav-btn {
+  padding: 8px;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .nav-btn:hover:not(:disabled) {
+  background: var(--modus-bg-tertiary);
+}
+
+.arrived-deliveries .nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.arrived-deliveries .date-selector select {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  background: white;
+}
+
+.arrived-deliveries .playback-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.arrived-deliveries .play-btn,
+.arrived-deliveries .stop-btn {
+  padding: 8px 12px;
+  background: var(--modus-primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .stop-btn {
+  background: #dc2626;
+}
+
+/* Vehicles container */
+.arrived-deliveries .vehicles-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.arrived-deliveries .no-vehicles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--modus-text-secondary);
+}
+
+.arrived-deliveries .no-vehicles p {
+  margin-top: 12px;
+}
+
+/* Vehicle card */
+.arrived-deliveries .vehicle-card {
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.arrived-deliveries .vehicle-card.confirmed {
+  border-left: 4px solid #10b981;
+}
+
+.arrived-deliveries .vehicle-card.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.arrived-deliveries .vehicle-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--modus-bg-secondary);
+  cursor: pointer;
+  gap: 12px;
+}
+
+.arrived-deliveries .vehicle-header:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.arrived-deliveries .vehicle-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.arrived-deliveries .vehicle-code {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.arrived-deliveries .vehicle-factory {
+  color: var(--modus-text-secondary);
+  font-size: 13px;
+}
+
+.arrived-deliveries .vehicle-stats {
+  color: var(--modus-text-tertiary);
+  font-size: 12px;
+}
+
+.arrived-deliveries .vehicle-status .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.arrived-deliveries .status-badge.confirmed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.arrived-deliveries .status-badge.in-progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.arrived-deliveries .status-badge.pending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.arrived-deliveries .missing-count {
+  color: #dc2626;
+}
+
+.arrived-deliveries .expand-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--modus-text-secondary);
+}
+
+/* Vehicle content */
+.arrived-deliveries .vehicle-content {
+  padding: 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .arrival-start {
+  text-align: center;
+  padding: 20px;
+}
+
+.arrived-deliveries .start-arrival-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.arrived-deliveries .start-arrival-btn:hover {
+  background: #2563eb;
+}
+
+/* Arrival details form */
+.arrived-deliveries .arrival-details {
+  margin-bottom: 20px;
+}
+
+.arrived-deliveries .detail-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.arrived-deliveries .detail-field {
+  flex: 1;
+}
+
+.arrived-deliveries .detail-field.wide {
+  flex: 2;
+}
+
+.arrived-deliveries .detail-field label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+  margin-bottom: 4px;
+}
+
+.arrived-deliveries .detail-field input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Resources row */
+.arrived-deliveries .resources-row {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.arrived-deliveries .resources-row > label {
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+  margin-right: 8px;
+}
+
+.arrived-deliveries .resource-selectors {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.arrived-deliveries .resource-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--modus-bg-secondary);
+  border-radius: 6px;
+}
+
+.arrived-deliveries .resource-icon {
+  font-size: 16px;
+}
+
+.arrived-deliveries .resource-label {
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+}
+
+.arrived-deliveries .resource-selector select {
+  padding: 4px 8px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* Photos section */
+.arrived-deliveries .photos-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .photos-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.arrived-deliveries .photos-header label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.arrived-deliveries .upload-photo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.arrived-deliveries .upload-photo-btn:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.arrived-deliveries .photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.arrived-deliveries .photo-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.arrived-deliveries .delete-photo-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.arrived-deliveries .no-photos {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--modus-text-tertiary);
+  font-size: 13px;
+}
+
+/* Items section */
+.arrived-deliveries .items-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.arrived-deliveries .items-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.arrived-deliveries .items-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.arrived-deliveries .confirm-all-btn,
+.arrived-deliveries .add-item-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .confirm-all-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+}
+
+.arrived-deliveries .confirm-all-btn:hover {
+  background: #059669;
+}
+
+.arrived-deliveries .add-item-btn {
+  background: var(--modus-bg-secondary);
+  border: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .add-item-btn:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+/* Items list */
+.arrived-deliveries .items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.arrived-deliveries .item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--modus-bg-secondary);
+  border-radius: 6px;
+}
+
+.arrived-deliveries .item-row.confirmed {
+  background: #ecfdf5;
+}
+
+.arrived-deliveries .item-row.missing {
+  background: #fef2f2;
+}
+
+.arrived-deliveries .item-row.wrong_vehicle {
+  background: #fffbeb;
+}
+
+.arrived-deliveries .item-row.added {
+  background: #eff6ff;
+}
+
+.arrived-deliveries .item-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.arrived-deliveries .item-mark {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.arrived-deliveries .item-name {
+  color: var(--modus-text-secondary);
+  font-size: 12px;
+}
+
+.arrived-deliveries .item-weight {
+  color: var(--modus-text-tertiary);
+  font-size: 11px;
+}
+
+.arrived-deliveries .item-source {
+  color: #3b82f6;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.arrived-deliveries .item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arrived-deliveries .action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .action-btn.confirm {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.arrived-deliveries .action-btn.confirm:hover {
+  background: #a7f3d0;
+}
+
+.arrived-deliveries .action-btn.missing {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.arrived-deliveries .action-btn.missing:hover {
+  background: #fecaca;
+}
+
+.arrived-deliveries .action-btn.wrong {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.arrived-deliveries .action-btn.wrong:hover {
+  background: #fde68a;
+}
+
+/* Complete section */
+.arrived-deliveries .complete-section {
+  margin-top: 20px;
+  text-align: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .complete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 32px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.arrived-deliveries .complete-btn:hover {
+  background: #059669;
+}
+
+/* Add item modal */
+.arrived-deliveries .add-item-modal {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.arrived-deliveries .items-selection {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+}
+
+.arrived-deliveries .item-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .item-checkbox:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.arrived-deliveries .item-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
 /* ============================================
    CHECKPOINT FORM STYLES (EOS2 Integration)
    ============================================ */
@@ -8385,6 +9190,15 @@ button.stat-toggle.off:hover {
   background: #dbeafe;
 }
 
+.org-group-header.has-model-selected {
+  background: #fef9c3;
+  border-left: 3px solid #eab308;
+}
+
+.org-group-header.has-model-selected .org-group-name {
+  color: #a16207;
+}
+
 .org-group-header.drag-over {
   background: #dcfce7;
   outline: 2px dashed #22c55e;
@@ -8548,7 +9362,7 @@ button.stat-toggle.off:hover {
 
 /* Items list */
 .org-items {
-  padding: 0 0 4px 24px;
+  padding: 0 0 4px 18px;
   margin-top: 2px;
 }
 
@@ -8581,6 +9395,22 @@ button.stat-toggle.off:hover {
 
 .org-item.selected {
   background: #dbeafe;
+}
+
+.org-item.model-selected {
+  background: #fef3c7;
+  animation: highlight-pulse 1.5s ease-in-out;
+}
+
+.org-item.model-selected .org-item-mark {
+  font-weight: 600;
+  color: #d97706;
+}
+
+@keyframes highlight-pulse {
+  0% { background: #fde68a; }
+  50% { background: #fef3c7; }
+  100% { background: #fef3c7; }
 }
 
 .org-item-index {

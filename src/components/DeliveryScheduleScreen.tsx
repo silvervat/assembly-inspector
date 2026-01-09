@@ -502,6 +502,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Vehicle settings modal
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<DeliveryVehicle | null>(null);
+  const [editingVehicleOriginalDate, setEditingVehicleOriginalDate] = useState<string | null>(null);
   const [vehicleUnloadMethods, setVehicleUnloadMethods] = useState<UnloadMethods>({});
   const [vehicleResources, setVehicleResources] = useState<DeliveryResources>({});
   const [vehicleStartTime, setVehicleStartTime] = useState<string>('');
@@ -520,6 +521,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyData, setHistoryData] = useState<DeliveryHistory[]>([]);
   const [_historyItemId, setHistoryItemId] = useState<string | null>(null);
+
+  // Date change comment modal
+  const [showDateChangeModal, setShowDateChangeModal] = useState(false);
+  const [dateChangeVehicleId, setDateChangeVehicleId] = useState<string | null>(null);
+  const [dateChangeOldDate, setDateChangeOldDate] = useState<string | null>(null);
+  const [dateChangeNewDate, setDateChangeNewDate] = useState<string | null>(null);
+  const [dateChangeComment, setDateChangeComment] = useState('');
 
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false);
@@ -2912,6 +2920,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           })
           .eq('vehicle_id', vehicleId);
 
+        // Log the date change
+        await logVehicleDateChange(vehicleId, oldDate, targetDate, '');
+
         // Recalculate times for both dates
         const oldDateVehicles = vehicles.filter(v => v.scheduled_date === oldDate && v.id !== vehicleId);
         const newDateVehicles = [...vehicles.filter(v => v.scheduled_date === targetDate), { ...draggedVehicle, scheduled_date: targetDate }];
@@ -2958,6 +2969,132 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       setShowHistoryModal(true);
     } catch (e) {
       console.error('Error loading history:', e);
+      setMessage('Viga ajaloo laadimisel');
+    }
+  };
+
+  // Log vehicle date change to history
+  const logVehicleDateChange = async (
+    vehicleId: string,
+    oldDate: string | null,
+    newDate: string | null,
+    comment: string
+  ) => {
+    try {
+      const vehicle = vehicles.find(v => v.id === vehicleId);
+      if (!vehicle) return;
+
+      // Get all items in this vehicle to log the change for each
+      const vehicleItems = items.filter(i => i.vehicle_id === vehicleId);
+
+      // If vehicle has items, log for each item
+      if (vehicleItems.length > 0) {
+        const historyEntries = vehicleItems.map(item => ({
+          trimble_project_id: projectId,
+          item_id: item.id,
+          vehicle_id: vehicleId,
+          change_type: 'date_changed' as const,
+          old_date: oldDate,
+          new_date: newDate,
+          old_vehicle_code: vehicle.vehicle_code,
+          new_vehicle_code: vehicle.vehicle_code,
+          change_reason: comment || null,
+          changed_by: tcUserEmail,
+          is_snapshot: false
+        }));
+
+        await supabase.from('trimble_delivery_history').insert(historyEntries);
+      } else {
+        // Log for vehicle without items
+        await supabase.from('trimble_delivery_history').insert({
+          trimble_project_id: projectId,
+          vehicle_id: vehicleId,
+          change_type: 'date_changed',
+          old_date: oldDate,
+          new_date: newDate,
+          old_vehicle_code: vehicle.vehicle_code,
+          new_vehicle_code: vehicle.vehicle_code,
+          change_reason: comment || null,
+          changed_by: tcUserEmail,
+          is_snapshot: false
+        });
+      }
+    } catch (e) {
+      console.error('Error logging date change:', e);
+    }
+  };
+
+  // Initiate date change with comment modal
+  const initiateVehicleDateChange = (vehicleId: string, oldDate: string | null, newDate: string | null) => {
+    setDateChangeVehicleId(vehicleId);
+    setDateChangeOldDate(oldDate);
+    setDateChangeNewDate(newDate);
+    setDateChangeComment('');
+    setShowDateChangeModal(true);
+  };
+
+  // Confirm and save date change with comment
+  const confirmDateChange = async () => {
+    if (!dateChangeVehicleId) return;
+
+    try {
+      // Save to DB
+      await supabase
+        .from('trimble_delivery_vehicles')
+        .update({ scheduled_date: dateChangeNewDate })
+        .eq('id', dateChangeVehicleId);
+
+      // Log the change
+      await logVehicleDateChange(
+        dateChangeVehicleId,
+        dateChangeOldDate,
+        dateChangeNewDate,
+        dateChangeComment
+      );
+
+      // Update local state
+      setVehicles(prev => prev.map(v =>
+        v.id === dateChangeVehicleId ? { ...v, scheduled_date: dateChangeNewDate } : v
+      ));
+
+      // Update items that are in this vehicle
+      setItems(prev => prev.map(i =>
+        i.vehicle_id === dateChangeVehicleId ? { ...i, scheduled_date: dateChangeNewDate } : i
+      ));
+
+      setShowDateChangeModal(false);
+      setMessage('Kuupäev muudetud');
+    } catch (e) {
+      console.error('Error changing date:', e);
+      setMessage('Viga kuupäeva muutmisel');
+    }
+  };
+
+  // Load vehicle date change history
+  const loadVehicleDateHistory = async (vehicleId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('trimble_delivery_history')
+        .select('*')
+        .eq('vehicle_id', vehicleId)
+        .eq('change_type', 'date_changed')
+        .order('changed_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Group by date (show only last change per day)
+      const byDay = new Map<string, typeof data[0]>();
+      for (const entry of data || []) {
+        const day = entry.changed_at.split('T')[0];
+        if (!byDay.has(day)) {
+          byDay.set(day, entry);
+        }
+      }
+
+      setHistoryData(Array.from(byDay.values()));
+      setShowHistoryModal(true);
+    } catch (e) {
+      console.error('Error loading vehicle history:', e);
       setMessage('Viga ajaloo laadimisel');
     }
   };
@@ -6393,6 +6530,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                           <div className="context-menu vehicle-context-menu">
                             <button onClick={() => {
                               setEditingVehicle(vehicle);
+                              setEditingVehicleOriginalDate(vehicle.scheduled_date || null);
                               setVehicleUnloadMethods(vehicle.unload_methods || {});
                               setVehicleResources(vehicle.resources || {});
                               // Strip seconds from time if present (DB returns "08:00:00", we need "08:00")
@@ -7372,38 +7510,31 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   <input
                     type="date"
                     value={activeVehicle.scheduled_date || ''}
-                    onChange={async (e) => {
+                    onChange={(e) => {
                       const newDate = e.target.value || null;
-                      // Optimistic update
-                      setVehicles(prev => prev.map(v =>
-                        v.id === activeVehicleId ? { ...v, scheduled_date: newDate } : v
-                      ));
-                      // Save to DB
-                      await supabase
-                        .from('delivery_vehicles')
-                        .update({ scheduled_date: newDate })
-                        .eq('id', activeVehicleId);
+                      // Open modal for comment
+                      initiateVehicleDateChange(activeVehicleId!, activeVehicle.scheduled_date, newDate);
                     }}
                   />
                   {activeVehicle.scheduled_date && (
                     <button
                       className="clear-date-btn"
-                      onClick={async () => {
-                        // Optimistic update
-                        setVehicles(prev => prev.map(v =>
-                          v.id === activeVehicleId ? { ...v, scheduled_date: null } : v
-                        ));
-                        // Save to DB
-                        await supabase
-                          .from('delivery_vehicles')
-                          .update({ scheduled_date: null })
-                          .eq('id', activeVehicleId);
+                      onClick={() => {
+                        // Open modal for comment
+                        initiateVehicleDateChange(activeVehicleId!, activeVehicle.scheduled_date, null);
                       }}
                       title="Eemalda kuupäev"
                     >
                       <FiX size={10} />
                     </button>
                   )}
+                  <button
+                    className="history-btn"
+                    onClick={() => loadVehicleDateHistory(activeVehicleId!)}
+                    title="Kuupäeva muutuste ajalugu"
+                  >
+                    <FiClock size={12} />
+                  </button>
                 </div>
                 <button
                   className="close-btn"
@@ -8544,6 +8675,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     notes: editingVehicle.notes
                   });
 
+                  // Log date change if date was modified
+                  if (editingVehicle.scheduled_date !== editingVehicleOriginalDate) {
+                    await logVehicleDateChange(
+                      editingVehicle.id,
+                      editingVehicleOriginalDate,
+                      editingVehicle.scheduled_date,
+                      '' // No comment from settings modal
+                    );
+                  }
+
                   // Add new comment if provided
                   if (vehicleNewComment.trim()) {
                     await supabase
@@ -8628,6 +8769,44 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         </div>
       )}
 
+      {/* Date change comment modal */}
+      {showDateChangeModal && (
+        <div className="modal-overlay" onClick={() => setShowDateChangeModal(false)}>
+          <div className="modal date-change-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Kuupäeva muutmine</h2>
+              <button className="close-btn" onClick={() => setShowDateChangeModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="date-change-info">
+                <span className="date-old">{dateChangeOldDate || '—'}</span>
+                <span className="date-arrow">→</span>
+                <span className="date-new">{dateChangeNewDate || '—'}</span>
+              </div>
+              <div className="form-group">
+                <label>Muutmise põhjus (valikuline)</label>
+                <textarea
+                  value={dateChangeComment}
+                  onChange={(e) => setDateChangeComment(e.target.value)}
+                  placeholder="Lisa kommentaar muutmise kohta..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowDateChangeModal(false)}>
+                Tühista
+              </button>
+              <button className="confirm-btn" onClick={confirmDateChange}>
+                Salvesta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* History modal */}
       {showHistoryModal && (
         <div className="modal-overlay" onClick={() => setShowHistoryModal(false)}>
@@ -8650,11 +8829,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       </div>
                       <div className="history-type">
                         {h.change_type === 'created' && 'Loodud'}
-                        {h.change_type === 'date_changed' && `Kuupäev: ${h.old_date} → ${h.new_date}`}
+                        {h.change_type === 'date_changed' && `Kuupäev: ${h.old_date || '—'} → ${h.new_date || '—'}`}
                         {h.change_type === 'vehicle_changed' && `Veok: ${h.old_vehicle_code || '-'} → ${h.new_vehicle_code || '-'}`}
                         {h.change_type === 'status_changed' && `Staatus: ${h.old_status} → ${h.new_status}`}
                         {h.change_type === 'daily_snapshot' && 'Päevalõpu hetktõmmis'}
                       </div>
+                      {h.change_reason && (
+                        <div className="history-comment">{h.change_reason}</div>
+                      )}
                       <div className="history-user">{h.changed_by}</div>
                     </div>
                   ))}

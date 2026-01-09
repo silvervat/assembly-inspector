@@ -22,6 +22,7 @@ export type InspectionMode =
   | 'installations' // Paigaldamiste süsteem
   | 'schedule' // Paigaldusgraafik
   | 'delivery_schedule' // Tarnegraafik
+  | 'arrived_deliveries' // Saabunud tarned
   | 'organizer'; // Organiseeri (gruppide haldus)
 
 interface MainMenuProps {
@@ -313,6 +314,23 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Tarnegraafik</span>
                 <span className="menu-item-desc">Planeeri ja jälgi tarneid veokite kaupa</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Saabunud tarned - arrived deliveries */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('arrived_deliveries')}
+            >
+              <span className="menu-item-icon" style={{ color: '#0891b2' }}>
+                <FiClipboard size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Saabunud tarned</span>
+                <span className="menu-item-desc">Kontrolli ja kinnita saabunud veokite sisu</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
