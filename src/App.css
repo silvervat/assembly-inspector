@@ -6317,6 +6317,241 @@ button.stat-toggle.off:hover {
   height: 16px;
 }
 
+/* Compact items list */
+.arrived-deliveries .items-list.compact .item-row {
+  padding: 4px 8px;
+  gap: 8px;
+}
+
+.arrived-deliveries .items-list.compact .item-checkbox {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.arrived-deliveries .items-list.compact .item-index {
+  font-size: 10px;
+  color: var(--modus-text-tertiary);
+  min-width: 36px;
+  font-family: monospace;
+}
+
+.arrived-deliveries .items-list.compact .item-info {
+  gap: 8px;
+}
+
+.arrived-deliveries .items-list.compact .item-mark {
+  font-size: 12px;
+}
+
+.arrived-deliveries .items-list.compact .item-name {
+  font-size: 11px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrived-deliveries .items-list.compact .item-weight {
+  font-size: 10px;
+}
+
+.arrived-deliveries .items-list.compact .action-btn {
+  width: 22px;
+  height: 22px;
+}
+
+.arrived-deliveries .item-row.selected {
+  background: #dbeafe !important;
+  border-left: 2px solid #3b82f6;
+}
+
+/* Bulk action buttons */
+.arrived-deliveries .confirm-selected-btn,
+.arrived-deliveries .missing-selected-btn,
+.arrived-deliveries .clear-selection-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.arrived-deliveries .confirm-selected-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+}
+
+.arrived-deliveries .confirm-selected-btn:hover {
+  background: #059669;
+}
+
+.arrived-deliveries .missing-selected-btn {
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.arrived-deliveries .missing-selected-btn:hover {
+  background: #fecaca;
+}
+
+.arrived-deliveries .clear-selection-btn {
+  background: transparent;
+  color: var(--modus-text-secondary);
+  border: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .clear-selection-btn:hover {
+  background: var(--modus-bg-secondary);
+}
+
+/* Add unplanned vehicle button */
+.arrived-deliveries .add-unplanned-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.arrived-deliveries .add-unplanned-btn:hover {
+  background: #059669;
+}
+
+/* Resources section - same style as installation schedule */
+.arrived-deliveries .resources-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--modus-border);
+}
+
+.arrived-deliveries .resources-label {
+  display: block;
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+  margin-bottom: 8px;
+}
+
+.arrived-deliveries .resources-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.arrived-deliveries .resource-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.arrived-deliveries .resource-button:hover {
+  transform: scale(1.05);
+}
+
+.arrived-deliveries .resource-button .resource-img {
+  width: 20px;
+  height: 20px;
+}
+
+.arrived-deliveries .resource-button .resource-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  background: white;
+  color: #1f2937;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+}
+
+.arrived-deliveries .resource-button .resource-qty-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 4px;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  padding: 4px;
+  display: none;
+  z-index: 100;
+}
+
+.arrived-deliveries .resource-button:hover .resource-qty-dropdown {
+  display: flex;
+  gap: 2px;
+}
+
+.arrived-deliveries .resource-qty-dropdown .qty-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--modus-bg-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.arrived-deliveries .resource-qty-dropdown .qty-btn:hover {
+  background: var(--modus-bg-tertiary);
+}
+
+.arrived-deliveries .resource-qty-dropdown .qty-btn.active {
+  background: var(--modus-primary);
+  color: white;
+}
+
+/* Unplanned vehicle modal */
+.arrived-deliveries .unplanned-vehicle-modal {
+  width: 90%;
+  max-width: 450px;
+}
+
+.arrived-deliveries .modal-description {
+  color: var(--modus-text-secondary);
+  font-size: 13px;
+  margin-bottom: 16px;
+  padding: 10px;
+  background: var(--modus-bg-secondary);
+  border-radius: 6px;
+}
+
+.arrived-deliveries .unplanned-vehicle-modal textarea {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  font-size: 14px;
+  resize: vertical;
+}
+
 /* ============================================
    CHECKPOINT FORM STYLES (EOS2 Integration)
    ============================================ */
