@@ -776,6 +776,121 @@ export interface DeliveryFactoryGroup {
 }
 
 // ============================================
+// SAABUNUD TARNED (Arrived Deliveries)
+// ============================================
+
+// Saabunud veoki ressursid (lihtsam kui UnloadMethods)
+export interface ArrivalUnloadResources {
+  crane?: number;         // Kraana
+  forklift?: number;      // Upitaja / Teleskooplaadur
+  workforce?: number;     // Tööjõud
+}
+
+// Saabunud veoki info
+export interface ArrivedVehicle {
+  id: string;
+  trimble_project_id: string;
+  vehicle_id: string;                    // Viide tarnegraafiku veokile
+  // Ajad
+  arrival_date: string;                  // Saabumise kuupäev
+  arrival_time?: string;                 // Saabumise kellaaeg (HH:MM)
+  unload_start_time?: string;            // Mahalaadimise algus (HH:MM)
+  unload_end_time?: string;              // Mahalaadimise lõpp (HH:MM)
+  // Ressursid
+  unload_resources?: ArrivalUnloadResources;
+  // Asukoht
+  unload_location?: string;              // Mahalaadimise asukoht (tekstiväli)
+  // Staatus
+  is_confirmed: boolean;                 // Kas kinnitus on lõpetatud
+  confirmed_at?: string;
+  confirmed_by?: string;
+  // Märkused
+  notes?: string;
+  // Audit
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by?: string;
+  // Joined
+  vehicle?: DeliveryVehicle;
+}
+
+// Detaili saabumise kinnitus
+export type ArrivalItemStatus =
+  | 'confirmed'     // Kinnitud - oli veokis
+  | 'missing'       // Puudub - pidi olema, aga ei olnud
+  | 'wrong_vehicle' // Vale veok - tuli teise veokiga
+  | 'added'         // Lisatud - polnud planeeritud, aga tuli
+  | 'pending';      // Ootel - pole veel kinnitatud
+
+export interface ArrivalItemConfirmation {
+  id: string;
+  trimble_project_id: string;
+  arrived_vehicle_id: string;            // Viide ArrivedVehicle-le
+  item_id: string;                       // Viide DeliveryItem-le
+  // Kinnitus
+  status: ArrivalItemStatus;
+  // Kui vale veok, siis kust tuli / kuhu läks
+  source_vehicle_id?: string;            // Millisest veokist tegelikult tuli
+  source_vehicle_code?: string;          // Cached veoki kood
+  // Märkused
+  notes?: string;
+  // Audit
+  confirmed_at: string;
+  confirmed_by: string;
+  // Joined
+  item?: DeliveryItem;
+}
+
+// Saabumise fotod
+export interface ArrivalPhoto {
+  id: string;
+  trimble_project_id: string;
+  arrived_vehicle_id: string;
+  // Foto info
+  file_name: string;
+  file_url: string;                      // Supabase Storage URL
+  file_size?: number;
+  mime_type?: string;
+  // Meta
+  description?: string;
+  // Audit
+  uploaded_at: string;
+  uploaded_by: string;
+}
+
+// Tarne lahknevus (mis läks valesti)
+export type DiscrepancyType =
+  | 'missing_item'        // Detail puudus
+  | 'wrong_vehicle'       // Vale veokiga
+  | 'damaged'             // Kahjustatud
+  | 'wrong_quantity'      // Vale kogus
+  | 'other';              // Muu
+
+export interface ArrivalDiscrepancy {
+  id: string;
+  trimble_project_id: string;
+  arrived_vehicle_id: string;
+  item_id?: string;                      // Viide detailile (kui on)
+  // Lahknevuse info
+  discrepancy_type: DiscrepancyType;
+  description: string;
+  // Kui teisest veokist, siis mis veok
+  expected_vehicle_id?: string;
+  expected_vehicle_code?: string;
+  actual_vehicle_id?: string;
+  actual_vehicle_code?: string;
+  // Lahendus
+  is_resolved: boolean;
+  resolved_at?: string;
+  resolved_by?: string;
+  resolution_notes?: string;
+  // Audit
+  created_at: string;
+  created_by: string;
+}
+
+// ============================================
 // MODEL OBJECTS (kõik mudeli objektid värvimiseks)
 // ============================================
 

@@ -8,6 +8,7 @@ import InstallationsScreen from './components/InstallationsScreen';
 import InstallationScheduleScreen from './components/InstallationScheduleScreen';
 import DeliveryScheduleScreen from './components/DeliveryScheduleScreen';
 import OrganizerScreen from './components/OrganizerScreen';
+import ArrivedDeliveriesScreen from './components/ArrivedDeliveriesScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -20,7 +21,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.362';
+export const APP_VERSION = '3.0.363';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -799,6 +800,22 @@ export default function App() {
           tcUserEmail={tcUser?.email || ''}
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Saabunud tarned ekraan
+  if (currentMode === 'arrived_deliveries') {
+    return (
+      <>
+        <NavigationOverlay />
+        <ArrivedDeliveriesScreen
+          api={api}
+          user={user}
+          projectId={projectId}
+          onBack={handleBackToMenu}
         />
         <VersionFooter />
       </>
