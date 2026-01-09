@@ -6117,6 +6117,90 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+/* Delivery notes section - saatelehed */
+.arrived-deliveries .photos-section.delivery-notes {
+  background: #fef9f3;
+  border-radius: 4px;
+  padding: 8px;
+  margin-top: 8px;
+  border: 1px dashed #f59e0b;
+}
+
+.arrived-deliveries .photo-item.delivery-note {
+  aspect-ratio: auto;
+  height: auto;
+  min-height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px;
+  background: white;
+}
+
+.arrived-deliveries .photo-item.delivery-note img {
+  max-height: 80px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.arrived-deliveries .photo-item .photo-name {
+  font-size: 9px;
+  color: var(--modus-text-secondary);
+  margin-top: 2px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 100%;
+  text-align: center;
+}
+
+/* Export section */
+.arrived-deliveries .export-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--modus-border);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.arrived-deliveries .export-vehicle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.arrived-deliveries .export-vehicle-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Export button in header */
+.calendar-nav .export-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #059669;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.calendar-nav .export-btn:hover {
+  background: #047857;
+}
+
 /* Items section - compact */
 .arrived-deliveries .items-section {
   margin-top: 10px;

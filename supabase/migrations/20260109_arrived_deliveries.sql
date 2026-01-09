@@ -100,6 +100,10 @@ ALTER TABLE trimble_arrival_photos ADD COLUMN IF NOT EXISTS item_id UUID REFEREN
 ALTER TABLE trimble_arrival_photos ADD COLUMN IF NOT EXISTS confirmation_id UUID REFERENCES trimble_arrival_confirmations(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_arrival_photos_item ON trimble_arrival_photos(item_id);
 
+-- Add photo_type for categorizing photos (general, delivery_note, item)
+ALTER TABLE trimble_arrival_photos ADD COLUMN IF NOT EXISTS photo_type TEXT DEFAULT 'general';
+CREATE INDEX IF NOT EXISTS idx_arrival_photos_type ON trimble_arrival_photos(photo_type);
+
 -- Storage bucket for photos
 -- Run this in Supabase dashboard SQL editor:
 /*

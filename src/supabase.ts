@@ -846,12 +846,16 @@ export interface ArrivalItemConfirmation {
 }
 
 // Saabumise fotod
+// Foto tüübid
+export type ArrivalPhotoType = 'general' | 'delivery_note' | 'item';
+
 export interface ArrivalPhoto {
   id: string;
   trimble_project_id: string;
   arrived_vehicle_id: string;
   item_id?: string;                      // Viide detailile (per-item foto)
   confirmation_id?: string;              // Viide kinnitusele
+  photo_type?: ArrivalPhotoType;         // Foto tüüp: general, delivery_note, item
   // Foto info
   file_name: string;
   file_url: string;                      // Supabase Storage URL
