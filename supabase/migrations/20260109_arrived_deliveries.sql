@@ -95,6 +95,11 @@ ALTER TABLE trimble_delivery_vehicles ADD COLUMN IF NOT EXISTS is_unplanned BOOL
 ALTER TABLE trimble_arrived_vehicles ADD COLUMN IF NOT EXISTS reg_number TEXT;
 ALTER TABLE trimble_arrived_vehicles ADD COLUMN IF NOT EXISTS trailer_number TEXT;
 
+-- Add item_id to photos for per-item photo support
+ALTER TABLE trimble_arrival_photos ADD COLUMN IF NOT EXISTS item_id UUID REFERENCES trimble_delivery_items(id) ON DELETE SET NULL;
+ALTER TABLE trimble_arrival_photos ADD COLUMN IF NOT EXISTS confirmation_id UUID REFERENCES trimble_arrival_confirmations(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_arrival_photos_item ON trimble_arrival_photos(item_id);
+
 -- Storage bucket for photos
 -- Run this in Supabase dashboard SQL editor:
 /*

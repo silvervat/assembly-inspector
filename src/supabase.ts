@@ -850,6 +850,8 @@ export interface ArrivalPhoto {
   id: string;
   trimble_project_id: string;
   arrived_vehicle_id: string;
+  item_id?: string;                      // Viide detailile (per-item foto)
+  confirmation_id?: string;              // Viide kinnitusele
   // Foto info
   file_name: string;
   file_url: string;                      // Supabase Storage URL
