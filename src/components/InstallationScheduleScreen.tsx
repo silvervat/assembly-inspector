@@ -2082,6 +2082,65 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Delete all items from a specific date
+  const deleteAllItemsInDate = async (date: string) => {
+    const dateItems = itemsByDate[date] || [];
+    if (dateItems.length === 0) return;
+
+    const confirmed = window.confirm(`Kustuta kõik ${dateItems.length} detaili kuupäevalt ${formatDateShort(date)}?`);
+    if (!confirmed) return;
+
+    saveUndoState(`Kõik detailid kuupäevalt ${date} kustutamine`);
+    const itemIds = dateItems.map(i => i.id);
+
+    // Collect GUIDs for coloring white after deletion
+    const guidsToColorWhite: string[] = [];
+    for (const item of dateItems) {
+      const guid = item.guid_ifc || item.guid;
+      if (guid) guidsToColorWhite.push(guid);
+    }
+
+    try {
+      // Delete comments for these items
+      await supabase
+        .from('schedule_comments')
+        .delete()
+        .in('schedule_item_id', itemIds);
+
+      // Delete date-level comments
+      await supabase
+        .from('schedule_comments')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('schedule_date', date);
+
+      // Delete items
+      const { error } = await supabase
+        .from('installation_schedule')
+        .delete()
+        .in('id', itemIds);
+
+      if (error) throw error;
+
+      // Color deleted items white in the model
+      if (guidsToColorWhite.length > 0 && playbackSettings.colorEachDayDifferent) {
+        try {
+          await colorObjectsByGuid(api, guidsToColorWhite, { r: 255, g: 255, b: 255, a: 255 });
+        } catch (e) {
+          console.error('Error coloring deleted items white:', e);
+        }
+      }
+
+      setDateMenuId(null);
+      setMessage(`${dateItems.length} detaili kustutatud kuupäevalt ${formatDateShort(date)}`);
+      await loadComments();
+      loadSchedule();
+    } catch (e) {
+      console.error('Error deleting date items:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
   // Remove model-selected items from a specific date
   const removeSelectedFromDate = async (date: string) => {
     const dateItems = itemsByDate[date] || [];
@@ -2323,7 +2382,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Select specific items in viewer (by item IDs)
+  // Select specific items in viewer (by item IDs) and highlight yellow
   const selectItemsInViewer = async (itemIds: Set<string>, skipZoom: boolean = false) => {
     if (itemIds.size === 0) {
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -2337,6 +2396,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .filter((g): g is string => !!g);
 
       if (guids.length === 0) return;
+
+      // Color selected items yellow for visibility
+      await colorObjectsByGuid(api, guids, { r: 255, g: 255, b: 0, a: 255 });
 
       // Use GUID-based lookup - works with any loaded model
       if (skipZoom) {
@@ -2377,7 +2439,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
-  // Select multiple items in viewer by their IDs
+  // Select multiple items in viewer by their IDs and highlight yellow
   const selectItemsByIdsInViewer = async (itemIds: Set<string>) => {
     if (itemIds.size === 0) {
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -2395,6 +2457,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       if (guids.length === 0) return;
+
+      // Color selected items yellow for visibility
+      await colorObjectsByGuid(api, guids, { r: 255, g: 255, b: 0, a: 255 });
 
       // Use GUID-based lookup - works with any loaded model
       await zoomToObjectsByGuid(api, guids, 300);
@@ -6291,6 +6356,22 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                 <FiCheck size={12} />
                 Rakenda
               </button>
+              <button
+                className="edit-selected-btn"
+                onClick={() => {
+                  const items = scheduleItems.filter(i => selectedItemIds.has(i.id));
+                  if (items.length > 0) {
+                    setScheduledEditItems(items);
+                    setScheduledEditDate(items[0].scheduled_date);
+                    setScheduledEditMethods(items[0].install_methods as InstallMethods || {});
+                    setShowScheduledEditModal(true);
+                  }
+                }}
+                title="Muuda valitud detaile"
+              >
+                <FiEdit size={12} />
+                Muuda
+              </button>
               <button onClick={clearItemSelection}>Tühista</button>
               <button className="delete-selected-btn" onClick={deleteSelectedItems}>
                 <FiTrash2 size={12} />
@@ -7807,6 +7888,15 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           }
                           return null;
                         })()}
+                        {/* Delete entire day */}
+                        <div className="date-menu-divider" />
+                        <button
+                          className="date-menu-option delete"
+                          onClick={() => deleteAllItemsInDate(date)}
+                        >
+                          <FiTrash2 size={12} style={{ marginRight: '6px' }} />
+                          Kustuta päev ({items.length})
+                        </button>
                       </div>
                     )}
                   </div>
@@ -8343,6 +8433,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
                       setMessage(`${scheduledEditItems.length} detaili uuendatud`);
                       setShowScheduledEditModal(false);
+                      // Clear selection after edit
+                      setSelectedItemIds(new Set());
                     } catch (err) {
                       console.error('Error updating items:', err);
                       setMessage('Viga detailide uuendamisel');
