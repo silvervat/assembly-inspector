@@ -729,20 +729,23 @@ export default function ArrivedDeliveriesScreen({
 
   return (
     <div className="delivery-schedule arrived-deliveries">
-      {/* Header */}
-      <div className="delivery-header">
-        <div className="header-left">
-          <button className="back-btn" onClick={onBack}>
-            <FiArrowLeft /> Tagasi
-          </button>
-          <h1>Saabunud tarned</h1>
-        </div>
-        <div className="header-right">
-          <button className="refresh-btn" onClick={loadAllData} disabled={loading}>
+      {/* Header - same style as Tarnegraafik */}
+      <header className="delivery-header">
+        <button className="back-btn" onClick={onBack}>
+          <FiArrowLeft />
+        </button>
+        <h1>Saabunud tarned</h1>
+        <div className="header-actions">
+          <button
+            className="view-toggle-btn"
+            onClick={loadAllData}
+            disabled={loading}
+            title="Värskenda"
+          >
             <FiRefreshCw className={loading ? 'spinning' : ''} />
           </button>
         </div>
-      </div>
+      </header>
 
       {/* Message */}
       {message && (

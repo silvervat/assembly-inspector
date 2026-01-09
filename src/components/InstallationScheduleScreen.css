@@ -1772,6 +1772,20 @@
   color: white;
 }
 
+.multi-select-bar .edit-selected-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #dbeafe;
+  color: #2563eb;
+  border-color: #2563eb;
+}
+
+.multi-select-bar .edit-selected-btn:hover {
+  background: #2563eb;
+  color: white;
+}
+
 .multi-select-bar .batch-methods {
   padding: 4px 10px 8px 10px;
   overflow: visible;
