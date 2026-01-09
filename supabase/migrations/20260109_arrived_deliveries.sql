@@ -88,6 +88,32 @@ CREATE POLICY "Allow all for arrived_vehicles" ON trimble_arrived_vehicles FOR A
 CREATE POLICY "Allow all for arrival_confirmations" ON trimble_arrival_confirmations FOR ALL USING (true);
 CREATE POLICY "Allow all for arrival_photos" ON trimble_arrival_photos FOR ALL USING (true);
 
--- Storage bucket for photos (run this in Supabase dashboard SQL editor or via API)
--- INSERT INTO storage.buckets (id, name, public) VALUES ('arrival-photos', 'arrival-photos', true)
--- ON CONFLICT (id) DO NOTHING;
+-- Add is_unplanned column to delivery vehicles (for unplanned arrivals)
+ALTER TABLE trimble_delivery_vehicles ADD COLUMN IF NOT EXISTS is_unplanned BOOLEAN DEFAULT FALSE;
+
+-- Storage bucket for photos
+-- Run this in Supabase dashboard SQL editor:
+/*
+-- Create the storage bucket
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('arrival-photos', 'arrival-photos', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Enable RLS on storage.objects
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+-- Allow all operations on arrival-photos bucket
+CREATE POLICY "Allow all for arrival-photos" ON storage.objects
+FOR ALL USING (bucket_id = 'arrival-photos')
+WITH CHECK (bucket_id = 'arrival-photos');
+
+-- Or if you want more specific policies:
+CREATE POLICY "Allow upload to arrival-photos" ON storage.objects
+FOR INSERT WITH CHECK (bucket_id = 'arrival-photos');
+
+CREATE POLICY "Allow read from arrival-photos" ON storage.objects
+FOR SELECT USING (bucket_id = 'arrival-photos');
+
+CREATE POLICY "Allow delete from arrival-photos" ON storage.objects
+FOR DELETE USING (bucket_id = 'arrival-photos');
+*/

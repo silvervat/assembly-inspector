@@ -28,11 +28,27 @@ const TIME_OPTIONS = [
   '18:00', '18:30', '19:00', '19:30', '20:00'
 ];
 
-// Resource configuration
-const UNLOAD_RESOURCES = [
-  { key: 'crane', label: 'Kraana', icon: '🏗️', maxCount: 3 },
-  { key: 'forklift', label: 'Upitaja', icon: '🚜', maxCount: 4 },
-  { key: 'workforce', label: 'Tööjõud', icon: '👷', maxCount: 10 }
+// Resource configuration - same as installation schedule
+interface UnloadResourceConfig {
+  key: string;
+  label: string;
+  icon: string;
+  bgColor: string;
+  activeBgColor: string;
+  filterCss: string;
+  maxCount: number;
+  category: 'machine' | 'labor';
+}
+
+const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
+  // Machines
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, category: 'machine' },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, category: 'machine' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, category: 'machine' },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, category: 'machine' },
+  // Labor
+  { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, category: 'labor' },
+  { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, category: 'labor' },
 ];
 
 // Format date to Estonian format
@@ -90,6 +106,15 @@ export default function ArrivedDeliveriesScreen({
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [addItemSourceVehicleId, setAddItemSourceVehicleId] = useState<string>('');
   const [selectedItemsToAdd, setSelectedItemsToAdd] = useState<Set<string>>(new Set());
+
+  // State - Unplanned vehicle modal
+  const [showUnplannedVehicleModal, setShowUnplannedVehicleModal] = useState(false);
+  const [unplannedVehicleCode, setUnplannedVehicleCode] = useState('');
+  const [unplannedFactoryId, setUnplannedFactoryId] = useState<string>('');
+  const [unplannedNotes, setUnplannedNotes] = useState('');
+
+  // State - Bulk item selection for confirmation
+  const [selectedItemsForConfirm, setSelectedItemsForConfirm] = useState<Set<string>>(new Set());
 
   // Photo upload ref
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -338,6 +363,68 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
+  // Create unplanned vehicle (not in original schedule)
+  const createUnplannedVehicle = async () => {
+    if (!unplannedVehicleCode.trim()) {
+      setMessage('Sisesta veoki kood');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // First create the vehicle in delivery schedule
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from('trimble_delivery_vehicles')
+        .insert({
+          trimble_project_id: projectId,
+          vehicle_code: unplannedVehicleCode.trim(),
+          factory_id: unplannedFactoryId || null,
+          scheduled_date: selectedDate,
+          is_unplanned: true,
+          notes: unplannedNotes || 'Planeerimata veok',
+          status: 'pending',
+          sort_order: vehicles.length,
+          created_by: tcUserEmail,
+          updated_by: tcUserEmail
+        })
+        .select()
+        .single();
+
+      if (vehicleError) throw vehicleError;
+
+      // Create arrival record for this vehicle
+      const { data: arrivalData, error: arrivalError } = await supabase
+        .from('trimble_arrived_vehicles')
+        .insert({
+          trimble_project_id: projectId,
+          vehicle_id: vehicleData.id,
+          arrival_date: selectedDate,
+          arrival_time: new Date().toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }),
+          is_confirmed: false,
+          notes: unplannedNotes || 'Planeerimata veok',
+          created_by: tcUserEmail,
+          updated_by: tcUserEmail
+        })
+        .select()
+        .single();
+
+      if (arrivalError) throw arrivalError;
+
+      await Promise.all([loadVehicles(), loadArrivedVehicles()]);
+      setActiveArrivalId(arrivalData.id);
+      setShowUnplannedVehicleModal(false);
+      setUnplannedVehicleCode('');
+      setUnplannedFactoryId('');
+      setUnplannedNotes('');
+      setMessage('Planeerimata veok lisatud');
+    } catch (e: any) {
+      console.error('Error creating unplanned vehicle:', e);
+      setMessage('Viga: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Confirm item was delivered
   const confirmItem = async (arrivedVehicleId: string, itemId: string, status: ArrivalItemStatus) => {
     setSaving(true);
@@ -402,9 +489,45 @@ export default function ArrivedDeliveriesScreen({
 
       if (error) throw error;
       await loadConfirmations();
+      setSelectedItemsForConfirm(new Set());
       setMessage('Kõik detailid kinnitatud');
     } catch (e: any) {
       console.error('Error confirming all items:', e);
+      setMessage('Viga: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Confirm selected items in bulk
+  const confirmSelectedItems = async (arrivedVehicleId: string, status: ArrivalItemStatus) => {
+    if (selectedItemsForConfirm.size === 0) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_arrival_confirmations')
+        .update({
+          status,
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: tcUserEmail
+        })
+        .eq('arrived_vehicle_id', arrivedVehicleId)
+        .in('item_id', [...selectedItemsForConfirm]);
+
+      if (error) throw error;
+      await loadConfirmations();
+      setSelectedItemsForConfirm(new Set());
+      const statusLabels: Record<ArrivalItemStatus, string> = {
+        confirmed: 'kinnitatud',
+        missing: 'märgitud puuduvaks',
+        wrong_vehicle: 'märgitud vale veoki alla',
+        pending: 'ootel',
+        added: 'lisatud'
+      };
+      setMessage(`${selectedItemsForConfirm.size} detaili ${statusLabels[status]}`);
+    } catch (e: any) {
+      console.error('Error confirming selected items:', e);
       setMessage('Viga: ' + e.message);
     } finally {
       setSaving(false);
@@ -796,6 +919,15 @@ export default function ArrivedDeliveriesScreen({
             </button>
           )}
         </div>
+
+        {/* Add unplanned vehicle button */}
+        <button
+          className="add-unplanned-btn"
+          onClick={() => setShowUnplannedVehicleModal(true)}
+          title="Lisa planeerimata veok"
+        >
+          <FiPlus /> Lisa veok
+        </button>
       </div>
 
       {/* Vehicles list */}
@@ -939,30 +1071,59 @@ export default function ArrivedDeliveriesScreen({
                             </div>
                           </div>
 
-                          {/* Resources */}
-                          <div className="detail-row resources-row">
-                            <label>Ressursid:</label>
-                            <div className="resource-selectors">
+                          {/* Resources - same style as installation schedule */}
+                          <div className="resources-section">
+                            <label className="resources-label">Mahalaadimise ressursid:</label>
+                            <div className="resources-grid">
                               {UNLOAD_RESOURCES.map(res => {
                                 const currentValue = (arrivedVehicle.unload_resources as any)?.[res.key] || 0;
+                                const isActive = currentValue > 0;
                                 return (
-                                  <div key={res.key} className="resource-selector">
-                                    <span className="resource-icon">{res.icon}</span>
-                                    <span className="resource-label">{res.label}</span>
-                                    <select
-                                      value={currentValue}
-                                      onChange={(e) => {
-                                        const newResources = {
-                                          ...(arrivedVehicle.unload_resources || {}),
-                                          [res.key]: Number(e.target.value)
-                                        };
-                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                      }}
-                                    >
-                                      {Array.from({ length: res.maxCount + 1 }, (_, i) => (
-                                        <option key={i} value={i}>{i}</option>
-                                      ))}
-                                    </select>
+                                  <div
+                                    key={res.key}
+                                    className={`resource-button ${isActive ? 'active' : ''}`}
+                                    style={{
+                                      backgroundColor: isActive ? res.activeBgColor : res.bgColor
+                                    }}
+                                    onClick={() => {
+                                      const newValue = isActive ? 0 : 1;
+                                      const newResources = {
+                                        ...(arrivedVehicle.unload_resources || {}),
+                                        [res.key]: newValue
+                                      };
+                                      updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                    }}
+                                  >
+                                    <img
+                                      src={`${import.meta.env.BASE_URL}icons/${res.icon}`}
+                                      alt={res.label}
+                                      className="resource-img"
+                                      style={{ filter: isActive ? 'brightness(0) invert(1)' : res.filterCss }}
+                                    />
+                                    {isActive && (
+                                      <span className="resource-count">{currentValue}</span>
+                                    )}
+                                    {/* Quantity selector on hover when active */}
+                                    {isActive && (
+                                      <div className="resource-qty-dropdown">
+                                        {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
+                                          <button
+                                            key={num}
+                                            className={`qty-btn ${currentValue === num ? 'active' : ''}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const newResources = {
+                                                ...(arrivedVehicle.unload_resources || {}),
+                                                [res.key]: num
+                                              };
+                                              updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                            }}
+                                          >
+                                            {num}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 );
                               })}
@@ -1019,7 +1180,32 @@ export default function ArrivedDeliveriesScreen({
                           <div className="items-header">
                             <h3>Detailid ({vehicleItems.length})</h3>
                             <div className="items-actions">
-                              {pendingCount > 0 && (
+                              {/* Bulk actions when items are selected */}
+                              {selectedItemsForConfirm.size > 0 && (
+                                <>
+                                  <button
+                                    className="confirm-selected-btn"
+                                    onClick={() => confirmSelectedItems(arrivedVehicle.id, 'confirmed')}
+                                    disabled={saving}
+                                  >
+                                    <FiCheck /> Kinnita ({selectedItemsForConfirm.size})
+                                  </button>
+                                  <button
+                                    className="missing-selected-btn"
+                                    onClick={() => confirmSelectedItems(arrivedVehicle.id, 'missing')}
+                                    disabled={saving}
+                                  >
+                                    <FiX /> Puudub
+                                  </button>
+                                  <button
+                                    className="clear-selection-btn"
+                                    onClick={() => setSelectedItemsForConfirm(new Set())}
+                                  >
+                                    Tühista
+                                  </button>
+                                </>
+                              )}
+                              {selectedItemsForConfirm.size === 0 && pendingCount > 0 && (
                                 <button
                                   className="confirm-all-btn"
                                   onClick={() => confirmAllItems(arrivedVehicle.id)}
@@ -1035,20 +1221,44 @@ export default function ArrivedDeliveriesScreen({
                                   setShowAddItemModal(true);
                                 }}
                               >
-                                <FiPlus /> Lisa detail
+                                <FiPlus /> Lisa
                               </button>
                             </div>
                           </div>
 
-                          <div className="items-list">
-                            {vehicleItems.map(item => {
+                          <div className="items-list compact">
+                            {vehicleItems.map((item, idx) => {
                               const status = getItemConfirmationStatus(arrivedVehicle.id, item.id);
+                              const isSelected = selectedItemsForConfirm.has(item.id);
+                              const totalCount = vehicleItems.length;
                               return (
-                                <div key={item.id} className={`item-row ${status}`}>
+                                <div key={item.id} className={`item-row ${status} ${isSelected ? 'selected' : ''}`}>
+                                  {/* Checkbox for pending items */}
+                                  {status === 'pending' && (
+                                    <input
+                                      type="checkbox"
+                                      className="item-checkbox"
+                                      checked={isSelected}
+                                      onChange={(e) => {
+                                        const next = new Set(selectedItemsForConfirm);
+                                        if (e.target.checked) {
+                                          next.add(item.id);
+                                        } else {
+                                          next.delete(item.id);
+                                        }
+                                        setSelectedItemsForConfirm(next);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  )}
+                                  {/* Item index */}
+                                  <span className="item-index">{idx + 1}/{totalCount}</span>
                                   <div className="item-info">
                                     <span className="item-mark">{item.assembly_mark}</span>
                                     <span className="item-name">{item.product_name}</span>
-                                    <span className="item-weight">{item.cast_unit_weight} kg</span>
+                                    {item.cast_unit_weight && (
+                                      <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
+                                    )}
                                   </div>
                                   <div className="item-actions">
                                     <StatusBadge status={status} />
@@ -1059,21 +1269,21 @@ export default function ArrivedDeliveriesScreen({
                                           onClick={() => confirmItem(arrivedVehicle.id, item.id, 'confirmed')}
                                           title="Kinnita"
                                         >
-                                          <FiCheck />
+                                          <FiCheck size={12} />
                                         </button>
                                         <button
                                           className="action-btn missing"
                                           onClick={() => confirmItem(arrivedVehicle.id, item.id, 'missing')}
                                           title="Puudub"
                                         >
-                                          <FiX />
+                                          <FiX size={12} />
                                         </button>
                                         <button
                                           className="action-btn wrong"
                                           onClick={() => confirmItem(arrivedVehicle.id, item.id, 'wrong_vehicle')}
                                           title="Vale veok"
                                         >
-                                          <FiAlertTriangle />
+                                          <FiAlertTriangle size={12} />
                                         </button>
                                       </>
                                     )}
@@ -1085,16 +1295,16 @@ export default function ArrivedDeliveriesScreen({
                             {/* Added items from other vehicles */}
                             {arrivalConfirmations
                               .filter(c => c.status === 'added')
-                              .map(conf => {
+                              .map((conf, idx) => {
                                 const item = items.find(i => i.id === conf.item_id);
                                 if (!item) return null;
                                 return (
                                   <div key={conf.id} className="item-row added">
+                                    <span className="item-index">+{idx + 1}</span>
                                     <div className="item-info">
                                       <span className="item-mark">{item.assembly_mark}</span>
-                                      <span className="item-name">{item.product_name}</span>
                                       <span className="item-source">
-                                        (lisatud veokist {conf.source_vehicle_code})
+                                        (veokist {conf.source_vehicle_code})
                                       </span>
                                     </div>
                                     <div className="item-actions">
@@ -1209,6 +1419,68 @@ export default function ArrivedDeliveriesScreen({
                 }}
               >
                 Lisa {selectedItemsToAdd.size > 0 ? `(${selectedItemsToAdd.size})` : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unplanned vehicle modal */}
+      {showUnplannedVehicleModal && (
+        <div className="modal-overlay" onClick={() => setShowUnplannedVehicleModal(false)}>
+          <div className="modal unplanned-vehicle-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Lisa planeerimata veok</h2>
+              <button className="close-btn" onClick={() => setShowUnplannedVehicleModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-description">
+                Lisa veok, mis polnud graafikus planeeritud. Tehas võis saata üllatusveoki.
+              </p>
+              <div className="form-group">
+                <label>Veoki kood *</label>
+                <input
+                  type="text"
+                  value={unplannedVehicleCode}
+                  onChange={(e) => setUnplannedVehicleCode(e.target.value)}
+                  placeholder="Nt. V99, SEGAPUDU, ÜLLATUS..."
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label>Tehas (valikuline)</label>
+                <select
+                  value={unplannedFactoryId}
+                  onChange={(e) => setUnplannedFactoryId(e.target.value)}
+                >
+                  <option value="">Teadmata tehas</option>
+                  {factories.map(f => (
+                    <option key={f.id} value={f.id}>{f.factory_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Märkused</label>
+                <textarea
+                  value={unplannedNotes}
+                  onChange={(e) => setUnplannedNotes(e.target.value)}
+                  placeholder="Nt. Tehas saatis lisa ilma eelneva teavituseta..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowUnplannedVehicleModal(false)}>
+                Tühista
+              </button>
+              <button
+                className="confirm-btn"
+                disabled={!unplannedVehicleCode.trim() || saving}
+                onClick={createUnplannedVehicle}
+              >
+                {saving ? 'Salvestab...' : 'Lisa veok'}
               </button>
             </div>
           </div>
