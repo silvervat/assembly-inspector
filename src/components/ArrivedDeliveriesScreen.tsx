@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   supabase, DeliveryVehicle, DeliveryItem, DeliveryFactory,
   ArrivedVehicle, ArrivalItemConfirmation, ArrivalPhoto,
-  ArrivalItemStatus
+  ArrivalItemStatus, ArrivalPhotoType
 } from '../supabase';
 import { selectObjectsByGuid } from '../utils/navigationHelper';
 import {
@@ -10,8 +10,10 @@ import {
   FiCamera, FiClock, FiMapPin, FiTruck,
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
-  FiUpload, FiImage
+  FiUpload, FiImage, FiMessageCircle,
+  FiFileText, FiDownload
 } from 'react-icons/fi';
+import * as XLSX from 'xlsx-js-style';
 
 // Props
 interface ArrivedDeliveriesScreenProps {
@@ -117,8 +119,14 @@ export default function ArrivedDeliveriesScreen({
   const [selectedItemsForConfirm, setSelectedItemsForConfirm] = useState<Set<string>>(new Set());
   const [lastClickedItemId, setLastClickedItemId] = useState<string | null>(null);
 
-  // Photo upload ref
+  // State - Expanded item for comment/photo editing
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [editingItemComment, setEditingItemComment] = useState('');
+
+  // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const deliveryNotePhotoInputRef = useRef<HTMLInputElement>(null);
+  const itemPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // ============================================
   // DATA LOADING
@@ -291,9 +299,7 @@ export default function ArrivedDeliveriesScreen({
     return confirmations.filter(c => c.arrived_vehicle_id === arrivedVehicleId);
   };
 
-  const getPhotosForArrival = (arrivedVehicleId: string) => {
-    return photos.filter(p => p.arrived_vehicle_id === arrivedVehicleId);
-  };
+  // Note: getPhotosForArrival was replaced with getGeneralPhotosForArrival and getPhotosForItem
 
   const getItemConfirmationStatus = (arrivedVehicleId: string, itemId: string): ArrivalItemStatus => {
     const confirmation = confirmations.find(
@@ -709,15 +715,19 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
-  // Upload photo
-  const handlePhotoUpload = async (arrivedVehicleId: string, files: FileList) => {
+  // Upload photo with type
+  const handlePhotoUpload = async (
+    arrivedVehicleId: string,
+    files: FileList,
+    photoType: ArrivalPhotoType = 'general'
+  ) => {
     if (!files || files.length === 0) return;
 
     setSaving(true);
     try {
       for (const file of Array.from(files)) {
         // Upload to Supabase Storage
-        const fileName = `${projectId}/${arrivedVehicleId}/${Date.now()}_${file.name}`;
+        const fileName = `${projectId}/${arrivedVehicleId}/${photoType}/${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage
           .from('arrival-photos')
           .upload(fileName, file);
@@ -739,12 +749,18 @@ export default function ArrivedDeliveriesScreen({
             file_url: urlData.publicUrl,
             file_size: file.size,
             mime_type: file.type,
+            photo_type: photoType,
             uploaded_by: tcUserEmail
           });
       }
 
       await loadPhotos();
-      setMessage('Fotod üles laetud');
+      const typeLabels: Record<ArrivalPhotoType, string> = {
+        general: 'Fotod üles laetud',
+        delivery_note: 'Saatelehed üles laetud',
+        item: 'Detaili foto üles laetud'
+      };
+      setMessage(typeLabels[photoType]);
     } catch (e: any) {
       console.error('Error uploading photo:', e);
       setMessage('Viga foto üleslaadimisel: ' + e.message);
@@ -778,6 +794,477 @@ export default function ArrivedDeliveriesScreen({
     } finally {
       setSaving(false);
     }
+  };
+
+  // Get photos for a specific item
+  const getPhotosForItem = (arrivedVehicleId: string, itemId: string) => {
+    return photos.filter(p => p.arrived_vehicle_id === arrivedVehicleId && p.item_id === itemId);
+  };
+
+  // Get general photos (not linked to items, not delivery notes)
+  const getGeneralPhotosForArrival = (arrivedVehicleId: string) => {
+    return photos.filter(p =>
+      p.arrived_vehicle_id === arrivedVehicleId &&
+      !p.item_id &&
+      (p.photo_type === 'general' || !p.photo_type)
+    );
+  };
+
+  // Get delivery note photos (saatelehed)
+  const getDeliveryNotePhotos = (arrivedVehicleId: string) => {
+    return photos.filter(p =>
+      p.arrived_vehicle_id === arrivedVehicleId &&
+      p.photo_type === 'delivery_note'
+    );
+  };
+
+  // Upload photo for specific item
+  const handleItemPhotoUpload = async (arrivedVehicleId: string, itemId: string, files: FileList) => {
+    if (!files || files.length === 0) return;
+
+    setSaving(true);
+    try {
+      for (const file of Array.from(files)) {
+        const fileName = `${projectId}/${arrivedVehicleId}/items/${itemId}/${Date.now()}_${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('arrival-photos')
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from('arrival-photos')
+          .getPublicUrl(fileName);
+
+        await supabase
+          .from('trimble_arrival_photos')
+          .insert({
+            trimble_project_id: projectId,
+            arrived_vehicle_id: arrivedVehicleId,
+            item_id: itemId,
+            file_name: file.name,
+            file_url: urlData.publicUrl,
+            file_size: file.size,
+            mime_type: file.type,
+            uploaded_by: tcUserEmail
+          });
+      }
+
+      await loadPhotos();
+      setMessage('Detaili foto üles laetud');
+    } catch (e: any) {
+      console.error('Error uploading item photo:', e);
+      setMessage('Viga foto üleslaadimisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Update item confirmation comment
+  const updateItemComment = async (arrivedVehicleId: string, itemId: string, notes: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_arrival_confirmations')
+        .update({
+          notes,
+          confirmed_by: tcUserEmail
+        })
+        .eq('arrived_vehicle_id', arrivedVehicleId)
+        .eq('item_id', itemId);
+
+      if (error) throw error;
+      await loadConfirmations();
+      setMessage('Kommentaar salvestatud');
+    } catch (e: any) {
+      console.error('Error updating item comment:', e);
+      setMessage('Viga: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Get item confirmation comment
+  const getItemComment = (arrivedVehicleId: string, itemId: string): string => {
+    const confirmation = confirmations.find(
+      c => c.arrived_vehicle_id === arrivedVehicleId && c.item_id === itemId
+    );
+    return confirmation?.notes || '';
+  };
+
+  // ============================================
+  // EXCEL EXPORT
+  // ============================================
+
+  // Export delivery report to Excel
+  const exportDeliveryReport = async (arrivedVehicleId: string) => {
+    const arrival = arrivedVehicles.find(av => av.id === arrivedVehicleId);
+    if (!arrival) return;
+
+    const vehicle = getVehicle(arrival.vehicle_id);
+    const factory = getFactory(vehicle?.factory_id);
+    const vehicleItems = getVehicleItems(arrival.vehicle_id);
+    const arrivalConfirmations = getConfirmationsForArrival(arrivedVehicleId);
+
+    // Calculate statistics
+    const confirmedCount = arrivalConfirmations.filter(c => c.status === 'confirmed').length;
+    const missingCount = arrivalConfirmations.filter(c => c.status === 'missing').length;
+    const wrongVehicleCount = arrivalConfirmations.filter(c => c.status === 'wrong_vehicle').length;
+    const addedCount = arrivalConfirmations.filter(c => c.status === 'added').length;
+
+    // Calculate delay (days between scheduled and actual arrival)
+    const scheduledDate = vehicle?.scheduled_date ? new Date(vehicle.scheduled_date + 'T00:00:00') : null;
+    const arrivalDate = arrival.arrival_date ? new Date(arrival.arrival_date + 'T00:00:00') : null;
+    const delayDays = scheduledDate && arrivalDate
+      ? Math.round((arrivalDate.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+
+    // Header styles
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '2563EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    const subHeaderStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: 'E5E7EB' } },
+      alignment: { horizontal: 'left' }
+    };
+
+    // ============================================
+    // Sheet 1: Ülevaade (Overview)
+    // ============================================
+    const overviewData = [
+      ['SAABUNUD TARNE RAPORT'],
+      [''],
+      ['Veok', vehicle?.vehicle_code || '-'],
+      ['Tehas', factory?.factory_name || '-'],
+      ['Planeeritud kuupäev', vehicle?.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : '-'],
+      ['Tegelik saabumise kuupäev', arrival.arrival_date ? formatDateEstonian(arrival.arrival_date) : '-'],
+      ['Hilinemine (päevi)', delayDays !== null ? (delayDays === 0 ? 'Tähtajal' : (delayDays > 0 ? `${delayDays} päeva hiljem` : `${Math.abs(delayDays)} päeva varem`)) : '-'],
+      [''],
+      ['AJAD'],
+      ['Saabumise aeg', arrival.arrival_time || '-'],
+      ['Mahalaadimine algus', arrival.unload_start_time || '-'],
+      ['Mahalaadimine lõpp', arrival.unload_end_time || '-'],
+      [''],
+      ['VEOKI ANDMED'],
+      ['Registri number', arrival.reg_number || '-'],
+      ['Haagise number', arrival.trailer_number || '-'],
+      ['Mahalaadimise asukoht', arrival.unload_location || '-'],
+      [''],
+      ['STATISTIKA'],
+      ['Planeeritud detaile', vehicleItems.length.toString()],
+      ['Kinnitatud', `${confirmedCount} (${vehicleItems.length > 0 ? Math.round(confirmedCount / vehicleItems.length * 100) : 0}%)`],
+      ['Puuduvaid', missingCount.toString()],
+      ['Vale veoki alt', wrongVehicleCount.toString()],
+      ['Lisatud teistest veokitest', addedCount.toString()],
+      [''],
+      ['MÄRKUSED'],
+      [arrival.notes || 'Märkused puuduvad'],
+      [''],
+      ['Kinnitus', arrival.is_confirmed ? 'JAH' : 'EI'],
+      ['Kinnitatud', arrival.confirmed_at ? new Date(arrival.confirmed_at).toLocaleString('et-EE') : '-'],
+      ['Kinnitaja', arrival.confirmed_by || '-']
+    ];
+
+    const wsOverview = XLSX.utils.aoa_to_sheet(overviewData);
+
+    // Apply styles
+    wsOverview['A1'] = { v: 'SAABUNUD TARNE RAPORT', s: { ...headerStyle, font: { ...headerStyle.font, sz: 16 } } };
+    wsOverview['!cols'] = [{ wch: 30 }, { wch: 40 }];
+
+    XLSX.utils.book_append_sheet(wb, wsOverview, 'Ülevaade');
+
+    // ============================================
+    // Sheet 2: Detailid (Items)
+    // ============================================
+    const itemsHeader = ['Nr', 'Tähis', 'Toote nimi', 'Kaal (kg)', 'Planeeritud kuupäev', 'Staatus', 'Kommentaar', 'Fotosid'];
+
+    const itemsData = vehicleItems.map((item, idx) => {
+      const status = getItemConfirmationStatus(arrivedVehicleId, item.id);
+      const comment = getItemComment(arrivedVehicleId, item.id);
+      const itemPhotos = getPhotosForItem(arrivedVehicleId, item.id);
+
+      const statusLabels: Record<ArrivalItemStatus, string> = {
+        pending: 'Ootel',
+        confirmed: 'Kinnitatud',
+        missing: 'Puudub',
+        wrong_vehicle: 'Vale veok',
+        added: 'Lisatud'
+      };
+
+      return [
+        idx + 1,
+        item.assembly_mark || '-',
+        item.product_name || '-',
+        item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
+        item.scheduled_date ? formatDateEstonian(item.scheduled_date) : '-',
+        statusLabels[status],
+        comment || '-',
+        itemPhotos.length
+      ];
+    });
+
+    // Add items from other vehicles (added status)
+    const addedItems = arrivalConfirmations.filter(c => c.status === 'added');
+    addedItems.forEach((conf, idx) => {
+      const item = items.find(i => i.id === conf.item_id);
+      if (item) {
+        itemsData.push([
+          `+${idx + 1}`,
+          item.assembly_mark || '-',
+          item.product_name || '-',
+          item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
+          item.scheduled_date ? formatDateEstonian(item.scheduled_date) : '-',
+          `Lisatud (${conf.source_vehicle_code || 'tundmatu veok'})`,
+          conf.notes || '-',
+          0
+        ]);
+      }
+    });
+
+    const wsItems = XLSX.utils.aoa_to_sheet([itemsHeader, ...itemsData]);
+
+    // Style header row
+    itemsHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsItems[cellRef] = { v: itemsHeader[colIdx], s: headerStyle };
+    });
+
+    wsItems['!cols'] = [
+      { wch: 6 }, { wch: 20 }, { wch: 30 }, { wch: 12 },
+      { wch: 16 }, { wch: 14 }, { wch: 40 }, { wch: 10 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
+
+    // ============================================
+    // Sheet 3: Erinevused (Discrepancies)
+    // ============================================
+    const discrepancyHeader = ['Probleem', 'Tähis', 'Toote nimi', 'Kommentaar', 'Algne veok'];
+    const discrepancyData: (string | number)[][] = [];
+
+    // Missing items
+    arrivalConfirmations
+      .filter(c => c.status === 'missing')
+      .forEach(conf => {
+        const item = items.find(i => i.id === conf.item_id);
+        discrepancyData.push([
+          'Puudub',
+          item?.assembly_mark || '-',
+          item?.product_name || '-',
+          conf.notes || '-',
+          '-'
+        ]);
+      });
+
+    // Wrong vehicle items
+    arrivalConfirmations
+      .filter(c => c.status === 'wrong_vehicle')
+      .forEach(conf => {
+        const item = items.find(i => i.id === conf.item_id);
+        discrepancyData.push([
+          'Vale veok',
+          item?.assembly_mark || '-',
+          item?.product_name || '-',
+          conf.notes || '-',
+          conf.source_vehicle_code || '-'
+        ]);
+      });
+
+    // Added items (came from other vehicle)
+    arrivalConfirmations
+      .filter(c => c.status === 'added')
+      .forEach(conf => {
+        const item = items.find(i => i.id === conf.item_id);
+        discrepancyData.push([
+          'Lisatud teisest veokist',
+          item?.assembly_mark || '-',
+          item?.product_name || '-',
+          conf.notes || '-',
+          conf.source_vehicle_code || '-'
+        ]);
+      });
+
+    if (discrepancyData.length === 0) {
+      discrepancyData.push(['Erinevusi ei leitud', '-', '-', '-', '-']);
+    }
+
+    const wsDiscrepancy = XLSX.utils.aoa_to_sheet([discrepancyHeader, ...discrepancyData]);
+
+    discrepancyHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsDiscrepancy[cellRef] = { v: discrepancyHeader[colIdx], s: headerStyle };
+    });
+
+    wsDiscrepancy['!cols'] = [
+      { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 40 }, { wch: 15 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsDiscrepancy, 'Erinevused');
+
+    // ============================================
+    // Sheet 4: Ressursid (Resources)
+    // ============================================
+    const resourcesData = [
+      ['MAHALAADIMISE RESSURSID'],
+      [''],
+      ['Ressurss', 'Kogus']
+    ];
+
+    const resources = arrival.unload_resources as Record<string, number> || {};
+    UNLOAD_RESOURCES.forEach(res => {
+      const count = resources[res.key] || 0;
+      if (count > 0) {
+        resourcesData.push([res.label, count.toString()]);
+      }
+    });
+
+    if (Object.values(resources).every(v => !v)) {
+      resourcesData.push(['Ressursse pole määratud', '-']);
+    }
+
+    const wsResources = XLSX.utils.aoa_to_sheet(resourcesData);
+    wsResources['A1'] = { v: 'MAHALAADIMISE RESSURSID', s: subHeaderStyle };
+    wsResources['!cols'] = [{ wch: 25 }, { wch: 15 }];
+
+    XLSX.utils.book_append_sheet(wb, wsResources, 'Ressursid');
+
+    // Generate filename and download
+    const dateStr = arrival.arrival_date || new Date().toISOString().split('T')[0];
+    const vehicleCode = vehicle?.vehicle_code || 'veok';
+    const fileName = `Saabunud_tarne_${vehicleCode}_${dateStr}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+    setMessage('Excel fail allalaetud');
+  };
+
+  // Export all arrivals for selected date
+  const exportAllArrivalsForDate = async () => {
+    const dateArrivals = arrivedVehicles.filter(av => av.arrival_date === selectedDate);
+    if (dateArrivals.length === 0) {
+      setMessage('Sellel kuupäeval pole saabunud tarneid');
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    // Header style
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '2563EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    // ============================================
+    // Sheet 1: Kokkuvõte (Summary)
+    // ============================================
+    const summaryHeader = [
+      'Veok', 'Tehas', 'Planeeritud', 'Saabunud', 'Hilinemine',
+      'Saabumise aeg', 'Detaile', 'Kinnitatud', 'Puudub', 'Staatus'
+    ];
+
+    const summaryData = dateArrivals.map(arrival => {
+      const vehicle = getVehicle(arrival.vehicle_id);
+      const factory = getFactory(vehicle?.factory_id);
+      const vehicleItems = getVehicleItems(arrival.vehicle_id);
+      const arrivalConfs = getConfirmationsForArrival(arrival.id);
+
+      const confirmedCount = arrivalConfs.filter(c => c.status === 'confirmed').length;
+      const missingCount = arrivalConfs.filter(c => c.status === 'missing').length;
+
+      const scheduledDate = vehicle?.scheduled_date ? new Date(vehicle.scheduled_date + 'T00:00:00') : null;
+      const arrivalDate = arrival.arrival_date ? new Date(arrival.arrival_date + 'T00:00:00') : null;
+      const delayDays = scheduledDate && arrivalDate
+        ? Math.round((arrivalDate.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      return [
+        vehicle?.vehicle_code || '-',
+        factory?.factory_name || '-',
+        vehicle?.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : '-',
+        arrival.arrival_date ? formatDateEstonian(arrival.arrival_date) : '-',
+        delayDays !== null ? (delayDays === 0 ? '0' : `${delayDays > 0 ? '+' : ''}${delayDays}`) : '-',
+        arrival.arrival_time || '-',
+        vehicleItems.length,
+        confirmedCount,
+        missingCount,
+        arrival.is_confirmed ? 'Kinnitatud' : 'Pooleli'
+      ];
+    });
+
+    const wsSummary = XLSX.utils.aoa_to_sheet([summaryHeader, ...summaryData]);
+
+    summaryHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsSummary[cellRef] = { v: summaryHeader[colIdx], s: headerStyle };
+    });
+
+    wsSummary['!cols'] = [
+      { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 8 }, { wch: 12 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Kokkuvõte');
+
+    // ============================================
+    // Sheet 2: Kõik detailid (All items)
+    // ============================================
+    const allItemsHeader = [
+      'Veok', 'Tähis', 'Toote nimi', 'Kaal (kg)', 'Staatus', 'Kommentaar'
+    ];
+
+    const allItemsData: (string | number)[][] = [];
+
+    dateArrivals.forEach(arrival => {
+      const vehicle = getVehicle(arrival.vehicle_id);
+      const vehicleItems = getVehicleItems(arrival.vehicle_id);
+
+      vehicleItems.forEach(item => {
+        const status = getItemConfirmationStatus(arrival.id, item.id);
+        const comment = getItemComment(arrival.id, item.id);
+
+        const statusLabels: Record<ArrivalItemStatus, string> = {
+          pending: 'Ootel',
+          confirmed: 'Kinnitatud',
+          missing: 'Puudub',
+          wrong_vehicle: 'Vale veok',
+          added: 'Lisatud'
+        };
+
+        allItemsData.push([
+          vehicle?.vehicle_code || '-',
+          item.assembly_mark || '-',
+          item.product_name || '-',
+          item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
+          statusLabels[status],
+          comment || '-'
+        ]);
+      });
+    });
+
+    const wsAllItems = XLSX.utils.aoa_to_sheet([allItemsHeader, ...allItemsData]);
+
+    allItemsHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsAllItems[cellRef] = { v: allItemsHeader[colIdx], s: headerStyle };
+    });
+
+    wsAllItems['!cols'] = [
+      { wch: 12 }, { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 40 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, wsAllItems, 'Kõik detailid');
+
+    // Generate filename and download
+    const fileName = `Saabunud_tarned_${selectedDate}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    setMessage('Excel fail allalaetud');
   };
 
   // ============================================
@@ -958,6 +1445,15 @@ export default function ArrivedDeliveriesScreen({
           title="Lisa planeerimata veok"
         >
           <FiPlus /> Lisa veok
+        </button>
+
+        {/* Export all arrivals for date */}
+        <button
+          className="export-btn"
+          onClick={exportAllArrivalsForDate}
+          title="Ekspordi päeva kokkuvõte"
+        >
+          <FiDownload /> Excel
         </button>
       </div>
 
@@ -1179,15 +1675,27 @@ export default function ArrivedDeliveriesScreen({
                             </div>
                           </div>
 
-                          {/* Photos */}
+                          {/* General Notes */}
+                          <div className="notes-section">
+                            <label className="notes-label">Üldised märkused tarne kohta:</label>
+                            <textarea
+                              className="notes-textarea"
+                              value={arrivedVehicle.notes || ''}
+                              onChange={(e) => updateArrival(arrivedVehicle.id, { notes: e.target.value })}
+                              placeholder="Lisa märkused tarne kohta..."
+                              rows={2}
+                            />
+                          </div>
+
+                          {/* Photos - general (not linked to items) */}
                           <div className="photos-section">
                             <div className="photos-header">
-                              <label><FiCamera /> Fotod</label>
+                              <label><FiCamera /> Koorma fotod</label>
                               <button
                                 className="upload-photo-btn"
                                 onClick={() => photoInputRef.current?.click()}
                               >
-                                <FiUpload /> Lisa foto
+                                <FiUpload /> Lisa
                               </button>
                               <input
                                 ref={photoInputRef}
@@ -1197,13 +1705,13 @@ export default function ArrivedDeliveriesScreen({
                                 style={{ display: 'none' }}
                                 onChange={(e) => {
                                   if (e.target.files) {
-                                    handlePhotoUpload(arrivedVehicle.id, e.target.files);
+                                    handlePhotoUpload(arrivedVehicle.id, e.target.files, 'general');
                                   }
                                 }}
                               />
                             </div>
                             <div className="photos-grid">
-                              {getPhotosForArrival(arrivedVehicle.id).map(photo => (
+                              {getGeneralPhotosForArrival(arrivedVehicle.id).map(photo => (
                                 <div key={photo.id} className="photo-item">
                                   <img src={photo.file_url} alt={photo.file_name} />
                                   <button
@@ -1214,13 +1722,69 @@ export default function ArrivedDeliveriesScreen({
                                   </button>
                                 </div>
                               ))}
-                              {getPhotosForArrival(arrivedVehicle.id).length === 0 && (
+                              {getGeneralPhotosForArrival(arrivedVehicle.id).length === 0 && (
                                 <div className="no-photos">
                                   <FiImage />
                                   <span>Pole fotosid</span>
                                 </div>
                               )}
                             </div>
+                          </div>
+
+                          {/* Delivery notes photos (saatelehed) */}
+                          <div className="photos-section delivery-notes">
+                            <div className="photos-header">
+                              <label><FiFileText /> Saatelehed</label>
+                              <button
+                                className="upload-photo-btn"
+                                onClick={() => deliveryNotePhotoInputRef.current?.click()}
+                              >
+                                <FiUpload /> Lisa
+                              </button>
+                              <input
+                                ref={deliveryNotePhotoInputRef}
+                                type="file"
+                                accept="image/*,.pdf"
+                                multiple
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  if (e.target.files) {
+                                    handlePhotoUpload(arrivedVehicle.id, e.target.files, 'delivery_note');
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div className="photos-grid">
+                              {getDeliveryNotePhotos(arrivedVehicle.id).map(photo => (
+                                <div key={photo.id} className="photo-item delivery-note">
+                                  <img src={photo.file_url} alt={photo.file_name} />
+                                  <span className="photo-name">{photo.file_name}</span>
+                                  <button
+                                    className="delete-photo-btn"
+                                    onClick={() => deletePhoto(photo.id, photo.file_url)}
+                                  >
+                                    <FiX />
+                                  </button>
+                                </div>
+                              ))}
+                              {getDeliveryNotePhotos(arrivedVehicle.id).length === 0 && (
+                                <div className="no-photos">
+                                  <FiFileText />
+                                  <span>Pole saatelehti</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Export button */}
+                          <div className="export-section">
+                            <button
+                              className="export-vehicle-btn"
+                              onClick={() => exportDeliveryReport(arrivedVehicle.id)}
+                              title="Ekspordi selle veoki raport"
+                            >
+                              <FiDownload /> Ekspordi raport
+                            </button>
                           </div>
                         </div>
 
@@ -1286,92 +1850,168 @@ export default function ArrivedDeliveriesScreen({
                                 getItemConfirmationStatus(arrivedVehicle.id, i.id) === 'pending'
                               );
 
+                              const itemCommentValue = getItemComment(arrivedVehicle.id, item.id);
+                              const itemPhotos = getPhotosForItem(arrivedVehicle.id, item.id);
+                              const isExpanded = expandedItemId === item.id;
+                              const hasCommentOrPhotos = itemCommentValue || itemPhotos.length > 0;
+
                               return (
-                                <div key={item.id} className={`item-row ${status} ${isSelected ? 'selected' : ''}`}>
-                                  {/* Checkbox for pending items */}
-                                  {status === 'pending' && (
-                                    <input
-                                      type="checkbox"
-                                      className="item-checkbox"
-                                      checked={isSelected}
-                                      onChange={() => {}}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
+                                <div key={item.id} className={`item-container ${isExpanded ? 'expanded' : ''}`}>
+                                  <div className={`item-row ${status} ${isSelected ? 'selected' : ''}`}>
+                                    {/* Checkbox for pending items */}
+                                    {status === 'pending' && (
+                                      <input
+                                        type="checkbox"
+                                        className="item-checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {}}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
 
-                                        // Shift+click for range selection
-                                        if (e.shiftKey && lastClickedItemId) {
-                                          const lastIdx = pendingItems.findIndex(i => i.id === lastClickedItemId);
-                                          const currentIdx = pendingItems.findIndex(i => i.id === item.id);
+                                          // Shift+click for range selection
+                                          if (e.shiftKey && lastClickedItemId) {
+                                            const lastIdx = pendingItems.findIndex(i => i.id === lastClickedItemId);
+                                            const currentIdx = pendingItems.findIndex(i => i.id === item.id);
 
-                                          if (lastIdx >= 0 && currentIdx >= 0) {
-                                            const start = Math.min(lastIdx, currentIdx);
-                                            const end = Math.max(lastIdx, currentIdx);
-                                            const rangeIds = pendingItems.slice(start, end + 1).map(i => i.id);
+                                            if (lastIdx >= 0 && currentIdx >= 0) {
+                                              const start = Math.min(lastIdx, currentIdx);
+                                              const end = Math.max(lastIdx, currentIdx);
+                                              const rangeIds = pendingItems.slice(start, end + 1).map(i => i.id);
 
+                                              setSelectedItemsForConfirm(prev => {
+                                                const next = new Set(prev);
+                                                rangeIds.forEach(id => next.add(id));
+                                                selectItemsInModel(next);
+                                                return next;
+                                              });
+                                            }
+                                          } else {
                                             setSelectedItemsForConfirm(prev => {
                                               const next = new Set(prev);
-                                              rangeIds.forEach(id => next.add(id));
-                                              // Select items in model
+                                              if (next.has(item.id)) {
+                                                next.delete(item.id);
+                                              } else {
+                                                next.add(item.id);
+                                              }
                                               selectItemsInModel(next);
                                               return next;
                                             });
                                           }
-                                        } else {
-                                          // Normal click - toggle single item
-                                          setSelectedItemsForConfirm(prev => {
-                                            const next = new Set(prev);
-                                            if (next.has(item.id)) {
-                                              next.delete(item.id);
-                                            } else {
-                                              next.add(item.id);
+                                          setLastClickedItemId(item.id);
+                                        }}
+                                      />
+                                    )}
+                                    {/* Item index */}
+                                    <span className="item-index">{idx + 1}/{totalCount}</span>
+                                    {/* Inline item info */}
+                                    <div className="item-info inline">
+                                      <span className="item-mark">{item.assembly_mark}</span>
+                                      {item.product_name && <span className="item-product">{item.product_name}</span>}
+                                      {item.cast_unit_weight && (
+                                        <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
+                                      )}
+                                    </div>
+                                    <div className="item-actions">
+                                      {/* Comment/Photo indicator */}
+                                      <button
+                                        className={`action-btn comment ${hasCommentOrPhotos ? 'has-content' : ''}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setExpandedItemId(isExpanded ? null : item.id);
+                                          if (!isExpanded) {
+                                            setEditingItemComment(itemCommentValue);
+                                          }
+                                        }}
+                                        title="Kommentaar/fotod"
+                                      >
+                                        <FiMessageCircle size={12} />
+                                        {hasCommentOrPhotos && <span className="indicator">!</span>}
+                                      </button>
+                                      <StatusBadge status={status} />
+                                      {status === 'pending' && (
+                                        <>
+                                          <button
+                                            className="action-btn confirm"
+                                            onClick={() => confirmItem(arrivedVehicle.id, item.id, 'confirmed')}
+                                            title="Kinnita"
+                                          >
+                                            <FiCheck size={12} />
+                                          </button>
+                                          <button
+                                            className="action-btn missing"
+                                            onClick={() => confirmItem(arrivedVehicle.id, item.id, 'missing')}
+                                            title="Puudub"
+                                          >
+                                            <FiX size={12} />
+                                          </button>
+                                          <button
+                                            className="action-btn wrong"
+                                            onClick={() => confirmItem(arrivedVehicle.id, item.id, 'wrong_vehicle')}
+                                            title="Vale veok"
+                                          >
+                                            <FiAlertTriangle size={12} />
+                                          </button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {/* Expandable comment/photo section */}
+                                  {isExpanded && (
+                                    <div className="item-detail-section">
+                                      <div className="item-comment-row">
+                                        <input
+                                          type="text"
+                                          className="item-comment-input"
+                                          placeholder="Lisa kommentaar..."
+                                          value={editingItemComment}
+                                          onChange={(e) => setEditingItemComment(e.target.value)}
+                                          onBlur={() => {
+                                            if (editingItemComment !== itemCommentValue) {
+                                              updateItemComment(arrivedVehicle.id, item.id, editingItemComment);
                                             }
-                                            // Select items in model
-                                            selectItemsInModel(next);
-                                            return next;
-                                          });
-                                        }
-                                        setLastClickedItemId(item.id);
-                                      }}
-                                    />
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              updateItemComment(arrivedVehicle.id, item.id, editingItemComment);
+                                            }
+                                          }}
+                                        />
+                                        <button
+                                          className="item-photo-btn"
+                                          onClick={() => itemPhotoInputRef.current?.click()}
+                                        >
+                                          <FiCamera size={12} /> Foto
+                                        </button>
+                                        <input
+                                          ref={itemPhotoInputRef}
+                                          type="file"
+                                          accept="image/*"
+                                          multiple
+                                          style={{ display: 'none' }}
+                                          onChange={(e) => {
+                                            if (e.target.files) {
+                                              handleItemPhotoUpload(arrivedVehicle.id, item.id, e.target.files);
+                                            }
+                                          }}
+                                        />
+                                      </div>
+                                      {itemPhotos.length > 0 && (
+                                        <div className="item-photos-row">
+                                          {itemPhotos.map(photo => (
+                                            <div key={photo.id} className="item-photo">
+                                              <img src={photo.file_url} alt={photo.file_name} />
+                                              <button
+                                                className="delete-item-photo-btn"
+                                                onClick={() => deletePhoto(photo.id, photo.file_url)}
+                                              >
+                                                <FiX size={10} />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   )}
-                                  {/* Item index */}
-                                  <span className="item-index">{idx + 1}/{totalCount}</span>
-                                  {/* Inline item info - same as delivery schedule */}
-                                  <div className="item-info inline">
-                                    <span className="item-mark">{item.assembly_mark}</span>
-                                    {item.product_name && <span className="item-product">{item.product_name}</span>}
-                                    {item.cast_unit_weight && (
-                                      <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
-                                    )}
-                                  </div>
-                                  <div className="item-actions">
-                                    <StatusBadge status={status} />
-                                    {status === 'pending' && (
-                                      <>
-                                        <button
-                                          className="action-btn confirm"
-                                          onClick={() => confirmItem(arrivedVehicle.id, item.id, 'confirmed')}
-                                          title="Kinnita"
-                                        >
-                                          <FiCheck size={12} />
-                                        </button>
-                                        <button
-                                          className="action-btn missing"
-                                          onClick={() => confirmItem(arrivedVehicle.id, item.id, 'missing')}
-                                          title="Puudub"
-                                        >
-                                          <FiX size={12} />
-                                        </button>
-                                        <button
-                                          className="action-btn wrong"
-                                          onClick={() => confirmItem(arrivedVehicle.id, item.id, 'wrong_vehicle')}
-                                          title="Vale veok"
-                                        >
-                                          <FiAlertTriangle size={12} />
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
                                 </div>
                               );
                             })}
