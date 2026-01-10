@@ -1680,7 +1680,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     setUsersLoading(true);
     try {
       const { data, error } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .select('*')
         .eq('trimble_project_id', projectId)
         .order('name', { ascending: true });
@@ -1737,7 +1737,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       if (editingUser) {
         // Update existing user
         const { error } = await supabase
-          .from('trimble_ex_users')
+          .from('trimble_inspection_users')
           .update({
             ...permissionFields,
             updated_at: new Date().toISOString()
@@ -1749,7 +1749,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       } else {
         // Create new user
         const { error } = await supabase
-          .from('trimble_ex_users')
+          .from('trimble_inspection_users')
           .insert({
             trimble_project_id: projectId,
             email: userFormData.email.trim().toLowerCase(),
@@ -1807,7 +1807,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     setUsersLoading(true);
     try {
       const { error } = await supabase
-        .from('trimble_ex_users')
+        .from('trimble_inspection_users')
         .delete()
         .eq('id', userId);
 
@@ -1817,6 +1817,81 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     } catch (e: any) {
       console.error('Error deleting user:', e);
       setMessage(`Viga kustutamisel: ${e.message}`);
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  // Sync team members from Trimble API to database
+  const syncTeamMembers = async () => {
+    if (!api || !projectId) return;
+
+    setUsersLoading(true);
+    try {
+      // Load team members from Trimble API
+      const members = await (api.project as any).getMembers?.();
+      if (!members || !Array.isArray(members)) {
+        setMessage('Meeskonna laadimine ebaõnnestus');
+        return;
+      }
+
+      // Get existing users from database
+      const { data: existingUsers } = await supabase
+        .from('trimble_inspection_users')
+        .select('email')
+        .eq('trimble_project_id', projectId);
+
+      const existingEmails = new Set((existingUsers || []).map(u => u.email.toLowerCase()));
+
+      // Filter new members that aren't in database yet
+      const newMembers = members.filter((m: any) =>
+        m.email && !existingEmails.has(m.email.toLowerCase())
+      );
+
+      if (newMembers.length === 0) {
+        setMessage('Kõik meeskonna liikmed on juba andmebaasis');
+        await loadProjectUsers();
+        return;
+      }
+
+      // Insert new members with default permissions
+      const newUsers = newMembers.map((m: any) => ({
+        trimble_project_id: projectId,
+        email: m.email.toLowerCase(),
+        name: m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || null,
+        role: m.role === 'ADMIN' ? 'admin' : 'inspector',
+        can_assembly_inspection: true,
+        can_bolt_inspection: false,
+        is_active: m.status === 'ACTIVE',
+        can_view_delivery: true,
+        can_edit_delivery: true,
+        can_delete_delivery: false,
+        can_view_installation_schedule: true,
+        can_edit_installation_schedule: true,
+        can_delete_installation_schedule: false,
+        can_view_installations: true,
+        can_edit_installations: true,
+        can_delete_installations: false,
+        can_view_organizer: true,
+        can_edit_organizer: true,
+        can_delete_organizer: false,
+        can_view_inspections: true,
+        can_edit_inspections: true,
+        can_delete_inspections: false,
+        can_access_admin: m.role === 'ADMIN'
+      }));
+
+      const { error } = await supabase
+        .from('trimble_inspection_users')
+        .insert(newUsers);
+
+      if (error) throw error;
+
+      setMessage(`${newMembers.length} meeskonna liiget lisatud`);
+      await loadProjectUsers();
+    } catch (e: any) {
+      console.error('Error syncing team members:', e);
+      setMessage(`Viga meeskonna sünkroonimisel: ${e.message}`);
     } finally {
       setUsersLoading(false);
     }
@@ -8167,6 +8242,14 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <button
                 className="inspector-button primary"
+                onClick={syncTeamMembers}
+                disabled={usersLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+              >
+                <FiUsers size={14} /> Laadi meeskond
+              </button>
+              <button
+                className="inspector-button"
                 onClick={openNewUserForm}
                 style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
               >
@@ -8194,9 +8277,14 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
               <FiUsers size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
               <p>Kasutajaid pole veel lisatud</p>
-              <button className="inspector-button primary" onClick={openNewUserForm} style={{ marginTop: '12px' }}>
-                <FiPlus size={14} /> Lisa esimene kasutaja
-              </button>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '12px' }}>
+                <button className="inspector-button primary" onClick={syncTeamMembers} disabled={usersLoading}>
+                  <FiUsers size={14} /> Laadi meeskond
+                </button>
+                <button className="inspector-button" onClick={openNewUserForm}>
+                  <FiPlus size={14} /> Lisa käsitsi
+                </button>
+              </div>
             </div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
