@@ -22,7 +22,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiArrowUp, FiArrowDown, FiTag, FiUpload
+  FiArrowUp, FiArrowDown, FiTag, FiUpload, FiSettings
 } from 'react-icons/fi';
 
 // ============================================
@@ -441,6 +441,19 @@ export default function OrganizerScreen({
   // Color picker popup state
   const [colorPickerGroupId, setColorPickerGroupId] = useState<string | null>(null);
 
+  // Settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // User settings (stored in localStorage)
+  const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(`organizer_autoExpand_${tcUserEmail}`);
+      return saved !== null ? JSON.parse(saved) : true; // Default: enabled
+    } catch {
+      return true;
+    }
+  });
+
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -472,6 +485,9 @@ export default function OrganizerScreen({
 
   // Auto-expand groups that contain selected items from model (but not when clicked via group header)
   useEffect(() => {
+    // Skip if setting is disabled
+    if (!autoExpandOnSelection) return;
+
     // Skip auto-expand if selection came from clicking a group header
     if (groupClickSelectionRef.current) {
       groupClickSelectionRef.current = false;
@@ -495,7 +511,20 @@ export default function OrganizerScreen({
         return newExpanded;
       });
     }
-  }, [selectedGuidsInGroups, groups]);
+  }, [selectedGuidsInGroups, groups, autoExpandOnSelection]);
+
+  // Toggle and save autoExpandOnSelection setting
+  const toggleAutoExpandOnSelection = useCallback(() => {
+    setAutoExpandOnSelection(prev => {
+      const newValue = !prev;
+      try {
+        localStorage.setItem(`organizer_autoExpand_${tcUserEmail}`, JSON.stringify(newValue));
+      } catch (e) {
+        console.warn('Failed to save setting:', e);
+      }
+      return newValue;
+    });
+  }, [tcUserEmail]);
 
   // ============================================
   // TOAST
@@ -3436,6 +3465,13 @@ export default function OrganizerScreen({
           >
             {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
           </button>
+          <button
+            className="org-icon-btn"
+            onClick={() => setShowSettingsModal(true)}
+            title="Seaded"
+          >
+            <FiSettings size={16} />
+          </button>
         </div>
       </div>
 
@@ -4131,6 +4167,79 @@ export default function OrganizerScreen({
           </div>
         );
       })()}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="org-modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="org-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="org-modal-header">
+              <h2>Seaded</h2>
+              <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body">
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--modus-border)'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+                    Mudelis märgistatud detail voldib lahti grupi
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    Kui detail on mõnes grupis, siis valik laieneb automaatselt
+                  </div>
+                </div>
+                <button
+                  onClick={toggleAutoExpandOnSelection}
+                  style={{
+                    width: '50px',
+                    height: '26px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    background: autoExpandOnSelection ? '#059669' : '#d1d5db',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: '3px',
+                    left: autoExpandOnSelection ? '27px' : '3px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'left 0.2s'
+                  }} />
+                </button>
+              </div>
+
+              {/* Placeholder for future settings */}
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                background: '#f5f5f5',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: '#666',
+                textAlign: 'center'
+              }}>
+                Rohkem seadeid lisandub varsti...
+              </div>
+            </div>
+            <div className="org-modal-footer">
+              <button className="save" onClick={() => setShowSettingsModal(false)}>
+                Sulge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
