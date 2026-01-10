@@ -2261,12 +2261,30 @@ export default function ArrivedDeliveriesScreen({
         >
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
             <img src={lightboxPhoto} alt="Foto" />
-            <button
-              className="lightbox-close"
-              onClick={() => setLightboxPhoto(null)}
-            >
-              <FiX size={24} />
-            </button>
+            <div className="lightbox-actions">
+              <button
+                className="lightbox-btn"
+                onClick={() => window.open(lightboxPhoto, '_blank')}
+                title="Ava uues aknas"
+              >
+                Ava uues aknas
+              </button>
+              <a
+                className="lightbox-btn"
+                href={lightboxPhoto}
+                download
+                title="Lae alla"
+              >
+                Lae alla
+              </a>
+              <button
+                className="lightbox-btn close"
+                onClick={() => setLightboxPhoto(null)}
+                title="Sulge"
+              >
+                <FiX size={18} /> Sulge
+              </button>
+            </div>
           </div>
         </div>
       )}

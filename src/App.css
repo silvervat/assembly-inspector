@@ -6255,29 +6255,42 @@ button.stat-toggle.off:hover {
 
 .lightbox-content img {
   max-width: 100%;
-  max-height: 95vh;
+  max-height: calc(95vh - 50px);
   object-fit: contain;
   border-radius: 4px;
 }
 
-.lightbox-close {
-  position: absolute;
-  top: -40px;
-  right: 0;
-  width: 36px;
-  height: 36px;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  border-radius: 50%;
-  color: white;
-  cursor: pointer;
+.lightbox-actions {
   display: flex;
-  align-items: center;
   justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
 }
 
-.lightbox-close:hover {
+.lightbox-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.lightbox-btn:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+.lightbox-btn.close {
+  background: rgba(239, 68, 68, 0.5);
+}
+
+.lightbox-btn.close:hover {
+  background: rgba(239, 68, 68, 0.7);
 }
 
 /* Items section - compact */
