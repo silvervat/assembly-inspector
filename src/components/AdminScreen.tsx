@@ -8371,13 +8371,14 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               zIndex: 1000
             }} onClick={() => setShowUserForm(false)}>
               <div style={{
-                backgroundColor: 'var(--bg-primary)',
+                backgroundColor: 'white',
                 borderRadius: '12px',
                 padding: '24px',
                 width: '100%',
                 maxWidth: '550px',
                 maxHeight: '90vh',
-                overflow: 'auto'
+                overflow: 'auto',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
               }} onClick={e => e.stopPropagation()}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
                   <h3 style={{ margin: 0 }}>{editingUser ? 'Muuda kasutajat' : 'Lisa uus kasutaja'}</h3>
@@ -8400,8 +8401,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           width: '100%',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          border: '1px solid var(--border-color)',
-                          backgroundColor: editingUser ? 'var(--bg-tertiary)' : 'var(--bg-primary)',
+                          border: '1px solid #e5e7eb',
+                          backgroundColor: editingUser ? '#f3f4f6' : 'white',
                           fontSize: '13px'
                         }}
                         placeholder="kasutaja@email.com"
@@ -8417,8 +8418,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           width: '100%',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          border: '1px solid var(--border-color)',
-                          backgroundColor: 'var(--bg-primary)',
+                          border: '1px solid #e5e7eb',
+                          backgroundColor: 'white',
                           fontSize: '13px'
                         }}
                         placeholder="Kasutaja nimi"
@@ -8436,8 +8437,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                           width: '100%',
                           padding: '8px 10px',
                           borderRadius: '6px',
-                          border: '1px solid var(--border-color)',
-                          backgroundColor: 'var(--bg-primary)',
+                          border: '1px solid #e5e7eb',
+                          backgroundColor: 'white',
                           fontSize: '13px'
                         }}
                       >
@@ -8460,80 +8461,80 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   </div>
 
                   {/* Permissions Table */}
-                  <div style={{ marginTop: '8px' }}>
-                    <h4 style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: '600' }}>Õigused moodulite kaupa</h4>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <div style={{ marginTop: '8px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                    <h4 style={{ margin: 0, padding: '12px', fontSize: '14px', fontWeight: '600', borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>Õigused moodulite kaupa</h4>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', backgroundColor: 'white' }}>
                       <thead>
-                        <tr style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                          <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid var(--border-color)' }}>Moodul</th>
-                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid var(--border-color)', width: '60px' }}>Vaata</th>
-                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid var(--border-color)', width: '60px' }}>Muuda</th>
-                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid var(--border-color)', width: '60px' }}>Kustuta</th>
+                        <tr style={{ backgroundColor: '#f3f4f6' }}>
+                          <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #e5e7eb' }}>Moodul</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Vaata</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Muuda</th>
+                          <th style={{ textAlign: 'center', padding: '8px', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Kustuta</th>
                         </tr>
                       </thead>
                       <tbody>
                         {/* Tarnegraafik */}
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>🚚 Tarnegraafik</td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                        <tr style={{ backgroundColor: 'white' }}>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>🚚 Tarnegraafik</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_view_delivery: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_edit_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_delivery: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_delete_delivery} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_delivery: e.target.checked }))} />
                           </td>
                         </tr>
                         {/* Paigaldusgraafik */}
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>📅 Paigaldusgraafik</td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                        <tr style={{ backgroundColor: 'white' }}>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>📅 Paigaldusgraafik</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_view_installation_schedule: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_edit_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_installation_schedule: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_delete_installation_schedule} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_installation_schedule: e.target.checked }))} />
                           </td>
                         </tr>
                         {/* Paigaldused */}
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>🔧 Paigaldused</td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                        <tr style={{ backgroundColor: 'white' }}>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>🔧 Paigaldused</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_view_installations: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_edit_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_installations: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_delete_installations} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_installations: e.target.checked }))} />
                           </td>
                         </tr>
                         {/* Organiseerija */}
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>📁 Organiseerija</td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                        <tr style={{ backgroundColor: 'white' }}>
+                          <td style={{ padding: '6px 8px', borderBottom: '1px solid #e5e7eb' }}>📁 Organiseerija</td>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_view_organizer} onChange={e => setUserFormData(prev => ({ ...prev, can_view_organizer: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_edit_organizer} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_organizer: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid #e5e7eb' }}>
                             <input type="checkbox" checked={userFormData.can_delete_organizer} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_organizer: e.target.checked }))} />
                           </td>
                         </tr>
                         {/* Inspektsioonid */}
-                        <tr>
-                          <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--border-color)' }}>🔍 Inspektsioonid</td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                        <tr style={{ backgroundColor: 'white' }}>
+                          <td style={{ padding: '6px 8px' }}>🔍 Inspektsioonid</td>
+                          <td style={{ textAlign: 'center', padding: '6px' }}>
                             <input type="checkbox" checked={userFormData.can_view_inspections} onChange={e => setUserFormData(prev => ({ ...prev, can_view_inspections: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px' }}>
                             <input type="checkbox" checked={userFormData.can_edit_inspections} onChange={e => setUserFormData(prev => ({ ...prev, can_edit_inspections: e.target.checked }))} />
                           </td>
-                          <td style={{ textAlign: 'center', padding: '6px', borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ textAlign: 'center', padding: '6px' }}>
                             <input type="checkbox" checked={userFormData.can_delete_inspections} onChange={e => setUserFormData(prev => ({ ...prev, can_delete_inspections: e.target.checked }))} />
                           </td>
                         </tr>
@@ -8564,8 +8565,8 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     style={{
                       padding: '10px 20px',
                       borderRadius: '8px',
-                      border: '1px solid var(--border-color)',
-                      background: 'var(--bg-secondary)',
+                      border: '1px solid #e5e7eb',
+                      background: '#f9fafb',
                       cursor: 'pointer',
                       fontSize: '14px'
                     }}

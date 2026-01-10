@@ -2135,11 +2135,45 @@ export default function OrganizerScreen({
     setGroupMenuId(null);
   };
 
-  // Detect if value looks like a GUID (UUID format)
-  const isGuid = (value: string): boolean => {
-    // Match UUID format: 8-4-4-4-12 hex characters (with or without dashes)
-    const uuidPattern = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+  // IFC GUID base64 charset (non-standard!)
+  const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+
+  // Convert MS GUID (UUID format like 85ca28da-b297-4bdc-87df-fac7573fb32d) to IFC GUID (22 chars)
+  const msToIfcGuid = (msGuid: string): string => {
+    if (!msGuid) return '';
+
+    // Remove dashes and validate
+    const hex = msGuid.replace(/-/g, '').toLowerCase();
+    if (hex.length !== 32 || !/^[0-9a-f]+$/.test(hex)) return '';
+
+    // Convert hex to 128 bits
+    let bits = '';
+    for (const char of hex) {
+      bits += parseInt(char, 16).toString(2).padStart(4, '0');
+    }
+
+    if (bits.length !== 128) return '';
+
+    // Convert to IFC GUID: first char 2 bits, rest 6 bits each
+    let ifcGuid = '';
+    ifcGuid += IFC_GUID_CHARS[parseInt(bits.substring(0, 2), 2)];
+    for (let i = 2; i < 128; i += 6) {
+      ifcGuid += IFC_GUID_CHARS[parseInt(bits.substring(i, i + 6), 2)];
+    }
+
+    return ifcGuid;
+  };
+
+  // Detect if value looks like an MS GUID (UUID format: 8-4-4-4-12 hex)
+  const isMsGuid = (value: string): boolean => {
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     return uuidPattern.test(value.trim());
+  };
+
+  // Detect if value looks like an IFC GUID (22 chars, base64-like)
+  const isIfcGuid = (value: string): boolean => {
+    const ifcPattern = /^[0-9A-Za-z_$]{22}$/;
+    return ifcPattern.test(value.trim());
   };
 
   const importItemsToGroup = async () => {
@@ -2167,16 +2201,35 @@ export default function OrganizerScreen({
       return;
     }
 
-    // Detect type based on first valid value
+    // Detect input type based on first value
     const firstValue = rawValues[0];
-    const isGuidInput = isGuid(firstValue);
+    const isMsGuidInput = isMsGuid(firstValue);
+    const isIfcGuidInput = isIfcGuid(firstValue);
+    const isGuidInput = isMsGuidInput || isIfcGuidInput;
 
     setSaving(true);
     setImportProgress({ current: 0, total: rawValues.length, found: 0 });
 
     try {
-      // Normalize values for search
-      const searchValues = rawValues.map(v => v.toLowerCase().trim());
+      // If MS GUID format, convert to IFC GUID format
+      let searchGuids: string[] = [];
+      let msToIfcMap: Map<string, string> | null = null;
+
+      if (isMsGuidInput) {
+        // Convert MS GUIDs to IFC GUIDs
+        msToIfcMap = new Map();
+        for (const msGuid of rawValues) {
+          const ifcGuid = msToIfcGuid(msGuid.trim());
+          if (ifcGuid) {
+            msToIfcMap.set(ifcGuid.toLowerCase(), msGuid);
+            searchGuids.push(ifcGuid.toLowerCase());
+          }
+        }
+        console.log(`Converted ${searchGuids.length}/${rawValues.length} MS GUIDs to IFC format`);
+      } else if (isIfcGuidInput) {
+        // Already IFC format
+        searchGuids = rawValues.map(v => v.toLowerCase().trim());
+      }
 
       // Query trimble_model_objects based on type
       let matchedObjects: Array<{
@@ -2186,7 +2239,7 @@ export default function OrganizerScreen({
       }> = [];
 
       if (isGuidInput) {
-        // Search by guid_ifc
+        // Search by guid_ifc (converted or original)
         const { data, error } = await supabase
           .from('trimble_model_objects')
           .select('guid_ifc, assembly_mark, product_name')
@@ -2197,10 +2250,11 @@ export default function OrganizerScreen({
 
         // Filter by matching GUIDs (case-insensitive)
         matchedObjects = (data || []).filter(obj =>
-          obj.guid_ifc && searchValues.includes(obj.guid_ifc.toLowerCase())
+          obj.guid_ifc && searchGuids.includes(obj.guid_ifc.toLowerCase())
         );
       } else {
-        // Search by assembly_mark (GUID_MS)
+        // Search by assembly_mark
+        const searchValues = rawValues.map(v => v.toLowerCase().trim());
         const { data, error } = await supabase
           .from('trimble_model_objects')
           .select('guid_ifc, assembly_mark, product_name')
@@ -2216,7 +2270,8 @@ export default function OrganizerScreen({
       }
 
       if (matchedObjects.length === 0) {
-        showToast(`Ühtegi sobivat elementi ei leitud (${isGuidInput ? 'GUID' : 'GUID_MS'})`);
+        const formatMsg = isMsGuidInput ? 'GUID_MS→IFC' : isIfcGuidInput ? 'IFC GUID' : 'Assembly Mark';
+        showToast(`Ühtegi sobivat elementi ei leitud (${formatMsg})`);
         setShowImportModal(false);
         return;
       }
@@ -3522,7 +3577,7 @@ export default function OrganizerScreen({
           .map(v => v.trim())
           .filter(v => v.length > 0);
         const firstValue = previewValues[0] || '';
-        const detectedType = isGuid(firstValue) ? 'GUID' : 'GUID_MS (assembly mark)';
+        const detectedType = isMsGuid(firstValue) ? 'GUID_MS (konverteeritakse IFC-ks)' : isIfcGuid(firstValue) ? 'IFC GUID' : 'Assembly mark';
 
         return (
           <div className="org-modal-overlay" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>
