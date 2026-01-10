@@ -10175,11 +10175,59 @@ button.stat-toggle.off:hover {
   display: flex;
 }
 
+.org-color-dot-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
 .org-color-dot {
   width: 10px;
   height: 10px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+.org-color-dot:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+}
+
+.org-color-picker-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  padding: 6px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  width: 124px;
+  z-index: 1000;
+}
+
+.org-color-picker-popup .org-color-option {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.org-color-picker-popup .org-color-option:hover {
+  transform: scale(1.15);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.org-color-picker-popup .org-color-option.selected {
+  border-color: #111827;
+  box-shadow: 0 0 0 1px white inset;
 }
 
 .org-folder-icon {

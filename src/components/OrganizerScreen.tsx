@@ -420,6 +420,9 @@ export default function OrganizerScreen({
   const [importText, setImportText] = useState('');
   const [importProgress, setImportProgress] = useState<{current: number; total: number; found: number} | null>(null);
 
+  // Color picker popup state
+  const [colorPickerGroupId, setColorPickerGroupId] = useState<string | null>(null);
+
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -483,16 +486,21 @@ export default function OrganizerScreen({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
       if (groupMenuId && containerRef.current) {
-        const target = e.target as HTMLElement;
         if (!target.closest('.org-group-menu') && !target.closest('.org-menu-btn')) {
           setGroupMenuId(null);
+        }
+      }
+      if (colorPickerGroupId && containerRef.current) {
+        if (!target.closest('.org-color-picker-popup') && !target.closest('.org-color-dot-wrapper')) {
+          setColorPickerGroupId(null);
         }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [groupMenuId]);
+  }, [groupMenuId, colorPickerGroupId]);
 
   // ============================================
   // ESC KEY HANDLER
@@ -529,6 +537,11 @@ export default function OrganizerScreen({
         if (showImportModal) {
           setShowImportModal(false);
           setImportGroupId(null);
+          return;
+        }
+        // Clear color picker
+        if (colorPickerGroupId) {
+          setColorPickerGroupId(null);
           return;
         }
         // Clear menu
@@ -902,6 +915,34 @@ export default function OrganizerScreen({
       showToast('Viga grupi uuendamisel');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Update group color directly (used by color picker popup)
+  const updateGroupColor = async (groupId: string, color: GroupColor) => {
+    try {
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({
+          color,
+          updated_at: new Date().toISOString(),
+          updated_by: tcUserEmail
+        })
+        .eq('id', groupId);
+
+      if (error) throw error;
+
+      // Update local state immediately for responsive UI
+      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, color } : g));
+      setColorPickerGroupId(null);
+
+      // Auto-recolor if coloring mode is active
+      if (colorByGroup) {
+        setTimeout(() => colorModelByGroups(), 150);
+      }
+    } catch (e) {
+      console.error('Error updating group color:', e);
+      showToast('Viga värvi uuendamisel');
     }
   };
 
@@ -2554,11 +2595,28 @@ export default function OrganizerScreen({
 
           {node.color && (
             <span
-              className="org-color-dot"
-              style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: 'pointer' }}
-              onDoubleClick={(e) => { e.stopPropagation(); openEditGroupForm(node); }}
-              title="Topeltklõps värvi muutmiseks"
-            />
+              className="org-color-dot-wrapper"
+              onClick={(e) => { e.stopPropagation(); setColorPickerGroupId(colorPickerGroupId === node.id ? null : node.id); }}
+            >
+              <span
+                className="org-color-dot"
+                style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: 'pointer' }}
+                title="Klõpsa värvi muutmiseks"
+              />
+              {colorPickerGroupId === node.id && (
+                <div className="org-color-picker-popup" onClick={(e) => e.stopPropagation()}>
+                  {PRESET_COLORS.map((c, i) => (
+                    <button
+                      key={i}
+                      className={`org-color-option ${node.color?.r === c.r && node.color?.g === c.g && node.color?.b === c.b ? 'selected' : ''}`}
+                      style={{ backgroundColor: `rgb(${c.r}, ${c.g}, ${c.b})` }}
+                      onClick={(e) => { e.stopPropagation(); updateGroupColor(node.id, c); }}
+                      title={`RGB(${c.r}, ${c.g}, ${c.b})`}
+                    />
+                  ))}
+                </div>
+              )}
+            </span>
           )}
 
           <div className="org-group-info">
