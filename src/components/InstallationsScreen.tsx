@@ -101,6 +101,21 @@ interface MonthGroup {
   allItems: Installation[];
 }
 
+// Day group for preassembly list
+interface PreassemblyDayGroup {
+  dayKey: string;
+  dayLabel: string;
+  items: Preassembly[];
+}
+
+// Month group for preassembly list
+interface PreassemblyMonthGroup {
+  monthKey: string;
+  monthLabel: string;
+  days: PreassemblyDayGroup[];
+  allItems: Preassembly[];
+}
+
 function getMonthKey(dateStr: string): string {
   const date = new Date(dateStr);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
@@ -313,6 +328,45 @@ function groupByMonthAndDay(installations: Installation[]): MonthGroup[] {
   return sortedMonths;
 }
 
+// Group preassemblies by month and day (same logic as installations)
+function groupPreassembliesByMonthAndDay(preassemblies: Preassembly[]): PreassemblyMonthGroup[] {
+  const monthMap: Record<string, PreassemblyMonthGroup> = {};
+
+  for (const item of preassemblies) {
+    const monthKey = getMonthKey(item.preassembled_at);
+    const dayKey = getDayKey(item.preassembled_at);
+
+    if (!monthMap[monthKey]) {
+      monthMap[monthKey] = {
+        monthKey,
+        monthLabel: getMonthLabel(item.preassembled_at),
+        days: [],
+        allItems: []
+      };
+    }
+
+    monthMap[monthKey].allItems.push(item);
+
+    let dayGroup = monthMap[monthKey].days.find(d => d.dayKey === dayKey);
+    if (!dayGroup) {
+      dayGroup = {
+        dayKey,
+        dayLabel: getDayLabel(item.preassembled_at),
+        items: []
+      };
+      monthMap[monthKey].days.push(dayGroup);
+    }
+    dayGroup.items.push(item);
+  }
+
+  const sortedMonths = Object.values(monthMap).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+  for (const month of sortedMonths) {
+    month.days.sort((a, b) => b.dayKey.localeCompare(a.dayKey));
+  }
+
+  return sortedMonths;
+}
+
 export default function InstallationsScreen({
   api,
   user,
@@ -407,6 +461,9 @@ export default function InstallationsScreen({
 
   // Installation info modal state - stores full Installation object
   const [showInstallInfo, setShowInstallInfo] = useState<Installation | null>(null);
+
+  // Preassembly info modal state
+  const [showPreassemblyInfo, setShowPreassemblyInfo] = useState<Preassembly | null>(null);
 
   // Day info modal state
   const [showDayInfo, setShowDayInfo] = useState<DayGroup | null>(null);
@@ -2086,6 +2143,65 @@ export default function InstallationsScreen({
     }
   };
 
+  // Delete preassembly
+  const deletePreassembly = async (id: string) => {
+    const preassemblyToDelete = preassemblies.find(p => p.id === id);
+    if (!preassemblyToDelete) {
+      setMessage('Preassembly kirjet ei leitud');
+      return;
+    }
+
+    if (!confirm('Kas oled kindel, et soovid selle preassembly kirje kustutada?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('preassemblies')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Reload data
+      await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
+
+      setMessage('Preassembly kirje kustutatud');
+    } catch (e) {
+      console.error('Error deleting preassembly:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Zoom to preassembly (same as installation)
+  const zoomToPreassembly = async (preassembly: Preassembly) => {
+    try {
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      const guid = preassembly.guid_ifc || preassembly.guid;
+      if (guid) {
+        for (const model of models) {
+          try {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+            if (runtimeIds && runtimeIds.length > 0 && runtimeIds[0] > 0) {
+              const objectRuntimeIds = [runtimeIds[0]];
+              await api.viewer.setSelection({
+                modelObjectIds: [{ modelId: model.id, objectRuntimeIds }]
+              }, 'set');
+              await (api.viewer as any).zoomToObjects?.([{ modelId: model.id, objectRuntimeIds }]);
+              return;
+            }
+          } catch {
+            // Try next model
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error zooming to preassembly:', e);
+    }
+  };
+
   const zoomToInstallation = async (installation: Installation) => {
     try {
       const models = await api.viewer.getModels();
@@ -2216,6 +2332,23 @@ export default function InstallationsScreen({
   });
 
   const monthGroups = groupByMonthAndDay(filteredInstallations);
+
+  // Filter preassemblies by search query
+  const filteredPreassemblies = preassemblies.filter(item => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      return (
+        item.assembly_mark?.toLowerCase().includes(query) ||
+        item.product_name?.toLowerCase().includes(query) ||
+        item.installer_name?.toLowerCase().includes(query) ||
+        item.installation_method_name?.toLowerCase().includes(query) ||
+        item.team_members?.toLowerCase().includes(query)
+      );
+    }
+    return true;
+  });
+
+  const preassemblyMonthGroups = groupPreassembliesByMonthAndDay(filteredPreassemblies);
 
   // Build items by date map for calendar
   const itemsByDate: Record<string, Installation[]> = {};
@@ -2427,12 +2560,17 @@ export default function InstallationsScreen({
     setEditTeamMembers(editTeamMembers.filter((_, i) => i !== index));
   };
 
-  // Render a single installation item
+  // Render a single installation item (with preassembly indicator)
   const renderInstallationItem = (inst: Installation) => {
     const monthKey = getMonthKey(inst.installed_at);
     const monthLocked = isMonthLocked(monthKey);
     const canDelete = !monthLocked && (isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase());
     const isSelected = selectedInstallationIds.has(inst.id);
+
+    // Check if this item was preassembled
+    const guid = (inst.guid_ifc || inst.guid || '').toLowerCase();
+    const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
+
     return (
       <div className="installation-item" key={inst.id}>
         <input
@@ -2448,6 +2586,27 @@ export default function InstallationsScreen({
             {inst.product_name && <span className="installation-product"> | {inst.product_name}</span>}
           </div>
         </div>
+        {/* Preassembly indicator */}
+        {preassemblyInfo && (
+          <span
+            title={`Preassembly: ${formatCompactDateTime(preassemblyInfo.preassembledAt)}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 6px',
+              background: '#f5f3ff',
+              color: '#7c3aed',
+              borderRadius: '10px',
+              fontSize: '10px',
+              fontWeight: 500,
+              marginRight: '4px',
+              cursor: 'help'
+            }}
+          >
+            <FiPackage size={10} style={{ marginRight: '3px' }} />
+            PA
+          </span>
+        )}
         <span className="installation-time compact-date">
           {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
             hour: '2-digit',
@@ -2472,6 +2631,84 @@ export default function InstallationsScreen({
           <button
             className="installation-delete-btn"
             onClick={() => deleteInstallation(inst.id)}
+            title="Kustuta"
+          >
+            <FiTrash2 size={14} />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // Render a single preassembly item (with installation indicator)
+  const renderPreassemblyItem = (item: Preassembly) => {
+    const canDelete = isAdminOrModerator || item.user_email?.toLowerCase() === user.email.toLowerCase();
+    const isSelected = selectedInstallationIds.has(item.id);
+
+    // Check if this item has been installed
+    const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+    const installationInfo = guid ? installedGuids.get(guid) : null;
+
+    return (
+      <div className="installation-item" key={item.id} style={{ borderLeftColor: '#7c3aed' }}>
+        <input
+          type="checkbox"
+          className="installation-item-checkbox"
+          checked={isSelected}
+          onChange={() => {}}
+          onClick={(e) => toggleInstallationSelect(item.id, e)}
+        />
+        <div className="installation-item-main" onClick={() => zoomToPreassembly(item)}>
+          <div className="installation-item-mark">
+            {item.assembly_mark}
+            {item.product_name && <span className="installation-product"> | {item.product_name}</span>}
+          </div>
+        </div>
+        {/* Installation indicator */}
+        {installationInfo && (
+          <span
+            title={`Paigaldatud: ${formatCompactDateTime(installationInfo.installedAt)}`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 6px',
+              background: '#dcfce7',
+              color: '#16a34a',
+              borderRadius: '10px',
+              fontSize: '10px',
+              fontWeight: 500,
+              marginRight: '4px',
+              cursor: 'help'
+            }}
+          >
+            <FiTool size={10} style={{ marginRight: '3px' }} />
+            OK
+          </span>
+        )}
+        <span className="installation-time compact-date">
+          {new Date(item.preassembled_at).toLocaleTimeString('et-EE', {
+            hour: '2-digit',
+            minute: '2-digit'
+          })}
+        </span>
+        <button
+          className="installation-info-btn"
+          onClick={(e) => { e.stopPropagation(); setShowPreassemblyInfo(item); }}
+          title="Info"
+        >
+          <FiInfo size={14} />
+        </button>
+        <button
+          className="installation-zoom-btn"
+          onClick={() => zoomToPreassembly(item)}
+          title="Zoom"
+        >
+          <FiZoomIn size={14} />
+        </button>
+        {canDelete && (
+          <button
+            className="installation-delete-btn"
+            onClick={() => deletePreassembly(item.id)}
             title="Kustuta"
           >
             <FiTrash2 size={14} />
@@ -2593,6 +2830,28 @@ export default function InstallationsScreen({
               // No worker grouping needed - show items directly
               day.items.map(inst => renderInstallationItem(inst))
             )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Render a preassembly day group (simplified - no worker grouping for now)
+  const renderPreassemblyDayGroup = (day: PreassemblyDayGroup) => {
+    return (
+      <div key={day.dayKey} className="installation-date-group">
+        <div className="date-group-header" onClick={() => toggleDay(day.dayKey)}>
+          <button className="date-group-toggle">
+            {expandedDays.has(day.dayKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+          </button>
+          <span className="date-label" style={{ cursor: 'pointer' }}>
+            {day.dayLabel}
+          </span>
+          <span className="date-count">{day.items.length}</span>
+        </div>
+        {expandedDays.has(day.dayKey) && (
+          <div className="date-group-items">
+            {day.items.map(item => renderPreassemblyItem(item))}
           </div>
         )}
       </div>
@@ -3480,17 +3739,72 @@ export default function InstallationsScreen({
             </div>
           </div>
 
+          {/* List mode tabs */}
+          <div className="list-mode-tabs" style={{
+            display: 'flex',
+            gap: '4px',
+            padding: '8px 12px',
+            background: '#f9fafb',
+            borderBottom: '1px solid #e5e7eb',
+            marginBottom: '8px'
+          }}>
+            <button
+              onClick={() => setEntryMode('installation')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: entryMode === 'installation' ? '#0a3a67' : '#e5e7eb',
+                color: entryMode === 'installation' ? '#fff' : '#374151',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: 500
+              }}
+            >
+              <FiTool size={14} />
+              Paigaldatud ({installations.length})
+            </button>
+            <button
+              onClick={() => setEntryMode('preassembly')}
+              style={{
+                flex: 1,
+                padding: '8px 12px',
+                borderRadius: '6px',
+                border: 'none',
+                background: entryMode === 'preassembly' ? '#7c3aed' : '#e5e7eb',
+                color: entryMode === 'preassembly' ? '#fff' : '#374151',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                fontWeight: 500
+              }}
+            >
+              <FiPackage size={14} />
+              Preassembly ({preassemblies.length})
+            </button>
+          </div>
+
           {/* List content */}
           <div className="installations-list-content">
             {loading ? (
               <div className="loading">Laadin...</div>
-            ) : filteredInstallations.length === 0 ? (
-              <div className="empty-list">
-                <FiTruck size={32} />
-                <p>{searchQuery ? 'Otsingutulemusi ei leitud' : 'Paigaldusi pole veel'}</p>
-              </div>
-            ) : (
-              monthGroups.map(month => {
+            ) : entryMode === 'installation' ? (
+              /* INSTALLATIONS LIST */
+              filteredInstallations.length === 0 ? (
+                <div className="empty-list">
+                  <FiTruck size={32} />
+                  <p>{searchQuery ? 'Otsingutulemusi ei leitud' : 'Paigaldusi pole veel'}</p>
+                </div>
+              ) : (
+                monthGroups.map(month => {
                 const mColor = colorByMonth ? monthColors[month.monthKey] : null;
                 return (
                 <div key={month.monthKey} className={`installation-month-group ${monthMenuOpen === month.monthKey ? 'menu-open' : ''}`}>
@@ -3590,6 +3904,34 @@ export default function InstallationsScreen({
                   )}
                 </div>
               );})
+              )
+            ) : (
+              /* PREASSEMBLY LIST */
+              filteredPreassemblies.length === 0 ? (
+                <div className="empty-list">
+                  <FiPackage size={32} style={{ color: '#7c3aed' }} />
+                  <p>{searchQuery ? 'Otsingutulemusi ei leitud' : 'Preassembly kirjeid pole veel'}</p>
+                </div>
+              ) : (
+                preassemblyMonthGroups.map(month => (
+                  <div key={month.monthKey} className="installation-month-group">
+                    <div className="month-group-header" onClick={() => toggleMonth(month.monthKey)} style={{ borderLeftColor: '#7c3aed' }}>
+                      <button className="month-group-toggle">
+                        {expandedMonths.has(month.monthKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                      </button>
+                      <span className="month-label">{month.monthLabel}</span>
+                      <span className="month-count" style={{ background: '#7c3aed' }}>
+                        {month.allItems.length}
+                      </span>
+                    </div>
+                    {expandedMonths.has(month.monthKey) && (
+                      <div className="month-group-days">
+                        {month.days.map(day => renderPreassemblyDayGroup(day))}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )
             )}
           </div>
         </div>
@@ -3663,6 +4005,25 @@ export default function InstallationsScreen({
                   <span className="install-info-label">Paigaldatud</span>
                   <span className="install-info-value compact-date">{formatCompactDateTime(showInstallInfo.installed_at)}</span>
                 </div>
+                {/* Show if this was preassembled */}
+                {(() => {
+                  const guid = (showInstallInfo.guid_ifc || showInstallInfo.guid || '').toLowerCase();
+                  const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
+                  if (preassemblyInfo) {
+                    return (
+                      <div className="install-info-row" style={{ background: '#f5f3ff' }}>
+                        <span className="install-info-label" style={{ color: '#7c3aed' }}>
+                          <FiPackage size={12} style={{ marginRight: '4px' }} />
+                          Preassembly
+                        </span>
+                        <span className="install-info-value compact-date" style={{ color: '#7c3aed' }}>
+                          {formatCompactDateTime(preassemblyInfo.preassembledAt)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="install-info-row">
                   <span className="install-info-label">Meetod</span>
                   <span className="install-info-value">{showInstallInfo.installation_method_name || 'Määramata'}</span>
@@ -3681,6 +4042,76 @@ export default function InstallationsScreen({
                   <span className="install-info-label">Kirje sisestas</span>
                   <span className="install-info-value">
                     {showInstallInfo.user_email.split('@')[0]} · <span className="compact-date">{formatCompactDateTime(showInstallInfo.created_at)}</span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preassembly Info Modal */}
+      {showPreassemblyInfo && (
+        <div className="modal-overlay" onClick={() => setShowPreassemblyInfo(null)}>
+          <div className="settings-modal install-info-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header" style={{ background: '#f5f3ff' }}>
+              <h3 style={{ color: '#7c3aed' }}>📦 {showPreassemblyInfo.assembly_mark}</h3>
+              <button onClick={() => setShowPreassemblyInfo(null)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="install-info-rows">
+                <div className="install-info-row">
+                  <span className="install-info-label">Preassembly</span>
+                  <span className="install-info-value compact-date">{formatCompactDateTime(showPreassemblyInfo.preassembled_at)}</span>
+                </div>
+                {/* Show if this has been installed */}
+                {(() => {
+                  const guid = (showPreassemblyInfo.guid_ifc || showPreassemblyInfo.guid || '').toLowerCase();
+                  const installInfo = guid ? installedGuids.get(guid) : null;
+                  if (installInfo) {
+                    return (
+                      <div className="install-info-row" style={{ background: '#dcfce7' }}>
+                        <span className="install-info-label" style={{ color: '#16a34a' }}>
+                          <FiTool size={12} style={{ marginRight: '4px' }} />
+                          Paigaldatud
+                        </span>
+                        <span className="install-info-value compact-date" style={{ color: '#16a34a' }}>
+                          {formatCompactDateTime(installInfo.installedAt)}
+                        </span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="install-info-row" style={{ background: '#fef3c7' }}>
+                      <span className="install-info-label" style={{ color: '#d97706' }}>
+                        Staatus
+                      </span>
+                      <span className="install-info-value" style={{ color: '#d97706' }}>
+                        Ootab paigaldamist
+                      </span>
+                    </div>
+                  );
+                })()}
+                <div className="install-info-row">
+                  <span className="install-info-label">Meetod</span>
+                  <span className="install-info-value">{showPreassemblyInfo.installation_method_name || 'Määramata'}</span>
+                </div>
+                <div className="install-info-row">
+                  <span className="install-info-label">Meeskond</span>
+                  <span className="install-info-value">{showPreassemblyInfo.team_members || showPreassemblyInfo.installer_name || '-'}</span>
+                </div>
+                {showPreassemblyInfo.notes && (
+                  <div className="install-info-row">
+                    <span className="install-info-label">Märkused</span>
+                    <span className="install-info-value">{showPreassemblyInfo.notes}</span>
+                  </div>
+                )}
+                <div className="install-info-row muted">
+                  <span className="install-info-label">Kirje sisestas</span>
+                  <span className="install-info-value">
+                    {showPreassemblyInfo.user_email.split('@')[0]} · <span className="compact-date">{formatCompactDateTime(showPreassemblyInfo.created_at)}</span>
                   </span>
                 </div>
               </div>
