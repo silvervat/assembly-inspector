@@ -2292,21 +2292,60 @@ export default function OrganizerScreen({
 
                       try {
                         const props = await api.viewer.getObjectProperties(modelId, [runtimeIds[0]]);
+                        console.log('Object properties for', originalCaseGuid, ':', props);
+
                         if (props && Array.isArray(props)) {
                           const obj = props[0];
                           if (obj) {
-                            // Try to find assembly mark from properties
-                            const allProps = (obj as any).properties || (obj as any).propertySets?.flatMap((ps: any) => ps.properties || []) || [];
-                            for (const prop of allProps) {
-                              const propName = (prop.name || '').toLowerCase().replace(/\s+/g, '');
-                              if (propName.includes('assemblymark') || propName.includes('castunitmark') || propName === 'name') {
-                                if (!assemblyMark && prop.value) {
-                                  assemblyMark = String(prop.value);
+                            // Get all properties from propertySets or properties array
+                            let allProps: Array<{ name: string; value: any }> = [];
+
+                            // Handle propertySets format (IFC models)
+                            if ((obj as any).propertySets && Array.isArray((obj as any).propertySets)) {
+                              for (const ps of (obj as any).propertySets) {
+                                if (ps.properties && Array.isArray(ps.properties)) {
+                                  allProps.push(...ps.properties);
                                 }
                               }
-                              if (propName === 'productname' || propName === 'name') {
-                                if (!productName && prop.value) {
-                                  productName = String(prop.value);
+                            }
+
+                            // Handle direct properties array
+                            if ((obj as any).properties && Array.isArray((obj as any).properties)) {
+                              allProps.push(...(obj as any).properties);
+                            }
+
+                            console.log('All properties found:', allProps.map(p => ({ name: p.name, value: p.value })));
+
+                            // Search for assembly mark using various property names
+                            const assemblyMarkNames = ['assembly_mark', 'assemblymark', 'cast_unit_mark', 'castunitmark', 'assembly mark', 'cast unit mark', 'mark', 'name'];
+                            const productNameNames = ['product_name', 'productname', 'product name', 'name', 'type'];
+
+                            for (const prop of allProps) {
+                              if (!prop.name || prop.value === undefined || prop.value === null || prop.value === '') continue;
+
+                              const propNameLower = prop.name.toLowerCase().replace(/[\s_-]+/g, '');
+
+                              // Check for assembly mark
+                              if (!assemblyMark) {
+                                for (const targetName of assemblyMarkNames) {
+                                  const targetLower = targetName.replace(/[\s_-]+/g, '');
+                                  if (propNameLower === targetLower || propNameLower.includes(targetLower)) {
+                                    assemblyMark = String(prop.value);
+                                    console.log('Found assembly_mark:', assemblyMark, 'from property:', prop.name);
+                                    break;
+                                  }
+                                }
+                              }
+
+                              // Check for product name
+                              if (!productName) {
+                                for (const targetName of productNameNames) {
+                                  const targetLower = targetName.replace(/[\s_-]+/g, '');
+                                  if (propNameLower === targetLower) {
+                                    productName = String(prop.value);
+                                    console.log('Found product_name:', productName, 'from property:', prop.name);
+                                    break;
+                                  }
                                 }
                               }
                             }
