@@ -437,6 +437,16 @@ export default function InstallationsScreen({
   // Track colored object IDs for proper reset
   const coloredObjectsRef = useRef<Map<string, number[]>>(new Map());
 
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editDate, setEditDate] = useState<string>('');
+  const [editNotes, setEditNotes] = useState<string>('');
+  const [editTeamMembers, setEditTeamMembers] = useState<string[]>([]);
+  const [editTeamMemberInput, setEditTeamMemberInput] = useState<string>('');
+  const [editInstallMethods, setEditInstallMethods] = useState<InstallMethods>({});
+  const [editHoveredMethod, setEditHoveredMethod] = useState<InstallMethodType | null>(null);
+  const [editingSaving, setEditingSaving] = useState(false);
+
   const isAdminOrModerator = user.role === 'admin' || user.role === 'moderator';
 
   // Check assembly selection status
@@ -2089,6 +2099,139 @@ export default function InstallationsScreen({
     setSelectedInstallationIds(newSelected);
   };
 
+  // Sync checkbox selection with model selection
+  useEffect(() => {
+    if (selectedInstallationIds.size === 0) return;
+
+    const selectedItems = installations.filter(inst => selectedInstallationIds.has(inst.id));
+    if (selectedItems.length > 0) {
+      selectInstallations(selectedItems);
+    }
+  }, [selectedInstallationIds]);
+
+  // Open edit modal for selected installations
+  const openEditModal = () => {
+    if (selectedInstallationIds.size === 0) return;
+
+    // Get selected items
+    const selectedItems = installations.filter(inst => selectedInstallationIds.has(inst.id));
+    if (selectedItems.length === 0) return;
+
+    // Use first item's values as defaults (or leave empty for mixed values)
+    const firstItem = selectedItems[0];
+
+    // Use date from first item, convert to datetime-local format
+    const itemDate = new Date(firstItem.installed_at);
+    const offset = itemDate.getTimezoneOffset();
+    const localDate = new Date(itemDate.getTime() - offset * 60000);
+    setEditDate(localDate.toISOString().slice(0, 16));
+
+    // Parse team members from first item (comma-separated string)
+    const teamStr = firstItem.team_members || '';
+    const members = teamStr.split(',').map(m => m.trim()).filter(m => m);
+    setEditTeamMembers(members);
+
+    // Parse install methods from method name string
+    const methodName = firstItem.installation_method_name || '';
+    const methods: InstallMethods = {};
+    // Try to parse method name like "Kraana, 2x Monteerija"
+    methodName.split(',').forEach(part => {
+      const trimmed = part.trim();
+      for (const config of INSTALL_METHODS_CONFIG) {
+        if (trimmed === config.label) {
+          methods[config.key] = 1;
+        } else if (trimmed.match(new RegExp(`^(\\d+)x\\s*${config.label}$`))) {
+          const match = trimmed.match(new RegExp(`^(\\d+)x\\s*${config.label}$`));
+          if (match) methods[config.key] = parseInt(match[1], 10);
+        }
+      }
+    });
+    setEditInstallMethods(methods);
+
+    // Set notes (empty if mixed)
+    const allSameNotes = selectedItems.every(item => item.notes === firstItem.notes);
+    setEditNotes(allSameNotes ? (firstItem.notes || '') : '');
+
+    setShowEditModal(true);
+  };
+
+  // Save edited installations
+  const saveEditedInstallations = async () => {
+    if (selectedInstallationIds.size === 0) return;
+
+    setEditingSaving(true);
+    try {
+      // Build method name string
+      const methodName = Object.entries(editInstallMethods)
+        .filter(([, count]) => count && count > 0)
+        .map(([key, count]) => {
+          const config = INSTALL_METHODS_CONFIG.find(m => m.key === key);
+          return count === 1 ? config?.label : `${count}x ${config?.label}`;
+        })
+        .join(', ');
+
+      // Update each selected installation
+      const updatePromises = Array.from(selectedInstallationIds).map(async (id) => {
+        const { error } = await supabase
+          .from('installations')
+          .update({
+            installed_at: editDate,
+            installation_method_name: methodName || null,
+            team_members: editTeamMembers.length > 0 ? editTeamMembers.join(', ') : null,
+            notes: editNotes || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+      });
+
+      await Promise.all(updatePromises);
+
+      setMessage(`${selectedInstallationIds.size} paigaldus${selectedInstallationIds.size > 1 ? 't' : ''} uuendatud`);
+      setShowEditModal(false);
+      setSelectedInstallationIds(new Set());
+      await loadInstallations();
+    } catch (e) {
+      console.error('Error updating installations:', e);
+      setMessage('Viga paigalduste uuendamisel');
+    } finally {
+      setEditingSaving(false);
+    }
+  };
+
+  // Toggle edit method
+  const toggleEditMethod = (key: InstallMethodType) => {
+    setEditInstallMethods(prev => {
+      const current = prev[key];
+      if (current) {
+        const { [key]: _, ...rest } = prev;
+        return rest;
+      } else {
+        return { ...prev, [key]: methodDefaults[key] || 1 };
+      }
+    });
+  };
+
+  // Set edit method count
+  const setEditMethodCount = (key: InstallMethodType, count: number) => {
+    setEditInstallMethods(prev => ({ ...prev, [key]: count }));
+  };
+
+  // Add edit team member
+  const addEditTeamMember = (name: string) => {
+    const trimmed = name.trim();
+    if (trimmed && !editTeamMembers.includes(trimmed)) {
+      setEditTeamMembers([...editTeamMembers, trimmed]);
+    }
+    setEditTeamMemberInput('');
+  };
+
+  // Remove edit team member
+  const removeEditTeamMember = (index: number) => {
+    setEditTeamMembers(editTeamMembers.filter((_, i) => i !== index));
+  };
+
   // Render a single installation item
   const renderInstallationItem = (inst: Installation) => {
     const monthKey = getMonthKey(inst.installed_at);
@@ -2653,6 +2796,52 @@ export default function InstallationsScreen({
                 </button>
               )}
             </div>
+
+            {/* Edit button when items selected */}
+            {selectedInstallationIds.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {selectedInstallationIds.size} valitud
+                </span>
+                <button
+                  onClick={openEditModal}
+                  title="Muuda valitud paigaldusi"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#3b82f6',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  <FiEdit2 size={14} />
+                  <span>Muuda</span>
+                </button>
+                <button
+                  onClick={() => setSelectedInstallationIds(new Set())}
+                  title="Tühista valik"
+                  style={{
+                    padding: '6px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#fee2e2',
+                    color: '#991b1b',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
+            )}
+
             <div className="color-buttons" style={{ display: 'flex', gap: '4px', marginLeft: '8px' }}>
               <button
                 className={`color-btn${colorByDay ? ' active' : ''}`}
@@ -3575,6 +3764,383 @@ export default function InstallationsScreen({
                   </>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Installations Modal */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3>✏️ Muuda paigaldusi ({selectedInstallationIds.size})</h3>
+              <button onClick={() => setShowEditModal(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {/* Date field */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiCalendar size={14} /> Kuupäev
+                </label>
+                <input
+                  type="datetime-local"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                  className="full-width-input"
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                />
+              </div>
+
+              {/* Resources / Methods */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Paigaldus ressursid</label>
+                {/* Machines row */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
+                    const isActive = !!editInstallMethods[method.key];
+                    const count = editInstallMethods[method.key] || 0;
+                    const isHovered = editHoveredMethod === method.key;
+
+                    return (
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setEditHoveredMethod(method.key)}
+                        onMouseLeave={() => setEditHoveredMethod(null)}
+                        style={{ position: 'relative' }}
+                      >
+                        <button
+                          type="button"
+                          style={{
+                            padding: '8px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
+                            position: 'relative'
+                          }}
+                          onClick={() => toggleEditMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: method.activeBgColor,
+                              color: '#fff',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              padding: '2px 5px',
+                              borderRadius: '10px',
+                              minWidth: '16px',
+                              textAlign: 'center'
+                            }}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+
+                        {isHovered && isActive && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            marginTop: '4px',
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            padding: '4px',
+                            display: 'flex',
+                            gap: '2px',
+                            zIndex: 100,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                          }}>
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  background: count === num ? method.activeBgColor : '#f3f4f6',
+                                  color: count === num ? '#fff' : '#374151',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  fontWeight: 500
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Labor row */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
+                    const isActive = !!editInstallMethods[method.key];
+                    const count = editInstallMethods[method.key] || 0;
+                    const isHovered = editHoveredMethod === method.key;
+
+                    return (
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setEditHoveredMethod(method.key)}
+                        onMouseLeave={() => setEditHoveredMethod(null)}
+                        style={{ position: 'relative' }}
+                      >
+                        <button
+                          type="button"
+                          style={{
+                            padding: '8px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
+                            position: 'relative'
+                          }}
+                          onClick={() => toggleEditMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: method.activeBgColor,
+                              color: '#fff',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              padding: '2px 5px',
+                              borderRadius: '10px',
+                              minWidth: '16px',
+                              textAlign: 'center'
+                            }}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+
+                        {isHovered && isActive && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            marginTop: '4px',
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            padding: '4px',
+                            display: 'flex',
+                            gap: '2px',
+                            zIndex: 100,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                          }}>
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  background: count === num ? method.activeBgColor : '#f3f4f6',
+                                  color: count === num ? '#fff' : '#374151',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  fontWeight: 500
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Team members */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiUsers size={14} /> Meeskond
+                </label>
+                {editTeamMembers.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                    {editTeamMembers.map((member, idx) => (
+                      <span key={idx} style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '4px 8px',
+                        background: '#dbeafe',
+                        color: '#1d4ed8',
+                        borderRadius: '16px',
+                        fontSize: '12px'
+                      }}>
+                        {member}
+                        <button
+                          type="button"
+                          onClick={() => removeEditTeamMember(idx)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: '0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            color: '#1d4ed8'
+                          }}
+                        >
+                          <FiX size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    value={editTeamMemberInput}
+                    onChange={(e) => setEditTeamMemberInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && editTeamMemberInput.trim()) {
+                        e.preventDefault();
+                        addEditTeamMember(editTeamMemberInput);
+                      }
+                    }}
+                    placeholder="Lisa meeskonna liige (Enter)"
+                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                  />
+                  {editTeamMemberInput && knownTeamMembers.filter(m =>
+                    m.toLowerCase().includes(editTeamMemberInput.toLowerCase()) &&
+                    !editTeamMembers.includes(m)
+                  ).length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      marginTop: '4px',
+                      maxHeight: '150px',
+                      overflowY: 'auto',
+                      zIndex: 100,
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                    }}>
+                      {knownTeamMembers.filter(m =>
+                        m.toLowerCase().includes(editTeamMemberInput.toLowerCase()) &&
+                        !editTeamMembers.includes(m)
+                      ).slice(0, 5).map((name, idx) => (
+                        <div
+                          key={idx}
+                          onMouseDown={() => addEditTeamMember(name)}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f3f4f6'
+                          }}
+                        >
+                          {name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiEdit2 size={14} /> Märkused
+                </label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="Lisa märkused..."
+                  rows={3}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Save button */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    background: '#fff',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Tühista
+                </button>
+                <button
+                  onClick={saveEditedInstallations}
+                  disabled={editingSaving}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: editingSaving ? '#9ca3af' : '#3b82f6',
+                    color: '#fff',
+                    cursor: editingSaving ? 'wait' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >
+                  {editingSaving ? 'Salvestan...' : 'Salvesta muudatused'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

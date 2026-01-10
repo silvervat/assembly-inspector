@@ -584,11 +584,17 @@ export default function OrganizerScreen({
           setSelectedGroupId(null);
           return;
         }
+        // Second ESC - clear model selection
+        if (selectedObjects.length > 0) {
+          api?.viewer.setSelection({ modelObjectIds: [] }, 'set');
+          setSelectedObjects([]);
+          return;
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId]);
+  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId, selectedObjects.length, api]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -751,13 +757,19 @@ export default function OrganizerScreen({
 
       // Check if change was made by current user
       const changeAuthor = record?.updated_by || record?.created_by || record?.added_by;
-      const isOwnChange = changeAuthor === tcUserEmail;
+      const isOwnChange = changeAuthor?.toLowerCase() === tcUserEmail?.toLowerCase();
+
+      console.log(`📡 Realtime check: author=${changeAuthor}, me=${tcUserEmail}, isOwn=${isOwnChange}, debounce=${Date.now() - lastRefreshTime}ms`);
 
       if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
         lastRefreshTime = Date.now();
-        console.log(`📡 Realtime: ${table} changed by ${changeAuthor || 'unknown'}`);
+        console.log(`📡 Realtime: refreshing data (${table} changed by ${changeAuthor || 'unknown'})`);
         showToast(`📡 ${changeAuthor || 'Keegi'} uuendas andmeid`);
         refreshData();
+      } else if (isOwnChange) {
+        console.log(`📡 Skipping own change`);
+      } else {
+        console.log(`📡 Skipping - debounce (${Date.now() - lastRefreshTime}ms < ${DEBOUNCE_MS}ms)`);
       }
     };
 
