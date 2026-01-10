@@ -362,6 +362,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     { id: 'manual', label: 'Käsitsi', labelEn: 'Manual', enabled: true },
     { id: 'guid_ms', label: 'GUID (MS)', labelEn: 'GUID (MS)', enabled: true },
     { id: 'guid_ifc', label: 'GUID (IFC)', labelEn: 'GUID (IFC)', enabled: true },
+    { id: 'created_by', label: 'Andmed sisestas', labelEn: 'Created By', enabled: false },
+    { id: 'created_at', label: 'Sisestatud', labelEn: 'Created At', enabled: false },
     { id: 'percentage', label: 'Kumulatiivne %', labelEn: 'Cumulative %', enabled: true },
     { id: 'comments', label: 'Kommentaarid', labelEn: 'Comments', enabled: true }
   ]);
@@ -5007,8 +5009,18 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           case 'monteerija': return getMethodCountForItem(item, 'monteerija') || '';
           case 'keevitaja': return getMethodCountForItem(item, 'keevitaja') || '';
           case 'manual': return getMethodCountForItem(item, 'manual') || '';
-          case 'guid_ms': return item.guid_ms || '';
+          case 'guid_ms': {
+            // Convert IFC GUID to MS GUID format
+            const ifcGuid = item.guid_ifc || item.guid || '';
+            return item.guid_ms || ifcToMsGuid(ifcGuid);
+          }
           case 'guid_ifc': return item.guid_ifc || item.guid || '';
+          case 'created_by': return item.created_by || '';
+          case 'created_at': {
+            if (!item.created_at) return '';
+            const d = new Date(item.created_at);
+            return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getFullYear()).slice(-2)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+          }
           case 'percentage': return `${percentage}%`;
           case 'comments': {
             const itemComments = comments.filter(c => c.schedule_item_id === item.id);
