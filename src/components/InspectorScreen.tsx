@@ -114,7 +114,7 @@ export default function InspectorScreen({
       schedule: 'Paigaldusgraafik',
       delivery_schedule: 'Tarnegraafik',
       arrived_deliveries: 'Saabunud tarned',
-      organizer: 'Organiseeri'
+      organizer: 'Organiseerija'
     };
     return titles[mode] || mode;
   };

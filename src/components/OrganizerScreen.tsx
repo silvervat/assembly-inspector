@@ -678,53 +678,51 @@ export default function OrganizerScreen({
     let lastRefreshTime = Date.now();
     const DEBOUNCE_MS = 1000; // Minimum time between refreshes
 
-    // Create a unique channel for this project
+    const handleRealtimeChange = (payload: { eventType: string; new: Record<string, unknown> | null; old: Record<string, unknown> | null }, table: string) => {
+      console.log(`📡 Realtime ${table}:`, payload.eventType, payload);
+
+      // Get the record (new for INSERT/UPDATE, old for DELETE)
+      const record = (payload.new || payload.old) as { trimble_project_id?: string; updated_by?: string; created_by?: string } | null;
+
+      // Filter by project (since we can't use filter in subscription reliably)
+      if (record?.trimble_project_id !== projectId) {
+        console.log('📡 Skipping - different project');
+        return;
+      }
+
+      // Check if change was made by current user
+      const changeAuthor = record?.updated_by || record?.created_by;
+      const isOwnChange = changeAuthor === tcUserEmail;
+
+      if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
+        lastRefreshTime = Date.now();
+        console.log(`📡 Realtime: ${table} changed by ${changeAuthor || 'unknown'}`);
+        showToast(`📡 ${changeAuthor || 'Keegi'} uuendas andmeid`);
+        refreshData();
+      }
+    };
+
+    // Create channel without filter (filter in callback for reliability)
     const channel = supabase
-      .channel(`organizer-${projectId}`)
+      .channel(`organizer-realtime-${projectId}`)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'organizer_groups',
-          filter: `trimble_project_id=eq.${projectId}`
-        },
-        (payload) => {
-          // Check if change was made by someone else
-          const record = payload.new as { updated_by?: string } | null;
-          const isOwnChange = record?.updated_by === tcUserEmail;
-
-          if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
-            lastRefreshTime = Date.now();
-            console.log('📡 Realtime: Groups changed by another user');
-            showToast('📡 Andmeid uuendati teise kasutaja poolt');
-            refreshData();
-          }
-        }
+        { event: '*', schema: 'public', table: 'organizer_groups' },
+        (payload) => handleRealtimeChange(payload, 'groups')
       )
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'organizer_group_items',
-          filter: `trimble_project_id=eq.${projectId}`
-        },
-        (payload) => {
-          // Check if change was made by someone else
-          const record = payload.new as { updated_by?: string } | null;
-          const isOwnChange = record?.updated_by === tcUserEmail;
-
-          if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
-            lastRefreshTime = Date.now();
-            console.log('📡 Realtime: Items changed by another user');
-            showToast('📡 Andmeid uuendati teise kasutaja poolt');
-            refreshData();
-          }
-        }
+        { event: '*', schema: 'public', table: 'organizer_group_items' },
+        (payload) => handleRealtimeChange(payload, 'items')
       )
-      .subscribe((status) => {
-        console.log('📡 Realtime subscription status:', status);
+      .subscribe((status, err) => {
+        console.log('📡 Realtime subscription status:', status, err || '');
+        if (status === 'SUBSCRIBED') {
+          console.log('📡 Realtime ready for organizer tables');
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('📡 Realtime subscription error:', err);
+        }
       });
 
     // Cleanup on unmount
@@ -1340,13 +1338,15 @@ export default function OrganizerScreen({
 
       const items = objectsToAdd.map((obj, index) => ({
         group_id: targetGroupId,
+        trimble_project_id: projectId,
         guid_ifc: obj.guidIfc,
         assembly_mark: obj.assemblyMark,
         product_name: obj.productName || null,
         cast_unit_weight: obj.castUnitWeight || null,
         cast_unit_position_code: obj.castUnitPositionCode || null,
         custom_properties: {},
-        added_by: tcUserEmail,
+        created_by: tcUserEmail,
+        updated_by: tcUserEmail,
         sort_order: startIndex + index
       }));
 
@@ -2508,12 +2508,14 @@ export default function OrganizerScreen({
 
       const items = objectsToAdd.map((obj, index) => ({
         group_id: importGroupId,
+        trimble_project_id: projectId,
         guid_ifc: obj.guid_ifc,
         assembly_mark: obj.assembly_mark,
         product_name: obj.product_name,
         cast_unit_weight: obj.cast_unit_weight || null,
         custom_properties: {},
-        added_by: tcUserEmail,
+        created_by: tcUserEmail,
+        updated_by: tcUserEmail,
         sort_order: startIndex + index
       }));
 
@@ -3271,7 +3273,7 @@ export default function OrganizerScreen({
       {/* Header */}
       <div className="org-header">
         <button className="org-back-btn" onClick={onBackToMenu}><FiArrowLeft size={18} /></button>
-        <h1>Organiseeri</h1>
+        <h1>Organiseerija</h1>
         <div className="org-header-actions">
           <button
             className="org-icon-btn"
