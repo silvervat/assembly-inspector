@@ -6586,6 +6586,13 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
+.arrived-deliveries .duplicate-indicator {
+  font-size: 9px;
+  color: #6366f1;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .arrived-deliveries .items-list.compact .item-actions {
   gap: 2px;
   flex-shrink: 0;

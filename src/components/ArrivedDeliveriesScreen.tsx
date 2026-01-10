@@ -1881,7 +1881,6 @@ export default function ArrivedDeliveriesScreen({
                             {vehicleItems.map((item, idx) => {
                               const status = getItemConfirmationStatus(arrivedVehicle.id, item.id);
                               const isSelected = selectedItemsForConfirm.has(item.id);
-                              const totalCount = vehicleItems.length;
 
                               // Get pending items for shift-click range selection
                               const pendingItems = vehicleItems.filter(i =>
@@ -1892,6 +1891,11 @@ export default function ArrivedDeliveriesScreen({
                               const itemPhotos = getPhotosForItem(arrivedVehicle.id, item.id);
                               const isExpanded = expandedItemId === item.id;
                               const hasCommentOrPhotos = itemCommentValue || itemPhotos.length > 0;
+
+                              // Calculate duplicate count for same assembly_mark
+                              const sameMarkItems = vehicleItems.filter(i => i.assembly_mark === item.assembly_mark);
+                              const duplicateCount = sameMarkItems.length;
+                              const duplicateIndex = sameMarkItems.findIndex(i => i.id === item.id) + 1;
 
                               return (
                                 <div key={item.id} className={`item-container ${isExpanded ? 'expanded' : ''}`}>
@@ -1940,13 +1944,20 @@ export default function ArrivedDeliveriesScreen({
                                       />
                                     )}
                                     {/* Item index */}
-                                    <span className="item-index">{idx + 1}/{totalCount}</span>
+                                    <span className="item-index">{idx + 1}</span>
                                     {/* Inline item info */}
                                     <div className="item-info inline">
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       {item.product_name && <span className="item-product">{item.product_name}</span>}
                                       {item.cast_unit_weight && (
-                                        <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
+                                        <span className="item-weight">
+                                          {Math.round(Number(item.cast_unit_weight))} kg
+                                          {duplicateCount > 1 && <span className="duplicate-indicator"> {duplicateIndex}/{duplicateCount}</span>}
+                                        </span>
+                                      )}
+                                      {/* Show duplicate indicator even if no weight */}
+                                      {!item.cast_unit_weight && duplicateCount > 1 && (
+                                        <span className="duplicate-indicator">{duplicateIndex}/{duplicateCount}</span>
                                       )}
                                     </div>
                                     <div className="item-actions">
