@@ -5379,6 +5379,180 @@ export default function InstallationsScreen({
             </button>
           </div>
 
+          {/* Selection action bar - appears when items are selected */}
+          {entryMode === 'installation' && selectedInstallationIds.size > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              background: '#eff6ff',
+              borderRadius: '8px',
+              border: '1px solid #3b82f6'
+            }}>
+              <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: 500 }}>
+                {selectedInstallationIds.size} valitud
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    // Get selected installations for bulk edit
+                    const selectedItems = installations.filter(i => selectedInstallationIds.has(i.id));
+                    if (selectedItems.length > 0) {
+                      // For now, open edit modal for first item (could be extended for bulk)
+                      const firstItem = selectedItems[0];
+                      setShowEditModal(true);
+                      setEditDate(firstItem.installed_at.split('T')[0]);
+                      setEditNotes(firstItem.notes || '');
+                      // Parse team members
+                      const members = firstItem.team_members?.split(',').map(m => m.trim()).filter(m => m) || [];
+                      setEditTeamMembers(members);
+                      setEditInstallMethods({});
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #3b82f6',
+                    background: '#fff',
+                    color: '#3b82f6',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                  Muuda
+                </button>
+                <button
+                  onClick={() => setSelectedInstallationIds(new Set())}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #9ca3af',
+                    background: '#fff',
+                    color: '#6b7280',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiX size={12} />
+                  Tühista
+                </button>
+              </div>
+            </div>
+          )}
+
+          {entryMode === 'preassembly' && selectedPreassemblyIds.size > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              background: '#f5f3ff',
+              borderRadius: '8px',
+              border: '1px solid #7c3aed'
+            }}>
+              <span style={{ fontSize: '13px', color: '#5b21b6', fontWeight: 500 }}>
+                {selectedPreassemblyIds.size} valitud
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    // Get selected preassemblies for marking as installed
+                    const selectedItems = preassemblies.filter(p => selectedPreassemblyIds.has(p.id));
+                    if (selectedItems.length > 0) {
+                      setMarkInstalledItems(selectedItems);
+                      setInstallDate(getLocalDateTimeString());
+                      setNotes('');
+                      setMonteerijad([]);
+                      setTroppijad([]);
+                      setKeevitajad([]);
+                      setCraneOperators([]);
+                      setForkliftOperators([]);
+                      setPoomtostukOperators([]);
+                      setKaartostukOperators([]);
+                      setSelectedInstallMethods({});
+                      setShowMarkInstalledModal(true);
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: '#16a34a',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiTool size={12} />
+                  Paigalda
+                </button>
+                <button
+                  onClick={() => {
+                    // Get selected preassemblies for edit
+                    const selectedItems = preassemblies.filter(p => selectedPreassemblyIds.has(p.id));
+                    if (selectedItems.length > 0) {
+                      const firstItem = selectedItems[0];
+                      setShowPreassemblyEditModal(true);
+                      setPreassemblyEditDate(firstItem.preassembled_at.split('T')[0]);
+                      setPreassemblyEditNotes(firstItem.notes || '');
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #7c3aed',
+                    background: '#fff',
+                    color: '#7c3aed',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                  Muuda
+                </button>
+                <button
+                  onClick={() => setSelectedPreassemblyIds(new Set())}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #9ca3af',
+                    background: '#fff',
+                    color: '#6b7280',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiX size={12} />
+                  Tühista
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* List content */}
           <div className="installations-list-content">
             {loading ? (
