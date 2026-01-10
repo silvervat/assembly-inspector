@@ -556,6 +556,10 @@ export default function InstallationsScreen({
   // Track colored object IDs for proper reset
   const coloredObjectsRef = useRef<Map<string, number[]>>(new Map());
 
+  // Track last clicked item for shift-click range selection
+  const lastClickedInstallationRef = useRef<string | null>(null);
+  const lastClickedPreassemblyRef = useRef<string | null>(null);
+
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editDate, setEditDate] = useState<string>('');
@@ -945,8 +949,9 @@ export default function InstallationsScreen({
   };
 
   // Check which items cannot be found in currently loaded models
-  const checkUnfoundItems = async () => {
-    const items = entryMode === 'preassembly' ? preassemblies : installations;
+  const checkUnfoundItems = async (mode?: 'installation' | 'preassembly') => {
+    const checkMode = mode || entryMode;
+    const items = checkMode === 'preassembly' ? preassemblies : installations;
     if (items.length === 0) {
       setUnfoundItemIds(new Set());
       return;
@@ -955,7 +960,6 @@ export default function InstallationsScreen({
     // Collect all unique GUIDs from items (keep original case for API, lowercase for lookup)
     const guidToItemIds = new Map<string, string[]>(); // lowercase guid -> item ids
     const originalGuids: string[] = []; // original case guids for API
-    const lowerToOriginal = new Map<string, string>(); // lowercase -> original
 
     for (const item of items) {
       const originalGuid = item.guid_ifc || item.guid || '';
@@ -965,8 +969,8 @@ export default function InstallationsScreen({
         ids.push(item.id);
         guidToItemIds.set(lowerGuid, ids);
 
-        if (!lowerToOriginal.has(lowerGuid)) {
-          lowerToOriginal.set(lowerGuid, originalGuid);
+        // Only add unique original GUIDs for API call
+        if (ids.length === 1) {
           originalGuids.push(originalGuid);
         }
       }
@@ -2624,15 +2628,38 @@ export default function InstallationsScreen({
     if (e) {
       e.stopPropagation();
     }
+
     setSelectedPreassemblyIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+
+      // Shift+click for range selection
+      if (e?.shiftKey && lastClickedPreassemblyRef.current) {
+        const allItems = filteredPreassemblies;
+        const lastIdx = allItems.findIndex(i => i.id === lastClickedPreassemblyRef.current);
+        const currentIdx = allItems.findIndex(i => i.id === id);
+
+        if (lastIdx !== -1 && currentIdx !== -1) {
+          const start = Math.min(lastIdx, currentIdx);
+          const end = Math.max(lastIdx, currentIdx);
+          for (let i = start; i <= end; i++) {
+            next.add(allItems[i].id);
+          }
+        } else {
+          next.add(id);
+        }
       } else {
-        next.add(id);
+        // Regular click - toggle single item
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
       }
+
       return next;
     });
+
+    lastClickedPreassemblyRef.current = id;
   };
 
   // Toggle all preassemblies in a day
@@ -3424,11 +3451,33 @@ export default function InstallationsScreen({
   const toggleInstallationSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newSelected = new Set(selectedInstallationIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
+
+    // Shift+click for range selection
+    if (e.shiftKey && lastClickedInstallationRef.current) {
+      // Get all visible items in order
+      const allItems = filteredInstallations;
+      const lastIdx = allItems.findIndex(i => i.id === lastClickedInstallationRef.current);
+      const currentIdx = allItems.findIndex(i => i.id === id);
+
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        for (let i = start; i <= end; i++) {
+          newSelected.add(allItems[i].id);
+        }
+      } else {
+        newSelected.add(id);
+      }
     } else {
-      newSelected.add(id);
+      // Regular click - toggle single item
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
     }
+
+    lastClickedInstallationRef.current = id;
     setSelectedInstallationIds(newSelected);
   };
 
@@ -4060,7 +4109,7 @@ export default function InstallationsScreen({
                 // Apply installation coloring when opening installation overview
                 await applyInstallationColoring(installedGuids);
                 // Check which items can't be found in current model
-                setTimeout(checkUnfoundItems, 500);
+                setTimeout(() => checkUnfoundItems('installation'), 500);
               }}
               style={{
                 flex: 1,
@@ -4080,7 +4129,7 @@ export default function InstallationsScreen({
                 // Apply preassembly coloring when opening preassembly overview
                 await applyPreassemblyColoring();
                 // Check which items can't be found in current model
-                setTimeout(checkUnfoundItems, 500);
+                setTimeout(() => checkUnfoundItems('preassembly'), 500);
               }}
               style={{
                 flex: 1,
@@ -5378,6 +5427,183 @@ export default function InstallationsScreen({
               Preassembly ({preassemblies.length})
             </button>
           </div>
+
+          {/* Selection action bar - appears when items are selected */}
+          {entryMode === 'installation' && selectedInstallationIds.size > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              background: '#eff6ff',
+              borderRadius: '8px',
+              border: '1px solid #3b82f6'
+            }}>
+              <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: 500 }}>
+                {selectedInstallationIds.size} valitud
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    // Bulk edit - pre-fill with first item's data (all selected will be updated)
+                    const selectedItems = installations.filter(i => selectedInstallationIds.has(i.id));
+                    if (selectedItems.length > 0) {
+                      const firstItem = selectedItems[0];
+                      setShowEditModal(true);
+                      // For single item, use its data; for multiple, use today's date
+                      setEditDate(selectedItems.length === 1
+                        ? firstItem.installed_at.split('T')[0]
+                        : new Date().toISOString().split('T')[0]);
+                      setEditNotes(selectedItems.length === 1 ? (firstItem.notes || '') : '');
+                      const members = selectedItems.length === 1
+                        ? (firstItem.team_members?.split(',').map(m => m.trim()).filter(m => m) || [])
+                        : [];
+                      setEditTeamMembers(members);
+                      setEditInstallMethods({});
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #3b82f6',
+                    background: '#fff',
+                    color: '#3b82f6',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                  Muuda
+                </button>
+                <button
+                  onClick={() => setSelectedInstallationIds(new Set())}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #9ca3af',
+                    background: '#fff',
+                    color: '#6b7280',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiX size={12} />
+                  Tühista
+                </button>
+              </div>
+            </div>
+          )}
+
+          {entryMode === 'preassembly' && selectedPreassemblyIds.size > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 12px',
+              marginBottom: '8px',
+              background: '#f5f3ff',
+              borderRadius: '8px',
+              border: '1px solid #7c3aed'
+            }}>
+              <span style={{ fontSize: '13px', color: '#5b21b6', fontWeight: 500 }}>
+                {selectedPreassemblyIds.size} valitud
+              </span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    // Get selected preassemblies for marking as installed
+                    const selectedItems = preassemblies.filter(p => selectedPreassemblyIds.has(p.id));
+                    if (selectedItems.length > 0) {
+                      setMarkInstalledItems(selectedItems);
+                      setInstallDate(getLocalDateTimeString());
+                      setNotes('');
+                      setMonteerijad([]);
+                      setTroppijad([]);
+                      setKeevitajad([]);
+                      setCraneOperators([]);
+                      setForkliftOperators([]);
+                      setPoomtostukOperators([]);
+                      setKaartostukOperators([]);
+                      setSelectedInstallMethods({});
+                      setShowMarkInstalledModal(true);
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: '#16a34a',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiTool size={12} />
+                  Paigalda
+                </button>
+                <button
+                  onClick={() => {
+                    // Get selected preassemblies for edit
+                    const selectedItems = preassemblies.filter(p => selectedPreassemblyIds.has(p.id));
+                    if (selectedItems.length > 0) {
+                      const firstItem = selectedItems[0];
+                      setShowPreassemblyEditModal(true);
+                      setPreassemblyEditDate(firstItem.preassembled_at.split('T')[0]);
+                      setPreassemblyEditNotes(firstItem.notes || '');
+                    }
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #7c3aed',
+                    background: '#fff',
+                    color: '#7c3aed',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiEdit2 size={12} />
+                  Muuda
+                </button>
+                <button
+                  onClick={() => setSelectedPreassemblyIds(new Set())}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid #9ca3af',
+                    background: '#fff',
+                    color: '#6b7280',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                >
+                  <FiX size={12} />
+                  Tühista
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* List content */}
           <div className="installations-list-content">
