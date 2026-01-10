@@ -9983,6 +9983,38 @@ button.stat-toggle.off:hover {
   background: #f0f0f0;
 }
 
+/* Secondary header row - for mobile-friendly button layout */
+.org-header-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #0d4a7f;
+  flex-shrink: 0;
+}
+
+.org-header-secondary .org-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.org-header-secondary .org-color-mode-select {
+  padding: 6px 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.org-header-secondary .org-add-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
 /* Toolbar */
 .org-toolbar {
   display: flex;

@@ -1854,7 +1854,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         return;
       }
 
-      // Insert new members with default permissions
+      // Insert new members with basic permissions (only columns that exist in DB)
       const newUsers = newMembers.map((m: any) => ({
         trimble_project_id: projectId,
         email: m.email.toLowerCase(),
@@ -1862,23 +1862,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
         role: m.role === 'ADMIN' ? 'admin' : 'inspector',
         can_assembly_inspection: true,
         can_bolt_inspection: false,
-        is_active: m.status === 'ACTIVE',
-        can_view_delivery: true,
-        can_edit_delivery: true,
-        can_delete_delivery: false,
-        can_view_installation_schedule: true,
-        can_edit_installation_schedule: true,
-        can_delete_installation_schedule: false,
-        can_view_installations: true,
-        can_edit_installations: true,
-        can_delete_installations: false,
-        can_view_organizer: true,
-        can_edit_organizer: true,
-        can_delete_organizer: false,
-        can_view_inspections: true,
-        can_edit_inspections: true,
-        can_delete_inspections: false,
-        can_access_admin: m.role === 'ADMIN'
+        is_active: m.status === 'ACTIVE'
       }));
 
       const { error } = await supabase

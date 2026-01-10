@@ -4,14 +4,14 @@ import {
   ArrivedVehicle, ArrivalItemConfirmation, ArrivalPhoto,
   ArrivalItemStatus, ArrivalPhotoType
 } from '../supabase';
-import { selectObjectsByGuid } from '../utils/navigationHelper';
+import { selectObjectsByGuid, findObjectsInLoadedModels } from '../utils/navigationHelper';
 import {
   FiArrowLeft, FiChevronLeft, FiChevronRight, FiCheck, FiX,
   FiCamera, FiClock, FiMapPin, FiTruck,
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
-  FiFileText, FiDownload, FiSearch
+  FiFileText, FiDownload, FiSearch, FiDroplet
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 
@@ -51,6 +51,23 @@ const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
   { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, category: 'machine' },
   // Labor
   { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, category: 'labor' },
+];
+
+// Color type for model coloring
+type ColorMode = 'off' | 'all-green' | 'by-vehicle';
+
+// Preset colors for vehicle coloring (different from other screens)
+const VEHICLE_COLORS = [
+  { r: 34, g: 197, b: 94 },   // Green
+  { r: 59, g: 130, b: 246 },  // Blue
+  { r: 249, g: 115, b: 22 },  // Orange
+  { r: 168, g: 85, b: 247 },  // Purple
+  { r: 236, g: 72, b: 153 },  // Pink
+  { r: 20, g: 184, b: 166 },  // Teal
+  { r: 245, g: 158, b: 11 },  // Amber
+  { r: 239, g: 68, b: 68 },   // Red
+  { r: 99, g: 102, b: 241 },  // Indigo
+  { r: 16, g: 185, b: 129 },  // Emerald
 ];
 
 // Format date to Estonian format
@@ -386,6 +403,10 @@ export default function ArrivedDeliveriesScreen({
 
   // State - Search per vehicle (vehicle_id -> search term)
   const [itemSearchTerms, setItemSearchTerms] = useState<Record<string, string>>({});
+
+  // State - Model coloring
+  const [colorMode, setColorMode] = useState<ColorMode>('off');
+  const [coloringInProgress, setColoringInProgress] = useState(false);
 
   // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1828,6 +1849,163 @@ export default function ArrivedDeliveriesScreen({
   }, [api]);
 
   // ============================================
+  // MODEL COLORING
+  // ============================================
+
+  // Get all confirmed items for the selected date
+  const getConfirmedItemsForDate = useCallback(() => {
+    const dateArrivals = arrivedVehicles.filter(av =>
+      av.arrival_date === selectedDate
+    );
+
+    const confirmedItems: { item: DeliveryItem; vehicleId: string; vehicleCode: string }[] = [];
+
+    for (const arrival of dateArrivals) {
+      const arrivalConfirmations = confirmations.filter(c =>
+        c.arrived_vehicle_id === arrival.id && c.status === 'confirmed'
+      );
+
+      const vehicle = vehicles.find(v => v.id === arrival.vehicle_id);
+      const vehicleCode = vehicle?.vehicle_code || 'Tundmatu';
+
+      for (const conf of arrivalConfirmations) {
+        const item = items.find(i => i.id === conf.item_id);
+        if (item) {
+          confirmedItems.push({
+            item,
+            vehicleId: arrival.id,
+            vehicleCode
+          });
+        }
+      }
+    }
+
+    return confirmedItems;
+  }, [arrivedVehicles, confirmations, items, vehicles, selectedDate]);
+
+  // Color the model based on mode
+  const colorModel = useCallback(async (mode: ColorMode) => {
+    if (!api) return;
+
+    setColoringInProgress(true);
+    try {
+      if (mode === 'off') {
+        // Reset all colors
+        await api.viewer.setObjectState(undefined, { color: 'reset' });
+        setMessage('Värvid lähtestatud');
+        setColorMode('off');
+        return;
+      }
+
+      // First, color entire model white
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+
+      // Get confirmed items
+      const confirmedItems = getConfirmedItemsForDate();
+      if (confirmedItems.length === 0) {
+        setMessage('Kinnitatud detaile pole');
+        setColorMode(mode);
+        return;
+      }
+
+      // Collect GUIDs
+      const guids = confirmedItems
+        .filter(ci => ci.item.guid_ifc)
+        .map(ci => ci.item.guid_ifc!);
+
+      if (guids.length === 0) {
+        setMessage('Detailidel puuduvad GUID-id');
+        setColorMode(mode);
+        return;
+      }
+
+      // Find objects in model
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+      if (foundObjects.size === 0) {
+        setMessage('Detaile ei leitud mudelist');
+        setColorMode(mode);
+        return;
+      }
+
+      if (mode === 'all-green') {
+        // Color all confirmed items green
+        const byModel: Record<string, number[]> = {};
+        for (const [, found] of foundObjects) {
+          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+          byModel[found.modelId].push(found.runtimeId);
+        }
+
+        const greenColor = { r: 34, g: 197, b: 94, a: 255 };
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: greenColor }
+          );
+        }
+
+        setMessage(`${foundObjects.size} detaili värvitud roheliseks`);
+      } else if (mode === 'by-vehicle') {
+        // Color by vehicle - each vehicle gets different color
+        const vehicleMap = new Map<string, { guids: string[]; color: { r: number; g: number; b: number } }>();
+        let colorIndex = 0;
+
+        for (const ci of confirmedItems) {
+          if (!ci.item.guid_ifc) continue;
+
+          if (!vehicleMap.has(ci.vehicleId)) {
+            vehicleMap.set(ci.vehicleId, {
+              guids: [],
+              color: VEHICLE_COLORS[colorIndex % VEHICLE_COLORS.length]
+            });
+            colorIndex++;
+          }
+
+          vehicleMap.get(ci.vehicleId)!.guids.push(ci.item.guid_ifc);
+        }
+
+        // Color each vehicle's items
+        for (const [, vehicleData] of vehicleMap) {
+          const byModel: Record<string, number[]> = {};
+
+          for (const guid of vehicleData.guids) {
+            const found = foundObjects.get(guid.toLowerCase()) || foundObjects.get(guid);
+            if (found) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+          }
+
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { ...vehicleData.color, a: 255 } }
+            );
+          }
+        }
+
+        setMessage(`${foundObjects.size} detaili värvitud ${vehicleMap.size} veoki kaupa`);
+      }
+
+      setColorMode(mode);
+    } catch (e) {
+      console.error('Error coloring model:', e);
+      setMessage('Viga mudeli värvimisel');
+    } finally {
+      setColoringInProgress(false);
+    }
+  }, [api, getConfirmedItemsForDate]);
+
+  // Toggle coloring mode
+  const toggleColoring = useCallback((newMode: ColorMode) => {
+    if (colorMode === newMode) {
+      // Turn off if clicking same mode
+      colorModel('off');
+    } else {
+      colorModel(newMode);
+    }
+  }, [colorMode, colorModel]);
+
+  // ============================================
   // RENDER
   // ============================================
 
@@ -1848,6 +2026,28 @@ export default function ArrivedDeliveriesScreen({
         </button>
         <h1>Saabunud tarned</h1>
         <div className="header-actions">
+          {/* Color mode selector */}
+          <select
+            className="color-mode-select"
+            value={colorMode}
+            onChange={(e) => toggleColoring(e.target.value as ColorMode)}
+            disabled={coloringInProgress}
+            title="Mudeli värvimine"
+            style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
+          >
+            <option value="off">Värvimine väljas</option>
+            <option value="all-green">Kõik roheliseks</option>
+            <option value="by-vehicle">Veokite kaupa</option>
+          </select>
+          <button
+            className={`view-toggle-btn ${colorMode !== 'off' ? 'active' : ''}`}
+            onClick={() => colorModel(colorMode === 'off' ? 'all-green' : 'off')}
+            disabled={coloringInProgress}
+            title={colorMode !== 'off' ? 'Lähtesta värvid' : 'Värvi mudel'}
+            style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
+          >
+            <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
+          </button>
           <button
             className="view-toggle-btn"
             onClick={loadAllData}
