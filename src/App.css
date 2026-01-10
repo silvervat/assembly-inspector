@@ -11236,11 +11236,11 @@ button.stat-toggle.off:hover {
   background: #f3f4f6;
 }
 
-/* Items header for sorting */
+/* Items header for sorting - matches .org-item layout */
 .org-items-header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 8px;
   background: #f3f4f6;
   border-radius: 4px;
@@ -11248,6 +11248,33 @@ button.stat-toggle.off:hover {
   font-size: 11px;
   font-weight: 600;
   color: #6b7280;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Header cells match item row cells */
+.org-items-header .org-item-index {
+  width: 20px;
+  text-align: center;
+}
+
+.org-items-header .org-item-mark {
+  min-width: 80px;
+}
+
+.org-items-header .org-item-product {
+  flex: 1;
+}
+
+.org-items-header .org-item-weight {
+  min-width: 50px;
+  text-align: right;
+}
+
+.org-items-header .org-item-custom {
+  min-width: 60px;
+  text-align: right;
 }
 
 .org-items-header .sortable {

@@ -427,6 +427,7 @@ export default function OrganizerScreen({
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const groupClickSelectionRef = useRef(false); // Track if selection came from group click
 
   // Computed: Selected GUIDs that are already in groups (for highlighting)
   const selectedGuidsInGroups = useMemo(() => {
@@ -449,8 +450,14 @@ export default function OrganizerScreen({
     return guidToGroupId;
   }, [selectedObjects, groupItems]);
 
-  // Auto-expand groups that contain selected items from model
+  // Auto-expand groups that contain selected items from model (but not when clicked via group header)
   useEffect(() => {
+    // Skip auto-expand if selection came from clicking a group header
+    if (groupClickSelectionRef.current) {
+      groupClickSelectionRef.current = false;
+      return;
+    }
+
     if (selectedGuidsInGroups.size > 0) {
       const groupsWithSelectedItems = new Set(selectedGuidsInGroups.values());
       setExpandedGroups(prev => {
@@ -2614,6 +2621,8 @@ export default function OrganizerScreen({
     const guids = collectGroupGuids(groupId, groups, groupItems);
     if (guids.length > 0) {
       try {
+        // Mark that selection comes from group click (to prevent auto-expand of children)
+        groupClickSelectionRef.current = true;
         await selectObjectsByGuid(api, guids, 'set');
       } catch (e) {
         console.error('Error selecting objects:', e);
@@ -3025,6 +3034,11 @@ export default function OrganizerScreen({
                     }}>
                       Kaal {itemSortField === 'cast_unit_weight' && (itemSortDir === 'asc' ? '↑' : '↓')}
                     </span>
+                    {customFields.map(field => (
+                      <span key={field.id} className="org-item-custom" title={field.name}>
+                        {field.name}
+                      </span>
+                    ))}
                   </div>
                 )}
 
