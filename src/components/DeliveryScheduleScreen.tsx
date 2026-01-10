@@ -3,7 +3,7 @@ import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
   DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
-  DeliveryVehicleStatus
+  DeliveryVehicleStatus, ArrivalItemConfirmation
 } from '../supabase';
 import {
   findObjectsInLoadedModels,
@@ -401,6 +401,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicles, setVehicles] = useState<DeliveryVehicle[]>([]);
   const [items, setItems] = useState<DeliveryItem[]>([]);
   const [comments, setComments] = useState<DeliveryComment[]>([]);
+  // Items moved to other vehicles (from arrival confirmations)
+  const [movedItemConfirmations, setMovedItemConfirmations] = useState<ArrivalItemConfirmation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -1063,11 +1065,35 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, [projectId]);
 
+  // Load items that were moved to other vehicles (from arrival confirmations)
+  const loadMovedItemConfirmations = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trimble_arrival_item_confirmations')
+        .select(`
+          *,
+          arrived_vehicle:trimble_arrived_vehicles(
+            id,
+            vehicle_id,
+            vehicle:trimble_delivery_vehicles(vehicle_code)
+          )
+        `)
+        .eq('trimble_project_id', projectId)
+        .eq('status', 'added')
+        .not('source_vehicle_id', 'is', null);
+
+      if (error) throw error;
+      setMovedItemConfirmations(data || []);
+    } catch (e) {
+      console.error('Error loading moved item confirmations:', e);
+    }
+  }, [projectId]);
+
   const loadAllData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments()]);
+    await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments(), loadMovedItemConfirmations()]);
     setLoading(false);
-  }, [loadFactories, loadVehicles, loadItems, loadComments]);
+  }, [loadFactories, loadVehicles, loadItems, loadComments, loadMovedItemConfirmations]);
 
   // Broadcast reload signal to other windows
   const broadcastReload = useCallback(() => {
@@ -6776,6 +6802,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <span>Ühtegi detaili pole</span>
                               </div>
                             )}
+                            {/* Moved items - items that arrived with a different vehicle */}
+                            {(() => {
+                              const movedItems = movedItemConfirmations.filter(c => c.source_vehicle_id === vehicle?.id);
+                              if (movedItems.length === 0) return null;
+                              return (
+                                <div className="moved-items-section">
+                                  <div className="moved-items-header">
+                                    <FiExternalLink size={12} />
+                                    <span>Teise tarnega saabunud ({movedItems.length})</span>
+                                  </div>
+                                  {movedItems.map(conf => {
+                                    const item = items.find(i => i.id === conf.item_id);
+                                    if (!item) return null;
+                                    const arrivedVehicle = (conf as any).arrived_vehicle;
+                                    const arrivedVehicleCode = arrivedVehicle?.vehicle?.vehicle_code || 'tundmatu';
+                                    return (
+                                      <div key={conf.id} className="moved-item">
+                                        <span className="moved-item-mark">{item.assembly_mark}</span>
+                                        <span className="moved-item-arrow">→</span>
+                                        <span className="moved-item-vehicle">{arrivedVehicleCode}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
                             {vehicleItems.map((item, idx) => {
                               const isSelected = selectedItemIds.has(item.id);
                               const isModelSelected = selectedGuids.has(item.guid);

@@ -6182,6 +6182,62 @@ button.stat-toggle.off:hover {
   background: #1d4ed8;
 }
 
+/* Item search section */
+.arrived-deliveries .item-search-section {
+  margin-top: 10px;
+}
+
+.arrived-deliveries .search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.arrived-deliveries .search-input-wrapper .search-icon {
+  position: absolute;
+  left: 10px;
+  color: #6b7280;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.arrived-deliveries .item-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 32px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.arrived-deliveries .item-search-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.arrived-deliveries .item-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.arrived-deliveries .clear-search-btn {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: #e5e7eb;
+  border: none;
+  border-radius: 50%;
+  color: #6b7280;
+  cursor: pointer;
+}
+
+.arrived-deliveries .clear-search-btn:hover {
+  background: #d1d5db;
+  color: #374151;
+}
+
 /* Export button in header */
 .calendar-nav .export-btn {
   display: flex;
