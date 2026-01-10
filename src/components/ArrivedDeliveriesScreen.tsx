@@ -122,8 +122,8 @@ export default function ArrivedDeliveriesScreen({
   // State - Expanded item for comment/photo editing
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
-  // State - Photo lightbox
-  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  // State - Photo lightbox (stores full photo object for metadata access)
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: ArrivalPhoto; vehicleCode: string } | null>(null);
 
   // State - Upload progress
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
@@ -279,6 +279,21 @@ export default function ArrivedDeliveriesScreen({
       return () => clearTimeout(timer);
     }
   }, [message]);
+
+  // ESC key handler - clear selection and close lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (lightboxPhoto) {
+          setLightboxPhoto(null);
+        } else if (selectedItemsForConfirm.size > 0) {
+          setSelectedItemsForConfirm(new Set());
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxPhoto, selectedItemsForConfirm.size]);
 
   // ============================================
   // HELPERS
@@ -1562,6 +1577,14 @@ export default function ArrivedDeliveriesScreen({
                         <div className="arrival-details">
                           <div className="detail-row">
                             <div className="detail-field">
+                              <label><FiClock /> Saabumise kuupäev</label>
+                              <input
+                                type="date"
+                                value={arrivedVehicle.arrival_date || ''}
+                                onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_date: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-field">
                               <label><FiClock /> Saabumise aeg</label>
                               <input
                                 type="text"
@@ -1744,7 +1767,7 @@ export default function ArrivedDeliveriesScreen({
                                   <img
                                     src={photo.file_url}
                                     alt={photo.file_name}
-                                    onClick={() => setLightboxPhoto(photo.file_url)}
+                                    onClick={() => setLightboxPhoto({ photo, vehicleCode: vehicle.vehicle_code || 'veok' })}
                                     style={{ cursor: 'pointer' }}
                                   />
                                   <button
@@ -1793,7 +1816,7 @@ export default function ArrivedDeliveriesScreen({
                                   <img
                                     src={photo.file_url}
                                     alt={photo.file_name}
-                                    onClick={() => setLightboxPhoto(photo.file_url)}
+                                    onClick={() => setLightboxPhoto({ photo, vehicleCode: vehicle.vehicle_code || 'veok' })}
                                     style={{ cursor: 'pointer' }}
                                   />
                                   <span className="photo-name">{photo.file_name}</span>
@@ -1829,42 +1852,8 @@ export default function ArrivedDeliveriesScreen({
                         {/* Items list */}
                         <div className="items-section">
                           <div className="items-header">
-                            <h3>Detailid ({vehicleItems.length})</h3>
-                            <div className="items-actions">
-                              {/* Bulk actions when items are selected */}
-                              {selectedItemsForConfirm.size > 0 && (
-                                <>
-                                  <button
-                                    className="confirm-selected-btn"
-                                    onClick={() => confirmSelectedItems(arrivedVehicle.id, 'confirmed')}
-                                    disabled={saving}
-                                  >
-                                    <FiCheck /> Kinnita ({selectedItemsForConfirm.size})
-                                  </button>
-                                  <button
-                                    className="missing-selected-btn"
-                                    onClick={() => confirmSelectedItems(arrivedVehicle.id, 'missing')}
-                                    disabled={saving}
-                                  >
-                                    <FiX /> Puudub
-                                  </button>
-                                  <button
-                                    className="clear-selection-btn"
-                                    onClick={() => setSelectedItemsForConfirm(new Set())}
-                                  >
-                                    Tühista
-                                  </button>
-                                </>
-                              )}
-                              {selectedItemsForConfirm.size === 0 && pendingCount > 0 && (
-                                <button
-                                  className="confirm-all-btn"
-                                  onClick={() => confirmAllItems(arrivedVehicle.id)}
-                                  disabled={saving}
-                                >
-                                  <FiCheck /> Kinnita kõik
-                                </button>
-                              )}
+                            <div className="items-title-row">
+                              <h3>Detailid ({vehicleItems.length})</h3>
                               <button
                                 className="add-item-btn"
                                 onClick={() => {
@@ -1875,6 +1864,42 @@ export default function ArrivedDeliveriesScreen({
                                 <FiPlus /> Lisa
                               </button>
                             </div>
+                            {/* Bulk actions when items are selected */}
+                            {selectedItemsForConfirm.size > 0 && (
+                              <div className="items-bulk-actions">
+                                <button
+                                  className="confirm-selected-btn"
+                                  onClick={() => confirmSelectedItems(arrivedVehicle.id, 'confirmed')}
+                                  disabled={saving}
+                                >
+                                  <FiCheck /> Kinnita ({selectedItemsForConfirm.size})
+                                </button>
+                                <button
+                                  className="missing-selected-btn"
+                                  onClick={() => confirmSelectedItems(arrivedVehicle.id, 'missing')}
+                                  disabled={saving}
+                                >
+                                  <FiX /> Puudub
+                                </button>
+                                <button
+                                  className="clear-selection-btn"
+                                  onClick={() => setSelectedItemsForConfirm(new Set())}
+                                >
+                                  Tühista (ESC)
+                                </button>
+                              </div>
+                            )}
+                            {selectedItemsForConfirm.size === 0 && pendingCount > 0 && (
+                              <div className="items-bulk-actions">
+                                <button
+                                  className="confirm-all-btn"
+                                  onClick={() => confirmAllItems(arrivedVehicle.id)}
+                                  disabled={saving}
+                                >
+                                  <FiCheck /> Kinnita kõik
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           <div className="items-list compact">
@@ -2058,7 +2083,7 @@ export default function ArrivedDeliveriesScreen({
                                               <img
                                                 src={photo.file_url}
                                                 alt={photo.file_name}
-                                                onClick={() => setLightboxPhoto(photo.file_url)}
+                                                onClick={() => setLightboxPhoto({ photo, vehicleCode: vehicle.vehicle_code || 'veok' })}
                                                 style={{ cursor: 'pointer' }}
                                               />
                                               <button
@@ -2273,40 +2298,62 @@ export default function ArrivedDeliveriesScreen({
       )}
 
       {/* Photo lightbox modal */}
-      {lightboxPhoto && (
-        <div
-          className="lightbox-overlay"
-          onClick={() => setLightboxPhoto(null)}
-        >
-          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <img src={lightboxPhoto} alt="Foto" />
-            <div className="lightbox-actions">
-              <button
-                className="lightbox-btn"
-                onClick={() => window.open(lightboxPhoto, '_blank')}
-                title="Ava uues aknas"
-              >
-                Ava uues aknas
-              </button>
-              <a
-                className="lightbox-btn"
-                href={lightboxPhoto}
-                download
-                title="Lae alla"
-              >
-                Lae alla
-              </a>
-              <button
-                className="lightbox-btn close"
-                onClick={() => setLightboxPhoto(null)}
-                title="Sulge"
-              >
-                <FiX size={18} /> Sulge
-              </button>
+      {lightboxPhoto && (() => {
+        const { photo, vehicleCode } = lightboxPhoto;
+        const uploadDate = photo.uploaded_at ? new Date(photo.uploaded_at) : null;
+        const dateStr = uploadDate ? uploadDate.toLocaleDateString('et-EE') : '';
+        const timeStr = uploadDate ? uploadDate.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        // Generate download filename: veok_kuupäev_kellaaeg_nr.ext
+        const photoIndex = photos.filter(p => p.arrived_vehicle_id === photo.arrived_vehicle_id).findIndex(p => p.id === photo.id) + 1;
+        const ext = photo.file_name?.split('.').pop() || 'jpg';
+        const safeVehicleCode = vehicleCode.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const downloadName = `${safeVehicleCode}_${uploadDate ? uploadDate.toISOString().split('T')[0] : 'foto'}_${photoIndex}.${ext}`;
+
+        return (
+          <div
+            className="lightbox-overlay"
+            onClick={() => setLightboxPhoto(null)}
+          >
+            <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+              <img src={photo.file_url} alt="Foto" />
+              <div className="lightbox-info">
+                <span className="lightbox-vehicle">{vehicleCode}</span>
+                {uploadDate && (
+                  <span className="lightbox-date">{dateStr} {timeStr}</span>
+                )}
+                {photo.uploaded_by && (
+                  <span className="lightbox-uploader">{photo.uploaded_by}</span>
+                )}
+              </div>
+              <div className="lightbox-actions compact">
+                <button
+                  className="lightbox-btn-sm"
+                  onClick={() => window.open(photo.file_url, '_blank')}
+                  title="Ava uues aknas"
+                >
+                  Ava uues aknas
+                </button>
+                <a
+                  className="lightbox-btn-sm"
+                  href={photo.file_url}
+                  download={downloadName}
+                  title="Lae alla"
+                >
+                  Lae alla
+                </a>
+                <button
+                  className="lightbox-btn-sm close"
+                  onClick={() => setLightboxPhoto(null)}
+                  title="Sulge (ESC)"
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
