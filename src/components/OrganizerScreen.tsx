@@ -2992,6 +2992,12 @@ export default function OrganizerScreen({
           >
             {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
           </button>
+        </div>
+      </div>
+
+      {/* Secondary header row - coloring and add group buttons */}
+      <div className="org-header-secondary">
+        <div className="org-header-left">
           <select
             className="org-color-mode-select"
             value={colorMode}
@@ -3009,10 +3015,10 @@ export default function OrganizerScreen({
           >
             {colorByGroup ? <FiRefreshCw size={16} /> : <FiDroplet size={16} />}
           </button>
-          <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
-            <FiPlus size={16} /><span>Uus grupp</span>
-          </button>
         </div>
+        <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
+          <FiPlus size={16} /><span>Uus grupp</span>
+        </button>
       </div>
 
       {/* Search bar - separate row */}
