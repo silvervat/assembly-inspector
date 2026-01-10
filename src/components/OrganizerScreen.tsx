@@ -700,7 +700,7 @@ export default function OrganizerScreen({
         {
           event: '*',
           schema: 'public',
-          table: 'organizer_items',
+          table: 'organizer_group_items',
           filter: `trimble_project_id=eq.${projectId}`
         },
         (payload) => {
