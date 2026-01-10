@@ -350,6 +350,8 @@ export default function OrganizerScreen({
   // Tags editing
   const [editingTags, setEditingTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  // Expanded text items (for showing full text content)
+  const [expandedTextItems, setExpandedTextItems] = useState<Set<string>>(new Set());
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
   // Group form state
@@ -2809,17 +2811,39 @@ export default function OrganizerScreen({
                           );
                         }
 
+                        // Check if text field has long content
+                        const textValue = String(val || '');
+                        const isLongText = field.type === 'text' && textValue.length > 30;
+                        const isTextExpanded = expandedTextItems.has(`${item.id}:${field.id}`);
+
                         return (
                           <span
                             key={field.id}
-                            className="org-item-custom"
-                            onDoubleClick={() => field.type === 'tags'
-                              ? handleTagFieldDoubleClick(item.id, field.id, val)
-                              : handleFieldDoubleClick(item.id, field.id, String(val || ''))
-                            }
-                            title="Topeltklõps muutmiseks"
+                            className={`org-item-custom ${isLongText ? 'truncatable' : ''} ${isTextExpanded ? 'expanded' : ''}`}
+                            onClick={(e) => {
+                              if (isLongText) {
+                                e.stopPropagation();
+                                const key = `${item.id}:${field.id}`;
+                                setExpandedTextItems(prev => {
+                                  const next = new Set(prev);
+                                  if (next.has(key)) next.delete(key);
+                                  else next.add(key);
+                                  return next;
+                                });
+                              }
+                            }}
+                            onDoubleClick={(e) => {
+                              e.stopPropagation();
+                              field.type === 'tags'
+                                ? handleTagFieldDoubleClick(item.id, field.id, val)
+                                : handleFieldDoubleClick(item.id, field.id, String(val || ''));
+                            }}
+                            title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
                           >
-                            {formatFieldValue(val, field)}
+                            {isLongText && !isTextExpanded
+                              ? textValue.substring(0, 30) + '...'
+                              : formatFieldValue(val, field)
+                            }
                           </span>
                         );
                       })}

@@ -10426,6 +10426,27 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+.org-item-custom.truncatable {
+  cursor: pointer;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.org-item-custom.truncatable:hover {
+  color: var(--modus-primary);
+}
+
+.org-item-custom.truncatable.expanded {
+  max-width: none;
+  white-space: normal;
+  word-break: break-word;
+  background: #fef9c3;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
 .org-item-remove {
   padding: 2px;
   border: none;
