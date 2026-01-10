@@ -450,6 +450,7 @@ export default function InstallationsScreen({
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedInstallationIds, setSelectedInstallationIds] = useState<Set<string>>(new Set());
+  const [selectedPreassemblyIds, setSelectedPreassemblyIds] = useState<Set<string>>(new Set());
 
   // Month locks state
   const [monthLocks, setMonthLocks] = useState<Map<string, InstallationMonthLock>>(new Map());
@@ -511,6 +512,15 @@ export default function InstallationsScreen({
   const [editInstallMethods, setEditInstallMethods] = useState<InstallMethods>({});
   const [editHoveredMethod, setEditHoveredMethod] = useState<InstallMethodType | null>(null);
   const [editingSaving, setEditingSaving] = useState(false);
+
+  // Preassembly edit modal state
+  const [showPreassemblyEditModal, setShowPreassemblyEditModal] = useState(false);
+  const [preassemblyEditDate, setPreassemblyEditDate] = useState<string>('');
+  const [preassemblyEditNotes, setPreassemblyEditNotes] = useState<string>('');
+
+  // Mark as installed modal (from preassembly)
+  const [showMarkInstalledModal, setShowMarkInstalledModal] = useState(false);
+  const [markInstalledItems, setMarkInstalledItems] = useState<Preassembly[]>([]);
 
   const isAdminOrModerator = user.role === 'admin' || user.role === 'moderator';
 
@@ -1162,6 +1172,11 @@ export default function InstallationsScreen({
   };
 
   // Color specific objects BLACK (for newly installed items - no reset needed)
+  // Color for installed items: #0a3a67 (dark blue)
+  const INSTALLED_COLOR = { r: 10, g: 58, b: 103, a: 255 };
+  // Color for preassembly items: #7c3aed (purple)
+  const PREASSEMBLY_COLOR = { r: 124, g: 58, b: 237, a: 255 };
+
   const colorObjectsBlack = async (objects: { modelId: string; runtimeId: number }[]) => {
     const byModel: Record<string, number[]> = {};
     for (const obj of objects) {
@@ -1171,7 +1186,7 @@ export default function InstallationsScreen({
     for (const [modelId, runtimeIds] of Object.entries(byModel)) {
       await api.viewer.setObjectState(
         { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-        { color: { r: 0, g: 0, b: 0, a: 255 } }
+        { color: INSTALLED_COLOR }
       );
     }
   };
@@ -1193,7 +1208,7 @@ export default function InstallationsScreen({
     }
   };
 
-  // Color installed GUIDs BLACK (for reverting from day/month coloring - no reset needed)
+  // Color installed GUIDs with INSTALLED_COLOR (for reverting from day/month coloring - no reset needed)
   const colorInstalledGuidsBlack = async () => {
     const guids = Array.from(installedGuids.keys());
     if (guids.length === 0) return;
@@ -1206,7 +1221,7 @@ export default function InstallationsScreen({
     for (const [modelId, runtimeIds] of Object.entries(byModel)) {
       await api.viewer.setObjectState(
         { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
-        { color: { r: 0, g: 0, b: 0, a: 255 } }
+        { color: INSTALLED_COLOR }
       );
     }
   };
@@ -1346,19 +1361,19 @@ export default function InstallationsScreen({
       }
       console.log(`[INSTALL] White coloring done: ${whiteCount}`);
 
-      // Step 7: Color installed items BLACK
-      console.log('[INSTALL] Step 7: Coloring installed objects black...');
+      // Step 7: Color installed items with INSTALLED_COLOR (#0a3a67)
+      console.log('[INSTALL] Step 7: Coloring installed objects...');
       coloredObjectsRef.current = new Map();
-      let blackCount = 0;
+      let installedCount = 0;
 
       for (const [modelId, runtimeIds] of Object.entries(blackByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-            { color: { r: 0, g: 0, b: 0, a: 255 } }
+            { color: INSTALLED_COLOR }
           );
-          blackCount += batch.length;
+          installedCount += batch.length;
           // Track colored objects for reference
           if (!coloredObjectsRef.current.has(modelId)) {
             coloredObjectsRef.current.set(modelId, []);
@@ -1367,10 +1382,135 @@ export default function InstallationsScreen({
         }
       }
 
-      console.log(`[INSTALL] Black coloring done: ${blackCount}`);
+      console.log(`[INSTALL] Installed coloring done: ${installedCount}`);
       console.log('[INSTALL] === COLORING COMPLETE ===');
     } catch (e) {
       console.error('[INSTALL] Error applying installation coloring:', e);
+    } finally {
+      setColoringInProgress(false);
+    }
+  };
+
+  // Apply coloring for PREASSEMBLY mode: installed items = INSTALLED_COLOR, preassembly items = PREASSEMBLY_COLOR
+  const applyPreassemblyColoring = async () => {
+    setColoringInProgress(true);
+    try {
+      // Get all loaded models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) {
+        setColoringInProgress(false);
+        return;
+      }
+
+      console.log('[PREASSEMBLY] Starting coloring...');
+
+      // Step 1: Reset all colors first
+      await api.viewer.setObjectState(undefined, { color: "reset" });
+
+      // Step 2: Fetch ALL objects from Supabase with pagination
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('[PREASSEMBLY] Supabase error:', error);
+          setColoringInProgress(false);
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      console.log(`[PREASSEMBLY] Total GUIDs fetched: ${allGuids.length}`);
+
+      // Step 3: Find objects in loaded models
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`[PREASSEMBLY] Found ${foundObjects.size} objects in models`);
+
+      // Step 4: Get installed and preassembly GUIDs
+      const installedGuidSet = new Set(installedGuids.keys());
+      const preassemblyGuidSet = new Set(preassembledGuids.keys());
+
+      console.log(`[PREASSEMBLY] Installed: ${installedGuidSet.size}, Preassembly: ${preassemblyGuidSet.size}`);
+
+      // Step 5: Build color arrays
+      const whiteByModel: Record<string, number[]> = {};
+      const installedByModel: Record<string, number[]> = {};
+      const preassemblyByModel: Record<string, number[]> = {};
+
+      for (const [guid, found] of foundObjects) {
+        if (installedGuidSet.has(guid)) {
+          // Installed - INSTALLED_COLOR
+          if (!installedByModel[found.modelId]) installedByModel[found.modelId] = [];
+          installedByModel[found.modelId].push(found.runtimeId);
+        } else if (preassemblyGuidSet.has(guid)) {
+          // Preassembly - PREASSEMBLY_COLOR
+          if (!preassemblyByModel[found.modelId]) preassemblyByModel[found.modelId] = [];
+          preassemblyByModel[found.modelId].push(found.runtimeId);
+        } else {
+          // Not in schedule - WHITE
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      // Step 6: Apply colors in batches
+      const BATCH_SIZE = 5000;
+
+      // White
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      // Installed - INSTALLED_COLOR
+      for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: INSTALLED_COLOR }
+          );
+        }
+      }
+
+      // Preassembly - PREASSEMBLY_COLOR
+      for (const [modelId, runtimeIds] of Object.entries(preassemblyByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: PREASSEMBLY_COLOR }
+          );
+        }
+      }
+
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+      const totalInstalled = Object.values(installedByModel).reduce((sum, arr) => sum + arr.length, 0);
+      const totalPreassembly = Object.values(preassemblyByModel).reduce((sum, arr) => sum + arr.length, 0);
+      console.log(`[PREASSEMBLY] Colored: ${totalWhite} white, ${totalInstalled} installed, ${totalPreassembly} preassembly`);
+
+    } catch (e) {
+      console.error('[PREASSEMBLY] Error applying coloring:', e);
     } finally {
       setColoringInProgress(false);
     }
@@ -1891,6 +2031,261 @@ export default function InstallationsScreen({
     }
   };
 
+  // Select preassembly items in 3D model (similar to selectInstallations)
+  const selectPreassemblies = async (items: Preassembly[], e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+
+    try {
+      const guids = items
+        .map(item => item.guid_ifc || item.guid)
+        .filter((guid): guid is string => !!guid);
+
+      if (guids.length === 0) {
+        setMessage('Valitud detailidel pole GUID-e');
+        return;
+      }
+
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) return;
+
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+
+      for (const model of models) {
+        try {
+          const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, guids);
+          if (runtimeIds && runtimeIds.length > 0) {
+            const validRuntimeIds = runtimeIds.filter((id: number) => id && id > 0);
+            if (validRuntimeIds.length > 0) {
+              modelObjectIds.push({
+                modelId: model.id,
+                objectRuntimeIds: validRuntimeIds
+              });
+            }
+          }
+        } catch (e) {
+          console.warn(`Could not convert GUIDs for model ${model.id}:`, e);
+        }
+      }
+
+      if (modelObjectIds.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+        setMessage(`Valitud ${items.length} detaili`);
+      } else {
+        setMessage('Detaile ei leitud mudelist');
+      }
+    } catch (e) {
+      console.error('Error selecting preassemblies:', e);
+      setMessage('Viga detailide valimisel');
+    }
+  };
+
+  // Toggle single preassembly selection (for checkbox)
+  const togglePreassemblySelection = (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setSelectedPreassemblyIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  // Toggle all preassemblies in a day
+  const toggleDayPreassemblySelection = (dayItems: Preassembly[], e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    const dayIds = dayItems.map(item => item.id);
+    const allSelected = dayIds.every(id => selectedPreassemblyIds.has(id));
+
+    setSelectedPreassemblyIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        // Deselect all
+        dayIds.forEach(id => next.delete(id));
+      } else {
+        // Select all
+        dayIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  // Open preassembly edit modal
+  const openPreassemblyEditModal = () => {
+    if (selectedPreassemblyIds.size === 0) return;
+
+    const selectedItems = preassemblies.filter(p => selectedPreassemblyIds.has(p.id));
+    if (selectedItems.length === 0) return;
+
+    const firstItem = selectedItems[0];
+    const itemDate = new Date(firstItem.preassembled_at);
+    const offset = itemDate.getTimezoneOffset();
+    const localDate = new Date(itemDate.getTime() - offset * 60000);
+    setPreassemblyEditDate(localDate.toISOString().slice(0, 16));
+
+    const allSameNotes = selectedItems.every(item => item.notes === firstItem.notes);
+    setPreassemblyEditNotes(allSameNotes ? (firstItem.notes || '') : '');
+
+    setShowPreassemblyEditModal(true);
+  };
+
+  // Save edited preassemblies
+  const saveEditedPreassemblies = async () => {
+    if (selectedPreassemblyIds.size === 0) return;
+
+    setEditingSaving(true);
+    try {
+      const updatePromises = Array.from(selectedPreassemblyIds).map(async (id) => {
+        const { error } = await supabase
+          .from('preassemblies')
+          .update({
+            preassembled_at: preassemblyEditDate,
+            notes: preassemblyEditNotes || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+      });
+
+      await Promise.all(updatePromises);
+
+      setMessage(`${selectedPreassemblyIds.size} preassembly kirjet uuendatud`);
+      setShowPreassemblyEditModal(false);
+      setSelectedPreassemblyIds(new Set());
+      await loadPreassemblies();
+      await loadPreassembledGuids();
+    } catch (e) {
+      console.error('Error updating preassemblies:', e);
+      setMessage('Viga preassembly uuendamisel');
+    } finally {
+      setEditingSaving(false);
+    }
+  };
+
+  // Open mark as installed modal (from preassembly)
+  const openMarkInstalledModal = () => {
+    if (selectedPreassemblyIds.size === 0) return;
+
+    const selectedItems = preassemblies.filter(p => selectedPreassemblyIds.has(p.id));
+    if (selectedItems.length === 0) return;
+
+    // Check if any are already installed
+    const alreadyInstalled = selectedItems.filter(item => {
+      const guid = item.guid_ifc || item.guid;
+      return guid && installedGuids.has(guid.toLowerCase());
+    });
+
+    if (alreadyInstalled.length > 0) {
+      setMessage(`${alreadyInstalled.length} detaili on juba paigaldatud`);
+      return;
+    }
+
+    setMarkInstalledItems(selectedItems);
+    // Set default date and reset form
+    setInstallDate(getLocalDateTimeString());
+    setNotes('');
+    setTeamMembers([]);
+    setSelectedInstallMethods({ crane: 1 });
+    setShowMarkInstalledModal(true);
+  };
+
+  // Mark preassembly items as installed
+  const markPreassembliesAsInstalled = async () => {
+    if (markInstalledItems.length === 0) return;
+
+    // Validate required fields
+    if (!installDate) {
+      setMessage('Kuupäev on kohustuslik');
+      return;
+    }
+    if (teamMembers.length === 0) {
+      setMessage('Lisa vähemalt üks meeskonnaliige');
+      return;
+    }
+    if (Object.values(selectedInstallMethods).every(v => !v || v === 0)) {
+      setMessage('Vali vähemalt üks paigaldusviis');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Build method name string
+      const methodName = Object.entries(selectedInstallMethods)
+        .filter(([, count]) => count && count > 0)
+        .map(([key, count]) => {
+          const config = INSTALL_METHODS_CONFIG.find(m => m.key === key);
+          return count === 1 ? config?.label : `${count}x ${config?.label}`;
+        })
+        .join(', ');
+
+      // Insert installations
+      const installationsToInsert = markInstalledItems.map(item => ({
+        project_id: projectId,
+        model_id: item.model_id,
+        guid: item.guid,
+        guid_ifc: item.guid_ifc,
+        guid_ms: item.guid_ms,
+        object_runtime_id: item.object_runtime_id,
+        assembly_mark: item.assembly_mark,
+        product_name: item.product_name,
+        file_name: item.file_name,
+        cast_unit_weight: item.cast_unit_weight,
+        cast_unit_bottom_elevation: item.cast_unit_bottom_elevation,
+        cast_unit_top_elevation: item.cast_unit_top_elevation,
+        cast_unit_position_code: item.cast_unit_position_code,
+        object_type: item.object_type,
+        installer_name: user.email || 'Unknown',
+        user_email: user.email || '',
+        installation_method_name: methodName || null,
+        installed_at: installDate,
+        team_members: teamMembers.length > 0 ? teamMembers.join(', ') : null,
+        notes: notes || null
+      }));
+
+      const { error: insertError } = await supabase
+        .from('installations')
+        .insert(installationsToInsert);
+
+      if (insertError) throw insertError;
+
+      // Delete preassembly records
+      const { error: deleteError } = await supabase
+        .from('preassemblies')
+        .delete()
+        .in('id', markInstalledItems.map(p => p.id));
+
+      if (deleteError) throw deleteError;
+
+      setMessage(`${markInstalledItems.length} detaili paigaldatuks märgitud`);
+      setShowMarkInstalledModal(false);
+      setMarkInstalledItems([]);
+      setSelectedPreassemblyIds(new Set());
+
+      // Reload data
+      await loadInstallations();
+      await loadInstalledGuids();
+      await loadPreassemblies();
+      await loadPreassembledGuids();
+
+      // Reapply coloring
+      await applyPreassemblyColoring();
+    } catch (e) {
+      console.error('Error marking as installed:', e);
+      setMessage('Viga paigaldamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ==================== PLAYBACK FUNCTIONS ====================
 
   // Get all installations sorted by date (oldest first)
@@ -1941,6 +2336,29 @@ export default function InstallationsScreen({
       }
     } catch (e) {
       console.warn('Error selecting item:', e);
+    }
+  };
+
+  // Handle entry mode change with coloring
+  const handleEntryModeChange = async (newMode: WorkRecordType) => {
+    if (newMode === entryMode) return;
+
+    setEntryMode(newMode);
+    // Clear selections when switching modes
+    setSelectedInstallationIds(new Set());
+    setSelectedPreassemblyIds(new Set());
+    // Turn off day/month coloring
+    setColorByDay(false);
+    setColorByMonth(false);
+    setDayColors({});
+    setMonthColors({});
+
+    // Apply appropriate coloring
+    if (newMode === 'preassembly') {
+      await applyPreassemblyColoring();
+    } else {
+      // Back to installation mode - reapply installation coloring
+      await applyInstallationColoring(installedGuids);
     }
   };
 
@@ -2350,13 +2768,24 @@ export default function InstallationsScreen({
 
   const preassemblyMonthGroups = groupPreassembliesByMonthAndDay(filteredPreassemblies);
 
-  // Build items by date map for calendar
-  const itemsByDate: Record<string, Installation[]> = {};
+  // Build items by date map for calendar (installations)
+  const installationsByDate: Record<string, Installation[]> = {};
   for (const inst of installations) {
     const dateKey = getDayKey(inst.installed_at);
-    if (!itemsByDate[dateKey]) itemsByDate[dateKey] = [];
-    itemsByDate[dateKey].push(inst);
+    if (!installationsByDate[dateKey]) installationsByDate[dateKey] = [];
+    installationsByDate[dateKey].push(inst);
   }
+
+  // Build items by date map for calendar (preassemblies)
+  const preassembliesByDate: Record<string, Preassembly[]> = {};
+  for (const prea of preassemblies) {
+    const dateKey = getDayKey(prea.preassembled_at);
+    if (!preassembliesByDate[dateKey]) preassembliesByDate[dateKey] = [];
+    preassembliesByDate[dateKey].push(prea);
+  }
+
+  // Use correct items by date based on entry mode
+  const itemsByDate = entryMode === 'preassembly' ? preassembliesByDate : installationsByDate;
 
   // Calendar navigation
   const prevMonth = () => {
@@ -2643,7 +3072,7 @@ export default function InstallationsScreen({
   // Render a single preassembly item (with installation indicator)
   const renderPreassemblyItem = (item: Preassembly) => {
     const canDelete = isAdminOrModerator || item.user_email?.toLowerCase() === user.email.toLowerCase();
-    const isSelected = selectedInstallationIds.has(item.id);
+    const isSelected = selectedPreassemblyIds.has(item.id);
 
     // Check if this item has been installed
     const guid = (item.guid_ifc || item.guid || '').toLowerCase();
@@ -2656,7 +3085,7 @@ export default function InstallationsScreen({
           className="installation-item-checkbox"
           checked={isSelected}
           onChange={() => {}}
-          onClick={(e) => toggleInstallationSelect(item.id, e)}
+          onClick={(e) => togglePreassemblySelection(item.id, e)}
         />
         <div className="installation-item-main" onClick={() => zoomToPreassembly(item)}>
           <div className="installation-item-mark">
@@ -2838,16 +3267,35 @@ export default function InstallationsScreen({
 
   // Render a preassembly day group (simplified - no worker grouping for now)
   const renderPreassemblyDayGroup = (day: PreassemblyDayGroup) => {
+    const dayIds = day.items.map(item => item.id);
+    const allSelected = dayIds.length > 0 && dayIds.every(id => selectedPreassemblyIds.has(id));
+    const someSelected = dayIds.some(id => selectedPreassemblyIds.has(id));
+
     return (
       <div key={day.dayKey} className="installation-date-group">
-        <div className="date-group-header" onClick={() => toggleDay(day.dayKey)}>
+        <div className="date-group-header" onClick={() => toggleDay(day.dayKey)} style={{ borderLeftColor: '#7c3aed' }}>
+          <input
+            type="checkbox"
+            checked={allSelected}
+            ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+            onChange={() => toggleDayPreassemblySelection(day.items)}
+            onClick={(e) => e.stopPropagation()}
+            style={{ marginRight: '8px', cursor: 'pointer' }}
+          />
           <button className="date-group-toggle">
             {expandedDays.has(day.dayKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
           </button>
           <span className="date-label" style={{ cursor: 'pointer' }}>
             {day.dayLabel}
           </span>
-          <span className="date-count">{day.items.length}</span>
+          <button
+            className="date-count clickable"
+            onClick={(e) => selectPreassemblies(day.items, e)}
+            title="Vali need detailid mudelis"
+            style={{ background: '#7c3aed' }}
+          >
+            {day.items.length}
+          </button>
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
@@ -2892,7 +3340,7 @@ export default function InstallationsScreen({
             marginBottom: '12px'
           }}>
             <button
-              onClick={() => setEntryMode('installation')}
+              onClick={() => handleEntryModeChange('installation')}
               style={{
                 flex: 1,
                 padding: '10px 16px',
@@ -2914,7 +3362,7 @@ export default function InstallationsScreen({
               <span>Paigaldus</span>
             </button>
             <button
-              onClick={() => setEntryMode('preassembly')}
+              onClick={() => handleEntryModeChange('preassembly')}
               style={{
                 flex: 1,
                 padding: '10px 16px',
@@ -2941,7 +3389,7 @@ export default function InstallationsScreen({
           <div className="installations-menu" style={{ display: 'flex', gap: '8px' }}>
             <button
               className="installations-menu-btn"
-              onClick={() => { setEntryMode('installation'); setShowList(true); }}
+              onClick={() => { handleEntryModeChange('installation'); setShowList(true); }}
               style={{
                 flex: 1,
                 background: '#eff6ff',
@@ -2954,7 +3402,7 @@ export default function InstallationsScreen({
             </button>
             <button
               className="installations-menu-btn"
-              onClick={() => { setEntryMode('preassembly'); setShowList(true); }}
+              onClick={() => { handleEntryModeChange('preassembly'); setShowList(true); }}
               style={{
                 flex: 1,
                 background: '#f5f3ff',
@@ -3331,8 +3779,8 @@ export default function InstallationsScreen({
               )}
             </div>
 
-            {/* Edit button when items selected */}
-            {selectedInstallationIds.size > 0 && (
+            {/* Edit button when installation items selected */}
+            {entryMode === 'installation' && selectedInstallationIds.size > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>
                   {selectedInstallationIds.size} valitud
@@ -3359,6 +3807,71 @@ export default function InstallationsScreen({
                 </button>
                 <button
                   onClick={() => setSelectedInstallationIds(new Set())}
+                  title="Tühista valik"
+                  style={{
+                    padding: '6px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#fee2e2',
+                    color: '#991b1b',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center'
+                  }}
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Edit and Mark Installed buttons when preassembly items selected */}
+            {entryMode === 'preassembly' && selectedPreassemblyIds.size > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '8px' }}>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  {selectedPreassemblyIds.size} valitud
+                </span>
+                <button
+                  onClick={openPreassemblyEditModal}
+                  title="Muuda valitud preassembly kirjeid"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#7c3aed',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  <FiEdit2 size={14} />
+                  <span>Muuda</span>
+                </button>
+                <button
+                  onClick={openMarkInstalledModal}
+                  title="Märgi paigaldatuks"
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: '#0a3a67',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  <FiTool size={14} />
+                  <span>Paigalda</span>
+                </button>
+                <button
+                  onClick={() => setSelectedPreassemblyIds(new Set())}
                   title="Tühista valik"
                   style={{
                     padding: '6px',
@@ -3682,7 +4195,11 @@ export default function InstallationsScreen({
                             // Select items for this day in viewer
                             const dayItems = itemsByDate[dateKey];
                             if (dayItems && dayItems.length > 0) {
-                              selectInstallations(dayItems);
+                              if (entryMode === 'preassembly') {
+                                selectPreassemblies(dayItems as Preassembly[]);
+                              } else {
+                                selectInstallations(dayItems as Installation[]);
+                              }
                               // Scroll to this date in list
                               const dayKey = getDayKey(dateKey);
                               setExpandedDays(prev => new Set([...prev, dayKey]));
@@ -3713,7 +4230,9 @@ export default function InstallationsScreen({
                                 marginTop: '1px',
                                 padding: '1px 4px',
                                 borderRadius: '8px',
-                                background: dayColor ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})` : '#006400',
+                                background: dayColor
+                                  ? `rgb(${dayColor.r}, ${dayColor.g}, ${dayColor.b})`
+                                  : entryMode === 'preassembly' ? '#7c3aed' : '#006400',
                                 color: dayColor ? (getTextColor(dayColor.r, dayColor.g, dayColor.b) === 'FFFFFF' ? '#fff' : '#000') : '#fff'
                               }}
                             >
@@ -3731,10 +4250,14 @@ export default function InstallationsScreen({
 
             {/* Calendar stats */}
             <div style={{ marginTop: '8px', fontSize: '11px', color: '#6b7280', display: 'flex', gap: '12px' }}>
-              <span>Kokku: <strong style={{ color: '#111827' }}>{installations.length}</strong></span>
-              <span>Päevi: <strong style={{ color: '#111827' }}>{Object.keys(itemsByDate).length}</strong></span>
+              <span>Kokku: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>
+                {entryMode === 'preassembly' ? preassemblies.length : installations.length}
+              </strong></span>
+              <span>Päevi: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>{Object.keys(itemsByDate).length}</strong></span>
               {Object.keys(itemsByDate).length > 0 && (
-                <span>Keskm: <strong style={{ color: '#111827' }}>{Math.round(installations.length / Object.keys(itemsByDate).length)}</strong> tk/päev</span>
+                <span>Keskm: <strong style={{ color: entryMode === 'preassembly' ? '#7c3aed' : '#111827' }}>
+                  {Math.round((entryMode === 'preassembly' ? preassemblies.length : installations.length) / Object.keys(itemsByDate).length)}
+                </strong> tk/päev</span>
               )}
             </div>
           </div>
@@ -3749,7 +4272,7 @@ export default function InstallationsScreen({
             marginBottom: '8px'
           }}>
             <button
-              onClick={() => setEntryMode('installation')}
+              onClick={() => handleEntryModeChange('installation')}
               style={{
                 flex: 1,
                 padding: '8px 12px',
@@ -3770,7 +4293,7 @@ export default function InstallationsScreen({
               Paigaldatud ({installations.length})
             </button>
             <button
-              onClick={() => setEntryMode('preassembly')}
+              onClick={() => handleEntryModeChange('preassembly')}
               style={{
                 flex: 1,
                 padding: '8px 12px',
@@ -4845,6 +5368,423 @@ export default function InstallationsScreen({
                   }}
                 >
                   {editingSaving ? 'Salvestan...' : 'Salvesta muudatused'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preassembly Edit Modal */}
+      {showPreassemblyEditModal && (
+        <div className="modal-overlay" onClick={() => setShowPreassemblyEditModal(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header" style={{ background: '#f5f3ff' }}>
+              <h3>✏️ Muuda preassembly ({selectedPreassemblyIds.size})</h3>
+              <button onClick={() => setShowPreassemblyEditModal(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {/* Date field */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiCalendar size={14} /> Kuupäev
+                </label>
+                <input
+                  type="datetime-local"
+                  value={preassemblyEditDate}
+                  onChange={(e) => setPreassemblyEditDate(e.target.value)}
+                  className="full-width-input"
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiEdit2 size={14} /> Märkused
+                </label>
+                <textarea
+                  value={preassemblyEditNotes}
+                  onChange={(e) => setPreassemblyEditNotes(e.target.value)}
+                  placeholder="Lisa märkused..."
+                  rows={3}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowPreassemblyEditModal(false)}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    background: '#fff',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Tühista
+                </button>
+                <button
+                  onClick={saveEditedPreassemblies}
+                  disabled={editingSaving}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: editingSaving ? '#9ca3af' : '#7c3aed',
+                    color: '#fff',
+                    cursor: editingSaving ? 'wait' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >
+                  {editingSaving ? 'Salvestan...' : 'Salvesta'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mark as Installed Modal */}
+      {showMarkInstalledModal && (
+        <div className="modal-overlay" onClick={() => setShowMarkInstalledModal(false)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header" style={{ background: '#eff6ff' }}>
+              <h3>🔧 Märgi paigaldatuks ({markInstalledItems.length})</h3>
+              <button onClick={() => setShowMarkInstalledModal(false)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              {/* Date field */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiCalendar size={14} /> Paigaldamise kuupäev *
+                </label>
+                <input
+                  type="datetime-local"
+                  value={installDate}
+                  onChange={(e) => setInstallDate(e.target.value)}
+                  className="full-width-input"
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                />
+              </div>
+
+              {/* Resources / Methods */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Paigaldus ressursid *</label>
+                {/* Machines row */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
+                    const isActive = !!selectedInstallMethods[method.key];
+                    const count = selectedInstallMethods[method.key] || 0;
+                    const isHovered = hoveredMethod === method.key;
+
+                    return (
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredMethod(method.key)}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        style={{ position: 'relative' }}
+                      >
+                        <button
+                          type="button"
+                          style={{
+                            padding: '8px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
+                            position: 'relative'
+                          }}
+                          onClick={() => toggleInstallMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: method.activeBgColor,
+                              color: '#fff',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              padding: '2px 5px',
+                              borderRadius: '10px',
+                              minWidth: '16px',
+                              textAlign: 'center'
+                            }}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+
+                        {isHovered && isActive && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            marginTop: '4px',
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            padding: '4px',
+                            display: 'flex',
+                            gap: '2px',
+                            zIndex: 100,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                          }}>
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  background: count === num ? method.activeBgColor : '#f3f4f6',
+                                  color: count === num ? '#fff' : '#374151',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  fontWeight: 500
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Labor row */}
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
+                    const isActive = !!selectedInstallMethods[method.key];
+                    const count = selectedInstallMethods[method.key] || 0;
+                    const isHovered = hoveredMethod === method.key;
+
+                    return (
+                      <div
+                        key={method.key}
+                        className="method-selector-wrapper"
+                        onMouseEnter={() => setHoveredMethod(method.key)}
+                        onMouseLeave={() => setHoveredMethod(null)}
+                        style={{ position: 'relative' }}
+                      >
+                        <button
+                          type="button"
+                          style={{
+                            padding: '8px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '40px',
+                            height: '40px',
+                            position: 'relative'
+                          }}
+                          onClick={() => toggleInstallMethod(method.key)}
+                          title={method.label}
+                        >
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ width: '24px', height: '24px', filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
+                          />
+                          {isActive && count > 0 && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: method.activeBgColor,
+                              color: '#fff',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              padding: '2px 5px',
+                              borderRadius: '10px',
+                              minWidth: '16px',
+                              textAlign: 'center'
+                            }}>
+                              {count}
+                            </span>
+                          )}
+                        </button>
+
+                        {isHovered && isActive && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            marginTop: '4px',
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            padding: '4px',
+                            display: 'flex',
+                            gap: '2px',
+                            zIndex: 100,
+                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                          }}>
+                            {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                style={{
+                                  width: '24px',
+                                  height: '24px',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  background: count === num ? method.activeBgColor : '#f3f4f6',
+                                  color: count === num ? '#fff' : '#374151',
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  fontWeight: 500
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMethodCount(method.key, num);
+                                }}
+                              >
+                                {num}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Team members */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiUsers size={14} /> Meeskond *
+                </label>
+                {teamMembers.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                    {teamMembers.map((member, idx) => (
+                      <span
+                        key={idx}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 8px',
+                          background: '#dbeafe',
+                          color: '#1e40af',
+                          borderRadius: '4px',
+                          fontSize: '12px'
+                        }}
+                      >
+                        {member}
+                        <button
+                          onClick={() => setTeamMembers(teamMembers.filter((_, i) => i !== idx))}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: '2px',
+                            cursor: 'pointer',
+                            color: '#1e40af'
+                          }}
+                        >
+                          <FiX size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <input
+                  type="text"
+                  value={teamMemberInput}
+                  onChange={(e) => setTeamMemberInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && teamMemberInput.trim()) {
+                      e.preventDefault();
+                      setTeamMembers([...teamMembers, teamMemberInput.trim()]);
+                      setTeamMemberInput('');
+                    }
+                  }}
+                  placeholder="Lisa meeskonna liige (Enter)"
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="form-row" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                  <FiEdit2 size={14} /> Märkused
+                </label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Lisa märkused..."
+                  rows={2}
+                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => setShowMarkInstalledModal(false)}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: '1px solid #d1d5db',
+                    background: '#fff',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Tühista
+                </button>
+                <button
+                  onClick={markPreassembliesAsInstalled}
+                  disabled={saving}
+                  style={{
+                    padding: '10px 20px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: saving ? '#9ca3af' : '#0a3a67',
+                    color: '#fff',
+                    cursor: saving ? 'wait' : 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >
+                  {saving ? 'Salvestan...' : 'Märgi paigaldatuks'}
                 </button>
               </div>
             </div>
