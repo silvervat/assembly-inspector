@@ -6535,6 +6535,101 @@ button.stat-toggle.off:hover {
   color: #374151 !important;
 }
 
+/* Items title buttons */
+.arrived-deliveries .items-title-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.arrived-deliveries .add-item-btn.model {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #93c5fd;
+}
+
+.arrived-deliveries .add-item-btn.model:hover {
+  background: #bfdbfe;
+}
+
+.arrived-deliveries .add-item-btn.model.active {
+  background: #1d4ed8;
+  color: white;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Model selection modal */
+.model-selection-modal .model-selected-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 12px 0;
+}
+
+.model-selection-modal .model-selected-item {
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.model-selection-modal .model-selected-item.warning {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.model-selection-modal .model-selected-item .item-info {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.model-selection-modal .model-selected-item .item-mark {
+  font-weight: 600;
+}
+
+.model-selection-modal .model-selected-item .item-name {
+  color: var(--modus-text-secondary);
+  font-size: 13px;
+}
+
+.model-selection-modal .model-selected-item .item-weight {
+  color: var(--modus-text-tertiary);
+  font-size: 12px;
+}
+
+.model-selection-modal .model-selected-item .item-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #d97706;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.model-selection-modal .warning-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px;
+  background: #fef3c7;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.model-selection-modal .warning-message svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
 /* Complete section */
 .arrived-deliveries .complete-section {
   margin-top: 20px;
@@ -6645,6 +6740,18 @@ button.stat-toggle.off:hover {
   text-overflow: ellipsis;
 }
 
+.arrived-deliveries .item-mark.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.arrived-deliveries .item-mark.clickable:hover {
+  color: #2563eb;
+  text-decoration-style: solid;
+}
+
 .arrived-deliveries .items-list.compact .item-product {
   display: none; /* Hide product name on narrow widths */
 }
@@ -6661,6 +6768,7 @@ button.stat-toggle.off:hover {
   color: #6366f1;
   font-weight: 500;
   white-space: nowrap;
+  margin-left: 4px;
 }
 
 .arrived-deliveries .items-list.compact .item-actions {
