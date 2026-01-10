@@ -1397,15 +1397,13 @@ export default function OrganizerScreen({
 
       const items = objectsToAdd.map((obj, index) => ({
         group_id: targetGroupId,
-        trimble_project_id: projectId,
         guid_ifc: obj.guidIfc,
         assembly_mark: obj.assemblyMark,
         product_name: obj.productName || null,
         cast_unit_weight: obj.castUnitWeight || null,
         cast_unit_position_code: obj.castUnitPositionCode || null,
         custom_properties: {},
-        created_by: tcUserEmail,
-        updated_by: tcUserEmail,
+        added_by: tcUserEmail,
         sort_order: startIndex + index
       }));
 
@@ -2567,14 +2565,12 @@ export default function OrganizerScreen({
 
       const items = objectsToAdd.map((obj, index) => ({
         group_id: importGroupId,
-        trimble_project_id: projectId,
         guid_ifc: obj.guid_ifc,
         assembly_mark: obj.assembly_mark,
         product_name: obj.product_name,
         cast_unit_weight: obj.cast_unit_weight || null,
         custom_properties: {},
-        created_by: tcUserEmail,
-        updated_by: tcUserEmail,
+        added_by: tcUserEmail,
         sort_order: startIndex + index
       }));
 
