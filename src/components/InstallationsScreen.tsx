@@ -1149,14 +1149,14 @@ export default function InstallationsScreen({
           userEmail: item.user_email || 'Tundmatu',
           assemblyMark: item.assembly_mark || 'Tundmatu'
         };
-        // Store guid_ifc first (IFC format - needed for coloring)
+        // Store guid_ifc first (IFC format - needed for coloring) - LOWERCASE for consistent lookup
         if (item.guid_ifc) {
-          guidsMap.set(item.guid_ifc, info);
+          guidsMap.set(item.guid_ifc.toLowerCase(), info);
           if (classifyGuid(item.guid_ifc) === 'IFC') ifcCount++;
         }
         // Also store guid for lookup (might be same as guid_ifc or different format)
-        if (item.guid && item.guid !== item.guid_ifc) {
-          guidsMap.set(item.guid, info);
+        if (item.guid && item.guid.toLowerCase() !== (item.guid_ifc || '').toLowerCase()) {
+          guidsMap.set(item.guid.toLowerCase(), info);
         }
       }
       console.log('Loaded installed GUIDs:', guidsMap.size, 'total,', ifcCount, 'IFC format');
@@ -1516,17 +1516,21 @@ export default function InstallationsScreen({
     }
   };
 
-  // Toggle color by day - colors installations by day with unique colors
+  // Toggle color by day - colors installations/preassemblies by day with unique colors
   // Uses EXACT same approach as DeliveryScheduleScreen: fetch guid_ifc, use findObjectsInLoadedModels
   const toggleColorByDay = async () => {
     if (coloringInProgress) return;
 
     if (colorByDay) {
-      // Turn off - just recolor installed items BLACK (no reset needed, whites stay white)
+      // Turn off - reapply base coloring based on mode
       setColoringInProgress(true);
       setColorByDay(false);
       setDayColors({});
-      await colorInstalledGuidsBlack();
+      if (entryMode === 'preassembly') {
+        await applyPreassemblyColoring();
+      } else {
+        await colorInstalledGuidsBlack();
+      }
       setColoringInProgress(false);
       return;
     }
@@ -1541,56 +1545,60 @@ export default function InstallationsScreen({
     setMessage('Värvin päevade järgi...');
 
     try {
-      // No reset or white coloring needed - we're already in default state (white/black)
-      // Just find installed items and color them by day
+      // For preassembly mode, color preassemblies; for installation mode, color installations
+      const isPreassemblyMode = entryMode === 'preassembly';
+      const itemsToColor = isPreassemblyMode ? preassemblies : installations;
 
-      // Step 1: Get installed item GUIDs and find them in loaded models
-      const guids = Array.from(installedGuids.keys());
-      console.log(`[DAY] Installed GUIDs count: ${guids.length}`);
+      // Step 1: Get item GUIDs
+      const guids = itemsToColor.map(item => (item.guid_ifc || item.guid || '').toLowerCase()).filter(Boolean);
+      console.log(`[DAY] ${isPreassemblyMode ? 'Preassembly' : 'Installed'} GUIDs count: ${guids.length}`);
 
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       console.log(`[DAY] Found ${foundObjects.size} objects in loaded models`);
 
-      // Step 6: Generate colors for each day
-      const uniqueDays = [...new Set(installations.map(inst => getDayKey(inst.installed_at)))].sort();
+      // Step 2: Generate colors for each day
+      const uniqueDays = [...new Set(itemsToColor.map(item => getDayKey((item as Installation).installed_at || (item as Preassembly).preassembled_at)))].sort();
       const colors = generateDateColors(uniqueDays);
       setDayColors(colors);
       console.log(`[DAY] Unique days: ${uniqueDays.length}`, uniqueDays);
 
-      // Step 7: Build runtime ID mapping for installed items
-      const installedByGuid = new Map<string, { modelId: string; runtimeId: number }>();
-      for (const inst of installations) {
-        const guid = inst.guid_ifc || inst.guid;
+      // Step 3: Build runtime ID mapping
+      const itemByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const item of itemsToColor) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
         if (guid && foundObjects.has(guid)) {
           const found = foundObjects.get(guid)!;
-          installedByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+          itemByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
         }
       }
-      console.log(`[DAY] Installed items found in model: ${installedByGuid.size}`);
+      console.log(`[DAY] Items found in model: ${itemByGuid.size}`);
 
-      // Step 8: Color installations by day
+      // Step 4: Color items by day
       let coloredCount = 0;
       console.log(`[DAY] Starting to color ${uniqueDays.length} days...`);
       for (const dayKey of uniqueDays) {
-        const dayInstallations = installations.filter(inst => getDayKey(inst.installed_at) === dayKey);
-        if (dayInstallations.length === 0) continue;
+        const dayItems = itemsToColor.filter(item => {
+          const itemDate = (item as Installation).installed_at || (item as Preassembly).preassembled_at;
+          return getDayKey(itemDate) === dayKey;
+        });
+        if (dayItems.length === 0) continue;
 
         const color = colors[dayKey];
         if (!color) continue;
 
         // Group by model
         const byModel: Record<string, number[]> = {};
-        for (const inst of dayInstallations) {
-          const guid = inst.guid_ifc || inst.guid;
-          if (guid && installedByGuid.has(guid)) {
-            const found = installedByGuid.get(guid)!;
+        for (const item of dayItems) {
+          const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+          if (guid && itemByGuid.has(guid)) {
+            const found = itemByGuid.get(guid)!;
             if (!byModel[found.modelId]) byModel[found.modelId] = [];
             byModel[found.modelId].push(found.runtimeId);
           }
         }
 
         const dayTotal = Object.values(byModel).reduce((sum, arr) => sum + arr.length, 0);
-        console.log(`[DAY] Day ${dayKey}: ${dayInstallations.length} installations, ${dayTotal} objects to color with RGB(${color.r},${color.g},${color.b})`);
+        console.log(`[DAY] Day ${dayKey}: ${dayItems.length} items, ${dayTotal} objects to color with RGB(${color.r},${color.g},${color.b})`);
 
         for (const [modelId, runtimeIds] of Object.entries(byModel)) {
           console.log(`[DAY] Coloring ${runtimeIds.length} objects in model ${modelId}`);
@@ -1614,17 +1622,21 @@ export default function InstallationsScreen({
     }
   };
 
-  // Toggle color by month - colors installations by month with unique colors
+  // Toggle color by month - colors installations/preassemblies by month with unique colors
   // Uses EXACT same approach as DeliveryScheduleScreen: fetch guid_ifc, use findObjectsInLoadedModels
   const toggleColorByMonth = async () => {
     if (coloringInProgress) return;
 
     if (colorByMonth) {
-      // Turn off - just recolor installed items BLACK (no reset needed, whites stay white)
+      // Turn off - reapply base coloring based on mode
       setColoringInProgress(true);
       setColorByMonth(false);
       setMonthColors({});
-      await colorInstalledGuidsBlack();
+      if (entryMode === 'preassembly') {
+        await applyPreassemblyColoring();
+      } else {
+        await colorInstalledGuidsBlack();
+      }
       setColoringInProgress(false);
       return;
     }
@@ -1639,46 +1651,50 @@ export default function InstallationsScreen({
     setMessage('Värvin kuude järgi...');
 
     try {
-      // No reset or white coloring needed - we're already in default state (white/black)
-      // Just find installed items and color them by month
+      // For preassembly mode, color preassemblies; for installation mode, color installations
+      const isPreassemblyMode = entryMode === 'preassembly';
+      const itemsToColor = isPreassemblyMode ? preassemblies : installations;
 
-      // Step 1: Get installed item GUIDs and find them in loaded models
-      const guids = Array.from(installedGuids.keys());
-      console.log(`[MONTH] Installed GUIDs count: ${guids.length}`);
+      // Step 1: Get item GUIDs and find them in loaded models
+      const guids = itemsToColor.map(item => (item.guid_ifc || item.guid || '').toLowerCase()).filter(Boolean);
+      console.log(`[MONTH] ${isPreassemblyMode ? 'Preassembly' : 'Installed'} GUIDs count: ${guids.length}`);
 
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       console.log(`[MONTH] Found ${foundObjects.size} objects in loaded models`);
 
       // Step 2: Generate colors for each month
-      const uniqueMonths = [...new Set(installations.map(inst => getMonthKey(inst.installed_at)))].sort();
+      const uniqueMonths = [...new Set(itemsToColor.map(item => getMonthKey((item as Installation).installed_at || (item as Preassembly).preassembled_at)))].sort();
       const colors = generateMonthColors(uniqueMonths);
       setMonthColors(colors);
 
-      // Step 7: Build runtime ID mapping for installed items
-      const installedByGuid = new Map<string, { modelId: string; runtimeId: number }>();
-      for (const inst of installations) {
-        const guid = inst.guid_ifc || inst.guid;
+      // Step 3: Build runtime ID mapping
+      const itemByGuid = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const item of itemsToColor) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
         if (guid && foundObjects.has(guid)) {
           const found = foundObjects.get(guid)!;
-          installedByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+          itemByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
         }
       }
 
-      // Step 8: Color installations by month
+      // Step 4: Color items by month
       let coloredCount = 0;
       for (const monthKey of uniqueMonths) {
-        const monthInstallations = installations.filter(inst => getMonthKey(inst.installed_at) === monthKey);
-        if (monthInstallations.length === 0) continue;
+        const monthItems = itemsToColor.filter(item => {
+          const itemDate = (item as Installation).installed_at || (item as Preassembly).preassembled_at;
+          return getMonthKey(itemDate) === monthKey;
+        });
+        if (monthItems.length === 0) continue;
 
         const color = colors[monthKey];
         if (!color) continue;
 
         // Group by model
         const byModel: Record<string, number[]> = {};
-        for (const inst of monthInstallations) {
-          const guid = inst.guid_ifc || inst.guid;
-          if (guid && installedByGuid.has(guid)) {
-            const found = installedByGuid.get(guid)!;
+        for (const item of monthItems) {
+          const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+          if (guid && itemByGuid.has(guid)) {
+            const found = itemByGuid.get(guid)!;
             if (!byModel[found.modelId]) byModel[found.modelId] = [];
             byModel[found.modelId].push(found.runtimeId);
           }
@@ -1965,6 +1981,23 @@ export default function InstallationsScreen({
         // Reload data
         await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
 
+        // Color newly added items with PREASSEMBLY_COLOR immediately
+        const newGuids = newObjects.map(obj => obj.guidIfc || obj.guid).filter(Boolean) as string[];
+        if (newGuids.length > 0) {
+          const foundObjects = await findObjectsInLoadedModels(api, newGuids);
+          const byModel: Record<string, number[]> = {};
+          for (const [, found] of foundObjects) {
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
+          }
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: PREASSEMBLY_COLOR }
+            );
+          }
+        }
+
         // Clear selection
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
         setSelectedObjects([]);
@@ -2227,8 +2260,28 @@ export default function InstallationsScreen({
         })
         .join(', ');
 
+      // Filter out items that are already installed (based on guid_ifc or guid)
+      const itemsToInstall = markInstalledItems.filter(item => {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+        return guid && !installedGuids.has(guid);
+      });
+
+      // If all items are already installed, show message and return
+      if (itemsToInstall.length === 0) {
+        setMessage('Kõik valitud detailid on juba paigaldatud');
+        setSaving(false);
+        setShowMarkInstalledModal(false);
+        return;
+      }
+
+      // Notify if some items were skipped
+      const skippedCount = markInstalledItems.length - itemsToInstall.length;
+      if (skippedCount > 0) {
+        console.log(`[INSTALL] Skipping ${skippedCount} already installed items`);
+      }
+
       // Insert installations
-      const installationsToInsert = markInstalledItems.map(item => ({
+      const installationsToInsert = itemsToInstall.map(item => ({
         project_id: projectId,
         model_id: item.model_id,
         guid: item.guid,
@@ -2257,15 +2310,18 @@ export default function InstallationsScreen({
 
       if (insertError) throw insertError;
 
-      // Delete preassembly records
+      // Delete only the preassembly records that were actually installed
       const { error: deleteError } = await supabase
         .from('preassemblies')
         .delete()
-        .in('id', markInstalledItems.map(p => p.id));
+        .in('id', itemsToInstall.map(p => p.id));
 
       if (deleteError) throw deleteError;
 
-      setMessage(`${markInstalledItems.length} detaili paigaldatuks märgitud`);
+      // Show appropriate message
+      const installedMsg = `${itemsToInstall.length} detaili paigaldatuks märgitud`;
+      const skippedMsg = skippedCount > 0 ? ` (${skippedCount} jäeti vahele - juba paigaldatud)` : '';
+      setMessage(installedMsg + skippedMsg);
       setShowMarkInstalledModal(false);
       setMarkInstalledItems([]);
       setSelectedPreassemblyIds(new Set());
@@ -3292,7 +3348,7 @@ export default function InstallationsScreen({
             className="date-count clickable"
             onClick={(e) => selectPreassemblies(day.items, e)}
             title="Vali need detailid mudelis"
-            style={{ background: '#7c3aed' }}
+            style={{ background: '#7c3aed', color: '#fff' }}
           >
             {day.items.length}
           </button>
