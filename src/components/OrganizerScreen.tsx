@@ -2769,7 +2769,7 @@ export default function OrganizerScreen({
     const selectedFilteredItems = filteredItems.filter(i => selectedItemIds.has(i.id));
 
     return (
-      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''}`}>
+      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''}`}
           style={{ paddingLeft: `${8 + depth * 10}px` }}

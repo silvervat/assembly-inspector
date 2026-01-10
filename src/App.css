@@ -10164,6 +10164,12 @@ button.stat-toggle.off:hover {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+/* Expanded root group - thin blue outline */
+.org-group-section.expanded-root {
+  outline: 1px solid #3b82f6;
+  outline-offset: -1px;
+}
+
 /* Group header */
 .org-group-header {
   display: flex;
