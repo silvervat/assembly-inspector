@@ -447,6 +447,7 @@ export default function OrganizerScreen({
   const containerRef = useRef<HTMLDivElement>(null);
   const groupClickSelectionRef = useRef(false); // Track if selection came from group click
   const groupsRef = useRef<OrganizerGroup[]>([]); // For Realtime callback access
+  const recentLocalChangesRef = useRef<Set<string>>(new Set()); // Track GUIDs changed by THIS session
 
   // Computed: Selected GUIDs that are already in groups (for highlighting)
   const selectedGuidsInGroups = useMemo(() => {
@@ -755,19 +756,35 @@ export default function OrganizerScreen({
         }
       }
 
-      // Check if change was made by current user
+      // Check if this change was made by THIS session (not just same user)
+      // This allows same user on different devices to sync properly
+      // Use payload.new for INSERT/UPDATE, payload.old for DELETE
+      const dataRecord = (payload.new || payload.old) as { guid_ifc?: string; id?: string } | null;
+
+      // For items, check guid_ifc; for groups, check id
+      const changeKey = table === 'items'
+        ? dataRecord?.guid_ifc?.toLowerCase()
+        : dataRecord?.id;
+
+      const isLocalChange = changeKey ? recentLocalChangesRef.current.has(changeKey) : false;
+
+      // Get author for logging
       const changeAuthor = record?.updated_by || record?.created_by || record?.added_by;
-      const isOwnChange = changeAuthor?.toLowerCase() === tcUserEmail?.toLowerCase();
 
-      console.log(`📡 Realtime check: author=${changeAuthor}, me=${tcUserEmail}, isOwn=${isOwnChange}, debounce=${Date.now() - lastRefreshTime}ms`);
+      console.log(`📡 Realtime check: key=${changeKey}, isLocal=${isLocalChange}, author=${changeAuthor}, debounce=${Date.now() - lastRefreshTime}ms`);
 
-      if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
+      if (isLocalChange) {
+        // This session made this change - remove from tracking (already handled by local refresh)
+        if (changeKey) {
+          recentLocalChangesRef.current.delete(changeKey);
+        }
+        console.log(`📡 Skipping local session change`);
+      } else if (Date.now() - lastRefreshTime > DEBOUNCE_MS) {
+        // Another session/device made this change - refresh to get updates
         lastRefreshTime = Date.now();
-        console.log(`📡 Realtime: refreshing data (${table} changed by ${changeAuthor || 'unknown'})`);
+        console.log(`📡 Realtime: refreshing data (${table} changed by ${changeAuthor || 'another device'})`);
         showToast(`📡 ${changeAuthor || 'Keegi'} uuendas andmeid`);
         refreshData();
-      } else if (isOwnChange) {
-        console.log(`📡 Skipping own change`);
       } else {
         console.log(`📡 Skipping - debounce (${Date.now() - lastRefreshTime}ms < ${DEBOUNCE_MS}ms)`);
       }
@@ -1442,6 +1459,14 @@ export default function OrganizerScreen({
 
       // Delete existing items in this specific group first (single query)
       const guids = items.map(i => i.guid_ifc).filter(Boolean);
+
+      // Mark these GUIDs as local changes (for realtime sync to skip)
+      guids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+      // Auto-clear after 5 seconds
+      setTimeout(() => {
+        guids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+      }, 5000);
+
       if (guids.length > 0) {
         await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', guids);
       }
@@ -1510,6 +1535,12 @@ export default function OrganizerScreen({
         if (item?.guid_ifc) guidsToRemove.push(item.guid_ifc);
       }
 
+      // Mark these GUIDs as local changes (for realtime sync to skip)
+      guidsToRemove.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+      setTimeout(() => {
+        guidsToRemove.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+      }, 5000);
+
       const { error } = await supabase.from('organizer_group_items').delete().in('id', itemIds);
       if (error) throw error;
 
@@ -1548,6 +1579,13 @@ export default function OrganizerScreen({
 
     const updatedProps = { ...(item.custom_properties || {}), [fieldId]: parsedValue };
     try {
+      // Mark this item as local change (for realtime sync to skip)
+      if (item.guid_ifc) {
+        const guidLower = item.guid_ifc.toLowerCase();
+        recentLocalChangesRef.current.add(guidLower);
+        setTimeout(() => recentLocalChangesRef.current.delete(guidLower), 5000);
+      }
+
       await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
       await refreshData();
     } catch (e) {
@@ -1607,8 +1645,9 @@ export default function OrganizerScreen({
     // Database update in background (no await blocking UI)
     (async () => {
       try {
-        // Prepare all updates
+        // Prepare all updates and collect GUIDs for realtime tracking
         const updates: { id: string; custom_properties: Record<string, any> }[] = [];
+        const guidsToUpdate: string[] = [];
         for (const itemId of updatedItemIds) {
           const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
           if (item) {
@@ -1617,8 +1656,15 @@ export default function OrganizerScreen({
               if (val !== '') updatedProps[fieldId] = val;
             }
             updates.push({ id: itemId, custom_properties: updatedProps });
+            if (item.guid_ifc) guidsToUpdate.push(item.guid_ifc);
           }
         }
+
+        // Mark these GUIDs as local changes (for realtime sync to skip)
+        guidsToUpdate.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+        setTimeout(() => {
+          guidsToUpdate.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+        }, 5000);
 
         // Execute updates in parallel batches
         const BATCH_SIZE = 10;
@@ -1655,6 +1701,19 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
+      // Collect GUIDs being moved for realtime tracking
+      const guidsToMove: string[] = [];
+      for (const itemId of itemIds) {
+        const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+        if (item?.guid_ifc) guidsToMove.push(item.guid_ifc);
+      }
+
+      // Mark these GUIDs as local changes (for realtime sync to skip)
+      guidsToMove.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+      setTimeout(() => {
+        guidsToMove.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+      }, 5000);
+
       const { error } = await supabase.from('organizer_group_items').update({ group_id: targetGroupId }).in('id', itemIds);
       if (error) throw error;
 
@@ -2609,6 +2668,13 @@ export default function OrganizerScreen({
 
       // Delete existing items with same GUIDs in this group first
       const guids = items.map(i => i.guid_ifc).filter(Boolean);
+
+      // Mark these GUIDs as local changes (for realtime sync to skip)
+      guids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+      setTimeout(() => {
+        guids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+      }, 5000);
+
       if (guids.length > 0) {
         await supabase.from('organizer_group_items').delete().eq('group_id', importGroupId).in('guid_ifc', guids);
       }
