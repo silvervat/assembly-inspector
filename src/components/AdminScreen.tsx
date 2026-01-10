@@ -143,7 +143,7 @@ function FunctionButton({
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions'>('main');
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -255,6 +255,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   }>>([]);
   const [orphanedLoading, setOrphanedLoading] = useState(false);
   const [showOrphanedPanel, setShowOrphanedPanel] = useState(false);
+
+  // Data export state
+  const [dataExportLoading, setDataExportLoading] = useState(false);
+  const [dataExportStatus, setDataExportStatus] = useState('');
 
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
@@ -1018,6 +1022,275 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
       setGuidImportLoading(false);
     }
   }, [api, guidImportText]);
+
+  // ============================================
+  // DATA EXPORT FUNCTIONS
+  // ============================================
+
+  // Export all schedule data to Excel
+  const exportAllScheduleData = async () => {
+    setDataExportLoading(true);
+    setDataExportStatus('Laadin andmeid...');
+
+    try {
+      // 1. Load all model objects from database
+      setDataExportStatus('Laadin mudeli objekte...');
+      const PAGE_SIZE = 5000;
+      const allModelObjects: Array<{
+        guid_ifc: string;
+        guid_ms: string | null;
+        assembly_mark: string;
+        product_name: string | null;
+        weight: number | null;
+      }> = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, guid_ms, assembly_mark, product_name, weight')
+          .eq('trimble_project_id', projectId)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allModelObjects.push(...data);
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      setDataExportStatus(`Leitud ${allModelObjects.length} mudeli objekti. Laadin graafikuid...`);
+
+      // 2. Load delivery schedule items
+      const { data: deliveryItems, error: delError } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, assembly_mark, scheduled_date, arrived_at, status, notes')
+        .eq('project_id', projectId);
+
+      if (delError) throw delError;
+
+      // 3. Load preassemblies
+      const { data: preassemblies, error: preError } = await supabase
+        .from('preassemblies')
+        .select('guid_ifc, guid, assembly_mark, preassembled_at, notes, team_members, user_email')
+        .eq('project_id', projectId);
+
+      if (preError) throw preError;
+
+      // 4. Load installations
+      const { data: installations, error: instError } = await supabase
+        .from('installations')
+        .select('guid_ifc, guid, assembly_mark, installed_at, notes, team_members, install_methods, user_email')
+        .eq('project_id', projectId);
+
+      if (instError) throw instError;
+
+      setDataExportStatus('Koostan ekspordi faili...');
+
+      // Create lookup maps for faster matching
+      const deliveryByGuid = new Map<string, typeof deliveryItems[0]>();
+      for (const item of deliveryItems || []) {
+        if (item.guid) deliveryByGuid.set(item.guid.toLowerCase(), item);
+      }
+
+      const preassemblyByGuid = new Map<string, typeof preassemblies[0]>();
+      for (const item of preassemblies || []) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guid) preassemblyByGuid.set(guid, item);
+      }
+
+      const installationByGuid = new Map<string, typeof installations[0]>();
+      for (const item of installations || []) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guid) installationByGuid.set(guid, item);
+      }
+
+      // Build combined data
+      const exportData: Array<{
+        assemblyMark: string;
+        productName: string;
+        weight: number | null;
+        guidIfc: string;
+        guidMs: string;
+        scheduledDate: string;
+        arrivedAt: string;
+        deliveryStatus: string;
+        deliveryNotes: string;
+        preassembledAt: string;
+        preassemblyNotes: string;
+        preassemblyTeam: string;
+        installedAt: string;
+        installationNotes: string;
+        installationTeam: string;
+        installMethods: string;
+      }> = [];
+
+      // Collect all unique GUIDs from all sources
+      const allGuids = new Set<string>();
+      for (const obj of allModelObjects) {
+        if (obj.guid_ifc) allGuids.add(obj.guid_ifc.toLowerCase());
+      }
+      for (const item of deliveryItems || []) {
+        if (item.guid) allGuids.add(item.guid.toLowerCase());
+      }
+      for (const item of preassemblies || []) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guid) allGuids.add(guid);
+      }
+      for (const item of installations || []) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guid) allGuids.add(guid);
+      }
+
+      // Create model object lookup
+      const modelObjectByGuid = new Map<string, typeof allModelObjects[0]>();
+      for (const obj of allModelObjects) {
+        if (obj.guid_ifc) modelObjectByGuid.set(obj.guid_ifc.toLowerCase(), obj);
+      }
+
+      // Build export rows
+      for (const guidLower of allGuids) {
+        const modelObj = modelObjectByGuid.get(guidLower);
+        const delivery = deliveryByGuid.get(guidLower);
+        const preassembly = preassemblyByGuid.get(guidLower);
+        const installation = installationByGuid.get(guidLower);
+
+        // Skip if no data at all
+        if (!modelObj && !delivery && !preassembly && !installation) continue;
+
+        const assemblyMark = modelObj?.assembly_mark || delivery?.assembly_mark || preassembly?.assembly_mark || installation?.assembly_mark || '';
+        const productName = modelObj?.product_name || '';
+        const weight = modelObj?.weight || null;
+        const guidIfc = modelObj?.guid_ifc || preassembly?.guid_ifc || installation?.guid_ifc || '';
+        const guidMs = modelObj?.guid_ms || '';
+
+        exportData.push({
+          assemblyMark,
+          productName,
+          weight,
+          guidIfc,
+          guidMs,
+          scheduledDate: delivery?.scheduled_date || '',
+          arrivedAt: delivery?.arrived_at || '',
+          deliveryStatus: delivery?.status || '',
+          deliveryNotes: delivery?.notes || '',
+          preassembledAt: preassembly?.preassembled_at || '',
+          preassemblyNotes: preassembly?.notes || '',
+          preassemblyTeam: (preassembly?.team_members || []).join(', '),
+          installedAt: installation?.installed_at || '',
+          installationNotes: installation?.notes || '',
+          installationTeam: (installation?.team_members || []).join(', '),
+          installMethods: installation?.install_methods ? JSON.stringify(installation.install_methods) : ''
+        });
+      }
+
+      // Sort by assembly mark
+      exportData.sort((a, b) => a.assemblyMark.localeCompare(b.assemblyMark));
+
+      setDataExportStatus(`Ekspordin ${exportData.length} rida...`);
+
+      // Create Excel workbook
+      const wb = XLSX.utils.book_new();
+
+      // Header row
+      const headers = [
+        'Cast Unit Mark',
+        'Product Name',
+        'Kaal (kg)',
+        'GUID IFC',
+        'GUID MS',
+        'Planeeritud tarne',
+        'Tegelik saabumine',
+        'Tarne staatus',
+        'Tarne märkused',
+        'Preassembly kuupäev',
+        'Preassembly märkused',
+        'Preassembly meeskond',
+        'Paigalduse kuupäev',
+        'Paigalduse märkused',
+        'Paigalduse meeskond',
+        'Paigaldusviisid'
+      ];
+
+      // Convert data to rows
+      const rows = exportData.map(row => [
+        row.assemblyMark,
+        row.productName,
+        row.weight,
+        row.guidIfc,
+        row.guidMs,
+        row.scheduledDate ? new Date(row.scheduledDate).toLocaleDateString('et-EE') : '',
+        row.arrivedAt ? new Date(row.arrivedAt).toLocaleDateString('et-EE') : '',
+        row.deliveryStatus,
+        row.deliveryNotes,
+        row.preassembledAt ? new Date(row.preassembledAt).toLocaleDateString('et-EE') : '',
+        row.preassemblyNotes,
+        row.preassemblyTeam,
+        row.installedAt ? new Date(row.installedAt).toLocaleDateString('et-EE') : '',
+        row.installationNotes,
+        row.installationTeam,
+        row.installMethods
+      ]);
+
+      // Create worksheet with header styling
+      const wsData = [headers, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Style header row
+      const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '0a3a67' } },
+        alignment: { horizontal: 'center', vertical: 'center' }
+      };
+
+      for (let i = 0; i < headers.length; i++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
+        if (ws[cellRef]) {
+          ws[cellRef].s = headerStyle;
+        }
+      }
+
+      // Set column widths
+      ws['!cols'] = [
+        { wch: 20 }, // Cast Unit Mark
+        { wch: 25 }, // Product Name
+        { wch: 10 }, // Kaal
+        { wch: 25 }, // GUID IFC
+        { wch: 38 }, // GUID MS
+        { wch: 15 }, // Planeeritud tarne
+        { wch: 15 }, // Tegelik saabumine
+        { wch: 12 }, // Tarne staatus
+        { wch: 30 }, // Tarne märkused
+        { wch: 15 }, // Preassembly kuupäev
+        { wch: 30 }, // Preassembly märkused
+        { wch: 25 }, // Preassembly meeskond
+        { wch: 15 }, // Paigalduse kuupäev
+        { wch: 30 }, // Paigalduse märkused
+        { wch: 25 }, // Paigalduse meeskond
+        { wch: 30 }  // Paigaldusviisid
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Kõik andmed');
+
+      // Generate filename with date
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const fileName = `eksport_koik_andmed_${dateStr}.xlsx`;
+
+      // Download
+      XLSX.writeFile(wb, fileName);
+
+      setDataExportStatus(`Ekspordi edukalt! ${exportData.length} rida.`);
+      setMessage(`Eksport õnnestus: ${fileName}`);
+
+    } catch (error) {
+      console.error('Export error:', error);
+      setDataExportStatus(`Viga: ${error instanceof Error ? error.message : String(error)}`);
+      setMessage(`Ekspordi viga: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setDataExportLoading(false);
+    }
+  };
 
   // ============================================
   // MODEL OBJECTS (Saada andmebaasi) FUNCTIONS
@@ -2768,6 +3041,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           {adminView === 'modelObjects' && 'Saada andmebaasi'}
           {adminView === 'propertyMappings' && 'Tekla property seaded'}
           {adminView === 'userPermissions' && 'Kasutajate õigused'}
+          {adminView === 'dataExport' && 'Ekspordi andmed'}
         </h2>
       </div>
 
@@ -2840,6 +3114,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           >
             <FiUsers size={18} />
             <span>Kasutajate õigused</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => setAdminView('dataExport')}
+            style={{ background: '#dc2626', color: 'white' }}
+          >
+            <FiDownload size={18} />
+            <span>Ekspordi andmed</span>
           </button>
         </div>
 
@@ -8594,6 +8877,100 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Data Export View */}
+      {adminView === 'dataExport' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+              Ekspordi projekti andmed Excel failidesse. Kõik andmed võetakse andmebaasist.
+            </p>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: '16px'
+          }}>
+            {/* Export All Data */}
+            <div style={{
+              padding: '20px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #dc2626 0%, #991b1b 100%)',
+              color: 'white',
+              boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '12px',
+                  background: 'rgba(255,255,255,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <FiDownload size={24} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Ekspordi kõik</h3>
+                  <p style={{ margin: 0, fontSize: '12px', opacity: 0.9 }}>Kõik graafikute andmed</p>
+                </div>
+              </div>
+              <p style={{ fontSize: '12px', opacity: 0.85, marginBottom: '16px', lineHeight: '1.5' }}>
+                Eksportib kõik detailid mis esinevad tarnegraafikus, preassembly plaanis või paigalduste nimekirjas.
+                Sisaldab: mark, kaal, GUID, planeeritud/tegelik tarne, preassembly, paigaldus, meeskonnad, märkused.
+              </p>
+              <button
+                onClick={exportAllScheduleData}
+                disabled={dataExportLoading}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  cursor: dataExportLoading ? 'wait' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                {dataExportLoading ? (
+                  <>
+                    <FiRefreshCw size={16} className="spin" />
+                    Ekspordin...
+                  </>
+                ) : (
+                  <>
+                    <FiDownload size={16} />
+                    Laadi alla
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Status message */}
+          {dataExportStatus && (
+            <div style={{
+              marginTop: '20px',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              background: dataExportStatus.includes('Viga') ? '#fef2f2' : '#f0fdf4',
+              border: `1px solid ${dataExportStatus.includes('Viga') ? '#fecaca' : '#bbf7d0'}`,
+              color: dataExportStatus.includes('Viga') ? '#dc2626' : '#16a34a',
+              fontSize: '13px'
+            }}>
+              {dataExportStatus}
             </div>
           )}
         </div>
