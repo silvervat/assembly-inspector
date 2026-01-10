@@ -2237,13 +2237,14 @@ export default function OrganizerScreen({
         guid_ifc: string;
         assembly_mark: string | null;
         product_name: string | null;
+        cast_unit_weight?: string | null;
       }> = [];
 
       if (isGuidInput) {
         // Search by guid_ifc (converted or original)
         const { data, error } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
           .eq('trimble_project_id', projectId)
           .not('guid_ifc', 'is', null);
 
@@ -2268,7 +2269,7 @@ export default function OrganizerScreen({
           try {
             const models = await api.viewer.getModels();
             if (models && models.length > 0) {
-              const foundFromModels: Array<{ guid_ifc: string; assembly_mark: string | null; product_name: string | null }> = [];
+              const foundFromModels: Array<{ guid_ifc: string; assembly_mark: string | null; product_name: string | null; cast_unit_weight: string | null }> = [];
 
               // Search each GUID in all models
               for (const searchGuid of searchGuids) {
@@ -2286,9 +2287,10 @@ export default function OrganizerScreen({
                     if (runtimeIds && runtimeIds.length > 0) {
                       console.log(`✅ Found ${originalCaseGuid} in model ${modelId}: ${runtimeIds}`);
 
-                      // Get object properties to find assembly_mark
+                      // Get object properties to find assembly_mark, product_name, weight
                       let assemblyMark: string | null = null;
                       let productName: string | null = null;
+                      let castUnitWeight: string | null = null;
 
                       try {
                         const props = await api.viewer.getObjectProperties(modelId, [runtimeIds[0]]);
@@ -2301,6 +2303,8 @@ export default function OrganizerScreen({
                           const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
                           const mappingMarkSetNorm = normalize(mappings.assembly_mark_set);
                           const mappingMarkPropNorm = normalize(mappings.assembly_mark_prop);
+                          const mappingWeightSetNorm = normalize(mappings.weight_set);
+                          const mappingWeightPropNorm = normalize(mappings.weight_prop);
 
                           // Get product name from top-level product object
                           const productObj = (objProps as any)?.product;
@@ -2337,6 +2341,17 @@ export default function OrganizerScreen({
                                   }
                                 }
 
+                                // Weight - configured mapping first
+                                if (!castUnitWeight) {
+                                  if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
+                                    castUnitWeight = String(propValue);
+                                  } else if (propName.includes('cast') && propName.includes('weight')) {
+                                    castUnitWeight = String(propValue);
+                                  } else if (propName === 'weight' || propName === 'kaal') {
+                                    castUnitWeight = String(propValue);
+                                  }
+                                }
+
                                 // Product name
                                 if (!productName) {
                                   if (propName === 'name' || propName === 'product_name') {
@@ -2354,7 +2369,8 @@ export default function OrganizerScreen({
                       foundFromModels.push({
                         guid_ifc: originalCaseGuid,
                         assembly_mark: assemblyMark,
-                        product_name: productName
+                        product_name: productName,
+                        cast_unit_weight: castUnitWeight
                       });
                       break; // Found in this model, move to next GUID
                     }
@@ -2378,7 +2394,7 @@ export default function OrganizerScreen({
         const searchValues = rawValues.map(v => v.toLowerCase().trim());
         const { data, error } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
           .eq('trimble_project_id', projectId)
           .not('guid_ifc', 'is', null);
 
@@ -2421,6 +2437,7 @@ export default function OrganizerScreen({
         guid_ifc: obj.guid_ifc,
         assembly_mark: obj.assembly_mark,
         product_name: obj.product_name,
+        cast_unit_weight: obj.cast_unit_weight || null,
         custom_properties: {},
         added_by: tcUserEmail,
         sort_order: startIndex + index
