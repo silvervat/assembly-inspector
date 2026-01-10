@@ -2244,7 +2244,7 @@ export default function OrganizerScreen({
         // Search by guid_ifc (converted or original)
         const { data, error } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
+          .select('guid_ifc, assembly_mark, product_name')
           .eq('trimble_project_id', projectId)
           .not('guid_ifc', 'is', null);
 
@@ -2394,7 +2394,7 @@ export default function OrganizerScreen({
         const searchValues = rawValues.map(v => v.toLowerCase().trim());
         const { data, error } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
+          .select('guid_ifc, assembly_mark, product_name')
           .eq('trimble_project_id', projectId)
           .not('guid_ifc', 'is', null);
 
@@ -2769,7 +2769,7 @@ export default function OrganizerScreen({
     const selectedFilteredItems = filteredItems.filter(i => selectedItemIds.has(i.id));
 
     return (
-      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''}`}>
+      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''}`}
           style={{ paddingLeft: `${8 + depth * 10}px` }}
