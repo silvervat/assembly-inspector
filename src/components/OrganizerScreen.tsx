@@ -22,7 +22,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiArrowUp, FiArrowDown, FiTag, FiUpload
+  FiArrowUp, FiArrowDown, FiTag, FiUpload, FiSettings
 } from 'react-icons/fi';
 
 // ============================================
@@ -441,6 +441,28 @@ export default function OrganizerScreen({
   // Color picker popup state
   const [colorPickerGroupId, setColorPickerGroupId] = useState<string | null>(null);
 
+  // Settings modal state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // User settings (stored in localStorage)
+  const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(`organizer_autoExpand_${tcUserEmail}`);
+      return saved !== null ? JSON.parse(saved) : true; // Default: enabled
+    } catch {
+      return true;
+    }
+  });
+
+  const [hideItemOnAdd, setHideItemOnAdd] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(`organizer_hideOnAdd_${tcUserEmail}`);
+      return saved !== null ? JSON.parse(saved) : false; // Default: disabled
+    } catch {
+      return false;
+    }
+  });
+
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -472,6 +494,9 @@ export default function OrganizerScreen({
 
   // Auto-expand groups that contain selected items from model (but not when clicked via group header)
   useEffect(() => {
+    // Skip if setting is disabled
+    if (!autoExpandOnSelection) return;
+
     // Skip auto-expand if selection came from clicking a group header
     if (groupClickSelectionRef.current) {
       groupClickSelectionRef.current = false;
@@ -495,7 +520,33 @@ export default function OrganizerScreen({
         return newExpanded;
       });
     }
-  }, [selectedGuidsInGroups, groups]);
+  }, [selectedGuidsInGroups, groups, autoExpandOnSelection]);
+
+  // Toggle and save autoExpandOnSelection setting
+  const toggleAutoExpandOnSelection = useCallback(() => {
+    setAutoExpandOnSelection(prev => {
+      const newValue = !prev;
+      try {
+        localStorage.setItem(`organizer_autoExpand_${tcUserEmail}`, JSON.stringify(newValue));
+      } catch (e) {
+        console.warn('Failed to save setting:', e);
+      }
+      return newValue;
+    });
+  }, [tcUserEmail]);
+
+  // Toggle and save hideItemOnAdd setting
+  const toggleHideItemOnAdd = useCallback(() => {
+    setHideItemOnAdd(prev => {
+      const newValue = !prev;
+      try {
+        localStorage.setItem(`organizer_hideOnAdd_${tcUserEmail}`, JSON.stringify(newValue));
+      } catch (e) {
+        console.warn('Failed to save setting:', e);
+      }
+      return newValue;
+    });
+  }, [tcUserEmail]);
 
   // ============================================
   // TOAST
@@ -1502,6 +1553,31 @@ export default function OrganizerScreen({
       // Color newly added items directly if coloring mode is active and group has a color
       if (colorByGroup && groupColor && addedGuids.length > 0) {
         await colorItemsDirectly(addedGuids, groupColor);
+      }
+
+      // Hide items from model if setting is enabled
+      if (hideItemOnAdd && addedGuids.length > 0) {
+        try {
+          const foundObjects = await findObjectsInLoadedModels(api, addedGuids);
+          if (foundObjects.size > 0) {
+            // Group by model for batch operation
+            const byModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+
+            // Hide all found objects
+            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                { visible: false }
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to hide items:', e);
+        }
       }
 
       // Use silent refresh to avoid UI flash (no "Laadin..." state)
@@ -3436,6 +3512,13 @@ export default function OrganizerScreen({
           >
             {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
           </button>
+          <button
+            className="org-icon-btn"
+            onClick={() => setShowSettingsModal(true)}
+            title="Seaded"
+          >
+            <FiSettings size={16} />
+          </button>
         </div>
       </div>
 
@@ -4131,6 +4214,109 @@ export default function OrganizerScreen({
           </div>
         );
       })()}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="org-modal-overlay" onClick={() => setShowSettingsModal(false)}>
+          <div className="org-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="org-modal-header">
+              <h2>Seaded</h2>
+              <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body">
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--modus-border)'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+                    Mudelis märgistatud detail voldib lahti grupi
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    Kui detail on mõnes grupis, siis valik laieneb automaatselt
+                  </div>
+                </div>
+                <button
+                  onClick={toggleAutoExpandOnSelection}
+                  style={{
+                    width: '50px',
+                    height: '26px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    background: autoExpandOnSelection ? '#059669' : '#d1d5db',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: '3px',
+                    left: autoExpandOnSelection ? '27px' : '3px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'left 0.2s'
+                  }} />
+                </button>
+              </div>
+
+              {/* Hide item on add setting */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--modus-border)'
+              }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+                    Gruppi lisatud detail peidetakse mudelist
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    Hea andmete sisestamiseks, et ei tekiks topeltvalikuid mudelist
+                  </div>
+                </div>
+                <button
+                  onClick={toggleHideItemOnAdd}
+                  style={{
+                    width: '50px',
+                    height: '26px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    background: hideItemOnAdd ? '#059669' : '#d1d5db',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: '3px',
+                    left: hideItemOnAdd ? '27px' : '3px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'left 0.2s'
+                  }} />
+                </button>
+              </div>
+            </div>
+            <div className="org-modal-footer">
+              <button className="save" onClick={() => setShowSettingsModal(false)}>
+                Sulge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
