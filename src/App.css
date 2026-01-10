@@ -6337,30 +6337,30 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .action-btn.confirm {
-  background: #d1fae5;
-  color: #059669;
+  background: #d1fae5 !important;
+  color: #059669 !important;
 }
 
 .arrived-deliveries .action-btn.confirm:hover {
-  background: #a7f3d0;
+  background: #a7f3d0 !important;
 }
 
 .arrived-deliveries .action-btn.missing {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #fee2e2 !important;
+  color: #dc2626 !important;
 }
 
 .arrived-deliveries .action-btn.missing:hover {
-  background: #fecaca;
+  background: #fecaca !important;
 }
 
 .arrived-deliveries .action-btn.wrong {
-  background: #fef3c7;
-  color: #d97706;
+  background: #fef3c7 !important;
+  color: #d97706 !important;
 }
 
 .arrived-deliveries .action-btn.wrong:hover {
-  background: #fde68a;
+  background: #fde68a !important;
 }
 
 /* Complete section */
@@ -6431,9 +6431,10 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .items-list.compact .item-row {
-  padding: 3px 8px;
-  gap: 6px;
+  padding: 3px 6px;
+  gap: 4px;
   min-height: 26px;
+  flex-wrap: nowrap;
 }
 
 .arrived-deliveries .items-list.compact .item-checkbox {
@@ -6445,9 +6446,9 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .items-list.compact .item-index {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--modus-text-tertiary);
-  min-width: 30px;
+  min-width: 28px;
   font-family: monospace;
   flex-shrink: 0;
 }
@@ -6457,13 +6458,15 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  flex: 1;
+  gap: 4px;
+  flex: 1 1 0;
   min-width: 0;
+  overflow: hidden;
+  max-width: calc(100% - 100px); /* Leave space for action buttons */
 }
 
 .arrived-deliveries .items-list.compact .item-mark {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--modus-text-primary);
   white-space: nowrap;
@@ -6471,30 +6474,49 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .items-list.compact .item-product {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--modus-text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
   min-width: 0;
+  display: none; /* Hide product name on narrow widths */
 }
 
 .arrived-deliveries .items-list.compact .item-weight {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--modus-text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .arrived-deliveries .items-list.compact .item-actions {
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .arrived-deliveries .items-list.compact .action-btn {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Status badge compact - show as small colored dot */
+.arrived-deliveries .items-list.compact .status-badge {
+  font-size: 0 !important;
+  padding: 0 !important;
+  width: 10px !important;
+  height: 10px !important;
+  min-width: 10px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+  flex-shrink: 0;
 }
 
 .arrived-deliveries .item-row.selected {

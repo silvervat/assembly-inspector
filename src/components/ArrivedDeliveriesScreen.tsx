@@ -1343,14 +1343,18 @@ export default function ArrivedDeliveriesScreen({
     };
     const c = config[status];
     return (
-      <span style={{
-        padding: '2px 8px',
-        borderRadius: 4,
-        fontSize: 11,
-        fontWeight: 500,
-        color: c.color,
-        background: c.bg
-      }}>
+      <span
+        className="status-badge"
+        style={{
+          padding: '2px 8px',
+          borderRadius: 4,
+          fontSize: 11,
+          fontWeight: 500,
+          color: c.color,
+          background: c.bg
+        }}
+        title={c.label}
+      >
         {c.label}
       </span>
     );
