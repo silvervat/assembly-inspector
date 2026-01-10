@@ -2183,15 +2183,13 @@ export default function OrganizerScreen({
         guid_ifc: string;
         assembly_mark: string | null;
         product_name: string | null;
-        cast_unit_weight: number | null;
-        cast_unit_position_code: string | null;
       }> = [];
 
       if (isGuidInput) {
         // Search by guid_ifc
         const { data, error } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, cast_unit_position_code')
+          .select('guid_ifc, assembly_mark, product_name')
           .eq('trimble_project_id', projectId)
           .not('guid_ifc', 'is', null);
 
@@ -2205,7 +2203,7 @@ export default function OrganizerScreen({
         // Search by assembly_mark (GUID_MS)
         const { data, error } = await supabase
           .from('trimble_model_objects')
-          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, cast_unit_position_code')
+          .select('guid_ifc, assembly_mark, product_name')
           .eq('trimble_project_id', projectId)
           .not('guid_ifc', 'is', null);
 
@@ -2247,8 +2245,6 @@ export default function OrganizerScreen({
         guid_ifc: obj.guid_ifc,
         assembly_mark: obj.assembly_mark,
         product_name: obj.product_name,
-        cast_unit_weight: obj.cast_unit_weight,
-        cast_unit_position_code: obj.cast_unit_position_code,
         custom_properties: {},
         added_by: tcUserEmail,
         sort_order: startIndex + index
