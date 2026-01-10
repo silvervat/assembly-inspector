@@ -556,6 +556,12 @@ export default function InstallationsScreen({
   // Track colored object IDs for proper reset
   const coloredObjectsRef = useRef<Map<string, number[]>>(new Map());
 
+  // Track last applied color state for optimization (guid lowercase -> 'white' | 'installed' | 'preassembly')
+  type ColorType = 'white' | 'installed' | 'preassembly';
+  const lastColorStateRef = useRef<Map<string, ColorType>>(new Map());
+  // Track found objects cache (guid lowercase -> { modelId, runtimeId })
+  const foundObjectsCacheRef = useRef<Map<string, { modelId: string; runtimeId: number }>>(new Map());
+
   // Track last clicked item for shift-click range selection
   const lastClickedInstallationRef = useRef<string | null>(null);
   const lastClickedPreassemblyRef = useRef<string | null>(null);
@@ -632,6 +638,8 @@ export default function InstallationsScreen({
       // Use official API: setObjectState(undefined, { color: "reset" })
       api.viewer.setObjectState(undefined, { color: "reset" }).catch(() => {});
       coloredObjectsRef.current = new Map();
+      lastColorStateRef.current = new Map();
+      foundObjectsCacheRef.current = new Map();
     };
   }, [projectId]);
 
@@ -882,15 +890,32 @@ export default function InstallationsScreen({
         const modelId = modelObj.modelId;
         const runtimeIds = modelObj.objectRuntimeIds || [];
 
+        // Get external IDs (IFC GUIDs) for all runtimeIds at once - most reliable source
+        try {
+          const externalIds = await api.viewer.convertToObjectIds(modelId, runtimeIds);
+          if (externalIds && Array.isArray(externalIds)) {
+            for (const extId of externalIds) {
+              if (extId) {
+                selectedGuids.add(extId.toLowerCase());
+              }
+            }
+          }
+        } catch { /* ignore */ }
+
+        // Also check properties for additional GUIDs (MS GUID etc)
         for (const runtimeId of runtimeIds) {
           try {
             const propsArray = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
             if (propsArray && propsArray.length > 0) {
-              const props = propsArray[0];
-              if (props?.properties) {
-                for (const prop of props.properties) {
-                  if (prop.name === 'GUID' && prop.value) {
-                    selectedGuids.add(prop.value.toLowerCase());
+              const objProps = propsArray[0];
+              // Properties are nested in property sets
+              for (const pset of objProps.properties || []) {
+                const propArray = (pset as any).properties || [];
+                for (const prop of propArray) {
+                  const propName = ((prop as any).name || '').toLowerCase().replace(/[\s\/]+/g, '_');
+                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+                  if ((propName === 'guid' || propName === 'globalid') && propValue) {
+                    selectedGuids.add(String(propValue).toLowerCase());
                   }
                 }
               }
@@ -1574,6 +1599,8 @@ export default function InstallationsScreen({
 
       console.log('Colors reset successfully via setObjectState(undefined, { color: "reset" })');
       coloredObjectsRef.current = new Map();
+      lastColorStateRef.current = new Map();
+      // Don't clear foundObjectsCacheRef - it can be reused
     } catch (e) {
       console.error('Error resetting colors:', e);
       // Fallback: try to reset specific colored objects
@@ -1589,6 +1616,7 @@ export default function InstallationsScreen({
         }
       }
       coloredObjectsRef.current = new Map();
+      lastColorStateRef.current = new Map();
     }
   };
 
@@ -1607,7 +1635,6 @@ export default function InstallationsScreen({
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
         console.log('[INSTALL] No models loaded for coloring, retry:', retryCount);
-        // Retry up to 5 times with increasing delay if models not yet loaded
         if (retryCount < 5) {
           setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
         } else {
@@ -1616,82 +1643,121 @@ export default function InstallationsScreen({
         return;
       }
 
-      console.log('[INSTALL] Starting database-based coloring...');
+      console.log('[INSTALL] Starting optimized coloring...');
 
-      // Step 1: Reset all colors first (required to allow new colors!)
-      console.log('[INSTALL] Step 1: Resetting colors...');
-      await api.viewer.setObjectState(undefined, { color: "reset" });
+      // Step 1: Check if we have cached foundObjects, if not fetch from DB and find
+      let foundByLowercase = foundObjectsCacheRef.current;
+      if (foundByLowercase.size === 0) {
+        console.log('[INSTALL] Cache empty, fetching GUIDs from database...');
+        const PAGE_SIZE = 5000;
+        const allGuids: string[] = [];
+        let offset = 0;
 
-      // Step 2: Fetch ALL objects from Supabase with pagination (get guid_ifc for lookup)
-      console.log('[INSTALL] Step 2: Fetching GUIDs from database...');
-      const PAGE_SIZE = 5000;
-      const allGuids: string[] = [];
-      let offset = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null)
+            .range(offset, offset + PAGE_SIZE - 1);
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('guid_ifc')
-          .eq('trimble_project_id', projectId)
-          .not('guid_ifc', 'is', null)
-          .range(offset, offset + PAGE_SIZE - 1);
+          if (error) {
+            console.error('[INSTALL] Supabase error:', error);
+            return;
+          }
 
-        if (error) {
-          console.error('[INSTALL] Supabase error:', error);
-          return;
+          if (!data || data.length === 0) break;
+
+          for (const obj of data) {
+            if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+          }
+          offset += data.length;
+          if (data.length < PAGE_SIZE) break;
         }
 
-        if (!data || data.length === 0) break;
+        console.log(`[INSTALL] Total GUIDs fetched: ${allGuids.length}`);
 
-        for (const obj of data) {
-          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+        console.log(`[INSTALL] Found ${foundObjects.size} objects in models`);
+
+        // Build case-insensitive lookup and cache it
+        foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const [guid, found] of foundObjects) {
+          foundByLowercase.set(guid.toLowerCase(), found);
         }
-        offset += data.length;
-        if (data.length < PAGE_SIZE) break;
+        foundObjectsCacheRef.current = foundByLowercase;
+      } else {
+        console.log(`[INSTALL] Using cached foundObjects: ${foundByLowercase.size}`);
       }
 
-      console.log(`[INSTALL] Total GUIDs fetched from database: ${allGuids.length}`);
-
-      // Step 3: Do ONE lookup for ALL GUIDs to get runtime IDs
-      console.log('[INSTALL] Step 3: Finding objects in loaded models...');
-      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
-      console.log(`[INSTALL] Found ${foundObjects.size} objects in loaded models`);
-
-      // Build case-insensitive lookup for foundObjects (like OrganizerScreen does)
-      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
-      for (const [guid, found] of foundObjects) {
-        foundByLowercase.set(guid.toLowerCase(), found);
-      }
-
-      // Step 4: Get installed item GUIDs (from the guidsMap - already lowercase)
+      // Step 2: Calculate new color state
       const installedGuidSet = new Set(guidsMap.keys());
-      console.log(`[INSTALL] Installed GUIDs count: ${installedGuidSet.size}`);
+      const newColorState = new Map<string, ColorType>();
 
-      // Step 5: Build arrays for white coloring (non-installed items) and black coloring (installed items)
-      const whiteByModel: Record<string, number[]> = {};
-      const blackByModel: Record<string, number[]> = {};
-
-      for (const [guidLower, found] of foundByLowercase) {
+      for (const guidLower of foundByLowercase.keys()) {
         if (installedGuidSet.has(guidLower)) {
-          // Installed - color with INSTALLED_COLOR
-          if (!blackByModel[found.modelId]) blackByModel[found.modelId] = [];
-          blackByModel[found.modelId].push(found.runtimeId);
+          newColorState.set(guidLower, 'installed');
         } else {
-          // Not installed - color WHITE
-          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-          whiteByModel[found.modelId].push(found.runtimeId);
+          newColorState.set(guidLower, 'white');
         }
       }
 
-      const totalToWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-      const totalToBlack = Object.values(blackByModel).reduce((sum, arr) => sum + arr.length, 0);
-      console.log(`[INSTALL] Objects to color: ${totalToWhite} white, ${totalToBlack} black`);
+      // Step 3: Compare with last color state and determine changes
+      const lastState = lastColorStateRef.current;
+      const toWhite: { modelId: string; runtimeId: number }[] = [];
+      const toInstalled: { modelId: string; runtimeId: number }[] = [];
 
-      // Step 6: Color non-installed items WHITE in batches
-      console.log('[INSTALL] Step 6: Coloring non-installed objects white...');
+      // If no previous state, we need full reset and recolor
+      const needsFullReset = lastState.size === 0;
+
+      if (needsFullReset) {
+        console.log('[INSTALL] No previous state, doing full coloring...');
+        await api.viewer.setObjectState(undefined, { color: "reset" });
+
+        for (const [guidLower, found] of foundByLowercase) {
+          const color = newColorState.get(guidLower);
+          if (color === 'white') {
+            toWhite.push(found);
+          } else if (color === 'installed') {
+            toInstalled.push(found);
+          }
+        }
+      } else {
+        console.log('[INSTALL] Calculating color diff...');
+        for (const [guidLower, found] of foundByLowercase) {
+          const newColor = newColorState.get(guidLower);
+          const oldColor = lastState.get(guidLower);
+
+          // Only recolor if color changed
+          if (newColor !== oldColor) {
+            if (newColor === 'white') {
+              toWhite.push(found);
+            } else if (newColor === 'installed') {
+              toInstalled.push(found);
+            }
+          }
+        }
+      }
+
+      console.log(`[INSTALL] Color changes: ${toWhite.length} to white, ${toInstalled.length} to installed`);
+
+      // Step 4: Apply color changes in batches
       const BATCH_SIZE = 5000;
-      let whiteCount = 0;
 
+      // Group by model for batch coloring
+      const whiteByModel: Record<string, number[]> = {};
+      const installedByModel: Record<string, number[]> = {};
+
+      for (const obj of toWhite) {
+        if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
+        whiteByModel[obj.modelId].push(obj.runtimeId);
+      }
+      for (const obj of toInstalled) {
+        if (!installedByModel[obj.modelId]) installedByModel[obj.modelId] = [];
+        installedByModel[obj.modelId].push(obj.runtimeId);
+      }
+
+      // Apply white coloring
       for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
@@ -1699,25 +1765,18 @@ export default function InstallationsScreen({
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: { r: 255, g: 255, b: 255, a: 255 } }
           );
-          whiteCount += batch.length;
         }
       }
-      console.log(`[INSTALL] White coloring done: ${whiteCount}`);
 
-      // Step 7: Color installed items with INSTALLED_COLOR (#0a3a67)
-      console.log('[INSTALL] Step 7: Coloring installed objects...');
+      // Apply installed coloring
       coloredObjectsRef.current = new Map();
-      let installedCount = 0;
-
-      for (const [modelId, runtimeIds] of Object.entries(blackByModel)) {
+      for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: INSTALLED_COLOR }
           );
-          installedCount += batch.length;
-          // Track colored objects for reference
           if (!coloredObjectsRef.current.has(modelId)) {
             coloredObjectsRef.current.set(modelId, []);
           }
@@ -1725,7 +1784,9 @@ export default function InstallationsScreen({
         }
       }
 
-      console.log(`[INSTALL] Installed coloring done: ${installedCount}`);
+      // Step 5: Update last color state
+      lastColorStateRef.current = newColorState;
+
       console.log('[INSTALL] === COLORING COMPLETE ===');
     } catch (e) {
       console.error('[INSTALL] Error applying installation coloring:', e);
@@ -1745,82 +1806,139 @@ export default function InstallationsScreen({
         return;
       }
 
-      console.log('[PREASSEMBLY] Starting coloring...');
+      console.log('[PREASSEMBLY] Starting optimized coloring...');
 
-      // Step 1: Reset all colors first
-      await api.viewer.setObjectState(undefined, { color: "reset" });
+      // Step 1: Check if we have cached foundObjects, if not fetch from DB and find
+      let foundByLowercase = foundObjectsCacheRef.current;
+      if (foundByLowercase.size === 0) {
+        console.log('[PREASSEMBLY] Cache empty, fetching GUIDs from database...');
+        const PAGE_SIZE = 5000;
+        const allGuids: string[] = [];
+        let offset = 0;
 
-      // Step 2: Fetch ALL objects from Supabase with pagination
-      const PAGE_SIZE = 5000;
-      const allGuids: string[] = [];
-      let offset = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null)
+            .range(offset, offset + PAGE_SIZE - 1);
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('trimble_model_objects')
-          .select('guid_ifc')
-          .eq('trimble_project_id', projectId)
-          .not('guid_ifc', 'is', null)
-          .range(offset, offset + PAGE_SIZE - 1);
+          if (error) {
+            console.error('[PREASSEMBLY] Supabase error:', error);
+            setColoringInProgress(false);
+            return;
+          }
 
-        if (error) {
-          console.error('[PREASSEMBLY] Supabase error:', error);
-          setColoringInProgress(false);
-          return;
+          if (!data || data.length === 0) break;
+
+          for (const obj of data) {
+            if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+          }
+          offset += data.length;
+          if (data.length < PAGE_SIZE) break;
         }
 
-        if (!data || data.length === 0) break;
+        console.log(`[PREASSEMBLY] Total GUIDs fetched: ${allGuids.length}`);
 
-        for (const obj of data) {
-          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+        console.log(`[PREASSEMBLY] Found ${foundObjects.size} objects in models`);
+
+        // Build case-insensitive lookup and cache it
+        foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const [guid, found] of foundObjects) {
+          foundByLowercase.set(guid.toLowerCase(), found);
         }
-        offset += data.length;
-        if (data.length < PAGE_SIZE) break;
+        foundObjectsCacheRef.current = foundByLowercase;
+      } else {
+        console.log(`[PREASSEMBLY] Using cached foundObjects: ${foundByLowercase.size}`);
       }
 
-      console.log(`[PREASSEMBLY] Total GUIDs fetched: ${allGuids.length}`);
-
-      // Step 3: Find objects in loaded models
-      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
-      console.log(`[PREASSEMBLY] Found ${foundObjects.size} objects in models`);
-
-      // Build case-insensitive lookup for foundObjects (like OrganizerScreen does)
-      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
-      for (const [guid, found] of foundObjects) {
-        foundByLowercase.set(guid.toLowerCase(), found);
-      }
-
-      // Step 4: Get installed and preassembly GUIDs (already lowercase)
+      // Step 2: Get installed and preassembly GUIDs (already lowercase)
       const installedGuidSet = new Set(installedGuids.keys());
       const preassemblyGuidSet = new Set(preassembledGuids.keys());
 
       console.log(`[PREASSEMBLY] Installed: ${installedGuidSet.size}, Preassembly: ${preassemblyGuidSet.size}`);
 
-      // Step 5: Build color arrays
+      // Step 3: Calculate new color state
+      const newColorState = new Map<string, ColorType>();
+
+      for (const guidLower of foundByLowercase.keys()) {
+        if (installedGuidSet.has(guidLower)) {
+          newColorState.set(guidLower, 'installed');
+        } else if (preassemblyGuidSet.has(guidLower)) {
+          newColorState.set(guidLower, 'preassembly');
+        } else {
+          newColorState.set(guidLower, 'white');
+        }
+      }
+
+      // Step 4: Compare with last color state and determine changes
+      const lastState = lastColorStateRef.current;
+      const toWhite: { modelId: string; runtimeId: number }[] = [];
+      const toInstalled: { modelId: string; runtimeId: number }[] = [];
+      const toPreassembly: { modelId: string; runtimeId: number }[] = [];
+
+      // If no previous state, we need full reset and recolor
+      const needsFullReset = lastState.size === 0;
+
+      if (needsFullReset) {
+        console.log('[PREASSEMBLY] No previous state, doing full coloring...');
+        await api.viewer.setObjectState(undefined, { color: "reset" });
+
+        for (const [guidLower, found] of foundByLowercase) {
+          const color = newColorState.get(guidLower);
+          if (color === 'white') {
+            toWhite.push(found);
+          } else if (color === 'installed') {
+            toInstalled.push(found);
+          } else if (color === 'preassembly') {
+            toPreassembly.push(found);
+          }
+        }
+      } else {
+        console.log('[PREASSEMBLY] Calculating color diff...');
+        for (const [guidLower, found] of foundByLowercase) {
+          const newColor = newColorState.get(guidLower);
+          const oldColor = lastState.get(guidLower);
+
+          // Only recolor if color changed
+          if (newColor !== oldColor) {
+            if (newColor === 'white') {
+              toWhite.push(found);
+            } else if (newColor === 'installed') {
+              toInstalled.push(found);
+            } else if (newColor === 'preassembly') {
+              toPreassembly.push(found);
+            }
+          }
+        }
+      }
+
+      console.log(`[PREASSEMBLY] Color changes: ${toWhite.length} white, ${toInstalled.length} installed, ${toPreassembly.length} preassembly`);
+
+      // Step 5: Apply color changes in batches
+      const BATCH_SIZE = 5000;
+
+      // Group by model for batch coloring
       const whiteByModel: Record<string, number[]> = {};
       const installedByModel: Record<string, number[]> = {};
       const preassemblyByModel: Record<string, number[]> = {};
 
-      for (const [guidLower, found] of foundByLowercase) {
-        if (installedGuidSet.has(guidLower)) {
-          // Installed - INSTALLED_COLOR
-          if (!installedByModel[found.modelId]) installedByModel[found.modelId] = [];
-          installedByModel[found.modelId].push(found.runtimeId);
-        } else if (preassemblyGuidSet.has(guidLower)) {
-          // Preassembly - PREASSEMBLY_COLOR
-          if (!preassemblyByModel[found.modelId]) preassemblyByModel[found.modelId] = [];
-          preassemblyByModel[found.modelId].push(found.runtimeId);
-        } else {
-          // Not in schedule - WHITE
-          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-          whiteByModel[found.modelId].push(found.runtimeId);
-        }
+      for (const obj of toWhite) {
+        if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
+        whiteByModel[obj.modelId].push(obj.runtimeId);
+      }
+      for (const obj of toInstalled) {
+        if (!installedByModel[obj.modelId]) installedByModel[obj.modelId] = [];
+        installedByModel[obj.modelId].push(obj.runtimeId);
+      }
+      for (const obj of toPreassembly) {
+        if (!preassemblyByModel[obj.modelId]) preassemblyByModel[obj.modelId] = [];
+        preassemblyByModel[obj.modelId].push(obj.runtimeId);
       }
 
-      // Step 6: Apply colors in batches
-      const BATCH_SIZE = 5000;
-
-      // White
+      // Apply white coloring
       for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
@@ -1831,7 +1949,7 @@ export default function InstallationsScreen({
         }
       }
 
-      // Installed - INSTALLED_COLOR
+      // Apply installed coloring
       for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
@@ -1842,7 +1960,7 @@ export default function InstallationsScreen({
         }
       }
 
-      // Preassembly - PREASSEMBLY_COLOR
+      // Apply preassembly coloring
       for (const [modelId, runtimeIds] of Object.entries(preassemblyByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
@@ -1853,10 +1971,10 @@ export default function InstallationsScreen({
         }
       }
 
-      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
-      const totalInstalled = Object.values(installedByModel).reduce((sum, arr) => sum + arr.length, 0);
-      const totalPreassembly = Object.values(preassemblyByModel).reduce((sum, arr) => sum + arr.length, 0);
-      console.log(`[PREASSEMBLY] Colored: ${totalWhite} white, ${totalInstalled} installed, ${totalPreassembly} preassembly`);
+      // Step 6: Update last color state
+      lastColorStateRef.current = newColorState;
+
+      console.log('[PREASSEMBLY] === COLORING COMPLETE ===');
 
     } catch (e) {
       console.error('[PREASSEMBLY] Error applying coloring:', e);
@@ -1877,6 +1995,8 @@ export default function InstallationsScreen({
 
       // Reset all colors first
       await api.viewer.setObjectState(undefined, { color: "reset" });
+      // Clear color state since we're applying a special coloring
+      lastColorStateRef.current = new Map();
 
       // Get GUIDs of uninstalled preassemblies (either from month or all)
       const itemsToCheck = monthItems || preassemblies;
@@ -5046,6 +5166,7 @@ export default function InstallationsScreen({
                     setDayColors({});
                     setMonthColors({});
                     await api.viewer.setObjectState(undefined, { color: "reset" });
+                    lastColorStateRef.current = new Map();
                   }}
                   title="Lähtesta värvid"
                   style={{
