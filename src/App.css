@@ -6117,6 +6117,34 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+.arrived-deliveries .no-photos.dropzone {
+  cursor: pointer;
+  border: 2px dashed var(--modus-border);
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.arrived-deliveries .no-photos.dropzone:hover {
+  border-color: var(--modus-primary);
+  color: var(--modus-primary);
+  background: rgba(0, 99, 163, 0.05);
+}
+
+.arrived-deliveries .photos-grid {
+  outline: none;
+}
+
+.arrived-deliveries .photos-grid.drag-over {
+  background: rgba(0, 99, 163, 0.1);
+  border-radius: 6px;
+}
+
+.arrived-deliveries .photos-grid.drag-over .no-photos.dropzone {
+  border-color: var(--modus-primary);
+  color: var(--modus-primary);
+  background: rgba(0, 99, 163, 0.15);
+}
+
 /* Delivery notes section - saatelehed */
 .arrived-deliveries .photos-section.delivery-notes {
   background: #fef9f3;

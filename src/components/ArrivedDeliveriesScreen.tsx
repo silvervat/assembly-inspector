@@ -2207,7 +2207,45 @@ export default function ArrivedDeliveriesScreen({
                                 <span>{uploadProgress.current} / {uploadProgress.total}</span>
                               </div>
                             )}
-                            <div className="photos-grid">
+                            <div
+                              className="photos-grid"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                // Only trigger if clicking on empty area or no-photos div
+                                if ((e.target as HTMLElement).closest('.photo-item')) return;
+                                photoInputRef.current?.click();
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.add('drag-over');
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.classList.remove('drag-over');
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.remove('drag-over');
+                                if (e.dataTransfer.files?.length > 0) {
+                                  handlePhotoUpload(arrivedVehicle.id, e.dataTransfer.files, 'general');
+                                }
+                              }}
+                              onPaste={(e) => {
+                                const items = e.clipboardData?.items;
+                                if (!items) return;
+                                const files: File[] = [];
+                                for (let i = 0; i < items.length; i++) {
+                                  if (items[i].type.startsWith('image/')) {
+                                    const file = items[i].getAsFile();
+                                    if (file) files.push(file);
+                                  }
+                                }
+                                if (files.length > 0) {
+                                  const dt = new DataTransfer();
+                                  files.forEach(f => dt.items.add(f));
+                                  handlePhotoUpload(arrivedVehicle.id, dt.files, 'general');
+                                }
+                              }}
+                            >
                               {getGeneralPhotosForArrival(arrivedVehicle.id).map(photo => (
                                 <div key={photo.id} className="photo-item">
                                   <img
@@ -2225,9 +2263,9 @@ export default function ArrivedDeliveriesScreen({
                                 </div>
                               ))}
                               {getGeneralPhotosForArrival(arrivedVehicle.id).length === 0 && (
-                                <div className="no-photos">
+                                <div className="no-photos dropzone">
                                   <FiImage />
-                                  <span>Pole fotosid</span>
+                                  <span>Lohista, kleebi või klõpsa</span>
                                 </div>
                               )}
                             </div>
@@ -2256,7 +2294,45 @@ export default function ArrivedDeliveriesScreen({
                                 }}
                               />
                             </div>
-                            <div className="photos-grid">
+                            <div
+                              className="photos-grid"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                // Only trigger if clicking on empty area or no-photos div
+                                if ((e.target as HTMLElement).closest('.photo-item')) return;
+                                deliveryNotePhotoInputRef.current?.click();
+                              }}
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.add('drag-over');
+                              }}
+                              onDragLeave={(e) => {
+                                e.currentTarget.classList.remove('drag-over');
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.currentTarget.classList.remove('drag-over');
+                                if (e.dataTransfer.files?.length > 0) {
+                                  handlePhotoUpload(arrivedVehicle.id, e.dataTransfer.files, 'delivery_note');
+                                }
+                              }}
+                              onPaste={(e) => {
+                                const items = e.clipboardData?.items;
+                                if (!items) return;
+                                const files: File[] = [];
+                                for (let i = 0; i < items.length; i++) {
+                                  if (items[i].type.startsWith('image/') || items[i].type === 'application/pdf') {
+                                    const file = items[i].getAsFile();
+                                    if (file) files.push(file);
+                                  }
+                                }
+                                if (files.length > 0) {
+                                  const dt = new DataTransfer();
+                                  files.forEach(f => dt.items.add(f));
+                                  handlePhotoUpload(arrivedVehicle.id, dt.files, 'delivery_note');
+                                }
+                              }}
+                            >
                               {getDeliveryNotePhotos(arrivedVehicle.id).map(photo => (
                                 <div key={photo.id} className="photo-item delivery-note">
                                   <img
@@ -2275,9 +2351,9 @@ export default function ArrivedDeliveriesScreen({
                                 </div>
                               ))}
                               {getDeliveryNotePhotos(arrivedVehicle.id).length === 0 && (
-                                <div className="no-photos">
+                                <div className="no-photos dropzone">
                                   <FiFileText />
-                                  <span>Pole saatelehti</span>
+                                  <span>Lohista, kleebi või klõpsa</span>
                                 </div>
                               )}
                             </div>
