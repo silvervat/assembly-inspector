@@ -6797,7 +6797,7 @@ button.stat-toggle.off:hover {
 .arrived-deliveries .items-list.compact .item-index {
   font-size: 9px;
   color: var(--modus-text-tertiary);
-  min-width: 28px;
+  min-width: 1px;
   font-family: monospace;
   flex-shrink: 0;
 }
