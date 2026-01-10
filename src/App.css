@@ -10314,6 +10314,12 @@ button.stat-toggle.off:hover {
   cursor: help;
 }
 
+.org-locked-indicator.inherited {
+  color: #f97316;
+  background: #fff7ed;
+  opacity: 0.8;
+}
+
 .org-group-count {
   font-size: 11px;
   color: #6b7280;
