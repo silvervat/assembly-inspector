@@ -6455,6 +6455,16 @@ button.stat-toggle.off:hover {
   background: #fde68a !important;
 }
 
+.arrived-deliveries .action-btn.reset {
+  background: #e5e7eb !important;
+  color: #6b7280 !important;
+}
+
+.arrived-deliveries .action-btn.reset:hover {
+  background: #d1d5db !important;
+  color: #374151 !important;
+}
+
 /* Complete section */
 .arrived-deliveries .complete-section {
   margin-top: 20px;

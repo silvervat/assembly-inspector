@@ -1963,7 +1963,7 @@ export default function ArrivedDeliveriesScreen({
                                         {hasCommentOrPhotos && <span className="indicator">!</span>}
                                       </button>
                                       <StatusBadge status={status} />
-                                      {status === 'pending' && (
+                                      {status === 'pending' ? (
                                         <>
                                           <button
                                             className="action-btn confirm"
@@ -1987,6 +1987,14 @@ export default function ArrivedDeliveriesScreen({
                                             <FiAlertTriangle size={12} />
                                           </button>
                                         </>
+                                      ) : (
+                                        <button
+                                          className="action-btn reset"
+                                          onClick={() => confirmItem(arrivedVehicle.id, item.id, 'pending')}
+                                          title="Muuda staatust"
+                                        >
+                                          <FiRefreshCw size={12} />
+                                        </button>
                                       )}
                                     </div>
                                   </div>
