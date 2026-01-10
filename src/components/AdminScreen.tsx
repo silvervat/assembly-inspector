@@ -1856,6 +1856,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
 
       // Insert new members with basic permissions (only columns that exist in DB)
       const newUsers = newMembers.map((m: any) => ({
+        project_id: projectId,
         trimble_project_id: projectId,
         email: m.email.toLowerCase(),
         name: m.name || `${m.firstName || ''} ${m.lastName || ''}`.trim() || null,
