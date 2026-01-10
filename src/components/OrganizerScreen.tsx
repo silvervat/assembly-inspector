@@ -2259,7 +2259,85 @@ export default function OrganizerScreen({
         matchedObjects = (data || []).filter(obj =>
           obj.guid_ifc && searchGuids.includes(obj.guid_ifc.toLowerCase())
         );
-        console.log(`Found ${matchedObjects.length} matches`);
+        console.log(`Found ${matchedObjects.length} matches in database`);
+
+        // If not found in database, search in loaded models directly
+        if (matchedObjects.length === 0 && searchGuids.length > 0) {
+          console.log('Not found in database, searching in loaded models...');
+
+          try {
+            const models = await api.viewer.getModels();
+            if (models && models.length > 0) {
+              const foundFromModels: Array<{ guid_ifc: string; assembly_mark: string | null; product_name: string | null }> = [];
+
+              // Search each GUID in all models
+              for (const searchGuid of searchGuids) {
+                // Use original case for API call
+                const originalCaseGuid = isMsGuidInput
+                  ? msToIfcGuid(rawValues.find(v => msToIfcGuid(v.trim()).toLowerCase() === searchGuid)?.trim() || '')
+                  : rawValues.find(v => v.toLowerCase().trim() === searchGuid)?.trim() || searchGuid;
+
+                for (const model of models) {
+                  const modelId = (model as any).id;
+                  if (!modelId) continue;
+
+                  try {
+                    const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, [originalCaseGuid]);
+                    if (runtimeIds && runtimeIds.length > 0) {
+                      console.log(`✅ Found ${originalCaseGuid} in model ${modelId}: ${runtimeIds}`);
+
+                      // Get object properties to find assembly_mark
+                      let assemblyMark: string | null = null;
+                      let productName: string | null = null;
+
+                      try {
+                        const props = await api.viewer.getObjectProperties(modelId, [runtimeIds[0]]);
+                        if (props && Array.isArray(props)) {
+                          const obj = props[0];
+                          if (obj) {
+                            // Try to find assembly mark from properties
+                            const allProps = (obj as any).properties || (obj as any).propertySets?.flatMap((ps: any) => ps.properties || []) || [];
+                            for (const prop of allProps) {
+                              const propName = (prop.name || '').toLowerCase().replace(/\s+/g, '');
+                              if (propName.includes('assemblymark') || propName.includes('castunitmark') || propName === 'name') {
+                                if (!assemblyMark && prop.value) {
+                                  assemblyMark = String(prop.value);
+                                }
+                              }
+                              if (propName === 'productname' || propName === 'name') {
+                                if (!productName && prop.value) {
+                                  productName = String(prop.value);
+                                }
+                              }
+                            }
+                          }
+                        }
+                      } catch (propError) {
+                        console.warn('Could not get object properties:', propError);
+                      }
+
+                      foundFromModels.push({
+                        guid_ifc: originalCaseGuid,
+                        assembly_mark: assemblyMark,
+                        product_name: productName
+                      });
+                      break; // Found in this model, move to next GUID
+                    }
+                  } catch (e) {
+                    // Model might not be loaded, continue to next
+                  }
+                }
+              }
+
+              if (foundFromModels.length > 0) {
+                console.log(`Found ${foundFromModels.length} objects in loaded models`);
+                matchedObjects = foundFromModels;
+              }
+            }
+          } catch (modelError) {
+            console.warn('Error searching in models:', modelError);
+          }
+        }
       } else {
         // Search by assembly_mark
         const searchValues = rawValues.map(v => v.toLowerCase().trim());
