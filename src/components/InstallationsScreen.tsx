@@ -952,36 +952,44 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Collect all unique GUIDs from items
-    const guidToItemIds = new Map<string, string[]>();
+    // Collect all unique GUIDs from items (keep original case for API, lowercase for lookup)
+    const guidToItemIds = new Map<string, string[]>(); // lowercase guid -> item ids
+    const originalGuids: string[] = []; // original case guids for API
+    const lowerToOriginal = new Map<string, string>(); // lowercase -> original
+
     for (const item of items) {
-      const guid = (item.guid_ifc || item.guid || '').toLowerCase();
-      if (guid) {
-        const ids = guidToItemIds.get(guid) || [];
+      const originalGuid = item.guid_ifc || item.guid || '';
+      if (originalGuid) {
+        const lowerGuid = originalGuid.toLowerCase();
+        const ids = guidToItemIds.get(lowerGuid) || [];
         ids.push(item.id);
-        guidToItemIds.set(guid, ids);
+        guidToItemIds.set(lowerGuid, ids);
+
+        if (!lowerToOriginal.has(lowerGuid)) {
+          lowerToOriginal.set(lowerGuid, originalGuid);
+          originalGuids.push(originalGuid);
+        }
       }
     }
 
-    if (guidToItemIds.size === 0) {
+    if (originalGuids.length === 0) {
       setUnfoundItemIds(new Set());
       return;
     }
 
-    // Find objects in loaded models
-    const guidsArray = Array.from(guidToItemIds.keys());
-    const foundObjects = await findObjectsInLoadedModels(api, guidsArray);
+    // Find objects in loaded models using original case GUIDs
+    const foundObjects = await findObjectsInLoadedModels(api, originalGuids);
 
-    // Create set of found GUIDs (lowercase)
-    const foundGuids = new Set<string>();
+    // Create set of found GUIDs (lowercase for comparison)
+    const foundGuidsLower = new Set<string>();
     for (const [guid] of foundObjects) {
-      foundGuids.add(guid.toLowerCase());
+      foundGuidsLower.add(guid.toLowerCase());
     }
 
     // Identify unfound items
     const unfound = new Set<string>();
-    for (const [guid, itemIds] of guidToItemIds) {
-      if (!foundGuids.has(guid)) {
+    for (const [lowerGuid, itemIds] of guidToItemIds) {
+      if (!foundGuidsLower.has(lowerGuid)) {
         for (const id of itemIds) {
           unfound.add(id);
         }
