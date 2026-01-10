@@ -354,6 +354,52 @@ export interface InstallationMethod {
   updated_at: string;
 }
 
+// ============================================
+// PREASSEMBLY & INSTALLATION SHARED TYPES
+// ============================================
+
+// Base interface for both Installation and Preassembly records
+export interface WorkRecord {
+  id: string;
+  // Projekti info
+  project_id: string;
+  model_id: string;
+  // Objekti identifikaatorid
+  guid: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_runtime_id?: number;
+  // Detaili andmed
+  assembly_mark: string;
+  product_name?: string;
+  file_name?: string;
+  // Tekla properties
+  cast_unit_weight?: string;
+  cast_unit_bottom_elevation?: string;
+  cast_unit_top_elevation?: string;
+  cast_unit_position_code?: string;
+  object_type?: string;
+  // Töötaja info
+  installer_id?: string;
+  installer_name: string;
+  user_email: string;
+  // Meetod
+  installation_method_id?: string;
+  installation_method_name?: string;
+  // Kuupäev (installed_at või preassembled_at)
+  recorded_at: string;
+  // Meeskond
+  team_members?: string;
+  // Märkused
+  notes?: string;
+  // Metadata
+  created_at: string;
+  updated_at: string;
+}
+
+// Record type for unified handling
+export type WorkRecordType = 'installation' | 'preassembly';
+
 // Paigaldamise kirje
 export interface Installation {
   id: string;
@@ -383,6 +429,44 @@ export interface Installation {
   installation_method_id?: string;
   installation_method_name?: string;
   installed_at: string;
+  // Meeskond
+  team_members?: string;
+  // Märkused
+  notes?: string;
+  // Metadata
+  created_at: string;
+  updated_at: string;
+}
+
+// Preassembly kirje (sama struktuur kui Installation)
+export interface Preassembly {
+  id: string;
+  // Projekti info
+  project_id: string;
+  model_id: string;
+  // Objekti identifikaatorid
+  guid: string;
+  guid_ifc?: string;
+  guid_ms?: string;
+  object_runtime_id?: number;
+  // Detaili andmed
+  assembly_mark: string;
+  product_name?: string;
+  file_name?: string;
+  // Tekla properties
+  cast_unit_weight?: string;
+  cast_unit_bottom_elevation?: string;
+  cast_unit_top_elevation?: string;
+  cast_unit_position_code?: string;
+  object_type?: string;
+  // Töötaja info
+  installer_id?: string;
+  installer_name: string;
+  user_email: string;
+  // Preassembly info
+  installation_method_id?: string;
+  installation_method_name?: string;
+  preassembled_at: string;
   // Meeskond
   team_members?: string;
   // Märkused
