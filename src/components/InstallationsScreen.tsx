@@ -127,6 +127,12 @@ function getMonthLabel(dateStr: string): string {
   return `${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
+function getFullMonthLabel(dateStr: string): string {
+  const date = new Date(dateStr);
+  const months = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni', 'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
+  return `${months[date.getMonth()]} ${date.getFullYear()}`;
+}
+
 function getDayKey(dateStr: string): string {
   const date = new Date(dateStr);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -801,8 +807,39 @@ export default function InstallationsScreen({
     setSelectedInstallMethods(prev => {
       const newMethods = { ...prev };
       if (newMethods[method]) {
-        // Remove method
+        // Remove method - also clear associated text fields
         delete newMethods[method];
+        // Clear the corresponding text resources
+        switch (method) {
+          case 'crane':
+            setCraneOperators([]);
+            setCraneOperatorInput('');
+            break;
+          case 'forklift':
+            setForkliftOperators([]);
+            setForkliftOperatorInput('');
+            break;
+          case 'poomtostuk':
+            setPoomtostukOperators([]);
+            setPoomtostukOperatorInput('');
+            break;
+          case 'kaartostuk':
+            setKaartostukOperators([]);
+            setKaartostukOperatorInput('');
+            break;
+          case 'troppija':
+            setTroppijad([]);
+            setTroppijaInput('');
+            break;
+          case 'monteerija':
+            setMonteerijad([]);
+            setMonteerijadInput('');
+            break;
+          case 'keevitaja':
+            setKeevitajad([]);
+            setKeevitajaInput('');
+            break;
+        }
       } else {
         // Add method with default count
         newMethods[method] = methodDefaults[method] || INSTALL_METHODS_CONFIG.find(m => m.key === method)?.defaultCount || 1;
@@ -1814,6 +1851,136 @@ export default function InstallationsScreen({
     } finally {
       setColoringInProgress(false);
     }
+  };
+
+  // Color only uninstalled preassemblies (those in preassemblyGuidSet but NOT in installedGuidSet)
+  const colorUninstalledPreassemblies = async (monthItems?: Preassembly[]) => {
+    setColoringInProgress(true);
+    try {
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) {
+        setColoringInProgress(false);
+        return;
+      }
+
+      // Reset all colors first
+      await api.viewer.setObjectState(undefined, { color: "reset" });
+
+      // Get GUIDs of uninstalled preassemblies (either from month or all)
+      const itemsToCheck = monthItems || preassemblies;
+      const uninstalledGuids: string[] = [];
+
+      for (const item of itemsToCheck) {
+        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guid && !installedGuids.has(guid)) {
+          uninstalledGuids.push(guid);
+        }
+      }
+
+      if (uninstalledGuids.length === 0) {
+        setMessage('Kõik preassembly detailid on juba paigaldatud');
+        setColoringInProgress(false);
+        return;
+      }
+
+      // Fetch all database GUIDs for white coloring
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) break;
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      // Find objects in loaded models
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of foundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
+      }
+
+      // Create set of uninstalled GUIDs for fast lookup
+      const uninstalledSet = new Set(uninstalledGuids);
+
+      // Build color arrays
+      const whiteByModel: Record<string, number[]> = {};
+      const preassemblyByModel: Record<string, number[]> = {};
+
+      for (const [guidLower, found] of foundByLowercase) {
+        if (uninstalledSet.has(guidLower)) {
+          // Uninstalled preassembly - PREASSEMBLY_COLOR
+          if (!preassemblyByModel[found.modelId]) preassemblyByModel[found.modelId] = [];
+          preassemblyByModel[found.modelId].push(found.runtimeId);
+        } else {
+          // Everything else - WHITE
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      // Apply colors in batches
+      const BATCH_SIZE = 5000;
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      for (const [modelId, runtimeIds] of Object.entries(preassemblyByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: PREASSEMBLY_COLOR }
+          );
+        }
+      }
+
+      const total = Object.values(preassemblyByModel).reduce((sum, arr) => sum + arr.length, 0);
+      setMessage(`Värvitud ${total} paigaldamata preassembly detaili`);
+
+    } catch (e) {
+      console.error('[PREASSEMBLY] Error coloring uninstalled:', e);
+    } finally {
+      setColoringInProgress(false);
+    }
+  };
+
+  // Select only uninstalled preassemblies from a list
+  const selectUninstalledPreassemblies = async (items: Preassembly[], e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const uninstalled = items.filter(item => {
+      const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+      return guid && !installedGuids.has(guid);
+    });
+
+    if (uninstalled.length === 0) {
+      setMessage('Kõik selle kuu preassembly detailid on juba paigaldatud');
+      return;
+    }
+
+    await selectPreassemblies(uninstalled);
+    setMessage(`Valitud ${uninstalled.length} paigaldamata detaili`);
   };
 
   // Toggle color by day - colors installations/preassemblies by day with unique colors
@@ -5323,8 +5490,14 @@ export default function InstallationsScreen({
                 preassemblyMonthGroups.map(month => {
                   // Check if any item in this month is highlighted
                   const hasHighlightedItems = month.allItems.some(item => highlightedItemIds.has(item.id));
+                  // Count uninstalled items
+                  const uninstalledCount = month.allItems.filter(item => {
+                    const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+                    return guid && !installedGuids.has(guid);
+                  }).length;
+                  const paMenuKey = `pa-${month.monthKey}`;
                   return (
-                  <div key={month.monthKey} className="installation-month-group">
+                  <div key={month.monthKey} className={`installation-month-group ${monthMenuOpen === paMenuKey ? 'menu-open' : ''}`}>
                     <div
                       className="month-group-header"
                       onClick={() => toggleMonth(month.monthKey)}
@@ -5338,10 +5511,52 @@ export default function InstallationsScreen({
                       <button className="month-group-toggle">
                         {expandedMonths.has(month.monthKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                       </button>
-                      <span className="month-label">{month.monthLabel}</span>
-                      <span className="month-count" style={{ background: '#7c3aed' }}>
+                      <span className="month-label">{getFullMonthLabel(month.allItems[0]?.preassembled_at || month.monthKey + '-01')}</span>
+                      <button
+                        className="month-count clickable"
+                        onClick={(e) => selectPreassemblies(month.allItems, e)}
+                        title="Vali kõik selle kuu detailid mudelis"
+                        style={{ background: '#7c3aed', color: '#fff' }}
+                      >
                         {month.allItems.length}
-                      </span>
+                      </button>
+                      {uninstalledCount < month.allItems.length && (
+                        <span
+                          title={`${uninstalledCount} paigaldamata / ${month.allItems.length - uninstalledCount} paigaldatud`}
+                          style={{
+                            fontSize: '10px',
+                            color: '#6b7280',
+                            marginLeft: '4px'
+                          }}
+                        >
+                          ({uninstalledCount} ootab)
+                        </span>
+                      )}
+                      {/* Three-dot menu for preassembly month */}
+                      <div className="month-menu-container" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="month-menu-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMonthMenuOpen(monthMenuOpen === paMenuKey ? null : paMenuKey);
+                          }}
+                          title="Rohkem valikuid"
+                        >
+                          <FiMoreVertical size={14} />
+                        </button>
+                        {monthMenuOpen === paMenuKey && (
+                          <div className="month-menu-dropdown">
+                            <button onClick={(e) => { selectUninstalledPreassemblies(month.allItems, e); setMonthMenuOpen(null); }}>
+                              <FiEye size={14} />
+                              <span>Vali ainult paigaldamata ({uninstalledCount})</span>
+                            </button>
+                            <button onClick={() => { colorUninstalledPreassemblies(month.allItems); setMonthMenuOpen(null); }}>
+                              <FiDroplet size={14} />
+                              <span>Värvi ainult paigaldamata</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     {expandedMonths.has(month.monthKey) && (
                       <div className="month-group-days">
