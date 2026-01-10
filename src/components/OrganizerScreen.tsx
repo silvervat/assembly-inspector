@@ -661,6 +661,73 @@ export default function OrganizerScreen({
   }, [loadData]);
 
   // ============================================
+  // REALTIME COLLABORATION
+  // ============================================
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    // Track last update time to prevent duplicate refreshes
+    let lastRefreshTime = Date.now();
+    const DEBOUNCE_MS = 1000; // Minimum time between refreshes
+
+    // Create a unique channel for this project
+    const channel = supabase
+      .channel(`organizer-${projectId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'organizer_groups',
+          filter: `trimble_project_id=eq.${projectId}`
+        },
+        (payload) => {
+          // Check if change was made by someone else
+          const record = payload.new as { updated_by?: string } | null;
+          const isOwnChange = record?.updated_by === tcUserEmail;
+
+          if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
+            lastRefreshTime = Date.now();
+            console.log('📡 Realtime: Groups changed by another user');
+            showToast('📡 Andmeid uuendati teise kasutaja poolt');
+            refreshData();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'organizer_group_items',
+          filter: `trimble_project_id=eq.${projectId}`
+        },
+        (payload) => {
+          // Check if change was made by someone else
+          const record = payload.new as { updated_by?: string } | null;
+          const isOwnChange = record?.updated_by === tcUserEmail;
+
+          if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
+            lastRefreshTime = Date.now();
+            console.log('📡 Realtime: Items changed by another user');
+            showToast('📡 Andmeid uuendati teise kasutaja poolt');
+            refreshData();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime subscription status:', status);
+      });
+
+    // Cleanup on unmount
+    return () => {
+      console.log('📡 Unsubscribing from realtime channel');
+      supabase.removeChannel(channel);
+    };
+  }, [projectId, tcUserEmail, refreshData, showToast]);
+
+  // ============================================
   // MODEL SELECTION POLLING
   // ============================================
 
