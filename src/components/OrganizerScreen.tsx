@@ -2226,6 +2226,7 @@ export default function OrganizerScreen({
           }
         }
         console.log(`Converted ${searchGuids.length}/${rawValues.length} MS GUIDs to IFC format`);
+        console.log('Converted GUIDs:', rawValues.map(ms => ({ ms: ms.trim(), ifc: msToIfcGuid(ms.trim()) })));
       } else if (isIfcGuidInput) {
         // Already IFC format
         searchGuids = rawValues.map(v => v.toLowerCase().trim());
@@ -2248,10 +2249,17 @@ export default function OrganizerScreen({
 
         if (error) throw error;
 
+        console.log(`Database has ${(data || []).length} objects for project ${projectId}`);
+        if (data && data.length > 0) {
+          console.log('Sample DB GUIDs:', data.slice(0, 5).map(o => o.guid_ifc));
+        }
+        console.log('Searching for GUIDs:', searchGuids);
+
         // Filter by matching GUIDs (case-insensitive)
         matchedObjects = (data || []).filter(obj =>
           obj.guid_ifc && searchGuids.includes(obj.guid_ifc.toLowerCase())
         );
+        console.log(`Found ${matchedObjects.length} matches`);
       } else {
         // Search by assembly_mark
         const searchValues = rawValues.map(v => v.toLowerCase().trim());
