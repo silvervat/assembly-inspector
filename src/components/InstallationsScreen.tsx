@@ -428,10 +428,25 @@ export default function InstallationsScreen({
   const [methodDefaults] = useState<Record<InstallMethodType, number>>(loadDefaultCounts);
   const [hoveredMethod, setHoveredMethod] = useState<InstallMethodType | null>(null);
 
-  // Team members
-  const [teamMembers, setTeamMembers] = useState<string[]>(() => {
+  // Known team member names for auto-suggestions
+  const [knownTeamMembers, setKnownTeamMembers] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const teamInputRef = useRef<HTMLInputElement>(null);
+
+  // Resource operators/workers - separate arrays for each type
+  const [craneOperators, setCraneOperators] = useState<string[]>([]);
+  const [craneOperatorInput, setCraneOperatorInput] = useState('');
+  const [forkliftOperators, setForkliftOperators] = useState<string[]>([]);
+  const [forkliftOperatorInput, setForkliftOperatorInput] = useState('');
+  const [poomtostukOperators, setPoomtostukOperators] = useState<string[]>([]);
+  const [poomtostukOperatorInput, setPoomtostukOperatorInput] = useState('');
+  const [kaartostukOperators, setKaartostukOperators] = useState<string[]>([]);
+  const [kaartostukOperatorInput, setKaartostukOperatorInput] = useState('');
+  const [troppijad, setTroppijad] = useState<string[]>([]);
+  const [troppijaInput, setTroppijaInput] = useState('');
+  const [monteerijad, setMonteerijad] = useState<string[]>(() => {
     // Load from localStorage
-    const saved = localStorage.getItem(`team_members_${projectId}`);
+    const saved = localStorage.getItem(`monteerijad_${projectId}`);
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -439,10 +454,9 @@ export default function InstallationsScreen({
     }
     return [];
   });
-  const [teamMemberInput, setTeamMemberInput] = useState<string>('');
-  const [knownTeamMembers, setKnownTeamMembers] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const teamInputRef = useRef<HTMLInputElement>(null);
+  const [monteerijadInput, setMonteerijadInput] = useState('');
+  const [keevitajad, setKeevitajad] = useState<string[]>([]);
+  const [keevitajaInput, setKeevitajaInput] = useState('');
 
   // List view state
   const [showList, setShowList] = useState(false);
@@ -592,8 +606,8 @@ export default function InstallationsScreen({
   }, [selectedInstallMethods, projectId]);
 
   useEffect(() => {
-    localStorage.setItem(`team_members_${projectId}`, JSON.stringify(teamMembers));
-  }, [teamMembers, projectId]);
+    localStorage.setItem(`monteerijad_${projectId}`, JSON.stringify(monteerijad));
+  }, [monteerijad, projectId]);
 
   // Load known team members from database
   const loadKnownTeamMembers = async () => {
@@ -653,24 +667,13 @@ export default function InstallationsScreen({
     }));
   };
 
-  // Filter suggestions based on input
-  const filteredSuggestions = teamMemberInput.trim()
+  // Filter suggestions based on input (for monteerijad)
+  const filteredSuggestions = monteerijadInput.trim()
     ? knownTeamMembers.filter(name =>
-        name.toLowerCase().includes(teamMemberInput.toLowerCase()) &&
-        !teamMembers.includes(name)
+        name.toLowerCase().includes(monteerijadInput.toLowerCase()) &&
+        !monteerijad.includes(name)
       )
     : [];
-
-  // Add team member
-  const addTeamMember = (name: string) => {
-    const trimmed = name.trim();
-    if (trimmed && !teamMembers.includes(trimmed)) {
-      setTeamMembers([...teamMembers, trimmed]);
-    }
-    setTeamMemberInput('');
-    setShowSuggestions(false);
-    teamInputRef.current?.focus();
-  };
 
   // Selection checking function
   const checkSelection = async () => {
@@ -1732,9 +1735,9 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Validate team members
-    if (teamMembers.length === 0) {
-      setMessage('Lisa vähemalt üks meeskonna liige!');
+    // Validate monteerijad (mandatory)
+    if (monteerijad.length === 0) {
+      setMessage('Lisa vähemalt üks monteerija!');
       return;
     }
 
@@ -1815,7 +1818,15 @@ export default function InstallationsScreen({
         installation_method_name: methodName,
         installed_at: installDate,
         notes: notes || null,
-        team_members: teamMembers.length > 0 ? teamMembers.join(', ') : null
+        team_members: [
+          ...monteerijad.map(m => `Monteerija: ${m}`),
+          ...troppijad.map(t => `Troppija: ${t}`),
+          ...keevitajad.map(k => `Keevitaja: ${k}`),
+          ...craneOperators.map(c => `Kraana: ${c}`),
+          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
+          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
+          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+        ].join(', ') || null
       }));
 
       const { error } = await supabase
@@ -1831,7 +1842,7 @@ export default function InstallationsScreen({
       } else {
         setMessage(`${newObjects.length} detail(i) edukalt paigaldatud!`);
         setNotes('');
-        // Don't reset teamMembers and method - keep them for next installation
+        // Don't reset monteerijad and method - keep them for next installation
 
         // Reload data - skip full recoloring (we'll just color the new objects)
         await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
@@ -1865,9 +1876,9 @@ export default function InstallationsScreen({
       return;
     }
 
-    // Validate team members
-    if (teamMembers.length === 0) {
-      setMessage('Lisa vähemalt üks meeskonna liige!');
+    // Validate monteerijad (mandatory)
+    if (monteerijad.length === 0) {
+      setMessage('Lisa vähemalt üks monteerija!');
       return;
     }
 
@@ -1961,7 +1972,15 @@ export default function InstallationsScreen({
         installation_method_name: methodName,
         preassembled_at: installDate, // Use same date field, just different column name
         notes: notes || null,
-        team_members: teamMembers.length > 0 ? teamMembers.join(', ') : null
+        team_members: [
+          ...monteerijad.map(m => `Monteerija: ${m}`),
+          ...troppijad.map(t => `Troppija: ${t}`),
+          ...keevitajad.map(k => `Keevitaja: ${k}`),
+          ...craneOperators.map(c => `Kraana: ${c}`),
+          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
+          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
+          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+        ].join(', ') || null
       }));
 
       const { error } = await supabase
@@ -2226,7 +2245,14 @@ export default function InstallationsScreen({
     // Set default date and reset form
     setInstallDate(getLocalDateTimeString());
     setNotes('');
-    setTeamMembers([]);
+    // Reset all worker arrays
+    setMonteerijad([]);
+    setTroppijad([]);
+    setKeevitajad([]);
+    setCraneOperators([]);
+    setForkliftOperators([]);
+    setPoomtostukOperators([]);
+    setKaartostukOperators([]);
     setSelectedInstallMethods({ crane: 1 });
     setShowMarkInstalledModal(true);
   };
@@ -2240,8 +2266,8 @@ export default function InstallationsScreen({
       setMessage('Kuupäev on kohustuslik');
       return;
     }
-    if (teamMembers.length === 0) {
-      setMessage('Lisa vähemalt üks meeskonnaliige');
+    if (monteerijad.length === 0) {
+      setMessage('Lisa vähemalt üks monteerija');
       return;
     }
     if (Object.values(selectedInstallMethods).every(v => !v || v === 0)) {
@@ -2300,7 +2326,15 @@ export default function InstallationsScreen({
         user_email: user.email || '',
         installation_method_name: methodName || null,
         installed_at: installDate,
-        team_members: teamMembers.length > 0 ? teamMembers.join(', ') : null,
+        team_members: [
+          ...monteerijad.map(m => `Monteerija: ${m}`),
+          ...troppijad.map(t => `Troppija: ${t}`),
+          ...keevitajad.map(k => `Keevitaja: ${k}`),
+          ...craneOperators.map(c => `Kraana: ${c}`),
+          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
+          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
+          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+        ].join(', ') || null,
         notes: notes || null
       }));
 
@@ -3527,69 +3561,10 @@ export default function InstallationsScreen({
             </div>
 
             <div className="form-row">
-              <label>Paigaldus ressursid</label>
-              {/* Machines row */}
-              <div className="install-methods-row">
-                {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
-                  const isActive = !!selectedInstallMethods[method.key];
-                  const count = selectedInstallMethods[method.key] || 0;
-                  const isHovered = hoveredMethod === method.key;
-
-                  return (
-                    <div
-                      key={method.key}
-                      className="method-selector-wrapper"
-                      onMouseEnter={() => setHoveredMethod(method.key)}
-                      onMouseLeave={() => setHoveredMethod(null)}
-                    >
-                      <button
-                        type="button"
-                        className={`method-icon-btn ${isActive ? 'active' : ''}`}
-                        style={{
-                          backgroundColor: isActive ? method.activeBgColor : method.bgColor,
-                        }}
-                        onClick={() => toggleInstallMethod(method.key)}
-                        title={method.label}
-                      >
-                        <img
-                          src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
-                          alt={method.label}
-                          style={{ filter: isActive ? 'brightness(0) invert(1)' : method.filterCss }}
-                        />
-                        {isActive && count > 0 && (
-                          <span
-                            className="method-count-badge"
-                            style={{ backgroundColor: `${method.activeBgColor}dd` }}
-                          >
-                            {count}
-                          </span>
-                        )}
-                      </button>
-
-                      {isHovered && isActive && (
-                        <div className="method-qty-dropdown">
-                          {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
-                            <button
-                              key={num}
-                              type="button"
-                              className={`qty-btn ${count === num ? 'active' : ''}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setMethodCount(method.key, num);
-                              }}
-                            >
-                              {num}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              {/* Labor row */}
-              <div className="install-methods-row">
-                {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
+              <label>{entryMode === 'preassembly' ? 'Preassembly ressursid' : 'Paigaldus ressursid'}</label>
+              {/* All resources in one row with wrapping */}
+              <div className="install-methods-row" style={{ maxHeight: '88px', overflow: 'hidden' }}>
+                {INSTALL_METHODS_CONFIG.map(method => {
                   const isActive = !!selectedInstallMethods[method.key];
                   const count = selectedInstallMethods[method.key] || 0;
                   const isHovered = hoveredMethod === method.key;
@@ -3648,17 +3623,190 @@ export default function InstallationsScreen({
               </div>
             </div>
 
+            {/* Crane Operators */}
+            {selectedInstallMethods.crane && selectedInstallMethods.crane > 0 && (
+              <div className="form-row">
+                <label><FiTruck size={14} /> Kraana operaatorid ({selectedInstallMethods.crane})</label>
+                <div className="team-members-input">
+                  {craneOperators.length > 0 && (
+                    <div className="team-chips">
+                      {craneOperators.map((operator, idx) => (
+                        <span key={idx} className="team-chip">
+                          {operator}
+                          <button
+                            type="button"
+                            onClick={() => setCraneOperators(craneOperators.filter((_, i) => i !== idx))}
+                            className="chip-remove"
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {craneOperators.length < selectedInstallMethods.crane && (
+                    <input
+                      type="text"
+                      value={craneOperatorInput}
+                      onChange={(e) => setCraneOperatorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && craneOperatorInput.trim()) {
+                          e.preventDefault();
+                          if (craneOperators.length < selectedInstallMethods.crane!) {
+                            setCraneOperators([...craneOperators, craneOperatorInput.trim()]);
+                            setCraneOperatorInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa kraana ${craneOperators.length + 1} operaator (Enter)`}
+                      className="full-width-input"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Forklift Operators */}
+            {selectedInstallMethods.forklift && selectedInstallMethods.forklift > 0 && (
+              <div className="form-row">
+                <label><FiTruck size={14} /> Teleskooplaaduri operaatorid ({selectedInstallMethods.forklift})</label>
+                <div className="team-members-input">
+                  {forkliftOperators.length > 0 && (
+                    <div className="team-chips">
+                      {forkliftOperators.map((operator, idx) => (
+                        <span key={idx} className="team-chip">
+                          {operator}
+                          <button
+                            type="button"
+                            onClick={() => setForkliftOperators(forkliftOperators.filter((_, i) => i !== idx))}
+                            className="chip-remove"
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {forkliftOperators.length < selectedInstallMethods.forklift && (
+                    <input
+                      type="text"
+                      value={forkliftOperatorInput}
+                      onChange={(e) => setForkliftOperatorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && forkliftOperatorInput.trim()) {
+                          e.preventDefault();
+                          if (forkliftOperators.length < selectedInstallMethods.forklift!) {
+                            setForkliftOperators([...forkliftOperators, forkliftOperatorInput.trim()]);
+                            setForkliftOperatorInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa teleskooplaadur ${forkliftOperators.length + 1} operaator (Enter)`}
+                      className="full-width-input"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Poomtostuk Operators */}
+            {selectedInstallMethods.poomtostuk && selectedInstallMethods.poomtostuk > 0 && (
+              <div className="form-row">
+                <label><FiTruck size={14} /> Korvtõstuki operaatorid ({selectedInstallMethods.poomtostuk})</label>
+                <div className="team-members-input">
+                  {poomtostukOperators.length > 0 && (
+                    <div className="team-chips">
+                      {poomtostukOperators.map((operator, idx) => (
+                        <span key={idx} className="team-chip">
+                          {operator}
+                          <button
+                            type="button"
+                            onClick={() => setPoomtostukOperators(poomtostukOperators.filter((_, i) => i !== idx))}
+                            className="chip-remove"
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {poomtostukOperators.length < selectedInstallMethods.poomtostuk && (
+                    <input
+                      type="text"
+                      value={poomtostukOperatorInput}
+                      onChange={(e) => setPoomtostukOperatorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && poomtostukOperatorInput.trim()) {
+                          e.preventDefault();
+                          if (poomtostukOperators.length < selectedInstallMethods.poomtostuk!) {
+                            setPoomtostukOperators([...poomtostukOperators, poomtostukOperatorInput.trim()]);
+                            setPoomtostukOperatorInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa korvtõstuk ${poomtostukOperators.length + 1} operaator (Enter)`}
+                      className="full-width-input"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Kaartostuk Operators */}
+            {selectedInstallMethods.kaartostuk && selectedInstallMethods.kaartostuk > 0 && (
+              <div className="form-row">
+                <label><FiTruck size={14} /> Käärtõstuki operaatorid ({selectedInstallMethods.kaartostuk})</label>
+                <div className="team-members-input">
+                  {kaartostukOperators.length > 0 && (
+                    <div className="team-chips">
+                      {kaartostukOperators.map((operator, idx) => (
+                        <span key={idx} className="team-chip">
+                          {operator}
+                          <button
+                            type="button"
+                            onClick={() => setKaartostukOperators(kaartostukOperators.filter((_, i) => i !== idx))}
+                            className="chip-remove"
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {kaartostukOperators.length < selectedInstallMethods.kaartostuk && (
+                    <input
+                      type="text"
+                      value={kaartostukOperatorInput}
+                      onChange={(e) => setKaartostukOperatorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && kaartostukOperatorInput.trim()) {
+                          e.preventDefault();
+                          if (kaartostukOperators.length < selectedInstallMethods.kaartostuk!) {
+                            setKaartostukOperators([...kaartostukOperators, kaartostukOperatorInput.trim()]);
+                            setKaartostukOperatorInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa käärtõstuk ${kaartostukOperators.length + 1} operaator (Enter)`}
+                      className="full-width-input"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Monteerijad (required) */}
             <div className="form-row">
-              <label><FiUsers size={14} /> Meeskond <span className="required-indicator">*</span></label>
+              <label><FiUsers size={14} /> Monteerijad <span className="required-indicator">*</span> {selectedInstallMethods.monteerija ? `(${selectedInstallMethods.monteerija})` : ''}</label>
               <div className="team-members-input">
-                {teamMembers.length > 0 && (
+                {monteerijad.length > 0 && (
                   <div className="team-chips">
-                    {teamMembers.map((member, idx) => (
+                    {monteerijad.map((member, idx) => (
                       <span key={idx} className="team-chip">
                         {member}
                         <button
                           type="button"
-                          onClick={() => setTeamMembers(teamMembers.filter((_, i) => i !== idx))}
+                          onClick={() => setMonteerijad(monteerijad.filter((_, i) => i !== idx))}
                           className="chip-remove"
                         >
                           <FiX size={12} />
@@ -3667,42 +3815,145 @@ export default function InstallationsScreen({
                     ))}
                   </div>
                 )}
-                <div className="team-input-wrapper">
-                  <input
-                    ref={teamInputRef}
-                    type="text"
-                    value={teamMemberInput}
-                    onChange={(e) => {
-                      setTeamMemberInput(e.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onFocus={() => setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && teamMemberInput.trim()) {
-                        e.preventDefault();
-                        addTeamMember(teamMemberInput);
-                      }
-                    }}
-                    placeholder="Lisa meeskonna liige (Enter)"
-                    className="full-width-input"
-                  />
-                  {showSuggestions && filteredSuggestions.length > 0 && (
-                    <div className="team-suggestions">
-                      {filteredSuggestions.slice(0, 5).map((name, idx) => (
-                        <div
-                          key={idx}
-                          className="team-suggestion-item"
-                          onMouseDown={() => addTeamMember(name)}
-                        >
-                          {name}
-                        </div>
+                {(!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) && (
+                  <div className="team-input-wrapper">
+                    <input
+                      ref={teamInputRef}
+                      type="text"
+                      value={monteerijadInput}
+                      onChange={(e) => {
+                        setMonteerijadInput(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && monteerijadInput.trim()) {
+                          e.preventDefault();
+                          if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                            setMonteerijad([...monteerijad, monteerijadInput.trim()]);
+                            setMonteerijadInput('');
+                            // Add to known team members for suggestions
+                            if (!knownTeamMembers.includes(monteerijadInput.trim())) {
+                              setKnownTeamMembers([...knownTeamMembers, monteerijadInput.trim()]);
+                            }
+                          }
+                        }
+                      }}
+                      placeholder={selectedInstallMethods.monteerija
+                        ? `Lisa monteerija ${monteerijad.length + 1}/${selectedInstallMethods.monteerija} (Enter)`
+                        : 'Lisa monteerija (Enter)'}
+                      className="full-width-input"
+                    />
+                    {showSuggestions && filteredSuggestions.length > 0 && (
+                      <div className="team-suggestions">
+                        {filteredSuggestions.slice(0, 5).map((name, idx) => (
+                          <div
+                            key={idx}
+                            className="team-suggestion-item"
+                            onMouseDown={() => {
+                              if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                                setMonteerijad([...monteerijad, name]);
+                                setMonteerijadInput('');
+                                setShowSuggestions(false);
+                              }
+                            }}
+                          >
+                            {name}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Troppijad */}
+            {selectedInstallMethods.troppija && selectedInstallMethods.troppija > 0 && (
+              <div className="form-row">
+                <label><FiUsers size={14} /> Troppijad ({selectedInstallMethods.troppija})</label>
+                <div className="team-members-input">
+                  {troppijad.length > 0 && (
+                    <div className="team-chips">
+                      {troppijad.map((member, idx) => (
+                        <span key={idx} className="team-chip">
+                          {member}
+                          <button
+                            type="button"
+                            onClick={() => setTroppijad(troppijad.filter((_, i) => i !== idx))}
+                            className="chip-remove"
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
                       ))}
                     </div>
                   )}
+                  {troppijad.length < selectedInstallMethods.troppija && (
+                    <input
+                      type="text"
+                      value={troppijaInput}
+                      onChange={(e) => setTroppijaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && troppijaInput.trim()) {
+                          e.preventDefault();
+                          if (troppijad.length < selectedInstallMethods.troppija!) {
+                            setTroppijad([...troppijad, troppijaInput.trim()]);
+                            setTroppijaInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa troppija ${troppijad.length + 1}/${selectedInstallMethods.troppija} (Enter)`}
+                      className="full-width-input"
+                    />
+                  )}
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* Keevitajad */}
+            {selectedInstallMethods.keevitaja && selectedInstallMethods.keevitaja > 0 && (
+              <div className="form-row">
+                <label><FiUsers size={14} /> Keevitajad ({selectedInstallMethods.keevitaja})</label>
+                <div className="team-members-input">
+                  {keevitajad.length > 0 && (
+                    <div className="team-chips">
+                      {keevitajad.map((member, idx) => (
+                        <span key={idx} className="team-chip">
+                          {member}
+                          <button
+                            type="button"
+                            onClick={() => setKeevitajad(keevitajad.filter((_, i) => i !== idx))}
+                            className="chip-remove"
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {keevitajad.length < selectedInstallMethods.keevitaja && (
+                    <input
+                      type="text"
+                      value={keevitajaInput}
+                      onChange={(e) => setKeevitajaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && keevitajaInput.trim()) {
+                          e.preventDefault();
+                          if (keevitajad.length < selectedInstallMethods.keevitaja!) {
+                            setKeevitajad([...keevitajad, keevitajaInput.trim()]);
+                            setKeevitajaInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa keevitaja ${keevitajad.length + 1}/${selectedInstallMethods.keevitaja} (Enter)`}
+                      className="full-width-input"
+                    />
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="form-row">
               <label><FiEdit2 size={14} /> Märkused</label>
@@ -3719,13 +3970,13 @@ export default function InstallationsScreen({
               <button
                 className="save-installation-btn"
                 onClick={entryMode === 'installation' ? saveInstallation : savePreassembly}
-                disabled={saving || newObjectsCount === 0 || teamMembers.length === 0}
+                disabled={saving || newObjectsCount === 0 || monteerijad.length === 0}
                 style={{
                   background: entryMode === 'preassembly' ? '#7c3aed' : undefined
                 }}
               >
                 {saving ? 'Salvestan...' :
-                  teamMembers.length === 0 ? 'Lisa meeskonna liige' :
+                  monteerijad.length === 0 ? 'Lisa monteerija' :
                   entryMode === 'installation' ?
                     <><FiPlus size={16} /> Salvesta paigaldus ({newObjectsCount})</> :
                     <><FiPlus size={16} /> Salvesta preassembly ({newObjectsCount})</>
@@ -5742,14 +5993,14 @@ export default function InstallationsScreen({
                 </div>
               </div>
 
-              {/* Team members */}
+              {/* Monteerijad (required) */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                  <FiUsers size={14} /> Meeskond *
+                  <FiUsers size={14} /> Monteerijad * {selectedInstallMethods.monteerija ? `(${selectedInstallMethods.monteerija})` : ''}
                 </label>
-                {teamMembers.length > 0 && (
+                {monteerijad.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
-                    {teamMembers.map((member, idx) => (
+                    {monteerijad.map((member, idx) => (
                       <span
                         key={idx}
                         style={{
@@ -5765,7 +6016,7 @@ export default function InstallationsScreen({
                       >
                         {member}
                         <button
-                          onClick={() => setTeamMembers(teamMembers.filter((_, i) => i !== idx))}
+                          onClick={() => setMonteerijad(monteerijad.filter((_, i) => i !== idx))}
                           style={{
                             background: 'none',
                             border: 'none',
@@ -5780,21 +6031,207 @@ export default function InstallationsScreen({
                     ))}
                   </div>
                 )}
-                <input
-                  type="text"
-                  value={teamMemberInput}
-                  onChange={(e) => setTeamMemberInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && teamMemberInput.trim()) {
-                      e.preventDefault();
-                      setTeamMembers([...teamMembers, teamMemberInput.trim()]);
-                      setTeamMemberInput('');
-                    }
-                  }}
-                  placeholder="Lisa meeskonna liige (Enter)"
-                  style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
-                />
+                {(!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) && (
+                  <input
+                    type="text"
+                    value={monteerijadInput}
+                    onChange={(e) => setMonteerijadInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && monteerijadInput.trim()) {
+                        e.preventDefault();
+                        if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                          setMonteerijad([...monteerijad, monteerijadInput.trim()]);
+                          setMonteerijadInput('');
+                        }
+                      }
+                    }}
+                    placeholder={selectedInstallMethods.monteerija
+                      ? `Lisa monteerija ${monteerijad.length + 1}/${selectedInstallMethods.monteerija} (Enter)`
+                      : 'Lisa monteerija (Enter)'}
+                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                  />
+                )}
               </div>
+
+              {/* Troppijad */}
+              {selectedInstallMethods.troppija && selectedInstallMethods.troppija > 0 && (
+                <div className="form-row" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                    <FiUsers size={14} /> Troppijad ({selectedInstallMethods.troppija})
+                  </label>
+                  {troppijad.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                      {troppijad.map((member, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 8px',
+                            background: '#ccfbf1',
+                            color: '#11625b',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          {member}
+                          <button
+                            onClick={() => setTroppijad(troppijad.filter((_, i) => i !== idx))}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '2px',
+                              cursor: 'pointer',
+                              color: '#11625b'
+                            }}
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {troppijad.length < selectedInstallMethods.troppija && (
+                    <input
+                      type="text"
+                      value={troppijaInput}
+                      onChange={(e) => setTroppijaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && troppijaInput.trim()) {
+                          e.preventDefault();
+                          if (troppijad.length < selectedInstallMethods.troppija!) {
+                            setTroppijad([...troppijad, troppijaInput.trim()]);
+                            setTroppijaInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa troppija ${troppijad.length + 1}/${selectedInstallMethods.troppija} (Enter)`}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Keevitajad */}
+              {selectedInstallMethods.keevitaja && selectedInstallMethods.keevitaja > 0 && (
+                <div className="form-row" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                    <FiUsers size={14} /> Keevitajad ({selectedInstallMethods.keevitaja})
+                  </label>
+                  {keevitajad.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                      {keevitajad.map((member, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 8px',
+                            background: '#e5e7eb',
+                            color: '#374151',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          {member}
+                          <button
+                            onClick={() => setKeevitajad(keevitajad.filter((_, i) => i !== idx))}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '2px',
+                              cursor: 'pointer',
+                              color: '#374151'
+                            }}
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {keevitajad.length < selectedInstallMethods.keevitaja && (
+                    <input
+                      type="text"
+                      value={keevitajaInput}
+                      onChange={(e) => setKeevitajaInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && keevitajaInput.trim()) {
+                          e.preventDefault();
+                          if (keevitajad.length < selectedInstallMethods.keevitaja!) {
+                            setKeevitajad([...keevitajad, keevitajaInput.trim()]);
+                            setKeevitajaInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa keevitaja ${keevitajad.length + 1}/${selectedInstallMethods.keevitaja} (Enter)`}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                    />
+                  )}
+                </div>
+              )}
+
+              {/* Crane operators */}
+              {selectedInstallMethods.crane && selectedInstallMethods.crane > 0 && (
+                <div className="form-row" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
+                    <FiTruck size={14} /> Kraana operaatorid ({selectedInstallMethods.crane})
+                  </label>
+                  {craneOperators.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+                      {craneOperators.map((operator, idx) => (
+                        <span
+                          key={idx}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 8px',
+                            background: '#dbeafe',
+                            color: '#1e40af',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          {operator}
+                          <button
+                            onClick={() => setCraneOperators(craneOperators.filter((_, i) => i !== idx))}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              padding: '2px',
+                              cursor: 'pointer',
+                              color: '#1e40af'
+                            }}
+                          >
+                            <FiX size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {craneOperators.length < selectedInstallMethods.crane && (
+                    <input
+                      type="text"
+                      value={craneOperatorInput}
+                      onChange={(e) => setCraneOperatorInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && craneOperatorInput.trim()) {
+                          e.preventDefault();
+                          if (craneOperators.length < selectedInstallMethods.crane!) {
+                            setCraneOperators([...craneOperators, craneOperatorInput.trim()]);
+                            setCraneOperatorInput('');
+                          }
+                        }
+                      }}
+                      placeholder={`Lisa kraana ${craneOperators.length + 1} operaator (Enter)`}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Notes */}
               <div className="form-row" style={{ marginBottom: '16px' }}>
