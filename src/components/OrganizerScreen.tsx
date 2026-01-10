@@ -454,6 +454,15 @@ export default function OrganizerScreen({
     }
   });
 
+  const [hideItemOnAdd, setHideItemOnAdd] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(`organizer_hideOnAdd_${tcUserEmail}`);
+      return saved !== null ? JSON.parse(saved) : false; // Default: disabled
+    } catch {
+      return false;
+    }
+  });
+
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -519,6 +528,19 @@ export default function OrganizerScreen({
       const newValue = !prev;
       try {
         localStorage.setItem(`organizer_autoExpand_${tcUserEmail}`, JSON.stringify(newValue));
+      } catch (e) {
+        console.warn('Failed to save setting:', e);
+      }
+      return newValue;
+    });
+  }, [tcUserEmail]);
+
+  // Toggle and save hideItemOnAdd setting
+  const toggleHideItemOnAdd = useCallback(() => {
+    setHideItemOnAdd(prev => {
+      const newValue = !prev;
+      try {
+        localStorage.setItem(`organizer_hideOnAdd_${tcUserEmail}`, JSON.stringify(newValue));
       } catch (e) {
         console.warn('Failed to save setting:', e);
       }
@@ -1531,6 +1553,31 @@ export default function OrganizerScreen({
       // Color newly added items directly if coloring mode is active and group has a color
       if (colorByGroup && groupColor && addedGuids.length > 0) {
         await colorItemsDirectly(addedGuids, groupColor);
+      }
+
+      // Hide items from model if setting is enabled
+      if (hideItemOnAdd && addedGuids.length > 0) {
+        try {
+          const foundObjects = await findObjectsInLoadedModels(api, addedGuids);
+          if (foundObjects.size > 0) {
+            // Group by model for batch operation
+            const byModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+
+            // Hide all found objects
+            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                { visible: false }
+              );
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to hide items:', e);
+        }
       }
 
       // Use silent refresh to avoid UI flash (no "Laadin..." state)
@@ -4219,17 +4266,47 @@ export default function OrganizerScreen({
                 </button>
               </div>
 
-              {/* Placeholder for future settings */}
+              {/* Hide item on add setting */}
               <div style={{
-                marginTop: '16px',
-                padding: '12px',
-                background: '#f5f5f5',
-                borderRadius: '8px',
-                fontSize: '12px',
-                color: '#666',
-                textAlign: 'center'
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 0',
+                borderBottom: '1px solid var(--modus-border)'
               }}>
-                Rohkem seadeid lisandub varsti...
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
+                    Gruppi lisatud detail peidetakse mudelist
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    Hea andmete sisestamiseks, et ei tekiks topeltvalikuid mudelist
+                  </div>
+                </div>
+                <button
+                  onClick={toggleHideItemOnAdd}
+                  style={{
+                    width: '50px',
+                    height: '26px',
+                    borderRadius: '13px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    position: 'relative',
+                    background: hideItemOnAdd ? '#059669' : '#d1d5db',
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute',
+                    top: '3px',
+                    left: hideItemOnAdd ? '27px' : '3px',
+                    width: '20px',
+                    height: '20px',
+                    borderRadius: '50%',
+                    background: 'white',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    transition: 'left 0.2s'
+                  }} />
+                </button>
               </div>
             </div>
             <div className="org-modal-footer">
