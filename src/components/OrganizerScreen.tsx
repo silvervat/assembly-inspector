@@ -446,6 +446,7 @@ export default function OrganizerScreen({
   const isCheckingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const groupClickSelectionRef = useRef(false); // Track if selection came from group click
+  const groupsRef = useRef<OrganizerGroup[]>([]); // For Realtime callback access
 
   // Computed: Selected GUIDs that are already in groups (for highlighting)
   const selectedGuidsInGroups = useMemo(() => {
@@ -709,6 +710,11 @@ export default function OrganizerScreen({
   // REALTIME COLLABORATION
   // ============================================
 
+  // Keep groupsRef in sync with groups for Realtime callback
+  useEffect(() => {
+    groupsRef.current = groups;
+  }, [groups]);
+
   useEffect(() => {
     if (!projectId) return;
 
@@ -720,16 +726,31 @@ export default function OrganizerScreen({
       console.log(`📡 Realtime ${table}:`, payload.eventType, payload);
 
       // Get the record (new for INSERT/UPDATE, old for DELETE)
-      const record = (payload.new || payload.old) as { trimble_project_id?: string; updated_by?: string; created_by?: string } | null;
+      const record = (payload.new || payload.old) as {
+        trimble_project_id?: string;
+        group_id?: string;
+        updated_by?: string;
+        created_by?: string;
+        added_by?: string;
+      } | null;
 
-      // Filter by project (since we can't use filter in subscription reliably)
-      if (record?.trimble_project_id !== projectId) {
-        console.log('📡 Skipping - different project');
-        return;
+      // Filter by project - groups have trimble_project_id, items have group_id
+      if (table === 'groups') {
+        if (record?.trimble_project_id !== projectId) {
+          console.log('📡 Skipping - different project');
+          return;
+        }
+      } else if (table === 'items') {
+        // For items, check if the group_id belongs to our loaded groups
+        const groupId = record?.group_id;
+        if (!groupId || !groupsRef.current.some(g => g.id === groupId)) {
+          console.log('📡 Skipping item - group not in our project');
+          return;
+        }
       }
 
       // Check if change was made by current user
-      const changeAuthor = record?.updated_by || record?.created_by;
+      const changeAuthor = record?.updated_by || record?.created_by || record?.added_by;
       const isOwnChange = changeAuthor === tcUserEmail;
 
       if (!isOwnChange && Date.now() - lastRefreshTime > DEBOUNCE_MS) {
