@@ -556,6 +556,10 @@ export default function InstallationsScreen({
   // Track colored object IDs for proper reset
   const coloredObjectsRef = useRef<Map<string, number[]>>(new Map());
 
+  // Track last clicked item for shift-click range selection
+  const lastClickedInstallationRef = useRef<string | null>(null);
+  const lastClickedPreassemblyRef = useRef<string | null>(null);
+
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editDate, setEditDate] = useState<string>('');
@@ -945,8 +949,9 @@ export default function InstallationsScreen({
   };
 
   // Check which items cannot be found in currently loaded models
-  const checkUnfoundItems = async () => {
-    const items = entryMode === 'preassembly' ? preassemblies : installations;
+  const checkUnfoundItems = async (mode?: 'installation' | 'preassembly') => {
+    const checkMode = mode || entryMode;
+    const items = checkMode === 'preassembly' ? preassemblies : installations;
     if (items.length === 0) {
       setUnfoundItemIds(new Set());
       return;
@@ -955,7 +960,6 @@ export default function InstallationsScreen({
     // Collect all unique GUIDs from items (keep original case for API, lowercase for lookup)
     const guidToItemIds = new Map<string, string[]>(); // lowercase guid -> item ids
     const originalGuids: string[] = []; // original case guids for API
-    const lowerToOriginal = new Map<string, string>(); // lowercase -> original
 
     for (const item of items) {
       const originalGuid = item.guid_ifc || item.guid || '';
@@ -965,8 +969,8 @@ export default function InstallationsScreen({
         ids.push(item.id);
         guidToItemIds.set(lowerGuid, ids);
 
-        if (!lowerToOriginal.has(lowerGuid)) {
-          lowerToOriginal.set(lowerGuid, originalGuid);
+        // Only add unique original GUIDs for API call
+        if (ids.length === 1) {
           originalGuids.push(originalGuid);
         }
       }
@@ -2624,15 +2628,38 @@ export default function InstallationsScreen({
     if (e) {
       e.stopPropagation();
     }
+
     setSelectedPreassemblyIds(prev => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
+
+      // Shift+click for range selection
+      if (e?.shiftKey && lastClickedPreassemblyRef.current) {
+        const allItems = filteredPreassemblies;
+        const lastIdx = allItems.findIndex(i => i.id === lastClickedPreassemblyRef.current);
+        const currentIdx = allItems.findIndex(i => i.id === id);
+
+        if (lastIdx !== -1 && currentIdx !== -1) {
+          const start = Math.min(lastIdx, currentIdx);
+          const end = Math.max(lastIdx, currentIdx);
+          for (let i = start; i <= end; i++) {
+            next.add(allItems[i].id);
+          }
+        } else {
+          next.add(id);
+        }
       } else {
-        next.add(id);
+        // Regular click - toggle single item
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
       }
+
       return next;
     });
+
+    lastClickedPreassemblyRef.current = id;
   };
 
   // Toggle all preassemblies in a day
@@ -3424,11 +3451,33 @@ export default function InstallationsScreen({
   const toggleInstallationSelect = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newSelected = new Set(selectedInstallationIds);
-    if (newSelected.has(id)) {
-      newSelected.delete(id);
+
+    // Shift+click for range selection
+    if (e.shiftKey && lastClickedInstallationRef.current) {
+      // Get all visible items in order
+      const allItems = filteredInstallations;
+      const lastIdx = allItems.findIndex(i => i.id === lastClickedInstallationRef.current);
+      const currentIdx = allItems.findIndex(i => i.id === id);
+
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        for (let i = start; i <= end; i++) {
+          newSelected.add(allItems[i].id);
+        }
+      } else {
+        newSelected.add(id);
+      }
     } else {
-      newSelected.add(id);
+      // Regular click - toggle single item
+      if (newSelected.has(id)) {
+        newSelected.delete(id);
+      } else {
+        newSelected.add(id);
+      }
     }
+
+    lastClickedInstallationRef.current = id;
     setSelectedInstallationIds(newSelected);
   };
 
@@ -4060,7 +4109,7 @@ export default function InstallationsScreen({
                 // Apply installation coloring when opening installation overview
                 await applyInstallationColoring(installedGuids);
                 // Check which items can't be found in current model
-                setTimeout(checkUnfoundItems, 500);
+                setTimeout(() => checkUnfoundItems('installation'), 500);
               }}
               style={{
                 flex: 1,
@@ -4080,7 +4129,7 @@ export default function InstallationsScreen({
                 // Apply preassembly coloring when opening preassembly overview
                 await applyPreassemblyColoring();
                 // Check which items can't be found in current model
-                setTimeout(checkUnfoundItems, 500);
+                setTimeout(() => checkUnfoundItems('preassembly'), 500);
               }}
               style={{
                 flex: 1,
@@ -5397,16 +5446,19 @@ export default function InstallationsScreen({
               <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
                 <button
                   onClick={() => {
-                    // Get selected installations for bulk edit
+                    // Bulk edit - pre-fill with first item's data (all selected will be updated)
                     const selectedItems = installations.filter(i => selectedInstallationIds.has(i.id));
                     if (selectedItems.length > 0) {
-                      // For now, open edit modal for first item (could be extended for bulk)
                       const firstItem = selectedItems[0];
                       setShowEditModal(true);
-                      setEditDate(firstItem.installed_at.split('T')[0]);
-                      setEditNotes(firstItem.notes || '');
-                      // Parse team members
-                      const members = firstItem.team_members?.split(',').map(m => m.trim()).filter(m => m) || [];
+                      // For single item, use its data; for multiple, use today's date
+                      setEditDate(selectedItems.length === 1
+                        ? firstItem.installed_at.split('T')[0]
+                        : new Date().toISOString().split('T')[0]);
+                      setEditNotes(selectedItems.length === 1 ? (firstItem.notes || '') : '');
+                      const members = selectedItems.length === 1
+                        ? (firstItem.team_members?.split(',').map(m => m.trim()).filter(m => m) || [])
+                        : [];
                       setEditTeamMembers(members);
                       setEditInstallMethods({});
                     }
