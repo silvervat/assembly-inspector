@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import {
   supabase, DeliveryVehicle, DeliveryItem, DeliveryFactory,
   ArrivedVehicle, ArrivalItemConfirmation, ArrivalPhoto,
@@ -67,6 +67,233 @@ const formatDateFull = (dateStr: string) => {
   return `${weekday} ${date.toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit' })}`;
 };
 
+// ============================================
+// MEMOIZED COMPONENTS FOR PERFORMANCE
+// ============================================
+
+// Memoized StatusBadge component
+const StatusBadge = memo(({ status }: { status: ArrivalItemStatus }) => {
+  const config: Record<ArrivalItemStatus, { label: string; color: string; bg: string }> = {
+    pending: { label: 'Ootel', color: '#6b7280', bg: '#f3f4f6' },
+    confirmed: { label: 'Kinnitatud', color: '#059669', bg: '#d1fae5' },
+    missing: { label: 'Puudub', color: '#dc2626', bg: '#fee2e2' },
+    wrong_vehicle: { label: 'Vale veok', color: '#d97706', bg: '#fef3c7' },
+    added: { label: 'Lisatud', color: '#2563eb', bg: '#dbeafe' }
+  };
+  const c = config[status];
+  return (
+    <span
+      className="status-badge"
+      style={{
+        padding: '2px 8px',
+        borderRadius: 4,
+        fontSize: 11,
+        fontWeight: 500,
+        color: c.color,
+        background: c.bg
+      }}
+      title={c.label}
+    >
+      {c.label}
+    </span>
+  );
+});
+
+// ItemRow props interface
+interface ItemRowProps {
+  item: DeliveryItem;
+  idx: number;
+  status: ArrivalItemStatus;
+  isSelected: boolean;
+  isExpanded: boolean;
+  hasCommentOrPhotos: boolean;
+  duplicateIndex: number;
+  duplicateCount: number;
+  itemCommentValue: string;
+  itemPhotos: ArrivalPhoto[];
+  vehicleCode: string;
+  onToggleSelect: (itemId: string, shiftKey: boolean) => void;
+  onToggleExpand: (itemId: string) => void;
+  onConfirmItem: (itemId: string, status: ArrivalItemStatus) => void;
+  onUpdateComment: (itemId: string, comment: string) => void;
+  onUploadPhoto: (itemId: string, files: FileList) => void;
+  onDeletePhoto: (photoId: string, fileUrl: string) => void;
+  onOpenLightbox: (photo: ArrivalPhoto, vehicleCode: string) => void;
+}
+
+// Memoized ItemRow component - only re-renders when its specific props change
+const ItemRow = memo(({
+  item,
+  idx,
+  status,
+  isSelected,
+  isExpanded,
+  hasCommentOrPhotos,
+  duplicateIndex,
+  duplicateCount,
+  itemCommentValue,
+  itemPhotos,
+  vehicleCode,
+  onToggleSelect,
+  onToggleExpand,
+  onConfirmItem,
+  onUpdateComment,
+  onUploadPhoto,
+  onDeletePhoto,
+  onOpenLightbox
+}: ItemRowProps) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div className={`item-container ${isExpanded ? 'expanded' : ''}`}>
+      <div className={`item-row ${status} ${isSelected ? 'selected' : ''}`}>
+        {/* Checkbox for pending items */}
+        {status === 'pending' && (
+          <input
+            type="checkbox"
+            className="item-checkbox"
+            checked={isSelected}
+            onChange={() => {}}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect(item.id, e.shiftKey);
+            }}
+          />
+        )}
+        {/* Item index */}
+        <span className="item-index">{idx + 1}</span>
+        {/* Inline item info */}
+        <div className="item-info inline">
+          <span className="item-mark">{item.assembly_mark}</span>
+          {item.product_name && <span className="item-product">{item.product_name}</span>}
+          {item.cast_unit_weight && (
+            <span className="item-weight">
+              {Math.round(Number(item.cast_unit_weight))} kg
+              {duplicateCount > 1 && <span className="duplicate-indicator"> {duplicateIndex}/{duplicateCount}</span>}
+            </span>
+          )}
+          {/* Show duplicate indicator even if no weight */}
+          {!item.cast_unit_weight && duplicateCount > 1 && (
+            <span className="duplicate-indicator">{duplicateIndex}/{duplicateCount}</span>
+          )}
+        </div>
+        <div className="item-actions">
+          {/* Comment/Photo indicator */}
+          <button
+            className={`action-btn comment ${hasCommentOrPhotos ? 'has-content' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand(item.id);
+            }}
+            title="Kommentaar/fotod"
+          >
+            <FiMessageCircle size={12} />
+            {hasCommentOrPhotos && <span className="indicator">!</span>}
+          </button>
+          <StatusBadge status={status} />
+          {status === 'pending' ? (
+            <>
+              <button
+                className="action-btn confirm"
+                onClick={() => onConfirmItem(item.id, 'confirmed')}
+                title="Kinnita"
+              >
+                <FiCheck size={12} />
+              </button>
+              <button
+                className="action-btn missing"
+                onClick={() => onConfirmItem(item.id, 'missing')}
+                title="Puudub"
+              >
+                <FiX size={12} />
+              </button>
+              <button
+                className="action-btn wrong"
+                onClick={() => onConfirmItem(item.id, 'wrong_vehicle')}
+                title="Vale veok"
+              >
+                <FiAlertTriangle size={12} />
+              </button>
+            </>
+          ) : (
+            <button
+              className="action-btn reset"
+              onClick={() => onConfirmItem(item.id, 'pending')}
+              title="Muuda staatust"
+            >
+              <FiRefreshCw size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+      {/* Expandable comment/photo section */}
+      {isExpanded && (
+        <div className="item-detail-section">
+          <div className="item-comment-row">
+            <input
+              key={`comment-${item.id}`}
+              type="text"
+              className="item-comment-input"
+              placeholder="Lisa kommentaar..."
+              defaultValue={itemCommentValue}
+              onBlur={(e) => {
+                const newValue = e.target.value;
+                if (newValue !== itemCommentValue) {
+                  onUpdateComment(item.id, newValue);
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const newValue = (e.target as HTMLInputElement).value;
+                  onUpdateComment(item.id, newValue);
+                }
+              }}
+            />
+            <button
+              className="item-photo-btn"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <FiCamera size={12} /> Foto
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                if (e.target.files) {
+                  onUploadPhoto(item.id, e.target.files);
+                }
+              }}
+            />
+          </div>
+          {itemPhotos.length > 0 && (
+            <div className="item-photos-row">
+              {itemPhotos.map(photo => (
+                <div key={photo.id} className="item-photo">
+                  <img
+                    src={photo.file_url}
+                    alt={photo.file_name}
+                    onClick={() => onOpenLightbox(photo, vehicleCode)}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <button
+                    className="delete-item-photo-btn"
+                    onClick={() => onDeletePhoto(photo.id, photo.file_url)}
+                  >
+                    <FiX size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default function ArrivedDeliveriesScreen({
   api,
   user,
@@ -122,8 +349,8 @@ export default function ArrivedDeliveriesScreen({
   // State - Expanded item for comment/photo editing
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
-  // State - Photo lightbox
-  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  // State - Photo lightbox (stores full photo object for metadata access)
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: ArrivalPhoto; vehicleCode: string } | null>(null);
 
   // State - Upload progress
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
@@ -131,7 +358,6 @@ export default function ArrivedDeliveriesScreen({
   // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
   const deliveryNotePhotoInputRef = useRef<HTMLInputElement>(null);
-  const itemPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // ============================================
   // DATA LOADING
@@ -279,6 +505,21 @@ export default function ArrivedDeliveriesScreen({
       return () => clearTimeout(timer);
     }
   }, [message]);
+
+  // ESC key handler - clear selection and close lightbox
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (lightboxPhoto) {
+          setLightboxPhoto(null);
+        } else if (selectedItemsForConfirm.size > 0) {
+          setSelectedItemsForConfirm(new Set());
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxPhoto, selectedItemsForConfirm.size]);
 
   // ============================================
   // HELPERS
@@ -1344,33 +1585,143 @@ export default function ArrivedDeliveriesScreen({
   // Get vehicles for selected date
   const dateVehicles = vehicles.filter(v => v.scheduled_date === selectedDate);
 
-  // Status badge component
-  const StatusBadge = ({ status }: { status: ArrivalItemStatus }) => {
-    const config: Record<ArrivalItemStatus, { label: string; color: string; bg: string }> = {
-      pending: { label: 'Ootel', color: '#6b7280', bg: '#f3f4f6' },
-      confirmed: { label: 'Kinnitatud', color: '#059669', bg: '#d1fae5' },
-      missing: { label: 'Puudub', color: '#dc2626', bg: '#fee2e2' },
-      wrong_vehicle: { label: 'Vale veok', color: '#d97706', bg: '#fef3c7' },
-      added: { label: 'Lisatud', color: '#2563eb', bg: '#dbeafe' }
+  // ============================================
+  // PRECOMPUTED DATA FOR PERFORMANCE
+  // ============================================
+
+  // Precompute confirmation status map: { `${arrivedVehicleId}_${itemId}`: confirmation }
+  const confirmationMap = useMemo(() => {
+    const map = new Map<string, ArrivalItemConfirmation>();
+    confirmations.forEach(c => {
+      map.set(`${c.arrived_vehicle_id}_${c.item_id}`, c);
+    });
+    return map;
+  }, [confirmations]);
+
+  // Get status from map - O(1) lookup instead of O(n) filter
+  const getStatusFast = useCallback((arrivedVehicleId: string, itemId: string): ArrivalItemStatus => {
+    return confirmationMap.get(`${arrivedVehicleId}_${itemId}`)?.status || 'pending';
+  }, [confirmationMap]);
+
+  // Get comment from map - O(1) lookup
+  const getCommentFast = useCallback((arrivedVehicleId: string, itemId: string): string => {
+    return confirmationMap.get(`${arrivedVehicleId}_${itemId}`)?.notes || '';
+  }, [confirmationMap]);
+
+  // Precompute photos map: { `${arrivedVehicleId}_${itemId}`: photos[] }
+  const itemPhotosMap = useMemo(() => {
+    const map = new Map<string, ArrivalPhoto[]>();
+    photos.forEach(p => {
+      if (p.item_id) {
+        const key = `${p.arrived_vehicle_id}_${p.item_id}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(p);
+      }
+    });
+    return map;
+  }, [photos]);
+
+  // Get photos from map - O(1) lookup
+  const getPhotosFast = useCallback((arrivedVehicleId: string, itemId: string): ArrivalPhoto[] => {
+    return itemPhotosMap.get(`${arrivedVehicleId}_${itemId}`) || [];
+  }, [itemPhotosMap]);
+
+  // Precompute duplicate counts per vehicle: { vehicleId: { assemblyMark: { count, indices: { itemId: index } } } }
+  const duplicateCountsMap = useMemo(() => {
+    const map = new Map<string, Map<string, { count: number; indices: Map<string, number> }>>();
+    items.forEach(item => {
+      if (!item.vehicle_id) return;
+      if (!map.has(item.vehicle_id)) map.set(item.vehicle_id, new Map());
+      const vehicleMap = map.get(item.vehicle_id)!;
+      const mark = item.assembly_mark || '';
+      if (!vehicleMap.has(mark)) vehicleMap.set(mark, { count: 0, indices: new Map() });
+      const markData = vehicleMap.get(mark)!;
+      markData.count++;
+      markData.indices.set(item.id, markData.count);
+    });
+    return map;
+  }, [items]);
+
+  // Get duplicate info - O(1) lookup
+  const getDuplicateInfo = useCallback((vehicleId: string, itemId: string, assemblyMark: string): { count: number; index: number } => {
+    const vehicleMap = duplicateCountsMap.get(vehicleId);
+    if (!vehicleMap) return { count: 1, index: 1 };
+    const markData = vehicleMap.get(assemblyMark || '');
+    if (!markData) return { count: 1, index: 1 };
+    return { count: markData.count, index: markData.indices.get(itemId) || 1 };
+  }, [duplicateCountsMap]);
+
+  // ============================================
+  // ITEM ROW CALLBACKS (memoized for ItemRow)
+  // ============================================
+
+  // Handler for toggling item selection (checkbox click)
+  const handleToggleSelect = useCallback((arrivedVehicleId: string, vehicleItems: DeliveryItem[]) => {
+    return (itemId: string, shiftKey: boolean) => {
+      if (shiftKey && lastClickedItemId) {
+        // Get pending items for range selection
+        const pendingItems = vehicleItems.filter(i => getStatusFast(arrivedVehicleId, i.id) === 'pending');
+        const lastIdx = pendingItems.findIndex(i => i.id === lastClickedItemId);
+        const currentIdx = pendingItems.findIndex(i => i.id === itemId);
+
+        if (lastIdx >= 0 && currentIdx >= 0) {
+          const start = Math.min(lastIdx, currentIdx);
+          const end = Math.max(lastIdx, currentIdx);
+          const rangeIds = pendingItems.slice(start, end + 1).map(i => i.id);
+
+          setSelectedItemsForConfirm(prev => {
+            const next = new Set(prev);
+            rangeIds.forEach(id => next.add(id));
+            selectItemsInModel(next);
+            return next;
+          });
+        }
+      } else {
+        setSelectedItemsForConfirm(prev => {
+          const next = new Set(prev);
+          if (next.has(itemId)) {
+            next.delete(itemId);
+          } else {
+            next.add(itemId);
+          }
+          selectItemsInModel(next);
+          return next;
+        });
+      }
+      setLastClickedItemId(itemId);
     };
-    const c = config[status];
-    return (
-      <span
-        className="status-badge"
-        style={{
-          padding: '2px 8px',
-          borderRadius: 4,
-          fontSize: 11,
-          fontWeight: 500,
-          color: c.color,
-          background: c.bg
-        }}
-        title={c.label}
-      >
-        {c.label}
-      </span>
-    );
-  };
+  }, [lastClickedItemId, getStatusFast, selectItemsInModel]);
+
+  // Handler for toggling item expand
+  const handleToggleExpand = useCallback((itemId: string) => {
+    setExpandedItemId(prev => prev === itemId ? null : itemId);
+  }, []);
+
+  // Handler for confirm item - uses optimistic update
+  const handleConfirmItem = useCallback((arrivedVehicleId: string) => {
+    return (itemId: string, status: ArrivalItemStatus) => {
+      confirmItem(arrivedVehicleId, itemId, status);
+    };
+  }, [confirmItem]);
+
+  // Handler for update comment
+  const handleUpdateComment = useCallback((arrivedVehicleId: string) => {
+    return (itemId: string, comment: string) => {
+      updateItemComment(arrivedVehicleId, itemId, comment);
+    };
+  }, [updateItemComment]);
+
+  // Handler for upload photo
+  const handleUploadPhoto = useCallback((arrivedVehicleId: string) => {
+    return (itemId: string, files: FileList) => {
+      handleItemPhotoUpload(arrivedVehicleId, itemId, files);
+    };
+  }, [handleItemPhotoUpload]);
+
+  // Handler for open lightbox
+  const handleOpenLightbox = useCallback((photo: ArrivalPhoto, vehicleCode: string) => {
+    setLightboxPhoto({ photo, vehicleCode });
+  }, []);
 
   // ============================================
   // RENDER
@@ -1562,6 +1913,14 @@ export default function ArrivedDeliveriesScreen({
                         <div className="arrival-details">
                           <div className="detail-row">
                             <div className="detail-field">
+                              <label><FiClock /> Saabumise kuupäev</label>
+                              <input
+                                type="date"
+                                value={arrivedVehicle.arrival_date || ''}
+                                onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_date: e.target.value })}
+                              />
+                            </div>
+                            <div className="detail-field">
                               <label><FiClock /> Saabumise aeg</label>
                               <input
                                 type="text"
@@ -1744,7 +2103,7 @@ export default function ArrivedDeliveriesScreen({
                                   <img
                                     src={photo.file_url}
                                     alt={photo.file_name}
-                                    onClick={() => setLightboxPhoto(photo.file_url)}
+                                    onClick={() => setLightboxPhoto({ photo, vehicleCode: vehicle.vehicle_code || 'veok' })}
                                     style={{ cursor: 'pointer' }}
                                   />
                                   <button
@@ -1793,7 +2152,7 @@ export default function ArrivedDeliveriesScreen({
                                   <img
                                     src={photo.file_url}
                                     alt={photo.file_name}
-                                    onClick={() => setLightboxPhoto(photo.file_url)}
+                                    onClick={() => setLightboxPhoto({ photo, vehicleCode: vehicle.vehicle_code || 'veok' })}
                                     style={{ cursor: 'pointer' }}
                                   />
                                   <span className="photo-name">{photo.file_name}</span>
@@ -1829,42 +2188,8 @@ export default function ArrivedDeliveriesScreen({
                         {/* Items list */}
                         <div className="items-section">
                           <div className="items-header">
-                            <h3>Detailid ({vehicleItems.length})</h3>
-                            <div className="items-actions">
-                              {/* Bulk actions when items are selected */}
-                              {selectedItemsForConfirm.size > 0 && (
-                                <>
-                                  <button
-                                    className="confirm-selected-btn"
-                                    onClick={() => confirmSelectedItems(arrivedVehicle.id, 'confirmed')}
-                                    disabled={saving}
-                                  >
-                                    <FiCheck /> Kinnita ({selectedItemsForConfirm.size})
-                                  </button>
-                                  <button
-                                    className="missing-selected-btn"
-                                    onClick={() => confirmSelectedItems(arrivedVehicle.id, 'missing')}
-                                    disabled={saving}
-                                  >
-                                    <FiX /> Puudub
-                                  </button>
-                                  <button
-                                    className="clear-selection-btn"
-                                    onClick={() => setSelectedItemsForConfirm(new Set())}
-                                  >
-                                    Tühista
-                                  </button>
-                                </>
-                              )}
-                              {selectedItemsForConfirm.size === 0 && pendingCount > 0 && (
-                                <button
-                                  className="confirm-all-btn"
-                                  onClick={() => confirmAllItems(arrivedVehicle.id)}
-                                  disabled={saving}
-                                >
-                                  <FiCheck /> Kinnita kõik
-                                </button>
-                              )}
+                            <div className="items-title-row">
+                              <h3>Detailid ({vehicleItems.length})</h3>
                               <button
                                 className="add-item-btn"
                                 onClick={() => {
@@ -1875,205 +2200,76 @@ export default function ArrivedDeliveriesScreen({
                                 <FiPlus /> Lisa
                               </button>
                             </div>
+                            {/* Bulk actions when items are selected */}
+                            {selectedItemsForConfirm.size > 0 && (
+                              <div className="items-bulk-actions">
+                                <button
+                                  className="confirm-selected-btn"
+                                  onClick={() => confirmSelectedItems(arrivedVehicle.id, 'confirmed')}
+                                  disabled={saving}
+                                >
+                                  <FiCheck /> Kinnita ({selectedItemsForConfirm.size})
+                                </button>
+                                <button
+                                  className="missing-selected-btn"
+                                  onClick={() => confirmSelectedItems(arrivedVehicle.id, 'missing')}
+                                  disabled={saving}
+                                >
+                                  <FiX /> Puudub
+                                </button>
+                                <button
+                                  className="clear-selection-btn"
+                                  onClick={() => setSelectedItemsForConfirm(new Set())}
+                                >
+                                  Tühista (ESC)
+                                </button>
+                              </div>
+                            )}
+                            {selectedItemsForConfirm.size === 0 && pendingCount > 0 && (
+                              <div className="items-bulk-actions">
+                                <button
+                                  className="confirm-all-btn"
+                                  onClick={() => confirmAllItems(arrivedVehicle.id)}
+                                  disabled={saving}
+                                >
+                                  <FiCheck /> Kinnita kõik
+                                </button>
+                              </div>
+                            )}
                           </div>
 
                           <div className="items-list compact">
                             {vehicleItems.map((item, idx) => {
-                              const status = getItemConfirmationStatus(arrivedVehicle.id, item.id);
+                              const status = getStatusFast(arrivedVehicle.id, item.id);
                               const isSelected = selectedItemsForConfirm.has(item.id);
-
-                              // Get pending items for shift-click range selection
-                              const pendingItems = vehicleItems.filter(i =>
-                                getItemConfirmationStatus(arrivedVehicle.id, i.id) === 'pending'
-                              );
-
-                              const itemCommentValue = getItemComment(arrivedVehicle.id, item.id);
-                              const itemPhotos = getPhotosForItem(arrivedVehicle.id, item.id);
+                              const itemCommentValue = getCommentFast(arrivedVehicle.id, item.id);
+                              const itemPhotos = getPhotosFast(arrivedVehicle.id, item.id);
                               const isExpanded = expandedItemId === item.id;
-                              const hasCommentOrPhotos = itemCommentValue || itemPhotos.length > 0;
-
-                              // Calculate duplicate count for same assembly_mark
-                              const sameMarkItems = vehicleItems.filter(i => i.assembly_mark === item.assembly_mark);
-                              const duplicateCount = sameMarkItems.length;
-                              const duplicateIndex = sameMarkItems.findIndex(i => i.id === item.id) + 1;
+                              const hasCommentOrPhotos = Boolean(itemCommentValue || itemPhotos.length > 0);
+                              const { count: duplicateCount, index: duplicateIndex } = getDuplicateInfo(vehicle.id, item.id, item.assembly_mark || '');
 
                               return (
-                                <div key={item.id} className={`item-container ${isExpanded ? 'expanded' : ''}`}>
-                                  <div className={`item-row ${status} ${isSelected ? 'selected' : ''}`}>
-                                    {/* Checkbox for pending items */}
-                                    {status === 'pending' && (
-                                      <input
-                                        type="checkbox"
-                                        className="item-checkbox"
-                                        checked={isSelected}
-                                        onChange={() => {}}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-
-                                          // Shift+click for range selection
-                                          if (e.shiftKey && lastClickedItemId) {
-                                            const lastIdx = pendingItems.findIndex(i => i.id === lastClickedItemId);
-                                            const currentIdx = pendingItems.findIndex(i => i.id === item.id);
-
-                                            if (lastIdx >= 0 && currentIdx >= 0) {
-                                              const start = Math.min(lastIdx, currentIdx);
-                                              const end = Math.max(lastIdx, currentIdx);
-                                              const rangeIds = pendingItems.slice(start, end + 1).map(i => i.id);
-
-                                              setSelectedItemsForConfirm(prev => {
-                                                const next = new Set(prev);
-                                                rangeIds.forEach(id => next.add(id));
-                                                selectItemsInModel(next);
-                                                return next;
-                                              });
-                                            }
-                                          } else {
-                                            setSelectedItemsForConfirm(prev => {
-                                              const next = new Set(prev);
-                                              if (next.has(item.id)) {
-                                                next.delete(item.id);
-                                              } else {
-                                                next.add(item.id);
-                                              }
-                                              selectItemsInModel(next);
-                                              return next;
-                                            });
-                                          }
-                                          setLastClickedItemId(item.id);
-                                        }}
-                                      />
-                                    )}
-                                    {/* Item index */}
-                                    <span className="item-index">{idx + 1}</span>
-                                    {/* Inline item info */}
-                                    <div className="item-info inline">
-                                      <span className="item-mark">{item.assembly_mark}</span>
-                                      {item.product_name && <span className="item-product">{item.product_name}</span>}
-                                      {item.cast_unit_weight && (
-                                        <span className="item-weight">
-                                          {Math.round(Number(item.cast_unit_weight))} kg
-                                          {duplicateCount > 1 && <span className="duplicate-indicator"> {duplicateIndex}/{duplicateCount}</span>}
-                                        </span>
-                                      )}
-                                      {/* Show duplicate indicator even if no weight */}
-                                      {!item.cast_unit_weight && duplicateCount > 1 && (
-                                        <span className="duplicate-indicator">{duplicateIndex}/{duplicateCount}</span>
-                                      )}
-                                    </div>
-                                    <div className="item-actions">
-                                      {/* Comment/Photo indicator */}
-                                      <button
-                                        className={`action-btn comment ${hasCommentOrPhotos ? 'has-content' : ''}`}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setExpandedItemId(isExpanded ? null : item.id);
-                                        }}
-                                        title="Kommentaar/fotod"
-                                      >
-                                        <FiMessageCircle size={12} />
-                                        {hasCommentOrPhotos && <span className="indicator">!</span>}
-                                      </button>
-                                      <StatusBadge status={status} />
-                                      {status === 'pending' ? (
-                                        <>
-                                          <button
-                                            className="action-btn confirm"
-                                            onClick={() => confirmItem(arrivedVehicle.id, item.id, 'confirmed')}
-                                            title="Kinnita"
-                                          >
-                                            <FiCheck size={12} />
-                                          </button>
-                                          <button
-                                            className="action-btn missing"
-                                            onClick={() => confirmItem(arrivedVehicle.id, item.id, 'missing')}
-                                            title="Puudub"
-                                          >
-                                            <FiX size={12} />
-                                          </button>
-                                          <button
-                                            className="action-btn wrong"
-                                            onClick={() => confirmItem(arrivedVehicle.id, item.id, 'wrong_vehicle')}
-                                            title="Vale veok"
-                                          >
-                                            <FiAlertTriangle size={12} />
-                                          </button>
-                                        </>
-                                      ) : (
-                                        <button
-                                          className="action-btn reset"
-                                          onClick={() => confirmItem(arrivedVehicle.id, item.id, 'pending')}
-                                          title="Muuda staatust"
-                                        >
-                                          <FiRefreshCw size={12} />
-                                        </button>
-                                      )}
-                                    </div>
-                                  </div>
-                                  {/* Expandable comment/photo section */}
-                                  {isExpanded && (
-                                    <div className="item-detail-section">
-                                      <div className="item-comment-row">
-                                        <input
-                                          key={`comment-${item.id}`}
-                                          type="text"
-                                          className="item-comment-input"
-                                          placeholder="Lisa kommentaar..."
-                                          defaultValue={itemCommentValue}
-                                          onBlur={(e) => {
-                                            const newValue = e.target.value;
-                                            if (newValue !== itemCommentValue) {
-                                              updateItemComment(arrivedVehicle.id, item.id, newValue);
-                                            }
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              const newValue = (e.target as HTMLInputElement).value;
-                                              updateItemComment(arrivedVehicle.id, item.id, newValue);
-                                            }
-                                          }}
-                                        />
-                                        <button
-                                          className="item-photo-btn"
-                                          onClick={() => itemPhotoInputRef.current?.click()}
-                                        >
-                                          <FiCamera size={12} /> Foto
-                                        </button>
-                                        <input
-                                          ref={itemPhotoInputRef}
-                                          type="file"
-                                          accept="image/*"
-                                          multiple
-                                          style={{ display: 'none' }}
-                                          onChange={(e) => {
-                                            if (e.target.files) {
-                                              handleItemPhotoUpload(arrivedVehicle.id, item.id, e.target.files);
-                                            }
-                                          }}
-                                        />
-                                      </div>
-                                      {itemPhotos.length > 0 && (
-                                        <div className="item-photos-row">
-                                          {itemPhotos.map(photo => (
-                                            <div key={photo.id} className="item-photo">
-                                              <img
-                                                src={photo.file_url}
-                                                alt={photo.file_name}
-                                                onClick={() => setLightboxPhoto(photo.file_url)}
-                                                style={{ cursor: 'pointer' }}
-                                              />
-                                              <button
-                                                className="delete-item-photo-btn"
-                                                onClick={() => deletePhoto(photo.id, photo.file_url)}
-                                              >
-                                                <FiX size={10} />
-                                              </button>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
+                                <ItemRow
+                                  key={item.id}
+                                  item={item}
+                                  idx={idx}
+                                  status={status}
+                                  isSelected={isSelected}
+                                  isExpanded={isExpanded}
+                                  hasCommentOrPhotos={hasCommentOrPhotos}
+                                  duplicateIndex={duplicateIndex}
+                                  duplicateCount={duplicateCount}
+                                  itemCommentValue={itemCommentValue}
+                                  itemPhotos={itemPhotos}
+                                  vehicleCode={vehicle.vehicle_code || 'veok'}
+                                  onToggleSelect={handleToggleSelect(arrivedVehicle.id, vehicleItems)}
+                                  onToggleExpand={handleToggleExpand}
+                                  onConfirmItem={handleConfirmItem(arrivedVehicle.id)}
+                                  onUpdateComment={handleUpdateComment(arrivedVehicle.id)}
+                                  onUploadPhoto={handleUploadPhoto(arrivedVehicle.id)}
+                                  onDeletePhoto={deletePhoto}
+                                  onOpenLightbox={handleOpenLightbox}
+                                />
                               );
                             })}
 
@@ -2273,40 +2469,62 @@ export default function ArrivedDeliveriesScreen({
       )}
 
       {/* Photo lightbox modal */}
-      {lightboxPhoto && (
-        <div
-          className="lightbox-overlay"
-          onClick={() => setLightboxPhoto(null)}
-        >
-          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <img src={lightboxPhoto} alt="Foto" />
-            <div className="lightbox-actions">
-              <button
-                className="lightbox-btn"
-                onClick={() => window.open(lightboxPhoto, '_blank')}
-                title="Ava uues aknas"
-              >
-                Ava uues aknas
-              </button>
-              <a
-                className="lightbox-btn"
-                href={lightboxPhoto}
-                download
-                title="Lae alla"
-              >
-                Lae alla
-              </a>
-              <button
-                className="lightbox-btn close"
-                onClick={() => setLightboxPhoto(null)}
-                title="Sulge"
-              >
-                <FiX size={18} /> Sulge
-              </button>
+      {lightboxPhoto && (() => {
+        const { photo, vehicleCode } = lightboxPhoto;
+        const uploadDate = photo.uploaded_at ? new Date(photo.uploaded_at) : null;
+        const dateStr = uploadDate ? uploadDate.toLocaleDateString('et-EE') : '';
+        const timeStr = uploadDate ? uploadDate.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        // Generate download filename: veok_kuupäev_kellaaeg_nr.ext
+        const photoIndex = photos.filter(p => p.arrived_vehicle_id === photo.arrived_vehicle_id).findIndex(p => p.id === photo.id) + 1;
+        const ext = photo.file_name?.split('.').pop() || 'jpg';
+        const safeVehicleCode = vehicleCode.replace(/[^a-zA-Z0-9-_]/g, '_');
+        const downloadName = `${safeVehicleCode}_${uploadDate ? uploadDate.toISOString().split('T')[0] : 'foto'}_${photoIndex}.${ext}`;
+
+        return (
+          <div
+            className="lightbox-overlay"
+            onClick={() => setLightboxPhoto(null)}
+          >
+            <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+              <img src={photo.file_url} alt="Foto" />
+              <div className="lightbox-info">
+                <span className="lightbox-vehicle">{vehicleCode}</span>
+                {uploadDate && (
+                  <span className="lightbox-date">{dateStr} {timeStr}</span>
+                )}
+                {photo.uploaded_by && (
+                  <span className="lightbox-uploader">{photo.uploaded_by}</span>
+                )}
+              </div>
+              <div className="lightbox-actions compact">
+                <button
+                  className="lightbox-btn-sm"
+                  onClick={() => window.open(photo.file_url, '_blank')}
+                  title="Ava uues aknas"
+                >
+                  Ava uues aknas
+                </button>
+                <a
+                  className="lightbox-btn-sm"
+                  href={photo.file_url}
+                  download={downloadName}
+                  title="Lae alla"
+                >
+                  Lae alla
+                </a>
+                <button
+                  className="lightbox-btn-sm close"
+                  onClick={() => setLightboxPhoto(null)}
+                  title="Sulge (ESC)"
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
