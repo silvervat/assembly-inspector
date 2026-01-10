@@ -22,7 +22,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet,
   FiRefreshCw, FiDownload, FiLock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiArrowUp, FiArrowDown, FiTag
+  FiArrowUp, FiArrowDown, FiTag, FiUpload
 } from 'react-icons/fi';
 
 // ============================================
@@ -412,6 +412,12 @@ export default function OrganizerScreen({
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
 
+  // Import state
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importGroupId, setImportGroupId] = useState<string | null>(null);
+  const [importText, setImportText] = useState('');
+  const [importProgress, setImportProgress] = useState<{current: number; total: number; found: number} | null>(null);
+
   // Refs
   const lastSelectionRef = useRef<string>('');
   const isCheckingRef = useRef(false);
@@ -518,6 +524,11 @@ export default function OrganizerScreen({
           setMarkupGroupId(null);
           return;
         }
+        if (showImportModal) {
+          setShowImportModal(false);
+          setImportGroupId(null);
+          return;
+        }
         // Clear menu
         if (groupMenuId) {
           setGroupMenuId(null);
@@ -536,7 +547,7 @@ export default function OrganizerScreen({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, groupMenuId, selectedItemIds.size, selectedGroupId]);
+  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId]);
 
   // ============================================
   // DATA LOADING
@@ -2040,6 +2051,166 @@ export default function OrganizerScreen({
   };
 
   // ============================================
+  // IMPORT GUID/GUID_MS
+  // ============================================
+
+  const openImportModal = (groupId: string) => {
+    setImportGroupId(groupId);
+    setImportText('');
+    setImportProgress(null);
+    setShowImportModal(true);
+    setGroupMenuId(null);
+  };
+
+  // Detect if value looks like a GUID (UUID format)
+  const isGuid = (value: string): boolean => {
+    // Match UUID format: 8-4-4-4-12 hex characters (with or without dashes)
+    const uuidPattern = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+    return uuidPattern.test(value.trim());
+  };
+
+  const importItemsToGroup = async () => {
+    if (!importGroupId || !importText.trim()) return;
+
+    const group = groups.find(g => g.id === importGroupId);
+    if (!group) return;
+
+    // Parse input - split by newlines, commas, semicolons, tabs, or spaces
+    const rawValues = importText
+      .split(/[\n,;\t]+/)
+      .map(v => v.trim())
+      .filter(v => v.length > 0);
+
+    if (rawValues.length === 0) {
+      showToast('Sisend on tühi');
+      return;
+    }
+
+    // Detect type based on first valid value
+    const firstValue = rawValues[0];
+    const isGuidInput = isGuid(firstValue);
+
+    setSaving(true);
+    setImportProgress({ current: 0, total: rawValues.length, found: 0 });
+
+    try {
+      // Normalize values for search
+      const searchValues = rawValues.map(v => v.toLowerCase().trim());
+
+      // Query trimble_model_objects based on type
+      let matchedObjects: Array<{
+        guid_ifc: string;
+        assembly_mark: string | null;
+        product_name: string | null;
+        cast_unit_weight: number | null;
+        cast_unit_position_code: string | null;
+      }> = [];
+
+      if (isGuidInput) {
+        // Search by guid_ifc
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, cast_unit_position_code')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null);
+
+        if (error) throw error;
+
+        // Filter by matching GUIDs (case-insensitive)
+        matchedObjects = (data || []).filter(obj =>
+          obj.guid_ifc && searchValues.includes(obj.guid_ifc.toLowerCase())
+        );
+      } else {
+        // Search by assembly_mark (GUID_MS)
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight, cast_unit_position_code')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null);
+
+        if (error) throw error;
+
+        // Filter by matching assembly marks (case-insensitive)
+        matchedObjects = (data || []).filter(obj =>
+          obj.assembly_mark && searchValues.includes(obj.assembly_mark.toLowerCase())
+        );
+      }
+
+      if (matchedObjects.length === 0) {
+        showToast(`Ühtegi sobivat elementi ei leitud (${isGuidInput ? 'GUID' : 'GUID_MS'})`);
+        setShowImportModal(false);
+        return;
+      }
+
+      // Check for existing items in this group
+      const existingGuids = new Set(
+        (groupItems.get(importGroupId) || []).map(i => i.guid_ifc?.toLowerCase()).filter(Boolean)
+      );
+
+      const objectsToAdd = matchedObjects.filter(
+        obj => obj.guid_ifc && !existingGuids.has(obj.guid_ifc.toLowerCase())
+      );
+
+      if (objectsToAdd.length === 0) {
+        showToast('Kõik leitud elemendid on juba grupis');
+        setShowImportModal(false);
+        return;
+      }
+
+      // Prepare insert data
+      const existingItems = groupItems.get(importGroupId) || [];
+      const startIndex = existingItems.length;
+
+      const items = objectsToAdd.map((obj, index) => ({
+        group_id: importGroupId,
+        guid_ifc: obj.guid_ifc,
+        assembly_mark: obj.assembly_mark,
+        product_name: obj.product_name,
+        cast_unit_weight: obj.cast_unit_weight,
+        cast_unit_position_code: obj.cast_unit_position_code,
+        custom_properties: {},
+        added_by: tcUserEmail,
+        sort_order: startIndex + index
+      }));
+
+      // Delete existing items with same GUIDs in this group first
+      const guids = items.map(i => i.guid_ifc).filter(Boolean);
+      if (guids.length > 0) {
+        await supabase.from('organizer_group_items').delete().eq('group_id', importGroupId).in('guid_ifc', guids);
+      }
+
+      // Insert items
+      const { error } = await supabase.from('organizer_group_items').insert(items);
+      if (error) throw error;
+
+      const skippedCount = matchedObjects.length - objectsToAdd.length;
+      const message = skippedCount > 0
+        ? `${objectsToAdd.length} elementi imporditud (${skippedCount} juba olemas, ${rawValues.length - matchedObjects.length} ei leitud)`
+        : `${objectsToAdd.length} elementi imporditud (${rawValues.length - matchedObjects.length} ei leitud)`;
+
+      showToast(message);
+      setShowImportModal(false);
+      setExpandedGroups(prev => new Set([...prev, importGroupId]));
+
+      // Color if coloring mode is active
+      const groupColor = group.color || (group.parent_id ? groups.find(g => g.id === group.parent_id)?.color : null);
+      const addedGuids = objectsToAdd.map(obj => obj.guid_ifc).filter(Boolean);
+
+      if (colorByGroup && groupColor && addedGuids.length > 0) {
+        await colorItemsDirectly(addedGuids as string[], groupColor);
+      }
+
+      await refreshData();
+    } catch (e) {
+      console.error('Error importing items:', e);
+      showToast('Viga importimisel');
+    } finally {
+      setSaving(false);
+      setImportProgress(null);
+    }
+  };
+
+  // ============================================
   // GROUP/EXPAND
   // ============================================
 
@@ -2363,6 +2534,9 @@ export default function OrganizerScreen({
               </button>
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
+              </button>
+              <button onClick={() => openImportModal(node.id)}>
+                <FiUpload size={12} /> Impordi GUID
               </button>
               <button className="delete" onClick={() => openDeleteConfirm(node)}>
                 <FiTrash2 size={12} /> Kustuta
@@ -3143,6 +3317,89 @@ export default function OrganizerScreen({
                   disabled={saving || itemCount === 0}
                 >
                   {saving ? 'Loon markupe...' : `Lisa ${itemCount} markupit`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Import GUID modal */}
+      {showImportModal && importGroupId && (() => {
+        const importGroup = groups.find(g => g.id === importGroupId);
+
+        // Parse input to show preview
+        const previewValues = importText
+          .split(/[\n,;\t]+/)
+          .map(v => v.trim())
+          .filter(v => v.length > 0);
+        const firstValue = previewValues[0] || '';
+        const detectedType = isGuid(firstValue) ? 'GUID' : 'GUID_MS (assembly mark)';
+
+        return (
+          <div className="org-modal-overlay" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>
+            <div className="org-modal" onClick={e => e.stopPropagation()}>
+              <div className="org-modal-header">
+                <h2>Impordi GUID</h2>
+                <button onClick={() => { setShowImportModal(false); setImportGroupId(null); }}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body">
+                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                  Grupp: <strong>{importGroup?.name}</strong>
+                </p>
+
+                <div className="org-field">
+                  <label>
+                    Kleebi GUID või GUID_MS väärtused
+                    <span style={{ fontSize: '11px', color: '#888', display: 'block' }}>
+                      (eraldajaks sobib reavahetus, koma, semikoolon või tabulaator)
+                    </span>
+                  </label>
+                  <textarea
+                    className="org-import-textarea"
+                    placeholder="Näiteks:&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3301&#10;3f2504e0-4f89-11d3-9a0c-0305e82c3302&#10;&#10;või&#10;&#10;W-101&#10;W-102&#10;W-103"
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    rows={10}
+                    style={{
+                      width: '100%',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      padding: '8px',
+                      border: '1px solid var(--modus-border)',
+                      borderRadius: '4px',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+
+                {previewValues.length > 0 && (
+                  <div style={{ marginTop: '8px', padding: '8px', background: '#f5f5f5', borderRadius: '4px', fontSize: '12px' }}>
+                    <strong>Tuvastatud tüüp:</strong> {detectedType}
+                    <br />
+                    <strong>Väärtusi:</strong> {previewValues.length}
+                  </div>
+                )}
+
+                {importProgress && (
+                  <div className="org-batch-progress" style={{ marginTop: '12px' }}>
+                    <div className="progress-bar">
+                      <div className="progress-fill" style={{ width: `${(importProgress.current / importProgress.total) * 100}%` }} />
+                    </div>
+                    <span>
+                      Impordin: {importProgress.current} / {importProgress.total} (leitud: {importProgress.found})
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => { setShowImportModal(false); setImportGroupId(null); }}>Tühista</button>
+                <button
+                  className="save"
+                  onClick={importItemsToGroup}
+                  disabled={saving || previewValues.length === 0}
+                >
+                  {saving ? 'Impordin...' : `Impordi ${previewValues.length} väärtust`}
                 </button>
               </div>
             </div>
