@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -395,7 +395,7 @@ export default function InstallationsScreen({
 
   // Preassembly state
   const [preassemblies, setPreassemblies] = useState<Preassembly[]>([]);
-  const [preassembledGuids, setPreassembledGuids] = useState<Map<string, { preassembledAt: string; userEmail: string; assemblyMark: string }>>(new Map());
+  const [preassembledGuids, setPreassembledGuids] = useState<Map<string, { preassembledAt: string; userEmail: string; assemblyMark: string; teamMembers?: string; methodName?: string }>>(new Map());
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -491,6 +491,13 @@ export default function InstallationsScreen({
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [selectedInstallationIds, setSelectedInstallationIds] = useState<Set<string>>(new Set());
   const [selectedPreassemblyIds, setSelectedPreassemblyIds] = useState<Set<string>>(new Set());
+
+  // Model selection highlighting in list view
+  const [highlightedDates, setHighlightedDates] = useState<Set<string>>(new Set());
+  const [highlightedItemIds, setHighlightedItemIds] = useState<Set<string>>(new Set());
+
+  // Track items not found in current model (entered with different model)
+  const [unfoundItemIds, setUnfoundItemIds] = useState<Set<string>>(new Set());
 
   // Month locks state
   const [monthLocks, setMonthLocks] = useState<Map<string, InstallationMonthLock>>(new Map());
@@ -815,9 +822,145 @@ export default function InstallationsScreen({
     }));
   };
 
-  // Selection checking function
+  // Handle model selection in list view - highlight corresponding items in list
+  const checkListViewSelection = async () => {
+    if (!showList) return;
+
+    try {
+      const selection = await api.viewer.getSelection();
+
+      if (!selection || selection.length === 0) {
+        setHighlightedDates(new Set());
+        setHighlightedItemIds(new Set());
+        return;
+      }
+
+      // Get GUIDs from selected objects
+      const selectedGuids = new Set<string>();
+      for (const modelObj of selection) {
+        const modelId = modelObj.modelId;
+        const runtimeIds = modelObj.objectRuntimeIds || [];
+
+        for (const runtimeId of runtimeIds) {
+          try {
+            const propsArray = await (api.viewer as any).getObjectProperties(modelId, [runtimeId], { includeHidden: true });
+            if (propsArray && propsArray.length > 0) {
+              const props = propsArray[0];
+              if (props?.properties) {
+                for (const prop of props.properties) {
+                  if (prop.name === 'GUID' && prop.value) {
+                    selectedGuids.add(prop.value.toLowerCase());
+                  }
+                }
+              }
+            }
+          } catch { /* ignore */ }
+        }
+      }
+
+      if (selectedGuids.size === 0) {
+        setHighlightedDates(new Set());
+        setHighlightedItemIds(new Set());
+        return;
+      }
+
+      // Find items that match the selected GUIDs
+      const newHighlightedDates = new Set<string>();
+      const newHighlightedIds = new Set<string>();
+      const monthsToExpand = new Set<string>();
+      const daysToExpand = new Set<string>();
+
+      const itemsToSearch = entryMode === 'preassembly' ? preassemblies : installations;
+
+      for (const item of itemsToSearch) {
+        const itemGuid = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (itemGuid && selectedGuids.has(itemGuid)) {
+          newHighlightedIds.add(item.id);
+
+          // Get the date for this item
+          const dateStr = entryMode === 'preassembly'
+            ? (item as Preassembly).preassembled_at
+            : (item as Installation).installed_at;
+
+          if (dateStr) {
+            const dayKey = dateStr.split('T')[0];
+            const monthKey = dayKey.substring(0, 7);
+            newHighlightedDates.add(dayKey);
+            monthsToExpand.add(monthKey);
+            daysToExpand.add(dayKey);
+          }
+        }
+      }
+
+      setHighlightedDates(newHighlightedDates);
+      setHighlightedItemIds(newHighlightedIds);
+
+      // Expand months and days that contain highlighted items
+      if (monthsToExpand.size > 0) {
+        setExpandedMonths(prev => new Set([...prev, ...monthsToExpand]));
+      }
+      if (daysToExpand.size > 0) {
+        setExpandedDays(prev => new Set([...prev, ...daysToExpand]));
+      }
+    } catch (e) {
+      console.error('Error checking list view selection:', e);
+    }
+  };
+
+  // Check which items cannot be found in currently loaded models
+  const checkUnfoundItems = async () => {
+    const items = entryMode === 'preassembly' ? preassemblies : installations;
+    if (items.length === 0) {
+      setUnfoundItemIds(new Set());
+      return;
+    }
+
+    // Collect all unique GUIDs from items
+    const guidToItemIds = new Map<string, string[]>();
+    for (const item of items) {
+      const guid = (item.guid_ifc || item.guid || '').toLowerCase();
+      if (guid) {
+        const ids = guidToItemIds.get(guid) || [];
+        ids.push(item.id);
+        guidToItemIds.set(guid, ids);
+      }
+    }
+
+    if (guidToItemIds.size === 0) {
+      setUnfoundItemIds(new Set());
+      return;
+    }
+
+    // Find objects in loaded models
+    const guidsArray = Array.from(guidToItemIds.keys());
+    const foundObjects = await findObjectsInLoadedModels(api, guidsArray);
+
+    // Create set of found GUIDs (lowercase)
+    const foundGuids = new Set<string>();
+    for (const [guid] of foundObjects) {
+      foundGuids.add(guid.toLowerCase());
+    }
+
+    // Identify unfound items
+    const unfound = new Set<string>();
+    for (const [guid, itemIds] of guidToItemIds) {
+      if (!foundGuids.has(guid)) {
+        for (const id of itemIds) {
+          unfound.add(id);
+        }
+      }
+    }
+
+    setUnfoundItemIds(unfound);
+  };
+
+  // Selection checking function for form view
   const checkSelection = async () => {
-    if (showList) return; // Skip when viewing list
+    // In list view, use different handler
+    if (showList) {
+      await checkListViewSelection();
+      return;
+    }
 
     const now = Date.now();
     if (now - lastCheckTimeRef.current < 100) return;
@@ -1067,19 +1210,21 @@ export default function InstallationsScreen({
     try {
       const { data, error } = await supabase
         .from('preassemblies')
-        .select('guid_ifc, guid, preassembled_at, user_email, assembly_mark')
+        .select('guid_ifc, guid, preassembled_at, user_email, assembly_mark, team_members, installation_method_name')
         .eq('project_id', projectId);
 
       if (error) throw error;
 
-      const guidsMap = new Map<string, { preassembledAt: string; userEmail: string; assemblyMark: string }>();
+      const guidsMap = new Map<string, { preassembledAt: string; userEmail: string; assemblyMark: string; teamMembers?: string; methodName?: string }>();
       for (const item of data || []) {
         const key = (item.guid_ifc || item.guid || '').toLowerCase();
         if (key) {
           guidsMap.set(key, {
             preassembledAt: item.preassembled_at,
             userEmail: item.user_email,
-            assemblyMark: item.assembly_mark
+            assemblyMark: item.assembly_mark,
+            teamMembers: item.team_members,
+            methodName: item.installation_method_name
           });
         }
       }
@@ -3251,13 +3396,25 @@ export default function InstallationsScreen({
     const monthLocked = isMonthLocked(monthKey);
     const canDelete = !monthLocked && (isAdminOrModerator || inst.user_email?.toLowerCase() === user.email.toLowerCase());
     const isSelected = selectedInstallationIds.has(inst.id);
+    const isHighlighted = highlightedItemIds.has(inst.id);
+    const isUnfound = unfoundItemIds.has(inst.id);
 
     // Check if this item was preassembled
     const guid = (inst.guid_ifc || inst.guid || '').toLowerCase();
     const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
 
     return (
-      <div className="installation-item" key={inst.id}>
+      <div
+        className="installation-item"
+        key={inst.id}
+        style={isHighlighted ? {
+          background: '#dbeafe',
+          boxShadow: '0 0 0 2px #3b82f6',
+          transform: 'scale(1.02)',
+          zIndex: 10,
+          position: 'relative'
+        } : undefined}
+      >
         <input
           type="checkbox"
           className="installation-item-checkbox"
@@ -3265,6 +3422,20 @@ export default function InstallationsScreen({
           onChange={() => {}}
           onClick={(e) => toggleInstallationSelect(inst.id, e)}
         />
+        {/* Warning icon for items not found in current model */}
+        {isUnfound && (
+          <span
+            title="Seda detaili ei leitud avatud mudelis. Andmed sisestati ilmselt teise mudeliga."
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              marginRight: '4px',
+              color: '#f59e0b'
+            }}
+          >
+            <FiAlertTriangle size={14} />
+          </span>
+        )}
         <div className="installation-item-main" onClick={() => zoomToInstallation(inst)}>
           <div className="installation-item-mark">
             {inst.assembly_mark}
@@ -3329,13 +3500,26 @@ export default function InstallationsScreen({
   const renderPreassemblyItem = (item: Preassembly) => {
     const canDelete = isAdminOrModerator || item.user_email?.toLowerCase() === user.email.toLowerCase();
     const isSelected = selectedPreassemblyIds.has(item.id);
+    const isHighlighted = highlightedItemIds.has(item.id);
+    const isUnfound = unfoundItemIds.has(item.id);
 
     // Check if this item has been installed
     const guid = (item.guid_ifc || item.guid || '').toLowerCase();
     const installationInfo = guid ? installedGuids.get(guid) : null;
 
     return (
-      <div className="installation-item" key={item.id} style={{ borderLeftColor: '#7c3aed' }}>
+      <div
+        className="installation-item"
+        key={item.id}
+        style={isHighlighted ? {
+          borderLeftColor: '#7c3aed',
+          background: '#ede9fe',
+          boxShadow: '0 0 0 2px #7c3aed',
+          transform: 'scale(1.02)',
+          zIndex: 10,
+          position: 'relative'
+        } : { borderLeftColor: '#7c3aed' }}
+      >
         <input
           type="checkbox"
           className="installation-item-checkbox"
@@ -3343,6 +3527,20 @@ export default function InstallationsScreen({
           onChange={() => {}}
           onClick={(e) => togglePreassemblySelection(item.id, e)}
         />
+        {/* Warning icon for items not found in current model */}
+        {isUnfound && (
+          <span
+            title="Seda detaili ei leitud avatud mudelis. Andmed sisestati ilmselt teise mudeliga."
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              marginRight: '4px',
+              color: '#f59e0b'
+            }}
+          >
+            <FiAlertTriangle size={14} />
+          </span>
+        )}
         <div className="installation-item-main" onClick={() => zoomToPreassembly(item)}>
           <div className="installation-item-mark">
             {item.assembly_mark}
@@ -3407,10 +3605,20 @@ export default function InstallationsScreen({
     const dayColor = colorByDay ? dayColors[day.dayKey] : null;
     const showWorkerGrouping = shouldShowWorkerGroups(day.items);
     const workerGroups = showWorkerGrouping ? groupItemsByWorkers(day.items) : [];
+    // Check if any item in this day is highlighted
+    const hasHighlightedItems = day.items.some(item => highlightedItemIds.has(item.id));
 
     return (
       <div key={day.dayKey} className="installation-date-group">
-        <div className="date-group-header" onClick={() => toggleDay(day.dayKey)}>
+        <div
+          className="date-group-header"
+          onClick={() => toggleDay(day.dayKey)}
+          style={hasHighlightedItems ? {
+            background: '#dbeafe',
+            boxShadow: '0 0 0 2px #3b82f6',
+            borderRadius: '6px'
+          } : undefined}
+        >
           <button className="date-group-toggle">
             {expandedDays.has(day.dayKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
           </button>
@@ -3526,10 +3734,21 @@ export default function InstallationsScreen({
     const dayIds = day.items.map(item => item.id);
     const allSelected = dayIds.length > 0 && dayIds.every(id => selectedPreassemblyIds.has(id));
     const someSelected = dayIds.some(id => selectedPreassemblyIds.has(id));
+    // Check if any item in this day is highlighted
+    const hasHighlightedItems = day.items.some(item => highlightedItemIds.has(item.id));
 
     return (
       <div key={day.dayKey} className="installation-date-group">
-        <div className="date-group-header" onClick={() => toggleDay(day.dayKey)} style={{ borderLeftColor: '#7c3aed' }}>
+        <div
+          className="date-group-header"
+          onClick={() => toggleDay(day.dayKey)}
+          style={hasHighlightedItems ? {
+            borderLeftColor: '#7c3aed',
+            background: '#ede9fe',
+            boxShadow: '0 0 0 2px #7c3aed',
+            borderRadius: '6px'
+          } : { borderLeftColor: '#7c3aed' }}
+        >
           <input
             type="checkbox"
             checked={allSelected}
@@ -3650,6 +3869,8 @@ export default function InstallationsScreen({
                 setShowList(true);
                 // Apply installation coloring when opening installation overview
                 await applyInstallationColoring(installedGuids);
+                // Check which items can't be found in current model
+                setTimeout(checkUnfoundItems, 500);
               }}
               style={{
                 flex: 1,
@@ -3668,6 +3889,8 @@ export default function InstallationsScreen({
                 setShowList(true);
                 // Apply preassembly coloring when opening preassembly overview
                 await applyPreassemblyColoring();
+                // Check which items can't be found in current model
+                setTimeout(checkUnfoundItems, 500);
               }}
               style={{
                 flex: 1,
@@ -4828,6 +5051,7 @@ export default function InstallationsScreen({
                       const itemCount = itemsByDate[dateKey]?.length || 0;
                       const dayColor = colorByDay && dayColors[dateKey];
                       const isFuture = date > todayDate;
+                      const isHighlighted = highlightedDates.has(dateKey);
 
                       rows.push(
                         <div
@@ -4856,11 +5080,18 @@ export default function InstallationsScreen({
                             padding: '4px 2px',
                             borderRadius: '4px',
                             cursor: isFuture ? 'not-allowed' : (itemCount > 0 ? 'pointer' : 'default'),
-                            background: isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
-                            border: isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                            background: isHighlighted
+                              ? (entryMode === 'preassembly' ? '#ede9fe' : '#dbeafe')
+                              : isToday ? '#dbeafe' : (isCurrentMonth ? '#fff' : '#f9fafb'),
+                            border: isHighlighted
+                              ? `3px solid ${entryMode === 'preassembly' ? '#7c3aed' : '#3b82f6'}`
+                              : isToday ? '2px solid #3b82f6' : '1px solid #e5e7eb',
                             color: isFuture ? '#d1d5db' : (isCurrentMonth ? '#111827' : '#9ca3af'),
                             position: 'relative',
-                            opacity: isFuture ? 0.5 : (isCurrentMonth ? 1 : 0.6)
+                            opacity: isFuture ? 0.5 : (isCurrentMonth ? 1 : 0.6),
+                            boxShadow: isHighlighted ? `0 0 8px ${entryMode === 'preassembly' ? '#7c3aed' : '#3b82f6'}40` : 'none',
+                            transform: isHighlighted ? 'scale(1.1)' : 'scale(1)',
+                            zIndex: isHighlighted ? 10 : 1
                           }}
                         >
                           <span style={{ fontSize: '11px' }}>{date.getDate()}</span>
@@ -4972,9 +5203,19 @@ export default function InstallationsScreen({
               ) : (
                 monthGroups.map(month => {
                 const mColor = colorByMonth ? monthColors[month.monthKey] : null;
+                // Check if any item in this month is highlighted
+                const hasHighlightedItems = month.allItems.some(item => highlightedItemIds.has(item.id));
                 return (
                 <div key={month.monthKey} className={`installation-month-group ${monthMenuOpen === month.monthKey ? 'menu-open' : ''}`}>
-                  <div className="month-group-header" onClick={() => toggleMonth(month.monthKey)}>
+                  <div
+                    className="month-group-header"
+                    onClick={() => toggleMonth(month.monthKey)}
+                    style={hasHighlightedItems ? {
+                      background: '#dbeafe',
+                      boxShadow: '0 0 0 2px #3b82f6',
+                      borderRadius: '6px'
+                    } : undefined}
+                  >
                     <button className="month-group-toggle">
                       {expandedMonths.has(month.monthKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                     </button>
@@ -5079,9 +5320,21 @@ export default function InstallationsScreen({
                   <p>{searchQuery ? 'Otsingutulemusi ei leitud' : 'Preassembly kirjeid pole veel'}</p>
                 </div>
               ) : (
-                preassemblyMonthGroups.map(month => (
+                preassemblyMonthGroups.map(month => {
+                  // Check if any item in this month is highlighted
+                  const hasHighlightedItems = month.allItems.some(item => highlightedItemIds.has(item.id));
+                  return (
                   <div key={month.monthKey} className="installation-month-group">
-                    <div className="month-group-header" onClick={() => toggleMonth(month.monthKey)} style={{ borderLeftColor: '#7c3aed' }}>
+                    <div
+                      className="month-group-header"
+                      onClick={() => toggleMonth(month.monthKey)}
+                      style={hasHighlightedItems ? {
+                        borderLeftColor: '#7c3aed',
+                        background: '#ede9fe',
+                        boxShadow: '0 0 0 2px #7c3aed',
+                        borderRadius: '6px'
+                      } : { borderLeftColor: '#7c3aed' }}
+                    >
                       <button className="month-group-toggle">
                         {expandedMonths.has(month.monthKey) ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
                       </button>
@@ -5096,7 +5349,7 @@ export default function InstallationsScreen({
                       </div>
                     )}
                   </div>
-                ))
+                );})
               )
             )}
           </div>
@@ -5177,15 +5430,36 @@ export default function InstallationsScreen({
                   const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
                   if (preassemblyInfo) {
                     return (
-                      <div className="install-info-row" style={{ background: '#f5f3ff' }}>
-                        <span className="install-info-label" style={{ color: '#7c3aed' }}>
-                          <FiPackage size={12} style={{ marginRight: '4px' }} />
-                          Preassembly
-                        </span>
-                        <span className="install-info-value compact-date" style={{ color: '#7c3aed' }}>
-                          {formatCompactDateTime(preassemblyInfo.preassembledAt)}
-                        </span>
-                      </div>
+                      <>
+                        <div className="install-info-row" style={{ background: '#f5f3ff' }}>
+                          <span className="install-info-label" style={{ color: '#7c3aed' }}>
+                            <FiPackage size={12} style={{ marginRight: '4px' }} />
+                            Preassembly
+                          </span>
+                          <span className="install-info-value compact-date" style={{ color: '#7c3aed' }}>
+                            {formatCompactDateTime(preassemblyInfo.preassembledAt)}
+                          </span>
+                        </div>
+                        {preassemblyInfo.teamMembers && (
+                          <div className="install-info-row" style={{ background: '#f5f3ff' }}>
+                            <span className="install-info-label" style={{ color: '#7c3aed' }}>
+                              <FiUsers size={12} style={{ marginRight: '4px' }} />
+                              PA Meeskond
+                            </span>
+                            <span className="install-info-value" style={{ color: '#7c3aed' }}>
+                              {preassemblyInfo.teamMembers}
+                            </span>
+                          </div>
+                        )}
+                        {preassemblyInfo.methodName && (
+                          <div className="install-info-row" style={{ background: '#f5f3ff' }}>
+                            <span className="install-info-label" style={{ color: '#7c3aed' }}>PA Meetod</span>
+                            <span className="install-info-value" style={{ color: '#7c3aed' }}>
+                              {preassemblyInfo.methodName}
+                            </span>
+                          </div>
+                        )}
+                      </>
                     );
                   }
                   return null;
