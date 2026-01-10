@@ -3959,11 +3959,26 @@ export default function InstallationsScreen({
         <span className="mode-title">Paigaldamised</span>
       </div>
 
-      {/* Coloring progress indicator */}
+      {/* Coloring progress indicator - floating overlay */}
       {coloringInProgress && (
-        <div className="coloring-progress-bar">
-          <FiRefreshCw size={14} className="spinning" />
-          <span>Värvin mudelit paigalduste andmete järgi...</span>
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          background: 'rgba(255, 255, 255, 0.95)',
+          padding: '16px 24px',
+          borderRadius: '12px',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          zIndex: 1000,
+          fontSize: '14px',
+          color: '#374151'
+        }}>
+          <FiRefreshCw size={18} className="spinning" style={{ color: '#3b82f6' }} />
+          <span>Värvin mudelit...</span>
         </div>
       )}
 
@@ -4753,9 +4768,9 @@ export default function InstallationsScreen({
           <div className="list-header" style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            marginBottom: '12px',
-            padding: '8px 0'
+            gap: '8px',
+            marginBottom: '8px',
+            padding: '4px 0'
           }}>
             <button
               className="list-back-btn"
@@ -4776,21 +4791,21 @@ export default function InstallationsScreen({
               }}
               title="Tagasi"
             >
-              <FiArrowLeft size={16} />
+              <FiArrowLeft size={14} />
             </button>
             <h3 style={{
               margin: 0,
-              fontSize: '16px',
+              fontSize: '13px',
               fontWeight: 600,
               color: entryMode === 'preassembly' ? '#7c3aed' : '#0a3a67',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '6px'
             }}>
               {entryMode === 'preassembly' ? (
-                <><FiPackage size={18} /> Preassembly ülevaade</>
+                <><FiPackage size={14} /> Preassembly ülevaade</>
               ) : (
-                <><FiTool size={18} /> Paigalduste ülevaade</>
+                <><FiTool size={14} /> Paigalduste ülevaade</>
               )}
             </h3>
           </div>
