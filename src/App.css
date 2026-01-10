@@ -6535,6 +6535,32 @@ button.stat-toggle.off:hover {
   color: #374151 !important;
 }
 
+.arrived-deliveries .action-btn.photo {
+  background: #dbeafe !important;
+  color: #2563eb !important;
+  position: relative;
+}
+
+.arrived-deliveries .action-btn.photo:hover {
+  background: #bfdbfe !important;
+}
+
+.arrived-deliveries .action-btn.photo .photo-count {
+  font-size: 8px;
+  font-weight: 600;
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #2563eb;
+  color: white;
+  border-radius: 50%;
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Items title buttons */
 .arrived-deliveries .items-title-buttons {
   display: flex;
@@ -6718,6 +6744,11 @@ button.stat-toggle.off:hover {
   min-width: 28px;
   font-family: monospace;
   flex-shrink: 0;
+}
+
+/* When item is not pending (no checkbox), remove the extra gap */
+.arrived-deliveries .items-list.compact .item-row:not(.pending) {
+  padding-left: 8px;
 }
 
 /* Inline item info - single line like delivery schedule */

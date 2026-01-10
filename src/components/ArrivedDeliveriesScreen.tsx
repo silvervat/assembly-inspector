@@ -106,7 +106,6 @@ interface ItemRowProps {
   status: ArrivalItemStatus;
   isSelected: boolean;
   isExpanded: boolean;
-  hasCommentOrPhotos: boolean;
   duplicateIndex: number;
   duplicateCount: number;
   itemCommentValue: string;
@@ -129,7 +128,6 @@ const ItemRow = memo(({
   status,
   isSelected,
   isExpanded,
-  hasCommentOrPhotos,
   duplicateIndex,
   duplicateCount,
   itemCommentValue,
@@ -191,18 +189,31 @@ const ItemRow = memo(({
           )}
         </div>
         <div className="item-actions">
-          {/* Comment/Photo indicator */}
+          {/* Comment indicator */}
           <button
-            className={`action-btn comment ${hasCommentOrPhotos ? 'has-content' : ''}`}
+            className={`action-btn comment ${itemCommentValue ? 'has-content' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onToggleExpand(item.id);
             }}
-            title="Kommentaar/fotod"
+            title={itemCommentValue || 'Lisa kommentaar'}
           >
             <FiMessageCircle size={12} />
-            {hasCommentOrPhotos && <span className="indicator">!</span>}
           </button>
+          {/* Photo indicator */}
+          {itemPhotos.length > 0 && (
+            <button
+              className="action-btn photo has-content"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand(item.id);
+              }}
+              title={`${itemPhotos.length} foto${itemPhotos.length > 1 ? 't' : ''}`}
+            >
+              <FiCamera size={12} />
+              <span className="photo-count">{itemPhotos.length}</span>
+            </button>
+          )}
           <StatusBadge status={status} />
           {status === 'pending' ? (
             <>
@@ -2352,7 +2363,6 @@ export default function ArrivedDeliveriesScreen({
                               const itemCommentValue = getCommentFast(arrivedVehicle.id, item.id);
                               const itemPhotos = getPhotosFast(arrivedVehicle.id, item.id);
                               const isExpanded = expandedItemId === item.id;
-                              const hasCommentOrPhotos = Boolean(itemCommentValue || itemPhotos.length > 0);
                               const { count: duplicateCount, index: duplicateIndex } = getDuplicateInfo(vehicle.id, item.id, item.assembly_mark || '');
 
                               return (
@@ -2363,7 +2373,6 @@ export default function ArrivedDeliveriesScreen({
                                   status={status}
                                   isSelected={isSelected}
                                   isExpanded={isExpanded}
-                                  hasCommentOrPhotos={hasCommentOrPhotos}
                                   duplicateIndex={duplicateIndex}
                                   duplicateCount={duplicateCount}
                                   itemCommentValue={itemCommentValue}
