@@ -20,7 +20,7 @@ import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiDroplet,
-  FiRefreshCw, FiDownload, FiLock, FiMoreVertical, FiMove,
+  FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiArrowUp, FiArrowDown, FiTag, FiUpload
 } from 'react-icons/fi';
@@ -1187,6 +1187,13 @@ export default function OrganizerScreen({
     const group = groups.find(g => g.id === targetGroupId);
     if (!group) return;
 
+    // Check if group is locked
+    if (isGroupLocked(targetGroupId)) {
+      const lockInfo = getGroupLockInfo(targetGroupId);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     // Check if unique items are required
     const uniqueRequired = requiresUniqueItems(targetGroupId);
     let objectsToAdd = [...selectedObjects];
@@ -1278,6 +1285,14 @@ export default function OrganizerScreen({
 
   const removeItemsFromGroup = async (itemIds: string[]) => {
     if (itemIds.length === 0) return;
+
+    // Check if any item's group is locked
+    const firstItem = Array.from(groupItems.values()).flat().find(i => itemIds.includes(i.id));
+    if (firstItem && isGroupLocked(firstItem.group_id)) {
+      const lockInfo = getGroupLockInfo(firstItem.group_id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -1415,6 +1430,21 @@ export default function OrganizerScreen({
 
   const moveItemsToGroup = async (itemIds: string[], targetGroupId: string) => {
     if (itemIds.length === 0) return;
+
+    // Check if source group is locked
+    const firstItem = Array.from(groupItems.values()).flat().find(i => itemIds.includes(i.id));
+    if (firstItem && isGroupLocked(firstItem.group_id)) {
+      const lockInfo = getGroupLockInfo(firstItem.group_id);
+      showToast(`🔒 Lähtegrupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
+    // Check if target group is locked
+    if (isGroupLocked(targetGroupId)) {
+      const lockInfo = getGroupLockInfo(targetGroupId);
+      showToast(`🔒 Sihtgrupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -2075,6 +2105,14 @@ export default function OrganizerScreen({
     const group = groups.find(g => g.id === importGroupId);
     if (!group) return;
 
+    // Check if group is locked
+    if (isGroupLocked(importGroupId)) {
+      const lockInfo = getGroupLockInfo(importGroupId);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      setShowImportModal(false);
+      return;
+    }
+
     // Parse input - split by newlines, commas, semicolons, tabs, or spaces
     const rawValues = importText
       .split(/[\n,;\t]+/)
@@ -2208,6 +2246,59 @@ export default function OrganizerScreen({
       setSaving(false);
       setImportProgress(null);
     }
+  };
+
+  // ============================================
+  // GROUP LOCKING
+  // ============================================
+
+  const toggleGroupLock = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    setSaving(true);
+    try {
+      const newLockState = !group.is_locked;
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({
+          is_locked: newLockState,
+          locked_by: newLockState ? tcUserEmail : null,
+          locked_at: newLockState ? new Date().toISOString() : null,
+          updated_by: tcUserEmail,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', groupId);
+
+      if (error) throw error;
+
+      showToast(newLockState ? '🔒 Grupp lukustatud' : '🔓 Grupp avatud');
+      setGroupMenuId(null);
+      await refreshData();
+    } catch (e) {
+      console.error('Error toggling group lock:', e);
+      showToast('Viga lukustamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Check if a group or any of its parents is locked
+  const isGroupLocked = (groupId: string): boolean => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return false;
+    if (group.is_locked) return true;
+    if (group.parent_id) return isGroupLocked(group.parent_id);
+    return false;
+  };
+
+  // Get lock info for a group (or its parent if the group itself isn't locked)
+  const getGroupLockInfo = (groupId: string): { locked_by: string | null; locked_at: string | null } | null => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return null;
+    if (group.is_locked) return { locked_by: group.locked_by, locked_at: group.locked_at };
+    if (group.parent_id) return getGroupLockInfo(group.parent_id);
+    return null;
   };
 
   // ============================================
@@ -2473,7 +2564,16 @@ export default function OrganizerScreen({
             {node.description && <div className="group-desc">{node.description}</div>}
           </div>
 
-          {node.is_private && <FiLock size={11} className="org-lock-icon" />}
+          {node.is_private && <FiLock size={11} className="org-lock-icon" title="Privaatne grupp" />}
+
+          {node.is_locked && (
+            <span
+              className="org-locked-indicator"
+              title={`🔒 Lukustatud\n👤 ${node.locked_by || 'Tundmatu'}\n📅 ${node.locked_at ? new Date(node.locked_at).toLocaleString('et-EE') : ''}`}
+            >
+              <FiLock size={11} />
+            </span>
+          )}
 
           <span className="org-group-count">{node.itemCount} tk</span>
           <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
@@ -2537,6 +2637,10 @@ export default function OrganizerScreen({
               </button>
               <button onClick={() => openImportModal(node.id)}>
                 <FiUpload size={12} /> Impordi GUID
+              </button>
+              <button onClick={() => toggleGroupLock(node.id)}>
+                {node.is_locked ? <FiUnlock size={12} /> : <FiLock size={12} />}
+                {node.is_locked ? ' Ava lukust' : ' Lukusta'}
               </button>
               <button className="delete" onClick={() => openDeleteConfirm(node)}>
                 <FiTrash2 size={12} /> Kustuta

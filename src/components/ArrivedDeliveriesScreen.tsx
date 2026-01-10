@@ -556,15 +556,22 @@ export default function ArrivedDeliveriesScreen({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxPhoto, selectedItemsForConfirm.size, modelSelectionMode]);
 
-  // Model selection mode - listen for selection events
+  // Model selection mode - poll for selection changes
   useEffect(() => {
     if (!modelSelectionMode || !api) return;
 
-    const handleSelectionChange = async () => {
+    let lastSelectionKey = '';
+
+    const checkSelection = async () => {
       try {
         // Get selected objects from Trimble Connect viewer
         const selection = await api.viewer.getSelection();
         if (!selection || selection.length === 0) return;
+
+        // Create a key to check if selection changed
+        const selectionKey = selection.map((s: any) => `${s.modelId}:${s.objectRuntimeIds?.join(',')}`).join('|');
+        if (selectionKey === lastSelectionKey) return;
+        lastSelectionKey = selectionKey;
 
         // Get GUIDs from selection
         const guids: string[] = [];
@@ -599,12 +606,11 @@ export default function ArrivedDeliveriesScreen({
       }
     };
 
-    // Subscribe to selection changes
-    const unsubscribe = api.viewer.subscribeToSelectionChanged(handleSelectionChange);
+    // Poll for selection changes every 1 second
+    const interval = setInterval(checkSelection, 1000);
+    checkSelection(); // Check immediately
 
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    return () => clearInterval(interval);
   }, [modelSelectionMode, api, items]);
 
   // ============================================

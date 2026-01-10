@@ -5924,7 +5924,7 @@ button.stat-toggle.off:hover {
 
 .arrived-deliveries .arrival-start {
   text-align: center;
-  padding: 12px;
+  padding: 0px;
 }
 
 .arrived-deliveries .start-arrival-btn {
@@ -10215,6 +10215,17 @@ button.stat-toggle.off:hover {
 
 .org-lock-icon {
   color: #9ca3af;
+}
+
+.org-locked-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  background: #fef2f2;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: help;
 }
 
 .org-group-count {

@@ -1079,6 +1079,9 @@ export interface OrganizerGroup {
   assembly_selection_on: boolean;   // Whether model selection is enabled for adding items
   unique_items: boolean;            // Whether items must be unique in group and subgroups
   color: GroupColor | null;         // For model coloring
+  is_locked: boolean;               // Prevents adding/editing/deleting items
+  locked_by: string | null;         // User email who locked
+  locked_at: string | null;         // When locked
   created_by: string;               // User email
   created_at: string;
   updated_at: string;
