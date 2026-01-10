@@ -3918,7 +3918,16 @@ export default function OrganizerScreen({
         const effectiveCustomFields = rootParent?.custom_fields || selectedGroup.custom_fields || [];
         return (
         <div className="org-modal-overlay" onClick={() => setShowBulkEdit(false)}>
-          <div className="org-modal org-modal-wide" onClick={e => e.stopPropagation()}>
+          <div
+            className="org-modal org-modal-wide"
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !saving && effectiveCustomFields.length > 0) {
+                e.preventDefault();
+                bulkUpdateItems();
+              }
+            }}
+          >
             <div className="org-modal-header">
               <h2>Muuda {selectedItemIds.size} detaili</h2>
               <button onClick={() => setShowBulkEdit(false)}><FiX size={18} /></button>
