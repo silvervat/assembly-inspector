@@ -48,6 +48,19 @@ interface SelectedObject {
   castUnitPositionCode?: string;
 }
 
+// Team member from Trimble Connect API
+interface TeamMember {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string;
+  status: string;
+}
+
+// Sharing mode for groups
+type SharingMode = 'private' | 'shared' | 'project';
+
 // Field type labels
 const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   text: 'Tekst',
@@ -357,9 +370,14 @@ export default function OrganizerScreen({
   // Group form state
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
-  const [formIsPrivate, setFormIsPrivate] = useState(false);
+  const [formSharingMode, setFormSharingMode] = useState<SharingMode>('project');
+  const [formAllowedUsers, setFormAllowedUsers] = useState<string[]>([]);
   const [formColor, setFormColor] = useState<GroupColor | null>(null);
   const [formParentId, setFormParentId] = useState<string | null>(null);
+
+  // Team members
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  const [teamMembersLoading, setTeamMembersLoading] = useState(false);
 
   // Field form state
   const [fieldName, setFieldName] = useState('');
@@ -570,6 +588,26 @@ export default function OrganizerScreen({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId]);
+
+  // ============================================
+  // TEAM MEMBERS LOADING
+  // ============================================
+
+  const loadTeamMembers = useCallback(async () => {
+    if (teamMembers.length > 0) return; // Already loaded
+    setTeamMembersLoading(true);
+    try {
+      const members = await (api.project as { getMembers?: () => Promise<TeamMember[]> }).getMembers?.();
+      if (members && Array.isArray(members)) {
+        setTeamMembers(members);
+        console.log('✅ Team members loaded:', members.length);
+      }
+    } catch (e) {
+      console.error('❌ Error loading team members:', e);
+    } finally {
+      setTeamMembersLoading(false);
+    }
+  }, [api, teamMembers.length]);
 
   // ============================================
   // DATA LOADING
@@ -915,13 +953,17 @@ export default function OrganizerScreen({
         }
       }
 
+      // Determine sharing settings based on mode
+      const isPrivate = formSharingMode !== 'project';
+      const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
+
       const newGroup = {
         trimble_project_id: projectId,
         parent_id: formParentId,
         name: formName.trim(),
         description: formDescription.trim() || null,
-        is_private: formIsPrivate,
-        allowed_users: [],
+        is_private: isPrivate,
+        allowed_users: allowedUsers,
         display_properties: [],
         custom_fields: finalCustomFields,
         assembly_selection_on: formAssemblySelectionOn,
@@ -954,6 +996,10 @@ export default function OrganizerScreen({
   const updateGroup = async () => {
     if (!editingGroup || !formName.trim()) return;
 
+    // Determine sharing settings based on mode
+    const isPrivate = formSharingMode !== 'project';
+    const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -961,7 +1007,8 @@ export default function OrganizerScreen({
         .update({
           name: formName.trim(),
           description: formDescription.trim() || null,
-          is_private: formIsPrivate,
+          is_private: isPrivate,
+          allowed_users: allowedUsers,
           color: formColor,
           custom_fields: editingGroup.custom_fields,
           assembly_selection_on: formAssemblySelectionOn,
@@ -1075,7 +1122,8 @@ export default function OrganizerScreen({
   const resetGroupForm = () => {
     setFormName('');
     setFormDescription('');
-    setFormIsPrivate(false);
+    setFormSharingMode('project');
+    setFormAllowedUsers([]);
     setFormColor(null);
     setFormParentId(null);
     setFormAssemblySelectionOn(true);
@@ -1087,13 +1135,24 @@ export default function OrganizerScreen({
     setEditingGroup(group);
     setFormName(group.name);
     setFormDescription(group.description || '');
-    setFormIsPrivate(group.is_private);
+    // Determine sharing mode from group data
+    if (!group.is_private) {
+      setFormSharingMode('project');
+    } else if (group.allowed_users && group.allowed_users.length > 0) {
+      setFormSharingMode('shared');
+      setFormAllowedUsers(group.allowed_users);
+    } else {
+      setFormSharingMode('private');
+      setFormAllowedUsers([]);
+    }
     setFormColor(group.color);
     setFormParentId(group.parent_id);
     setFormAssemblySelectionOn(group.assembly_selection_on !== false);
     setFormUniqueItems(group.unique_items !== false);
     setShowGroupForm(true);
     setGroupMenuId(null);
+    // Load team members when editing for shared mode
+    loadTeamMembers();
   };
 
   const openAddSubgroupForm = (parentId: string) => {
@@ -1338,15 +1397,13 @@ export default function OrganizerScreen({
 
       const items = objectsToAdd.map((obj, index) => ({
         group_id: targetGroupId,
-        trimble_project_id: projectId,
         guid_ifc: obj.guidIfc,
         assembly_mark: obj.assemblyMark,
         product_name: obj.productName || null,
         cast_unit_weight: obj.castUnitWeight || null,
         cast_unit_position_code: obj.castUnitPositionCode || null,
         custom_properties: {},
-        created_by: tcUserEmail,
-        updated_by: tcUserEmail,
+        added_by: tcUserEmail,
         sort_order: startIndex + index
       }));
 
@@ -2508,14 +2565,12 @@ export default function OrganizerScreen({
 
       const items = objectsToAdd.map((obj, index) => ({
         group_id: importGroupId,
-        trimble_project_id: projectId,
         guid_ifc: obj.guid_ifc,
         assembly_mark: obj.assembly_mark,
         product_name: obj.product_name,
         cast_unit_weight: obj.cast_unit_weight || null,
         custom_properties: {},
-        created_by: tcUserEmail,
-        updated_by: tcUserEmail,
+        added_by: tcUserEmail,
         sort_order: startIndex + index
       }));
 
@@ -3437,9 +3492,98 @@ export default function OrganizerScreen({
                   </select>
                 </div>
               )}
-              <div className="org-field checkbox">
-                <label><input type="checkbox" checked={formIsPrivate} onChange={(e) => setFormIsPrivate(e.target.checked)} /> Privaatne grupp</label>
-              </div>
+              {/* Sharing settings - only for main groups */}
+              {!formParentId && (
+                <div className="org-field">
+                  <label>Jagamine</label>
+                  <div className="org-sharing-options">
+                    <label className={`org-sharing-option ${formSharingMode === 'project' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="sharing"
+                        checked={formSharingMode === 'project'}
+                        onChange={() => setFormSharingMode('project')}
+                      />
+                      <span className="option-icon">🌐</span>
+                      <span className="option-text">
+                        <strong>Kogu projekt</strong>
+                        <small>Kõik projekti liikmed näevad</small>
+                      </span>
+                    </label>
+                    <label className={`org-sharing-option ${formSharingMode === 'shared' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="sharing"
+                        checked={formSharingMode === 'shared'}
+                        onChange={() => { setFormSharingMode('shared'); loadTeamMembers(); }}
+                      />
+                      <span className="option-icon">👥</span>
+                      <span className="option-text">
+                        <strong>Valitud kasutajad</strong>
+                        <small>Ainult valitud liikmed näevad</small>
+                      </span>
+                    </label>
+                    <label className={`org-sharing-option ${formSharingMode === 'private' ? 'selected' : ''}`}>
+                      <input
+                        type="radio"
+                        name="sharing"
+                        checked={formSharingMode === 'private'}
+                        onChange={() => setFormSharingMode('private')}
+                      />
+                      <span className="option-icon">🔒</span>
+                      <span className="option-text">
+                        <strong>Privaatne</strong>
+                        <small>Ainult mina näen</small>
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* User selection for shared mode */}
+                  {formSharingMode === 'shared' && (
+                    <div className="org-user-selection">
+                      {teamMembersLoading ? (
+                        <div className="org-loading-users">Laadin kasutajaid...</div>
+                      ) : teamMembers.length === 0 ? (
+                        <div className="org-no-users">
+                          <button className="org-load-users-btn" onClick={loadTeamMembers}>
+                            Laadi projekti liikmed
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="org-users-list">
+                            {teamMembers
+                              .filter(m => m.email !== tcUserEmail) // Don't show current user
+                              .map(member => (
+                                <label key={member.id} className={`org-user-item ${formAllowedUsers.includes(member.email) ? 'selected' : ''}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={formAllowedUsers.includes(member.email)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormAllowedUsers([...formAllowedUsers, member.email]);
+                                      } else {
+                                        setFormAllowedUsers(formAllowedUsers.filter(u => u !== member.email));
+                                      }
+                                    }}
+                                  />
+                                  <span className="user-name">{member.firstName} {member.lastName}</span>
+                                  <span className="user-email">{member.email}</span>
+                                  <span className="user-role">{member.role}</span>
+                                </label>
+                              ))}
+                          </div>
+                          {formAllowedUsers.length > 0 && (
+                            <div className="org-selected-count">
+                              Valitud: {formAllowedUsers.length} kasutajat
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Settings only for main groups (not subgroups) */}
               {!formParentId && (
