@@ -1323,7 +1323,13 @@ export default function InstallationsScreen({
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`[INSTALL] Found ${foundObjects.size} objects in loaded models`);
 
-      // Step 4: Get installed item GUIDs (from the guidsMap)
+      // Build case-insensitive lookup for foundObjects (like OrganizerScreen does)
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of foundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
+      }
+
+      // Step 4: Get installed item GUIDs (from the guidsMap - already lowercase)
       const installedGuidSet = new Set(guidsMap.keys());
       console.log(`[INSTALL] Installed GUIDs count: ${installedGuidSet.size}`);
 
@@ -1331,9 +1337,9 @@ export default function InstallationsScreen({
       const whiteByModel: Record<string, number[]> = {};
       const blackByModel: Record<string, number[]> = {};
 
-      for (const [guid, found] of foundObjects) {
-        if (installedGuidSet.has(guid)) {
-          // Installed - color BLACK
+      for (const [guidLower, found] of foundByLowercase) {
+        if (installedGuidSet.has(guidLower)) {
+          // Installed - color with INSTALLED_COLOR
           if (!blackByModel[found.modelId]) blackByModel[found.modelId] = [];
           blackByModel[found.modelId].push(found.runtimeId);
         } else {
@@ -1444,7 +1450,13 @@ export default function InstallationsScreen({
       const foundObjects = await findObjectsInLoadedModels(api, allGuids);
       console.log(`[PREASSEMBLY] Found ${foundObjects.size} objects in models`);
 
-      // Step 4: Get installed and preassembly GUIDs
+      // Build case-insensitive lookup for foundObjects (like OrganizerScreen does)
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of foundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
+      }
+
+      // Step 4: Get installed and preassembly GUIDs (already lowercase)
       const installedGuidSet = new Set(installedGuids.keys());
       const preassemblyGuidSet = new Set(preassembledGuids.keys());
 
@@ -1455,12 +1467,12 @@ export default function InstallationsScreen({
       const installedByModel: Record<string, number[]> = {};
       const preassemblyByModel: Record<string, number[]> = {};
 
-      for (const [guid, found] of foundObjects) {
-        if (installedGuidSet.has(guid)) {
+      for (const [guidLower, found] of foundByLowercase) {
+        if (installedGuidSet.has(guidLower)) {
           // Installed - INSTALLED_COLOR
           if (!installedByModel[found.modelId]) installedByModel[found.modelId] = [];
           installedByModel[found.modelId].push(found.runtimeId);
-        } else if (preassemblyGuidSet.has(guid)) {
+        } else if (preassemblyGuidSet.has(guidLower)) {
           // Preassembly - PREASSEMBLY_COLOR
           if (!preassemblyByModel[found.modelId]) preassemblyByModel[found.modelId] = [];
           preassemblyByModel[found.modelId].push(found.runtimeId);
@@ -1552,12 +1564,19 @@ export default function InstallationsScreen({
       const isPreassemblyMode = entryMode === 'preassembly';
       const itemsToColor = isPreassemblyMode ? preassemblies : installations;
 
-      // Step 1: Get item GUIDs
-      const guids = itemsToColor.map(item => (item.guid_ifc || item.guid || '').toLowerCase()).filter(Boolean);
+      // Step 1: Get item GUIDs (original case for API, we'll handle case later)
+      const guids = itemsToColor.map(item => item.guid_ifc || item.guid || '').filter(Boolean);
       console.log(`[DAY] ${isPreassemblyMode ? 'Preassembly' : 'Installed'} GUIDs count: ${guids.length}`);
 
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       console.log(`[DAY] Found ${foundObjects.size} objects in loaded models`);
+
+      // Build case-insensitive lookup for foundObjects (like OrganizerScreen does)
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of foundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
+      }
+      console.log(`[DAY] Found by lowercase: ${foundByLowercase.size}`);
 
       // Step 2: Generate colors for each day
       const uniqueDays = [...new Set(itemsToColor.map(item => getDayKey((item as Installation).installed_at || (item as Preassembly).preassembled_at)))].sort();
@@ -1565,13 +1584,13 @@ export default function InstallationsScreen({
       setDayColors(colors);
       console.log(`[DAY] Unique days: ${uniqueDays.length}`, uniqueDays);
 
-      // Step 3: Build runtime ID mapping
+      // Step 3: Build runtime ID mapping (using lowercase for consistent lookup)
       const itemByGuid = new Map<string, { modelId: string; runtimeId: number }>();
       for (const item of itemsToColor) {
-        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
-        if (guid && foundObjects.has(guid)) {
-          const found = foundObjects.get(guid)!;
-          itemByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+        const guidLower = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guidLower && foundByLowercase.has(guidLower)) {
+          const found = foundByLowercase.get(guidLower)!;
+          itemByGuid.set(guidLower, { modelId: found.modelId, runtimeId: found.runtimeId });
         }
       }
       console.log(`[DAY] Items found in model: ${itemByGuid.size}`);
@@ -1658,25 +1677,32 @@ export default function InstallationsScreen({
       const isPreassemblyMode = entryMode === 'preassembly';
       const itemsToColor = isPreassemblyMode ? preassemblies : installations;
 
-      // Step 1: Get item GUIDs and find them in loaded models
-      const guids = itemsToColor.map(item => (item.guid_ifc || item.guid || '').toLowerCase()).filter(Boolean);
+      // Step 1: Get item GUIDs (original case for API, we'll handle case later)
+      const guids = itemsToColor.map(item => item.guid_ifc || item.guid || '').filter(Boolean);
       console.log(`[MONTH] ${isPreassemblyMode ? 'Preassembly' : 'Installed'} GUIDs count: ${guids.length}`);
 
       const foundObjects = await findObjectsInLoadedModels(api, guids);
       console.log(`[MONTH] Found ${foundObjects.size} objects in loaded models`);
+
+      // Build case-insensitive lookup for foundObjects (like OrganizerScreen does)
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of foundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
+      }
+      console.log(`[MONTH] Found by lowercase: ${foundByLowercase.size}`);
 
       // Step 2: Generate colors for each month
       const uniqueMonths = [...new Set(itemsToColor.map(item => getMonthKey((item as Installation).installed_at || (item as Preassembly).preassembled_at)))].sort();
       const colors = generateMonthColors(uniqueMonths);
       setMonthColors(colors);
 
-      // Step 3: Build runtime ID mapping
+      // Step 3: Build runtime ID mapping (using lowercase for consistent lookup)
       const itemByGuid = new Map<string, { modelId: string; runtimeId: number }>();
       for (const item of itemsToColor) {
-        const guid = (item.guid_ifc || item.guid || '').toLowerCase();
-        if (guid && foundObjects.has(guid)) {
-          const found = foundObjects.get(guid)!;
-          itemByGuid.set(guid, { modelId: found.modelId, runtimeId: found.runtimeId });
+        const guidLower = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (guidLower && foundByLowercase.has(guidLower)) {
+          const found = foundByLowercase.get(guidLower)!;
+          itemByGuid.set(guidLower, { modelId: found.modelId, runtimeId: found.runtimeId });
         }
       }
 
