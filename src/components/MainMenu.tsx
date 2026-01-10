@@ -346,7 +346,7 @@ export default function MainMenu({
                 <FiFolder size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Organiseeri</span>
+                <span className="menu-item-title">Organiseerija</span>
                 <span className="menu-item-desc">Grupeeri ja organiseeri detaile</span>
               </div>
               <span className="menu-item-arrow">
