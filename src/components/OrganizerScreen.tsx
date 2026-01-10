@@ -2815,14 +2815,20 @@ export default function OrganizerScreen({
 
           {node.is_private && <FiLock size={11} className="org-lock-icon" title="Privaatne grupp" />}
 
-          {node.is_locked && (
-            <span
-              className="org-locked-indicator"
-              title={`🔒 Lukustatud\n👤 ${node.locked_by || 'Tundmatu'}\n📅 ${node.locked_at ? new Date(node.locked_at).toLocaleString('et-EE') : ''}`}
-            >
-              <FiLock size={11} />
-            </span>
-          )}
+          {(() => {
+            const effectiveLockInfo = getGroupLockInfo(node.id);
+            const isEffectivelyLocked = isGroupLocked(node.id);
+            const lockedByParent = isEffectivelyLocked && !node.is_locked;
+            if (!isEffectivelyLocked) return null;
+            return (
+              <span
+                className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
+                title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+              >
+                <FiLock size={11} />
+              </span>
+            );
+          })()}
 
           <span className="org-group-count">{node.itemCount} tk</span>
           <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
@@ -2887,10 +2893,22 @@ export default function OrganizerScreen({
               <button onClick={() => openImportModal(node.id)}>
                 <FiUpload size={12} /> Impordi GUID
               </button>
-              <button onClick={() => toggleGroupLock(node.id)}>
-                {node.is_locked ? <FiUnlock size={12} /> : <FiLock size={12} />}
-                {node.is_locked ? ' Ava lukust' : ' Lukusta'}
-              </button>
+              {(() => {
+                const parentLocked = node.parent_id && isGroupLocked(node.parent_id);
+                if (parentLocked) {
+                  return (
+                    <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
+                      <FiLock size={12} /> Lukust. ülemgrupi poolt
+                    </button>
+                  );
+                }
+                return (
+                  <button onClick={() => toggleGroupLock(node.id)}>
+                    {node.is_locked ? <FiUnlock size={12} /> : <FiLock size={12} />}
+                    {node.is_locked ? ' Ava lukust' : ' Lukusta'}
+                  </button>
+                );
+              })()}
               <button className="delete" onClick={() => openDeleteConfirm(node)}>
                 <FiTrash2 size={12} /> Kustuta
               </button>
