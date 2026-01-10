@@ -693,6 +693,70 @@ export default function InstallationsScreen({
     }
   }, [kaartostukOperators, projectId]);
 
+  // Auto-update method badges when resource arrays change
+  useEffect(() => {
+    if (monteerijad.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        monteerija: Math.max(prev.monteerija || 0, monteerijad.length)
+      }));
+    }
+  }, [monteerijad.length]);
+
+  useEffect(() => {
+    if (troppijad.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        troppija: Math.max(prev.troppija || 0, troppijad.length)
+      }));
+    }
+  }, [troppijad.length]);
+
+  useEffect(() => {
+    if (keevitajad.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        keevitaja: Math.max(prev.keevitaja || 0, keevitajad.length)
+      }));
+    }
+  }, [keevitajad.length]);
+
+  useEffect(() => {
+    if (craneOperators.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        crane: Math.max(prev.crane || 0, craneOperators.length)
+      }));
+    }
+  }, [craneOperators.length]);
+
+  useEffect(() => {
+    if (forkliftOperators.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        forklift: Math.max(prev.forklift || 0, forkliftOperators.length)
+      }));
+    }
+  }, [forkliftOperators.length]);
+
+  useEffect(() => {
+    if (poomtostukOperators.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        poomtostuk: Math.max(prev.poomtostuk || 0, poomtostukOperators.length)
+      }));
+    }
+  }, [poomtostukOperators.length]);
+
+  useEffect(() => {
+    if (kaartostukOperators.length > 0) {
+      setSelectedInstallMethods(prev => ({
+        ...prev,
+        kaartostuk: Math.max(prev.kaartostuk || 0, kaartostukOperators.length)
+      }));
+    }
+  }, [kaartostukOperators.length]);
+
   // Load known team members from database
   const loadKnownTeamMembers = async () => {
     try {
@@ -3581,7 +3645,12 @@ export default function InstallationsScreen({
           <div className="installations-menu" style={{ display: 'flex', gap: '8px' }}>
             <button
               className="installations-menu-btn"
-              onClick={() => { handleEntryModeChange('installation'); setShowList(true); }}
+              onClick={async () => {
+                handleEntryModeChange('installation');
+                setShowList(true);
+                // Apply installation coloring when opening installation overview
+                await applyInstallationColoring(installedGuids);
+              }}
               style={{
                 flex: 1,
                 background: '#eff6ff',
@@ -3589,12 +3658,17 @@ export default function InstallationsScreen({
               }}
             >
               <FiTool size={16} />
-              <span>Paigaldatud</span>
+              <span>Paigalduste ülevaade</span>
               <span className="menu-count" style={{ background: '#3b82f6' }}>{installations.length}</span>
             </button>
             <button
               className="installations-menu-btn"
-              onClick={() => { handleEntryModeChange('preassembly'); setShowList(true); }}
+              onClick={async () => {
+                handleEntryModeChange('preassembly');
+                setShowList(true);
+                // Apply preassembly coloring when opening preassembly overview
+                await applyPreassemblyColoring();
+              }}
               style={{
                 flex: 1,
                 background: '#f5f3ff',
@@ -3602,7 +3676,7 @@ export default function InstallationsScreen({
               }}
             >
               <FiPackage size={16} />
-              <span>Preassembly</span>
+              <span>Preassembly ülevaade</span>
               <span className="menu-count" style={{ background: '#7c3aed' }}>{preassemblies.length}</span>
             </button>
           </div>
@@ -4285,25 +4359,54 @@ export default function InstallationsScreen({
       ) : (
         /* List View */
         <div className="installations-list-view">
-          {/* Search and filter */}
-          <div className="list-controls">
+          {/* Header with title */}
+          <div className="list-header" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '12px',
+            padding: '8px 0'
+          }}>
             <button
               className="list-back-btn"
               onClick={async () => {
                 setShowList(false);
-                // Just recolor installed items BLACK (no full reset needed, whites stay white)
+                // Reapply base coloring based on mode
                 if (colorByDay || colorByMonth) {
                   setColorByDay(false);
                   setColorByMonth(false);
                   setDayColors({});
                   setMonthColors({});
-                  await colorInstalledGuidsBlack();
+                }
+                if (entryMode === 'preassembly') {
+                  await applyPreassemblyColoring();
+                } else {
+                  await applyInstallationColoring(installedGuids);
                 }
               }}
               title="Tagasi"
             >
               <FiArrowLeft size={16} />
             </button>
+            <h3 style={{
+              margin: 0,
+              fontSize: '16px',
+              fontWeight: 600,
+              color: entryMode === 'preassembly' ? '#7c3aed' : '#0a3a67',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              {entryMode === 'preassembly' ? (
+                <><FiPackage size={18} /> Preassembly ülevaade</>
+              ) : (
+                <><FiTool size={18} /> Paigalduste ülevaade</>
+              )}
+            </h3>
+          </div>
+
+          {/* Search and filter */}
+          <div className="list-controls">
             <div className="search-box compact">
               <FiSearch size={14} />
               <input
