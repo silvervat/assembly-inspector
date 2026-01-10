@@ -2755,7 +2755,7 @@ export default function OrganizerScreen({
       <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''}`}
-          style={{ paddingLeft: `${8 + depth * 20}px` }}
+          style={{ paddingLeft: `${8 + depth * 10}px` }}
           onClick={(e) => handleGroupClick(e, node.id)}
           onDragOver={(e) => handleDragOver(e, node.id)}
           onDragLeave={handleDragLeave}
