@@ -11,7 +11,7 @@ import {
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
-  FiFileText, FiDownload
+  FiFileText, FiDownload, FiSearch
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 
@@ -383,6 +383,9 @@ export default function ArrivedDeliveriesScreen({
 
   // State - Upload progress
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // State - Search per vehicle (vehicle_id -> search term)
+  const [itemSearchTerms, setItemSearchTerms] = useState<Record<string, string>>({});
 
   // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -839,11 +842,11 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
-  // Confirm all items at once
-  const confirmAllItems = async (arrivedVehicleId: string) => {
+  // Confirm all items at once (or filtered items if itemIds provided)
+  const confirmAllItems = async (arrivedVehicleId: string, itemIds?: string[]) => {
     setSaving(true);
     try {
-      const { error } = await supabase
+      let query = supabase
         .from('trimble_arrival_confirmations')
         .update({
           status: 'confirmed',
@@ -853,10 +856,17 @@ export default function ArrivedDeliveriesScreen({
         .eq('arrived_vehicle_id', arrivedVehicleId)
         .eq('status', 'pending');
 
+      // If itemIds provided, only confirm those items
+      if (itemIds && itemIds.length > 0) {
+        query = query.in('item_id', itemIds);
+      }
+
+      const { error } = await query;
+
       if (error) throw error;
       await loadConfirmations();
       setSelectedItemsForConfirm(new Set());
-      setMessage('Kõik detailid kinnitatud');
+      setMessage(itemIds ? `${itemIds.length} detaili kinnitatud` : 'Kõik detailid kinnitatud');
     } catch (e: any) {
       console.error('Error confirming all items:', e);
       setMessage('Viga: ' + e.message);
@@ -2283,13 +2293,54 @@ export default function ArrivedDeliveriesScreen({
                               <FiDownload /> Ekspordi raport
                             </button>
                           </div>
+
+                          {/* Item search */}
+                          <div className="item-search-section">
+                            <div className="search-input-wrapper">
+                              <FiSearch className="search-icon" />
+                              <input
+                                type="text"
+                                className="item-search-input"
+                                placeholder="Otsi detaile..."
+                                value={itemSearchTerms[vehicle.id] || ''}
+                                onChange={(e) => {
+                                  const searchTerm = e.target.value;
+                                  setItemSearchTerms(prev => ({ ...prev, [vehicle.id]: searchTerm }));
+                                  // Clear selection when search changes
+                                  setSelectedItemsForConfirm(new Set());
+                                }}
+                              />
+                              {itemSearchTerms[vehicle.id] && (
+                                <button
+                                  className="clear-search-btn"
+                                  onClick={() => setItemSearchTerms(prev => ({ ...prev, [vehicle.id]: '' }))}
+                                >
+                                  <FiX />
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
                         {/* Items list */}
+                        {(() => {
+                          // Filter items based on search
+                          const searchTerm = (itemSearchTerms[vehicle.id] || '').toLowerCase().trim();
+                          const filteredItems = searchTerm
+                            ? vehicleItems.filter(item =>
+                                (item.assembly_mark?.toLowerCase() || '').includes(searchTerm) ||
+                                (item.product_name?.toLowerCase() || '').includes(searchTerm)
+                              )
+                            : vehicleItems;
+                          const filteredPendingItems = filteredItems.filter(
+                            item => getStatusFast(arrivedVehicle.id, item.id) === 'pending'
+                          );
+
+                          return (
                         <div className="items-section">
                           <div className="items-header">
                             <div className="items-title-row">
-                              <h3>Detailid ({vehicleItems.length})</h3>
+                              <h3>Detailid ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
                               <div className="items-title-buttons">
                                 <button
                                   className="add-item-btn"
@@ -2343,21 +2394,24 @@ export default function ArrivedDeliveriesScreen({
                                 </button>
                               </div>
                             )}
-                            {selectedItemsForConfirm.size === 0 && pendingCount > 0 && (
+                            {selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && (
                               <div className="items-bulk-actions">
                                 <button
                                   className="confirm-all-btn"
-                                  onClick={() => confirmAllItems(arrivedVehicle.id)}
+                                  onClick={() => confirmAllItems(
+                                    arrivedVehicle.id,
+                                    searchTerm ? filteredPendingItems.map(i => i.id) : undefined
+                                  )}
                                   disabled={saving}
                                 >
-                                  <FiCheck /> Kinnita kõik
+                                  <FiCheck /> {searchTerm ? `Kinnita otsingu tulemused (${filteredPendingItems.length})` : 'Kinnita kõik'}
                                 </button>
                               </div>
                             )}
                           </div>
 
                           <div className="items-list compact">
-                            {vehicleItems.map((item, idx) => {
+                            {filteredItems.map((item, idx) => {
                               const status = getStatusFast(arrivedVehicle.id, item.id);
                               const isSelected = selectedItemsForConfirm.has(item.id);
                               const itemCommentValue = getCommentFast(arrivedVehicle.id, item.id);
@@ -2378,7 +2432,7 @@ export default function ArrivedDeliveriesScreen({
                                   itemCommentValue={itemCommentValue}
                                   itemPhotos={itemPhotos}
                                   vehicleCode={vehicle.vehicle_code || 'veok'}
-                                  onToggleSelect={handleToggleSelect(arrivedVehicle.id, vehicleItems)}
+                                  onToggleSelect={handleToggleSelect(arrivedVehicle.id, filteredItems)}
                                   onToggleExpand={handleToggleExpand}
                                   onConfirmItem={handleConfirmItem(arrivedVehicle.id)}
                                   onUpdateComment={handleUpdateComment(arrivedVehicle.id)}
@@ -2390,8 +2444,8 @@ export default function ArrivedDeliveriesScreen({
                               );
                             })}
 
-                            {/* Added items from other vehicles */}
-                            {arrivalConfirmations
+                            {/* Added items from other vehicles - only show when not searching */}
+                            {!searchTerm && arrivalConfirmations
                               .filter(c => c.status === 'added')
                               .map((conf, idx) => {
                                 const item = items.find(i => i.id === conf.item_id);
@@ -2413,6 +2467,8 @@ export default function ArrivedDeliveriesScreen({
                               })}
                           </div>
                         </div>
+                          );
+                        })()}
 
                         {/* Complete button */}
                         {!arrivedVehicle.is_confirmed && pendingCount === 0 && (
