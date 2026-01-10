@@ -807,6 +807,8 @@ export interface ArrivedVehicle {
   is_confirmed: boolean;                 // Kas kinnitus on lõpetatud
   confirmed_at?: string;
   confirmed_by?: string;
+  // Kontrollijad
+  checked_by_workers?: string;            // Töötajad kes tarnet kontrollisid (komadega eraldatud)
   // Märkused
   notes?: string;
   // Audit

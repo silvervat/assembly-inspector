@@ -106,7 +106,6 @@ interface ItemRowProps {
   status: ArrivalItemStatus;
   isSelected: boolean;
   isExpanded: boolean;
-  hasCommentOrPhotos: boolean;
   duplicateIndex: number;
   duplicateCount: number;
   itemCommentValue: string;
@@ -119,6 +118,7 @@ interface ItemRowProps {
   onUploadPhoto: (itemId: string, files: FileList) => void;
   onDeletePhoto: (photoId: string, fileUrl: string) => void;
   onOpenLightbox: (photo: ArrivalPhoto, vehicleCode: string) => void;
+  onSelectInModel: (guid: string) => void;
 }
 
 // Memoized ItemRow component - only re-renders when its specific props change
@@ -128,7 +128,6 @@ const ItemRow = memo(({
   status,
   isSelected,
   isExpanded,
-  hasCommentOrPhotos,
   duplicateIndex,
   duplicateCount,
   itemCommentValue,
@@ -140,7 +139,8 @@ const ItemRow = memo(({
   onUpdateComment,
   onUploadPhoto,
   onDeletePhoto,
-  onOpenLightbox
+  onOpenLightbox,
+  onSelectInModel
 }: ItemRowProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,7 +164,18 @@ const ItemRow = memo(({
         <span className="item-index">{idx + 1}</span>
         {/* Inline item info */}
         <div className="item-info inline">
-          <span className="item-mark">{item.assembly_mark}</span>
+          <span
+            className="item-mark clickable"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (item.guid_ifc) {
+                onSelectInModel(item.guid_ifc);
+              }
+            }}
+            title="Klõpsa mudelis valimiseks"
+          >
+            {item.assembly_mark}
+          </span>
           {item.product_name && <span className="item-product">{item.product_name}</span>}
           {item.cast_unit_weight && (
             <span className="item-weight">
@@ -178,18 +189,31 @@ const ItemRow = memo(({
           )}
         </div>
         <div className="item-actions">
-          {/* Comment/Photo indicator */}
+          {/* Comment indicator */}
           <button
-            className={`action-btn comment ${hasCommentOrPhotos ? 'has-content' : ''}`}
+            className={`action-btn comment ${itemCommentValue ? 'has-content' : ''}`}
             onClick={(e) => {
               e.stopPropagation();
               onToggleExpand(item.id);
             }}
-            title="Kommentaar/fotod"
+            title={itemCommentValue || 'Lisa kommentaar'}
           >
             <FiMessageCircle size={12} />
-            {hasCommentOrPhotos && <span className="indicator">!</span>}
           </button>
+          {/* Photo indicator */}
+          {itemPhotos.length > 0 && (
+            <button
+              className="action-btn photo has-content"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleExpand(item.id);
+              }}
+              title={`${itemPhotos.length} foto${itemPhotos.length > 1 ? 't' : ''}`}
+            >
+              <FiCamera size={12} />
+              <span className="photo-count">{itemPhotos.length}</span>
+            </button>
+          )}
           <StatusBadge status={status} />
           {status === 'pending' ? (
             <>
@@ -335,6 +359,11 @@ export default function ArrivedDeliveriesScreen({
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [addItemSourceVehicleId, setAddItemSourceVehicleId] = useState<string>('');
   const [selectedItemsToAdd, setSelectedItemsToAdd] = useState<Set<string>>(new Set());
+
+  // State - Model selection mode for adding items
+  const [modelSelectionMode, setModelSelectionMode] = useState(false);
+  const [modelSelectedItems, setModelSelectedItems] = useState<DeliveryItem[]>([]);
+  const [showModelSelectionModal, setShowModelSelectionModal] = useState(false);
 
   // State - Unplanned vehicle modal
   const [showUnplannedVehicleModal, setShowUnplannedVehicleModal] = useState(false);
@@ -510,7 +539,10 @@ export default function ArrivedDeliveriesScreen({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (lightboxPhoto) {
+        if (modelSelectionMode) {
+          setModelSelectionMode(false);
+          setMessage('');
+        } else if (lightboxPhoto) {
           setLightboxPhoto(null);
         } else if (selectedItemsForConfirm.size > 0) {
           setSelectedItemsForConfirm(new Set());
@@ -519,7 +551,58 @@ export default function ArrivedDeliveriesScreen({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxPhoto, selectedItemsForConfirm.size]);
+  }, [lightboxPhoto, selectedItemsForConfirm.size, modelSelectionMode]);
+
+  // Model selection mode - listen for selection events
+  useEffect(() => {
+    if (!modelSelectionMode || !api) return;
+
+    const handleSelectionChange = async () => {
+      try {
+        // Get selected objects from Trimble Connect viewer
+        const selection = await api.viewer.getSelection();
+        if (!selection || selection.length === 0) return;
+
+        // Get GUIDs from selection
+        const guids: string[] = [];
+        for (const sel of selection) {
+          if (sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
+            const objects = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
+            for (const obj of objects) {
+              if (obj.properties?.GUID) {
+                guids.push(obj.properties.GUID.toLowerCase());
+              }
+            }
+          }
+        }
+
+        if (guids.length === 0) return;
+
+        // Find matching items in delivery schedule
+        const matchedItems = items.filter(item =>
+          item.guid_ifc && guids.includes(item.guid_ifc.toLowerCase())
+        );
+
+        if (matchedItems.length > 0) {
+          setModelSelectedItems(matchedItems);
+          setShowModelSelectionModal(true);
+          setModelSelectionMode(false);
+          setMessage('');
+        } else {
+          setMessage('Valitud objektid ei ole tarnegraafikus');
+        }
+      } catch (e) {
+        console.error('Error handling model selection:', e);
+      }
+    };
+
+    // Subscribe to selection changes
+    const unsubscribe = api.viewer.subscribeToSelectionChanged(handleSelectionChange);
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [modelSelectionMode, api, items]);
 
   // ============================================
   // HELPERS
@@ -1723,6 +1806,11 @@ export default function ArrivedDeliveriesScreen({
     setLightboxPhoto({ photo, vehicleCode });
   }, []);
 
+  // Handler for selecting item in 3D model
+  const handleSelectInModel = useCallback((guid: string) => {
+    selectObjectsByGuid(api, [guid]);
+  }, [api]);
+
   // ============================================
   // RENDER
   // ============================================
@@ -1991,6 +2079,18 @@ export default function ArrivedDeliveriesScreen({
                             </div>
                           </div>
 
+                          <div className="detail-row">
+                            <div className="detail-field wide">
+                              <label>👷 Kontrollijad</label>
+                              <input
+                                type="text"
+                                value={arrivedVehicle.checked_by_workers || ''}
+                                onChange={(e) => updateArrival(arrivedVehicle.id, { checked_by_workers: e.target.value })}
+                                placeholder="Nt. Jaan Tamm, Mari Mets..."
+                              />
+                            </div>
+                          </div>
+
                           {/* Resources - same style as installation schedule */}
                           <div className="resources-section">
                             <label className="resources-label">Mahalaadimise ressursid:</label>
@@ -2190,15 +2290,33 @@ export default function ArrivedDeliveriesScreen({
                           <div className="items-header">
                             <div className="items-title-row">
                               <h3>Detailid ({vehicleItems.length})</h3>
-                              <button
-                                className="add-item-btn"
-                                onClick={() => {
-                                  setActiveArrivalId(arrivedVehicle.id);
-                                  setShowAddItemModal(true);
-                                }}
-                              >
-                                <FiPlus /> Lisa
-                              </button>
+                              <div className="items-title-buttons">
+                                <button
+                                  className="add-item-btn"
+                                  onClick={() => {
+                                    setActiveArrivalId(arrivedVehicle.id);
+                                    setShowAddItemModal(true);
+                                  }}
+                                >
+                                  <FiPlus /> Lisa
+                                </button>
+                                <button
+                                  className={`add-item-btn model ${modelSelectionMode ? 'active' : ''}`}
+                                  onClick={() => {
+                                    setActiveArrivalId(arrivedVehicle.id);
+                                    if (modelSelectionMode) {
+                                      setModelSelectionMode(false);
+                                      setMessage('');
+                                    } else {
+                                      setModelSelectionMode(true);
+                                      setMessage('Vali mudelist detailid, mida soovid lisada...');
+                                    }
+                                  }}
+                                  title="Vali detailid 3D mudelist"
+                                >
+                                  🎯 Mudelist
+                                </button>
+                              </div>
                             </div>
                             {/* Bulk actions when items are selected */}
                             {selectedItemsForConfirm.size > 0 && (
@@ -2245,7 +2363,6 @@ export default function ArrivedDeliveriesScreen({
                               const itemCommentValue = getCommentFast(arrivedVehicle.id, item.id);
                               const itemPhotos = getPhotosFast(arrivedVehicle.id, item.id);
                               const isExpanded = expandedItemId === item.id;
-                              const hasCommentOrPhotos = Boolean(itemCommentValue || itemPhotos.length > 0);
                               const { count: duplicateCount, index: duplicateIndex } = getDuplicateInfo(vehicle.id, item.id, item.assembly_mark || '');
 
                               return (
@@ -2256,7 +2373,6 @@ export default function ArrivedDeliveriesScreen({
                                   status={status}
                                   isSelected={isSelected}
                                   isExpanded={isExpanded}
-                                  hasCommentOrPhotos={hasCommentOrPhotos}
                                   duplicateIndex={duplicateIndex}
                                   duplicateCount={duplicateCount}
                                   itemCommentValue={itemCommentValue}
@@ -2269,6 +2385,7 @@ export default function ArrivedDeliveriesScreen({
                                   onUploadPhoto={handleUploadPhoto(arrivedVehicle.id)}
                                   onDeletePhoto={deletePhoto}
                                   onOpenLightbox={handleOpenLightbox}
+                                  onSelectInModel={handleSelectInModel}
                                 />
                               );
                             })}
@@ -2462,6 +2579,96 @@ export default function ArrivedDeliveriesScreen({
                 onClick={createUnplannedVehicle}
               >
                 {saving ? 'Salvestab...' : 'Lisa veok'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Model selection modal - show items selected from 3D model */}
+      {showModelSelectionModal && modelSelectedItems.length > 0 && activeArrivalId && (
+        <div className="modal-overlay" onClick={() => setShowModelSelectionModal(false)}>
+          <div className="modal model-selection-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Lisa valitud detailid</h2>
+              <button className="close-btn" onClick={() => setShowModelSelectionModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-description">
+                Mudelist valitud {modelSelectedItems.length} detaili. Kontrolli ja kinnita lisamine.
+              </p>
+              <div className="model-selected-items">
+                {modelSelectedItems.map(item => {
+                  const plannedVehicle = vehicles.find(v => v.id === item.vehicle_id);
+                  const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                  const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
+                  const isFromDifferentVehicle = item.vehicle_id !== currentVehicle?.id;
+
+                  return (
+                    <div key={item.id} className={`model-selected-item ${isFromDifferentVehicle ? 'warning' : ''}`}>
+                      <div className="item-info">
+                        <span className="item-mark">{item.assembly_mark}</span>
+                        <span className="item-name">{item.product_name}</span>
+                        {item.cast_unit_weight && (
+                          <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
+                        )}
+                      </div>
+                      {isFromDifferentVehicle && plannedVehicle && (
+                        <div className="item-warning">
+                          <FiAlertTriangle />
+                          <span>Planeeritud veokis: <strong>{plannedVehicle.vehicle_code}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {modelSelectedItems.some(item => {
+                const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
+                return item.vehicle_id !== currentVehicle?.id;
+              }) && (
+                <div className="warning-message">
+                  <FiAlertTriangle />
+                  <span>Mõned detailid olid planeeritud teise veokisse. Lisamisel märgitakse need selle veokiga saabunuks ja algse veoki juurde lisatakse märge.</span>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowModelSelectionModal(false)}>
+                Tühista
+              </button>
+              <button
+                className="confirm-btn"
+                disabled={saving}
+                onClick={async () => {
+                  const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                  const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
+
+                  for (const item of modelSelectedItems) {
+                    // Add item to current arrival
+                    await addItemFromVehicle(activeArrivalId, item.id, item.vehicle_id || '');
+
+                    // If from different vehicle, add note to original vehicle's arrival
+                    if (item.vehicle_id !== currentVehicle?.id && item.vehicle_id) {
+                      const originalArrival = arrivedVehicles.find(av => av.vehicle_id === item.vehicle_id);
+                      if (originalArrival) {
+                        const existingNotes = originalArrival.notes || '';
+                        const moveNote = `[${new Date().toLocaleDateString('et-EE')}] Detail ${item.assembly_mark} saabus veokiga ${currentVehicle?.vehicle_code || 'tundmatu'}`;
+                        const newNotes = existingNotes ? `${existingNotes}\n${moveNote}` : moveNote;
+                        await updateArrival(originalArrival.id, { notes: newNotes });
+                      }
+                    }
+                  }
+
+                  setShowModelSelectionModal(false);
+                  setModelSelectedItems([]);
+                  setMessage(`Lisatud ${modelSelectedItems.length} detaili`);
+                }}
+              >
+                Lisa {modelSelectedItems.length} detaili
               </button>
             </div>
           </div>
