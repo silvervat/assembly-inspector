@@ -584,11 +584,17 @@ export default function OrganizerScreen({
           setSelectedGroupId(null);
           return;
         }
+        // Second ESC - clear model selection
+        if (selectedObjects.length > 0) {
+          api?.viewer.setSelection({ modelObjectIds: [] }, 'set');
+          setSelectedObjects([]);
+          return;
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId]);
+  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId, selectedObjects.length, api]);
 
   // ============================================
   // TEAM MEMBERS LOADING
