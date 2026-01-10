@@ -121,7 +121,12 @@ export default function ArrivedDeliveriesScreen({
 
   // State - Expanded item for comment/photo editing
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
-  const [editingItemComment, setEditingItemComment] = useState('');
+
+  // State - Photo lightbox
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+
+  // State - Upload progress
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -724,8 +729,14 @@ export default function ArrivedDeliveriesScreen({
     if (!files || files.length === 0) return;
 
     setSaving(true);
+    const fileArray = Array.from(files);
+    setUploadProgress({ current: 0, total: fileArray.length });
+
     try {
-      for (const file of Array.from(files)) {
+      for (let i = 0; i < fileArray.length; i++) {
+        const file = fileArray[i];
+        setUploadProgress({ current: i + 1, total: fileArray.length });
+
         // Upload to Supabase Storage
         const fileName = `${projectId}/${arrivedVehicleId}/${photoType}/${Date.now()}_${file.name}`;
         const { error: uploadError } = await supabase.storage
@@ -766,6 +777,7 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Viga foto üleslaadimisel: ' + e.message);
     } finally {
       setSaving(false);
+      setUploadProgress(null);
     }
   };
 
@@ -1714,10 +1726,27 @@ export default function ArrivedDeliveriesScreen({
                                 }}
                               />
                             </div>
+                            {/* Upload progress */}
+                            {uploadProgress && (
+                              <div className="upload-progress">
+                                <div className="progress-bar">
+                                  <div
+                                    className="progress-fill"
+                                    style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                                  />
+                                </div>
+                                <span>{uploadProgress.current} / {uploadProgress.total}</span>
+                              </div>
+                            )}
                             <div className="photos-grid">
                               {getGeneralPhotosForArrival(arrivedVehicle.id).map(photo => (
                                 <div key={photo.id} className="photo-item">
-                                  <img src={photo.file_url} alt={photo.file_name} />
+                                  <img
+                                    src={photo.file_url}
+                                    alt={photo.file_name}
+                                    onClick={() => setLightboxPhoto(photo.file_url)}
+                                    style={{ cursor: 'pointer' }}
+                                  />
                                   <button
                                     className="delete-photo-btn"
                                     onClick={() => deletePhoto(photo.id, photo.file_url)}
@@ -1761,7 +1790,12 @@ export default function ArrivedDeliveriesScreen({
                             <div className="photos-grid">
                               {getDeliveryNotePhotos(arrivedVehicle.id).map(photo => (
                                 <div key={photo.id} className="photo-item delivery-note">
-                                  <img src={photo.file_url} alt={photo.file_name} />
+                                  <img
+                                    src={photo.file_url}
+                                    alt={photo.file_name}
+                                    onClick={() => setLightboxPhoto(photo.file_url)}
+                                    style={{ cursor: 'pointer' }}
+                                  />
                                   <span className="photo-name">{photo.file_name}</span>
                                   <button
                                     className="delete-photo-btn"
@@ -1922,9 +1956,6 @@ export default function ArrivedDeliveriesScreen({
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setExpandedItemId(isExpanded ? null : item.id);
-                                          if (!isExpanded) {
-                                            setEditingItemComment(itemCommentValue);
-                                          }
                                         }}
                                         title="Kommentaar/fotod"
                                       >
@@ -1932,7 +1963,7 @@ export default function ArrivedDeliveriesScreen({
                                         {hasCommentOrPhotos && <span className="indicator">!</span>}
                                       </button>
                                       <StatusBadge status={status} />
-                                      {status === 'pending' && (
+                                      {status === 'pending' ? (
                                         <>
                                           <button
                                             className="action-btn confirm"
@@ -1956,6 +1987,14 @@ export default function ArrivedDeliveriesScreen({
                                             <FiAlertTriangle size={12} />
                                           </button>
                                         </>
+                                      ) : (
+                                        <button
+                                          className="action-btn reset"
+                                          onClick={() => confirmItem(arrivedVehicle.id, item.id, 'pending')}
+                                          title="Muuda staatust"
+                                        >
+                                          <FiRefreshCw size={12} />
+                                        </button>
                                       )}
                                     </div>
                                   </div>
@@ -1964,19 +2003,21 @@ export default function ArrivedDeliveriesScreen({
                                     <div className="item-detail-section">
                                       <div className="item-comment-row">
                                         <input
+                                          key={`comment-${item.id}`}
                                           type="text"
                                           className="item-comment-input"
                                           placeholder="Lisa kommentaar..."
-                                          value={editingItemComment}
-                                          onChange={(e) => setEditingItemComment(e.target.value)}
-                                          onBlur={() => {
-                                            if (editingItemComment !== itemCommentValue) {
-                                              updateItemComment(arrivedVehicle.id, item.id, editingItemComment);
+                                          defaultValue={itemCommentValue}
+                                          onBlur={(e) => {
+                                            const newValue = e.target.value;
+                                            if (newValue !== itemCommentValue) {
+                                              updateItemComment(arrivedVehicle.id, item.id, newValue);
                                             }
                                           }}
                                           onKeyDown={(e) => {
                                             if (e.key === 'Enter') {
-                                              updateItemComment(arrivedVehicle.id, item.id, editingItemComment);
+                                              const newValue = (e.target as HTMLInputElement).value;
+                                              updateItemComment(arrivedVehicle.id, item.id, newValue);
                                             }
                                           }}
                                         />
@@ -2003,7 +2044,12 @@ export default function ArrivedDeliveriesScreen({
                                         <div className="item-photos-row">
                                           {itemPhotos.map(photo => (
                                             <div key={photo.id} className="item-photo">
-                                              <img src={photo.file_url} alt={photo.file_name} />
+                                              <img
+                                                src={photo.file_url}
+                                                alt={photo.file_name}
+                                                onClick={() => setLightboxPhoto(photo.file_url)}
+                                                style={{ cursor: 'pointer' }}
+                                              />
                                               <button
                                                 className="delete-item-photo-btn"
                                                 onClick={() => deletePhoto(photo.id, photo.file_url)}
@@ -2209,6 +2255,42 @@ export default function ArrivedDeliveriesScreen({
                 onClick={createUnplannedVehicle}
               >
                 {saving ? 'Salvestab...' : 'Lisa veok'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo lightbox modal */}
+      {lightboxPhoto && (
+        <div
+          className="lightbox-overlay"
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <img src={lightboxPhoto} alt="Foto" />
+            <div className="lightbox-actions">
+              <button
+                className="lightbox-btn"
+                onClick={() => window.open(lightboxPhoto, '_blank')}
+                title="Ava uues aknas"
+              >
+                Ava uues aknas
+              </button>
+              <a
+                className="lightbox-btn"
+                href={lightboxPhoto}
+                download
+                title="Lae alla"
+              >
+                Lae alla
+              </a>
+              <button
+                className="lightbox-btn close"
+                onClick={() => setLightboxPhoto(null)}
+                title="Sulge"
+              >
+                <FiX size={18} /> Sulge
               </button>
             </div>
           </div>
