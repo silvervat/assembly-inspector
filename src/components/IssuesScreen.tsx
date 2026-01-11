@@ -348,41 +348,43 @@ export default function IssuesScreen({
         }
       }
 
-      // 4. Load all issues with their objects
-      const { data: issueObjects, error: ioError } = await supabase
-        .from('issue_objects')
+      // 4. Load all issues with their objects for this project
+      const { data: projectIssues, error: ioError } = await supabase
+        .from('issues')
         .select(`
-          guid_ifc,
-          model_id,
-          issue:issues(status)
+          id,
+          status,
+          objects:issue_objects(guid_ifc, model_id)
         `)
-        .eq('issue:issues.trimble_project_id', projectId);
+        .eq('trimble_project_id', projectId);
 
       if (ioError) throw ioError;
-      if (!issueObjects || issueObjects.length === 0) {
+      if (!projectIssues || projectIssues.length === 0) {
         console.log('✅ Model colored white, no issues');
         setColoringStatus('');
         return;
       }
 
       // 5. Color each issue object with its status color
-      for (const io of issueObjects) {
-        if (!io.issue || !io.guid_ifc) continue;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const issueData = io.issue as any;
-        const status = issueData?.status as IssueStatus | undefined;
+      for (const issue of projectIssues) {
+        if (!issue.objects || issue.objects.length === 0) continue;
+        const status = issue.status as IssueStatus;
         if (!status) continue;
-        const found = foundObjects.get(io.guid_ifc.toLowerCase());
-        if (found) {
-          const color = ISSUE_STATUS_CONFIG[status].modelColor;
-          await api.viewer.setObjectState(
-            { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
-            { color }
-          );
+
+        for (const obj of issue.objects) {
+          if (!obj.guid_ifc) continue;
+          const found = foundObjects.get(obj.guid_ifc.toLowerCase());
+          if (found) {
+            const color = ISSUE_STATUS_CONFIG[status].modelColor;
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
+              { color }
+            );
+          }
         }
       }
 
-      console.log(`✅ Model colored: ${issueObjects.length} issue objects`);
+      console.log(`✅ Model colored: ${projectIssues.length} issues`);
       setColoringStatus('');
 
     } catch (e: unknown) {
