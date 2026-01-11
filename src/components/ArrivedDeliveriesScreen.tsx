@@ -2344,47 +2344,53 @@ export default function ArrivedDeliveriesScreen({
                                       src={`${import.meta.env.BASE_URL}icons/${res.icon}`}
                                       alt={res.label}
                                       className="resource-img"
-                                      style={{ filter: isActive ? 'brightness(0) invert(1)' : res.filterCss }}
+                                      style={{
+                                        filter: isActive ? 'brightness(0) invert(1)' : res.filterCss,
+                                        cursor: 'pointer'
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (isActive) {
+                                          // Toggle off - set to 0
+                                          const newResources = {
+                                            ...(arrivedVehicle.unload_resources || {}),
+                                            [res.key]: 0,
+                                            [`${res.key}_name`]: undefined
+                                          };
+                                          updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                        } else {
+                                          // Toggle on - set to 1
+                                          const newResources = {
+                                            ...(arrivedVehicle.unload_resources || {}),
+                                            [res.key]: 1
+                                          };
+                                          updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                        }
+                                      }}
                                     />
                                     {isActive && (
                                       <span className="resource-count">{currentValue}</span>
                                     )}
-                                    {/* Quantity selector on hover - always rendered */}
+                                    {/* Quantity selector on hover - horizontal row */}
                                     <div className="resource-qty-dropdown">
-                                      {isActive && (
-                                        <button
-                                          key={0}
-                                          className="qty-btn qty-zero"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const newResources = {
-                                              ...(arrivedVehicle.unload_resources || {}),
-                                              [res.key]: 0,
-                                              [`${res.key}_name`]: undefined
-                                            };
-                                            updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                          }}
-                                          title="Eemalda"
-                                        >
-                                          ✕
-                                        </button>
-                                      )}
-                                      {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
-                                        <button
-                                          key={num}
-                                          className={`qty-btn ${currentValue === num ? 'active' : ''}`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            const newResources = {
-                                              ...(arrivedVehicle.unload_resources || {}),
-                                              [res.key]: num
-                                            };
-                                            updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                          }}
-                                        >
-                                          {num}
-                                        </button>
-                                      ))}
+                                      <div className="resource-qty-dropdown-inner">
+                                        {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
+                                          <button
+                                            key={num}
+                                            className={`qty-btn ${currentValue === num ? 'active' : ''}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const newResources = {
+                                                ...(arrivedVehicle.unload_resources || {}),
+                                                [res.key]: num
+                                              };
+                                              updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                            }}
+                                          >
+                                            {num}
+                                          </button>
+                                        ))}
+                                      </div>
                                     </div>
                                   </div>
                                 );
