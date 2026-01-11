@@ -1097,7 +1097,6 @@ export default function OrganizerScreen({
     try {
       let level = 0;
       let finalCustomFields: CustomFieldDefinition[] = formCustomFields;
-      let inheritedAssemblySelection = formAssemblySelectionOn;
       let inheritedUniqueItems = formUniqueItems;
 
       if (formParentId) {
@@ -1109,16 +1108,15 @@ export default function OrganizerScreen({
             setSaving(false);
             return;
           }
-          // Subgroups inherit parent's custom fields and settings from root
+          // Subgroups inherit parent's custom fields
           finalCustomFields = [...(parent.custom_fields || [])];
-          // Find root parent for inherited settings
+          // Find root parent for inherited unique_items setting
           let root = parent;
           while (root.parent_id) {
             const p = groups.find(g => g.id === root.parent_id);
             if (p) root = p;
             else break;
           }
-          inheritedAssemblySelection = root.assembly_selection_on !== false;
           inheritedUniqueItems = root.unique_items !== false;
         }
       }
@@ -1136,7 +1134,7 @@ export default function OrganizerScreen({
         allowed_users: allowedUsers,
         display_properties: [],
         custom_fields: finalCustomFields,
-        assembly_selection_on: formParentId ? inheritedAssemblySelection : formAssemblySelectionOn,
+        assembly_selection_on: formAssemblySelectionOn, // Each group has its own setting
         unique_items: formParentId ? inheritedUniqueItems : formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
@@ -3279,9 +3277,10 @@ export default function OrganizerScreen({
   // ============================================
 
   const isSelectionEnabled = useCallback((groupId: string): boolean => {
-    const root = getRootParent(groupId);
-    return root?.assembly_selection_on !== false;
-  }, [getRootParent]);
+    // Check the group's own assembly_selection_on setting
+    const group = groups.find(g => g.id === groupId);
+    return group?.assembly_selection_on !== false;
+  }, [groups]);
 
   // ============================================
   // HELPER: Check if unique items required for group
@@ -4058,24 +4057,29 @@ export default function OrganizerScreen({
                   )}
                 </div>
 
-              {/* Settings only for main groups (not subgroups) */}
+              {/* Assembly Selection and Unique Items settings - available for ALL groups */}
+              <div className="org-toggle-field">
+                <div className="org-toggle-label">
+                  <div className="title">Assembly Selection nõutud</div>
+                  <div className="description">
+                    {formParentId
+                      ? 'Kas sellesse alamgruppi lisamiseks peab Assembly Selection olema sees'
+                      : 'Kas sellesse gruppi ja alamgruppidesse lisamiseks peab Assembly Selection olema sees'
+                    }
+                  </div>
+                </div>
+                <div className={`org-toggle ${formAssemblySelectionOn ? 'active' : ''}`} onClick={() => setFormAssemblySelectionOn(!formAssemblySelectionOn)} />
+              </div>
+
+              {/* Unique items - only for main groups (subgroups inherit) */}
               {!formParentId && (
-                <>
-                  <div className="org-toggle-field">
-                    <div className="org-toggle-label">
-                      <div className="title">Mudelist valimine sees</div>
-                      <div className="description">Detaile saab lisada mudelist valides. Kui väljas, saab ainult käsitsi lisada.</div>
-                    </div>
-                    <div className={`org-toggle ${formAssemblySelectionOn ? 'active' : ''}`} onClick={() => setFormAssemblySelectionOn(!formAssemblySelectionOn)} />
+                <div className="org-toggle-field">
+                  <div className="org-toggle-label">
+                    <div className="title">Unikaalsed detailid</div>
+                    <div className="description">Sama detaili ei saa lisada mitu korda sellesse gruppi või alamgruppidesse.</div>
                   </div>
-                  <div className="org-toggle-field">
-                    <div className="org-toggle-label">
-                      <div className="title">Unikaalsed detailid</div>
-                      <div className="description">Sama detaili ei saa lisada mitu korda sellesse gruppi või alamgruppidesse.</div>
-                    </div>
-                    <div className={`org-toggle ${formUniqueItems ? 'active' : ''}`} onClick={() => setFormUniqueItems(!formUniqueItems)} />
-                  </div>
-                </>
+                  <div className={`org-toggle ${formUniqueItems ? 'active' : ''}`} onClick={() => setFormUniqueItems(!formUniqueItems)} />
+                </div>
               )}
 
               {/* Show custom fields section - visible for main groups (editing or creating) */}
