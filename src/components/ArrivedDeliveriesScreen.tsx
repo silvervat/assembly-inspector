@@ -500,7 +500,6 @@ export default function ArrivedDeliveriesScreen({
         .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
-      console.log('loadPhotos fetched:', data?.length, 'photos', data);
       setPhotos(data || []);
     } catch (e) {
       console.error('Error loading photos:', e);
@@ -1101,22 +1100,16 @@ export default function ArrivedDeliveriesScreen({
 
         // Upload to Supabase Storage
         const fileName = `${projectId}/${arrivedVehicleId}/${photoType}/${Date.now()}_${file.name}`;
-        console.log('Uploading to storage:', fileName);
         const { error: uploadError } = await supabase.storage
           .from('arrival-photos')
           .upload(fileName, file);
 
-        if (uploadError) {
-          console.error('Storage upload error:', uploadError);
-          throw uploadError;
-        }
-        console.log('Storage upload success');
+        if (uploadError) throw uploadError;
 
         // Get public URL
         const { data: urlData } = supabase.storage
           .from('arrival-photos')
           .getPublicUrl(fileName);
-        console.log('Public URL:', urlData.publicUrl);
 
         // Save photo record
         const { error: insertError } = await supabase
@@ -1132,15 +1125,10 @@ export default function ArrivedDeliveriesScreen({
             uploaded_by: tcUserEmail
           });
 
-        if (insertError) {
-          console.error('Insert error:', insertError);
-          throw insertError;
-        }
-        console.log('Photo saved to DB:', file.name, 'arrivedVehicleId:', arrivedVehicleId);
+        if (insertError) throw insertError;
       }
 
       await loadPhotos();
-      console.log('Photos after upload:', photos.length, 'arrivedVehicleId:', arrivedVehicleId);
       const typeLabels: Record<ArrivalPhotoType, string> = {
         general: 'Fotod üles laetud',
         delivery_note: 'Saatelehed üles laetud',
@@ -1212,13 +1200,11 @@ export default function ArrivedDeliveriesScreen({
 
   // Get general photos (not linked to items, not delivery notes)
   const getGeneralPhotosForArrival = (arrivedVehicleId: string) => {
-    const result = photos.filter(p =>
+    return photos.filter(p =>
       p.arrived_vehicle_id === arrivedVehicleId &&
       !p.item_id &&
       (p.photo_type === 'general' || !p.photo_type)
     );
-    console.log('getGeneralPhotosForArrival', arrivedVehicleId, 'found:', result.length, 'from total:', photos.length);
-    return result;
   };
 
   // Get delivery note photos (saatelehed)
