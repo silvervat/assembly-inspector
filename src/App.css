@@ -7140,8 +7140,7 @@ button.stat-toggle.off:hover {
 .arrived-deliveries .resource-button .resource-qty-dropdown {
   position: absolute;
   top: calc(100% - 4px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   padding-top: 8px;
   display: none;
   z-index: 100;
