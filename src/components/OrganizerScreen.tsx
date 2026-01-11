@@ -1172,6 +1172,10 @@ export default function OrganizerScreen({
       const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
       if (error) throw error;
 
+      // Mark this group as local change (for realtime sync to skip toast)
+      recentLocalChangesRef.current.add(insertedGroup.id);
+      setTimeout(() => recentLocalChangesRef.current.delete(insertedGroup.id), 5000);
+
       // Optimistic UI update - add new group to state immediately
       const fullGroup: OrganizerGroup = {
         ...newGroupData,
@@ -1224,6 +1228,10 @@ export default function OrganizerScreen({
     const isPrivate = formSharingMode !== 'project';
     const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
 
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(editingGroup.id);
+    setTimeout(() => recentLocalChangesRef.current.delete(editingGroup.id), 5000);
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -1265,6 +1273,10 @@ export default function OrganizerScreen({
 
   // Update group color directly (used by color picker popup)
   const updateGroupColor = async (groupId: string, color: GroupColor) => {
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(groupId);
+    setTimeout(() => recentLocalChangesRef.current.delete(groupId), 5000);
+
     try {
       const { error } = await supabase
         .from('organizer_groups')
@@ -1339,6 +1351,10 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
+      // Mark this group as local change (for realtime sync to skip toast)
+      recentLocalChangesRef.current.add(insertedGroup.id);
+      setTimeout(() => recentLocalChangesRef.current.delete(insertedGroup.id), 5000);
+
       // Optimistic UI update
       const fullGroup: OrganizerGroup = {
         ...newGroupData,
@@ -1402,6 +1418,10 @@ export default function OrganizerScreen({
   const deleteGroup = async () => {
     if (!deleteGroupData) return;
     const { group } = deleteGroupData;
+
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(group.id);
+    setTimeout(() => recentLocalChangesRef.current.delete(group.id), 5000);
 
     setSaving(true);
     try {
@@ -3233,6 +3253,10 @@ export default function OrganizerScreen({
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(groupId);
+    setTimeout(() => recentLocalChangesRef.current.delete(groupId), 5000);
+
     setSaving(true);
     try {
       const newLockState = !group.is_locked;
@@ -3706,8 +3730,38 @@ export default function OrganizerScreen({
               const displayItems = sortedItems.slice(0, visibleCount);
               const hasMore = sortedItems.length > visibleCount;
 
+              // Calculate dynamic column widths based on content
+              const CHAR_WIDTH = 7; // approx pixels per character for monospace-ish font
+              const MIN_MARK_WIDTH = 50;
+              const MIN_PRODUCT_WIDTH = 50;
+              const MIN_WEIGHT_WIDTH = 45;
+
+              let maxMarkLen = 4; // "Mark" header length
+              let maxProductLen = 5; // "Toode" header length
+              let maxWeightLen = 4; // "Kaal" header length
+
+              for (const item of sortedItems) {
+                const markLen = (item.assembly_mark || '').length;
+                const productLen = (item.product_name || '').length;
+                const weightLen = formatWeight(item.cast_unit_weight).length;
+                if (markLen > maxMarkLen) maxMarkLen = markLen;
+                if (productLen > maxProductLen) maxProductLen = productLen;
+                if (weightLen > maxWeightLen) maxWeightLen = weightLen;
+              }
+
+              // Calculate widths with minimal padding
+              const markWidth = Math.max(MIN_MARK_WIDTH, maxMarkLen * CHAR_WIDTH + 4);
+              const productWidth = Math.max(MIN_PRODUCT_WIDTH, maxProductLen * CHAR_WIDTH + 4);
+              const weightWidth = Math.max(MIN_WEIGHT_WIDTH, maxWeightLen * CHAR_WIDTH + 4);
+
+              const columnStyles = {
+                '--col-mark-width': `${markWidth}px`,
+                '--col-product-width': `${productWidth}px`,
+                '--col-weight-width': `${weightWidth}px`,
+              } as React.CSSProperties;
+
               return (
-              <div className="org-items">
+              <div className="org-items org-items-dynamic" style={columnStyles}>
                 {/* Item sort header */}
                 {sortedItems.length > 3 && (
                   <div className="org-items-header">
