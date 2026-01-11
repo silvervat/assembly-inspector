@@ -385,6 +385,7 @@ export default function OrganizerScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilterGroup, setSearchFilterGroup] = useState<string>('all'); // 'all' or group id
   const [searchFilterColumn, setSearchFilterColumn] = useState<string>('all'); // 'all', 'mark', 'product', 'weight', or custom field id
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
@@ -749,6 +750,14 @@ export default function OrganizerScreen({
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, [showSortMenu]);
+
+  // Close filter menu when clicking outside
+  useEffect(() => {
+    if (!showFilterMenu) return;
+    const handleClick = () => setShowFilterMenu(false);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showFilterMenu]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -4121,7 +4130,7 @@ export default function OrganizerScreen({
   // RENDER GROUP NODE
   // ============================================
 
-  const renderGroupNode = (node: OrganizerGroupTree, depth: number = 0): JSX.Element => {
+  const renderGroupNode = (node: OrganizerGroupTree, depth: number = 0): JSX.Element | null => {
     const isExpanded = expandedGroups.has(node.id);
     const isSelected = selectedGroupId === node.id;
     const isDragOver = dragOverGroupId === node.id;
@@ -4134,6 +4143,18 @@ export default function OrganizerScreen({
     const customFields = effectiveCustomFields.filter(f => f.showInList);
 
     const filteredItems = filterItems(items, node);
+
+    // Check if this group or any children have matching items (for search filtering)
+    const hasMatchingChildren = hasChildren && node.children.some(child => {
+      const childItems = groupItems.get(child.id) || [];
+      const childFiltered = filterItems(childItems, child);
+      return childFiltered.length > 0 || child.children.length > 0;
+    });
+
+    // Hide groups with no results during search (unless they have matching children)
+    if (searchQuery && filteredItems.length === 0 && !hasMatchingChildren) {
+      return null;
+    }
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
     const hasModelSelectedItems = filteredItems.some(item =>
       item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase())
@@ -4207,7 +4228,12 @@ export default function OrganizerScreen({
             );
           })()}
 
-          <span className="org-group-count">{node.itemCount} tk</span>
+          <span className="org-group-count">
+            {searchQuery && filteredItems.length !== node.itemCount
+              ? <><span className="search-match">{filteredItems.length}</span>/{node.itemCount} tk</>
+              : <>{node.itemCount} tk</>
+            }
+          </span>
           <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
 
           {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
@@ -4420,9 +4446,9 @@ export default function OrganizerScreen({
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />
-                      <span className="org-item-mark">{item.assembly_mark || 'Tundmatu'}</span>
-                      <span className="org-item-product">{item.product_name || ''}</span>
-                      <span className="org-item-weight">{formatWeight(item.cast_unit_weight)}</span>
+                      <span className="org-item-mark" title={item.assembly_mark || ''}>{item.assembly_mark || 'Tundmatu'}</span>
+                      <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
+                      <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
 
                       {customFields.map(field => {
                         const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
@@ -4690,39 +4716,61 @@ export default function OrganizerScreen({
             {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
           </div>
 
-          {/* Filter dropdowns */}
-          <select
-            className="org-filter-select"
-            value={searchFilterGroup}
-            onChange={(e) => setSearchFilterGroup(e.target.value)}
-            title="Filtreeri grupi järgi"
-          >
-            <option value="all">Kõik grupid</option>
-            {groups.map(g => (
-              <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
-            ))}
-          </select>
-
-          <select
-            className="org-filter-select"
-            value={searchFilterColumn}
-            onChange={(e) => setSearchFilterColumn(e.target.value)}
-            title="Filtreeri veeru järgi"
-          >
-            <option value="all">Kõik veerud</option>
-            <option value="mark">Mark</option>
-            <option value="product">Toode</option>
-            <option value="weight">Kaal</option>
-            {allCustomFields.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
+          {/* Filter button with dropdown */}
+          <div className="org-filter-dropdown-container">
+            <button
+              className={`org-filter-icon-btn ${showFilterMenu ? 'active' : ''} ${(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') ? 'has-filter' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); }}
+              title="Filtreeri"
+            >
+              <i className="modus-icons" style={{ fontSize: '18px' }}>filter</i>
+            </button>
+            {showFilterMenu && (
+              <div className="org-filter-dropdown" onClick={(e) => e.stopPropagation()}>
+                <div className="org-filter-dropdown-section">
+                  <label>Grupp</label>
+                  <select
+                    value={searchFilterGroup}
+                    onChange={(e) => setSearchFilterGroup(e.target.value)}
+                  >
+                    <option value="all">Kõik grupid</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="org-filter-dropdown-section">
+                  <label>Veerg</label>
+                  <select
+                    value={searchFilterColumn}
+                    onChange={(e) => setSearchFilterColumn(e.target.value)}
+                  >
+                    <option value="all">Kõik veerud</option>
+                    <option value="mark">Mark</option>
+                    <option value="product">Toode</option>
+                    <option value="weight">Kaal</option>
+                    {allCustomFields.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') && (
+                  <button
+                    className="org-filter-clear-btn"
+                    onClick={() => { setSearchFilterGroup('all'); setSearchFilterColumn('all'); }}
+                  >
+                    Tühista filtrid
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Sort button with dropdown */}
           <div className="org-sort-dropdown-container">
             <button
               className={`org-sort-icon-btn ${showSortMenu ? 'active' : ''}`}
-              onClick={() => setShowSortMenu(!showSortMenu)}
+              onClick={(e) => { e.stopPropagation(); setShowSortMenu(!showSortMenu); }}
               title="Sorteeri"
             >
               <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>

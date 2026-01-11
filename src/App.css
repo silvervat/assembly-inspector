@@ -10159,6 +10159,97 @@ button.stat-toggle.off:hover {
   margin: 4px 0;
 }
 
+/* Filter dropdown */
+.org-filter-dropdown-container {
+  position: relative;
+}
+
+.org-filter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  color: #6b7280;
+  transition: all 0.15s;
+}
+
+.org-filter-icon-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.org-filter-icon-btn.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.org-filter-icon-btn.has-filter {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #d97706;
+}
+
+.org-filter-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  z-index: 1000;
+  padding: 8px;
+}
+
+.org-filter-dropdown-section {
+  margin-bottom: 8px;
+}
+
+.org-filter-dropdown-section:last-child {
+  margin-bottom: 0;
+}
+
+.org-filter-dropdown-section label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.org-filter-dropdown-section select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: white;
+}
+
+.org-filter-clear-btn {
+  width: 100%;
+  padding: 6px 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.org-filter-clear-btn:hover {
+  background: #fee2e2;
+}
+
 .org-toolbar-stats {
   display: flex;
   align-items: center;
@@ -10434,6 +10525,11 @@ button.stat-toggle.off:hover {
   border-radius: 8px;
 }
 
+.org-group-count .search-match {
+  color: #f97316;
+  font-weight: 600;
+}
+
 .org-group-weight {
   font-size: 11px;
   color: #9ca3af;
@@ -10645,20 +10741,25 @@ button.stat-toggle.off:hover {
   flex: none;
 }
 
-/* Responsive: narrow screens - truncate product, hide weight and custom */
+/* Responsive: narrow screens - truncate product, keep weight visible */
 @media (max-width: 350px) {
   .org-items-dynamic .org-item-product,
   .org-items-dynamic .org-items-header .org-item-product {
-    max-width: 45px !important;
-    width: 45px !important;
-    min-width: 45px !important;
+    max-width: 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   .org-items-dynamic .org-item-weight,
-  .org-items-dynamic .org-items-header .org-item-weight,
+  .org-items-dynamic .org-items-header .org-item-weight {
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+  }
+
   .org-items-dynamic .org-item-custom,
   .org-items-dynamic .org-items-header .org-item-custom {
     display: none !important;
@@ -10669,7 +10770,7 @@ button.stat-toggle.off:hover {
 @media (max-width: 450px) and (min-width: 351px) {
   .org-items-dynamic .org-item-product,
   .org-items-dynamic .org-items-header .org-item-product {
-    max-width: 60px !important;
+    max-width: 55px !important;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
