@@ -500,6 +500,7 @@ export default function ArrivedDeliveriesScreen({
         .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
+      console.log('loadPhotos fetched:', data?.length, 'photos', data);
       setPhotos(data || []);
     } catch (e) {
       console.error('Error loading photos:', e);
@@ -1100,19 +1101,25 @@ export default function ArrivedDeliveriesScreen({
 
         // Upload to Supabase Storage
         const fileName = `${projectId}/${arrivedVehicleId}/${photoType}/${Date.now()}_${file.name}`;
+        console.log('Uploading to storage:', fileName);
         const { error: uploadError } = await supabase.storage
           .from('arrival-photos')
           .upload(fileName, file);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          throw uploadError;
+        }
+        console.log('Storage upload success');
 
         // Get public URL
         const { data: urlData } = supabase.storage
           .from('arrival-photos')
           .getPublicUrl(fileName);
+        console.log('Public URL:', urlData.publicUrl);
 
         // Save photo record
-        await supabase
+        const { error: insertError } = await supabase
           .from('trimble_arrival_photos')
           .insert({
             trimble_project_id: projectId,
@@ -1124,9 +1131,16 @@ export default function ArrivedDeliveriesScreen({
             photo_type: photoType,
             uploaded_by: tcUserEmail
           });
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
+        console.log('Photo saved to DB:', file.name, 'arrivedVehicleId:', arrivedVehicleId);
       }
 
       await loadPhotos();
+      console.log('Photos after upload:', photos.length, 'arrivedVehicleId:', arrivedVehicleId);
       const typeLabels: Record<ArrivalPhotoType, string> = {
         general: 'Fotod üles laetud',
         delivery_note: 'Saatelehed üles laetud',
@@ -2331,72 +2345,74 @@ export default function ArrivedDeliveriesScreen({
                               {UNLOAD_RESOURCES.map(res => {
                                 const currentValue = (arrivedVehicle.unload_resources as any)?.[res.key] || 0;
                                 const isActive = currentValue > 0;
+                                const showQtyDropdown = res.maxCount > 1 && isActive;
                                 return (
                                   <div
                                     key={res.key}
-                                    className={`resource-button ${isActive ? 'active' : ''}`}
+                                    className={`resource-button ${isActive ? 'active' : ''} ${showQtyDropdown ? 'has-dropdown' : ''}`}
                                     style={{
                                       backgroundColor: isActive ? res.activeBgColor : res.bgColor
                                     }}
                                     title={res.label}
+                                    onClick={() => {
+                                      if (isActive) {
+                                        // Toggle off - set to 0 and clear name
+                                        const newResources = {
+                                          ...(arrivedVehicle.unload_resources || {}),
+                                          [res.key]: 0,
+                                          [`${res.key}_name`]: undefined,
+                                          [`${res.key}_workers`]: undefined
+                                        };
+                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                      } else {
+                                        // Toggle on - set to 1
+                                        const newResources = {
+                                          ...(arrivedVehicle.unload_resources || {}),
+                                          [res.key]: 1
+                                        };
+                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                      }
+                                    }}
                                   >
                                     <img
                                       src={`${import.meta.env.BASE_URL}icons/${res.icon}`}
                                       alt={res.label}
                                       className="resource-img"
                                       style={{
-                                        filter: isActive ? 'brightness(0) invert(1)' : res.filterCss,
-                                        cursor: 'pointer'
-                                      }}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (isActive) {
-                                          // Toggle off - set to 0
-                                          const newResources = {
-                                            ...(arrivedVehicle.unload_resources || {}),
-                                            [res.key]: 0,
-                                            [`${res.key}_name`]: undefined
-                                          };
-                                          updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                        } else {
-                                          // Toggle on - set to 1
-                                          const newResources = {
-                                            ...(arrivedVehicle.unload_resources || {}),
-                                            [res.key]: 1
-                                          };
-                                          updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                        }
+                                        filter: isActive ? 'brightness(0) invert(1)' : res.filterCss
                                       }}
                                     />
                                     {isActive && (
                                       <span className="resource-count">{currentValue}</span>
                                     )}
-                                    {/* Quantity selector on hover - horizontal row */}
-                                    <div className="resource-qty-dropdown">
-                                      <div className="resource-qty-dropdown-inner">
-                                        {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
-                                          <button
-                                            key={num}
-                                            className={`qty-btn ${currentValue === num ? 'active' : ''}`}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const newResources = {
-                                                ...(arrivedVehicle.unload_resources || {}),
-                                                [res.key]: num
-                                              };
-                                              updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                            }}
-                                          >
-                                            {num}
-                                          </button>
-                                        ))}
+                                    {/* Quantity selector on hover - only for resources with maxCount > 1 */}
+                                    {showQtyDropdown && (
+                                      <div className="resource-qty-dropdown">
+                                        <div className="resource-qty-dropdown-inner">
+                                          {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
+                                            <button
+                                              key={num}
+                                              className={`qty-btn ${currentValue === num ? 'active' : ''}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                const newResources = {
+                                                  ...(arrivedVehicle.unload_resources || {}),
+                                                  [res.key]: num
+                                                };
+                                                updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                              }}
+                                            >
+                                              {num}
+                                            </button>
+                                          ))}
+                                        </div>
                                       </div>
-                                    </div>
+                                    )}
                                   </div>
                                 );
                               })}
                             </div>
-                            {/* Equipment name inputs for active machine resources */}
+                            {/* Equipment name inputs for active machine resources (except manual) */}
                             {UNLOAD_RESOURCES.filter(res =>
                               res.category === 'machine' &&
                               res.key !== 'manual' &&
@@ -2424,6 +2440,26 @@ export default function ArrivedDeliveriesScreen({
                                     />
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                            {/* Workers input for workforce resource */}
+                            {((arrivedVehicle.unload_resources as any)?.workforce || 0) > 0 && (
+                              <div className="resource-names-section">
+                                <div className="resource-name-field workforce-field">
+                                  <label>Tööjõud:</label>
+                                  <input
+                                    type="text"
+                                    value={(arrivedVehicle.unload_resources as any)?.workforce_workers || ''}
+                                    onChange={(e) => {
+                                      const newResources = {
+                                        ...(arrivedVehicle.unload_resources || {}),
+                                        workforce_workers: e.target.value
+                                      };
+                                      updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                    }}
+                                    placeholder="Nt. Jaan Tamm, Mari Mets..."
+                                  />
+                                </div>
                               </div>
                             )}
                           </div>
