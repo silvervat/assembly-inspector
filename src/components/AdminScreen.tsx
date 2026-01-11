@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
@@ -156,6 +156,30 @@ interface ProjectResource {
   updated_by: string | null;
 }
 
+// Camera position definition
+interface CameraPosition {
+  id: string;
+  trimble_project_id: string;
+  name: string;
+  description: string | null;
+  camera_state: {
+    position?: { x: number; y: number; z: number };
+    lookAt?: { x: number; y: number; z: number };
+    upDirection?: { x: number; y: number; z: number };
+    quaternion?: { x: number; y: number; z: number; w: number };
+    pitch?: number;
+    yaw?: number;
+    projectionType?: 'ortho' | 'perspective';
+    fieldOfView?: number;
+    orthoSize?: number;
+  };
+  sort_order: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
 // Resource types configuration
 const RESOURCE_TYPES = [
   { key: 'crane', label: 'Kraana', icon: '🏗️' },
@@ -170,8 +194,8 @@ const RESOURCE_TYPES = [
 ] as const;
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -253,6 +277,17 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   const [resourceFormData, setResourceFormData] = useState({
     name: '',
     keywords: '',
+  });
+
+  // Camera Positions state
+  const [cameraPositions, setCameraPositions] = useState<CameraPosition[]>([]);
+  const [cameraPositionsLoading, setCameraPositionsLoading] = useState(false);
+  const [cameraPositionsSaving, setCameraPositionsSaving] = useState(false);
+  const [editingCameraPosition, setEditingCameraPosition] = useState<CameraPosition | null>(null);
+  const [showCameraForm, setShowCameraForm] = useState(false);
+  const [cameraFormData, setCameraFormData] = useState({
+    name: '',
+    description: '',
   });
 
   // GUID Controller popup state
@@ -2344,6 +2379,165 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     return projectResources.filter(r => r.resource_type === type);
   };
 
+  // ==========================================
+  // CAMERA POSITIONS FUNCTIONS
+  // ==========================================
+
+  // Load camera positions
+  const loadCameraPositions = useCallback(async () => {
+    if (!projectId) return;
+    setCameraPositionsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('camera_positions')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setCameraPositions(data || []);
+    } catch (e: any) {
+      console.error('Error loading camera positions:', e);
+      setMessage(`Viga kaamera positsioonide laadimisel: ${e.message}`);
+    } finally {
+      setCameraPositionsLoading(false);
+    }
+  }, [projectId]);
+
+  // Save current camera position
+  const saveCameraPosition = async () => {
+    if (!cameraFormData.name.trim()) {
+      setMessage('Nimi on kohustuslik');
+      return;
+    }
+
+    setCameraPositionsSaving(true);
+    try {
+      // Get current camera state from the viewer
+      const camera = await api.viewer.getCamera();
+
+      if (editingCameraPosition) {
+        // Update existing position (just name/description, not camera state)
+        const { error } = await supabase
+          .from('camera_positions')
+          .update({
+            name: cameraFormData.name.trim(),
+            description: cameraFormData.description.trim() || null,
+            updated_at: new Date().toISOString(),
+            updated_by: userEmail || null
+          })
+          .eq('id', editingCameraPosition.id);
+
+        if (error) throw error;
+        setMessage('Kaamera positsioon uuendatud');
+      } else {
+        // Create new position with current camera state
+        const { error } = await supabase
+          .from('camera_positions')
+          .insert({
+            trimble_project_id: projectId,
+            name: cameraFormData.name.trim(),
+            description: cameraFormData.description.trim() || null,
+            camera_state: camera,
+            created_by: userEmail || null
+          });
+
+        if (error) throw error;
+        setMessage('Kaamera positsioon salvestatud');
+      }
+
+      setShowCameraForm(false);
+      setEditingCameraPosition(null);
+      resetCameraForm();
+      await loadCameraPositions();
+    } catch (e: any) {
+      console.error('Error saving camera position:', e);
+      setMessage(`Viga salvestamisel: ${e.message}`);
+    } finally {
+      setCameraPositionsSaving(false);
+    }
+  };
+
+  // Reset camera form
+  const resetCameraForm = () => {
+    setCameraFormData({
+      name: '',
+      description: '',
+    });
+  };
+
+  // Delete camera position
+  const deleteCameraPosition = async (positionId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle kaamera positsiooni kustutada?')) return;
+
+    setCameraPositionsLoading(true);
+    try {
+      const { error } = await supabase
+        .from('camera_positions')
+        .delete()
+        .eq('id', positionId);
+
+      if (error) throw error;
+      setMessage('Kaamera positsioon kustutatud');
+      await loadCameraPositions();
+    } catch (e: any) {
+      console.error('Error deleting camera position:', e);
+      setMessage(`Viga kustutamisel: ${e.message}`);
+    } finally {
+      setCameraPositionsLoading(false);
+    }
+  };
+
+  // Restore camera to saved position
+  const restoreCameraPosition = async (position: CameraPosition) => {
+    try {
+      await api.viewer.setCamera(position.camera_state, { animationTime: 500 });
+      setMessage(`Kaamera seatud: "${position.name}"`);
+    } catch (e: any) {
+      console.error('Error restoring camera position:', e);
+      setMessage(`Viga kaamera seadmisel: ${e.message}`);
+    }
+  };
+
+  // Update camera state for existing position
+  const updateCameraState = async (position: CameraPosition) => {
+    if (!confirm(`Kas soovid uuendada "${position.name}" kaamera positsiooni praeguse vaatega?`)) return;
+
+    setCameraPositionsLoading(true);
+    try {
+      const camera = await api.viewer.getCamera();
+
+      const { error } = await supabase
+        .from('camera_positions')
+        .update({
+          camera_state: camera,
+          updated_at: new Date().toISOString(),
+          updated_by: userEmail || null
+        })
+        .eq('id', position.id);
+
+      if (error) throw error;
+      setMessage('Kaamera positsioon uuendatud praeguse vaatega');
+      await loadCameraPositions();
+    } catch (e: any) {
+      console.error('Error updating camera state:', e);
+      setMessage(`Viga uuendamisel: ${e.message}`);
+    } finally {
+      setCameraPositionsLoading(false);
+    }
+  };
+
+  // Open camera position edit form
+  const openEditCameraForm = (position: CameraPosition) => {
+    setEditingCameraPosition(position);
+    setCameraFormData({
+      name: position.name,
+      description: position.description || '',
+    });
+    setShowCameraForm(true);
+  };
+
   // Open user edit form
   const openEditUserForm = (user: TrimbleExUser) => {
     setEditingUser(user);
@@ -3231,6 +3425,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           {adminView === 'propertyMappings' && 'Tekla property seaded'}
           {adminView === 'userPermissions' && 'Kasutajate õigused'}
           {adminView === 'resources' && 'Ressursside haldus'}
+          {adminView === 'cameraPositions' && 'Kaamera positsioonid'}
           {adminView === 'dataExport' && 'Ekspordi andmed'}
           {adminView === 'fontTester' && 'Fontide testija'}
         </h2>
@@ -3317,6 +3512,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           >
             <FiDatabase size={18} />
             <span>Ressursside haldus</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('cameraPositions');
+              loadCameraPositions();
+            }}
+            style={{ background: '#8b5cf6', color: 'white' }}
+          >
+            <FiVideo size={18} />
+            <span>Kaamera positsioonid</span>
           </button>
 
           <button
@@ -9384,6 +9591,265 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
           <div style={{ marginTop: '16px', fontSize: '12px', color: '#6b7280' }}>
             Kokku: {projectResources.length} ressurssi ({projectResources.filter(r => r.is_active).length} aktiivset)
           </div>
+        </div>
+      )}
+
+      {/* Camera Positions View */}
+      {adminView === 'cameraPositions' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          {/* Header with refresh button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
+              Salvesta ja taasta kaamera positsioone 3D vaaturis. Positsioonid on jagatud kogu meeskonnaga.
+            </p>
+            <button
+              className="admin-tool-btn"
+              onClick={loadCameraPositions}
+              disabled={cameraPositionsLoading}
+              style={{ padding: '6px 12px' }}
+            >
+              <FiRefreshCw size={14} className={cameraPositionsLoading ? 'spin' : ''} />
+              <span>Värskenda</span>
+            </button>
+          </div>
+
+          {/* Add new camera position button */}
+          <div style={{ marginBottom: '16px' }}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setEditingCameraPosition(null);
+                resetCameraForm();
+                setShowCameraForm(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FiPlus size={14} />
+              Salvesta praegune vaade
+            </button>
+          </div>
+
+          {/* Camera form modal */}
+          {showCameraForm && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                width: '90%',
+                maxWidth: '400px',
+                padding: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0 }}>
+                    {editingCameraPosition ? 'Muuda kaamera positsiooni' : 'Salvesta praegune vaade'}
+                  </h3>
+                  <button onClick={() => setShowCameraForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                    <FiX size={20} />
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
+                    Nimi *
+                  </label>
+                  <input
+                    type="text"
+                    value={cameraFormData.name}
+                    onChange={(e) => setCameraFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="Nt: Peavaade, A-telg, Katus..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
+                    Kirjeldus
+                  </label>
+                  <textarea
+                    value={cameraFormData.description}
+                    onChange={(e) => setCameraFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Valikuline kirjeldus..."
+                    rows={2}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+
+                {!editingCameraPosition && (
+                  <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#6b7280', background: '#f3f4f6', padding: '8px', borderRadius: '6px' }}>
+                    <FiCamera size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                    Salvestatakse praegune kaamera positsioon mudelist.
+                  </p>
+                )}
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowCameraForm(false)}
+                    style={{ flex: 1 }}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={saveCameraPosition}
+                    disabled={cameraPositionsSaving}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    {cameraPositionsSaving ? <FiRefreshCw size={14} className="spin" /> : <FiSave size={14} />}
+                    {editingCameraPosition ? 'Salvesta' : 'Salvesta vaade'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Camera positions list */}
+          <div style={{
+            background: 'white',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+            overflow: 'hidden'
+          }}>
+            {cameraPositionsLoading ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                <FiRefreshCw size={24} className="spin" />
+                <p>Laadin kaamera positsioone...</p>
+              </div>
+            ) : cameraPositions.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                <FiVideo size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                <p>Kaamera positsioone pole veel salvestatud.</p>
+                <p style={{ fontSize: '12px' }}>
+                  Klõpsa "Salvesta praegune vaade" et salvestada esimene positsioon.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: '#e5e7eb' }}>
+                {cameraPositions.map(position => (
+                  <div
+                    key={position.id}
+                    style={{
+                      background: 'white',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px'
+                    }}
+                  >
+                    {/* Play button - restore camera */}
+                    <button
+                      onClick={() => restoreCameraPosition(position)}
+                      style={{
+                        background: '#8b5cf6',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '36px',
+                        height: '36px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        flexShrink: 0
+                      }}
+                      title="Mine sellele vaatele"
+                    >
+                      <FiVideo size={16} />
+                    </button>
+
+                    {/* Name and description */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, fontSize: '14px' }}>{position.name}</div>
+                      {position.description && (
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                          {position.description}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                        {position.created_by && <span>{position.created_by} • </span>}
+                        {new Date(position.created_at).toLocaleDateString('et-EE')}
+                      </div>
+                    </div>
+
+                    {/* Action buttons */}
+                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                      <button
+                        onClick={() => updateCameraState(position)}
+                        style={{
+                          background: '#f3f4f6',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px',
+                          cursor: 'pointer'
+                        }}
+                        title="Uuenda praeguse vaatega"
+                      >
+                        <FiCamera size={14} />
+                      </button>
+                      <button
+                        onClick={() => openEditCameraForm(position)}
+                        style={{
+                          background: '#f3f4f6',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px',
+                          cursor: 'pointer'
+                        }}
+                        title="Muuda nime/kirjeldust"
+                      >
+                        <FiEdit2 size={14} />
+                      </button>
+                      <button
+                        onClick={() => deleteCameraPosition(position.id)}
+                        style={{
+                          background: '#fee2e2',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px',
+                          cursor: 'pointer',
+                          color: '#dc2626'
+                        }}
+                        title="Kustuta"
+                      >
+                        <FiTrash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Summary */}
+          {cameraPositions.length > 0 && (
+            <div style={{ marginTop: '16px', fontSize: '12px', color: '#6b7280' }}>
+              Kokku: {cameraPositions.length} salvestatud vaade{cameraPositions.length !== 1 ? 't' : ''}
+            </div>
+          )}
         </div>
       )}
 

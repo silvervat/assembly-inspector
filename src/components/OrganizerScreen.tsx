@@ -1138,8 +1138,6 @@ export default function OrganizerScreen({
     const DEBOUNCE_MS = 1000; // Minimum time between refreshes
 
     const handleRealtimeChange = (payload: { eventType: string; new: Record<string, unknown> | null; old: Record<string, unknown> | null }, table: string) => {
-      console.log(`📡 Realtime ${table}:`, payload.eventType, payload);
-
       // Get the record (new for INSERT/UPDATE, old for DELETE)
       const record = (payload.new || payload.old) as {
         trimble_project_id?: string;
@@ -1152,14 +1150,12 @@ export default function OrganizerScreen({
       // Filter by project - groups have trimble_project_id, items have group_id
       if (table === 'groups') {
         if (record?.trimble_project_id !== projectId) {
-          console.log('📡 Skipping - different project');
           return;
         }
       } else if (table === 'items') {
         // For items, check if the group_id belongs to our loaded groups
         const groupId = record?.group_id;
         if (!groupId || !groupsRef.current.some(g => g.id === groupId)) {
-          console.log('📡 Skipping item - group not in our project');
           return;
         }
       }
@@ -1176,25 +1172,19 @@ export default function OrganizerScreen({
 
       const isLocalChange = changeKey ? recentLocalChangesRef.current.has(changeKey) : false;
 
-      // Get author for logging
+      // Get author for toast notification
       const changeAuthor = record?.updated_by || record?.created_by || record?.added_by;
-
-      console.log(`📡 Realtime check: key=${changeKey}, isLocal=${isLocalChange}, author=${changeAuthor}, debounce=${Date.now() - lastRefreshTime}ms`);
 
       if (isLocalChange) {
         // This session made this change - remove from tracking (already handled by local refresh)
         if (changeKey) {
           recentLocalChangesRef.current.delete(changeKey);
         }
-        console.log(`📡 Skipping local session change`);
       } else if (Date.now() - lastRefreshTime > DEBOUNCE_MS) {
         // Another session/device made this change - refresh to get updates
         lastRefreshTime = Date.now();
-        console.log(`📡 Realtime: refreshing data (${table} changed by ${changeAuthor || 'another device'})`);
         showToast(`📡 ${changeAuthor || 'Keegi'} uuendas andmeid`);
         refreshData();
-      } else {
-        console.log(`📡 Skipping - debounce (${Date.now() - lastRefreshTime}ms < ${DEBOUNCE_MS}ms)`);
       }
     };
 
@@ -1212,10 +1202,6 @@ export default function OrganizerScreen({
         (payload) => handleRealtimeChange(payload, 'items')
       )
       .subscribe((status, err) => {
-        console.log('📡 Realtime subscription status:', status, err || '');
-        if (status === 'SUBSCRIBED') {
-          console.log('📡 Realtime ready for organizer tables');
-        }
         if (status === 'CHANNEL_ERROR') {
           console.error('📡 Realtime subscription error:', err);
         }
@@ -1223,7 +1209,6 @@ export default function OrganizerScreen({
 
     // Cleanup on unmount
     return () => {
-      console.log('📡 Unsubscribing from realtime channel');
       supabase.removeChannel(channel);
     };
   }, [projectId, tcUserEmail, refreshData, showToast]);
