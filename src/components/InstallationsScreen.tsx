@@ -514,6 +514,7 @@ export default function InstallationsScreen({
   // Month locks state
   const [monthLocks, setMonthLocks] = useState<Map<string, InstallationMonthLock>>(new Map());
   const [monthMenuOpen, setMonthMenuOpen] = useState<string | null>(null);
+  const [dayMenuOpen, setDayMenuOpen] = useState<string | null>(null);
 
   // Property discovery state
   const [showProperties, setShowProperties] = useState(false);
@@ -3495,6 +3496,163 @@ export default function InstallationsScreen({
     }
   };
 
+  // Delete all installations for a day
+  const deleteDayInstallations = async (dayKey: string, items: Installation[]) => {
+    if (items.length === 0) return;
+
+    // Check if month is locked
+    const monthKey = getMonthKey(items[0].installed_at);
+    if (isMonthLocked(monthKey)) {
+      setMessage('🔒 Kuu on lukustatud - kustutamine keelatud');
+      return;
+    }
+
+    // Double confirmation
+    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} paigaldust päeval ${dayKey}?`)) {
+      return;
+    }
+    if (!confirm(`VIIMANE HOIATUS: See kustutab ${items.length} paigalduse kirjet jäädavalt! Kas jätkata?`)) {
+      return;
+    }
+
+    setMessage(`Kustutan ${items.length} paigaldust...`);
+    try {
+      const ids = items.map(i => i.id);
+      const guidsToColor = items.map(i => i.guid_ifc || i.guid).filter(Boolean) as string[];
+
+      const { error } = await supabase
+        .from('installations')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
+
+      if (guidsToColor.length > 0) {
+        await colorGuidsWhite(guidsToColor);
+      }
+
+      setMessage(`${items.length} paigaldust kustutatud`);
+      setDayMenuOpen(null);
+    } catch (e) {
+      console.error('Error deleting day installations:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Delete all installations for a month
+  const deleteMonthInstallations = async (monthKey: string, items: Installation[]) => {
+    if (items.length === 0) return;
+
+    // Check if month is locked
+    if (isMonthLocked(monthKey)) {
+      setMessage('🔒 Kuu on lukustatud - kustutamine keelatud');
+      return;
+    }
+
+    // Double confirmation with month name
+    const monthLabel = getFullMonthLabel(items[0].installed_at);
+    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} paigaldust kuus ${monthLabel}?`)) {
+      return;
+    }
+    if (!confirm(`⚠️ VIIMANE HOIATUS: See kustutab ${items.length} paigalduse kirjet jäädavalt!\n\nKas oled TÄIESTI kindel?`)) {
+      return;
+    }
+
+    setMessage(`Kustutan ${items.length} paigaldust...`);
+    try {
+      const ids = items.map(i => i.id);
+      const guidsToColor = items.map(i => i.guid_ifc || i.guid).filter(Boolean) as string[];
+
+      const { error } = await supabase
+        .from('installations')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
+
+      if (guidsToColor.length > 0) {
+        await colorGuidsWhite(guidsToColor);
+      }
+
+      setMessage(`${items.length} paigaldust kustutatud`);
+      setMonthMenuOpen(null);
+    } catch (e) {
+      console.error('Error deleting month installations:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Delete all preassemblies for a day
+  const deleteDayPreassemblies = async (dayKey: string, items: Preassembly[]) => {
+    if (items.length === 0) return;
+
+    // Double confirmation
+    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} preassembly kirjet päeval ${dayKey}?`)) {
+      return;
+    }
+    if (!confirm(`VIIMANE HOIATUS: See kustutab ${items.length} preassembly kirjet jäädavalt! Kas jätkata?`)) {
+      return;
+    }
+
+    setMessage(`Kustutan ${items.length} preassembly kirjet...`);
+    try {
+      const ids = items.map(i => i.id);
+
+      const { error } = await supabase
+        .from('preassemblies')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
+
+      setMessage(`${items.length} preassembly kirjet kustutatud`);
+      setDayMenuOpen(null);
+    } catch (e) {
+      console.error('Error deleting day preassemblies:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Delete all preassemblies for a month
+  const deleteMonthPreassemblies = async (_monthKey: string, items: Preassembly[]) => {
+    if (items.length === 0) return;
+
+    // Double confirmation with month name
+    const monthLabel = getFullMonthLabel(items[0].preassembled_at);
+    if (!confirm(`Kas oled kindel, et soovid kustutada KÕIK ${items.length} preassembly kirjet kuus ${monthLabel}?`)) {
+      return;
+    }
+    if (!confirm(`⚠️ VIIMANE HOIATUS: See kustutab ${items.length} preassembly kirjet jäädavalt!\n\nKas oled TÄIESTI kindel?`)) {
+      return;
+    }
+
+    setMessage(`Kustutan ${items.length} preassembly kirjet...`);
+    try {
+      const ids = items.map(i => i.id);
+
+      const { error } = await supabase
+        .from('preassemblies')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
+
+      setMessage(`${items.length} preassembly kirjet kustutatud`);
+      setMonthMenuOpen(null);
+    } catch (e) {
+      console.error('Error deleting month preassemblies:', e);
+      setMessage('Viga kustutamisel');
+    }
+  };
+
   // Zoom to preassembly (same as installation)
   const zoomToPreassembly = async (preassembly: Preassembly) => {
     try {
@@ -4197,6 +4355,31 @@ export default function InstallationsScreen({
           >
             <FiInfo size={12} />
           </button>
+          {/* Day menu */}
+          <div className="day-menu-container" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="day-menu-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMonthMenuOpen(null);
+                setDayMenuOpen(dayMenuOpen === day.dayKey ? null : day.dayKey);
+              }}
+              title="Rohkem valikuid"
+            >
+              <FiMoreVertical size={12} />
+            </button>
+            {dayMenuOpen === day.dayKey && (
+              <div className="day-menu-dropdown">
+                <button
+                  onClick={() => deleteDayInstallations(day.dayKey, day.items)}
+                  className="delete-btn"
+                >
+                  <FiTrash2 size={14} />
+                  <span>Kustuta päev ({day.items.length})</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
@@ -4296,6 +4479,32 @@ export default function InstallationsScreen({
           >
             {day.items.length}
           </button>
+          {/* Day menu for preassembly */}
+          <div className="day-menu-container" onClick={(e) => e.stopPropagation()}>
+            <button
+              className="day-menu-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMonthMenuOpen(null);
+                const paDayKey = `pa-${day.dayKey}`;
+                setDayMenuOpen(dayMenuOpen === paDayKey ? null : paDayKey);
+              }}
+              title="Rohkem valikuid"
+            >
+              <FiMoreVertical size={12} />
+            </button>
+            {dayMenuOpen === `pa-${day.dayKey}` && (
+              <div className="day-menu-dropdown">
+                <button
+                  onClick={() => deleteDayPreassemblies(day.dayKey, day.items)}
+                  className="delete-btn"
+                >
+                  <FiTrash2 size={14} />
+                  <span>Kustuta päev ({day.items.length})</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
         {expandedDays.has(day.dayKey) && (
           <div className="date-group-items">
@@ -5992,6 +6201,7 @@ export default function InstallationsScreen({
                         className="month-menu-btn"
                         onClick={(e) => {
                           e.stopPropagation();
+                          setDayMenuOpen(null);
                           setMonthMenuOpen(monthMenuOpen === month.monthKey ? null : month.monthKey);
                         }}
                         title="Rohkem valikuid"
@@ -6019,6 +6229,15 @@ export default function InstallationsScreen({
                             <FiDownload size={14} />
                             <span>Ekspordi Excelisse</span>
                           </button>
+                          {!isMonthLocked(month.monthKey) && (
+                            <button
+                              onClick={() => deleteMonthInstallations(month.monthKey, month.allItems)}
+                              className="delete-btn"
+                            >
+                              <FiTrash2 size={14} />
+                              <span>Kustuta kuu ({month.allItems.length})</span>
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -6090,6 +6309,7 @@ export default function InstallationsScreen({
                           className="month-menu-btn"
                           onClick={(e) => {
                             e.stopPropagation();
+                            setDayMenuOpen(null);
                             setMonthMenuOpen(monthMenuOpen === paMenuKey ? null : paMenuKey);
                           }}
                           title="Rohkem valikuid"
@@ -6105,6 +6325,13 @@ export default function InstallationsScreen({
                             <button onClick={() => { colorUninstalledPreassemblies(month.allItems); setMonthMenuOpen(null); }}>
                               <FiDroplet size={14} />
                               <span>Värvi ainult paigaldamata</span>
+                            </button>
+                            <button
+                              onClick={() => deleteMonthPreassemblies(month.monthKey, month.allItems)}
+                              className="delete-btn"
+                            >
+                              <FiTrash2 size={14} />
+                              <span>Kustuta kuu ({month.allItems.length})</span>
                             </button>
                           </div>
                         )}

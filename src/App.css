@@ -9725,6 +9725,84 @@ button.stat-toggle.off:hover {
   border-bottom: 1px solid var(--modus-border-light);
 }
 
+.month-menu-dropdown button.delete-btn {
+  color: #dc2626;
+}
+
+.month-menu-dropdown button.delete-btn:hover {
+  background: #fef2f2;
+}
+
+/* Day menu (in date group header) */
+.day-menu-container {
+  position: relative;
+  margin-left: 4px;
+}
+
+.day-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+  opacity: 0;
+}
+
+.date-group-header:hover .day-menu-btn {
+  opacity: 1;
+}
+
+.day-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--modus-text-primary);
+}
+
+.day-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.day-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--modus-text-primary);
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.day-menu-dropdown button:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.day-menu-dropdown button.delete-btn {
+  color: #dc2626;
+}
+
+.day-menu-dropdown button.delete-btn:hover {
+  background: #fef2f2;
+}
+
 .installation-date-group .date-group-items {
   padding-left: 8px;
 }
