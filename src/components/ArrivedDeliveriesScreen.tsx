@@ -6,7 +6,7 @@ import {
 } from '../supabase';
 import { selectObjectsByGuid, findObjectsInLoadedModels } from '../utils/navigationHelper';
 import {
-  FiArrowLeft, FiChevronLeft, FiChevronRight, FiCheck, FiX,
+  FiArrowLeft, FiArrowRight, FiChevronLeft, FiChevronRight, FiCheck, FiX,
   FiCamera, FiClock, FiMapPin, FiTruck,
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
@@ -2151,6 +2151,23 @@ export default function ArrivedDeliveriesScreen({
             const missingCount = arrivalConfirmations.filter(c => c.status === 'missing').length;
             const pendingCount = arrivalConfirmations.filter(c => c.status === 'pending').length;
 
+            // Find items that were supposed to be in THIS vehicle but arrived with ANOTHER vehicle
+            // These are confirmations with source_vehicle_id matching this vehicle
+            const removedItemsConfirmations = confirmations.filter(c =>
+              c.source_vehicle_id === vehicle.id && c.status === 'added'
+            );
+            const removedItems = removedItemsConfirmations.map(conf => {
+              const item = items.find(i => i.id === conf.item_id);
+              const receivingVehicle = arrivedVehicles.find(av => av.id === conf.arrived_vehicle_id);
+              const receivingVehicleInfo = receivingVehicle ? vehicles.find(v => v.id === receivingVehicle.vehicle_id) : null;
+              return {
+                confirmation: conf,
+                item,
+                receivingVehicle: receivingVehicleInfo,
+                receivingArrival: receivingVehicle
+              };
+            }).filter(r => r.item); // Only include if item still exists
+
             return (
               <div
                 key={vehicle.id}
@@ -2759,6 +2776,36 @@ export default function ArrivedDeliveriesScreen({
                         </div>
                           );
                         })()}
+
+                        {/* Removed items - items that were supposed to be here but arrived with another vehicle */}
+                        {removedItems.length > 0 && (
+                          <div className="removed-items-section">
+                            <div className="removed-items-header">
+                              <FiAlertTriangle className="warning-icon" />
+                              <h4>Tarnest eemaldatud detailid ({removedItems.length})</h4>
+                            </div>
+                            <p className="removed-items-description">
+                              Need detailid pidid saabuma selle veokiga, kuid saabusid teise veokiga.
+                            </p>
+                            <div className="removed-items-list">
+                              {removedItems.map(({ confirmation, item, receivingVehicle, receivingArrival }) => (
+                                <div key={confirmation.id} className="removed-item">
+                                  <div className="removed-item-info">
+                                    <span className="removed-item-mark">{item?.assembly_mark}</span>
+                                    <span className="removed-item-name">{item?.product_name}</span>
+                                  </div>
+                                  <div className="removed-item-destination">
+                                    <FiArrowRight />
+                                    <span>Saabus veokiga: <strong>{receivingVehicle?.vehicle_code || 'tundmatu'}</strong></span>
+                                    {receivingArrival?.arrival_date && (
+                                      <span className="arrival-date">({formatDateEstonian(receivingArrival.arrival_date)})</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Complete button */}
                         {!arrivedVehicle.is_confirmed && pendingCount === 0 && (
