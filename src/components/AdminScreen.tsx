@@ -9250,6 +9250,75 @@ document.body.appendChild(div);`;
             </div>
           </div>
 
+          {/* Modus Icons Section */}
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '16px',
+            border: '1px solid #e5e7eb'
+          }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+              Modus Icons (CDN)
+            </h3>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '16px' }}>
+              Trimble Modus Icons laetud CDN-ist. Kasutamine: <code>&lt;i className="modus-icons"&gt;icon_name&lt;/i&gt;</code>
+            </p>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+              gap: '8px'
+            }}>
+              {[
+                'apps', 'settings', 'search', 'check', 'close', 'add',
+                'remove', 'edit', 'delete', 'save', 'download', 'upload',
+                'folder', 'folder_open', 'file', 'visibility', 'visibility_off',
+                'lock', 'lock_open', 'person', 'people', 'group',
+                'calendar', 'schedule', 'event', 'alarm', 'notifications',
+                'warning', 'error', 'info', 'help', 'check_circle',
+                'cancel', 'refresh', 'sync', 'cloud', 'cloud_upload',
+                'cloud_download', 'arrow_back', 'arrow_forward', 'arrow_upward', 'arrow_downward',
+                'expand_more', 'expand_less', 'chevron_left', 'chevron_right',
+                'menu', 'more_vert', 'more_horiz', 'filter_list', 'sort',
+                'zoom_in', 'zoom_out', 'fullscreen', 'fullscreen_exit',
+                'home', 'dashboard', 'list', 'view_list', 'grid_view',
+                'table_view', 'print', 'share', 'link', 'copy',
+                'content_copy', 'content_paste', 'drag_indicator', 'tune',
+                'color_lens', 'palette', 'brush', 'format_paint',
+                'location_on', 'map', 'layers', 'terrain', '3d_rotation',
+                'view_in_ar', 'model_training', 'category', 'inventory',
+                'construction', 'engineering', 'architecture', 'foundation'
+              ].map(iconName => (
+                <div
+                  key={iconName}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px',
+                    background: '#f9fafb',
+                    borderRadius: '6px',
+                    border: '1px solid #e5e7eb'
+                  }}
+                >
+                  <i className="modus-icons" style={{ fontSize: '20px', color: '#374151' }}>{iconName}</i>
+                  <code style={{ fontSize: '10px', color: '#6b7280', wordBreak: 'break-all' }}>
+                    {iconName}
+                  </code>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: '16px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+              <p style={{ margin: 0, fontSize: '12px', color: '#166534' }}>
+                <strong>Kasutamine React-is:</strong><br/>
+                <code style={{ fontSize: '11px' }}>&lt;i className="modus-icons"&gt;settings&lt;/i&gt;</code><br/>
+                <code style={{ fontSize: '11px' }}>&lt;i className="modus-icons" style=&#123;&#123; fontSize: '24px' &#125;&#125;&gt;folder&lt;/i&gt;</code>
+              </p>
+            </div>
+          </div>
+
           {/* Info Section */}
           <div style={{
             background: '#eff6ff',
