@@ -22,7 +22,7 @@ import {
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
-  FiEdit2, FiTrash2, FiX, FiDroplet,
+  FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiArrowUp, FiArrowDown, FiTag, FiUpload, FiSettings
@@ -107,18 +107,36 @@ type SortField = 'name' | 'itemCount' | 'totalWeight' | 'created_at';
 type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
 type SortDirection = 'asc' | 'desc';
 
-// Preset colors for group color picker
+// Preset colors for group color picker (24 colors in 4 rows)
 const PRESET_COLORS: GroupColor[] = [
+  // Row 1: Reds, Oranges, Yellows
   { r: 239, g: 68, b: 68 },   // Red
+  { r: 220, g: 38, b: 38 },   // Red-600
   { r: 249, g: 115, b: 22 },  // Orange
+  { r: 234, g: 88, b: 12 },   // Orange-600
   { r: 234, g: 179, b: 8 },   // Yellow
+  { r: 245, g: 158, b: 11 },  // Amber
+  // Row 2: Greens, Teals, Cyans
   { r: 34, g: 197, b: 94 },   // Green
+  { r: 22, g: 163, b: 74 },   // Green-600
+  { r: 16, g: 185, b: 129 },  // Emerald
+  { r: 20, g: 184, b: 166 },  // Teal
   { r: 6, g: 182, b: 212 },   // Cyan
+  { r: 14, g: 165, b: 233 },  // Sky
+  // Row 3: Blues, Purples
   { r: 59, g: 130, b: 246 },  // Blue
-  { r: 139, g: 92, b: 246 },  // Purple
-  { r: 236, g: 72, b: 153 },  // Pink
-  { r: 107, g: 114, b: 128 }, // Gray
+  { r: 37, g: 99, b: 235 },   // Blue-600
   { r: 30, g: 64, b: 175 },   // Indigo
+  { r: 99, g: 102, b: 241 },  // Indigo-500
+  { r: 139, g: 92, b: 246 },  // Purple
+  { r: 168, g: 85, b: 247 },  // Violet
+  // Row 4: Pinks, Roses, Grays
+  { r: 236, g: 72, b: 153 },  // Pink
+  { r: 244, g: 63, b: 94 },   // Rose
+  { r: 217, g: 70, b: 239 },  // Fuchsia
+  { r: 107, g: 114, b: 128 }, // Gray-500
+  { r: 71, g: 85, b: 105 },   // Slate-600
+  { r: 64, g: 64, b: 64 },    // Neutral-700
 ];
 
 // ============================================
@@ -1141,7 +1159,7 @@ export default function OrganizerScreen({
         allowed_users: allowedUsers,
         display_properties: [],
         custom_fields: finalCustomFields,
-        assembly_selection_on: formAssemblySelectionOn, // Each group has its own setting
+        assembly_selection_on: formAssemblySelectionOn,
         unique_items: formParentId ? inheritedUniqueItems : formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
@@ -1270,6 +1288,89 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error updating group color:', e);
       showToast('Viga värvi uuendamisel');
+    }
+  };
+
+  // Clone a group with a new name
+  const cloneGroup = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Generate unique name with (1), (2), etc.
+    const baseName = group.name.replace(/\s*\(\d+\)$/, ''); // Remove existing (N) suffix
+    let newName = `${baseName} (1)`;
+    let counter = 1;
+
+    // Find the next available number
+    const existingNames = groups.map(g => g.name);
+    while (existingNames.includes(newName)) {
+      counter++;
+      newName = `${baseName} (${counter})`;
+    }
+
+    setSaving(true);
+    setGroupMenuId(null);
+
+    try {
+      const newGroupData = {
+        trimble_project_id: projectId,
+        parent_id: group.parent_id,
+        name: newName,
+        description: group.description,
+        is_private: group.is_private,
+        allowed_users: group.allowed_users,
+        display_properties: group.display_properties,
+        custom_fields: group.custom_fields,
+        assembly_selection_on: group.assembly_selection_on,
+        unique_items: group.unique_items,
+        color: group.color,
+        created_by: tcUserEmail,
+        sort_order: groups.length,
+        level: group.level,
+        default_permissions: group.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS },
+        user_permissions: group.user_permissions || {}
+      };
+
+      const { data: insertedGroup, error } = await supabase
+        .from('organizer_groups')
+        .insert(newGroupData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Optimistic UI update
+      const fullGroup: OrganizerGroup = {
+        ...newGroupData,
+        id: insertedGroup.id,
+        created_at: insertedGroup.created_at || new Date().toISOString(),
+        updated_at: insertedGroup.updated_at || new Date().toISOString(),
+        updated_by: null,
+        is_locked: false,
+        locked_by: null,
+        locked_at: null,
+        default_permissions: { ...DEFAULT_GROUP_PERMISSIONS },
+        user_permissions: {}
+      };
+
+      setGroups(prev => [...prev, fullGroup]);
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        newMap.set(fullGroup.id, []);
+        return newMap;
+      });
+
+      showToast(`Grupp kloonitud: ${newName}`);
+
+      // Expand parent if it's a subgroup
+      if (group.parent_id) {
+        setExpandedGroups(prev => new Set([...prev, group.parent_id!]));
+      }
+    } catch (e) {
+      console.error('Error cloning group:', e);
+      showToast('Viga grupi kloonimisel');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -3477,7 +3578,7 @@ export default function OrganizerScreen({
             </span>
           )}
 
-          <div className="org-group-info">
+          <div className="org-group-info" title={node.description ? `${node.name}\n${node.description}` : node.name}>
             <div className="group-name">{node.name}</div>
             {node.description && <div className="group-desc">{node.description}</div>}
           </div>
@@ -3543,6 +3644,9 @@ export default function OrganizerScreen({
               )}
               <button onClick={() => openEditGroupForm(node)}>
                 <FiEdit2 size={12} /> Muuda gruppi
+              </button>
+              <button onClick={() => cloneGroup(node.id)}>
+                <FiCopy size={12} /> Klooni grupp
               </button>
               <button onClick={() => { setSelectedGroupId(node.id); setShowFieldForm(true); setGroupMenuId(null); }}>
                 <FiList size={12} /> Lisa väli
