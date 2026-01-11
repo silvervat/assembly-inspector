@@ -10366,17 +10366,17 @@ button.stat-toggle.off:hover {
   cursor: pointer;
   color: #9ca3af;
   border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.1s;
+  transition: background 0.1s, color 0.1s;
 }
 
-.org-group-header:hover .org-menu-btn {
-  opacity: 1;
+.org-menu-btn:hover {
+  background: #e5e7eb;
+  color: #6b7280;
 }
 
 .org-menu-btn.active {
-  opacity: 1;
   background: #e5e7eb;
+  color: #374151;
 }
 
 /* Group dropdown menu */
