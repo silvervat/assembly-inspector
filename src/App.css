@@ -7192,6 +7192,42 @@ button.stat-toggle.off:hover {
   background: #fecaca;
 }
 
+/* Equipment name inputs */
+.arrived-deliveries .resource-names-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--modus-border);
+}
+
+.arrived-deliveries .resource-name-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.arrived-deliveries .resource-name-field label {
+  font-size: 11px;
+  color: var(--modus-text-secondary);
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.arrived-deliveries .resource-name-field input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid var(--modus-border);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.arrived-deliveries .resource-name-field input:focus {
+  outline: none;
+  border-color: var(--modus-primary);
+}
+
 /* General notes section */
 .arrived-deliveries .notes-section {
   margin-top: 8px;

@@ -4006,6 +4006,9 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .map(item => item.guid_ifc || item.guid)
           .filter((g): g is string => !!g);
 
+        // Show progress
+        setMessage(`Värvin mudelit... ${d + 1}/${targetDayIndex + 1} päeva`);
+
         if (guids.length > 0) {
           if (playbackSettings.colorEachDayDifferent && playbackDateColors[date]) {
             const dayColor = playbackDateColors[date];
@@ -4052,7 +4055,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Color each date's items
-      for (const [date, items] of Object.entries(itemsByDateTemp)) {
+      const dateEntries = Object.entries(itemsByDateTemp);
+      let coloredDates = 0;
+      for (const [date, items] of dateEntries) {
+        coloredDates++;
+        setMessage(`Värvin mudelit... ${coloredDates}/${dateEntries.length} päeva`);
+
         const guids = items
           .map(item => item.guid_ifc || item.guid)
           .filter((g): g is string => !!g);
@@ -4110,7 +4118,6 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
   // Execute the actual seek with coloring (called after debounce)
   const executeScrubSeek = async (targetIndex: number) => {
-    setMessage('Värvin mudelit...');
     await seekToPosition(targetIndex);
     setMessage('');
   };

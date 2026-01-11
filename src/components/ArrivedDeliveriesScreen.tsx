@@ -2359,7 +2359,8 @@ export default function ArrivedDeliveriesScreen({
                                             e.stopPropagation();
                                             const newResources = {
                                               ...(arrivedVehicle.unload_resources || {}),
-                                              [res.key]: 0
+                                              [res.key]: 0,
+                                              [`${res.key}_name`]: undefined
                                             };
                                             updateArrival(arrivedVehicle.id, { unload_resources: newResources });
                                           }}
@@ -2389,6 +2390,36 @@ export default function ArrivedDeliveriesScreen({
                                 );
                               })}
                             </div>
+                            {/* Equipment name inputs for active machine resources */}
+                            {UNLOAD_RESOURCES.filter(res =>
+                              res.category === 'machine' &&
+                              res.key !== 'manual' &&
+                              ((arrivedVehicle.unload_resources as any)?.[res.key] || 0) > 0
+                            ).length > 0 && (
+                              <div className="resource-names-section">
+                                {UNLOAD_RESOURCES.filter(res =>
+                                  res.category === 'machine' &&
+                                  res.key !== 'manual' &&
+                                  ((arrivedVehicle.unload_resources as any)?.[res.key] || 0) > 0
+                                ).map(res => (
+                                  <div key={`${res.key}_name`} className="resource-name-field">
+                                    <label>{res.label}:</label>
+                                    <input
+                                      type="text"
+                                      value={(arrivedVehicle.unload_resources as any)?.[`${res.key}_name`] || ''}
+                                      onChange={(e) => {
+                                        const newResources = {
+                                          ...(arrivedVehicle.unload_resources || {}),
+                                          [`${res.key}_name`]: e.target.value
+                                        };
+                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                      }}
+                                      placeholder={`Nt. ${res.label === 'Kraana' ? 'Liebherr LTM 1050' : res.label === 'Teleskooplaadur' ? 'JCB 540-170' : 'Haulotte HA16'}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                           {/* General Notes */}
