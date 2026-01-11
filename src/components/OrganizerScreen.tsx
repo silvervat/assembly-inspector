@@ -4581,9 +4581,29 @@ export default function OrganizerScreen({
       return null;
     }
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
-    const hasModelSelectedItems = filteredItems.some(item =>
+
+    // Check for model-selected items in this group
+    const hasModelSelectedInThis = filteredItems.some(item =>
       item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase())
     );
+
+    // Also check descendant groups if this group is collapsed (so parent shows yellow)
+    const hasModelSelectedInDescendants = !isExpanded && hasChildren && (() => {
+      const checkDescendants = (children: typeof node.children): boolean => {
+        for (const child of children) {
+          const childItems = groupItems.get(child.id) || [];
+          const hasInChild = childItems.some(item =>
+            item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase())
+          );
+          if (hasInChild) return true;
+          if (child.children.length > 0 && checkDescendants(child.children)) return true;
+        }
+        return false;
+      };
+      return checkDescendants(node.children);
+    })();
+
+    const hasModelSelectedItems = hasModelSelectedInThis || hasModelSelectedInDescendants;
     const newItemsCount = getNewItemsCount(node.id);
     const existingItemsCount = getExistingItemsCount(node.id);
 

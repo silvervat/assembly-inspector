@@ -10389,10 +10389,14 @@ button.stat-toggle.off:hover {
 
 .org-group-header.selected {
   background: #dbeafe;
+  margin: 1px;
+  border-radius: 4px;
 }
 
 .org-group-header.has-model-selected {
   background: #fef9c3;
+  margin: 1px;
+  border-radius: 4px;
   border-left: 3px solid #eab308;
 }
 
