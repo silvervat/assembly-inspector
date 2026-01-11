@@ -3368,18 +3368,27 @@ export default function OrganizerScreen({
     const customFields = group.custom_fields || [];
 
     const wb = XLSX.utils.book_new();
-    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon', 'Lisatud', 'Lisaja'];
     customFields.forEach(f => headers.push(f.name));
 
     const data: any[][] = [headers];
     items.forEach((item, idx) => {
-      const row: any[] = [idx + 1, item.assembly_mark || '', item.product_name || '', formatWeight(item.cast_unit_weight), item.cast_unit_position_code || ''];
+      const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
+      const row: any[] = [
+        idx + 1,
+        item.assembly_mark || '',
+        item.product_name || '',
+        formatWeight(item.cast_unit_weight),
+        item.cast_unit_position_code || '',
+        addedDate,
+        item.added_by || ''
+      ];
       customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
       data.push(row);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 }))];
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 25 }, ...customFields.map(() => ({ wch: 15 }))];
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -3809,8 +3818,8 @@ export default function OrganizerScreen({
 
               return (
               <div className="org-items org-items-dynamic" style={columnStyles}>
-                {/* Item sort header */}
-                {sortedItems.length > 3 && (
+                {/* Item sort header - show when at least 1 item */}
+                {sortedItems.length > 0 && (
                   <div className="org-items-header">
                     <span className="org-item-index">#</span>
                     <span className="org-header-spacer" /> {/* For drag handle */}
@@ -3843,6 +3852,9 @@ export default function OrganizerScreen({
                 {displayItems.map((item, idx) => {
                   const isItemSelected = selectedItemIds.has(item.id);
                   const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
+                  const addedInfo = item.added_at
+                    ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
+                    : '';
                   return (
                     <div
                       key={item.id}
@@ -3850,6 +3862,7 @@ export default function OrganizerScreen({
                       draggable
                       onDragStart={(e) => handleDragStart(e, [item])}
                       onClick={(e) => handleItemClick(e, item, sortedItems)}
+                      title={addedInfo}
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />

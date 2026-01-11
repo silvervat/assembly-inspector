@@ -10640,6 +10640,42 @@ button.stat-toggle.off:hover {
   flex: none;
 }
 
+/* Responsive: narrow screens - truncate product, hide weight and custom */
+@media (max-width: 350px) {
+  .org-items-dynamic .org-item-product,
+  .org-items-dynamic .org-items-header .org-item-product {
+    max-width: 45px !important;
+    width: 45px !important;
+    min-width: 45px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-items-dynamic .org-item-weight,
+  .org-items-dynamic .org-items-header .org-item-weight,
+  .org-items-dynamic .org-item-custom,
+  .org-items-dynamic .org-items-header .org-item-custom {
+    display: none !important;
+  }
+}
+
+/* Responsive: medium narrow screens - truncate product more */
+@media (max-width: 450px) and (min-width: 351px) {
+  .org-items-dynamic .org-item-product,
+  .org-items-dynamic .org-items-header .org-item-product {
+    max-width: 60px !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .org-items-dynamic .org-item-custom,
+  .org-items-dynamic .org-items-header .org-item-custom {
+    display: none !important;
+  }
+}
+
 .org-item-custom {
   min-width: 60px;
   text-align: right;
