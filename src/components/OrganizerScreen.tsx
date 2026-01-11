@@ -253,16 +253,6 @@ function collectGroupGuids(
   return guids;
 }
 
-function collectAllGuids(groupItems: Map<string, OrganizerGroupItem[]>): Set<string> {
-  const guids = new Set<string>();
-  for (const items of groupItems.values()) {
-    for (const item of items) {
-      if (item.guid_ifc) guids.add(item.guid_ifc.toLowerCase());
-    }
-  }
-  return guids;
-}
-
 function generateGroupColor(index: number): GroupColor {
   return PRESET_COLORS[index % PRESET_COLORS.length];
 }
@@ -2104,6 +2094,7 @@ export default function OrganizerScreen({
     let skippedCount = 0;
 
     if (uniqueRequired) {
+      // Check against entire tree (root + all subgroups)
       const existingGuids = collectTreeGuids(targetGroupId);
       objectsToAdd = selectedObjects.filter(obj => {
         if (!obj.guidIfc) return true;
@@ -2113,11 +2104,22 @@ export default function OrganizerScreen({
         }
         return true;
       });
+    } else {
+      // Still prevent duplicates within the SAME group (but allow in sibling groups)
+      const targetGroupGuids = new Set((groupItems.get(targetGroupId) || []).map(i => i.guid_ifc?.toLowerCase()).filter(Boolean));
+      objectsToAdd = selectedObjects.filter(obj => {
+        if (!obj.guidIfc) return true;
+        if (targetGroupGuids.has(obj.guidIfc.toLowerCase())) {
+          skippedCount++;
+          return false;
+        }
+        return true;
+      });
+    }
 
-      if (objectsToAdd.length === 0) {
-        showToast('Kõik valitud detailid on juba grupis');
-        return;
-      }
+    if (objectsToAdd.length === 0) {
+      showToast('Kõik valitud detailid on juba selles grupis');
+      return;
     }
 
     setSaving(true);
@@ -4679,7 +4681,11 @@ export default function OrganizerScreen({
 
   const getNewItemsCount = (groupId: string): number => {
     const uniqueRequired = requiresUniqueItems(groupId);
-    const existingGuids = uniqueRequired ? collectTreeGuids(groupId) : collectAllGuids(groupItems);
+    // When unique required: check entire tree (root + subgroups)
+    // When NOT required: only check the specific target group itself
+    const existingGuids = uniqueRequired
+      ? collectTreeGuids(groupId)
+      : new Set((groupItems.get(groupId) || []).map(i => i.guid_ifc?.toLowerCase()).filter(Boolean));
     return selectedObjects.filter(obj => obj.guidIfc && !existingGuids.has(obj.guidIfc.toLowerCase())).length;
   };
 
