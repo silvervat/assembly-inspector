@@ -47,10 +47,10 @@ const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
   // Machines
   { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, category: 'machine' },
   { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, category: 'machine' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, category: 'machine' },
   { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, category: 'machine' },
   // Labor
-  { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, category: 'labor' },
+  { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 6, category: 'labor' },
 ];
 
 // Color type for model coloring
@@ -2321,14 +2321,7 @@ export default function ArrivedDeliveriesScreen({
                                     style={{
                                       backgroundColor: isActive ? res.activeBgColor : res.bgColor
                                     }}
-                                    onClick={() => {
-                                      const newValue = isActive ? 0 : 1;
-                                      const newResources = {
-                                        ...(arrivedVehicle.unload_resources || {}),
-                                        [res.key]: newValue
-                                      };
-                                      updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                    }}
+                                    title={res.label}
                                   >
                                     <img
                                       src={`${import.meta.env.BASE_URL}icons/${res.icon}`}
@@ -2339,27 +2332,42 @@ export default function ArrivedDeliveriesScreen({
                                     {isActive && (
                                       <span className="resource-count">{currentValue}</span>
                                     )}
-                                    {/* Quantity selector on hover when active */}
-                                    {isActive && (
-                                      <div className="resource-qty-dropdown">
-                                        {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
-                                          <button
-                                            key={num}
-                                            className={`qty-btn ${currentValue === num ? 'active' : ''}`}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const newResources = {
-                                                ...(arrivedVehicle.unload_resources || {}),
-                                                [res.key]: num
-                                              };
-                                              updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                            }}
-                                          >
-                                            {num}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {/* Quantity selector on hover - always rendered */}
+                                    <div className="resource-qty-dropdown">
+                                      {isActive && (
+                                        <button
+                                          key={0}
+                                          className="qty-btn qty-zero"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newResources = {
+                                              ...(arrivedVehicle.unload_resources || {}),
+                                              [res.key]: 0
+                                            };
+                                            updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                          }}
+                                          title="Eemalda"
+                                        >
+                                          ✕
+                                        </button>
+                                      )}
+                                      {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
+                                        <button
+                                          key={num}
+                                          className={`qty-btn ${currentValue === num ? 'active' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newResources = {
+                                              ...(arrivedVehicle.unload_resources || {}),
+                                              [res.key]: num
+                                            };
+                                            updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                          }}
+                                        >
+                                          {num}
+                                        </button>
+                                      ))}
+                                    </div>
                                   </div>
                                 );
                               })}
