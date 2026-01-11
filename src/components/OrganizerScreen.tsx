@@ -3830,16 +3830,36 @@ export default function OrganizerScreen({
   // EXPORT
   // ============================================
 
+  // Helper to collect all items from a group and its subgroups with group names
+  const collectAllGroupItems = (groupId: string): { item: any; groupName: string }[] => {
+    const result: { item: any; groupName: string }[] = [];
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return result;
+
+    // Add items from this group
+    const items = groupItems.get(groupId) || [];
+    items.forEach(item => result.push({ item, groupName: group.name }));
+
+    // Recursively add items from child groups
+    const children = groups.filter(g => g.parent_id === groupId);
+    for (const child of children) {
+      result.push(...collectAllGroupItems(child.id));
+    }
+
+    return result;
+  };
+
   const exportGroupToExcel = (groupId: string) => {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
-    const items = groupItems.get(groupId) || [];
+    // Collect all items from this group and subgroups
+    const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
     const wb = XLSX.utils.book_new();
-    // Headers: base columns, custom fields, then Lisatud/Ajavöönd/Lisaja at the end
-    const headers = ['#', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Headers: Grupp column added after #
+    const headers = ['#', 'Grupp', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
     headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -3847,10 +3867,11 @@ export default function OrganizerScreen({
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const data: any[][] = [headers];
-    items.forEach((item, idx) => {
+    allItems.forEach(({ item, groupName }, idx) => {
       const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
       const row: any[] = [
         idx + 1,
+        groupName,
         item.guid_ifc || '',
         (item as any).guid_ms || '',
         item.assembly_mark || '',
@@ -3866,11 +3887,11 @@ export default function OrganizerScreen({
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 5 }, { wch: 38 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 })), { wch: 16 }, { wch: 20 }, { wch: 25 }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 38 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 })), { wch: 16 }, { wch: 20 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
-    showToast('Eksport loodud');
+    showToast(`Eksport loodud (${allItems.length} rida)`);
     setGroupMenuId(null);
   };
 
@@ -3879,11 +3900,12 @@ export default function OrganizerScreen({
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
-    const items = groupItems.get(groupId) || [];
+    // Collect all items from this group and subgroups
+    const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
-    // Build headers: base columns, custom fields, then Lisatud/Ajavöönd/Lisaja at the end
-    const headers = ['#', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Build headers: Grupp column added after #
+    const headers = ['#', 'Grupp', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
     headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -3892,12 +3914,13 @@ export default function OrganizerScreen({
 
     // Build rows
     const rows: string[][] = [headers];
-    items.forEach((item, idx) => {
+    allItems.forEach(({ item, groupName }, idx) => {
       const addedDate = item.added_at
         ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
         : '';
       const row: string[] = [
         String(idx + 1),
+        groupName,
         item.guid_ifc || '',
         (item as any).guid_ms || '',
         item.assembly_mark || '',
@@ -3917,7 +3940,7 @@ export default function OrganizerScreen({
 
     try {
       await navigator.clipboard.writeText(tsvContent);
-      showToast(`${items.length} rida kopeeritud`);
+      showToast(`${allItems.length} rida kopeeritud`);
     } catch (e) {
       console.error('Clipboard error:', e);
       showToast('Viga kopeerimisel');
