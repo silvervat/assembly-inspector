@@ -75,9 +75,9 @@ export function PropertyMappingsProvider({ projectId, children }: PropertyMappin
         .from('project_property_mappings')
         .select('*')
         .eq('trimble_project_id', projectId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error loading property mappings:', error);
       }
 
@@ -196,15 +196,15 @@ async function loadMappingsFromDb(projectId: string): Promise<PropertyMappings> 
         .from('project_property_mappings')
         .select('*')
         .eq('trimble_project_id', projectId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error loading property mappings:', error);
         return DEFAULT_PROPERTY_MAPPINGS;
       }
 
       // No record found for this project
-      if (error && error.code === 'PGRST116') {
+      if (!data) {
         console.log(`⚠️ Property mappings: No record in database for project, using defaults`);
         return DEFAULT_PROPERTY_MAPPINGS;
       }
