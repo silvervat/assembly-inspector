@@ -1172,6 +1172,10 @@ export default function OrganizerScreen({
       const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
       if (error) throw error;
 
+      // Mark this group as local change (for realtime sync to skip toast)
+      recentLocalChangesRef.current.add(insertedGroup.id);
+      setTimeout(() => recentLocalChangesRef.current.delete(insertedGroup.id), 5000);
+
       // Optimistic UI update - add new group to state immediately
       const fullGroup: OrganizerGroup = {
         ...newGroupData,
@@ -1224,6 +1228,10 @@ export default function OrganizerScreen({
     const isPrivate = formSharingMode !== 'project';
     const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
 
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(editingGroup.id);
+    setTimeout(() => recentLocalChangesRef.current.delete(editingGroup.id), 5000);
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -1265,6 +1273,10 @@ export default function OrganizerScreen({
 
   // Update group color directly (used by color picker popup)
   const updateGroupColor = async (groupId: string, color: GroupColor) => {
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(groupId);
+    setTimeout(() => recentLocalChangesRef.current.delete(groupId), 5000);
+
     try {
       const { error } = await supabase
         .from('organizer_groups')
@@ -1339,6 +1351,10 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
+      // Mark this group as local change (for realtime sync to skip toast)
+      recentLocalChangesRef.current.add(insertedGroup.id);
+      setTimeout(() => recentLocalChangesRef.current.delete(insertedGroup.id), 5000);
+
       // Optimistic UI update
       const fullGroup: OrganizerGroup = {
         ...newGroupData,
@@ -1402,6 +1418,10 @@ export default function OrganizerScreen({
   const deleteGroup = async () => {
     if (!deleteGroupData) return;
     const { group } = deleteGroupData;
+
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(group.id);
+    setTimeout(() => recentLocalChangesRef.current.delete(group.id), 5000);
 
     setSaving(true);
     try {
@@ -3232,6 +3252,10 @@ export default function OrganizerScreen({
   const toggleGroupLock = async (groupId: string) => {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
+
+    // Mark this group as local change (for realtime sync to skip toast)
+    recentLocalChangesRef.current.add(groupId);
+    setTimeout(() => recentLocalChangesRef.current.delete(groupId), 5000);
 
     setSaving(true);
     try {
