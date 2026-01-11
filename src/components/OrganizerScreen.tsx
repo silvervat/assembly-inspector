@@ -3578,7 +3578,7 @@ export default function OrganizerScreen({
             </span>
           )}
 
-          <div className="org-group-info">
+          <div className="org-group-info" title={node.description ? `${node.name}\n${node.description}` : node.name}>
             <div className="group-name">{node.name}</div>
             {node.description && <div className="group-desc">{node.description}</div>}
           </div>
