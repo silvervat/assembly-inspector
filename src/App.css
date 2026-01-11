@@ -10567,6 +10567,11 @@ button.stat-toggle.off:hover {
   background: #dbeafe;
 }
 
+.org-item.drag-target {
+  border-top: 2px solid #3b82f6;
+  margin-top: -2px;
+}
+
 .org-item.model-selected {
   background: #fef3c7;
   animation: highlight-pulse 1.5s ease-in-out;
@@ -11604,6 +11609,21 @@ button.stat-toggle.off:hover {
 
 .org-header-spacer {
   width: 10px;
+}
+
+.org-save-order-btn {
+  margin-left: auto;
+  padding: 2px 8px;
+  font-size: 10px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.org-save-order-btn:hover {
+  background: #2563eb;
 }
 
 .org-item-sort-col {

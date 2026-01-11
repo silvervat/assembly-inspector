@@ -444,6 +444,7 @@ export default function OrganizerScreen({
   // Drag & Drop
   const [draggedItems, setDraggedItems] = useState<OrganizerGroupItem[]>([]);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [dragReorderTarget, setDragReorderTarget] = useState<{ groupId: string; targetIndex: number } | null>(null);
 
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
@@ -3789,6 +3790,118 @@ export default function OrganizerScreen({
     setDraggedItems([]);
   };
 
+  // Handle drag over an item for reordering within group
+  const handleItemDragOver = (e: React.DragEvent, groupId: string, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedItems.length === 0) return;
+    // Only allow reordering within the same group
+    if (draggedItems[0].group_id === groupId) {
+      setDragReorderTarget({ groupId, targetIndex });
+    }
+  };
+
+  const handleItemDragLeave = () => {
+    setDragReorderTarget(null);
+  };
+
+  // Handle drop for reordering within a group
+  const handleItemDrop = async (e: React.DragEvent, groupId: string, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragReorderTarget(null);
+
+    if (draggedItems.length === 0) return;
+    // Only reorder within the same group
+    if (draggedItems[0].group_id !== groupId) {
+      // Move to different group - use existing logic
+      const itemIds = draggedItems.map(i => i.id);
+      await moveItemsToGroup(itemIds, groupId);
+      setDraggedItems([]);
+      return;
+    }
+
+    const items = groupItems.get(groupId) || [];
+    const sortedItems = sortItems(items, itemSortField, itemSortDir);
+    const draggedItem = draggedItems[0];
+    const currentIndex = sortedItems.findIndex(i => i.id === draggedItem.id);
+
+    if (currentIndex === -1 || currentIndex === targetIndex) {
+      setDraggedItems([]);
+      return;
+    }
+
+    // Reorder items
+    const newItems = [...sortedItems];
+    newItems.splice(currentIndex, 1);
+    newItems.splice(targetIndex, 0, draggedItem);
+
+    // Update sort_order for all items
+    const updates = newItems.map((item, idx) => ({
+      id: item.id,
+      sort_order: idx
+    }));
+
+    try {
+      // Update in database
+      for (const upd of updates) {
+        await supabase.from('organizer_group_items').update({ sort_order: upd.sort_order }).eq('id', upd.id);
+      }
+
+      // Update local state
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const updatedItems = newItems.map((item, idx) => ({ ...item, sort_order: idx }));
+        newMap.set(groupId, updatedItems);
+        return newMap;
+      });
+
+      // Switch to sort_order sort to show the new order
+      setItemSortField('sort_order');
+      setItemSortDir('asc');
+    } catch (err) {
+      console.error('Error reordering items:', err);
+      showToast('Viga järjestuse muutmisel');
+    }
+
+    setDraggedItems([]);
+  };
+
+  // Apply current visual sort as the new sort_order in database
+  const applySortAsOrder = async (groupId: string) => {
+    const items = groupItems.get(groupId) || [];
+    if (items.length === 0) return;
+
+    const sortedItems = sortItems(items, itemSortField, itemSortDir);
+
+    try {
+      setSaving(true);
+      // Update sort_order for all items
+      for (let i = 0; i < sortedItems.length; i++) {
+        await supabase.from('organizer_group_items').update({ sort_order: i }).eq('id', sortedItems[i].id);
+      }
+
+      // Update local state
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const updatedItems = sortedItems.map((item, idx) => ({ ...item, sort_order: idx }));
+        newMap.set(groupId, updatedItems);
+        return newMap;
+      });
+
+      // Switch to sort_order to show the applied order
+      setItemSortField('sort_order');
+      setItemSortDir('asc');
+
+      showToast('Järjestus salvestatud');
+    } catch (err) {
+      console.error('Error applying sort order:', err);
+      showToast('Viga järjestuse salvestamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ============================================
   // SEARCH
   // ============================================
@@ -4191,7 +4304,12 @@ export default function OrganizerScreen({
                 {/* Item sort header - show when at least 1 item */}
                 {sortedItems.length > 0 && (
                   <div className="org-items-header">
-                    <span className="org-item-index">#</span>
+                    <span className="org-item-index sortable" onClick={() => {
+                      if (itemSortField === 'sort_order') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                      else { setItemSortField('sort_order'); setItemSortDir('asc'); }
+                    }} title="Sorteeri järjekorra järgi">
+                      # {itemSortField === 'sort_order' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                    </span>
                     <span className="org-header-spacer" /> {/* For drag handle */}
                     <span className="org-item-mark sortable" onClick={() => {
                       if (itemSortField === 'assembly_mark') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
@@ -4216,21 +4334,37 @@ export default function OrganizerScreen({
                         {field.name}
                       </span>
                     ))}
+                    {itemSortField !== 'sort_order' && (
+                      <button
+                        className="org-save-order-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          applySortAsOrder(node.id);
+                        }}
+                        title="Salvesta praegune järjestus positsioonidena"
+                      >
+                        Salvesta
+                      </button>
+                    )}
                   </div>
                 )}
 
                 {displayItems.map((item, idx) => {
                   const isItemSelected = selectedItemIds.has(item.id);
                   const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
+                  const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
                   const addedInfo = item.added_at
                     ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
                     : '';
                   return (
                     <div
                       key={item.id}
-                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''}`}
+                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragTarget ? 'drag-target' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, [item])}
+                      onDragOver={(e) => handleItemDragOver(e, node.id, idx)}
+                      onDragLeave={handleItemDragLeave}
+                      onDrop={(e) => handleItemDrop(e, node.id, idx)}
                       onClick={(e) => handleItemClick(e, item, sortedItems)}
                       title={addedInfo}
                     >
