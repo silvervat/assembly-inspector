@@ -1820,23 +1820,46 @@ export default function OrganizerScreen({
         await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', guids);
       }
 
-      // Batch insert for large datasets
+      // Insert items and get back the inserted records with IDs
+      let insertedItems: OrganizerGroupItem[] = [];
+
       if (items.length > BATCH_SIZE) {
         setBatchProgress({ current: 0, total: items.length });
 
         for (let i = 0; i < items.length; i += BATCH_SIZE) {
           const batch = items.slice(i, i + BATCH_SIZE);
-          const { error } = await supabase.from('organizer_group_items').insert(batch);
+          const { data, error } = await supabase.from('organizer_group_items').insert(batch).select();
           if (error) throw error;
+          if (data) insertedItems = [...insertedItems, ...data];
           setBatchProgress({ current: Math.min(i + BATCH_SIZE, items.length), total: items.length });
         }
 
         setBatchProgress(null);
       } else {
-        // Small dataset - single insert
-        const { error } = await supabase.from('organizer_group_items').insert(items);
+        // Small dataset - single insert with select
+        const { data, error } = await supabase.from('organizer_group_items').insert(items).select();
         if (error) throw error;
+        if (data) insertedItems = data;
       }
+
+      // Update local state immediately (optimistic update)
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(targetGroupId) || [];
+        // Filter out any items with same GUID (replaced by new ones)
+        const filtered = existing.filter(e => !guids.includes(e.guid_ifc));
+        newMap.set(targetGroupId, [...filtered, ...insertedItems]);
+        return newMap;
+      });
+
+      // Rebuild tree locally
+      setGroupTree(() => {
+        const updatedItems = new Map(groupItems);
+        const existing = updatedItems.get(targetGroupId) || [];
+        const filtered = existing.filter(e => !guids.includes(e.guid_ifc));
+        updatedItems.set(targetGroupId, [...filtered, ...insertedItems]);
+        return buildGroupTree(groups, updatedItems);
+      });
 
       const message = skippedCount > 0
         ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
@@ -1850,36 +1873,28 @@ export default function OrganizerScreen({
 
       // Color newly added items directly if coloring mode is active and group has a color
       if (colorByGroup && groupColor && addedGuids.length > 0) {
-        await colorItemsDirectly(addedGuids, groupColor);
+        colorItemsDirectly(addedGuids, groupColor); // Don't await - run in background
       }
 
       // Hide items from model if setting is enabled
       if (hideItemOnAdd && addedGuids.length > 0) {
-        try {
-          const foundObjects = await findObjectsInLoadedModels(api, addedGuids);
+        // Run in background - don't await
+        findObjectsInLoadedModels(api, addedGuids).then(foundObjects => {
           if (foundObjects.size > 0) {
-            // Group by model for batch operation
             const byModel: Record<string, number[]> = {};
             for (const [, found] of foundObjects) {
               if (!byModel[found.modelId]) byModel[found.modelId] = [];
               byModel[found.modelId].push(found.runtimeId);
             }
-
-            // Hide all found objects
             for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-              await api.viewer.setObjectState(
+              api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
                 { visible: false }
               );
             }
           }
-        } catch (e) {
-          console.warn('Failed to hide items:', e);
-        }
+        }).catch(e => console.warn('Failed to hide items:', e));
       }
-
-      // Use silent refresh to avoid UI flash (no "Laadin..." state)
-      await refreshData();
     } catch (e) {
       console.error('Error adding items to group:', e);
       showToast('Viga detailide lisamisel');
@@ -1936,12 +1951,19 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
-      // Get GUIDs before deleting for coloring
-      const guidsToRemove: string[] = [];
+      // Get items and their group IDs before deleting
+      const itemsToRemove: { id: string; groupId: string; guidIfc: string | null }[] = [];
+      const affectedGroups = new Set<string>();
+
       for (const itemId of itemIds) {
         const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
-        if (item?.guid_ifc) guidsToRemove.push(item.guid_ifc);
+        if (item) {
+          itemsToRemove.push({ id: item.id, groupId: item.group_id, guidIfc: item.guid_ifc });
+          affectedGroups.add(item.group_id);
+        }
       }
+
+      const guidsToRemove = itemsToRemove.map(i => i.guidIfc).filter(Boolean) as string[];
 
       // Mark these GUIDs as local changes (for realtime sync to skip)
       guidsToRemove.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
@@ -1952,16 +1974,33 @@ export default function OrganizerScreen({
       const { error } = await supabase.from('organizer_group_items').delete().in('id', itemIds);
       if (error) throw error;
 
+      // Update local state immediately (optimistic update)
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        for (const groupId of affectedGroups) {
+          const existing = newMap.get(groupId) || [];
+          newMap.set(groupId, existing.filter(item => !itemIds.includes(item.id)));
+        }
+        return newMap;
+      });
+
+      // Rebuild tree locally
+      setGroupTree(() => {
+        const updatedItems = new Map(groupItems);
+        for (const groupId of affectedGroups) {
+          const existing = updatedItems.get(groupId) || [];
+          updatedItems.set(groupId, existing.filter(item => !itemIds.includes(item.id)));
+        }
+        return buildGroupTree(groups, updatedItems);
+      });
+
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
 
-      // Color removed items WHITE if coloring mode is active
+      // Color removed items WHITE if coloring mode is active (run in background)
       if (colorByGroup && guidsToRemove.length > 0) {
-        await colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
+        colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
       }
-
-      // Use silent refresh to avoid UI flash
-      await refreshData();
     } catch (e) {
       console.error('Error removing items:', e);
       showToast('Viga detailide eemaldamisel');
@@ -1994,8 +2033,19 @@ export default function OrganizerScreen({
         setTimeout(() => recentLocalChangesRef.current.delete(guidLower), 5000);
       }
 
-      await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
-      await refreshData();
+      // Update local state immediately (optimistic update)
+      const groupId = item.group_id;
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(groupId) || [];
+        newMap.set(groupId, existing.map(i =>
+          i.id === itemId ? { ...i, custom_properties: updatedProps } : i
+        ));
+        return newMap;
+      });
+
+      // Update database in background
+      supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
     } catch (e) {
       console.error('Error updating field:', e);
     }
