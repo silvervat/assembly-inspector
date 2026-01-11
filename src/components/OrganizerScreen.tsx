@@ -463,6 +463,11 @@ export default function OrganizerScreen({
   // Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+  // Assembly Selection enforcement state
+  const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
+  const [pendingAddGroupId, setPendingAddGroupId] = useState<string | null>(null);
+
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
     try {
@@ -566,6 +571,40 @@ export default function OrganizerScreen({
       return newValue;
     });
   }, [tcUserEmail]);
+
+  // ============================================
+  // ASSEMBLY SELECTION CHECK & ENABLE
+  // ============================================
+
+  const checkAssemblySelection = useCallback(async () => {
+    try {
+      const settings = await api.viewer.getSettings();
+      const enabled = !!settings.assemblySelection;
+      setAssemblySelectionEnabled(enabled);
+      return enabled;
+    } catch (e) {
+      console.error('Failed to get viewer settings:', e);
+      return true; // Assume enabled on error
+    }
+  }, [api]);
+
+  const enableAssemblySelection = useCallback(async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+      setAssemblySelectionEnabled(true);
+      setShowAssemblyModal(false);
+      // pendingAddGroupId will trigger useEffect below to actually add items
+    } catch (e) {
+      console.error('Failed to enable assembly selection:', e);
+    }
+  }, [api]);
+
+  // Poll for assembly selection status
+  useEffect(() => {
+    const interval = setInterval(checkAssemblySelection, 3000);
+    checkAssemblySelection(); // Initial check
+    return () => clearInterval(interval);
+  }, [checkAssemblySelection]);
 
   // ============================================
   // TOAST
@@ -1058,6 +1097,8 @@ export default function OrganizerScreen({
     try {
       let level = 0;
       let finalCustomFields: CustomFieldDefinition[] = formCustomFields;
+      let inheritedAssemblySelection = formAssemblySelectionOn;
+      let inheritedUniqueItems = formUniqueItems;
 
       if (formParentId) {
         const parent = groups.find(g => g.id === formParentId);
@@ -1068,8 +1109,17 @@ export default function OrganizerScreen({
             setSaving(false);
             return;
           }
-          // Subgroups inherit parent's custom fields
+          // Subgroups inherit parent's custom fields and settings from root
           finalCustomFields = [...(parent.custom_fields || [])];
+          // Find root parent for inherited settings
+          let root = parent;
+          while (root.parent_id) {
+            const p = groups.find(g => g.id === root.parent_id);
+            if (p) root = p;
+            else break;
+          }
+          inheritedAssemblySelection = root.assembly_selection_on !== false;
+          inheritedUniqueItems = root.unique_items !== false;
         }
       }
 
@@ -1077,7 +1127,7 @@ export default function OrganizerScreen({
       const isPrivate = formSharingMode !== 'project';
       const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
 
-      const newGroup = {
+      const newGroupData = {
         trimble_project_id: projectId,
         parent_id: formParentId,
         name: formName.trim(),
@@ -1086,21 +1136,48 @@ export default function OrganizerScreen({
         allowed_users: allowedUsers,
         display_properties: [],
         custom_fields: finalCustomFields,
-        assembly_selection_on: formAssemblySelectionOn,
-        unique_items: formUniqueItems,
+        assembly_selection_on: formParentId ? inheritedAssemblySelection : formAssemblySelectionOn,
+        unique_items: formParentId ? inheritedUniqueItems : formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
         sort_order: groups.length,
         level
       };
 
-      const { error } = await supabase.from('organizer_groups').insert(newGroup).select().single();
+      const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
       if (error) throw error;
+
+      // Optimistic UI update - add new group to state immediately
+      const fullGroup: OrganizerGroup = {
+        ...newGroupData,
+        id: insertedGroup.id,
+        created_at: insertedGroup.created_at || new Date().toISOString(),
+        updated_at: insertedGroup.updated_at || new Date().toISOString(),
+        updated_by: null,
+        is_locked: false,
+        locked_by: null,
+        locked_at: null
+      };
+
+      // Update groups state immediately
+      setGroups(prev => [...prev, fullGroup]);
+
+      // Update groupItems with empty array for the new group
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        newMap.set(fullGroup.id, []);
+        return newMap;
+      });
+
+      // Rebuild tree with new group
+      setGroupTree(() => {
+        const allGroups = [...groups, fullGroup];
+        return buildGroupTree(allGroups, groupItems);
+      });
 
       showToast('Grupp loodud');
       resetGroupForm();
       setShowGroupForm(false);
-      await loadData();
 
       if (formParentId) {
         setExpandedGroups(prev => new Set([...prev, formParentId]));
@@ -1475,7 +1552,29 @@ export default function OrganizerScreen({
   // ITEM OPERATIONS
   // ============================================
 
+  // Wrapper function that checks assembly selection before adding
   const addSelectedToGroup = async (targetGroupId: string) => {
+    if (selectedObjects.length === 0) return;
+
+    // Check if this group requires assembly selection
+    const selectionRequired = isSelectionEnabled(targetGroupId);
+
+    if (selectionRequired) {
+      // Check current assembly selection status
+      const isEnabled = await checkAssemblySelection();
+      if (!isEnabled) {
+        // Show modal and save pending operation
+        setPendingAddGroupId(targetGroupId);
+        setShowAssemblyModal(true);
+        return;
+      }
+    }
+
+    // Proceed with adding
+    await addSelectedToGroupInternal(targetGroupId);
+  };
+
+  const addSelectedToGroupInternal = async (targetGroupId: string) => {
     if (selectedObjects.length === 0) return;
 
     const group = groups.find(g => g.id === targetGroupId);
@@ -1609,6 +1708,18 @@ export default function OrganizerScreen({
       setSaving(false);
     }
   };
+
+  // Effect to handle pending add operation when assembly selection is re-enabled
+  useEffect(() => {
+    if (assemblySelectionEnabled && pendingAddGroupId && !showAssemblyModal) {
+      const groupId = pendingAddGroupId;
+      setPendingAddGroupId(null);
+      // Small delay to ensure UI is updated
+      setTimeout(() => {
+        addSelectedToGroupInternal(groupId);
+      }, 100);
+    }
+  }, [assemblySelectionEnabled, pendingAddGroupId, showAssemblyModal]);
 
   const removeItemsFromGroup = async (itemIds: string[]) => {
     if (itemIds.length === 0) return;
@@ -3856,10 +3967,9 @@ export default function OrganizerScreen({
                   </select>
                 </div>
               )}
-              {/* Sharing settings - only for main groups */}
-              {!formParentId && (
-                <div className="org-field">
-                  <label>Jagamine</label>
+              {/* Sharing settings - available for all groups including subgroups */}
+              <div className="org-field">
+                <label>Jagamine</label>
                   <div className="org-sharing-options">
                     <label className={`org-sharing-option ${formSharingMode === 'project' ? 'selected' : ''}`}>
                       <input
@@ -3947,7 +4057,6 @@ export default function OrganizerScreen({
                     </div>
                   )}
                 </div>
-              )}
 
               {/* Settings only for main groups (not subgroups) */}
               {!formParentId && (
@@ -4731,6 +4840,53 @@ export default function OrganizerScreen({
             <div className="org-modal-footer">
               <button className="save" onClick={() => setShowSettingsModal(false)}>
                 Sulge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assembly Selection required modal */}
+      {showAssemblyModal && (
+        <div className="org-modal-overlay" onClick={() => { setShowAssemblyModal(false); setPendingAddGroupId(null); }}>
+          <div className="org-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="org-modal-body" style={{ textAlign: 'center', padding: '24px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+              <p style={{ marginBottom: '16px', color: '#374151', fontWeight: 500 }}>
+                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+              </p>
+              <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
+                Sellesse gruppi detailide lisamiseks peab Assembly Selection olema sisse lülitatud.
+              </p>
+              <button
+                onClick={enableAssemblySelection}
+                style={{
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                Lülita Assembly Selection sisse
+              </button>
+              <button
+                onClick={() => { setShowAssemblyModal(false); setPendingAddGroupId(null); }}
+                style={{
+                  background: 'transparent',
+                  color: '#6b7280',
+                  border: 'none',
+                  padding: '8px',
+                  marginTop: '12px',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Tühista
               </button>
             </div>
           </div>
