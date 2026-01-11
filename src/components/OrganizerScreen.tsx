@@ -76,13 +76,27 @@ const BATCH_SIZE = 100;  // Items per database batch insert
 const VIRTUAL_PAGE_SIZE = 50;  // Items to load per page
 const MARKUP_BATCH_SIZE = 50;  // Markups to create/remove per batch
 
-// Markup settings
+// Markup settings - which fields to include in markup
+type MarkupLineConfig = 'line1' | 'line2' | 'line3' | 'none';
+
+interface MarkupFieldConfig {
+  enabled: boolean;
+  line: MarkupLineConfig;
+}
+
 interface MarkupSettings {
   includeGroupName: boolean;
+  groupNameLine: MarkupLineConfig;
   includeCustomFields: string[]; // field IDs to include
   applyToSubgroups: boolean;
   separator: 'newline' | 'comma' | 'space' | 'dash';
   useGroupColors: boolean;
+  // New model property fields
+  includeAssemblyMark: MarkupFieldConfig;
+  includeWeight: MarkupFieldConfig;
+  includeProductName: MarkupFieldConfig;
+  // Filter options
+  onlySelectedInModel: boolean;
 }
 
 // Sorting options
@@ -425,10 +439,15 @@ export default function OrganizerScreen({
   const [markupGroupId, setMarkupGroupId] = useState<string | null>(null);
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>({
     includeGroupName: true,
+    groupNameLine: 'line1',
     includeCustomFields: [],
     applyToSubgroups: true,
     separator: 'newline',
-    useGroupColors: true
+    useGroupColors: true,
+    includeAssemblyMark: { enabled: true, line: 'line1' },
+    includeWeight: { enabled: false, line: 'line2' },
+    includeProductName: { enabled: false, line: 'line2' },
+    onlySelectedInModel: false
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
 
@@ -443,6 +462,11 @@ export default function OrganizerScreen({
 
   // Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  // Assembly Selection enforcement state
+  const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
+  const [showAssemblyModal, setShowAssemblyModal] = useState(false);
+  const [pendingAddGroupId, setPendingAddGroupId] = useState<string | null>(null);
 
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
@@ -547,6 +571,40 @@ export default function OrganizerScreen({
       return newValue;
     });
   }, [tcUserEmail]);
+
+  // ============================================
+  // ASSEMBLY SELECTION CHECK & ENABLE
+  // ============================================
+
+  const checkAssemblySelection = useCallback(async () => {
+    try {
+      const settings = await api.viewer.getSettings();
+      const enabled = !!settings.assemblySelection;
+      setAssemblySelectionEnabled(enabled);
+      return enabled;
+    } catch (e) {
+      console.error('Failed to get viewer settings:', e);
+      return true; // Assume enabled on error
+    }
+  }, [api]);
+
+  const enableAssemblySelection = useCallback(async () => {
+    try {
+      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+      setAssemblySelectionEnabled(true);
+      setShowAssemblyModal(false);
+      // pendingAddGroupId will trigger useEffect below to actually add items
+    } catch (e) {
+      console.error('Failed to enable assembly selection:', e);
+    }
+  }, [api]);
+
+  // Poll for assembly selection status
+  useEffect(() => {
+    const interval = setInterval(checkAssemblySelection, 3000);
+    checkAssemblySelection(); // Initial check
+    return () => clearInterval(interval);
+  }, [checkAssemblySelection]);
 
   // ============================================
   // TOAST
@@ -1039,6 +1097,8 @@ export default function OrganizerScreen({
     try {
       let level = 0;
       let finalCustomFields: CustomFieldDefinition[] = formCustomFields;
+      let inheritedAssemblySelection = formAssemblySelectionOn;
+      let inheritedUniqueItems = formUniqueItems;
 
       if (formParentId) {
         const parent = groups.find(g => g.id === formParentId);
@@ -1049,8 +1109,17 @@ export default function OrganizerScreen({
             setSaving(false);
             return;
           }
-          // Subgroups inherit parent's custom fields
+          // Subgroups inherit parent's custom fields and settings from root
           finalCustomFields = [...(parent.custom_fields || [])];
+          // Find root parent for inherited settings
+          let root = parent;
+          while (root.parent_id) {
+            const p = groups.find(g => g.id === root.parent_id);
+            if (p) root = p;
+            else break;
+          }
+          inheritedAssemblySelection = root.assembly_selection_on !== false;
+          inheritedUniqueItems = root.unique_items !== false;
         }
       }
 
@@ -1058,7 +1127,7 @@ export default function OrganizerScreen({
       const isPrivate = formSharingMode !== 'project';
       const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
 
-      const newGroup = {
+      const newGroupData = {
         trimble_project_id: projectId,
         parent_id: formParentId,
         name: formName.trim(),
@@ -1067,21 +1136,48 @@ export default function OrganizerScreen({
         allowed_users: allowedUsers,
         display_properties: [],
         custom_fields: finalCustomFields,
-        assembly_selection_on: formAssemblySelectionOn,
-        unique_items: formUniqueItems,
+        assembly_selection_on: formParentId ? inheritedAssemblySelection : formAssemblySelectionOn,
+        unique_items: formParentId ? inheritedUniqueItems : formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
         sort_order: groups.length,
         level
       };
 
-      const { error } = await supabase.from('organizer_groups').insert(newGroup).select().single();
+      const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
       if (error) throw error;
+
+      // Optimistic UI update - add new group to state immediately
+      const fullGroup: OrganizerGroup = {
+        ...newGroupData,
+        id: insertedGroup.id,
+        created_at: insertedGroup.created_at || new Date().toISOString(),
+        updated_at: insertedGroup.updated_at || new Date().toISOString(),
+        updated_by: null,
+        is_locked: false,
+        locked_by: null,
+        locked_at: null
+      };
+
+      // Update groups state immediately
+      setGroups(prev => [...prev, fullGroup]);
+
+      // Update groupItems with empty array for the new group
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        newMap.set(fullGroup.id, []);
+        return newMap;
+      });
+
+      // Rebuild tree with new group
+      setGroupTree(() => {
+        const allGroups = [...groups, fullGroup];
+        return buildGroupTree(allGroups, groupItems);
+      });
 
       showToast('Grupp loodud');
       resetGroupForm();
       setShowGroupForm(false);
-      await loadData();
 
       if (formParentId) {
         setExpandedGroups(prev => new Set([...prev, formParentId]));
@@ -1456,7 +1552,29 @@ export default function OrganizerScreen({
   // ITEM OPERATIONS
   // ============================================
 
+  // Wrapper function that checks assembly selection before adding
   const addSelectedToGroup = async (targetGroupId: string) => {
+    if (selectedObjects.length === 0) return;
+
+    // Check if this group requires assembly selection
+    const selectionRequired = isSelectionEnabled(targetGroupId);
+
+    if (selectionRequired) {
+      // Check current assembly selection status
+      const isEnabled = await checkAssemblySelection();
+      if (!isEnabled) {
+        // Show modal and save pending operation
+        setPendingAddGroupId(targetGroupId);
+        setShowAssemblyModal(true);
+        return;
+      }
+    }
+
+    // Proceed with adding
+    await addSelectedToGroupInternal(targetGroupId);
+  };
+
+  const addSelectedToGroupInternal = async (targetGroupId: string) => {
     if (selectedObjects.length === 0) return;
 
     const group = groups.find(g => g.id === targetGroupId);
@@ -1590,6 +1708,18 @@ export default function OrganizerScreen({
       setSaving(false);
     }
   };
+
+  // Effect to handle pending add operation when assembly selection is re-enabled
+  useEffect(() => {
+    if (assemblySelectionEnabled && pendingAddGroupId && !showAssemblyModal) {
+      const groupId = pendingAddGroupId;
+      setPendingAddGroupId(null);
+      // Small delay to ensure UI is updated
+      setTimeout(() => {
+        addSelectedToGroupInternal(groupId);
+      }, 100);
+    }
+  }, [assemblySelectionEnabled, pendingAddGroupId, showAssemblyModal]);
 
   const removeItemsFromGroup = async (itemIds: string[]) => {
     if (itemIds.length === 0) return;
@@ -2214,13 +2344,119 @@ export default function OrganizerScreen({
     // Reset settings but keep some defaults
     setMarkupSettings({
       includeGroupName: true,
+      groupNameLine: 'line1',
       includeCustomFields: [],
       applyToSubgroups: true,
       separator: 'newline',
-      useGroupColors: true
+      useGroupColors: true,
+      includeAssemblyMark: { enabled: true, line: 'line1' },
+      includeWeight: { enabled: false, line: 'line2' },
+      includeProductName: { enabled: false, line: 'line2' },
+      onlySelectedInModel: false
     });
     setShowMarkupModal(true);
     setGroupMenuId(null);
+  };
+
+  // Helper to get property from model property sets
+  const getModelProperty = (
+    propertySets: any[] | undefined,
+    setName: string,
+    propName: string
+  ): string | null => {
+    if (!propertySets || propertySets.length === 0) return null;
+    const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
+    const setNameNorm = normalize(setName);
+    const propNameNorm = normalize(propName);
+
+    for (const pset of propertySets) {
+      const psetName = (pset as any).set || (pset as any).name || '';
+      if (normalize(psetName) !== setNameNorm) continue;
+      for (const prop of (pset.properties || [])) {
+        if (normalize((prop as any).name || '') === propNameNorm) {
+          const value = (prop as any).displayValue ?? (prop as any).value;
+          return value != null ? String(value) : null;
+        }
+      }
+    }
+    return null;
+  };
+
+  // Build markup text from settings and item data
+  const buildMarkupText = (
+    item: OrganizerGroupItem,
+    itemGroup: OrganizerGroup,
+    customFields: CustomFieldDefinition[],
+    modelProps?: { assemblyMark?: string; weight?: string; productName?: string }
+  ): string => {
+    const lines: { line: MarkupLineConfig; parts: string[] }[] = [
+      { line: 'line1', parts: [] },
+      { line: 'line2', parts: [] },
+      { line: 'line3', parts: [] }
+    ];
+
+    const addToLine = (line: MarkupLineConfig, value: string) => {
+      if (line === 'none' || !value) return;
+      const lineObj = lines.find(l => l.line === line);
+      if (lineObj) lineObj.parts.push(value);
+    };
+
+    // Group name
+    if (markupSettings.includeGroupName) {
+      addToLine(markupSettings.groupNameLine, itemGroup.name);
+    }
+
+    // Assembly mark from model or item
+    if (markupSettings.includeAssemblyMark.enabled) {
+      const mark = modelProps?.assemblyMark || item.assembly_mark;
+      if (mark && !mark.startsWith('Object_')) {
+        addToLine(markupSettings.includeAssemblyMark.line, mark);
+      }
+    }
+
+    // Weight from model or item
+    if (markupSettings.includeWeight.enabled) {
+      const weight = modelProps?.weight || item.cast_unit_weight;
+      if (weight) {
+        const numWeight = parseFloat(weight);
+        const formatted = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
+        addToLine(markupSettings.includeWeight.line, formatted);
+      }
+    }
+
+    // Product name from model or item
+    if (markupSettings.includeProductName.enabled) {
+      const productName = modelProps?.productName || item.product_name;
+      if (productName) {
+        addToLine(markupSettings.includeProductName.line, productName);
+      }
+    }
+
+    // Custom fields (always on their own lines after main content)
+    for (const fieldId of markupSettings.includeCustomFields) {
+      const field = customFields.find(f => f.id === fieldId);
+      if (field) {
+        const val = item.custom_properties?.[fieldId];
+        if (val !== undefined && val !== null && val !== '') {
+          addToLine('line3', `${field.name}: ${formatFieldValue(val, field)}`);
+        }
+      }
+    }
+
+    // Build final text
+    const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
+    const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
+
+    const lineTexts = lines
+      .filter(l => l.parts.length > 0)
+      .map(l => l.parts.join(inlineSeparator));
+
+    if (lineTexts.length === 0) {
+      // Fallback to assembly mark
+      return item.assembly_mark || 'Tundmatu';
+    }
+
+    return lineTexts.join(lineSeparator);
   };
 
   const addMarkupsToGroup = async () => {
@@ -2242,14 +2478,27 @@ export default function OrganizerScreen({
       }
 
       // Get all items with their group info
-      const itemsWithGroup: Array<{ item: OrganizerGroupItem; group: OrganizerGroup }> = [];
+      let itemsWithGroup: Array<{ item: OrganizerGroupItem; group: OrganizerGroup }> = [];
       for (const g of groupsToProcess) {
         const items = groupItems.get(g.id) || [];
         items.forEach(item => itemsWithGroup.push({ item, group: g }));
       }
 
+      // Filter by selected objects in model if enabled
+      if (markupSettings.onlySelectedInModel && selectedObjects.length > 0) {
+        const selectedGuidsLower = new Set(
+          selectedObjects.map(obj => obj.guidIfc?.toLowerCase()).filter(Boolean)
+        );
+        itemsWithGroup = itemsWithGroup.filter(({ item }) =>
+          item.guid_ifc && selectedGuidsLower.has(item.guid_ifc.toLowerCase())
+        );
+      }
+
       if (itemsWithGroup.length === 0) {
-        showToast('Grupis pole detaile');
+        const msg = markupSettings.onlySelectedInModel
+          ? 'Valitud detailid pole selles grupis'
+          : 'Grupis pole detaile';
+        showToast(msg);
         setSaving(false);
         return;
       }
@@ -2264,9 +2513,70 @@ export default function OrganizerScreen({
       const guidsToFetch = itemsWithGroup.map(i => i.item.guid_ifc).filter(Boolean);
       const foundObjects = await findObjectsInLoadedModels(api, guidsToFetch);
 
+      // Group found objects by model for batch property fetching
+      const objectsByModel = new Map<string, { runtimeId: number; guidIfc: string }[]>();
+      for (const { item } of itemsWithGroup) {
+        if (!item.guid_ifc) continue;
+        const found = foundObjects.get(item.guid_ifc) || foundObjects.get(item.guid_ifc.toLowerCase());
+        if (!found) continue;
+        if (!objectsByModel.has(found.modelId)) {
+          objectsByModel.set(found.modelId, []);
+        }
+        objectsByModel.get(found.modelId)!.push({ runtimeId: found.runtimeId, guidIfc: item.guid_ifc });
+      }
+
+      // Fetch properties from model if weight or product name is needed
+      const needModelProps = markupSettings.includeWeight.enabled ||
+                            markupSettings.includeProductName.enabled ||
+                            markupSettings.includeAssemblyMark.enabled;
+      const guidToProps = new Map<string, { assemblyMark?: string; weight?: string; productName?: string }>();
+
+      if (needModelProps) {
+        showToast(`Laen mudeli omadusi...`);
+        for (const [modelId, objects] of objectsByModel) {
+          try {
+            const runtimeIds = objects.map(o => o.runtimeId);
+            const propsArray = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+            for (let i = 0; i < objects.length; i++) {
+              const props = propsArray?.[i]?.properties;
+              if (!props) continue;
+
+              const guidLower = objects[i].guidIfc.toLowerCase();
+              const propData: { assemblyMark?: string; weight?: string; productName?: string } = {};
+
+              // Get assembly mark using property mappings
+              const assemblyMark = getModelProperty(
+                props,
+                propertyMappings.assembly_mark_set,
+                propertyMappings.assembly_mark_prop
+              );
+              if (assemblyMark) propData.assemblyMark = assemblyMark;
+
+              // Get weight using property mappings
+              const weight = getModelProperty(
+                props,
+                propertyMappings.weight_set,
+                propertyMappings.weight_prop
+              );
+              if (weight) propData.weight = weight;
+
+              // Get product name (try common locations)
+              const productName = getModelProperty(props, 'Tekla Common', 'Product_Name') ||
+                                  getModelProperty(props, 'Tekla Assembly', 'Product_Name') ||
+                                  getModelProperty(props, 'Identity Data', 'Product Name');
+              if (productName) propData.productName = productName;
+
+              guidToProps.set(guidLower, propData);
+            }
+          } catch (e) {
+            console.warn('Error fetching properties for model', modelId, e);
+          }
+        }
+      }
+
       // Build markups to create
       const markupsToCreate: Array<{ text: string; start: any; end: any; color?: string }> = [];
-      const separator = getSeparator(markupSettings.separator);
 
       let processedCount = 0;
       for (const { item, group: itemGroup } of itemsWithGroup) {
@@ -2285,28 +2595,11 @@ export default function OrganizerScreen({
             const centerY = ((box.min.y + box.max.y) / 2) * 1000;
             const centerZ = box.max.z * 1000; // Top of object
 
-            // Build markup text
-            const textParts: string[] = [];
-            if (markupSettings.includeGroupName) {
-              textParts.push(itemGroup.name);
-            }
-            // Add custom field values
-            for (const fieldId of markupSettings.includeCustomFields) {
-              const field = customFields.find(f => f.id === fieldId);
-              if (field) {
-                const val = item.custom_properties?.[fieldId];
-                if (val !== undefined && val !== null && val !== '') {
-                  textParts.push(`${field.name}: ${formatFieldValue(val, field)}`);
-                }
-              }
-            }
+            // Get model properties for this item
+            const modelProps = guidToProps.get(item.guid_ifc.toLowerCase());
 
-            if (textParts.length === 0) {
-              // If nothing selected, at least add assembly mark
-              textParts.push(item.assembly_mark || 'Tundmatu');
-            }
-
-            const text = textParts.join(separator);
+            // Build markup text using line configuration
+            const text = buildMarkupText(item, itemGroup, customFields, modelProps);
             const pos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
 
             // Get color if using group colors
@@ -3674,10 +3967,9 @@ export default function OrganizerScreen({
                   </select>
                 </div>
               )}
-              {/* Sharing settings - only for main groups */}
-              {!formParentId && (
-                <div className="org-field">
-                  <label>Jagamine</label>
+              {/* Sharing settings - available for all groups including subgroups */}
+              <div className="org-field">
+                <label>Jagamine</label>
                   <div className="org-sharing-options">
                     <label className={`org-sharing-option ${formSharingMode === 'project' ? 'selected' : ''}`}>
                       <input
@@ -3765,7 +4057,6 @@ export default function OrganizerScreen({
                     </div>
                   )}
                 </div>
-              )}
 
               {/* Settings only for main groups (not subgroups) */}
               {!formParentId && (
@@ -4008,22 +4299,129 @@ export default function OrganizerScreen({
         const markupGroup = groups.find(g => g.id === markupGroupId);
         const rootParent = getRootParent(markupGroupId);
         const customFields = rootParent?.custom_fields || [];
-        const itemCount = (() => {
-          let count = groupItems.get(markupGroupId)?.length || 0;
+
+        // Calculate item count based on settings
+        const calculateItemCount = () => {
+          let items: OrganizerGroupItem[] = [];
+          const groupsToCheck = [markupGroupId];
+
           if (markupSettings.applyToSubgroups) {
             const subtreeIds = getGroupSubtreeIds(markupGroupId);
-            subtreeIds.forEach(id => {
-              if (id !== markupGroupId) {
-                count += groupItems.get(id)?.length || 0;
-              }
-            });
+            groupsToCheck.push(...subtreeIds.filter(id => id !== markupGroupId));
           }
-          return count;
-        })();
+
+          for (const gId of groupsToCheck) {
+            const gItems = groupItems.get(gId) || [];
+            items.push(...gItems);
+          }
+
+          // Filter by selected objects if enabled
+          if (markupSettings.onlySelectedInModel && selectedObjects.length > 0) {
+            const selectedGuidsLower = new Set(
+              selectedObjects.map(obj => obj.guidIfc?.toLowerCase()).filter(Boolean)
+            );
+            items = items.filter(item =>
+              item.guid_ifc && selectedGuidsLower.has(item.guid_ifc.toLowerCase())
+            );
+          }
+
+          return items.length;
+        };
+
+        const itemCount = calculateItemCount();
+
+        // Get first item for preview
+        const getFirstItem = (): OrganizerGroupItem | null => {
+          const items = groupItems.get(markupGroupId) || [];
+          if (items.length > 0) return items[0];
+          if (markupSettings.applyToSubgroups) {
+            const subtreeIds = getGroupSubtreeIds(markupGroupId);
+            for (const id of subtreeIds) {
+              const subItems = groupItems.get(id) || [];
+              if (subItems.length > 0) return subItems[0];
+            }
+          }
+          return null;
+        };
+
+        const firstItem = getFirstItem();
+
+        // Generate preview text
+        const generatePreview = (): string => {
+          if (!firstItem || !markupGroup) return 'Eelvaade pole saadaval';
+
+          const lines: { line: MarkupLineConfig; parts: string[] }[] = [
+            { line: 'line1', parts: [] },
+            { line: 'line2', parts: [] },
+            { line: 'line3', parts: [] }
+          ];
+
+          const addToLine = (line: MarkupLineConfig, value: string) => {
+            if (line === 'none' || !value) return;
+            const lineObj = lines.find(l => l.line === line);
+            if (lineObj) lineObj.parts.push(value);
+          };
+
+          if (markupSettings.includeGroupName) {
+            addToLine(markupSettings.groupNameLine, markupGroup.name);
+          }
+
+          if (markupSettings.includeAssemblyMark.enabled) {
+            const mark = firstItem.assembly_mark || 'W-101';
+            if (!mark.startsWith('Object_')) {
+              addToLine(markupSettings.includeAssemblyMark.line, mark);
+            }
+          }
+
+          if (markupSettings.includeWeight.enabled) {
+            const weight = firstItem.cast_unit_weight || '1234.5';
+            const numWeight = parseFloat(weight);
+            const formatted = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
+            addToLine(markupSettings.includeWeight.line, formatted);
+          }
+
+          if (markupSettings.includeProductName.enabled) {
+            const productName = firstItem.product_name || 'BEAM';
+            addToLine(markupSettings.includeProductName.line, productName);
+          }
+
+          for (const fieldId of markupSettings.includeCustomFields) {
+            const field = customFields.find(f => f.id === fieldId);
+            if (field) {
+              const val = firstItem.custom_properties?.[fieldId] || 'Näidis';
+              addToLine('line3', `${field.name}: ${val}`);
+            }
+          }
+
+          const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
+          const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
+
+          const lineTexts = lines
+            .filter(l => l.parts.length > 0)
+            .map(l => l.parts.join(inlineSeparator));
+
+          return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
+        };
+
+        // Line selector component
+        const LineSelector = ({ value, onChange }: { value: MarkupLineConfig; onChange: (v: MarkupLineConfig) => void }) => (
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value as MarkupLineConfig)}
+            style={{ marginLeft: '8px', padding: '2px 6px', fontSize: '11px', width: '70px' }}
+          >
+            <option value="line1">Rida 1</option>
+            <option value="line2">Rida 2</option>
+            <option value="line3">Rida 3</option>
+          </select>
+        );
+
+        // Check if subgroups exist
+        const hasSubgroups = groups.some(g => g.parent_id === markupGroupId);
 
         return (
           <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
-            <div className="org-modal" onClick={e => e.stopPropagation()}>
+            <div className="org-modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
                 <h2>Lisa markupid</h2>
                 <button onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}><FiX size={18} /></button>
@@ -4033,42 +4431,147 @@ export default function OrganizerScreen({
                   Grupp: <strong>{markupGroup?.name}</strong> ({itemCount} detaili)
                 </p>
 
-                <div className="org-field checkbox">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={markupSettings.includeGroupName}
-                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, includeGroupName: e.target.checked }))}
-                    />
-                    Lisa grupi nimi
-                  </label>
+                {/* Filter options */}
+                <div style={{ background: '#f0f9ff', padding: '10px', borderRadius: '6px', marginBottom: '12px' }}>
+                  <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.onlySelectedInModel}
+                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, onlySelectedInModel: e.target.checked }))}
+                      />
+                      Ainult mudelis valitud ({selectedObjects.length} valitud)
+                    </label>
+                  </div>
+
+                  {hasSubgroups && (
+                    <div className="org-field checkbox">
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={markupSettings.applyToSubgroups}
+                          onChange={(e) => setMarkupSettings(prev => ({ ...prev, applyToSubgroups: e.target.checked }))}
+                        />
+                        Rakenda ka alamgruppidele
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="org-field checkbox">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.useGroupColors}
+                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
+                      />
+                      Kasuta grupi värve
+                    </label>
+                  </div>
                 </div>
 
-                <div className="org-field checkbox">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={markupSettings.applyToSubgroups}
-                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, applyToSubgroups: e.target.checked }))}
-                    />
-                    Rakenda ka alamgruppidele
+                {/* Model properties */}
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', display: 'block' }}>
+                    Mudeli omadused:
                   </label>
+
+                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{ flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.includeGroupName}
+                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, includeGroupName: e.target.checked }))}
+                      />
+                      Grupi nimi
+                    </label>
+                    {markupSettings.includeGroupName && (
+                      <LineSelector
+                        value={markupSettings.groupNameLine}
+                        onChange={(v) => setMarkupSettings(prev => ({ ...prev, groupNameLine: v }))}
+                      />
+                    )}
+                  </div>
+
+                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{ flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.includeAssemblyMark.enabled}
+                        onChange={(e) => setMarkupSettings(prev => ({
+                          ...prev,
+                          includeAssemblyMark: { ...prev.includeAssemblyMark, enabled: e.target.checked }
+                        }))}
+                      />
+                      Assembly/Cast unit Mark
+                    </label>
+                    {markupSettings.includeAssemblyMark.enabled && (
+                      <LineSelector
+                        value={markupSettings.includeAssemblyMark.line}
+                        onChange={(v) => setMarkupSettings(prev => ({
+                          ...prev,
+                          includeAssemblyMark: { ...prev.includeAssemblyMark, line: v }
+                        }))}
+                      />
+                    )}
+                  </div>
+
+                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{ flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.includeWeight.enabled}
+                        onChange={(e) => setMarkupSettings(prev => ({
+                          ...prev,
+                          includeWeight: { ...prev.includeWeight, enabled: e.target.checked }
+                        }))}
+                      />
+                      Assembly/Cast unit Weight
+                    </label>
+                    {markupSettings.includeWeight.enabled && (
+                      <LineSelector
+                        value={markupSettings.includeWeight.line}
+                        onChange={(v) => setMarkupSettings(prev => ({
+                          ...prev,
+                          includeWeight: { ...prev.includeWeight, line: v }
+                        }))}
+                      />
+                    )}
+                  </div>
+
+                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <label style={{ flex: 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={markupSettings.includeProductName.enabled}
+                        onChange={(e) => setMarkupSettings(prev => ({
+                          ...prev,
+                          includeProductName: { ...prev.includeProductName, enabled: e.target.checked }
+                        }))}
+                      />
+                      Product Name
+                    </label>
+                    {markupSettings.includeProductName.enabled && (
+                      <LineSelector
+                        value={markupSettings.includeProductName.line}
+                        onChange={(v) => setMarkupSettings(prev => ({
+                          ...prev,
+                          includeProductName: { ...prev.includeProductName, line: v }
+                        }))}
+                      />
+                    )}
+                  </div>
+
+                  <p style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
+                    Kasutab Admin → Tekla property seadeid
+                  </p>
                 </div>
 
-                <div className="org-field checkbox">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={markupSettings.useGroupColors}
-                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
-                    />
-                    Kasuta grupi värve
-                  </label>
-                </div>
-
+                {/* Custom fields */}
                 {customFields.length > 0 && (
-                  <div className="org-field">
-                    <label>Lisa väljad:</label>
+                  <div style={{ marginBottom: '12px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', display: 'block' }}>
+                      Lisa väljad:
+                    </label>
                     <div className="org-markup-fields">
                       {customFields.map(f => (
                         <div key={f.id} className="org-field checkbox" style={{ marginBottom: '4px' }}>
@@ -4093,7 +4596,8 @@ export default function OrganizerScreen({
                   </div>
                 )}
 
-                <div className="org-field">
+                {/* Separator */}
+                <div className="org-field" style={{ marginBottom: '12px' }}>
                   <label>Eraldaja:</label>
                   <select
                     value={markupSettings.separator}
@@ -4106,6 +4610,30 @@ export default function OrganizerScreen({
                   </select>
                 </div>
 
+                {/* Preview */}
+                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>
+                    Eelvaade (esimese detaili põhjal):
+                  </label>
+                  <div style={{
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                    color: markupSettings.useGroupColors && markupGroup?.color
+                      ? `rgb(${markupGroup.color.r}, ${markupGroup.color.g}, ${markupGroup.color.b})`
+                      : '#1f2937',
+                    whiteSpace: 'pre-wrap',
+                    lineHeight: '1.5',
+                    padding: '8px',
+                    background: '#fff',
+                    borderRadius: '4px',
+                    border: '1px dashed #d1d5db',
+                    minHeight: '40px'
+                  }}>
+                    {generatePreview()}
+                  </div>
+                </div>
+
+                {/* Progress */}
                 {markupProgress && (
                   <div className="org-batch-progress" style={{ marginTop: '12px' }}>
                     <div className="progress-bar">
@@ -4312,6 +4840,53 @@ export default function OrganizerScreen({
             <div className="org-modal-footer">
               <button className="save" onClick={() => setShowSettingsModal(false)}>
                 Sulge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assembly Selection required modal */}
+      {showAssemblyModal && (
+        <div className="org-modal-overlay" onClick={() => { setShowAssemblyModal(false); setPendingAddGroupId(null); }}>
+          <div className="org-modal" style={{ maxWidth: '400px' }} onClick={e => e.stopPropagation()}>
+            <div className="org-modal-body" style={{ textAlign: 'center', padding: '24px' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+              <p style={{ marginBottom: '16px', color: '#374151', fontWeight: 500 }}>
+                Jätkamine pole võimalik, kuna lülitasid Assembly valiku välja.
+              </p>
+              <p style={{ marginBottom: '20px', color: '#6b7280', fontSize: '13px' }}>
+                Sellesse gruppi detailide lisamiseks peab Assembly Selection olema sisse lülitatud.
+              </p>
+              <button
+                onClick={enableAssemblySelection}
+                style={{
+                  background: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  width: '100%'
+                }}
+              >
+                Lülita Assembly Selection sisse
+              </button>
+              <button
+                onClick={() => { setShowAssemblyModal(false); setPendingAddGroupId(null); }}
+                style={{
+                  background: 'transparent',
+                  color: '#6b7280',
+                  border: 'none',
+                  padding: '8px',
+                  marginTop: '12px',
+                  fontSize: '13px',
+                  cursor: 'pointer'
+                }}
+              >
+                Tühista
               </button>
             </div>
           </div>
