@@ -21,7 +21,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.455';
+export const APP_VERSION = '3.0.458';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';

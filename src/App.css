@@ -10544,14 +10544,18 @@ button.stat-toggle.off:hover {
 .org-quick-add-btn {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 6px;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 10px;
+  margin: -4px 0;
   border: none;
   background: #22c55e;
   color: white;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 500;
+  min-height: 28px;
 }
 
 .org-quick-add-btn:hover {
