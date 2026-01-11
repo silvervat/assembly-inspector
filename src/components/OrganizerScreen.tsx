@@ -3838,8 +3838,13 @@ export default function OrganizerScreen({
     const customFields = group.custom_fields || [];
 
     const wb = XLSX.utils.book_new();
-    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon', 'Lisatud', 'Lisaja'];
+    // Headers: base columns, custom fields, then Lisatud/Ajavöönd/Lisaja at the end
+    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
+    headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
+
+    // Get timezone name
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     const data: any[][] = [headers];
     items.forEach((item, idx) => {
@@ -3849,16 +3854,17 @@ export default function OrganizerScreen({
         item.assembly_mark || '',
         item.product_name || '',
         formatWeight(item.cast_unit_weight),
-        item.cast_unit_position_code || '',
-        addedDate,
-        item.added_by || ''
+        item.cast_unit_position_code || ''
       ];
+      // Add custom fields
       customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
+      // Add Lisatud, Ajavöönd, Lisaja at the end
+      row.push(addedDate, item.added_at ? timeZone : '', item.added_by || '');
       data.push(row);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 25 }, ...customFields.map(() => ({ wch: 15 }))];
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 })), { wch: 16 }, { wch: 20 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -3874,9 +3880,13 @@ export default function OrganizerScreen({
     const items = groupItems.get(groupId) || [];
     const customFields = group.custom_fields || [];
 
-    // Build headers
-    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon', 'Lisatud', 'Lisaja'];
+    // Build headers: base columns, custom fields, then Lisatud/Ajavöönd/Lisaja at the end
+    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
+    headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
+
+    // Get timezone name
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
     // Build rows
     const rows: string[][] = [headers];
@@ -3889,11 +3899,12 @@ export default function OrganizerScreen({
         item.assembly_mark || '',
         item.product_name || '',
         formatWeight(item.cast_unit_weight),
-        item.cast_unit_position_code || '',
-        addedDate,
-        item.added_by || ''
+        item.cast_unit_position_code || ''
       ];
+      // Add custom fields
       customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
+      // Add Lisatud, Ajavöönd, Lisaja at the end
+      row.push(addedDate, item.added_at ? timeZone : '', item.added_by || '');
       rows.push(row);
     });
 
