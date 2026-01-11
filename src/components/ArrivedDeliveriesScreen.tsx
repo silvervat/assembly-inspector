@@ -1212,11 +1212,13 @@ export default function ArrivedDeliveriesScreen({
 
   // Get general photos (not linked to items, not delivery notes)
   const getGeneralPhotosForArrival = (arrivedVehicleId: string) => {
-    return photos.filter(p =>
+    const result = photos.filter(p =>
       p.arrived_vehicle_id === arrivedVehicleId &&
       !p.item_id &&
       (p.photo_type === 'general' || !p.photo_type)
     );
+    console.log('getGeneralPhotosForArrival', arrivedVehicleId, 'found:', result.length, 'from total:', photos.length);
+    return result;
   };
 
   // Get delivery note photos (saatelehed)
