@@ -3730,8 +3730,38 @@ export default function OrganizerScreen({
               const displayItems = sortedItems.slice(0, visibleCount);
               const hasMore = sortedItems.length > visibleCount;
 
+              // Calculate dynamic column widths based on content
+              const CHAR_WIDTH = 7; // approx pixels per character for monospace-ish font
+              const MIN_MARK_WIDTH = 50;
+              const MIN_PRODUCT_WIDTH = 50;
+              const MIN_WEIGHT_WIDTH = 45;
+
+              let maxMarkLen = 4; // "Mark" header length
+              let maxProductLen = 5; // "Toode" header length
+              let maxWeightLen = 4; // "Kaal" header length
+
+              for (const item of sortedItems) {
+                const markLen = (item.assembly_mark || '').length;
+                const productLen = (item.product_name || '').length;
+                const weightLen = formatWeight(item.cast_unit_weight).length;
+                if (markLen > maxMarkLen) maxMarkLen = markLen;
+                if (productLen > maxProductLen) maxProductLen = productLen;
+                if (weightLen > maxWeightLen) maxWeightLen = weightLen;
+              }
+
+              // Calculate widths with padding
+              const markWidth = Math.max(MIN_MARK_WIDTH, maxMarkLen * CHAR_WIDTH + 12);
+              const productWidth = Math.max(MIN_PRODUCT_WIDTH, maxProductLen * CHAR_WIDTH + 12);
+              const weightWidth = Math.max(MIN_WEIGHT_WIDTH, maxWeightLen * CHAR_WIDTH + 8);
+
+              const columnStyles = {
+                '--col-mark-width': `${markWidth}px`,
+                '--col-product-width': `${productWidth}px`,
+                '--col-weight-width': `${weightWidth}px`,
+              } as React.CSSProperties;
+
               return (
-              <div className="org-items">
+              <div className="org-items org-items-dynamic" style={columnStyles}>
                 {/* Item sort header */}
                 {sortedItems.length > 3 && (
                   <div className="org-items-header">

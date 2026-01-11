@@ -10511,6 +10511,29 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+/* Dynamic column widths based on content */
+.org-items-dynamic .org-item-mark,
+.org-items-dynamic .org-items-header .org-item-mark {
+  width: var(--col-mark-width, 80px);
+  min-width: var(--col-mark-width, 80px);
+  max-width: var(--col-mark-width, 80px);
+  flex: none;
+}
+
+.org-items-dynamic .org-item-product,
+.org-items-dynamic .org-items-header .org-item-product {
+  width: var(--col-product-width, 80px);
+  min-width: var(--col-product-width, 80px);
+  flex: none;
+}
+
+.org-items-dynamic .org-item-weight,
+.org-items-dynamic .org-items-header .org-item-weight {
+  width: var(--col-weight-width, 50px);
+  min-width: var(--col-weight-width, 50px);
+  flex: none;
+}
+
 .org-item-custom {
   min-width: 60px;
   text-align: right;
