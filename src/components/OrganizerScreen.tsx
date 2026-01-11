@@ -3866,6 +3866,50 @@ export default function OrganizerScreen({
     setGroupMenuId(null);
   };
 
+  // Copy group data to clipboard (for pasting into Excel)
+  const copyGroupDataToClipboard = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    const items = groupItems.get(groupId) || [];
+    const customFields = group.custom_fields || [];
+
+    // Build headers
+    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon', 'Lisatud', 'Lisaja'];
+    customFields.forEach(f => headers.push(f.name));
+
+    // Build rows
+    const rows: string[][] = [headers];
+    items.forEach((item, idx) => {
+      const addedDate = item.added_at
+        ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
+        : '';
+      const row: string[] = [
+        String(idx + 1),
+        item.assembly_mark || '',
+        item.product_name || '',
+        formatWeight(item.cast_unit_weight),
+        item.cast_unit_position_code || '',
+        addedDate,
+        item.added_by || ''
+      ];
+      customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
+      rows.push(row);
+    });
+
+    // Convert to tab-separated string
+    const tsvContent = rows.map(row => row.join('\t')).join('\n');
+
+    try {
+      await navigator.clipboard.writeText(tsvContent);
+      showToast(`${items.length} rida kopeeritud`);
+    } catch (e) {
+      console.error('Clipboard error:', e);
+      showToast('Viga kopeerimisel');
+    }
+    setGroupMenuId(null);
+  };
+
   // ============================================
   // EXCEL IMPORT
   // ============================================
@@ -4755,6 +4799,9 @@ export default function OrganizerScreen({
               </button>
               <button onClick={() => { setGroupMenuId(null); removeAllMarkups(); }}>
                 <FiTag size={12} /> Eemalda markupid
+              </button>
+              <button onClick={() => copyGroupDataToClipboard(node.id)}>
+                <FiCopy size={12} /> Kopeeri andmed
               </button>
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
