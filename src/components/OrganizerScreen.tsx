@@ -4724,7 +4724,17 @@ export default function OrganizerScreen({
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />
-                      <span className="org-item-mark" title={item.assembly_mark || ''}>{item.assembly_mark || 'Tundmatu'}</span>
+                      <span
+                        className="org-item-mark"
+                        title={item.assembly_mark || ''}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (item.assembly_mark) {
+                            navigator.clipboard.writeText(item.assembly_mark);
+                            showToast(`Kopeeritud: ${item.assembly_mark}`);
+                          }
+                        }}
+                      >{item.assembly_mark || 'Tundmatu'}</span>
                       <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
                       <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
 
