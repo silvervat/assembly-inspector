@@ -10633,19 +10633,19 @@ button.stat-toggle.off:hover {
 
 /* Items list */
 .org-items {
-  padding: 0 0 4px 18px;
-  margin-top: 2px;
+  padding: 0 0 2px 12px;
+  margin-top: 1px;
 }
 
 .org-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 6px;
+  gap: 3px;
+  padding: 3px 4px;
   background: #fafafa;
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   transition: background 0.1s;
 }
 
@@ -10702,13 +10702,17 @@ button.stat-toggle.off:hover {
 }
 
 .org-item-mark {
-  min-width: 80px;
+  min-width: 40px;
   font-weight: 500;
   color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .org-item-product {
   flex: 1;
+  min-width: 30px;
   color: #6b7280;
   white-space: nowrap;
   overflow: hidden;
@@ -10716,33 +10720,33 @@ button.stat-toggle.off:hover {
 }
 
 .org-item-weight {
-  min-width: 50px;
+  min-width: 38px;
   text-align: right;
   color: #9ca3af;
   font-family: 'SF Mono', monospace;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 /* Dynamic column widths based on content */
 .org-items-dynamic .org-item-mark,
 .org-items-dynamic .org-items-header .org-item-mark {
-  width: var(--col-mark-width, 80px);
-  min-width: var(--col-mark-width, 80px);
-  max-width: var(--col-mark-width, 80px);
+  width: var(--col-mark-width, 40px);
+  min-width: var(--col-mark-width, 40px);
+  max-width: var(--col-mark-width, 40px);
   flex: none;
 }
 
 .org-items-dynamic .org-item-product,
 .org-items-dynamic .org-items-header .org-item-product {
-  width: var(--col-product-width, 80px);
-  min-width: var(--col-product-width, 80px);
+  width: var(--col-product-width, 35px);
+  min-width: var(--col-product-width, 35px);
   flex: none;
 }
 
 .org-items-dynamic .org-item-weight,
 .org-items-dynamic .org-items-header .org-item-weight {
-  width: var(--col-weight-width, 50px);
-  min-width: var(--col-weight-width, 50px);
+  width: var(--col-weight-width, 38px);
+  min-width: var(--col-weight-width, 38px);
   flex: none;
 }
 
@@ -11687,20 +11691,21 @@ button.stat-toggle.off:hover {
 }
 
 .org-items-header .org-item-mark {
-  min-width: 80px;
+  min-width: 40px;
 }
 
 .org-items-header .org-item-product {
   flex: 1;
+  min-width: 30px;
 }
 
 .org-items-header .org-item-weight {
-  min-width: 50px;
+  min-width: 38px;
   text-align: right;
 }
 
 .org-items-header .org-item-custom {
-  min-width: 60px;
+  min-width: 45px;
   text-align: right;
 }
 

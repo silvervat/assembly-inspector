@@ -4375,10 +4375,10 @@ export default function OrganizerScreen({
               const hasMore = sortedItems.length > visibleCount;
 
               // Calculate dynamic column widths based on content
-              const CHAR_WIDTH = 7; // approx pixels per character for monospace-ish font
-              const MIN_MARK_WIDTH = 50;
-              const MIN_PRODUCT_WIDTH = 50;
-              const MIN_WEIGHT_WIDTH = 45;
+              const CHAR_WIDTH = 6; // approx pixels per character
+              const MIN_MARK_WIDTH = 40;
+              const MIN_PRODUCT_WIDTH = 35;
+              const MIN_WEIGHT_WIDTH = 38;
 
               let maxMarkLen = 4; // "Mark" header length
               let maxProductLen = 5; // "Toode" header length
