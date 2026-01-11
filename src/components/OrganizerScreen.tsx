@@ -4334,9 +4334,6 @@ export default function OrganizerScreen({
               <button onClick={() => openExcelImportModal(node.id)}>
                 <FiUpload size={12} /> Impordi Excelist
               </button>
-              <button onClick={() => downloadImportTemplate(node.id)}>
-                <FiDownload size={12} /> Lae template
-              </button>
               {(() => {
                 const parentLocked = node.parent_id && isGroupLocked(node.parent_id);
                 if (parentLocked) {
