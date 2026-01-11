@@ -485,6 +485,13 @@ export default function OrganizerScreen({
   const [importText, setImportText] = useState('');
   const [importProgress, setImportProgress] = useState<{current: number; total: number; found: number} | null>(null);
 
+  // Excel import state
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [excelImportGroupId, setExcelImportGroupId] = useState<string | null>(null);
+  const [excelImportFile, setExcelImportFile] = useState<File | null>(null);
+  const [excelImportPreview, setExcelImportPreview] = useState<{rows: number; subgroups: string[]} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Color picker popup state
   const [colorPickerGroupId, setColorPickerGroupId] = useState<string | null>(null);
 
@@ -3414,6 +3421,346 @@ export default function OrganizerScreen({
   };
 
   // ============================================
+  // EXCEL IMPORT
+  // ============================================
+
+  const downloadImportTemplate = (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    const customFields = group.custom_fields || [];
+
+    const wb = XLSX.utils.book_new();
+
+    // Headers: GUID columns + Subgroup + Custom fields
+    const headers = ['GUID_IFC', 'GUID_MS', 'Alamgrupp', 'Alamgrupi_kirjeldus'];
+    customFields.forEach(f => headers.push(f.name.replace(/\s+/g, '_')));
+
+    // Add example row
+    const exampleRow = [
+      '2O2Fr$t4X7Zf8NOew3FLOH', // IFC GUID example
+      '85ca28da-b297-4bdc-87df-fac7573fb32d', // MS GUID example
+      'Alamgrupi nimi (valikuline)',
+      'Alamgrupi kirjeldus (valikuline)'
+    ];
+    customFields.forEach(f => {
+      if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
+        exampleRow.push(f.options.dropdownOptions[0] || '');
+      } else if (f.type === 'tags') {
+        exampleRow.push('tag1, tag2');
+      } else {
+        exampleRow.push('');
+      }
+    });
+
+    const data = [headers, exampleRow];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 25 }, // GUID_IFC
+      { wch: 38 }, // GUID_MS
+      { wch: 20 }, // Alamgrupp
+      { wch: 30 }, // Alamgrupi_kirjeldus
+      ...customFields.map(() => ({ wch: 15 }))
+    ];
+
+    // Add instructions sheet
+    const instructionsData = [
+      ['IMPORDI JUHEND'],
+      [''],
+      ['1. Täida GUID_IFC VÕI GUID_MS veerg (üks on kohustuslik)'],
+      ['2. GUID_MS konverteeritakse automaatselt GUID_IFC formaati'],
+      ['3. Alamgrupp veerg loob uue alamgrupi kui seda pole veel olemas'],
+      ['4. Alamgrupi_kirjeldus on valikuline'],
+      ['5. Lisaveerud täidetakse vastavate väärtustega'],
+      [''],
+      ['GUID FORMAADID:'],
+      ['- GUID_IFC: 22 tähemärki (nt: 2O2Fr$t4X7Zf8NOew3FLOH)'],
+      ['- GUID_MS: UUID formaat (nt: 85ca28da-b297-4bdc-87df-fac7573fb32d)'],
+      [''],
+      ['NÄPUNÄITED:'],
+      ['- Kustuta näidisrida enne importimist'],
+      ['- Dropdown väärtused peavad vastama täpselt seadistatud valikutele'],
+      ['- Tags veerus eraldage väärtused komaga']
+    ];
+
+    const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
+    wsInstructions['!cols'] = [{ wch: 60 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Andmed');
+    XLSX.utils.book_append_sheet(wb, wsInstructions, 'Juhend');
+
+    XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_import_template.xlsx`);
+    showToast('Template alla laetud');
+    setGroupMenuId(null);
+  };
+
+  const openExcelImportModal = (groupId: string) => {
+    setExcelImportGroupId(groupId);
+    setExcelImportFile(null);
+    setExcelImportPreview(null);
+    setShowExcelImportModal(true);
+    setGroupMenuId(null);
+  };
+
+  const handleExcelFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setExcelImportFile(file);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
+
+      // Extract unique subgroup names
+      const subgroupNames = new Set<string>();
+      for (const row of rows) {
+        const subgroup = row['Alamgrupp'] || row['alamgrupp'] || row['Subgroup'] || row['subgroup'];
+        if (subgroup && subgroup.trim()) {
+          subgroupNames.add(subgroup.trim());
+        }
+      }
+
+      setExcelImportPreview({
+        rows: rows.length,
+        subgroups: Array.from(subgroupNames)
+      });
+    } catch (err) {
+      console.error('Error reading Excel file:', err);
+      showToast('Viga faili lugemisel');
+      setExcelImportFile(null);
+      setExcelImportPreview(null);
+    }
+  };
+
+  const importFromExcel = async () => {
+    if (!excelImportGroupId || !excelImportFile) return;
+
+    const parentGroup = groups.find(g => g.id === excelImportGroupId);
+    if (!parentGroup) return;
+
+    // Check if group is locked
+    if (isGroupLocked(excelImportGroupId)) {
+      const lockInfo = getGroupLockInfo(excelImportGroupId);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      setShowExcelImportModal(false);
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const data = await excelImportFile.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
+
+      if (rows.length === 0) {
+        showToast('Excel fail on tühi');
+        setSaving(false);
+        return;
+      }
+
+      const customFields = parentGroup.custom_fields || [];
+
+      // Step 1: Collect all GUIDs and convert MS to IFC
+      const guidToRow = new Map<string, Record<string, string>>();
+
+      for (const row of rows) {
+        let guidIfc = row['GUID_IFC'] || row['guid_ifc'] || row['GUID'] || row['guid'];
+        const guidMs = row['GUID_MS'] || row['guid_ms'];
+
+        // Convert MS GUID to IFC if needed
+        if (!guidIfc && guidMs) {
+          guidIfc = msToIfcGuid(guidMs.trim());
+        }
+
+        if (guidIfc && guidIfc.trim()) {
+          guidToRow.set(guidIfc.toLowerCase(), row);
+        }
+      }
+
+      if (guidToRow.size === 0) {
+        showToast('GUID veergu ei leitud või kõik read on tühjad');
+        setSaving(false);
+        return;
+      }
+
+      // Step 2: Look up GUIDs in database
+      const guidsToSearch = Array.from(guidToRow.keys());
+      const { data: foundObjects, error: searchError } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
+        .eq('trimble_project_id', projectId)
+        .filter('guid_ifc', 'in', `(${guidsToSearch.map(g => `"${g}"`).join(',')})`);
+
+      if (searchError) throw searchError;
+
+      // Create lookup by lowercase GUID
+      const foundByGuid = new Map<string, typeof foundObjects[0]>();
+      for (const obj of foundObjects || []) {
+        if (obj.guid_ifc) {
+          foundByGuid.set(obj.guid_ifc.toLowerCase(), obj);
+        }
+      }
+
+      // Step 3: Create subgroups if needed
+      const subgroupMap = new Map<string, string>(); // name -> id
+
+      // Get existing subgroups
+      const existingSubgroups = groups.filter(g => g.parent_id === excelImportGroupId);
+      for (const sg of existingSubgroups) {
+        subgroupMap.set(sg.name.toLowerCase(), sg.id);
+      }
+
+      // Create new subgroups
+      const newSubgroupNames = new Set<string>();
+      for (const row of rows) {
+        const subgroupName = row['Alamgrupp'] || row['alamgrupp'] || row['Subgroup'] || row['subgroup'];
+        if (subgroupName && subgroupName.trim() && !subgroupMap.has(subgroupName.toLowerCase())) {
+          newSubgroupNames.add(subgroupName.trim());
+        }
+      }
+
+      for (const subgroupName of newSubgroupNames) {
+        const description = rows.find(r =>
+          (r['Alamgrupp'] || r['alamgrupp'] || r['Subgroup'] || r['subgroup'])?.trim().toLowerCase() === subgroupName.toLowerCase()
+        )?.['Alamgrupi_kirjeldus'] || rows.find(r =>
+          (r['Alamgrupp'] || r['alamgrupp'] || r['Subgroup'] || r['subgroup'])?.trim().toLowerCase() === subgroupName.toLowerCase()
+        )?.['alamgrupi_kirjeldus'] || null;
+
+        const newGroupData = {
+          trimble_project_id: projectId,
+          parent_id: excelImportGroupId,
+          name: subgroupName,
+          description: description,
+          is_private: parentGroup.is_private,
+          allowed_users: parentGroup.allowed_users,
+          display_properties: parentGroup.display_properties,
+          custom_fields: parentGroup.custom_fields,
+          assembly_selection_on: parentGroup.assembly_selection_on,
+          unique_items: parentGroup.unique_items,
+          color: generateGroupColor(groups.length + subgroupMap.size),
+          created_by: tcUserEmail,
+          sort_order: groups.length + subgroupMap.size,
+          level: (parentGroup.level || 0) + 1
+        };
+
+        const { data: insertedGroup, error: insertError } = await supabase
+          .from('organizer_groups')
+          .insert(newGroupData)
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        subgroupMap.set(subgroupName.toLowerCase(), insertedGroup.id);
+      }
+
+      // Step 4: Prepare items for insertion
+      const itemsByGroup = new Map<string, any[]>();
+
+      for (const [guidLower, row] of guidToRow) {
+        const foundObj = foundByGuid.get(guidLower);
+        if (!foundObj) continue;
+
+        // Determine target group
+        const subgroupName = row['Alamgrupp'] || row['alamgrupp'] || row['Subgroup'] || row['subgroup'];
+        let targetGroupId = excelImportGroupId;
+
+        if (subgroupName && subgroupName.trim()) {
+          const subgroupId = subgroupMap.get(subgroupName.toLowerCase());
+          if (subgroupId) targetGroupId = subgroupId;
+        }
+
+        // Build custom properties
+        const customProperties: Record<string, string> = {};
+        for (const field of customFields) {
+          const colName = field.name.replace(/\s+/g, '_');
+          const value = row[colName] || row[field.name] || row[field.name.toLowerCase()];
+          if (value !== undefined && value !== '') {
+            customProperties[field.id] = String(value);
+          }
+        }
+
+        const item = {
+          group_id: targetGroupId,
+          guid_ifc: foundObj.guid_ifc,
+          assembly_mark: foundObj.assembly_mark,
+          product_name: foundObj.product_name,
+          cast_unit_weight: foundObj.cast_unit_weight || null,
+          custom_properties: customProperties,
+          added_by: tcUserEmail,
+          sort_order: 0
+        };
+
+        if (!itemsByGroup.has(targetGroupId)) {
+          itemsByGroup.set(targetGroupId, []);
+        }
+        itemsByGroup.get(targetGroupId)!.push(item);
+      }
+
+      // Step 5: Insert items (delete existing first)
+      let totalAdded = 0;
+      let totalSkipped = 0;
+
+      for (const [targetGroupId, items] of itemsByGroup) {
+        const existingGuids = new Set(
+          (groupItems.get(targetGroupId) || []).map(i => i.guid_ifc?.toLowerCase()).filter(Boolean)
+        );
+
+        // Filter out already existing items
+        const newItems = items.filter(i => !existingGuids.has(i.guid_ifc?.toLowerCase()));
+        totalSkipped += items.length - newItems.length;
+
+        if (newItems.length === 0) continue;
+
+        // Set sort orders
+        const existingCount = (groupItems.get(targetGroupId) || []).length;
+        newItems.forEach((item, idx) => {
+          item.sort_order = existingCount + idx;
+        });
+
+        // Mark GUIDs as local changes
+        const guids = newItems.map(i => i.guid_ifc).filter(Boolean);
+        guids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+        setTimeout(() => {
+          guids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+        }, 5000);
+
+        // Insert
+        const { error } = await supabase.from('organizer_group_items').insert(newItems);
+        if (error) throw error;
+
+        totalAdded += newItems.length;
+      }
+
+      const notFoundCount = guidToRow.size - (totalAdded + totalSkipped);
+      let message = `${totalAdded} elementi imporditud`;
+      if (totalSkipped > 0) message += `, ${totalSkipped} juba olemas`;
+      if (notFoundCount > 0) message += `, ${notFoundCount} ei leitud andmebaasist`;
+      if (newSubgroupNames.size > 0) message += `, ${newSubgroupNames.size} alamgruppi loodud`;
+
+      showToast(message);
+      await refreshData();
+      setShowExcelImportModal(false);
+
+    } catch (err) {
+      console.error('Error importing from Excel:', err);
+      showToast('Viga importimisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================
   // DRAG & DROP
   // ============================================
 
@@ -3762,6 +4109,12 @@ export default function OrganizerScreen({
               </button>
               <button onClick={() => openImportModal(node.id)}>
                 <FiUpload size={12} /> Impordi GUID
+              </button>
+              <button onClick={() => openExcelImportModal(node.id)}>
+                <FiUpload size={12} /> Impordi Excelist
+              </button>
+              <button onClick={() => downloadImportTemplate(node.id)}>
+                <FiDownload size={12} /> Lae template
               </button>
               {(() => {
                 const parentLocked = node.parent_id && isGroupLocked(node.parent_id);
@@ -5259,6 +5612,94 @@ export default function OrganizerScreen({
                   disabled={saving || previewValues.length === 0}
                 >
                   {saving ? 'Impordin...' : `Impordi ${previewValues.length} väärtust`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Excel Import Modal */}
+      {showExcelImportModal && excelImportGroupId && (() => {
+        const importGroup = groups.find(g => g.id === excelImportGroupId);
+
+        return (
+          <div className="org-modal-overlay" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>
+            <div className="org-modal" onClick={e => e.stopPropagation()}>
+              <div className="org-modal-header">
+                <h2>Impordi Excelist</h2>
+                <button onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body">
+                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                  Grupp: <strong>{importGroup?.name}</strong>
+                </p>
+
+                <div style={{ marginBottom: '16px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#166534' }}>
+                    <strong>Nõuded:</strong><br/>
+                    • GUID_IFC või GUID_MS veerg (vähemalt üks kohustuslik)<br/>
+                    • GUID_MS konverteeritakse automaatselt IFC formaati<br/>
+                    • Alamgrupp veerg loob uued alamgrupid automaatselt
+                  </p>
+                </div>
+
+                <div className="org-field" style={{ marginBottom: '16px' }}>
+                  <label>Vali Excel fail (.xlsx)</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleExcelFileSelect}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid var(--modus-border)',
+                      borderRadius: '4px',
+                      marginTop: '4px'
+                    }}
+                  />
+                </div>
+
+                {excelImportPreview && (
+                  <div style={{ padding: '12px', background: '#eff6ff', borderRadius: '8px', marginBottom: '16px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#1e40af' }}>
+                      <strong>Eelvaade:</strong><br/>
+                      • Ridu: {excelImportPreview.rows}<br/>
+                      {excelImportPreview.subgroups.length > 0 && (
+                        <>• Alamgrupid: {excelImportPreview.subgroups.join(', ')}</>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => downloadImportTemplate(excelImportGroupId)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 12px',
+                    background: 'white',
+                    border: '1px solid var(--modus-border)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    color: '#374151'
+                  }}
+                >
+                  <FiDownload size={14} /> Lae alla template
+                </button>
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>Tühista</button>
+                <button
+                  className="save"
+                  onClick={importFromExcel}
+                  disabled={saving || !excelImportFile}
+                >
+                  {saving ? 'Impordin...' : 'Impordi'}
                 </button>
               </div>
             </div>
