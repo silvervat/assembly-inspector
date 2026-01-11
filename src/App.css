@@ -11696,6 +11696,11 @@ button.stat-toggle.off:hover {
   z-index: 1;
 }
 
+/* Keep header below the blue outline of expanded root groups */
+.org-group-section.expanded-root .org-items-header {
+  top: 1px;
+}
+
 /* Header cells match item row cells */
 .org-items-header .org-item-index {
   width: 20px;
