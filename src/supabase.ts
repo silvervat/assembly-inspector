@@ -47,6 +47,11 @@ export interface TrimbleExUser {
   can_edit_inspections: boolean;
   can_delete_inspections: boolean;
 
+  // Issues (Probleemid) permissions
+  can_view_issues: boolean;
+  can_edit_issues: boolean;
+  can_delete_issues: boolean;
+
   // Admin access
   can_access_admin: boolean;
 
@@ -1233,4 +1238,328 @@ export interface OrganizerGroupTree extends OrganizerGroup {
   itemCount: number;
   totalWeight: number;
 }
+
+// ============================================
+// ISSUES SYSTEM TYPES (Mittevastavused ja probleemid)
+// ============================================
+
+export type IssueStatus =
+  | 'nonconformance'
+  | 'problem'
+  | 'pending'
+  | 'in_progress'
+  | 'completed'
+  | 'closed'
+  | 'cancelled';
+
+export type IssuePriority = 'low' | 'medium' | 'high' | 'critical';
+
+export type IssueSource =
+  | 'inspection' | 'delivery' | 'installation'
+  | 'production' | 'design' | 'other';
+
+export type IssueAttachmentType =
+  | 'photo' | 'document' | 'video' | 'drawing' | 'report' | 'other';
+
+export type ActivityAction =
+  | 'issue_created' | 'issue_updated' | 'issue_deleted'
+  | 'status_changed' | 'priority_changed' | 'category_changed'
+  | 'user_assigned' | 'user_unassigned' | 'assignment_accepted' | 'assignment_rejected'
+  | 'resource_added' | 'resource_removed' | 'resource_updated'
+  | 'attachment_added' | 'attachment_removed'
+  | 'comment_added' | 'comment_edited' | 'comment_deleted'
+  | 'zoomed_to_model' | 'isolated_in_model' | 'colored_in_model'
+  | 'resolution_set' | 'issue_closed' | 'issue_reopened' | 'issue_cancelled';
+
+// Issue Category
+export interface IssueCategory {
+  id: string;
+  trimble_project_id: string;
+  code: string;
+  name: string;
+  description?: string;
+  color: string;
+  icon: string;
+  sort_order: number;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Main Issue interface
+export interface Issue {
+  id: string;
+  trimble_project_id: string;
+  issue_number: string;
+
+  // Details
+  category_id?: string;
+  title: string;
+  description?: string;
+  location?: string;
+
+  // Status
+  status: IssueStatus;
+  priority: IssuePriority;
+  source: IssueSource;
+
+  // Timestamps
+  detected_at: string;
+  due_date?: string;
+  started_at?: string;
+  completed_at?: string;
+  closed_at?: string;
+
+  // Estimates
+  estimated_hours?: number;
+  actual_hours?: number;
+  estimated_cost?: number;
+  actual_cost?: number;
+
+  // Resolution
+  resolution_type?: string;
+  resolution_notes?: string;
+
+  // People
+  reported_by: string;
+  reported_by_name?: string;
+  closed_by?: string;
+  closed_by_name?: string;
+
+  // Tags
+  tags: string[];
+  custom_fields: Record<string, unknown>;
+
+  // Audit
+  created_at: string;
+  updated_at: string;
+  updated_by?: string;
+
+  // Joined (optional)
+  category?: IssueCategory;
+  objects?: IssueObject[];
+  assignments?: IssueAssignment[];
+  primary_photo_url?: string;
+  comments_count?: number;
+  attachments_count?: number;
+}
+
+// Issue Object - links model objects to issues (many-to-many)
+export interface IssueObject {
+  id: string;
+  issue_id: string;
+  model_id: string;
+  guid_ifc: string;
+  guid_ms?: string;
+  assembly_mark?: string;
+  product_name?: string;
+  cast_unit_weight?: string;
+  cast_unit_position_code?: string;
+  is_primary: boolean;
+  sort_order: number;
+  added_by: string;
+  added_at: string;
+}
+
+// Issue Assignment
+export interface IssueAssignment {
+  id: string;
+  issue_id: string;
+  user_email: string;
+  user_name?: string;
+  role: 'assignee' | 'reviewer' | 'observer';
+  is_primary: boolean;
+  is_active: boolean;
+  accepted_at?: string;
+  rejected_at?: string;
+  rejection_reason?: string;
+  assigned_by: string;
+  assigned_by_name?: string;
+  assigned_at: string;
+  assignment_notes?: string;
+  unassigned_at?: string;
+  unassigned_by?: string;
+}
+
+// Issue Comment
+export interface IssueComment {
+  id: string;
+  issue_id: string;
+  comment_text: string;
+  is_internal: boolean;
+  old_status?: IssueStatus;
+  new_status?: IssueStatus;
+  author_email: string;
+  author_name?: string;
+  created_at: string;
+  updated_at: string;
+  is_edited: boolean;
+  attachments?: IssueAttachment[];
+}
+
+// Issue Attachment
+export interface IssueAttachment {
+  id: string;
+  issue_id: string;
+  comment_id?: string;
+  file_name: string;
+  file_url: string;
+  file_size?: number;
+  mime_type?: string;
+  attachment_type: IssueAttachmentType;
+  title?: string;
+  description?: string;
+  uploaded_by: string;
+  uploaded_by_name?: string;
+  uploaded_at: string;
+  is_primary_photo: boolean;
+  sort_order: number;
+}
+
+// Issue Resource Assignment
+export interface IssueResourceAssignment {
+  id: string;
+  issue_id: string;
+  resource_id?: string;
+  resource_type: 'worker' | 'machine' | 'material' | 'tool';
+  resource_name: string;
+  planned_start?: string;
+  planned_end?: string;
+  planned_hours?: number;
+  actual_hours?: number;
+  status: 'planned' | 'assigned' | 'working' | 'completed';
+  assigned_by: string;
+  assigned_at: string;
+  notes?: string;
+}
+
+// Issue Activity Log
+export interface IssueActivityLog {
+  id: string;
+  trimble_project_id: string;
+  issue_id?: string;
+  action: ActivityAction;
+  action_label: string;
+  field_name?: string;
+  old_value?: string;
+  new_value?: string;
+  details?: Record<string, unknown>;
+  target_user_email?: string;
+  target_user_name?: string;
+  actor_email: string;
+  actor_name?: string;
+  created_at: string;
+  is_status_change: boolean;
+  is_assignment: boolean;
+  // Joined
+  issue?: Issue;
+}
+
+// ============================================
+// ISSUE STATUS & PRIORITY CONFIGS
+// ============================================
+
+export const ISSUE_STATUS_CONFIG: Record<IssueStatus, {
+  label: string;
+  labelEn: string;
+  color: string;
+  bgColor: string;
+  modelColor: { r: number; g: number; b: number; a: number };
+  icon: string;
+  order: number;
+}> = {
+  nonconformance: {
+    label: 'Mittevastavus', labelEn: 'Non-conformance',
+    color: '#DC2626', bgColor: '#FEE2E2',
+    modelColor: { r: 255, g: 0, b: 0, a: 255 },
+    icon: 'alert-triangle', order: 0
+  },
+  problem: {
+    label: 'Probleem', labelEn: 'Problem',
+    color: '#EA580C', bgColor: '#FFEDD5',
+    modelColor: { r: 255, g: 140, b: 0, a: 255 },
+    icon: 'alert-circle', order: 1
+  },
+  pending: {
+    label: 'Ootel', labelEn: 'Pending',
+    color: '#CA8A04', bgColor: '#FEF9C3',
+    modelColor: { r: 255, g: 215, b: 0, a: 255 },
+    icon: 'clock', order: 2
+  },
+  in_progress: {
+    label: 'Töös', labelEn: 'In Progress',
+    color: '#2563EB', bgColor: '#DBEAFE',
+    modelColor: { r: 0, g: 100, b: 255, a: 255 },
+    icon: 'loader', order: 3
+  },
+  completed: {
+    label: 'Valmis', labelEn: 'Completed',
+    color: '#16A34A', bgColor: '#DCFCE7',
+    modelColor: { r: 0, g: 255, b: 100, a: 255 },
+    icon: 'check-circle', order: 4
+  },
+  closed: {
+    label: 'Lõpetatud', labelEn: 'Closed',
+    color: '#4B5563', bgColor: '#F3F4F6',
+    modelColor: { r: 100, g: 100, b: 100, a: 255 },
+    icon: 'check-square', order: 5
+  },
+  cancelled: {
+    label: 'Tühistatud', labelEn: 'Cancelled',
+    color: '#9CA3AF', bgColor: '#F9FAFB',
+    modelColor: { r: 180, g: 180, b: 180, a: 255 },
+    icon: 'x-circle', order: 6
+  }
+};
+
+export const ISSUE_PRIORITY_CONFIG: Record<IssuePriority, {
+  label: string;
+  color: string;
+  bgColor: string;
+  icon: string;
+}> = {
+  low: { label: 'Madal', color: '#6B7280', bgColor: '#F3F4F6', icon: 'arrow-down' },
+  medium: { label: 'Keskmine', color: '#CA8A04', bgColor: '#FEF9C3', icon: 'minus' },
+  high: { label: 'Kõrge', color: '#EA580C', bgColor: '#FFEDD5', icon: 'arrow-up' },
+  critical: { label: 'Kriitiline', color: '#DC2626', bgColor: '#FEE2E2', icon: 'alert-octagon' }
+};
+
+export const ISSUE_SOURCE_CONFIG: Record<IssueSource, { label: string }> = {
+  inspection: { label: 'Inspektsioon' },
+  delivery: { label: 'Tarnimine' },
+  installation: { label: 'Paigaldamine' },
+  production: { label: 'Tootmine' },
+  design: { label: 'Projekteerimine' },
+  other: { label: 'Muu' }
+};
+
+// Activity action labels (Estonian)
+export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
+  issue_created: 'Probleem loodud',
+  issue_updated: 'Probleem uuendatud',
+  issue_deleted: 'Probleem kustutatud',
+  status_changed: 'Staatus muudetud',
+  priority_changed: 'Prioriteet muudetud',
+  category_changed: 'Kategooria muudetud',
+  user_assigned: 'Kasutaja määratud',
+  user_unassigned: 'Kasutaja eemaldatud',
+  assignment_accepted: 'Määramine aktsepteeritud',
+  assignment_rejected: 'Määramine tagasi lükatud',
+  resource_added: 'Ressurss lisatud',
+  resource_removed: 'Ressurss eemaldatud',
+  resource_updated: 'Ressurss uuendatud',
+  attachment_added: 'Fail lisatud',
+  attachment_removed: 'Fail eemaldatud',
+  comment_added: 'Kommentaar lisatud',
+  comment_edited: 'Kommentaar muudetud',
+  comment_deleted: 'Kommentaar kustutatud',
+  zoomed_to_model: 'Zoomitud mudelis',
+  isolated_in_model: 'Isoleeritud mudelis',
+  colored_in_model: 'Värvitud mudelis',
+  resolution_set: 'Lahendus määratud',
+  issue_closed: 'Probleem suletud',
+  issue_reopened: 'Probleem taasavatud',
+  issue_cancelled: 'Probleem tühistatud'
+};
 

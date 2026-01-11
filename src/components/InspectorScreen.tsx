@@ -114,7 +114,8 @@ export default function InspectorScreen({
       schedule: 'Paigaldusgraafik',
       delivery_schedule: 'Tarnegraafik',
       arrived_deliveries: 'Saabunud tarned',
-      organizer: 'Organiseerija'
+      organizer: 'Organiseerija',
+      issues: 'Probleemid'
     };
     return titles[mode] || mode;
   };
@@ -1000,7 +1001,7 @@ export default function InspectorScreen({
         topview_url: topviewUrl,
         project_id: projectId,
         // inspection_type is for legacy modes only; inspection_type mode uses plan-based tracking
-        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer')
+        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues')
           ? undefined
           : inspectionMode,
         // Additional Tekla fields

@@ -1,0 +1,1986 @@
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import * as WorkspaceAPI from 'trimble-connect-workspace-api';
+import {
+  supabase,
+  TrimbleExUser,
+  Issue,
+  IssueStatus,
+  IssuePriority,
+  IssueSource,
+  IssueAssignment,
+  IssueComment,
+  IssueAttachment,
+  IssueCategory,
+  IssueActivityLog,
+  ISSUE_STATUS_CONFIG,
+  ISSUE_PRIORITY_CONFIG,
+  ISSUE_SOURCE_CONFIG,
+  ACTIVITY_ACTION_LABELS
+} from '../supabase';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import * as XLSX from 'xlsx-js-style';
+import {
+  FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
+  FiEdit2, FiTrash2, FiX, FiCamera, FiDownload,
+  FiRefreshCw, FiFilter, FiUser, FiCalendar, FiClock, FiAlertTriangle,
+  FiAlertCircle, FiCheckCircle, FiXCircle, FiLoader, FiCheckSquare,
+  FiTarget, FiMessageSquare, FiActivity, FiLayers, FiSend,
+  FiArrowUp, FiArrowDown, FiMinus, FiAlertOctagon, FiEye
+} from 'react-icons/fi';
+
+// ============================================
+// TYPES
+// ============================================
+
+interface IssuesScreenProps {
+  api: WorkspaceAPI.WorkspaceAPI;
+  user: TrimbleExUser;
+  projectId: string;
+  tcUserEmail: string;
+  tcUserName?: string;
+  onBackToMenu: () => void;
+}
+
+interface SelectedObject {
+  modelId: string;
+  runtimeId: number;
+  guidIfc: string;
+  guidMs?: string;
+  assemblyMark?: string;
+  productName?: string;
+  castUnitWeight?: string;
+  castUnitPositionCode?: string;
+}
+
+// Team member from Trimble Connect API
+interface TeamMember {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  fullName: string;
+  role: string;
+  status: string;
+}
+
+// Filter state
+interface IssueFilters {
+  status: IssueStatus | 'all';
+  priority: IssuePriority | 'all';
+  category: string | 'all';
+  assignedTo: string | 'all';
+  source: IssueSource | 'all';
+  dateRange: 'today' | 'week' | 'month' | 'all';
+  overdue: boolean;
+}
+
+// Performance constants
+const COLOR_BATCH_SIZE = 100;
+const WHITE_COLOR = { r: 255, g: 255, b: 255, a: 255 };
+
+// Status icons mapping
+const STATUS_ICONS: Record<IssueStatus, React.ReactNode> = {
+  nonconformance: <FiAlertTriangle size={14} />,
+  problem: <FiAlertCircle size={14} />,
+  pending: <FiClock size={14} />,
+  in_progress: <FiLoader size={14} />,
+  completed: <FiCheckCircle size={14} />,
+  closed: <FiCheckSquare size={14} />,
+  cancelled: <FiXCircle size={14} />
+};
+
+// Priority icons mapping
+const PRIORITY_ICONS: Record<IssuePriority, React.ReactNode> = {
+  low: <FiArrowDown size={12} />,
+  medium: <FiMinus size={12} />,
+  high: <FiArrowUp size={12} />,
+  critical: <FiAlertOctagon size={12} />
+};
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+function formatDate(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('et-EE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatDateTime(dateStr: string | undefined | null): string {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  return date.toLocaleString('et-EE', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} min tagasi`;
+  if (diffHours < 24) return `${diffHours}h tagasi`;
+  if (diffDays < 7) return `${diffDays}p tagasi`;
+  return formatDate(dateStr);
+}
+
+function isOverdue(issue: Issue): boolean {
+  if (!issue.due_date) return false;
+  if (['closed', 'cancelled', 'completed'].includes(issue.status)) return false;
+  const today = new Date().toISOString().split('T')[0];
+  return issue.due_date < today;
+}
+
+// ============================================
+// COMPONENT
+// ============================================
+
+export default function IssuesScreen({
+  api,
+  user: _user,
+  projectId,
+  tcUserEmail,
+  tcUserName,
+  onBackToMenu
+}: IssuesScreenProps) {
+  // ============================================
+  // STATE
+  // ============================================
+
+  // Data state
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [_categories, setCategories] = useState<IssueCategory[]>([]);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+
+  // UI state
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState('');
+  const [coloringStatus, setColoringStatus] = useState('');
+  const [_selectedIssue, _setSelectedIssue] = useState<Issue | null>(null);
+  const [highlightedIssueId, setHighlightedIssueId] = useState<string | null>(null);
+  const [expandedStatuses, setExpandedStatuses] = useState<Set<IssueStatus>>(
+    new Set(['nonconformance', 'problem', 'pending', 'in_progress'])
+  );
+
+  // Form state
+  const [showForm, setShowForm] = useState(false);
+  const [editingIssue, setEditingIssue] = useState<Issue | null>(null);
+  const [newIssueObjects, setNewIssueObjects] = useState<SelectedObject[]>([]);
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    location: '',
+    status: 'nonconformance' as IssueStatus,
+    priority: 'medium' as IssuePriority,
+    source: 'inspection' as IssueSource,
+    category_id: '',
+    due_date: '',
+    estimated_hours: '',
+    estimated_cost: ''
+  });
+
+  // Detail view state
+  const [showDetail, setShowDetail] = useState(false);
+  const [detailIssue, setDetailIssue] = useState<Issue | null>(null);
+  const [issueComments, setIssueComments] = useState<IssueComment[]>([]);
+  const [issueAttachments, setIssueAttachments] = useState<IssueAttachment[]>([]);
+  const [issueActivities, setIssueActivities] = useState<IssueActivityLog[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Filter state
+  const [filters, setFilters] = useState<IssueFilters>({
+    status: 'all',
+    priority: 'all',
+    category: 'all',
+    assignedTo: 'all',
+    source: 'all',
+    dateRange: 'all',
+    overdue: false
+  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Assignment state
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [assigningIssueId, setAssigningIssueId] = useState<string | null>(null);
+
+  // Refs
+  const syncingToModelRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Property mappings
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+
+  // ============================================
+  // DATA LOADING
+  // ============================================
+
+  const loadIssues = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // Load issues with objects
+      const { data: issuesData, error: issuesError } = await supabase
+        .from('issues')
+        .select(`
+          *,
+          category:issue_categories(*),
+          objects:issue_objects(*),
+          assignments:issue_assignments(*)
+        `)
+        .eq('trimble_project_id', projectId)
+        .order('detected_at', { ascending: false });
+
+      if (issuesError) throw issuesError;
+
+      // Count comments and attachments
+      const issuesWithCounts = (issuesData || []).map((issue: Issue) => ({
+        ...issue,
+        objects: issue.objects || [],
+        assignments: (issue.assignments || []).filter((a: IssueAssignment) => a.is_active)
+      }));
+
+      setIssues(issuesWithCounts);
+
+    } catch (e: unknown) {
+      console.error('Error loading issues:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('issue_categories')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .eq('is_active', true)
+        .order('sort_order');
+
+      if (!error && data) {
+        setCategories(data);
+      }
+    } catch (e) {
+      console.error('Error loading categories:', e);
+    }
+  }, [projectId]);
+
+  const loadTeamMembers = useCallback(async () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const team = await (api.project as any).getMembers?.();
+      if (team && Array.isArray(team)) {
+        const members = team.map((member: { id?: string; email?: string; firstName?: string; lastName?: string; role?: string; status?: string }) => ({
+          id: member.id || '',
+          email: member.email || '',
+          firstName: member.firstName || '',
+          lastName: member.lastName || '',
+          fullName: `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || '',
+          role: member.role || '',
+          status: member.status || ''
+        }));
+        setTeamMembers(members.filter(m => m.status === 'ACTIVE'));
+      }
+    } catch (e) {
+      console.error('Error loading team:', e);
+    }
+  }, [api]);
+
+  // Initial load
+  useEffect(() => {
+    loadIssues();
+    loadCategories();
+    loadTeamMembers();
+  }, [loadIssues, loadCategories, loadTeamMembers]);
+
+  // ============================================
+  // MODEL COLORING
+  // ============================================
+
+  const colorModelByIssueStatus = useCallback(async () => {
+    if (!api || !projectId) return;
+
+    setColoringStatus('Värvin mudelit...');
+
+    try {
+      // 1. Load all model objects from database
+      const { data: modelObjects, error: moError } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, model_id')
+        .eq('trimble_project_id', projectId);
+
+      if (moError) throw moError;
+      if (!modelObjects || modelObjects.length === 0) {
+        console.log('📦 No model objects found');
+        setColoringStatus('');
+        return;
+      }
+
+      // 2. Find runtime IDs in model
+      const guids = modelObjects.map(obj => obj.guid_ifc).filter((g): g is string => !!g);
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      // 3. Color ALL objects white first
+      const allByModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!allByModel[found.modelId]) allByModel[found.modelId] = [];
+        allByModel[found.modelId].push(found.runtimeId);
+      }
+
+      for (const [modelId, runtimeIds] of Object.entries(allByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += COLOR_BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + COLOR_BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: WHITE_COLOR }
+          );
+        }
+      }
+
+      // 4. Load all issues with their objects
+      const { data: issueObjects, error: ioError } = await supabase
+        .from('issue_objects')
+        .select(`
+          guid_ifc,
+          model_id,
+          issue:issues(status)
+        `)
+        .eq('issue:issues.trimble_project_id', projectId);
+
+      if (ioError) throw ioError;
+      if (!issueObjects || issueObjects.length === 0) {
+        console.log('✅ Model colored white, no issues');
+        setColoringStatus('');
+        return;
+      }
+
+      // 5. Color each issue object with its status color
+      for (const io of issueObjects) {
+        if (!io.issue || !io.guid_ifc) continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const issueData = io.issue as any;
+        const status = issueData?.status as IssueStatus | undefined;
+        if (!status) continue;
+        const found = foundObjects.get(io.guid_ifc.toLowerCase());
+        if (found) {
+          const color = ISSUE_STATUS_CONFIG[status].modelColor;
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
+            { color }
+          );
+        }
+      }
+
+      console.log(`✅ Model colored: ${issueObjects.length} issue objects`);
+      setColoringStatus('');
+
+    } catch (e: unknown) {
+      console.error('❌ Error coloring model:', e);
+      setColoringStatus('');
+    }
+  }, [api, projectId]);
+
+  // Color on load
+  useEffect(() => {
+    if (!loading && issues.length >= 0) {
+      colorModelByIssueStatus();
+    }
+  }, [loading, colorModelByIssueStatus]);
+
+  // ============================================
+  // MODEL SELECTION SYNC
+  // ============================================
+
+  const handleModelSelectionChange = useCallback(async () => {
+    if (syncingToModelRef.current) return;
+
+    try {
+      const selection = await api.viewer.getSelection();
+      if (!selection || selection.length === 0) {
+        setHighlightedIssueId(null);
+        return;
+      }
+
+      // Get GUIDs of selected objects
+      const firstSel = selection[0];
+      if (!firstSel.objectRuntimeIds || firstSel.objectRuntimeIds.length === 0) return;
+      const guids = await api.viewer.convertToObjectIds(
+        firstSel.modelId,
+        firstSel.objectRuntimeIds
+      );
+
+      if (!guids || guids.length === 0) return;
+
+      // Find issue with this GUID
+      const guidLower = guids[0].toLowerCase();
+      const matchingIssue = issues.find(
+        i => i.objects?.some(o => o.guid_ifc?.toLowerCase() === guidLower)
+      );
+
+      if (matchingIssue) {
+        setHighlightedIssueId(matchingIssue.id);
+
+        // Scroll to issue in list
+        const element = document.getElementById(`issue-card-${matchingIssue.id}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // Expand status group if collapsed
+        if (!expandedStatuses.has(matchingIssue.status)) {
+          setExpandedStatuses(prev => new Set([...prev, matchingIssue.status]));
+        }
+      } else {
+        setHighlightedIssueId(null);
+      }
+
+    } catch (e) {
+      console.error('Error handling model selection:', e);
+    }
+  }, [api, issues, expandedStatuses]);
+
+  // Poll for model selection changes (like other components do)
+  useEffect(() => {
+    if (!api) return;
+
+    // Poll for selection changes every 1 second
+    const interval = setInterval(() => {
+      handleModelSelectionChange();
+    }, 1000);
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [api, handleModelSelectionChange]);
+
+  // Select issue in model (List -> Model)
+  const selectIssueInModel = useCallback(async (issue: Issue) => {
+    if (!issue.objects || issue.objects.length === 0) {
+      setMessage('⚠️ Probleem pole seotud mudeli objektiga');
+      return;
+    }
+
+    syncingToModelRef.current = true;
+
+    try {
+      // Get all GUIDs for this issue
+      const objectsByModel: Record<string, string[]> = {};
+      for (const obj of issue.objects) {
+        if (!objectsByModel[obj.model_id]) objectsByModel[obj.model_id] = [];
+        objectsByModel[obj.model_id].push(obj.guid_ifc);
+      }
+
+      // Convert to runtime IDs and select
+      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+
+      for (const [modelId, guids] of Object.entries(objectsByModel)) {
+        const runtimeIds = await api.viewer.convertToObjectRuntimeIds(modelId, guids);
+        const validIds = runtimeIds.filter((id): id is number => id !== undefined && id !== null);
+        if (validIds.length > 0) {
+          modelObjectIds.push({ modelId, objectRuntimeIds: validIds });
+        }
+      }
+
+      if (modelObjectIds.length > 0) {
+        await api.viewer.setSelection({ modelObjectIds }, 'set');
+        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+      } else {
+        setMessage('⚠️ Objekti ei leitud mudelist');
+      }
+
+    } catch (e: unknown) {
+      console.error('Error selecting in model:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    } finally {
+      setTimeout(() => {
+        syncingToModelRef.current = false;
+      }, 2000);
+    }
+  }, [api]);
+
+  // ============================================
+  // ISSUE CRUD OPERATIONS
+  // ============================================
+
+  const handleCreateIssue = useCallback(async () => {
+    // Get current selection from model
+    const selection = await api.viewer.getSelection();
+
+    if (!selection || selection.length === 0) {
+      setMessage('⚠️ Vali mudelist vähemalt üks detail!');
+      return;
+    }
+
+    // Extract all selected objects
+    const selectedObjects: SelectedObject[] = [];
+
+    for (const sel of selection) {
+      if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
+        const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+        for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+          const runtimeId = sel.objectRuntimeIds[i];
+          const props = propsArray?.[i];
+          const guid = guids?.[i] || '';
+
+          // Extract assembly mark using property mappings
+          let assemblyMark = '';
+          if (props?.propertySets && propertyMappings) {
+            const mapping = propertyMappings;
+            const set = props.propertySets[mapping.assembly_mark_set];
+            if (set) {
+              assemblyMark = String(set[mapping.assembly_mark_prop] || '');
+            }
+          }
+
+          selectedObjects.push({
+            modelId: sel.modelId,
+            runtimeId,
+            guidIfc: guid,
+            assemblyMark: assemblyMark || props?.name || 'Unknown',
+            productName: props?.name,
+            castUnitWeight: props?.propertySets?.['Tekla Assembly']?.['Cast_unit_Weight']?.toString(),
+            castUnitPositionCode: props?.propertySets?.['Tekla Assembly']?.['Cast_unit_Position_Code']?.toString()
+          });
+        }
+      } catch (e) {
+        console.error('Error getting object properties:', e);
+      }
+    }
+
+    if (selectedObjects.length === 0) {
+      setMessage('⚠️ Valitud objektide andmeid ei saanud lugeda');
+      return;
+    }
+
+    // Set objects and show form
+    setNewIssueObjects(selectedObjects);
+    setFormData({
+      title: '',
+      description: '',
+      location: '',
+      status: 'nonconformance',
+      priority: 'medium',
+      source: 'inspection',
+      category_id: '',
+      due_date: '',
+      estimated_hours: '',
+      estimated_cost: ''
+    });
+    setEditingIssue(null);
+    setShowForm(true);
+
+  }, [api, propertyMappings]);
+
+  const handleSubmitIssue = useCallback(async () => {
+    if (!formData.title.trim()) {
+      setMessage('⚠️ Pealkiri on kohustuslik');
+      return;
+    }
+
+    if (!editingIssue && newIssueObjects.length === 0) {
+      setMessage('⚠️ Vähemalt üks detail peab olema valitud');
+      return;
+    }
+
+    try {
+      if (editingIssue) {
+        // Update existing issue
+        const { error } = await supabase
+          .from('issues')
+          .update({
+            title: formData.title.trim(),
+            description: formData.description.trim() || null,
+            location: formData.location.trim() || null,
+            status: formData.status,
+            priority: formData.priority,
+            source: formData.source,
+            category_id: formData.category_id || null,
+            due_date: formData.due_date || null,
+            estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
+            estimated_cost: formData.estimated_cost ? parseFloat(formData.estimated_cost) : null,
+            updated_by: tcUserEmail
+          })
+          .eq('id', editingIssue.id);
+
+        if (error) throw error;
+
+        setMessage('✅ Probleem uuendatud');
+
+      } else {
+        // Create new issue
+        const { data: newIssue, error: issueError } = await supabase
+          .from('issues')
+          .insert({
+            trimble_project_id: projectId,
+            title: formData.title.trim(),
+            description: formData.description.trim() || null,
+            location: formData.location.trim() || null,
+            status: formData.status,
+            priority: formData.priority,
+            source: formData.source,
+            category_id: formData.category_id || null,
+            due_date: formData.due_date || null,
+            estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
+            estimated_cost: formData.estimated_cost ? parseFloat(formData.estimated_cost) : null,
+            reported_by: tcUserEmail,
+            reported_by_name: tcUserName
+          })
+          .select()
+          .single();
+
+        if (issueError) throw issueError;
+
+        // Add objects to issue
+        const objectsToInsert = newIssueObjects.map((obj, index) => ({
+          issue_id: newIssue.id,
+          model_id: obj.modelId,
+          guid_ifc: obj.guidIfc,
+          guid_ms: obj.guidMs,
+          assembly_mark: obj.assemblyMark,
+          product_name: obj.productName,
+          cast_unit_weight: obj.castUnitWeight,
+          cast_unit_position_code: obj.castUnitPositionCode,
+          is_primary: index === 0,
+          sort_order: index,
+          added_by: tcUserEmail
+        }));
+
+        const { error: objectsError } = await supabase
+          .from('issue_objects')
+          .insert(objectsToInsert);
+
+        if (objectsError) throw objectsError;
+
+        setMessage('✅ Probleem loodud');
+      }
+
+      setShowForm(false);
+      setNewIssueObjects([]);
+      await loadIssues();
+      await colorModelByIssueStatus();
+
+    } catch (e: unknown) {
+      console.error('Error saving issue:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [formData, editingIssue, newIssueObjects, projectId, tcUserEmail, tcUserName, loadIssues, colorModelByIssueStatus]);
+
+  const handleDeleteIssue = useCallback(async (issueId: string) => {
+    if (!confirm('Kas oled kindel, et soovid probleemi kustutada?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .delete()
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      setMessage('✅ Probleem kustutatud');
+      setShowDetail(false);
+      setDetailIssue(null);
+      await loadIssues();
+      await colorModelByIssueStatus();
+
+    } catch (e: unknown) {
+      console.error('Error deleting issue:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [loadIssues, colorModelByIssueStatus]);
+
+  const handleStatusChange = useCallback(async (issueId: string, newStatus: IssueStatus) => {
+    try {
+      const { error } = await supabase
+        .from('issues')
+        .update({
+          status: newStatus,
+          updated_by: tcUserEmail
+        })
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      setMessage(`✅ Staatus muudetud: ${ISSUE_STATUS_CONFIG[newStatus].label}`);
+      await loadIssues();
+      await colorModelByIssueStatus();
+
+      // Update detail view if open
+      if (detailIssue?.id === issueId) {
+        setDetailIssue(prev => prev ? { ...prev, status: newStatus } : null);
+      }
+
+    } catch (e: unknown) {
+      console.error('Error changing status:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [tcUserEmail, loadIssues, colorModelByIssueStatus, detailIssue]);
+
+  // ============================================
+  // DETAIL VIEW
+  // ============================================
+
+  const openIssueDetail = useCallback(async (issue: Issue) => {
+    setDetailIssue(issue);
+    setShowDetail(true);
+
+    // Load comments
+    const { data: comments } = await supabase
+      .from('issue_comments')
+      .select('*')
+      .eq('issue_id', issue.id)
+      .order('created_at', { ascending: true });
+    setIssueComments(comments || []);
+
+    // Load attachments
+    const { data: attachments } = await supabase
+      .from('issue_attachments')
+      .select('*')
+      .eq('issue_id', issue.id)
+      .order('uploaded_at', { ascending: false });
+    setIssueAttachments(attachments || []);
+
+    // Load activity
+    const { data: activities } = await supabase
+      .from('issue_activity_log')
+      .select('*')
+      .eq('issue_id', issue.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    setIssueActivities(activities || []);
+
+  }, []);
+
+  const handleAddComment = useCallback(async () => {
+    if (!newComment.trim() || !detailIssue) return;
+
+    try {
+      const { error } = await supabase
+        .from('issue_comments')
+        .insert({
+          issue_id: detailIssue.id,
+          comment_text: newComment.trim(),
+          author_email: tcUserEmail,
+          author_name: tcUserName
+        });
+
+      if (error) throw error;
+
+      // Log activity
+      await supabase.from('issue_activity_log').insert({
+        trimble_project_id: projectId,
+        issue_id: detailIssue.id,
+        action: 'comment_added',
+        action_label: ACTIVITY_ACTION_LABELS.comment_added,
+        actor_email: tcUserEmail,
+        actor_name: tcUserName
+      });
+
+      setNewComment('');
+      setMessage('✅ Kommentaar lisatud');
+
+      // Reload comments
+      const { data: comments } = await supabase
+        .from('issue_comments')
+        .select('*')
+        .eq('issue_id', detailIssue.id)
+        .order('created_at', { ascending: true });
+      setIssueComments(comments || []);
+
+    } catch (e: unknown) {
+      console.error('Error adding comment:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [newComment, detailIssue, tcUserEmail, tcUserName, projectId]);
+
+  // ============================================
+  // PHOTO HANDLING
+  // ============================================
+
+  const handlePhotoUpload = useCallback(async (files: FileList | File[]) => {
+    if (!detailIssue || files.length === 0) return;
+
+    setUploadingPhoto(true);
+
+    try {
+      for (const file of Array.from(files)) {
+        // Generate unique filename
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const ext = file.name.split('.').pop() || 'jpg';
+        const filename = `${projectId}/${detailIssue.id}/${timestamp}.${ext}`;
+
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('issue-attachments')
+          .upload(filename, file);
+
+        if (uploadError) throw uploadError;
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+          .from('issue-attachments')
+          .getPublicUrl(filename);
+
+        // Save attachment record
+        const { error: dbError } = await supabase
+          .from('issue_attachments')
+          .insert({
+            issue_id: detailIssue.id,
+            file_name: file.name,
+            file_url: urlData.publicUrl,
+            file_size: file.size,
+            mime_type: file.type,
+            attachment_type: file.type.startsWith('image/') ? 'photo' : 'document',
+            uploaded_by: tcUserEmail,
+            uploaded_by_name: tcUserName
+          });
+
+        if (dbError) throw dbError;
+      }
+
+      // Log activity
+      await supabase.from('issue_activity_log').insert({
+        trimble_project_id: projectId,
+        issue_id: detailIssue.id,
+        action: 'attachment_added',
+        action_label: ACTIVITY_ACTION_LABELS.attachment_added,
+        actor_email: tcUserEmail,
+        actor_name: tcUserName,
+        details: { count: files.length }
+      });
+
+      setMessage(`✅ ${files.length} fail(i) üles laetud`);
+
+      // Reload attachments
+      const { data: attachments } = await supabase
+        .from('issue_attachments')
+        .select('*')
+        .eq('issue_id', detailIssue.id)
+        .order('uploaded_at', { ascending: false });
+      setIssueAttachments(attachments || []);
+
+    } catch (e: unknown) {
+      console.error('Error uploading photo:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [detailIssue, projectId, tcUserEmail, tcUserName]);
+
+  // Paste handler for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (!showDetail || !detailIssue) return;
+
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageFiles: File[] = [];
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            // Rename with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const ext = file.type.split('/')[1] || 'png';
+            const renamedFile = new File([file], `pasted_${timestamp}.${ext}`, { type: file.type });
+            imageFiles.push(renamedFile);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        await handlePhotoUpload(imageFiles);
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [showDetail, detailIssue, handlePhotoUpload]);
+
+  const handleDeleteAttachment = useCallback(async (attachment: IssueAttachment) => {
+    if (!confirm('Kas oled kindel, et soovid faili kustutada?')) return;
+
+    try {
+      // Extract storage path from URL
+      const url = new URL(attachment.file_url);
+      const pathParts = url.pathname.split('/');
+      const storagePath = pathParts.slice(pathParts.indexOf('issue-attachments') + 1).join('/');
+
+      // Delete from storage
+      if (storagePath) {
+        await supabase.storage.from('issue-attachments').remove([storagePath]);
+      }
+
+      // Delete record
+      const { error } = await supabase
+        .from('issue_attachments')
+        .delete()
+        .eq('id', attachment.id);
+
+      if (error) throw error;
+
+      setMessage('✅ Fail kustutatud');
+
+      // Reload attachments
+      if (detailIssue) {
+        const { data: attachments } = await supabase
+          .from('issue_attachments')
+          .select('*')
+          .eq('issue_id', detailIssue.id)
+          .order('uploaded_at', { ascending: false });
+        setIssueAttachments(attachments || []);
+      }
+
+    } catch (e: unknown) {
+      console.error('Error deleting attachment:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [detailIssue]);
+
+  // ============================================
+  // USER ASSIGNMENT
+  // ============================================
+
+  const handleAssignUser = useCallback(async (userEmail: string, userName: string) => {
+    if (!assigningIssueId) return;
+
+    try {
+      // Check if already assigned
+      const { data: existing } = await supabase
+        .from('issue_assignments')
+        .select('id')
+        .eq('issue_id', assigningIssueId)
+        .eq('user_email', userEmail)
+        .eq('is_active', true)
+        .single();
+
+      if (existing) {
+        setMessage('⚠️ Kasutaja on juba määratud');
+        return;
+      }
+
+      const { error } = await supabase
+        .from('issue_assignments')
+        .insert({
+          issue_id: assigningIssueId,
+          user_email: userEmail,
+          user_name: userName,
+          role: 'assignee',
+          assigned_by: tcUserEmail,
+          assigned_by_name: tcUserName
+        });
+
+      if (error) throw error;
+
+      setMessage(`✅ ${userName} määratud`);
+      setShowAssignDialog(false);
+      setAssigningIssueId(null);
+      await loadIssues();
+
+    } catch (e: unknown) {
+      console.error('Error assigning user:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [assigningIssueId, tcUserEmail, tcUserName, loadIssues]);
+
+  const handleUnassignUser = useCallback(async (assignmentId: string) => {
+    try {
+      const { error } = await supabase
+        .from('issue_assignments')
+        .update({
+          is_active: false,
+          unassigned_at: new Date().toISOString(),
+          unassigned_by: tcUserEmail
+        })
+        .eq('id', assignmentId);
+
+      if (error) throw error;
+
+      setMessage('✅ Kasutaja eemaldatud');
+      await loadIssues();
+
+    } catch (e: unknown) {
+      console.error('Error unassigning user:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [tcUserEmail, loadIssues]);
+
+  // ============================================
+  // FILTERING
+  // ============================================
+
+  const filteredIssues = useMemo(() => {
+    let result = [...issues];
+
+    // Text search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(issue =>
+        issue.issue_number.toLowerCase().includes(query) ||
+        issue.title.toLowerCase().includes(query) ||
+        issue.objects?.some(o => o.assembly_mark?.toLowerCase().includes(query)) ||
+        issue.description?.toLowerCase().includes(query) ||
+        issue.location?.toLowerCase().includes(query)
+      );
+    }
+
+    // Status filter
+    if (filters.status !== 'all') {
+      result = result.filter(i => i.status === filters.status);
+    }
+
+    // Priority filter
+    if (filters.priority !== 'all') {
+      result = result.filter(i => i.priority === filters.priority);
+    }
+
+    // Category filter
+    if (filters.category !== 'all') {
+      result = result.filter(i => i.category_id === filters.category);
+    }
+
+    // Assigned to filter
+    if (filters.assignedTo !== 'all') {
+      result = result.filter(i =>
+        i.assignments?.some(a => a.user_email === filters.assignedTo && a.is_active)
+      );
+    }
+
+    // Date range filter
+    if (filters.dateRange !== 'all') {
+      const now = new Date();
+      let startDate: Date;
+
+      switch (filters.dateRange) {
+        case 'today':
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'week':
+          startDate = new Date(now.setDate(now.getDate() - 7));
+          break;
+        case 'month':
+          startDate = new Date(now.setMonth(now.getMonth() - 1));
+          break;
+      }
+
+      result = result.filter(i => new Date(i.detected_at) >= startDate);
+    }
+
+    // Overdue filter
+    if (filters.overdue) {
+      result = result.filter(i => isOverdue(i));
+    }
+
+    return result;
+  }, [issues, searchQuery, filters]);
+
+  // ============================================
+  // EXCEL EXPORT
+  // ============================================
+
+  const exportToExcel = useCallback(async () => {
+    try {
+      setMessage('Genereerin Excelit...');
+
+      const rows: (string | number | null)[][] = [];
+
+      // Header row
+      rows.push([
+        'Number', 'Pealkiri', 'Staatus', 'Prioriteet', 'Kategooria',
+        'Detailid', 'Assembly Mark', 'Avastatud', 'Tähtaeg',
+        'Vastutaja', 'Teavitaja', 'Kirjeldus', 'Asukoht'
+      ]);
+
+      // Sort by status order then by number
+      const sortedIssues = [...filteredIssues].sort((a, b) => {
+        const statusDiff = ISSUE_STATUS_CONFIG[a.status].order - ISSUE_STATUS_CONFIG[b.status].order;
+        if (statusDiff !== 0) return statusDiff;
+        return a.issue_number.localeCompare(b.issue_number);
+      });
+
+      for (const issue of sortedIssues) {
+        const objects = issue.objects || [];
+        const assemblyMarks = objects.map(o => o.assembly_mark).filter(Boolean).join(', ');
+        const primaryAssignee = issue.assignments?.find(a => a.is_primary && a.is_active);
+
+        rows.push([
+          issue.issue_number,
+          issue.title,
+          ISSUE_STATUS_CONFIG[issue.status].label,
+          ISSUE_PRIORITY_CONFIG[issue.priority].label,
+          issue.category?.name || '',
+          objects.length,
+          assemblyMarks,
+          formatDate(issue.detected_at),
+          issue.due_date ? formatDate(issue.due_date) : '',
+          primaryAssignee?.user_name || primaryAssignee?.user_email || '',
+          issue.reported_by_name || issue.reported_by,
+          issue.description || '',
+          issue.location || ''
+        ]);
+      }
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+
+      // Style header row
+      const headerStyle = {
+        font: { bold: true, color: { rgb: 'FFFFFF' } },
+        fill: { fgColor: { rgb: '2563EB' }, type: 'solid' as const },
+        alignment: { horizontal: 'center' as const }
+      };
+
+      for (let col = 0; col < rows[0].length; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (ws[cellRef]) {
+          ws[cellRef].s = headerStyle;
+        }
+      }
+
+      // Column widths
+      ws['!cols'] = [
+        { wch: 10 }, { wch: 30 }, { wch: 14 }, { wch: 12 }, { wch: 15 },
+        { wch: 8 }, { wch: 20 }, { wch: 12 }, { wch: 12 },
+        { wch: 20 }, { wch: 20 }, { wch: 40 }, { wch: 20 }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Probleemid');
+
+      // Generate filename
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `Probleemid_${date}.xlsx`;
+
+      XLSX.writeFile(wb, filename);
+      setMessage('✅ Excel alla laetud');
+
+    } catch (e: unknown) {
+      console.error('Error exporting to Excel:', e);
+      setMessage(`Viga: ${e instanceof Error ? e.message : 'Tundmatu viga'}`);
+    }
+  }, [filteredIssues]);
+
+  // Group issues by status
+  const issuesByStatus = useMemo(() => {
+    const grouped: Record<IssueStatus, Issue[]> = {
+      nonconformance: [],
+      problem: [],
+      pending: [],
+      in_progress: [],
+      completed: [],
+      closed: [],
+      cancelled: []
+    };
+
+    for (const issue of filteredIssues) {
+      grouped[issue.status].push(issue);
+    }
+
+    return grouped;
+  }, [filteredIssues]);
+
+  // Status order for display
+  const statusOrder: IssueStatus[] = [
+    'nonconformance', 'problem', 'pending', 'in_progress',
+    'completed', 'closed', 'cancelled'
+  ];
+
+  // Clear message after 3 seconds
+  useEffect(() => {
+    if (message) {
+      const timer = setTimeout(() => setMessage(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [message]);
+
+  // ============================================
+  // RENDER
+  // ============================================
+
+  return (
+    <div className="issues-screen">
+      {/* Header */}
+      <div className="issues-header">
+        <div className="issues-header-left">
+          <button className="back-button" onClick={onBackToMenu}>
+            <FiArrowLeft size={20} />
+          </button>
+          <h1>Probleemid</h1>
+          <span className="issues-count">
+            {filteredIssues.length} / {issues.length}
+          </span>
+        </div>
+        <div className="issues-header-right">
+          <button
+            className="icon-button"
+            onClick={() => setShowFilters(!showFilters)}
+            title="Filtrid"
+          >
+            <FiFilter size={18} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={colorModelByIssueStatus}
+            title="Värvi mudel"
+          >
+            <FiRefreshCw size={18} />
+          </button>
+          <button
+            className="icon-button"
+            onClick={exportToExcel}
+            title="Ekspordi Excel"
+          >
+            <FiDownload size={18} />
+          </button>
+          <button
+            className="primary-button"
+            onClick={handleCreateIssue}
+          >
+            <FiPlus size={18} />
+            Lisa probleem
+          </button>
+        </div>
+      </div>
+
+      {/* Message */}
+      {message && (
+        <div className={`issues-message ${message.startsWith('⚠️') || message.startsWith('Viga') ? 'error' : 'success'}`}>
+          {message}
+        </div>
+      )}
+
+      {/* Coloring status */}
+      {coloringStatus && (
+        <div className="issues-coloring-status">
+          <FiLoader className="spinning" size={14} />
+          {coloringStatus}
+        </div>
+      )}
+
+      {/* Search bar */}
+      <div className="issues-search">
+        <FiSearch size={16} />
+        <input
+          type="text"
+          placeholder="Otsi numbri, pealkirja, detaili järgi..."
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button onClick={() => setSearchQuery('')}>
+            <FiX size={14} />
+          </button>
+        )}
+      </div>
+
+      {/* Filters */}
+      {showFilters && (
+        <div className="issues-filters">
+          <select
+            value={filters.status}
+            onChange={e => setFilters(f => ({ ...f, status: e.target.value as IssueStatus | 'all' }))}
+          >
+            <option value="all">Kõik staatused</option>
+            {Object.entries(ISSUE_STATUS_CONFIG).map(([key, config]) => (
+              <option key={key} value={key}>{config.label}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.priority}
+            onChange={e => setFilters(f => ({ ...f, priority: e.target.value as IssuePriority | 'all' }))}
+          >
+            <option value="all">Kõik prioriteedid</option>
+            {Object.entries(ISSUE_PRIORITY_CONFIG).map(([key, config]) => (
+              <option key={key} value={key}>{config.label}</option>
+            ))}
+          </select>
+
+          <select
+            value={filters.assignedTo}
+            onChange={e => setFilters(f => ({ ...f, assignedTo: e.target.value }))}
+          >
+            <option value="all">Kõik vastutajad</option>
+            <option value={tcUserEmail}>Mulle määratud</option>
+            {teamMembers.map(member => (
+              <option key={member.email} value={member.email}>
+                {member.fullName}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filters.dateRange}
+            onChange={e => setFilters(f => ({ ...f, dateRange: e.target.value as 'today' | 'week' | 'month' | 'all' }))}
+          >
+            <option value="all">Kõik kuupäevad</option>
+            <option value="today">Täna</option>
+            <option value="week">Viimane nädal</option>
+            <option value="month">Viimane kuu</option>
+          </select>
+
+          <label className="filter-checkbox">
+            <input
+              type="checkbox"
+              checked={filters.overdue}
+              onChange={e => setFilters(f => ({ ...f, overdue: e.target.checked }))}
+            />
+            <span>Tähtaeg ületatud</span>
+          </label>
+
+          <button
+            className="filter-clear-btn"
+            onClick={() => {
+              setFilters({
+                status: 'all', priority: 'all', category: 'all',
+                assignedTo: 'all', source: 'all', dateRange: 'all', overdue: false
+              });
+              setSearchQuery('');
+            }}
+          >
+            <FiX size={14} /> Tühjenda
+          </button>
+        </div>
+      )}
+
+      {/* Issues list grouped by status */}
+      <div className="issues-list">
+        {loading ? (
+          <div className="issues-loading">
+            <FiLoader className="spinning" size={24} />
+            <span>Laen probleeme...</span>
+          </div>
+        ) : filteredIssues.length === 0 ? (
+          <div className="issues-empty">
+            <FiAlertCircle size={48} />
+            <p>Probleeme ei leitud</p>
+            <p className="issues-empty-hint">
+              Vali mudelist detail ja klõpsa "Lisa probleem"
+            </p>
+          </div>
+        ) : (
+          statusOrder.map(status => {
+            const statusIssues = issuesByStatus[status];
+            if (statusIssues.length === 0) return null;
+
+            const config = ISSUE_STATUS_CONFIG[status];
+            const isExpanded = expandedStatuses.has(status);
+
+            return (
+              <div key={status} className="issues-status-group">
+                <button
+                  className="status-group-header"
+                  onClick={() => {
+                    setExpandedStatuses(prev => {
+                      const next = new Set(prev);
+                      if (next.has(status)) {
+                        next.delete(status);
+                      } else {
+                        next.add(status);
+                      }
+                      return next;
+                    });
+                  }}
+                  style={{ borderLeftColor: config.color }}
+                >
+                  <div className="status-group-title">
+                    {isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+                    <span
+                      className="status-badge"
+                      style={{ backgroundColor: config.bgColor, color: config.color }}
+                    >
+                      {STATUS_ICONS[status]}
+                      {config.label}
+                    </span>
+                    <span className="status-count">{statusIssues.length}</span>
+                  </div>
+                </button>
+
+                {isExpanded && (
+                  <div className="status-group-items">
+                    {statusIssues.map(issue => (
+                      <div
+                        key={issue.id}
+                        id={`issue-card-${issue.id}`}
+                        className={`issue-card ${highlightedIssueId === issue.id ? 'highlighted' : ''} ${isOverdue(issue) ? 'overdue' : ''}`}
+                        onClick={() => openIssueDetail(issue)}
+                      >
+                        <div className="issue-card-header">
+                          <span className="issue-number">{issue.issue_number}</span>
+                          <span
+                            className="priority-badge"
+                            style={{
+                              backgroundColor: ISSUE_PRIORITY_CONFIG[issue.priority].bgColor,
+                              color: ISSUE_PRIORITY_CONFIG[issue.priority].color
+                            }}
+                            title={ISSUE_PRIORITY_CONFIG[issue.priority].label}
+                          >
+                            {PRIORITY_ICONS[issue.priority]}
+                          </span>
+                        </div>
+                        <div className="issue-card-title">{issue.title}</div>
+                        <div className="issue-card-objects">
+                          {issue.objects && issue.objects.length > 0 ? (
+                            issue.objects.length > 1 ? (
+                              <span className="objects-badge">
+                                <FiLayers size={12} />
+                                {issue.objects.length} detaili
+                              </span>
+                            ) : (
+                              <span className="assembly-mark">
+                                {issue.objects[0].assembly_mark || 'Määramata'}
+                              </span>
+                            )
+                          ) : (
+                            <span className="no-objects">Pole seotud</span>
+                          )}
+                        </div>
+                        <div className="issue-card-footer">
+                          <span className="issue-date">
+                            <FiCalendar size={12} />
+                            {formatDate(issue.detected_at)}
+                          </span>
+                          {issue.due_date && (
+                            <span className={`issue-due ${isOverdue(issue) ? 'overdue' : ''}`}>
+                              <FiClock size={12} />
+                              {formatDate(issue.due_date)}
+                            </span>
+                          )}
+                          {issue.assignments && issue.assignments.length > 0 && (
+                            <span className="issue-assignee">
+                              <FiUser size={12} />
+                              {issue.assignments[0].user_name || issue.assignments[0].user_email.split('@')[0]}
+                            </span>
+                          )}
+                        </div>
+                        <div className="issue-card-actions">
+                          <button
+                            className="icon-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              selectIssueInModel(issue);
+                            }}
+                            title="Näita mudelis"
+                          >
+                            <FiTarget size={14} />
+                          </button>
+                          <button
+                            className="icon-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssigningIssueId(issue.id);
+                              setShowAssignDialog(true);
+                            }}
+                            title="Määra vastutaja"
+                          >
+                            <FiUser size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Issue Form Modal */}
+      {showForm && (
+        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+          <div className="modal-content issue-form-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingIssue ? 'Muuda probleemi' : 'Lisa uus probleem'}</h2>
+              <button onClick={() => setShowForm(false)}>
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="issue-form">
+              {/* Selected objects */}
+              {!editingIssue && newIssueObjects.length > 0 && (
+                <div className="form-section">
+                  <label>Valitud detailid ({newIssueObjects.length})</label>
+                  <div className="selected-objects-list">
+                    {newIssueObjects.map((obj, index) => (
+                      <div key={index} className="selected-object">
+                        <span>{obj.assemblyMark || 'Unknown'}</span>
+                        {obj.productName && <span className="product-name">{obj.productName}</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="form-row">
+                <div className="form-group full">
+                  <label>Pealkiri *</label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={e => setFormData(f => ({ ...f, title: e.target.value }))}
+                    placeholder="Kirjelda probleemi lühidalt"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Staatus</label>
+                  <select
+                    value={formData.status}
+                    onChange={e => setFormData(f => ({ ...f, status: e.target.value as IssueStatus }))}
+                  >
+                    {Object.entries(ISSUE_STATUS_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Prioriteet</label>
+                  <select
+                    value={formData.priority}
+                    onChange={e => setFormData(f => ({ ...f, priority: e.target.value as IssuePriority }))}
+                  >
+                    {Object.entries(ISSUE_PRIORITY_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Allikas</label>
+                  <select
+                    value={formData.source}
+                    onChange={e => setFormData(f => ({ ...f, source: e.target.value as IssueSource }))}
+                  >
+                    {Object.entries(ISSUE_SOURCE_CONFIG).map(([key, config]) => (
+                      <option key={key} value={key}>{config.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Tähtaeg</label>
+                  <input
+                    type="date"
+                    value={formData.due_date}
+                    onChange={e => setFormData(f => ({ ...f, due_date: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group full">
+                  <label>Kirjeldus</label>
+                  <textarea
+                    value={formData.description}
+                    onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Detailne kirjeldus probleemist"
+                    rows={4}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group full">
+                  <label>Asukoht objektil</label>
+                  <input
+                    type="text"
+                    value={formData.location}
+                    onChange={e => setFormData(f => ({ ...f, location: e.target.value }))}
+                    placeholder="Nt. vasakpoolne serv, keevitusõmblus nr.2"
+                  />
+                </div>
+              </div>
+
+              <div className="form-actions">
+                <button
+                  className="secondary-button"
+                  onClick={() => setShowForm(false)}
+                >
+                  Tühista
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={handleSubmitIssue}
+                >
+                  {editingIssue ? 'Salvesta muudatused' : 'Lisa probleem'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Issue Detail Modal */}
+      {showDetail && detailIssue && (
+        <div className="modal-overlay" onClick={() => setShowDetail(false)}>
+          <div className="modal-content issue-detail-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="detail-header-info">
+                <span className="issue-number">{detailIssue.issue_number}</span>
+                <span
+                  className="status-badge large"
+                  style={{
+                    backgroundColor: ISSUE_STATUS_CONFIG[detailIssue.status].bgColor,
+                    color: ISSUE_STATUS_CONFIG[detailIssue.status].color
+                  }}
+                >
+                  {STATUS_ICONS[detailIssue.status]}
+                  {ISSUE_STATUS_CONFIG[detailIssue.status].label}
+                </span>
+              </div>
+              <button onClick={() => setShowDetail(false)}>
+                <FiX size={20} />
+              </button>
+            </div>
+
+            <div className="issue-detail">
+              <h3>{detailIssue.title}</h3>
+
+              {/* Quick status change */}
+              <div className="status-change-bar">
+                {statusOrder.map(s => (
+                  <button
+                    key={s}
+                    className={`status-btn ${detailIssue.status === s ? 'active' : ''}`}
+                    style={{
+                      backgroundColor: detailIssue.status === s ? ISSUE_STATUS_CONFIG[s].color : undefined,
+                      color: detailIssue.status === s ? 'white' : ISSUE_STATUS_CONFIG[s].color,
+                      borderColor: ISSUE_STATUS_CONFIG[s].color
+                    }}
+                    onClick={() => handleStatusChange(detailIssue.id, s)}
+                    title={ISSUE_STATUS_CONFIG[s].label}
+                  >
+                    {STATUS_ICONS[s]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Info grid */}
+              <div className="detail-info-grid">
+                <div className="info-item">
+                  <span className="info-label">Prioriteet</span>
+                  <span
+                    className="priority-badge"
+                    style={{
+                      backgroundColor: ISSUE_PRIORITY_CONFIG[detailIssue.priority].bgColor,
+                      color: ISSUE_PRIORITY_CONFIG[detailIssue.priority].color
+                    }}
+                  >
+                    {PRIORITY_ICONS[detailIssue.priority]}
+                    {ISSUE_PRIORITY_CONFIG[detailIssue.priority].label}
+                  </span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Avastatud</span>
+                  <span>{formatDateTime(detailIssue.detected_at)}</span>
+                </div>
+                {detailIssue.due_date && (
+                  <div className="info-item">
+                    <span className="info-label">Tähtaeg</span>
+                    <span className={isOverdue(detailIssue) ? 'overdue' : ''}>
+                      {formatDate(detailIssue.due_date)}
+                    </span>
+                  </div>
+                )}
+                <div className="info-item">
+                  <span className="info-label">Teavitas</span>
+                  <span>{detailIssue.reported_by_name || detailIssue.reported_by}</span>
+                </div>
+              </div>
+
+              {/* Description */}
+              {detailIssue.description && (
+                <div className="detail-section">
+                  <h4>Kirjeldus</h4>
+                  <p>{detailIssue.description}</p>
+                </div>
+              )}
+
+              {/* Location */}
+              {detailIssue.location && (
+                <div className="detail-section">
+                  <h4>Asukoht</h4>
+                  <p>{detailIssue.location}</p>
+                </div>
+              )}
+
+              {/* Objects */}
+              <div className="detail-section">
+                <h4>
+                  <FiLayers size={14} />
+                  Seotud detailid ({detailIssue.objects?.length || 0})
+                </h4>
+                <div className="detail-objects-list">
+                  {detailIssue.objects?.map(obj => (
+                    <div
+                      key={obj.id}
+                      className="detail-object"
+                      onClick={() => {
+                        // Select this object in model
+                        syncingToModelRef.current = true;
+                        api.viewer.convertToObjectRuntimeIds(obj.model_id, [obj.guid_ifc])
+                          .then(runtimeIds => {
+                            const validIds = runtimeIds.filter((id): id is number => id !== undefined && id !== null);
+                            if (validIds.length > 0) {
+                              api.viewer.setSelection({
+                                modelObjectIds: [{ modelId: obj.model_id, objectRuntimeIds: validIds }]
+                              }, 'set');
+                              api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+                            }
+                          })
+                          .finally(() => {
+                            setTimeout(() => { syncingToModelRef.current = false; }, 2000);
+                          });
+                      }}
+                    >
+                      <span className="obj-mark">{obj.assembly_mark || 'Unknown'}</span>
+                      {obj.product_name && <span className="obj-product">{obj.product_name}</span>}
+                      {obj.is_primary && <span className="primary-tag">Peamine</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Assignments */}
+              <div className="detail-section">
+                <h4>
+                  <FiUser size={14} />
+                  Vastutajad
+                  <button
+                    className="add-btn"
+                    onClick={() => {
+                      setAssigningIssueId(detailIssue.id);
+                      setShowAssignDialog(true);
+                    }}
+                  >
+                    <FiPlus size={14} />
+                  </button>
+                </h4>
+                <div className="assignments-list">
+                  {detailIssue.assignments?.filter(a => a.is_active).map(a => (
+                    <div key={a.id} className="assignment-item">
+                      <FiUser size={14} />
+                      <span>{a.user_name || a.user_email}</span>
+                      <button
+                        className="remove-btn"
+                        onClick={() => handleUnassignUser(a.id)}
+                      >
+                        <FiX size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  {(!detailIssue.assignments || detailIssue.assignments.filter(a => a.is_active).length === 0) && (
+                    <span className="no-assignments">Pole määratud</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Photos */}
+              <div className="detail-section">
+                <h4>
+                  <FiCamera size={14} />
+                  Pildid ({issueAttachments.filter(a => a.attachment_type === 'photo').length})
+                  <button
+                    className="add-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingPhoto}
+                  >
+                    {uploadingPhoto ? <FiLoader className="spinning" size={14} /> : <FiPlus size={14} />}
+                  </button>
+                </h4>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    if (e.target.files) handlePhotoUpload(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+                <p className="paste-hint">Võid ka kleepida pildi (Ctrl+V)</p>
+                <div className="photos-grid">
+                  {issueAttachments.filter(a => a.attachment_type === 'photo').map(photo => (
+                    <div key={photo.id} className="photo-item">
+                      <img src={photo.file_url} alt={photo.file_name} />
+                      <div className="photo-actions">
+                        <a href={photo.file_url} download={photo.file_name} target="_blank" rel="noopener noreferrer">
+                          <FiDownload size={14} />
+                        </a>
+                        <button onClick={() => handleDeleteAttachment(photo)}>
+                          <FiTrash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Comments */}
+              <div className="detail-section">
+                <h4>
+                  <FiMessageSquare size={14} />
+                  Kommentaarid ({issueComments.length})
+                </h4>
+                <div className="comments-list">
+                  {issueComments.map(comment => (
+                    <div key={comment.id} className="comment-item">
+                      <div className="comment-header">
+                        <span className="comment-author">
+                          {comment.author_name || comment.author_email}
+                        </span>
+                        <span className="comment-date">
+                          {formatRelativeTime(comment.created_at)}
+                        </span>
+                      </div>
+                      <p className="comment-text">{comment.comment_text}</p>
+                      {comment.old_status && comment.new_status && (
+                        <div className="comment-status-change">
+                          Staatus: {ISSUE_STATUS_CONFIG[comment.old_status].label} →{' '}
+                          {ISSUE_STATUS_CONFIG[comment.new_status].label}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="comment-input">
+                  <textarea
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    placeholder="Lisa kommentaar..."
+                    rows={2}
+                  />
+                  <button
+                    className="send-btn"
+                    onClick={handleAddComment}
+                    disabled={!newComment.trim()}
+                  >
+                    <FiSend size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Activity log */}
+              <div className="detail-section">
+                <h4>
+                  <FiActivity size={14} />
+                  Tegevused
+                </h4>
+                <div className="activity-list">
+                  {issueActivities.slice(0, 10).map(activity => (
+                    <div key={activity.id} className="activity-item">
+                      <span className="activity-text">
+                        {activity.action_label}
+                        {activity.old_value && activity.new_value && (
+                          <span className="activity-change">
+                            {' '}{activity.old_value} → {activity.new_value}
+                          </span>
+                        )}
+                      </span>
+                      <span className="activity-meta">
+                        {activity.actor_name || activity.actor_email} • {formatRelativeTime(activity.created_at)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="detail-actions">
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    setEditingIssue(detailIssue);
+                    setFormData({
+                      title: detailIssue.title,
+                      description: detailIssue.description || '',
+                      location: detailIssue.location || '',
+                      status: detailIssue.status,
+                      priority: detailIssue.priority,
+                      source: detailIssue.source,
+                      category_id: detailIssue.category_id || '',
+                      due_date: detailIssue.due_date || '',
+                      estimated_hours: detailIssue.estimated_hours?.toString() || '',
+                      estimated_cost: detailIssue.estimated_cost?.toString() || ''
+                    });
+                    setShowDetail(false);
+                    setShowForm(true);
+                  }}
+                >
+                  <FiEdit2 size={14} />
+                  Muuda
+                </button>
+                <button
+                  className="danger-button"
+                  onClick={() => handleDeleteIssue(detailIssue.id)}
+                >
+                  <FiTrash2 size={14} />
+                  Kustuta
+                </button>
+                <button
+                  className="primary-button"
+                  onClick={() => selectIssueInModel(detailIssue)}
+                >
+                  <FiEye size={14} />
+                  Näita mudelis
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign User Dialog */}
+      {showAssignDialog && (
+        <div className="modal-overlay" onClick={() => setShowAssignDialog(false)}>
+          <div className="modal-content assign-dialog" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Määra vastutaja</h3>
+              <button onClick={() => setShowAssignDialog(false)}>
+                <FiX size={20} />
+              </button>
+            </div>
+            <div className="assign-list">
+              {teamMembers.map(member => (
+                <button
+                  key={member.email}
+                  className="assign-item"
+                  onClick={() => handleAssignUser(member.email, member.fullName)}
+                >
+                  <FiUser size={16} />
+                  <div className="assign-info">
+                    <span className="assign-name">{member.fullName}</span>
+                    <span className="assign-email">{member.email}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
