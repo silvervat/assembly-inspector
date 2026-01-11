@@ -408,6 +408,12 @@ export default function InstallationsScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{assemblyMark: string; installedAt: string; userEmail: string}[] | null>(null);
 
+  // State for preassembly confirmation (when adding preassembly to already-installed items)
+  const [preassemblyConfirm, setPreassemblyConfirm] = useState<{
+    installedItems: {assemblyMark: string; installedAt: string; preassemblyTime: string}[];
+    objectsToSave: SelectedObject[];
+  } | null>(null);
+
   // Helper to get local datetime string for datetime-local input
   const getLocalDateTimeString = () => {
     const now = new Date();
@@ -2494,24 +2500,38 @@ export default function InstallationsScreen({
 
     // Clear previous warning
     setDuplicateWarning(null);
+    setPreassemblyConfirm(null);
 
-    // Check for already INSTALLED objects - can't preassemble if already installed!
-    const alreadyInstalled: {assemblyMark: string; installedAt: string; userEmail: string}[] = [];
-    // Also check for already preassembled
+    // Track already installed and preassembled items
+    const installedCanAdd: {obj: SelectedObject; assemblyMark: string; installedAt: string}[] = []; // Preassembly time is before installation
+    const installedBlocked: {assemblyMark: string; installedAt: string}[] = []; // Preassembly time is not before installation
     const alreadyPreassembled: {assemblyMark: string; preassembledAt: string; userEmail: string}[] = [];
+
+    const preassemblyDateTime = new Date(installDate).getTime();
 
     const newObjects = selectedObjects.filter(obj => {
       const guid = (obj.guidIfc || obj.guid || '').toLowerCase();
       if (!guid) return true;
 
-      // Check if already installed - can't preassemble!
+      // Check if already installed
       const installedInfo = installedGuids.get(guid);
       if (installedInfo) {
-        alreadyInstalled.push({
-          assemblyMark: obj.assemblyMark || installedInfo.assemblyMark,
-          installedAt: installedInfo.installedAt,
-          userEmail: installedInfo.userEmail
-        });
+        const installDateTime = new Date(installedInfo.installedAt).getTime();
+        const assemblyMark = obj.assemblyMark || installedInfo.assemblyMark;
+
+        // Allow if preassembly time is strictly BEFORE installation time
+        if (preassemblyDateTime < installDateTime) {
+          installedCanAdd.push({
+            obj,
+            assemblyMark,
+            installedAt: installedInfo.installedAt
+          });
+        } else {
+          installedBlocked.push({
+            assemblyMark,
+            installedAt: installedInfo.installedAt
+          });
+        }
         return false;
       }
 
@@ -2529,10 +2549,32 @@ export default function InstallationsScreen({
       return true;
     });
 
-    // Show warnings
-    if (alreadyInstalled.length > 0) {
-      setMessage(`${alreadyInstalled.length} detaili on juba paigaldatud ja neid ei saa preassembly lisada`);
-      return;
+    // Show warnings for blocked items (preassembly time is not before installation time)
+    if (installedBlocked.length > 0) {
+      const blockedMsg = installedBlocked.length === 1
+        ? `1 detail on juba paigaldatud ja preassembly aeg peab olema enne paigalduse aega`
+        : `${installedBlocked.length} detaili on juba paigaldatud ja preassembly aeg peab olema enne paigalduse aega`;
+      setMessage(blockedMsg);
+
+      // If there are items that can be added, still continue with those
+      if (installedCanAdd.length === 0 && newObjects.length === 0) {
+        return;
+      }
+    }
+
+    // If there are already installed items that CAN be added (preassembly is before installation)
+    // Show confirmation dialog
+    if (installedCanAdd.length > 0) {
+      const allObjectsToSave = [...newObjects, ...installedCanAdd.map(i => i.obj)];
+      setPreassemblyConfirm({
+        installedItems: installedCanAdd.map(i => ({
+          assemblyMark: i.assemblyMark,
+          installedAt: i.installedAt,
+          preassemblyTime: installDate
+        })),
+        objectsToSave: allObjectsToSave
+      });
+      return; // Wait for user confirmation
     }
 
     if (alreadyPreassembled.length > 0 && newObjects.length === 0) {
@@ -2612,6 +2654,113 @@ export default function InstallationsScreen({
 
         // Color newly added items with PREASSEMBLY_COLOR immediately
         const newGuids = newObjects.map(obj => obj.guidIfc || obj.guid).filter(Boolean) as string[];
+        if (newGuids.length > 0) {
+          const foundObjects = await findObjectsInLoadedModels(api, newGuids);
+          const byModel: Record<string, number[]> = {};
+          for (const [, found] of foundObjects) {
+            if (!byModel[found.modelId]) byModel[found.modelId] = [];
+            byModel[found.modelId].push(found.runtimeId);
+          }
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: PREASSEMBLY_COLOR }
+            );
+          }
+        }
+
+        // Clear selection
+        await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+        setSelectedObjects([]);
+        lastSelectionRef.current = '';
+      }
+    } catch (e) {
+      console.error('Error saving preassembly:', e);
+      setMessage('Viga preassembly salvestamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Confirm and save preassembly for already-installed items
+  const confirmPreassemblySave = async () => {
+    if (!preassemblyConfirm) return;
+
+    const objectsToSave = preassemblyConfirm.objectsToSave;
+    setPreassemblyConfirm(null);
+
+    if (objectsToSave.length === 0) {
+      setMessage('Pole detaile lisamiseks');
+      return;
+    }
+
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const installerName = tcUserName || user.name || user.email.split('@')[0];
+      const userEmail = tcUserEmail || user.email;
+
+      // Convert install methods to display string
+      const methodName = Object.entries(selectedInstallMethods)
+        .filter(([, count]) => count && count > 0)
+        .map(([key, count]) => {
+          const config = INSTALL_METHODS_CONFIG.find(m => m.key === key);
+          return count === 1 ? config?.label : `${count}x ${config?.label}`;
+        })
+        .join(', ');
+
+      const preassembliesToSave = objectsToSave.map(obj => ({
+        project_id: projectId,
+        model_id: obj.modelId,
+        guid: obj.guidIfc || obj.guid || '',
+        guid_ifc: obj.guidIfc,
+        guid_ms: obj.guidMs,
+        object_runtime_id: obj.runtimeId,
+        assembly_mark: obj.assemblyMark || '',
+        product_name: obj.productName,
+        file_name: obj.fileName,
+        cast_unit_weight: obj.castUnitWeight,
+        cast_unit_bottom_elevation: obj.castUnitBottomElevation,
+        cast_unit_top_elevation: obj.castUnitTopElevation,
+        cast_unit_position_code: obj.castUnitPositionCode,
+        object_type: obj.objectType,
+        installer_name: installerName,
+        user_email: userEmail.toLowerCase(),
+        installation_method_id: null,
+        installation_method_name: methodName,
+        preassembled_at: installDate,
+        notes: notes || null,
+        team_members: [
+          ...monteerijad.map(m => `Monteerija: ${m}`),
+          ...troppijad.map(t => `Troppija: ${t}`),
+          ...keevitajad.map(k => `Keevitaja: ${k}`),
+          ...craneOperators.map(c => `Kraana: ${c}`),
+          ...forkliftOperators.map(f => `Teleskooplaadur: ${f}`),
+          ...poomtostukOperators.map(p => `Korvtõstuk: ${p}`),
+          ...kaartostukOperators.map(k => `Käärtõstuk: ${k}`)
+        ].join(', ') || null
+      }));
+
+      const { error } = await supabase
+        .from('preassemblies')
+        .insert(preassembliesToSave);
+
+      if (error) {
+        if (error.code === '23505') {
+          setMessage('Mõned detailid on juba preassembly listis');
+        } else {
+          throw error;
+        }
+      } else {
+        setMessage(`${objectsToSave.length} detail(i) edukalt preassembly lisatud!`);
+        setNotes('');
+
+        // Reload data
+        await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
+
+        // Color newly added items with PREASSEMBLY_COLOR immediately
+        const newGuids = objectsToSave.map(obj => obj.guidIfc || obj.guid).filter(Boolean) as string[];
         if (newGuids.length > 0) {
           const foundObjects = await findObjectsInLoadedModels(api, newGuids);
           const byModel: Record<string, number[]> = {};
@@ -4162,64 +4311,7 @@ export default function InstallationsScreen({
       {!showList ? (
         /* Form View */
         <div className="installations-form-view">
-          {/* Entry Mode Switch - Installation vs Preassembly */}
-          <div className="entry-mode-switch" style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            padding: '8px 12px',
-            background: '#f3f4f6',
-            borderRadius: '8px',
-            marginBottom: '12px'
-          }}>
-            <button
-              onClick={() => handleEntryModeChange('installation')}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                borderRadius: '6px',
-                border: 'none',
-                background: entryMode === 'installation' ? '#0a3a67' : 'transparent',
-                color: entryMode === 'installation' ? '#fff' : '#374151',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontSize: '13px',
-                fontWeight: entryMode === 'installation' ? 600 : 400,
-                transition: 'all 0.2s'
-              }}
-            >
-              <FiTool size={16} />
-              <span>Paigaldus</span>
-            </button>
-            <button
-              onClick={() => handleEntryModeChange('preassembly')}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                borderRadius: '6px',
-                border: 'none',
-                background: entryMode === 'preassembly' ? '#7c3aed' : 'transparent',
-                color: entryMode === 'preassembly' ? '#fff' : '#374151',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontSize: '13px',
-                fontWeight: entryMode === 'preassembly' ? 600 : 400,
-                transition: 'all 0.2s'
-              }}
-            >
-              <FiPackage size={16} />
-              <span>Preassembly</span>
-            </button>
-          </div>
-
-          {/* Menu with list buttons */}
+          {/* Menu with list buttons - at the very top */}
           <div className="installations-menu" style={{ display: 'flex', gap: '8px' }}>
             <button
               className="installations-menu-btn"
@@ -4281,6 +4373,63 @@ export default function InstallationsScreen({
 
           {/* Form fields - each on separate row */}
           <div className="installations-form-fields">
+            {/* Entry Mode Switch - Installation vs Preassembly - compact, inside form */}
+            <div className="entry-mode-switch" style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '4px',
+              background: '#f3f4f6',
+              borderRadius: '6px',
+              marginBottom: '8px'
+            }}>
+              <button
+                onClick={() => handleEntryModeChange('installation')}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: entryMode === 'installation' ? '#0a3a67' : 'transparent',
+                  color: entryMode === 'installation' ? '#fff' : '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '13px',
+                  fontWeight: entryMode === 'installation' ? 600 : 400,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FiTool size={14} />
+                <span>Paigaldus</span>
+              </button>
+              <button
+                onClick={() => handleEntryModeChange('preassembly')}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: entryMode === 'preassembly' ? '#7c3aed' : 'transparent',
+                  color: entryMode === 'preassembly' ? '#fff' : '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '13px',
+                  fontWeight: entryMode === 'preassembly' ? 600 : 400,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FiPackage size={14} />
+                <span>Preassembly</span>
+              </button>
+            </div>
+
             <div className="form-row">
               <label><FiCalendar size={14} /> Kuupäev</label>
               <div className="date-input-wrapper">
@@ -5988,6 +6137,82 @@ export default function InstallationsScreen({
               >
                 Selge
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Preassembly confirmation modal - for adding preassembly to already installed items */}
+      {preassemblyConfirm && (
+        <div className="modal-overlay" onClick={() => setPreassemblyConfirm(null)}>
+          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+            <div className="modal-header" style={{ background: '#fff3e0' }}>
+              <h3>⚠️ Preassembly juba paigaldatud detailidele</h3>
+              <button onClick={() => setPreassemblyConfirm(null)}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div style={{
+                background: '#e3f2fd',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '16px',
+                border: '1px solid #90caf9'
+              }}>
+                <p style={{ margin: 0, color: '#1565c0', fontWeight: 500, fontSize: '14px' }}>
+                  ℹ️ <strong>NB! Pöörake tähelepanu kellaajale!</strong>
+                </p>
+                <p style={{ margin: '8px 0 0 0', color: '#1565c0', fontSize: '13px' }}>
+                  Preassembly kellaaeg peab olema enne paigalduse kellaaega (päev võib olla sama).
+                </p>
+              </div>
+              <p style={{ marginBottom: '12px', color: '#666' }}>
+                Järgmised {preassemblyConfirm.installedItems.length} detaili on juba paigaldatud,
+                kuid preassembly aeg on enne paigalduse aega:
+              </p>
+              <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
+                {preassemblyConfirm.installedItems.map((item, idx) => (
+                  <div key={idx} style={{
+                    padding: '10px',
+                    marginBottom: '8px',
+                    background: '#fff3e0',
+                    borderRadius: '6px',
+                    border: '1px solid #ffcc80'
+                  }}>
+                    <div style={{ fontWeight: 600, marginBottom: '4px' }}>{item.assemblyMark}</div>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '12px', color: '#666' }}>
+                      <div>
+                        <span style={{ color: '#388e3c' }}>📦 Preassembly:</span>{' '}
+                        {new Date(item.preassemblyTime).toLocaleDateString('et-EE')}{' '}
+                        <strong>{new Date(item.preassemblyTime).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#1976d2' }}>🔧 Paigaldus:</span>{' '}
+                        {new Date(item.installedAt).toLocaleDateString('et-EE')}{' '}
+                        <strong>{new Date(item.installedAt).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setPreassemblyConfirm(null)}
+                  style={{ flex: 1 }}
+                >
+                  Tühista
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={confirmPreassemblySave}
+                  disabled={saving}
+                  style={{ flex: 1, background: '#ff9800' }}
+                >
+                  {saving ? 'Salvestan...' : `Lisa preassembly (${preassemblyConfirm.objectsToSave.length} tk)`}
+                </button>
+              </div>
             </div>
           </div>
         </div>

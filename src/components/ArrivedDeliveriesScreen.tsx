@@ -6,7 +6,7 @@ import {
 } from '../supabase';
 import { selectObjectsByGuid, findObjectsInLoadedModels } from '../utils/navigationHelper';
 import {
-  FiArrowLeft, FiChevronLeft, FiChevronRight, FiCheck, FiX,
+  FiArrowLeft, FiArrowRight, FiChevronLeft, FiChevronRight, FiCheck, FiX,
   FiCamera, FiClock, FiMapPin, FiTruck,
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
@@ -47,10 +47,10 @@ const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
   // Machines
   { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, category: 'machine' },
   { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, category: 'machine' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, category: 'machine' },
   { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, category: 'machine' },
   // Labor
-  { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, category: 'labor' },
+  { key: 'workforce', label: 'Tööjõud', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 6, category: 'labor' },
 ];
 
 // Color type for model coloring
@@ -2151,6 +2151,23 @@ export default function ArrivedDeliveriesScreen({
             const missingCount = arrivalConfirmations.filter(c => c.status === 'missing').length;
             const pendingCount = arrivalConfirmations.filter(c => c.status === 'pending').length;
 
+            // Find items that were supposed to be in THIS vehicle but arrived with ANOTHER vehicle
+            // These are confirmations with source_vehicle_id matching this vehicle
+            const removedItemsConfirmations = confirmations.filter(c =>
+              c.source_vehicle_id === vehicle.id && c.status === 'added'
+            );
+            const removedItems = removedItemsConfirmations.map(conf => {
+              const item = items.find(i => i.id === conf.item_id);
+              const receivingVehicle = arrivedVehicles.find(av => av.id === conf.arrived_vehicle_id);
+              const receivingVehicleInfo = receivingVehicle ? vehicles.find(v => v.id === receivingVehicle.vehicle_id) : null;
+              return {
+                confirmation: conf,
+                item,
+                receivingVehicle: receivingVehicleInfo,
+                receivingArrival: receivingVehicle
+              };
+            }).filter(r => r.item); // Only include if item still exists
+
             return (
               <div
                 key={vehicle.id}
@@ -2321,14 +2338,7 @@ export default function ArrivedDeliveriesScreen({
                                     style={{
                                       backgroundColor: isActive ? res.activeBgColor : res.bgColor
                                     }}
-                                    onClick={() => {
-                                      const newValue = isActive ? 0 : 1;
-                                      const newResources = {
-                                        ...(arrivedVehicle.unload_resources || {}),
-                                        [res.key]: newValue
-                                      };
-                                      updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                    }}
+                                    title={res.label}
                                   >
                                     <img
                                       src={`${import.meta.env.BASE_URL}icons/${res.icon}`}
@@ -2339,31 +2349,77 @@ export default function ArrivedDeliveriesScreen({
                                     {isActive && (
                                       <span className="resource-count">{currentValue}</span>
                                     )}
-                                    {/* Quantity selector on hover when active */}
-                                    {isActive && (
-                                      <div className="resource-qty-dropdown">
-                                        {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
-                                          <button
-                                            key={num}
-                                            className={`qty-btn ${currentValue === num ? 'active' : ''}`}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const newResources = {
-                                                ...(arrivedVehicle.unload_resources || {}),
-                                                [res.key]: num
-                                              };
-                                              updateArrival(arrivedVehicle.id, { unload_resources: newResources });
-                                            }}
-                                          >
-                                            {num}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    )}
+                                    {/* Quantity selector on hover - always rendered */}
+                                    <div className="resource-qty-dropdown">
+                                      {isActive && (
+                                        <button
+                                          key={0}
+                                          className="qty-btn qty-zero"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newResources = {
+                                              ...(arrivedVehicle.unload_resources || {}),
+                                              [res.key]: 0,
+                                              [`${res.key}_name`]: undefined
+                                            };
+                                            updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                          }}
+                                          title="Eemalda"
+                                        >
+                                          ✕
+                                        </button>
+                                      )}
+                                      {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
+                                        <button
+                                          key={num}
+                                          className={`qty-btn ${currentValue === num ? 'active' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const newResources = {
+                                              ...(arrivedVehicle.unload_resources || {}),
+                                              [res.key]: num
+                                            };
+                                            updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                          }}
+                                        >
+                                          {num}
+                                        </button>
+                                      ))}
+                                    </div>
                                   </div>
                                 );
                               })}
                             </div>
+                            {/* Equipment name inputs for active machine resources */}
+                            {UNLOAD_RESOURCES.filter(res =>
+                              res.category === 'machine' &&
+                              res.key !== 'manual' &&
+                              ((arrivedVehicle.unload_resources as any)?.[res.key] || 0) > 0
+                            ).length > 0 && (
+                              <div className="resource-names-section">
+                                {UNLOAD_RESOURCES.filter(res =>
+                                  res.category === 'machine' &&
+                                  res.key !== 'manual' &&
+                                  ((arrivedVehicle.unload_resources as any)?.[res.key] || 0) > 0
+                                ).map(res => (
+                                  <div key={`${res.key}_name`} className="resource-name-field">
+                                    <label>{res.label}:</label>
+                                    <input
+                                      type="text"
+                                      value={(arrivedVehicle.unload_resources as any)?.[`${res.key}_name`] || ''}
+                                      onChange={(e) => {
+                                        const newResources = {
+                                          ...(arrivedVehicle.unload_resources || {}),
+                                          [`${res.key}_name`]: e.target.value
+                                        };
+                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                      }}
+                                      placeholder={`Nt. ${res.label === 'Kraana' ? 'Liebherr LTM 1050' : res.label === 'Teleskooplaadur' ? 'JCB 540-170' : 'Haulotte HA16'}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
 
                           {/* General Notes */}
@@ -2751,6 +2807,36 @@ export default function ArrivedDeliveriesScreen({
                         </div>
                           );
                         })()}
+
+                        {/* Removed items - items that were supposed to be here but arrived with another vehicle */}
+                        {removedItems.length > 0 && (
+                          <div className="removed-items-section">
+                            <div className="removed-items-header">
+                              <FiAlertTriangle className="warning-icon" />
+                              <h4>Tarnest eemaldatud detailid ({removedItems.length})</h4>
+                            </div>
+                            <p className="removed-items-description">
+                              Need detailid pidid saabuma selle veokiga, kuid saabusid teise veokiga.
+                            </p>
+                            <div className="removed-items-list">
+                              {removedItems.map(({ confirmation, item, receivingVehicle, receivingArrival }) => (
+                                <div key={confirmation.id} className="removed-item">
+                                  <div className="removed-item-info">
+                                    <span className="removed-item-mark">{item?.assembly_mark}</span>
+                                    <span className="removed-item-name">{item?.product_name}</span>
+                                  </div>
+                                  <div className="removed-item-destination">
+                                    <FiArrowRight />
+                                    <span>Saabus veokiga: <strong>{receivingVehicle?.vehicle_code || 'tundmatu'}</strong></span>
+                                    {receivingArrival?.arrival_date && (
+                                      <span className="arrival-date">({formatDateEstonian(receivingArrival.arrival_date)})</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Complete button */}
                         {!arrivedVehicle.is_confirmed && pendingCount === 0 && (
