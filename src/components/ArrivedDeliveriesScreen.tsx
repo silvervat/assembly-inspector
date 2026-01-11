@@ -1183,6 +1183,28 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
+  // Download photo (for cross-origin URLs)
+  const downloadPhoto = async (url: string, fileName: string) => {
+    try {
+      setMessage('Laen alla...');
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+      setMessage('Foto allalaetud');
+    } catch (e) {
+      console.error('Download error:', e);
+      // Fallback: open in new tab
+      window.open(url, '_blank');
+    }
+  };
+
   // Get photos for a specific item
   const getPhotosForItem = (arrivedVehicleId: string, itemId: string) => {
     return photos.filter(p => p.arrived_vehicle_id === arrivedVehicleId && p.item_id === itemId);
@@ -3178,14 +3200,13 @@ export default function ArrivedDeliveriesScreen({
                 >
                   Ava uues aknas
                 </button>
-                <a
+                <button
                   className="lightbox-btn-sm"
-                  href={photo.file_url}
-                  download={downloadName}
+                  onClick={() => downloadPhoto(photo.file_url, downloadName)}
                   title="Lae alla"
                 >
                   Lae alla
-                </a>
+                </button>
                 <button
                   className="lightbox-btn-sm close"
                   onClick={() => setLightboxPhoto(null)}
