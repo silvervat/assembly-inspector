@@ -10364,6 +10364,7 @@ button.stat-toggle.off:hover {
   border-radius: 6px;
   margin-bottom: 2px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
 }
 
 /* Expanded root group - thin blue outline */
@@ -10549,17 +10550,17 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 6px 10px;
-  margin: -4px 0;
+  gap: 3px;
+  padding: 5px 9px;
+  margin: -3px 0;
   border: none;
   background: #22c55e;
   color: white;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
-  min-height: 28px;
+  min-height: 25px;
 }
 
 .org-quick-add-btn:hover {
@@ -10643,6 +10644,7 @@ button.stat-toggle.off:hover {
 .org-items {
   padding: 0 0 2px 12px;
   margin-top: 1px;
+  overflow: hidden;
 }
 
 .org-item {
@@ -10655,6 +10657,7 @@ button.stat-toggle.off:hover {
   cursor: pointer;
   font-size: 11px;
   transition: background 0.1s;
+  overflow: hidden;
 }
 
 .org-item:first-child {
