@@ -4311,64 +4311,7 @@ export default function InstallationsScreen({
       {!showList ? (
         /* Form View */
         <div className="installations-form-view">
-          {/* Entry Mode Switch - Installation vs Preassembly */}
-          <div className="entry-mode-switch" style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '4px',
-            padding: '8px 12px',
-            background: '#f3f4f6',
-            borderRadius: '8px',
-            marginBottom: '12px'
-          }}>
-            <button
-              onClick={() => handleEntryModeChange('installation')}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                borderRadius: '6px',
-                border: 'none',
-                background: entryMode === 'installation' ? '#0a3a67' : 'transparent',
-                color: entryMode === 'installation' ? '#fff' : '#374151',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontSize: '13px',
-                fontWeight: entryMode === 'installation' ? 600 : 400,
-                transition: 'all 0.2s'
-              }}
-            >
-              <FiTool size={16} />
-              <span>Paigaldus</span>
-            </button>
-            <button
-              onClick={() => handleEntryModeChange('preassembly')}
-              style={{
-                flex: 1,
-                padding: '10px 16px',
-                borderRadius: '6px',
-                border: 'none',
-                background: entryMode === 'preassembly' ? '#7c3aed' : 'transparent',
-                color: entryMode === 'preassembly' ? '#fff' : '#374151',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontSize: '13px',
-                fontWeight: entryMode === 'preassembly' ? 600 : 400,
-                transition: 'all 0.2s'
-              }}
-            >
-              <FiPackage size={16} />
-              <span>Preassembly</span>
-            </button>
-          </div>
-
-          {/* Menu with list buttons */}
+          {/* Menu with list buttons - at the very top */}
           <div className="installations-menu" style={{ display: 'flex', gap: '8px' }}>
             <button
               className="installations-menu-btn"
@@ -4430,6 +4373,63 @@ export default function InstallationsScreen({
 
           {/* Form fields - each on separate row */}
           <div className="installations-form-fields">
+            {/* Entry Mode Switch - Installation vs Preassembly - compact, inside form */}
+            <div className="entry-mode-switch" style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '4px',
+              background: '#f3f4f6',
+              borderRadius: '6px',
+              marginBottom: '8px'
+            }}>
+              <button
+                onClick={() => handleEntryModeChange('installation')}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: entryMode === 'installation' ? '#0a3a67' : 'transparent',
+                  color: entryMode === 'installation' ? '#fff' : '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '13px',
+                  fontWeight: entryMode === 'installation' ? 600 : 400,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FiTool size={14} />
+                <span>Paigaldus</span>
+              </button>
+              <button
+                onClick={() => handleEntryModeChange('preassembly')}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  borderRadius: '4px',
+                  border: 'none',
+                  background: entryMode === 'preassembly' ? '#7c3aed' : 'transparent',
+                  color: entryMode === 'preassembly' ? '#fff' : '#374151',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  fontSize: '13px',
+                  fontWeight: entryMode === 'preassembly' ? 600 : 400,
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FiPackage size={14} />
+                <span>Preassembly</span>
+              </button>
+            </div>
+
             <div className="form-row">
               <label><FiCalendar size={14} /> Kuupäev</label>
               <div className="date-input-wrapper">
