@@ -11768,6 +11768,18 @@ button.stat-toggle.off:hover {
   color: #374151;
 }
 
+.org-load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.org-items-loading {
+  padding: 12px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 11px;
+}
+
 /* Items footer with sums */
 .org-items-footer {
   display: flex;

@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   supabase,
@@ -164,22 +165,35 @@ function generateUUID(): string {
 
 function buildGroupTree(
   groups: OrganizerGroup[],
-  groupItems: Map<string, OrganizerGroupItem[]>
+  groupItems: Map<string, OrganizerGroupItem[]>,
+  preloadedCounts?: Map<string, { count: number; totalWeight: number }>
 ): OrganizerGroupTree[] {
   const groupMap = new Map<string, OrganizerGroupTree>();
   const roots: OrganizerGroupTree[] = [];
 
   for (const g of groups) {
+    // Use preloaded counts if available, otherwise calculate from loaded items
+    const preloaded = preloadedCounts?.get(g.id);
     const items = groupItems.get(g.id) || [];
-    const totalWeight = items.reduce((sum, item) => {
-      const w = parseFloat(item.cast_unit_weight || '0') || 0;
-      return sum + w;
-    }, 0);
+
+    let itemCount: number;
+    let totalWeight: number;
+
+    if (preloaded) {
+      itemCount = preloaded.count;
+      totalWeight = preloaded.totalWeight;
+    } else {
+      itemCount = items.length;
+      totalWeight = items.reduce((sum, item) => {
+        const w = parseFloat(item.cast_unit_weight || '0') || 0;
+        return sum + w;
+      }, 0);
+    }
 
     groupMap.set(g.id, {
       ...g,
       children: [],
-      itemCount: items.length,
+      itemCount,
       totalWeight
     });
   }
@@ -199,9 +213,14 @@ function buildGroupTree(
   };
   sortChildren(roots);
 
+  // Calculate totals including children - use preloaded counts if available
   const calculateTotals = (node: OrganizerGroupTree): { count: number; weight: number } => {
-    let count = groupItems.get(node.id)?.length || 0;
-    let weight = (groupItems.get(node.id) || []).reduce((sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0);
+    const preloaded = preloadedCounts?.get(node.id);
+    const items = groupItems.get(node.id) || [];
+
+    let count = preloaded ? preloaded.count : items.length;
+    let weight = preloaded ? preloaded.totalWeight : items.reduce((sum, item) => sum + (parseFloat(item.cast_unit_weight || '0') || 0), 0);
+
     for (const child of node.children) {
       const childTotals = calculateTotals(child);
       count += childTotals.count;
@@ -639,6 +658,12 @@ export default function OrganizerScreen({
   // Virtualization - track visible items per group
   const [visibleItemCounts, setVisibleItemCounts] = useState<Map<string, number>>(new Map());
 
+  // Lazy loading - track which groups have loaded items and their total counts
+  const [groupItemCounts] = useState<Map<string, { count: number; totalWeight: number }>>(new Map());
+  const [loadedGroupIds, setLoadedGroupIds] = useState<Set<string>>(new Set());
+  const [loadingGroupIds, setLoadingGroupIds] = useState<Set<string>>(new Set());
+  const [groupHasMore, setGroupHasMore] = useState<Map<string, boolean>>(new Map());
+
   // Batch insert progress
   const [batchProgress, setBatchProgress] = useState<{current: number; total: number} | null>(null);
 
@@ -997,6 +1022,52 @@ export default function OrganizerScreen({
     }
   }, [projectId, tcUserEmail]);
 
+  // Load items for a specific group with pagination
+  const loadGroupItemsPage = useCallback(async (groupId: string, offset: number = 0, limit: number = VIRTUAL_PAGE_SIZE) => {
+    try {
+      setLoadingGroupIds(prev => new Set(prev).add(groupId));
+
+      const { data, error, count } = await supabase
+        .from('organizer_group_items')
+        .select('*', { count: 'exact' })
+        .eq('group_id', groupId)
+        .order('sort_order')
+        .range(offset, offset + limit - 1);
+
+      if (error) throw error;
+
+      const totalCount = count || 0;
+      const hasMore = offset + limit < totalCount;
+
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        if (offset === 0) {
+          // First page - replace
+          newMap.set(groupId, data || []);
+        } else {
+          // Subsequent pages - append
+          const existing = newMap.get(groupId) || [];
+          newMap.set(groupId, [...existing, ...(data || [])]);
+        }
+        return newMap;
+      });
+
+      setGroupHasMore(prev => new Map(prev).set(groupId, hasMore));
+      setLoadedGroupIds(prev => new Set(prev).add(groupId));
+
+      return { items: data || [], hasMore, totalCount };
+    } catch (e) {
+      console.error('Error loading group items page:', e);
+      return { items: [], hasMore: false, totalCount: 0 };
+    } finally {
+      setLoadingGroupIds(prev => {
+        const next = new Set(prev);
+        next.delete(groupId);
+        return next;
+      });
+    }
+  }, []);
+
   const loadAllGroupItems = useCallback(async (groupList: OrganizerGroup[]) => {
     try {
       const groupIds = groupList.map(g => g.id);
@@ -1022,6 +1093,11 @@ export default function OrganizerScreen({
       }
 
       setGroupItems(itemsMap);
+
+      // Mark all groups as loaded
+      setLoadedGroupIds(new Set(groupIds));
+      setGroupHasMore(new Map()); // All loaded, no more items
+
       return itemsMap;
     } catch (e) {
       console.error('Error loading group items:', e);
@@ -3703,6 +3779,13 @@ export default function OrganizerScreen({
 
   const toggleGroupExpand = (e: React.MouseEvent, groupId: string) => {
     e.stopPropagation();
+    const isCurrentlyExpanded = expandedGroups.has(groupId);
+
+    // If expanding and items not yet loaded, trigger lazy load
+    if (!isCurrentlyExpanded && !loadedGroupIds.has(groupId) && !loadingGroupIds.has(groupId)) {
+      loadGroupItemsPage(groupId, 0, VIRTUAL_PAGE_SIZE);
+    }
+
     setExpandedGroups(prev => {
       const next = new Set(prev);
       if (next.has(groupId)) next.delete(groupId);
@@ -4614,14 +4697,22 @@ export default function OrganizerScreen({
               </div>
             )}
 
-            {filteredItems.length > 0 && (() => {
+            {(filteredItems.length > 0 || loadingGroupIds.has(node.id)) && (() => {
               // Sort items
               const sortedItems = sortItems(filteredItems, itemSortField, itemSortDir);
 
               // Virtualization - get visible count for this group
               const visibleCount = visibleItemCounts.get(node.id) || VIRTUAL_PAGE_SIZE;
               const displayItems = sortedItems.slice(0, visibleCount);
-              const hasMore = sortedItems.length > visibleCount;
+
+              // Check both local and DB pagination
+              const hasMoreLocal = sortedItems.length > visibleCount;
+              const hasMoreInDb = groupHasMore.get(node.id) || false;
+              const hasMore = hasMoreLocal || hasMoreInDb;
+              const isLoadingMore = loadingGroupIds.has(node.id);
+
+              // Get total count from preloaded counts or loaded items
+              const totalItemCount = groupItemCounts.get(node.id)?.count || sortedItems.length;
 
               // Calculate dynamic column widths based on content
               const CHAR_WIDTH = 6; // approx pixels per character
@@ -4703,201 +4794,237 @@ export default function OrganizerScreen({
                   </div>
                 )}
 
-                {displayItems.map((item, idx) => {
-                  const isItemSelected = selectedItemIds.has(item.id);
-                  const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
-                  const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
-                  const addedInfo = item.added_at
-                    ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
-                    : '';
-                  return (
-                    <div
-                      key={item.id}
-                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragTarget ? 'drag-target' : ''}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, [item])}
-                      onDragOver={(e) => handleItemDragOver(e, node.id, idx)}
-                      onDragLeave={handleItemDragLeave}
-                      onDrop={(e) => handleItemDrop(e, node.id, idx)}
-                      onClick={(e) => handleItemClick(e, item, sortedItems)}
-                      title={addedInfo}
-                    >
-                      <span className="org-item-index">{idx + 1}</span>
-                      <FiMove size={10} className="org-drag-handle" />
-                      <span
-                        className="org-item-mark"
-                        title={item.assembly_mark || ''}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          if (item.assembly_mark) {
-                            navigator.clipboard.writeText(item.assembly_mark);
-                            showToast(`Kopeeritud: ${item.assembly_mark}`);
-                          }
-                        }}
-                      >{item.assembly_mark || 'Tundmatu'}</span>
-                      <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
-                      <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
-
-                      {customFields.map(field => {
-                        const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
-                        const val = item.custom_properties?.[field.id];
-
-                        if (isEditing) {
-                          // Show dropdown for dropdown fields
-                          if (field.type === 'dropdown' && field.options?.dropdownOptions?.length) {
-                            return (
-                              <select
-                                key={field.id}
-                                className="org-item-custom-edit org-item-dropdown"
-                                value={editingItemValue}
-                                onChange={(e) => {
-                                  setEditingItemValue(e.target.value);
-                                  // Auto-save on selection
-                                  updateItemField(item.id, field.id, e.target.value);
-                                  setEditingItemField(null);
-                                  setEditingItemValue('');
-                                }}
-                                onBlur={() => {
-                                  setEditingItemField(null);
-                                  setEditingItemValue('');
-                                }}
-                                autoFocus
-                              >
-                                <option value="">-- Vali --</option>
-                                {field.options.dropdownOptions.map(opt => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            );
-                          }
-                          // Show tags input for tags fields
-                          if (field.type === 'tags') {
-                            const suggestions = getFilteredTagSuggestions(tagInput);
-                            return (
-                              <div key={field.id} className="org-tags-editor">
-                                <div className="org-tags-container">
-                                  {editingTags.map(tag => (
-                                    <span key={tag} className="org-tag">
-                                      {tag}
-                                      <button onClick={() => removeTag(tag)} className="org-tag-remove">×</button>
-                                    </span>
-                                  ))}
-                                  <input
-                                    type="text"
-                                    className="org-tag-input"
-                                    value={tagInput}
-                                    onChange={(e) => {
-                                      setTagInput(e.target.value);
-                                      setShowTagSuggestions(true);
-                                    }}
-                                    onKeyDown={handleTagInputKeyDown}
-                                    onBlur={() => {
-                                      // Delay to allow clicking suggestions
-                                      setTimeout(() => {
-                                        setShowTagSuggestions(false);
-                                        // Always save if we have tags or were editing
-                                        if (editingTags.length > 0) {
-                                          saveTagsField();
-                                        } else {
-                                          setEditingItemField(null);
-                                          setEditingTags([]);
-                                          setTagInput('');
-                                        }
-                                      }, 200);
-                                    }}
-                                    placeholder="Lisa silt..."
-                                    autoFocus
-                                  />
-                                </div>
-                                {showTagSuggestions && suggestions.length > 0 && (
-                                  <div className="org-tag-suggestions">
-                                    {suggestions.map(s => (
-                                      <div key={s} className="org-tag-suggestion" onMouseDown={() => addTag(s)}>
-                                        {s}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }
-                          // Default input for other field types
-                          return (
-                            <input
-                              key={field.id}
-                              className="org-item-custom-edit"
-                              type={field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-                              value={editingItemValue}
-                              onChange={(e) => setEditingItemValue(e.target.value)}
-                              onBlur={handleFieldEditSave}
-                              onKeyDown={handleFieldEditKeyDown}
-                              autoFocus
-                            />
-                          );
-                        }
-
-                        // Check if text field has long content
-                        const textValue = String(val || '');
-                        const isLongText = field.type === 'text' && textValue.length > 30;
-                        const isTextExpanded = expandedTextItems.has(`${item.id}:${field.id}`);
-
-                        return (
-                          <span
-                            key={field.id}
-                            className={`org-item-custom ${isLongText ? 'truncatable' : ''} ${isTextExpanded ? 'expanded' : ''}`}
-                            onClick={(e) => {
-                              if (isLongText) {
-                                e.stopPropagation();
-                                const key = `${item.id}:${field.id}`;
-                                setExpandedTextItems(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(key)) next.delete(key);
-                                  else next.add(key);
-                                  return next;
-                                });
-                              }
-                            }}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              field.type === 'tags'
-                                ? handleTagFieldDoubleClick(item.id, field.id, val)
-                                : handleFieldDoubleClick(item.id, field.id, String(val || ''));
-                            }}
-                            title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
-                          >
-                            {isLongText && !isTextExpanded
-                              ? textValue.substring(0, 30) + '...'
-                              : formatFieldValue(val, field)
-                            }
-                          </span>
-                        );
-                      })}
-
-                      <button
-                        className="org-item-remove"
-                        onClick={(e) => { e.stopPropagation(); removeItemsFromGroup([item.id]); }}
+                {/* Virtualized item list for smooth scrolling with large datasets */}
+                <Virtuoso
+                  style={{ height: Math.min(displayItems.length * 28, 400) }}
+                  totalCount={displayItems.length}
+                  itemContent={(idx) => {
+                    const item = displayItems[idx];
+                    if (!item) return null;
+                    const isItemSelected = selectedItemIds.has(item.id);
+                    const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
+                    const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
+                    const addedInfo = item.added_at
+                      ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
+                      : '';
+                    return (
+                      <div
+                        className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragTarget ? 'drag-target' : ''}`}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, [item])}
+                        onDragOver={(e) => handleItemDragOver(e, node.id, idx)}
+                        onDragLeave={handleItemDragLeave}
+                        onDrop={(e) => handleItemDrop(e, node.id, idx)}
+                        onClick={(e) => handleItemClick(e, item, sortedItems)}
+                        title={addedInfo}
                       >
-                        <FiX size={10} />
-                      </button>
-                    </div>
-                  );
-                })}
+                        <span className="org-item-index">{idx + 1}</span>
+                        <FiMove size={10} className="org-drag-handle" />
+                        <span
+                          className="org-item-mark"
+                          title={item.assembly_mark || ''}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            if (item.assembly_mark) {
+                              navigator.clipboard.writeText(item.assembly_mark);
+                              showToast(`Kopeeritud: ${item.assembly_mark}`);
+                            }
+                          }}
+                        >{item.assembly_mark || 'Tundmatu'}</span>
+                        <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
+                        <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
+
+                        {customFields.map(field => {
+                          const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
+                          const val = item.custom_properties?.[field.id];
+
+                          if (isEditing) {
+                            // Show dropdown for dropdown fields
+                            if (field.type === 'dropdown' && field.options?.dropdownOptions?.length) {
+                              return (
+                                <select
+                                  key={field.id}
+                                  className="org-item-custom-edit org-item-dropdown"
+                                  value={editingItemValue}
+                                  onChange={(e) => {
+                                    setEditingItemValue(e.target.value);
+                                    // Auto-save on selection
+                                    updateItemField(item.id, field.id, e.target.value);
+                                    setEditingItemField(null);
+                                    setEditingItemValue('');
+                                  }}
+                                  onBlur={() => {
+                                    setEditingItemField(null);
+                                    setEditingItemValue('');
+                                  }}
+                                  autoFocus
+                                >
+                                  <option value="">-- Vali --</option>
+                                  {field.options.dropdownOptions.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              );
+                            }
+                            // Show tags input for tags fields
+                            if (field.type === 'tags') {
+                              const suggestions = getFilteredTagSuggestions(tagInput);
+                              return (
+                                <div key={field.id} className="org-tags-editor">
+                                  <div className="org-tags-container">
+                                    {editingTags.map(tag => (
+                                      <span key={tag} className="org-tag">
+                                        {tag}
+                                        <button onClick={() => removeTag(tag)} className="org-tag-remove">×</button>
+                                      </span>
+                                    ))}
+                                    <input
+                                      type="text"
+                                      className="org-tag-input"
+                                      value={tagInput}
+                                      onChange={(e) => {
+                                        setTagInput(e.target.value);
+                                        setShowTagSuggestions(true);
+                                      }}
+                                      onKeyDown={handleTagInputKeyDown}
+                                      onBlur={() => {
+                                        // Delay to allow clicking suggestions
+                                        setTimeout(() => {
+                                          setShowTagSuggestions(false);
+                                          // Always save if we have tags or were editing
+                                          if (editingTags.length > 0) {
+                                            saveTagsField();
+                                          } else {
+                                            setEditingItemField(null);
+                                            setEditingTags([]);
+                                            setTagInput('');
+                                          }
+                                        }, 200);
+                                      }}
+                                      placeholder="Lisa silt..."
+                                      autoFocus
+                                    />
+                                  </div>
+                                  {showTagSuggestions && suggestions.length > 0 && (
+                                    <div className="org-tag-suggestions">
+                                      {suggestions.map(s => (
+                                        <div key={s} className="org-tag-suggestion" onMouseDown={() => addTag(s)}>
+                                          {s}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            // Default input for other field types
+                            return (
+                              <input
+                                key={field.id}
+                                className="org-item-custom-edit"
+                                type={field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                                value={editingItemValue}
+                                onChange={(e) => setEditingItemValue(e.target.value)}
+                                onBlur={handleFieldEditSave}
+                                onKeyDown={handleFieldEditKeyDown}
+                                autoFocus
+                              />
+                            );
+                          }
+
+                          // Check if text field has long content
+                          const textValue = String(val || '');
+                          const isLongText = field.type === 'text' && textValue.length > 30;
+                          const isTextExpanded = expandedTextItems.has(`${item.id}:${field.id}`);
+
+                          return (
+                            <span
+                              key={field.id}
+                              className={`org-item-custom ${isLongText ? 'truncatable' : ''} ${isTextExpanded ? 'expanded' : ''}`}
+                              onClick={(e) => {
+                                if (isLongText) {
+                                  e.stopPropagation();
+                                  const key = `${item.id}:${field.id}`;
+                                  setExpandedTextItems(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                }
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                field.type === 'tags'
+                                  ? handleTagFieldDoubleClick(item.id, field.id, val)
+                                  : handleFieldDoubleClick(item.id, field.id, String(val || ''));
+                              }}
+                              title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
+                            >
+                              {isLongText && !isTextExpanded
+                                ? textValue.substring(0, 30) + '...'
+                                : formatFieldValue(val, field)
+                              }
+                            </span>
+                          );
+                        })}
+
+                        <button
+                          className="org-item-remove"
+                          onClick={(e) => { e.stopPropagation(); removeItemsFromGroup([item.id]); }}
+                        >
+                          <FiX size={10} />
+                        </button>
+                      </div>
+                    );
+                  }}
+                  endReached={() => {
+                    // Auto-load more when scrolled to bottom
+                    if (hasMoreInDb && !isLoadingMore) {
+                      const currentLoaded = sortedItems.length;
+                      loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
+                      setVisibleItemCounts(prev => {
+                        const next = new Map(prev);
+                        next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
+                        return next;
+                      });
+                    }
+                  }}
+                />
 
                 {/* Load more button for virtualization */}
                 {hasMore && (
                   <button
                     className="org-load-more-btn"
+                    disabled={isLoadingMore}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setVisibleItemCounts(prev => {
-                        const next = new Map(prev);
-                        next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
-                        return next;
-                      });
+                      if (hasMoreLocal) {
+                        // First, show more already-loaded items
+                        setVisibleItemCounts(prev => {
+                          const next = new Map(prev);
+                          next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                          return next;
+                        });
+                      } else if (hasMoreInDb && !isLoadingMore) {
+                        // Need to fetch more from database
+                        const currentLoaded = sortedItems.length;
+                        loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
+                        // Also increase visible count to show new items when they arrive
+                        setVisibleItemCounts(prev => {
+                          const next = new Map(prev);
+                          next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
+                          return next;
+                        });
+                      }
                     }}
                   >
-                    Näita veel {Math.min(VIRTUAL_PAGE_SIZE, sortedItems.length - visibleCount)} (kokku {sortedItems.length})
+                    {isLoadingMore ? 'Laen...' : `Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, totalItemCount - displayItems.length)} (kokku ${totalItemCount})`}
                   </button>
+                )}
+                {/* Loading indicator when fetching items */}
+                {isLoadingMore && filteredItems.length === 0 && (
+                  <div className="org-items-loading">Laen detaile...</div>
                 )}
 
                 {/* Sums for numeric fields */}
