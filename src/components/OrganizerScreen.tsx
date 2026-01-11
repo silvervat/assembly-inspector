@@ -1282,11 +1282,35 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
+      // Optimistic UI update
+      const updatedGroup: OrganizerGroup = {
+        ...editingGroup,
+        name: formName.trim(),
+        description: formDescription.trim() || null,
+        is_private: isPrivate,
+        allowed_users: allowedUsers,
+        color: formColor,
+        assembly_selection_on: formAssemblySelectionOn,
+        unique_items: formUniqueItems,
+        default_permissions: formDefaultPermissions,
+        user_permissions: formUserPermissions,
+        updated_at: new Date().toISOString(),
+        updated_by: tcUserEmail
+      };
+
+      setGroups(prev => prev.map(g => g.id === editingGroup.id ? updatedGroup : g));
+
+      // Rebuild tree with updated group
+      setGroupTree(() => {
+        const allGroups = groups.map(g => g.id === editingGroup.id ? updatedGroup : g);
+        return buildGroupTree(allGroups, groupItems);
+      });
+
       showToast('Grupp uuendatud');
       resetGroupForm();
       setShowGroupForm(false);
       setEditingGroup(null);
-      await loadData();
+
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
         setTimeout(() => colorModelByGroups(), 150);
@@ -1419,6 +1443,14 @@ export default function OrganizerScreen({
         const newMap = new Map(prev);
         newMap.set(fullGroup.id, []);
         return newMap;
+      });
+
+      // Rebuild tree with new group
+      setGroupTree(() => {
+        const allGroups = [...groups, fullGroup];
+        const updatedItems = new Map(groupItems);
+        updatedItems.set(fullGroup.id, []);
+        return buildGroupTree(allGroups, updatedItems);
       });
 
       showToast(`Grupp kloonitud: ${newName}`);
