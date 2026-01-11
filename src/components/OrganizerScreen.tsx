@@ -3839,7 +3839,7 @@ export default function OrganizerScreen({
 
     const wb = XLSX.utils.book_new();
     // Headers: base columns, custom fields, then Lisatud/Ajavöönd/Lisaja at the end
-    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    const headers = ['#', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
     headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -3851,6 +3851,8 @@ export default function OrganizerScreen({
       const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
       const row: any[] = [
         idx + 1,
+        item.guid_ifc || '',
+        (item as any).guid_ms || '',
         item.assembly_mark || '',
         item.product_name || '',
         formatWeight(item.cast_unit_weight),
@@ -3864,7 +3866,7 @@ export default function OrganizerScreen({
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 })), { wch: 16 }, { wch: 20 }, { wch: 25 }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 38 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 })), { wch: 16 }, { wch: 20 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -3881,7 +3883,7 @@ export default function OrganizerScreen({
     const customFields = group.custom_fields || [];
 
     // Build headers: base columns, custom fields, then Lisatud/Ajavöönd/Lisaja at the end
-    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    const headers = ['#', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
     headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -3896,6 +3898,8 @@ export default function OrganizerScreen({
         : '';
       const row: string[] = [
         String(idx + 1),
+        item.guid_ifc || '',
+        (item as any).guid_ms || '',
         item.assembly_mark || '',
         item.product_name || '',
         formatWeight(item.cast_unit_weight),
