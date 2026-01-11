@@ -570,7 +570,7 @@ export default function OrganizerScreen({
   };
 
   // Selection
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [selectedObjects, setSelectedObjects] = useState<SelectedObject[]>([]);
   const [lastSelectedItemId, setLastSelectedItemId] = useState<string | null>(null);
@@ -929,8 +929,8 @@ export default function OrganizerScreen({
           setSelectedItemIds(new Set());
           return;
         }
-        if (selectedGroupId) {
-          setSelectedGroupId(null);
+        if (selectedGroupIds.size > 0) {
+          setSelectedGroupIds(new Set());
           return;
         }
         // Second ESC - clear model selection
@@ -949,7 +949,7 @@ export default function OrganizerScreen({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId, selectedObjects.length, api]);
+  }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupIds.size, selectedObjects.length, api]);
 
   // Close all dropdown menus when clicking outside
   useEffect(() => {
@@ -1791,7 +1791,13 @@ export default function OrganizerScreen({
       if (error) throw error;
 
       showToast('Grupp ja sisu kustutatud');
-      if (selectedGroupId === group.id) setSelectedGroupId(null);
+      if (selectedGroupIds.has(group.id)) {
+        setSelectedGroupIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(group.id);
+          return newSet;
+        });
+      }
       setShowDeleteConfirm(false);
       setDeleteGroupData(null);
       await loadData();
@@ -1861,13 +1867,14 @@ export default function OrganizerScreen({
   // ============================================
 
   const addCustomField = async () => {
-    if (!selectedGroupId || !fieldName.trim()) {
+    const firstSelectedGroupId = selectedGroupIds.size > 0 ? [...selectedGroupIds][0] : null;
+    if (!firstSelectedGroupId || !fieldName.trim()) {
       showToast('Välja nimi on kohustuslik');
       return;
     }
 
     // Always add field to root parent group (fields are inherited by subgroups)
-    const rootGroup = getRootParent(selectedGroupId);
+    const rootGroup = getRootParent(firstSelectedGroupId);
     if (!rootGroup) return;
 
     setSaving(true);
@@ -1911,10 +1918,11 @@ export default function OrganizerScreen({
   };
 
   const updateCustomField = async () => {
-    if (!selectedGroupId || !editingField || !fieldName.trim()) return;
+    const firstSelectedGroupId = selectedGroupIds.size > 0 ? [...selectedGroupIds][0] : null;
+    if (!firstSelectedGroupId || !editingField || !fieldName.trim()) return;
 
     // Always update field in root parent group
-    const rootGroup = getRootParent(selectedGroupId);
+    const rootGroup = getRootParent(firstSelectedGroupId);
     if (!rootGroup) return;
 
     setSaving(true);
@@ -2589,8 +2597,8 @@ export default function OrganizerScreen({
     e.stopPropagation();
 
     // Auto-select the group when clicking on an item (enables bulk edit button)
-    if (selectedGroupId !== item.group_id) {
-      setSelectedGroupId(item.group_id);
+    if (!selectedGroupIds.has(item.group_id)) {
+      setSelectedGroupIds(new Set([item.group_id]));
     }
 
     let newSelectedIds: Set<string>;
@@ -3784,15 +3792,39 @@ export default function OrganizerScreen({
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('.org-group-menu')) return;
 
-    setSelectedGroupId(groupId);
+    // CTRL+click for multi-select
+    if (e.ctrlKey || e.metaKey) {
+      setSelectedGroupIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(groupId)) {
+          newSet.delete(groupId);
+        } else {
+          newSet.add(groupId);
+        }
+        return newSet;
+      });
+    } else {
+      // Regular click - single selection
+      setSelectedGroupIds(new Set([groupId]));
+    }
     setSelectedItemIds(new Set());
 
-    const guids = collectGroupGuids(groupId, groups, groupItems);
-    if (guids.length > 0) {
+    // Collect GUIDs from all selected groups (including the one just clicked)
+    const groupIdsToSelect = (e.ctrlKey || e.metaKey)
+      ? [...selectedGroupIds, groupId].filter((id, idx, arr) => arr.indexOf(id) === idx) // Unique IDs
+      : [groupId];
+
+    const allGuids: string[] = [];
+    for (const gid of groupIdsToSelect) {
+      const guids = collectGroupGuids(gid, groups, groupItems);
+      allGuids.push(...guids);
+    }
+
+    if (allGuids.length > 0) {
       try {
         // Mark that selection comes from group click (to prevent auto-expand of children)
         groupClickSelectionRef.current = true;
-        await selectObjectsByGuid(api, guids, 'set');
+        await selectObjectsByGuid(api, allGuids, 'set');
       } catch (e) {
         console.error('Error selecting objects:', e);
       }
@@ -4657,7 +4689,7 @@ export default function OrganizerScreen({
 
   const renderGroupNode = (node: OrganizerGroupTree, depth: number = 0): JSX.Element | null => {
     const isExpanded = expandedGroups.has(node.id);
-    const isSelected = selectedGroupId === node.id;
+    const isSelected = selectedGroupIds.has(node.id);
     const isDragOver = dragOverGroupId === node.id;
     const hasChildren = node.children.length > 0;
     const items = groupItems.get(node.id) || [];
@@ -4826,7 +4858,7 @@ export default function OrganizerScreen({
               <button onClick={() => cloneGroup(node.id)}>
                 <FiCopy size={12} /> Klooni grupp
               </button>
-              <button onClick={() => { setSelectedGroupId(node.id); setShowFieldForm(true); setGroupMenuId(null); }}>
+              <button onClick={() => { setSelectedGroupIds(new Set([node.id])); setShowFieldForm(true); setGroupMenuId(null); }}>
                 <FiList size={12} /> Lisa väli
               </button>
               <button onClick={() => { setGroupMenuId(null); colorModelByGroups(node.id); }}>
@@ -5238,7 +5270,8 @@ export default function OrganizerScreen({
   // RENDER
   // ============================================
 
-  const selectedGroup = selectedGroupId ? groups.find(g => g.id === selectedGroupId) : null;
+  const firstSelectedGroupId = selectedGroupIds.size > 0 ? [...selectedGroupIds][0] : null;
+  const selectedGroup = firstSelectedGroupId ? groups.find(g => g.id === firstSelectedGroupId) : null;
 
   return (
     <div className="organizer-screen" ref={containerRef}>
@@ -5444,7 +5477,7 @@ export default function OrganizerScreen({
       </div>
 
       {/* Selection bar */}
-      {selectedObjects.length > 0 && !selectedGroupId && (
+      {selectedObjects.length > 0 && selectedGroupIds.size === 0 && (
         <div className="org-selection-bar">
           <span>Valitud mudelist: {selectedObjects.length} detaili</span>
           <span className="hint">Vali grupp, kuhu lisada</span>
