@@ -4330,9 +4330,13 @@ export default function OrganizerScreen({
   // ============================================
 
   const filterItems = (items: OrganizerGroupItem[], group: OrganizerGroup): OrganizerGroupItem[] => {
-    // Apply group filter
-    if (searchFilterGroup !== 'all' && group.id !== searchFilterGroup) {
-      return []; // Hide items from other groups when filtering by specific group
+    // Apply group filter - include selected group AND all its descendants
+    if (searchFilterGroup !== 'all') {
+      const isSelectedGroup = group.id === searchFilterGroup;
+      const isDescendant = getDescendantGroupIds(searchFilterGroup).has(group.id);
+      if (!isSelectedGroup && !isDescendant) {
+        return []; // Hide items from other groups when filtering by specific group
+      }
     }
 
     if (!searchQuery) return items;
@@ -4380,6 +4384,21 @@ export default function OrganizerScreen({
       }
     }
     return Array.from(fieldsMap.values());
+  }, [groups]);
+
+  // Get all descendant group IDs for a given group (for search filtering)
+  const getDescendantGroupIds = useCallback((groupId: string): Set<string> => {
+    const descendants = new Set<string>();
+    const collectDescendants = (parentId: string) => {
+      for (const g of groups) {
+        if (g.parent_id === parentId) {
+          descendants.add(g.id);
+          collectDescendants(g.id);
+        }
+      }
+    };
+    collectDescendants(groupId);
+    return descendants;
   }, [groups]);
 
   // ============================================
