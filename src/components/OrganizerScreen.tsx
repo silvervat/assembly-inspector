@@ -25,7 +25,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiArrowUp, FiArrowDown, FiTag, FiUpload, FiSettings
+  FiTag, FiUpload, FiSettings
 } from 'react-icons/fi';
 
 // ============================================
@@ -103,7 +103,7 @@ interface MarkupSettings {
 }
 
 // Sorting options
-type SortField = 'name' | 'itemCount' | 'totalWeight' | 'created_at';
+type SortField = 'sort_order' | 'name' | 'itemCount' | 'totalWeight' | 'created_at';
 type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
 type SortDirection = 'asc' | 'desc';
 
@@ -383,6 +383,9 @@ export default function OrganizerScreen({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [allExpanded, setAllExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilterGroup, setSearchFilterGroup] = useState<string>('all'); // 'all' or group id
+  const [searchFilterColumn, setSearchFilterColumn] = useState<string>('all'); // 'all', 'mark', 'product', 'weight', or custom field id
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
   const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
@@ -730,6 +733,14 @@ export default function OrganizerScreen({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId, selectedObjects.length, api]);
+
+  // Close sort menu when clicking outside
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handleClick = () => setShowSortMenu(false);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showSortMenu]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -3410,12 +3421,35 @@ export default function OrganizerScreen({
   // ============================================
 
   const filterItems = (items: OrganizerGroupItem[], group: OrganizerGroup): OrganizerGroupItem[] => {
+    // Apply group filter
+    if (searchFilterGroup !== 'all' && group.id !== searchFilterGroup) {
+      return []; // Hide items from other groups when filtering by specific group
+    }
+
     if (!searchQuery) return items;
 
     const q = searchQuery.toLowerCase();
     return items.filter(item => {
+      // Apply column filter
+      if (searchFilterColumn === 'mark') {
+        return item.assembly_mark?.toLowerCase().includes(q);
+      }
+      if (searchFilterColumn === 'product') {
+        return item.product_name?.toLowerCase().includes(q);
+      }
+      if (searchFilterColumn === 'weight') {
+        return formatWeight(item.cast_unit_weight).toLowerCase().includes(q);
+      }
+      // Check if filtering by custom field
+      if (searchFilterColumn !== 'all') {
+        const val = item.custom_properties?.[searchFilterColumn];
+        return val && String(val).toLowerCase().includes(q);
+      }
+
+      // Search all columns
       if (item.assembly_mark?.toLowerCase().includes(q)) return true;
       if (item.product_name?.toLowerCase().includes(q)) return true;
+      if (formatWeight(item.cast_unit_weight).toLowerCase().includes(q)) return true;
 
       const customFields = group.custom_fields || [];
       for (const field of customFields) {
@@ -3425,6 +3459,19 @@ export default function OrganizerScreen({
       return false;
     });
   };
+
+  // Get all unique custom fields across all groups for filter dropdown
+  const allCustomFields = useMemo(() => {
+    const fieldsMap = new Map<string, CustomFieldDefinition>();
+    for (const group of groups) {
+      for (const field of (group.custom_fields || [])) {
+        if (!fieldsMap.has(field.id)) {
+          fieldsMap.set(field.id, field);
+        }
+      }
+    }
+    return Array.from(fieldsMap.values());
+  }, [groups]);
 
   // ============================================
   // HELPER: Get root parent group for settings
@@ -4069,32 +4116,90 @@ export default function OrganizerScreen({
 
       {/* Search bar - separate row */}
       <div className="org-search-bar">
-        <div className="org-search">
-          <FiSearch size={14} />
-          <input type="text" placeholder="Otsi detaile..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-          {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
-        </div>
+        <div className="org-search-group">
+          <div className="org-search">
+            <FiSearch size={14} />
+            <input type="text" placeholder="Otsi kõikidest gruppidest..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
+          </div>
 
-        {/* Sorting controls */}
-        <div className="org-sort-controls">
+          {/* Filter dropdowns */}
           <select
-            value={groupSortField}
-            onChange={(e) => setGroupSortField(e.target.value as SortField)}
-            title="Gruppide sortimine"
+            className="org-filter-select"
+            value={searchFilterGroup}
+            onChange={(e) => setSearchFilterGroup(e.target.value)}
+            title="Filtreeri grupi järgi"
           >
-            <option value="sort_order">Järjekord</option>
-            <option value="name">Nimi</option>
-            <option value="itemCount">Kogus</option>
-            <option value="totalWeight">Kaal</option>
-            <option value="created_at">Loodud</option>
+            <option value="all">Kõik grupid</option>
+            {groups.map(g => (
+              <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
+            ))}
           </select>
-          <button
-            className="org-sort-dir-btn"
-            onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}
-            title={groupSortDir === 'asc' ? 'Kasvav' : 'Kahanev'}
+
+          <select
+            className="org-filter-select"
+            value={searchFilterColumn}
+            onChange={(e) => setSearchFilterColumn(e.target.value)}
+            title="Filtreeri veeru järgi"
           >
-            {groupSortDir === 'asc' ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />}
-          </button>
+            <option value="all">Kõik veerud</option>
+            <option value="mark">Mark</option>
+            <option value="product">Toode</option>
+            <option value="weight">Kaal</option>
+            {allCustomFields.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+
+          {/* Sort button with dropdown */}
+          <div className="org-sort-dropdown-container">
+            <button
+              className={`org-sort-icon-btn ${showSortMenu ? 'active' : ''}`}
+              onClick={() => setShowSortMenu(!showSortMenu)}
+              title="Sorteeri"
+            >
+              <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>
+            </button>
+            {showSortMenu && (
+              <div className="org-sort-dropdown" onClick={(e) => e.stopPropagation()}>
+                <div className="org-sort-dropdown-header">Gruppide sortimine</div>
+                <button
+                  className={groupSortField === 'sort_order' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('sort_order'); }}
+                >
+                  Järjekord {groupSortField === 'sort_order' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'name' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('name'); }}
+                >
+                  Nimi {groupSortField === 'name' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'itemCount' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('itemCount'); }}
+                >
+                  Kogus {groupSortField === 'itemCount' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'totalWeight' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('totalWeight'); }}
+                >
+                  Kaal {groupSortField === 'totalWeight' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'created_at' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('created_at'); }}
+                >
+                  Loodud {groupSortField === 'created_at' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <div className="org-sort-dropdown-divider" />
+                <button onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}>
+                  {groupSortDir === 'asc' ? '↑ Kasvav' : '↓ Kahanev'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="org-toolbar-stats">
