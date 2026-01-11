@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { Virtuoso } from 'react-virtuoso';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   supabase,
@@ -4793,185 +4794,203 @@ export default function OrganizerScreen({
                   </div>
                 )}
 
-                {displayItems.map((item, idx) => {
-                  const isItemSelected = selectedItemIds.has(item.id);
-                  const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
-                  const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
-                  const addedInfo = item.added_at
-                    ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
-                    : '';
-                  return (
-                    <div
-                      key={item.id}
-                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragTarget ? 'drag-target' : ''}`}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, [item])}
-                      onDragOver={(e) => handleItemDragOver(e, node.id, idx)}
-                      onDragLeave={handleItemDragLeave}
-                      onDrop={(e) => handleItemDrop(e, node.id, idx)}
-                      onClick={(e) => handleItemClick(e, item, sortedItems)}
-                      title={addedInfo}
-                    >
-                      <span className="org-item-index">{idx + 1}</span>
-                      <FiMove size={10} className="org-drag-handle" />
-                      <span
-                        className="org-item-mark"
-                        title={item.assembly_mark || ''}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          if (item.assembly_mark) {
-                            navigator.clipboard.writeText(item.assembly_mark);
-                            showToast(`Kopeeritud: ${item.assembly_mark}`);
-                          }
-                        }}
-                      >{item.assembly_mark || 'Tundmatu'}</span>
-                      <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
-                      <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
-
-                      {customFields.map(field => {
-                        const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
-                        const val = item.custom_properties?.[field.id];
-
-                        if (isEditing) {
-                          // Show dropdown for dropdown fields
-                          if (field.type === 'dropdown' && field.options?.dropdownOptions?.length) {
-                            return (
-                              <select
-                                key={field.id}
-                                className="org-item-custom-edit org-item-dropdown"
-                                value={editingItemValue}
-                                onChange={(e) => {
-                                  setEditingItemValue(e.target.value);
-                                  // Auto-save on selection
-                                  updateItemField(item.id, field.id, e.target.value);
-                                  setEditingItemField(null);
-                                  setEditingItemValue('');
-                                }}
-                                onBlur={() => {
-                                  setEditingItemField(null);
-                                  setEditingItemValue('');
-                                }}
-                                autoFocus
-                              >
-                                <option value="">-- Vali --</option>
-                                {field.options.dropdownOptions.map(opt => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            );
-                          }
-                          // Show tags input for tags fields
-                          if (field.type === 'tags') {
-                            const suggestions = getFilteredTagSuggestions(tagInput);
-                            return (
-                              <div key={field.id} className="org-tags-editor">
-                                <div className="org-tags-container">
-                                  {editingTags.map(tag => (
-                                    <span key={tag} className="org-tag">
-                                      {tag}
-                                      <button onClick={() => removeTag(tag)} className="org-tag-remove">×</button>
-                                    </span>
-                                  ))}
-                                  <input
-                                    type="text"
-                                    className="org-tag-input"
-                                    value={tagInput}
-                                    onChange={(e) => {
-                                      setTagInput(e.target.value);
-                                      setShowTagSuggestions(true);
-                                    }}
-                                    onKeyDown={handleTagInputKeyDown}
-                                    onBlur={() => {
-                                      // Delay to allow clicking suggestions
-                                      setTimeout(() => {
-                                        setShowTagSuggestions(false);
-                                        // Always save if we have tags or were editing
-                                        if (editingTags.length > 0) {
-                                          saveTagsField();
-                                        } else {
-                                          setEditingItemField(null);
-                                          setEditingTags([]);
-                                          setTagInput('');
-                                        }
-                                      }, 200);
-                                    }}
-                                    placeholder="Lisa silt..."
-                                    autoFocus
-                                  />
-                                </div>
-                                {showTagSuggestions && suggestions.length > 0 && (
-                                  <div className="org-tag-suggestions">
-                                    {suggestions.map(s => (
-                                      <div key={s} className="org-tag-suggestion" onMouseDown={() => addTag(s)}>
-                                        {s}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          }
-                          // Default input for other field types
-                          return (
-                            <input
-                              key={field.id}
-                              className="org-item-custom-edit"
-                              type={field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-                              value={editingItemValue}
-                              onChange={(e) => setEditingItemValue(e.target.value)}
-                              onBlur={handleFieldEditSave}
-                              onKeyDown={handleFieldEditKeyDown}
-                              autoFocus
-                            />
-                          );
-                        }
-
-                        // Check if text field has long content
-                        const textValue = String(val || '');
-                        const isLongText = field.type === 'text' && textValue.length > 30;
-                        const isTextExpanded = expandedTextItems.has(`${item.id}:${field.id}`);
-
-                        return (
-                          <span
-                            key={field.id}
-                            className={`org-item-custom ${isLongText ? 'truncatable' : ''} ${isTextExpanded ? 'expanded' : ''}`}
-                            onClick={(e) => {
-                              if (isLongText) {
-                                e.stopPropagation();
-                                const key = `${item.id}:${field.id}`;
-                                setExpandedTextItems(prev => {
-                                  const next = new Set(prev);
-                                  if (next.has(key)) next.delete(key);
-                                  else next.add(key);
-                                  return next;
-                                });
-                              }
-                            }}
-                            onDoubleClick={(e) => {
-                              e.stopPropagation();
-                              field.type === 'tags'
-                                ? handleTagFieldDoubleClick(item.id, field.id, val)
-                                : handleFieldDoubleClick(item.id, field.id, String(val || ''));
-                            }}
-                            title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
-                          >
-                            {isLongText && !isTextExpanded
-                              ? textValue.substring(0, 30) + '...'
-                              : formatFieldValue(val, field)
-                            }
-                          </span>
-                        );
-                      })}
-
-                      <button
-                        className="org-item-remove"
-                        onClick={(e) => { e.stopPropagation(); removeItemsFromGroup([item.id]); }}
+                {/* Virtualized item list for smooth scrolling with large datasets */}
+                <Virtuoso
+                  style={{ height: Math.min(displayItems.length * 28, 400) }}
+                  totalCount={displayItems.length}
+                  itemContent={(idx) => {
+                    const item = displayItems[idx];
+                    if (!item) return null;
+                    const isItemSelected = selectedItemIds.has(item.id);
+                    const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
+                    const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
+                    const addedInfo = item.added_at
+                      ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
+                      : '';
+                    return (
+                      <div
+                        className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragTarget ? 'drag-target' : ''}`}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, [item])}
+                        onDragOver={(e) => handleItemDragOver(e, node.id, idx)}
+                        onDragLeave={handleItemDragLeave}
+                        onDrop={(e) => handleItemDrop(e, node.id, idx)}
+                        onClick={(e) => handleItemClick(e, item, sortedItems)}
+                        title={addedInfo}
                       >
-                        <FiX size={10} />
-                      </button>
-                    </div>
-                  );
-                })}
+                        <span className="org-item-index">{idx + 1}</span>
+                        <FiMove size={10} className="org-drag-handle" />
+                        <span
+                          className="org-item-mark"
+                          title={item.assembly_mark || ''}
+                          onDoubleClick={(e) => {
+                            e.stopPropagation();
+                            if (item.assembly_mark) {
+                              navigator.clipboard.writeText(item.assembly_mark);
+                              showToast(`Kopeeritud: ${item.assembly_mark}`);
+                            }
+                          }}
+                        >{item.assembly_mark || 'Tundmatu'}</span>
+                        <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
+                        <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
+
+                        {customFields.map(field => {
+                          const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
+                          const val = item.custom_properties?.[field.id];
+
+                          if (isEditing) {
+                            // Show dropdown for dropdown fields
+                            if (field.type === 'dropdown' && field.options?.dropdownOptions?.length) {
+                              return (
+                                <select
+                                  key={field.id}
+                                  className="org-item-custom-edit org-item-dropdown"
+                                  value={editingItemValue}
+                                  onChange={(e) => {
+                                    setEditingItemValue(e.target.value);
+                                    // Auto-save on selection
+                                    updateItemField(item.id, field.id, e.target.value);
+                                    setEditingItemField(null);
+                                    setEditingItemValue('');
+                                  }}
+                                  onBlur={() => {
+                                    setEditingItemField(null);
+                                    setEditingItemValue('');
+                                  }}
+                                  autoFocus
+                                >
+                                  <option value="">-- Vali --</option>
+                                  {field.options.dropdownOptions.map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              );
+                            }
+                            // Show tags input for tags fields
+                            if (field.type === 'tags') {
+                              const suggestions = getFilteredTagSuggestions(tagInput);
+                              return (
+                                <div key={field.id} className="org-tags-editor">
+                                  <div className="org-tags-container">
+                                    {editingTags.map(tag => (
+                                      <span key={tag} className="org-tag">
+                                        {tag}
+                                        <button onClick={() => removeTag(tag)} className="org-tag-remove">×</button>
+                                      </span>
+                                    ))}
+                                    <input
+                                      type="text"
+                                      className="org-tag-input"
+                                      value={tagInput}
+                                      onChange={(e) => {
+                                        setTagInput(e.target.value);
+                                        setShowTagSuggestions(true);
+                                      }}
+                                      onKeyDown={handleTagInputKeyDown}
+                                      onBlur={() => {
+                                        // Delay to allow clicking suggestions
+                                        setTimeout(() => {
+                                          setShowTagSuggestions(false);
+                                          // Always save if we have tags or were editing
+                                          if (editingTags.length > 0) {
+                                            saveTagsField();
+                                          } else {
+                                            setEditingItemField(null);
+                                            setEditingTags([]);
+                                            setTagInput('');
+                                          }
+                                        }, 200);
+                                      }}
+                                      placeholder="Lisa silt..."
+                                      autoFocus
+                                    />
+                                  </div>
+                                  {showTagSuggestions && suggestions.length > 0 && (
+                                    <div className="org-tag-suggestions">
+                                      {suggestions.map(s => (
+                                        <div key={s} className="org-tag-suggestion" onMouseDown={() => addTag(s)}>
+                                          {s}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            }
+                            // Default input for other field types
+                            return (
+                              <input
+                                key={field.id}
+                                className="org-item-custom-edit"
+                                type={field.type === 'number' || field.type === 'currency' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+                                value={editingItemValue}
+                                onChange={(e) => setEditingItemValue(e.target.value)}
+                                onBlur={handleFieldEditSave}
+                                onKeyDown={handleFieldEditKeyDown}
+                                autoFocus
+                              />
+                            );
+                          }
+
+                          // Check if text field has long content
+                          const textValue = String(val || '');
+                          const isLongText = field.type === 'text' && textValue.length > 30;
+                          const isTextExpanded = expandedTextItems.has(`${item.id}:${field.id}`);
+
+                          return (
+                            <span
+                              key={field.id}
+                              className={`org-item-custom ${isLongText ? 'truncatable' : ''} ${isTextExpanded ? 'expanded' : ''}`}
+                              onClick={(e) => {
+                                if (isLongText) {
+                                  e.stopPropagation();
+                                  const key = `${item.id}:${field.id}`;
+                                  setExpandedTextItems(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(key)) next.delete(key);
+                                    else next.add(key);
+                                    return next;
+                                  });
+                                }
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                field.type === 'tags'
+                                  ? handleTagFieldDoubleClick(item.id, field.id, val)
+                                  : handleFieldDoubleClick(item.id, field.id, String(val || ''));
+                              }}
+                              title={isLongText ? (isTextExpanded ? 'Klõpsa kokku tõmbamiseks' : textValue) : 'Topeltklõps muutmiseks'}
+                            >
+                              {isLongText && !isTextExpanded
+                                ? textValue.substring(0, 30) + '...'
+                                : formatFieldValue(val, field)
+                              }
+                            </span>
+                          );
+                        })}
+
+                        <button
+                          className="org-item-remove"
+                          onClick={(e) => { e.stopPropagation(); removeItemsFromGroup([item.id]); }}
+                        >
+                          <FiX size={10} />
+                        </button>
+                      </div>
+                    );
+                  }}
+                  endReached={() => {
+                    // Auto-load more when scrolled to bottom
+                    if (hasMoreInDb && !isLoadingMore) {
+                      const currentLoaded = sortedItems.length;
+                      loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
+                      setVisibleItemCounts(prev => {
+                        const next = new Map(prev);
+                        next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
+                        return next;
+                      });
+                    }
+                  }}
+                />
 
                 {/* Load more button for virtualization */}
                 {hasMore && (
