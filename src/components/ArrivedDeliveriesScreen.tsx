@@ -500,6 +500,7 @@ export default function ArrivedDeliveriesScreen({
         .order('uploaded_at', { ascending: false });
 
       if (error) throw error;
+      console.log('loadPhotos fetched:', data?.length, 'photos', data);
       setPhotos(data || []);
     } catch (e) {
       console.error('Error loading photos:', e);
@@ -1127,6 +1128,7 @@ export default function ArrivedDeliveriesScreen({
       }
 
       await loadPhotos();
+      console.log('Photos after upload:', photos.length, 'arrivedVehicleId:', arrivedVehicleId);
       const typeLabels: Record<ArrivalPhotoType, string> = {
         general: 'Fotod üles laetud',
         delivery_note: 'Saatelehed üles laetud',
