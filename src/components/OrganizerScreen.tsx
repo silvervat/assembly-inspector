@@ -3749,10 +3749,10 @@ export default function OrganizerScreen({
                 if (weightLen > maxWeightLen) maxWeightLen = weightLen;
               }
 
-              // Calculate widths with padding
-              const markWidth = Math.max(MIN_MARK_WIDTH, maxMarkLen * CHAR_WIDTH + 12);
-              const productWidth = Math.max(MIN_PRODUCT_WIDTH, maxProductLen * CHAR_WIDTH + 12);
-              const weightWidth = Math.max(MIN_WEIGHT_WIDTH, maxWeightLen * CHAR_WIDTH + 8);
+              // Calculate widths with minimal padding
+              const markWidth = Math.max(MIN_MARK_WIDTH, maxMarkLen * CHAR_WIDTH + 4);
+              const productWidth = Math.max(MIN_PRODUCT_WIDTH, maxProductLen * CHAR_WIDTH + 4);
+              const weightWidth = Math.max(MIN_WEIGHT_WIDTH, maxWeightLen * CHAR_WIDTH + 4);
 
               const columnStyles = {
                 '--col-mark-width': `${markWidth}px`,

@@ -10433,8 +10433,8 @@ button.stat-toggle.off:hover {
 .org-item {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 4px 6px;
   background: #fafafa;
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
@@ -11414,8 +11414,8 @@ button.stat-toggle.off:hover {
 .org-items-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 8px;
+  gap: 4px;
+  padding: 4px 6px;
   background: #f3f4f6;
   border-radius: 4px;
   margin-bottom: 4px;
