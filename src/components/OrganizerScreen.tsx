@@ -107,6 +107,17 @@ type SortField = 'sort_order' | 'name' | 'itemCount' | 'totalWeight' | 'created_
 type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
 type SortDirection = 'asc' | 'desc';
 
+// Undo action types
+type UndoAction =
+  | { type: 'add_items'; groupId: string; itemIds: string[] }
+  | { type: 'remove_items'; items: OrganizerGroupItem[] }
+  | { type: 'move_items'; itemIds: string[]; fromGroupId: string; toGroupId: string }
+  | { type: 'create_group'; groupId: string }
+  | { type: 'delete_group'; group: OrganizerGroup; items: OrganizerGroupItem[] }
+  | { type: 'update_group'; groupId: string; previousData: Partial<OrganizerGroup> }
+  | { type: 'clone_group'; groupId: string }
+  | { type: 'update_item_field'; itemId: string; fieldId: string; previousValue: unknown };
+
 // Preset colors for group color picker (24 colors in 4 rows)
 const PRESET_COLORS: GroupColor[] = [
   // Row 1: Reds, Oranges, Yellows
@@ -373,6 +384,173 @@ export default function OrganizerScreen({
   const [toast, setToast] = useState<string | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Undo stack
+  const undoStackRef = useRef<UndoAction[]>([]);
+  const MAX_UNDO_STACK = 20;
+
+  const pushUndo = (action: UndoAction) => {
+    undoStackRef.current.push(action);
+    if (undoStackRef.current.length > MAX_UNDO_STACK) {
+      undoStackRef.current.shift();
+    }
+  };
+
+  const performUndo = async () => {
+    const action = undoStackRef.current.pop();
+    if (!action) {
+      showToast('Pole midagi tagasi võtta');
+      return;
+    }
+
+    try {
+      switch (action.type) {
+        case 'add_items': {
+          // Undo: delete the added items
+          await supabase.from('organizer_group_items').delete().in('id', action.itemIds);
+          setGroupItems(prev => {
+            const newMap = new Map(prev);
+            const existing = newMap.get(action.groupId) || [];
+            newMap.set(action.groupId, existing.filter(i => !action.itemIds.includes(i.id)));
+            return newMap;
+          });
+          setGroupTree(() => {
+            const updatedItems = new Map(groupItems);
+            const existing = updatedItems.get(action.groupId) || [];
+            updatedItems.set(action.groupId, existing.filter(i => !action.itemIds.includes(i.id)));
+            return buildGroupTree(groups, updatedItems);
+          });
+          showToast('Detailide lisamine tagasi võetud');
+          break;
+        }
+
+        case 'remove_items': {
+          // Undo: re-insert the removed items
+          const itemsToInsert = action.items.map(({ id, ...rest }) => rest);
+          const { data } = await supabase.from('organizer_group_items').insert(itemsToInsert).select();
+          if (data) {
+            const groupId = action.items[0]?.group_id;
+            if (groupId) {
+              setGroupItems(prev => {
+                const newMap = new Map(prev);
+                const existing = newMap.get(groupId) || [];
+                newMap.set(groupId, [...existing, ...data]);
+                return newMap;
+              });
+              setGroupTree(() => {
+                const updatedItems = new Map(groupItems);
+                const existing = updatedItems.get(groupId) || [];
+                updatedItems.set(groupId, [...existing, ...data]);
+                return buildGroupTree(groups, updatedItems);
+              });
+            }
+          }
+          showToast('Detailide eemaldamine tagasi võetud');
+          break;
+        }
+
+        case 'move_items': {
+          // Undo: move items back to original group
+          await supabase.from('organizer_group_items').update({ group_id: action.fromGroupId }).in('id', action.itemIds);
+          await refreshData();
+          showToast('Detailide liigutamine tagasi võetud');
+          break;
+        }
+
+        case 'create_group': {
+          // Undo: delete the created group
+          await supabase.from('organizer_groups').delete().eq('id', action.groupId);
+          setGroups(prev => prev.filter(g => g.id !== action.groupId));
+          setGroupItems(prev => {
+            const newMap = new Map(prev);
+            newMap.delete(action.groupId);
+            return newMap;
+          });
+          setGroupTree(() => {
+            const filteredGroups = groups.filter(g => g.id !== action.groupId);
+            const updatedItems = new Map(groupItems);
+            updatedItems.delete(action.groupId);
+            return buildGroupTree(filteredGroups, updatedItems);
+          });
+          showToast('Grupi loomine tagasi võetud');
+          break;
+        }
+
+        case 'delete_group': {
+          // Undo: recreate the group and its items
+          const { id, ...groupData } = action.group;
+          const { data: newGroup } = await supabase.from('organizer_groups').insert(groupData).select().single();
+          if (newGroup && action.items.length > 0) {
+            const itemsToInsert = action.items.map(({ id: itemId, ...rest }) => ({
+              ...rest,
+              group_id: newGroup.id
+            }));
+            await supabase.from('organizer_group_items').insert(itemsToInsert);
+          }
+          await refreshData();
+          showToast('Grupi kustutamine tagasi võetud');
+          break;
+        }
+
+        case 'clone_group': {
+          // Undo: delete the cloned group
+          await supabase.from('organizer_groups').delete().eq('id', action.groupId);
+          setGroups(prev => prev.filter(g => g.id !== action.groupId));
+          setGroupTree(() => {
+            const filteredGroups = groups.filter(g => g.id !== action.groupId);
+            return buildGroupTree(filteredGroups, groupItems);
+          });
+          showToast('Grupi kloonimine tagasi võetud');
+          break;
+        }
+
+        case 'update_group': {
+          // Undo: restore previous group data
+          await supabase.from('organizer_groups').update(action.previousData).eq('id', action.groupId);
+          setGroups(prev => prev.map(g =>
+            g.id === action.groupId ? { ...g, ...action.previousData } : g
+          ));
+          setGroupTree(() => {
+            const updatedGroups = groups.map(g =>
+              g.id === action.groupId ? { ...g, ...action.previousData } : g
+            );
+            return buildGroupTree(updatedGroups, groupItems);
+          });
+          showToast('Grupi muutmine tagasi võetud');
+          break;
+        }
+
+        case 'update_item_field': {
+          // Undo: restore previous field value
+          const item = Array.from(groupItems.values()).flat().find(i => i.id === action.itemId);
+          if (item) {
+            const prevValue = action.previousValue as string | undefined;
+            const updatedProps: Record<string, string> = { ...(item.custom_properties || {}) };
+            if (prevValue !== undefined) {
+              updatedProps[action.fieldId] = prevValue;
+            } else {
+              delete updatedProps[action.fieldId];
+            }
+            await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', action.itemId);
+            setGroupItems(prev => {
+              const newMap = new Map(prev);
+              for (const [gId, items] of newMap) {
+                newMap.set(gId, items.map(i =>
+                  i.id === action.itemId ? { ...i, custom_properties: updatedProps } : i
+                ));
+              }
+              return newMap;
+            });
+          }
+          showToast('Välja muutmine tagasi võetud');
+          break;
+        }
+      }
+    } catch (e) {
+      console.error('Undo error:', e);
+      showToast('Viga tagasivõtmisel');
+    }
+  };
+
   // Selection
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
@@ -385,6 +563,7 @@ export default function OrganizerScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFilterGroup, setSearchFilterGroup] = useState<string>('all'); // 'all' or group id
   const [searchFilterColumn, setSearchFilterColumn] = useState<string>('all'); // 'all', 'mark', 'product', 'weight', or custom field id
+  const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
@@ -737,6 +916,12 @@ export default function OrganizerScreen({
           return;
         }
       }
+
+      // Ctrl+Z - Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        performUndo();
+      }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
@@ -749,6 +934,14 @@ export default function OrganizerScreen({
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, [showSortMenu]);
+
+  // Close filter menu when clicking outside
+  useEffect(() => {
+    if (!showFilterMenu) return;
+    const handleClick = () => setShowFilterMenu(false);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showFilterMenu]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -1225,6 +1418,9 @@ export default function OrganizerScreen({
         return buildGroupTree(allGroups, groupItems);
       });
 
+      // Push to undo stack
+      pushUndo({ type: 'create_group', groupId: fullGroup.id });
+
       showToast('Grupp loodud');
       resetGroupForm();
       setShowGroupForm(false);
@@ -1251,6 +1447,19 @@ export default function OrganizerScreen({
     recentLocalChangesRef.current.add(editingGroup.id);
     setTimeout(() => recentLocalChangesRef.current.delete(editingGroup.id), 5000);
 
+    // Save previous state for undo
+    const previousData = {
+      name: editingGroup.name,
+      description: editingGroup.description,
+      is_private: editingGroup.is_private,
+      allowed_users: editingGroup.allowed_users,
+      color: editingGroup.color,
+      assembly_selection_on: editingGroup.assembly_selection_on,
+      unique_items: editingGroup.unique_items,
+      default_permissions: editingGroup.default_permissions,
+      user_permissions: editingGroup.user_permissions
+    };
+
     setSaving(true);
     try {
       const { error } = await supabase
@@ -1273,11 +1482,38 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
+      // Push to undo stack
+      pushUndo({ type: 'update_group', groupId: editingGroup.id, previousData });
+
+      // Optimistic UI update
+      const updatedGroup: OrganizerGroup = {
+        ...editingGroup,
+        name: formName.trim(),
+        description: formDescription.trim() || null,
+        is_private: isPrivate,
+        allowed_users: allowedUsers,
+        color: formColor,
+        assembly_selection_on: formAssemblySelectionOn,
+        unique_items: formUniqueItems,
+        default_permissions: formDefaultPermissions,
+        user_permissions: formUserPermissions,
+        updated_at: new Date().toISOString(),
+        updated_by: tcUserEmail
+      };
+
+      setGroups(prev => prev.map(g => g.id === editingGroup.id ? updatedGroup : g));
+
+      // Rebuild tree with updated group
+      setGroupTree(() => {
+        const allGroups = groups.map(g => g.id === editingGroup.id ? updatedGroup : g);
+        return buildGroupTree(allGroups, groupItems);
+      });
+
       showToast('Grupp uuendatud');
       resetGroupForm();
       setShowGroupForm(false);
       setEditingGroup(null);
-      await loadData();
+
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
         setTimeout(() => colorModelByGroups(), 150);
@@ -1412,6 +1648,17 @@ export default function OrganizerScreen({
         return newMap;
       });
 
+      // Rebuild tree with new group
+      setGroupTree(() => {
+        const allGroups = [...groups, fullGroup];
+        const updatedItems = new Map(groupItems);
+        updatedItems.set(fullGroup.id, []);
+        return buildGroupTree(allGroups, updatedItems);
+      });
+
+      // Push to undo stack
+      pushUndo({ type: 'clone_group', groupId: fullGroup.id });
+
       showToast(`Grupp kloonitud: ${newName}`);
 
       // Expand parent if it's a subgroup
@@ -1454,6 +1701,10 @@ export default function OrganizerScreen({
   const deleteGroup = async () => {
     if (!deleteGroupData) return;
     const { group } = deleteGroupData;
+
+    // Save group and items for undo before deleting
+    const itemsToSave = groupItems.get(group.id) || [];
+    pushUndo({ type: 'delete_group', group, items: [...itemsToSave] });
 
     // Mark this group as local change (for realtime sync to skip toast)
     recentLocalChangesRef.current.add(group.id);
@@ -1842,6 +2093,11 @@ export default function OrganizerScreen({
         if (data) insertedItems = data;
       }
 
+      // Push to undo stack
+      if (insertedItems.length > 0) {
+        pushUndo({ type: 'add_items', groupId: targetGroupId, itemIds: insertedItems.map(i => i.id) });
+      }
+
       // Update local state immediately (optimistic update)
       setGroupItems(prev => {
         const newMap = new Map(prev);
@@ -1951,19 +2207,24 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
-      // Get items and their group IDs before deleting
-      const itemsToRemove: { id: string; groupId: string; guidIfc: string | null }[] = [];
+      // Get full items before deleting (for undo)
+      const fullItemsToRemove: OrganizerGroupItem[] = [];
       const affectedGroups = new Set<string>();
 
       for (const itemId of itemIds) {
         const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
         if (item) {
-          itemsToRemove.push({ id: item.id, groupId: item.group_id, guidIfc: item.guid_ifc });
+          fullItemsToRemove.push(item);
           affectedGroups.add(item.group_id);
         }
       }
 
-      const guidsToRemove = itemsToRemove.map(i => i.guidIfc).filter(Boolean) as string[];
+      const guidsToRemove = fullItemsToRemove.map(i => i.guid_ifc).filter(Boolean) as string[];
+
+      // Push to undo stack before deleting
+      if (fullItemsToRemove.length > 0) {
+        pushUndo({ type: 'remove_items', items: fullItemsToRemove });
+      }
 
       // Mark these GUIDs as local changes (for realtime sync to skip)
       guidsToRemove.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
@@ -2001,6 +2262,25 @@ export default function OrganizerScreen({
       if (colorByGroup && guidsToRemove.length > 0) {
         colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
       }
+
+      // Show items in model again if hideItemOnAdd setting is enabled
+      if (hideItemOnAdd && guidsToRemove.length > 0) {
+        findObjectsInLoadedModels(api, guidsToRemove).then(foundObjects => {
+          if (foundObjects.size > 0) {
+            const byModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+              api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+                { visible: true }
+              );
+            }
+          }
+        }).catch(e => console.warn('Failed to show items:', e));
+      }
     } catch (e) {
       console.error('Error removing items:', e);
       showToast('Viga detailide eemaldamisel');
@@ -2012,6 +2292,10 @@ export default function OrganizerScreen({
   const updateItemField = async (itemId: string, fieldId: string, value: string) => {
     const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
     if (!item) return;
+
+    // Save previous value for undo
+    const previousValue = item.custom_properties?.[fieldId];
+    pushUndo({ type: 'update_item_field', itemId, fieldId, previousValue });
 
     // Try to parse JSON for arrays (tags)
     let parsedValue: any = value;
@@ -2155,6 +2439,12 @@ export default function OrganizerScreen({
       const lockInfo = getGroupLockInfo(targetGroupId);
       showToast(`🔒 Sihtgrupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
       return;
+    }
+
+    // Save source group for undo (assumes all items come from same group)
+    const fromGroupId = firstItem?.group_id;
+    if (fromGroupId) {
+      pushUndo({ type: 'move_items', itemIds: [...itemIds], fromGroupId, toGroupId: targetGroupId });
     }
 
     setSaving(true);
@@ -4121,7 +4411,7 @@ export default function OrganizerScreen({
   // RENDER GROUP NODE
   // ============================================
 
-  const renderGroupNode = (node: OrganizerGroupTree, depth: number = 0): JSX.Element => {
+  const renderGroupNode = (node: OrganizerGroupTree, depth: number = 0): JSX.Element | null => {
     const isExpanded = expandedGroups.has(node.id);
     const isSelected = selectedGroupId === node.id;
     const isDragOver = dragOverGroupId === node.id;
@@ -4134,6 +4424,18 @@ export default function OrganizerScreen({
     const customFields = effectiveCustomFields.filter(f => f.showInList);
 
     const filteredItems = filterItems(items, node);
+
+    // Check if this group or any children have matching items (for search filtering)
+    const hasMatchingChildren = hasChildren && node.children.some(child => {
+      const childItems = groupItems.get(child.id) || [];
+      const childFiltered = filterItems(childItems, child);
+      return childFiltered.length > 0 || child.children.length > 0;
+    });
+
+    // Hide groups with no results during search (unless they have matching children)
+    if (searchQuery && filteredItems.length === 0 && !hasMatchingChildren) {
+      return null;
+    }
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
     const hasModelSelectedItems = filteredItems.some(item =>
       item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase())
@@ -4207,7 +4509,12 @@ export default function OrganizerScreen({
             );
           })()}
 
-          <span className="org-group-count">{node.itemCount} tk</span>
+          <span className="org-group-count">
+            {searchQuery && filteredItems.length !== node.itemCount
+              ? <><span className="search-match">{filteredItems.length}</span>/{node.itemCount} tk</>
+              : <>{node.itemCount} tk</>
+            }
+          </span>
           <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
 
           {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
@@ -4276,9 +4583,6 @@ export default function OrganizerScreen({
               <button onClick={() => openExcelImportModal(node.id)}>
                 <FiUpload size={12} /> Impordi Excelist
               </button>
-              <button onClick={() => downloadImportTemplate(node.id)}>
-                <FiDownload size={12} /> Lae template
-              </button>
               {(() => {
                 const parentLocked = node.parent_id && isGroupLocked(node.parent_id);
                 if (parentLocked) {
@@ -4320,10 +4624,10 @@ export default function OrganizerScreen({
               const hasMore = sortedItems.length > visibleCount;
 
               // Calculate dynamic column widths based on content
-              const CHAR_WIDTH = 7; // approx pixels per character for monospace-ish font
-              const MIN_MARK_WIDTH = 50;
-              const MIN_PRODUCT_WIDTH = 50;
-              const MIN_WEIGHT_WIDTH = 45;
+              const CHAR_WIDTH = 6; // approx pixels per character
+              const MIN_MARK_WIDTH = 40;
+              const MIN_PRODUCT_WIDTH = 35;
+              const MIN_WEIGHT_WIDTH = 38;
 
               let maxMarkLen = 4; // "Mark" header length
               let maxProductLen = 5; // "Toode" header length
@@ -4420,9 +4724,19 @@ export default function OrganizerScreen({
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />
-                      <span className="org-item-mark">{item.assembly_mark || 'Tundmatu'}</span>
-                      <span className="org-item-product">{item.product_name || ''}</span>
-                      <span className="org-item-weight">{formatWeight(item.cast_unit_weight)}</span>
+                      <span
+                        className="org-item-mark"
+                        title={item.assembly_mark || ''}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          if (item.assembly_mark) {
+                            navigator.clipboard.writeText(item.assembly_mark);
+                            showToast(`Kopeeritud: ${item.assembly_mark}`);
+                          }
+                        }}
+                      >{item.assembly_mark || 'Tundmatu'}</span>
+                      <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
+                      <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
 
                       {customFields.map(field => {
                         const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
@@ -4690,39 +5004,61 @@ export default function OrganizerScreen({
             {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
           </div>
 
-          {/* Filter dropdowns */}
-          <select
-            className="org-filter-select"
-            value={searchFilterGroup}
-            onChange={(e) => setSearchFilterGroup(e.target.value)}
-            title="Filtreeri grupi järgi"
-          >
-            <option value="all">Kõik grupid</option>
-            {groups.map(g => (
-              <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
-            ))}
-          </select>
-
-          <select
-            className="org-filter-select"
-            value={searchFilterColumn}
-            onChange={(e) => setSearchFilterColumn(e.target.value)}
-            title="Filtreeri veeru järgi"
-          >
-            <option value="all">Kõik veerud</option>
-            <option value="mark">Mark</option>
-            <option value="product">Toode</option>
-            <option value="weight">Kaal</option>
-            {allCustomFields.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
+          {/* Filter button with dropdown */}
+          <div className="org-filter-dropdown-container">
+            <button
+              className={`org-filter-icon-btn ${showFilterMenu ? 'active' : ''} ${(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') ? 'has-filter' : ''}`}
+              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); }}
+              title="Filtreeri"
+            >
+              <i className="modus-icons" style={{ fontSize: '18px' }}>filter</i>
+            </button>
+            {showFilterMenu && (
+              <div className="org-filter-dropdown" onClick={(e) => e.stopPropagation()}>
+                <div className="org-filter-dropdown-section">
+                  <label>Grupp</label>
+                  <select
+                    value={searchFilterGroup}
+                    onChange={(e) => setSearchFilterGroup(e.target.value)}
+                  >
+                    <option value="all">Kõik grupid</option>
+                    {groups.map(g => (
+                      <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="org-filter-dropdown-section">
+                  <label>Veerg</label>
+                  <select
+                    value={searchFilterColumn}
+                    onChange={(e) => setSearchFilterColumn(e.target.value)}
+                  >
+                    <option value="all">Kõik veerud</option>
+                    <option value="mark">Mark</option>
+                    <option value="product">Toode</option>
+                    <option value="weight">Kaal</option>
+                    {allCustomFields.map(f => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+                {(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') && (
+                  <button
+                    className="org-filter-clear-btn"
+                    onClick={() => { setSearchFilterGroup('all'); setSearchFilterColumn('all'); }}
+                  >
+                    Tühista filtrid
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Sort button with dropdown */}
           <div className="org-sort-dropdown-container">
             <button
               className={`org-sort-icon-btn ${showSortMenu ? 'active' : ''}`}
-              onClick={() => setShowSortMenu(!showSortMenu)}
+              onClick={(e) => { e.stopPropagation(); setShowSortMenu(!showSortMenu); }}
               title="Sorteeri"
             >
               <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>
