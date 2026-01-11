@@ -25,7 +25,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiArrowUp, FiArrowDown, FiTag, FiUpload, FiSettings
+  FiTag, FiUpload, FiSettings
 } from 'react-icons/fi';
 
 // ============================================
@@ -103,7 +103,7 @@ interface MarkupSettings {
 }
 
 // Sorting options
-type SortField = 'name' | 'itemCount' | 'totalWeight' | 'created_at';
+type SortField = 'sort_order' | 'name' | 'itemCount' | 'totalWeight' | 'created_at';
 type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
 type SortDirection = 'asc' | 'desc';
 
@@ -383,6 +383,9 @@ export default function OrganizerScreen({
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [allExpanded, setAllExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilterGroup, setSearchFilterGroup] = useState<string>('all'); // 'all' or group id
+  const [searchFilterColumn, setSearchFilterColumn] = useState<string>('all'); // 'all', 'mark', 'product', 'weight', or custom field id
+  const [showSortMenu, setShowSortMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
   const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
@@ -441,6 +444,7 @@ export default function OrganizerScreen({
   // Drag & Drop
   const [draggedItems, setDraggedItems] = useState<OrganizerGroupItem[]>([]);
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
+  const [dragReorderTarget, setDragReorderTarget] = useState<{ groupId: string; targetIndex: number } | null>(null);
 
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
@@ -481,6 +485,13 @@ export default function OrganizerScreen({
   const [importGroupId, setImportGroupId] = useState<string | null>(null);
   const [importText, setImportText] = useState('');
   const [importProgress, setImportProgress] = useState<{current: number; total: number; found: number} | null>(null);
+
+  // Excel import state
+  const [showExcelImportModal, setShowExcelImportModal] = useState(false);
+  const [excelImportGroupId, setExcelImportGroupId] = useState<string | null>(null);
+  const [excelImportFile, setExcelImportFile] = useState<File | null>(null);
+  const [excelImportPreview, setExcelImportPreview] = useState<{rows: number; subgroups: string[]} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Color picker popup state
   const [colorPickerGroupId, setColorPickerGroupId] = useState<string | null>(null);
@@ -730,6 +741,14 @@ export default function OrganizerScreen({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId, selectedObjects.length, api]);
+
+  // Close sort menu when clicking outside
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handleClick = () => setShowSortMenu(false);
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [showSortMenu]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -1291,6 +1310,23 @@ export default function OrganizerScreen({
 
       // Update local state immediately for responsive UI
       setGroups(prev => prev.map(g => g.id === groupId ? { ...g, color } : g));
+
+      // Also update groupTree for immediate UI update
+      setGroupTree(prev => {
+        const updateNode = (nodes: OrganizerGroupTree[]): OrganizerGroupTree[] => {
+          return nodes.map(node => {
+            if (node.id === groupId) {
+              return { ...node, color };
+            }
+            if (node.children.length > 0) {
+              return { ...node, children: updateNode(node.children) };
+            }
+            return node;
+          });
+        };
+        return updateNode(prev);
+      });
+
       setColorPickerGroupId(null);
 
       // Auto-recolor if coloring mode is active
@@ -1784,23 +1820,46 @@ export default function OrganizerScreen({
         await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', guids);
       }
 
-      // Batch insert for large datasets
+      // Insert items and get back the inserted records with IDs
+      let insertedItems: OrganizerGroupItem[] = [];
+
       if (items.length > BATCH_SIZE) {
         setBatchProgress({ current: 0, total: items.length });
 
         for (let i = 0; i < items.length; i += BATCH_SIZE) {
           const batch = items.slice(i, i + BATCH_SIZE);
-          const { error } = await supabase.from('organizer_group_items').insert(batch);
+          const { data, error } = await supabase.from('organizer_group_items').insert(batch).select();
           if (error) throw error;
+          if (data) insertedItems = [...insertedItems, ...data];
           setBatchProgress({ current: Math.min(i + BATCH_SIZE, items.length), total: items.length });
         }
 
         setBatchProgress(null);
       } else {
-        // Small dataset - single insert
-        const { error } = await supabase.from('organizer_group_items').insert(items);
+        // Small dataset - single insert with select
+        const { data, error } = await supabase.from('organizer_group_items').insert(items).select();
         if (error) throw error;
+        if (data) insertedItems = data;
       }
+
+      // Update local state immediately (optimistic update)
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(targetGroupId) || [];
+        // Filter out any items with same GUID (replaced by new ones)
+        const filtered = existing.filter(e => !guids.includes(e.guid_ifc));
+        newMap.set(targetGroupId, [...filtered, ...insertedItems]);
+        return newMap;
+      });
+
+      // Rebuild tree locally
+      setGroupTree(() => {
+        const updatedItems = new Map(groupItems);
+        const existing = updatedItems.get(targetGroupId) || [];
+        const filtered = existing.filter(e => !guids.includes(e.guid_ifc));
+        updatedItems.set(targetGroupId, [...filtered, ...insertedItems]);
+        return buildGroupTree(groups, updatedItems);
+      });
 
       const message = skippedCount > 0
         ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
@@ -1814,36 +1873,28 @@ export default function OrganizerScreen({
 
       // Color newly added items directly if coloring mode is active and group has a color
       if (colorByGroup && groupColor && addedGuids.length > 0) {
-        await colorItemsDirectly(addedGuids, groupColor);
+        colorItemsDirectly(addedGuids, groupColor); // Don't await - run in background
       }
 
       // Hide items from model if setting is enabled
       if (hideItemOnAdd && addedGuids.length > 0) {
-        try {
-          const foundObjects = await findObjectsInLoadedModels(api, addedGuids);
+        // Run in background - don't await
+        findObjectsInLoadedModels(api, addedGuids).then(foundObjects => {
           if (foundObjects.size > 0) {
-            // Group by model for batch operation
             const byModel: Record<string, number[]> = {};
             for (const [, found] of foundObjects) {
               if (!byModel[found.modelId]) byModel[found.modelId] = [];
               byModel[found.modelId].push(found.runtimeId);
             }
-
-            // Hide all found objects
             for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-              await api.viewer.setObjectState(
+              api.viewer.setObjectState(
                 { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
                 { visible: false }
               );
             }
           }
-        } catch (e) {
-          console.warn('Failed to hide items:', e);
-        }
+        }).catch(e => console.warn('Failed to hide items:', e));
       }
-
-      // Use silent refresh to avoid UI flash (no "Laadin..." state)
-      await refreshData();
     } catch (e) {
       console.error('Error adding items to group:', e);
       showToast('Viga detailide lisamisel');
@@ -1900,12 +1951,19 @@ export default function OrganizerScreen({
 
     setSaving(true);
     try {
-      // Get GUIDs before deleting for coloring
-      const guidsToRemove: string[] = [];
+      // Get items and their group IDs before deleting
+      const itemsToRemove: { id: string; groupId: string; guidIfc: string | null }[] = [];
+      const affectedGroups = new Set<string>();
+
       for (const itemId of itemIds) {
         const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
-        if (item?.guid_ifc) guidsToRemove.push(item.guid_ifc);
+        if (item) {
+          itemsToRemove.push({ id: item.id, groupId: item.group_id, guidIfc: item.guid_ifc });
+          affectedGroups.add(item.group_id);
+        }
       }
+
+      const guidsToRemove = itemsToRemove.map(i => i.guidIfc).filter(Boolean) as string[];
 
       // Mark these GUIDs as local changes (for realtime sync to skip)
       guidsToRemove.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
@@ -1916,16 +1974,33 @@ export default function OrganizerScreen({
       const { error } = await supabase.from('organizer_group_items').delete().in('id', itemIds);
       if (error) throw error;
 
+      // Update local state immediately (optimistic update)
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        for (const groupId of affectedGroups) {
+          const existing = newMap.get(groupId) || [];
+          newMap.set(groupId, existing.filter(item => !itemIds.includes(item.id)));
+        }
+        return newMap;
+      });
+
+      // Rebuild tree locally
+      setGroupTree(() => {
+        const updatedItems = new Map(groupItems);
+        for (const groupId of affectedGroups) {
+          const existing = updatedItems.get(groupId) || [];
+          updatedItems.set(groupId, existing.filter(item => !itemIds.includes(item.id)));
+        }
+        return buildGroupTree(groups, updatedItems);
+      });
+
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
 
-      // Color removed items WHITE if coloring mode is active
+      // Color removed items WHITE if coloring mode is active (run in background)
       if (colorByGroup && guidsToRemove.length > 0) {
-        await colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
+        colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
       }
-
-      // Use silent refresh to avoid UI flash
-      await refreshData();
     } catch (e) {
       console.error('Error removing items:', e);
       showToast('Viga detailide eemaldamisel');
@@ -1958,8 +2033,19 @@ export default function OrganizerScreen({
         setTimeout(() => recentLocalChangesRef.current.delete(guidLower), 5000);
       }
 
-      await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
-      await refreshData();
+      // Update local state immediately (optimistic update)
+      const groupId = item.group_id;
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const existing = newMap.get(groupId) || [];
+        newMap.set(groupId, existing.map(i =>
+          i.id === itemId ? { ...i, custom_properties: updatedProps } : i
+        ));
+        return newMap;
+      });
+
+      // Update database in background
+      supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
     } catch (e) {
       console.error('Error updating field:', e);
     }
@@ -3357,23 +3443,372 @@ export default function OrganizerScreen({
     const customFields = group.custom_fields || [];
 
     const wb = XLSX.utils.book_new();
-    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    const headers = ['#', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon', 'Lisatud', 'Lisaja'];
     customFields.forEach(f => headers.push(f.name));
 
     const data: any[][] = [headers];
     items.forEach((item, idx) => {
-      const row: any[] = [idx + 1, item.assembly_mark || '', item.product_name || '', formatWeight(item.cast_unit_weight), item.cast_unit_position_code || ''];
+      const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
+      const row: any[] = [
+        idx + 1,
+        item.assembly_mark || '',
+        item.product_name || '',
+        formatWeight(item.cast_unit_weight),
+        item.cast_unit_position_code || '',
+        addedDate,
+        item.added_by || ''
+      ];
       customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
       data.push(row);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 }))];
+    ws['!cols'] = [{ wch: 5 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 25 }, ...customFields.map(() => ({ wch: 15 }))];
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
     showToast('Eksport loodud');
     setGroupMenuId(null);
+  };
+
+  // ============================================
+  // EXCEL IMPORT
+  // ============================================
+
+  const downloadImportTemplate = (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    const customFields = group.custom_fields || [];
+
+    const wb = XLSX.utils.book_new();
+
+    // Headers: GUID columns + Subgroup + Custom fields
+    const headers = ['GUID_IFC', 'GUID_MS', 'Alamgrupp', 'Alamgrupi_kirjeldus'];
+    customFields.forEach(f => headers.push(f.name.replace(/\s+/g, '_')));
+
+    // Add example row
+    const exampleRow = [
+      '2O2Fr$t4X7Zf8NOew3FLOH', // IFC GUID example
+      '85ca28da-b297-4bdc-87df-fac7573fb32d', // MS GUID example
+      'Alamgrupi nimi (valikuline)',
+      'Alamgrupi kirjeldus (valikuline)'
+    ];
+    customFields.forEach(f => {
+      if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
+        exampleRow.push(f.options.dropdownOptions[0] || '');
+      } else if (f.type === 'tags') {
+        exampleRow.push('tag1, tag2');
+      } else {
+        exampleRow.push('');
+      }
+    });
+
+    const data = [headers, exampleRow];
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 25 }, // GUID_IFC
+      { wch: 38 }, // GUID_MS
+      { wch: 20 }, // Alamgrupp
+      { wch: 30 }, // Alamgrupi_kirjeldus
+      ...customFields.map(() => ({ wch: 15 }))
+    ];
+
+    // Add instructions sheet
+    const instructionsData = [
+      ['IMPORDI JUHEND'],
+      [''],
+      ['1. Täida GUID_IFC VÕI GUID_MS veerg (üks on kohustuslik)'],
+      ['2. GUID_MS konverteeritakse automaatselt GUID_IFC formaati'],
+      ['3. Alamgrupp veerg loob uue alamgrupi kui seda pole veel olemas'],
+      ['4. Alamgrupi_kirjeldus on valikuline'],
+      ['5. Lisaveerud täidetakse vastavate väärtustega'],
+      [''],
+      ['GUID FORMAADID:'],
+      ['- GUID_IFC: 22 tähemärki (nt: 2O2Fr$t4X7Zf8NOew3FLOH)'],
+      ['- GUID_MS: UUID formaat (nt: 85ca28da-b297-4bdc-87df-fac7573fb32d)'],
+      [''],
+      ['NÄPUNÄITED:'],
+      ['- Kustuta näidisrida enne importimist'],
+      ['- Dropdown väärtused peavad vastama täpselt seadistatud valikutele'],
+      ['- Tags veerus eraldage väärtused komaga']
+    ];
+
+    const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
+    wsInstructions['!cols'] = [{ wch: 60 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Andmed');
+    XLSX.utils.book_append_sheet(wb, wsInstructions, 'Juhend');
+
+    XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_import_template.xlsx`);
+    showToast('Template alla laetud');
+    setGroupMenuId(null);
+  };
+
+  const openExcelImportModal = (groupId: string) => {
+    setExcelImportGroupId(groupId);
+    setExcelImportFile(null);
+    setExcelImportPreview(null);
+    setShowExcelImportModal(true);
+    setGroupMenuId(null);
+  };
+
+  const handleExcelFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setExcelImportFile(file);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
+
+      // Extract unique subgroup names
+      const subgroupNames = new Set<string>();
+      for (const row of rows) {
+        const subgroup = row['Alamgrupp'] || row['alamgrupp'] || row['Subgroup'] || row['subgroup'];
+        if (subgroup && subgroup.trim()) {
+          subgroupNames.add(subgroup.trim());
+        }
+      }
+
+      setExcelImportPreview({
+        rows: rows.length,
+        subgroups: Array.from(subgroupNames)
+      });
+    } catch (err) {
+      console.error('Error reading Excel file:', err);
+      showToast('Viga faili lugemisel');
+      setExcelImportFile(null);
+      setExcelImportPreview(null);
+    }
+  };
+
+  const importFromExcel = async () => {
+    if (!excelImportGroupId || !excelImportFile) return;
+
+    const parentGroup = groups.find(g => g.id === excelImportGroupId);
+    if (!parentGroup) return;
+
+    // Check if group is locked
+    if (isGroupLocked(excelImportGroupId)) {
+      const lockInfo = getGroupLockInfo(excelImportGroupId);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      setShowExcelImportModal(false);
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const data = await excelImportFile.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(sheet);
+
+      if (rows.length === 0) {
+        showToast('Excel fail on tühi');
+        setSaving(false);
+        return;
+      }
+
+      const customFields = parentGroup.custom_fields || [];
+
+      // Step 1: Collect all GUIDs and convert MS to IFC
+      const guidToRow = new Map<string, Record<string, string>>();
+
+      for (const row of rows) {
+        let guidIfc = row['GUID_IFC'] || row['guid_ifc'] || row['GUID'] || row['guid'];
+        const guidMs = row['GUID_MS'] || row['guid_ms'];
+
+        // Convert MS GUID to IFC if needed
+        if (!guidIfc && guidMs) {
+          guidIfc = msToIfcGuid(guidMs.trim());
+        }
+
+        if (guidIfc && guidIfc.trim()) {
+          guidToRow.set(guidIfc.toLowerCase(), row);
+        }
+      }
+
+      if (guidToRow.size === 0) {
+        showToast('GUID veergu ei leitud või kõik read on tühjad');
+        setSaving(false);
+        return;
+      }
+
+      // Step 2: Look up GUIDs in database
+      const guidsToSearch = Array.from(guidToRow.keys());
+      const { data: foundObjects, error: searchError } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
+        .eq('trimble_project_id', projectId)
+        .filter('guid_ifc', 'in', `(${guidsToSearch.map(g => `"${g}"`).join(',')})`);
+
+      if (searchError) throw searchError;
+
+      // Create lookup by lowercase GUID
+      const foundByGuid = new Map<string, typeof foundObjects[0]>();
+      for (const obj of foundObjects || []) {
+        if (obj.guid_ifc) {
+          foundByGuid.set(obj.guid_ifc.toLowerCase(), obj);
+        }
+      }
+
+      // Step 3: Create subgroups if needed
+      const subgroupMap = new Map<string, string>(); // name -> id
+
+      // Get existing subgroups
+      const existingSubgroups = groups.filter(g => g.parent_id === excelImportGroupId);
+      for (const sg of existingSubgroups) {
+        subgroupMap.set(sg.name.toLowerCase(), sg.id);
+      }
+
+      // Create new subgroups
+      const newSubgroupNames = new Set<string>();
+      for (const row of rows) {
+        const subgroupName = row['Alamgrupp'] || row['alamgrupp'] || row['Subgroup'] || row['subgroup'];
+        if (subgroupName && subgroupName.trim() && !subgroupMap.has(subgroupName.toLowerCase())) {
+          newSubgroupNames.add(subgroupName.trim());
+        }
+      }
+
+      for (const subgroupName of newSubgroupNames) {
+        const description = rows.find(r =>
+          (r['Alamgrupp'] || r['alamgrupp'] || r['Subgroup'] || r['subgroup'])?.trim().toLowerCase() === subgroupName.toLowerCase()
+        )?.['Alamgrupi_kirjeldus'] || rows.find(r =>
+          (r['Alamgrupp'] || r['alamgrupp'] || r['Subgroup'] || r['subgroup'])?.trim().toLowerCase() === subgroupName.toLowerCase()
+        )?.['alamgrupi_kirjeldus'] || null;
+
+        const newGroupData = {
+          trimble_project_id: projectId,
+          parent_id: excelImportGroupId,
+          name: subgroupName,
+          description: description,
+          is_private: parentGroup.is_private,
+          allowed_users: parentGroup.allowed_users,
+          display_properties: parentGroup.display_properties,
+          custom_fields: parentGroup.custom_fields,
+          assembly_selection_on: parentGroup.assembly_selection_on,
+          unique_items: parentGroup.unique_items,
+          color: generateGroupColor(groups.length + subgroupMap.size),
+          created_by: tcUserEmail,
+          sort_order: groups.length + subgroupMap.size,
+          level: (parentGroup.level || 0) + 1
+        };
+
+        const { data: insertedGroup, error: insertError } = await supabase
+          .from('organizer_groups')
+          .insert(newGroupData)
+          .select()
+          .single();
+
+        if (insertError) throw insertError;
+
+        subgroupMap.set(subgroupName.toLowerCase(), insertedGroup.id);
+      }
+
+      // Step 4: Prepare items for insertion
+      const itemsByGroup = new Map<string, any[]>();
+
+      for (const [guidLower, row] of guidToRow) {
+        const foundObj = foundByGuid.get(guidLower);
+        if (!foundObj) continue;
+
+        // Determine target group
+        const subgroupName = row['Alamgrupp'] || row['alamgrupp'] || row['Subgroup'] || row['subgroup'];
+        let targetGroupId = excelImportGroupId;
+
+        if (subgroupName && subgroupName.trim()) {
+          const subgroupId = subgroupMap.get(subgroupName.toLowerCase());
+          if (subgroupId) targetGroupId = subgroupId;
+        }
+
+        // Build custom properties
+        const customProperties: Record<string, string> = {};
+        for (const field of customFields) {
+          const colName = field.name.replace(/\s+/g, '_');
+          const value = row[colName] || row[field.name] || row[field.name.toLowerCase()];
+          if (value !== undefined && value !== '') {
+            customProperties[field.id] = String(value);
+          }
+        }
+
+        const item = {
+          group_id: targetGroupId,
+          guid_ifc: foundObj.guid_ifc,
+          assembly_mark: foundObj.assembly_mark,
+          product_name: foundObj.product_name,
+          cast_unit_weight: foundObj.cast_unit_weight || null,
+          custom_properties: customProperties,
+          added_by: tcUserEmail,
+          sort_order: 0
+        };
+
+        if (!itemsByGroup.has(targetGroupId)) {
+          itemsByGroup.set(targetGroupId, []);
+        }
+        itemsByGroup.get(targetGroupId)!.push(item);
+      }
+
+      // Step 5: Insert items (delete existing first)
+      let totalAdded = 0;
+      let totalSkipped = 0;
+
+      for (const [targetGroupId, items] of itemsByGroup) {
+        const existingGuids = new Set(
+          (groupItems.get(targetGroupId) || []).map(i => i.guid_ifc?.toLowerCase()).filter(Boolean)
+        );
+
+        // Filter out already existing items
+        const newItems = items.filter(i => !existingGuids.has(i.guid_ifc?.toLowerCase()));
+        totalSkipped += items.length - newItems.length;
+
+        if (newItems.length === 0) continue;
+
+        // Set sort orders
+        const existingCount = (groupItems.get(targetGroupId) || []).length;
+        newItems.forEach((item, idx) => {
+          item.sort_order = existingCount + idx;
+        });
+
+        // Mark GUIDs as local changes
+        const guids = newItems.map(i => i.guid_ifc).filter(Boolean);
+        guids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+        setTimeout(() => {
+          guids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+        }, 5000);
+
+        // Insert
+        const { error } = await supabase.from('organizer_group_items').insert(newItems);
+        if (error) throw error;
+
+        totalAdded += newItems.length;
+      }
+
+      const notFoundCount = guidToRow.size - (totalAdded + totalSkipped);
+      let message = `${totalAdded} elementi imporditud`;
+      if (totalSkipped > 0) message += `, ${totalSkipped} juba olemas`;
+      if (notFoundCount > 0) message += `, ${notFoundCount} ei leitud andmebaasist`;
+      if (newSubgroupNames.size > 0) message += `, ${newSubgroupNames.size} alamgruppi loodud`;
+
+      showToast(message);
+      await refreshData();
+      setShowExcelImportModal(false);
+
+    } catch (err) {
+      console.error('Error importing from Excel:', err);
+      showToast('Viga importimisel');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // ============================================
@@ -3405,17 +3840,152 @@ export default function OrganizerScreen({
     setDraggedItems([]);
   };
 
+  // Handle drag over an item for reordering within group
+  const handleItemDragOver = (e: React.DragEvent, groupId: string, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedItems.length === 0) return;
+    // Only allow reordering within the same group
+    if (draggedItems[0].group_id === groupId) {
+      setDragReorderTarget({ groupId, targetIndex });
+    }
+  };
+
+  const handleItemDragLeave = () => {
+    setDragReorderTarget(null);
+  };
+
+  // Handle drop for reordering within a group
+  const handleItemDrop = async (e: React.DragEvent, groupId: string, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragReorderTarget(null);
+
+    if (draggedItems.length === 0) return;
+    // Only reorder within the same group
+    if (draggedItems[0].group_id !== groupId) {
+      // Move to different group - use existing logic
+      const itemIds = draggedItems.map(i => i.id);
+      await moveItemsToGroup(itemIds, groupId);
+      setDraggedItems([]);
+      return;
+    }
+
+    const items = groupItems.get(groupId) || [];
+    const sortedItems = sortItems(items, itemSortField, itemSortDir);
+    const draggedItem = draggedItems[0];
+    const currentIndex = sortedItems.findIndex(i => i.id === draggedItem.id);
+
+    if (currentIndex === -1 || currentIndex === targetIndex) {
+      setDraggedItems([]);
+      return;
+    }
+
+    // Reorder items
+    const newItems = [...sortedItems];
+    newItems.splice(currentIndex, 1);
+    newItems.splice(targetIndex, 0, draggedItem);
+
+    // Update sort_order for all items
+    const updates = newItems.map((item, idx) => ({
+      id: item.id,
+      sort_order: idx
+    }));
+
+    try {
+      // Update in database
+      for (const upd of updates) {
+        await supabase.from('organizer_group_items').update({ sort_order: upd.sort_order }).eq('id', upd.id);
+      }
+
+      // Update local state
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const updatedItems = newItems.map((item, idx) => ({ ...item, sort_order: idx }));
+        newMap.set(groupId, updatedItems);
+        return newMap;
+      });
+
+      // Switch to sort_order sort to show the new order
+      setItemSortField('sort_order');
+      setItemSortDir('asc');
+    } catch (err) {
+      console.error('Error reordering items:', err);
+      showToast('Viga järjestuse muutmisel');
+    }
+
+    setDraggedItems([]);
+  };
+
+  // Apply current visual sort as the new sort_order in database
+  const applySortAsOrder = async (groupId: string) => {
+    const items = groupItems.get(groupId) || [];
+    if (items.length === 0) return;
+
+    const sortedItems = sortItems(items, itemSortField, itemSortDir);
+
+    try {
+      setSaving(true);
+      // Update sort_order for all items
+      for (let i = 0; i < sortedItems.length; i++) {
+        await supabase.from('organizer_group_items').update({ sort_order: i }).eq('id', sortedItems[i].id);
+      }
+
+      // Update local state
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const updatedItems = sortedItems.map((item, idx) => ({ ...item, sort_order: idx }));
+        newMap.set(groupId, updatedItems);
+        return newMap;
+      });
+
+      // Switch to sort_order to show the applied order
+      setItemSortField('sort_order');
+      setItemSortDir('asc');
+
+      showToast('Järjestus salvestatud');
+    } catch (err) {
+      console.error('Error applying sort order:', err);
+      showToast('Viga järjestuse salvestamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ============================================
   // SEARCH
   // ============================================
 
   const filterItems = (items: OrganizerGroupItem[], group: OrganizerGroup): OrganizerGroupItem[] => {
+    // Apply group filter
+    if (searchFilterGroup !== 'all' && group.id !== searchFilterGroup) {
+      return []; // Hide items from other groups when filtering by specific group
+    }
+
     if (!searchQuery) return items;
 
     const q = searchQuery.toLowerCase();
     return items.filter(item => {
+      // Apply column filter
+      if (searchFilterColumn === 'mark') {
+        return item.assembly_mark?.toLowerCase().includes(q);
+      }
+      if (searchFilterColumn === 'product') {
+        return item.product_name?.toLowerCase().includes(q);
+      }
+      if (searchFilterColumn === 'weight') {
+        return formatWeight(item.cast_unit_weight).toLowerCase().includes(q);
+      }
+      // Check if filtering by custom field
+      if (searchFilterColumn !== 'all') {
+        const val = item.custom_properties?.[searchFilterColumn];
+        return val && String(val).toLowerCase().includes(q);
+      }
+
+      // Search all columns
       if (item.assembly_mark?.toLowerCase().includes(q)) return true;
       if (item.product_name?.toLowerCase().includes(q)) return true;
+      if (formatWeight(item.cast_unit_weight).toLowerCase().includes(q)) return true;
 
       const customFields = group.custom_fields || [];
       for (const field of customFields) {
@@ -3425,6 +3995,19 @@ export default function OrganizerScreen({
       return false;
     });
   };
+
+  // Get all unique custom fields across all groups for filter dropdown
+  const allCustomFields = useMemo(() => {
+    const fieldsMap = new Map<string, CustomFieldDefinition>();
+    for (const group of groups) {
+      for (const field of (group.custom_fields || [])) {
+        if (!fieldsMap.has(field.id)) {
+          fieldsMap.set(field.id, field);
+        }
+      }
+    }
+    return Array.from(fieldsMap.values());
+  }, [groups]);
 
   // ============================================
   // HELPER: Get root parent group for settings
@@ -3690,6 +4273,12 @@ export default function OrganizerScreen({
               <button onClick={() => openImportModal(node.id)}>
                 <FiUpload size={12} /> Impordi GUID
               </button>
+              <button onClick={() => openExcelImportModal(node.id)}>
+                <FiUpload size={12} /> Impordi Excelist
+              </button>
+              <button onClick={() => downloadImportTemplate(node.id)}>
+                <FiDownload size={12} /> Lae template
+              </button>
               {(() => {
                 const parentLocked = node.parent_id && isGroupLocked(node.parent_id);
                 if (parentLocked) {
@@ -3762,10 +4351,15 @@ export default function OrganizerScreen({
 
               return (
               <div className="org-items org-items-dynamic" style={columnStyles}>
-                {/* Item sort header */}
-                {sortedItems.length > 3 && (
+                {/* Item sort header - show when at least 1 item */}
+                {sortedItems.length > 0 && (
                   <div className="org-items-header">
-                    <span className="org-item-index">#</span>
+                    <span className="org-item-index sortable" onClick={() => {
+                      if (itemSortField === 'sort_order') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                      else { setItemSortField('sort_order'); setItemSortDir('asc'); }
+                    }} title="Sorteeri järjekorra järgi">
+                      # {itemSortField === 'sort_order' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                    </span>
                     <span className="org-header-spacer" /> {/* For drag handle */}
                     <span className="org-item-mark sortable" onClick={() => {
                       if (itemSortField === 'assembly_mark') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
@@ -3790,19 +4384,39 @@ export default function OrganizerScreen({
                         {field.name}
                       </span>
                     ))}
+                    {itemSortField !== 'sort_order' && (
+                      <button
+                        className="org-save-order-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          applySortAsOrder(node.id);
+                        }}
+                        title="Salvesta praegune järjestus positsioonidena"
+                      >
+                        Salvesta
+                      </button>
+                    )}
                   </div>
                 )}
 
                 {displayItems.map((item, idx) => {
                   const isItemSelected = selectedItemIds.has(item.id);
                   const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
+                  const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
+                  const addedInfo = item.added_at
+                    ? `Lisatud: ${new Date(item.added_at).toLocaleDateString('et-EE')} ${new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}\nLisaja: ${item.added_by || 'Tundmatu'}`
+                    : '';
                   return (
                     <div
                       key={item.id}
-                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''}`}
+                      className={`org-item ${isItemSelected ? 'selected' : ''} ${isModelSelected ? 'model-selected' : ''} ${isDragTarget ? 'drag-target' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, [item])}
+                      onDragOver={(e) => handleItemDragOver(e, node.id, idx)}
+                      onDragLeave={handleItemDragLeave}
+                      onDrop={(e) => handleItemDrop(e, node.id, idx)}
                       onClick={(e) => handleItemClick(e, item, sortedItems)}
+                      title={addedInfo}
                     >
                       <span className="org-item-index">{idx + 1}</span>
                       <FiMove size={10} className="org-drag-handle" />
@@ -4069,32 +4683,90 @@ export default function OrganizerScreen({
 
       {/* Search bar - separate row */}
       <div className="org-search-bar">
-        <div className="org-search">
-          <FiSearch size={14} />
-          <input type="text" placeholder="Otsi detaile..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-          {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
-        </div>
+        <div className="org-search-group">
+          <div className="org-search">
+            <FiSearch size={14} />
+            <input type="text" placeholder="Otsi kõikidest gruppidest..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+            {searchQuery && <button onClick={() => setSearchQuery('')}><FiX size={14} /></button>}
+          </div>
 
-        {/* Sorting controls */}
-        <div className="org-sort-controls">
+          {/* Filter dropdowns */}
           <select
-            value={groupSortField}
-            onChange={(e) => setGroupSortField(e.target.value as SortField)}
-            title="Gruppide sortimine"
+            className="org-filter-select"
+            value={searchFilterGroup}
+            onChange={(e) => setSearchFilterGroup(e.target.value)}
+            title="Filtreeri grupi järgi"
           >
-            <option value="sort_order">Järjekord</option>
-            <option value="name">Nimi</option>
-            <option value="itemCount">Kogus</option>
-            <option value="totalWeight">Kaal</option>
-            <option value="created_at">Loodud</option>
+            <option value="all">Kõik grupid</option>
+            {groups.map(g => (
+              <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
+            ))}
           </select>
-          <button
-            className="org-sort-dir-btn"
-            onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}
-            title={groupSortDir === 'asc' ? 'Kasvav' : 'Kahanev'}
+
+          <select
+            className="org-filter-select"
+            value={searchFilterColumn}
+            onChange={(e) => setSearchFilterColumn(e.target.value)}
+            title="Filtreeri veeru järgi"
           >
-            {groupSortDir === 'asc' ? <FiArrowUp size={12} /> : <FiArrowDown size={12} />}
-          </button>
+            <option value="all">Kõik veerud</option>
+            <option value="mark">Mark</option>
+            <option value="product">Toode</option>
+            <option value="weight">Kaal</option>
+            {allCustomFields.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+
+          {/* Sort button with dropdown */}
+          <div className="org-sort-dropdown-container">
+            <button
+              className={`org-sort-icon-btn ${showSortMenu ? 'active' : ''}`}
+              onClick={() => setShowSortMenu(!showSortMenu)}
+              title="Sorteeri"
+            >
+              <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>
+            </button>
+            {showSortMenu && (
+              <div className="org-sort-dropdown" onClick={(e) => e.stopPropagation()}>
+                <div className="org-sort-dropdown-header">Gruppide sortimine</div>
+                <button
+                  className={groupSortField === 'sort_order' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('sort_order'); }}
+                >
+                  Järjekord {groupSortField === 'sort_order' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'name' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('name'); }}
+                >
+                  Nimi {groupSortField === 'name' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'itemCount' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('itemCount'); }}
+                >
+                  Kogus {groupSortField === 'itemCount' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'totalWeight' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('totalWeight'); }}
+                >
+                  Kaal {groupSortField === 'totalWeight' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <button
+                  className={groupSortField === 'created_at' ? 'active' : ''}
+                  onClick={() => { setGroupSortField('created_at'); }}
+                >
+                  Loodud {groupSortField === 'created_at' && (groupSortDir === 'asc' ? '↑' : '↓')}
+                </button>
+                <div className="org-sort-dropdown-divider" />
+                <button onClick={() => setGroupSortDir(groupSortDir === 'asc' ? 'desc' : 'asc')}>
+                  {groupSortDir === 'asc' ? '↑ Kasvav' : '↓ Kahanev'}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="org-toolbar-stats">
@@ -5124,6 +5796,94 @@ export default function OrganizerScreen({
                   disabled={saving || previewValues.length === 0}
                 >
                   {saving ? 'Impordin...' : `Impordi ${previewValues.length} väärtust`}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Excel Import Modal */}
+      {showExcelImportModal && excelImportGroupId && (() => {
+        const importGroup = groups.find(g => g.id === excelImportGroupId);
+
+        return (
+          <div className="org-modal-overlay" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>
+            <div className="org-modal" onClick={e => e.stopPropagation()}>
+              <div className="org-modal-header">
+                <h2>Impordi Excelist</h2>
+                <button onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body">
+                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
+                  Grupp: <strong>{importGroup?.name}</strong>
+                </p>
+
+                <div style={{ marginBottom: '16px', padding: '12px', background: '#f0fdf4', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+                  <p style={{ margin: 0, fontSize: '12px', color: '#166534' }}>
+                    <strong>Nõuded:</strong><br/>
+                    • GUID_IFC või GUID_MS veerg (vähemalt üks kohustuslik)<br/>
+                    • GUID_MS konverteeritakse automaatselt IFC formaati<br/>
+                    • Alamgrupp veerg loob uued alamgrupid automaatselt
+                  </p>
+                </div>
+
+                <div className="org-field" style={{ marginBottom: '16px' }}>
+                  <label>Vali Excel fail (.xlsx)</label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleExcelFileSelect}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid var(--modus-border)',
+                      borderRadius: '4px',
+                      marginTop: '4px'
+                    }}
+                  />
+                </div>
+
+                {excelImportPreview && (
+                  <div style={{ padding: '12px', background: '#eff6ff', borderRadius: '8px', marginBottom: '16px' }}>
+                    <p style={{ margin: 0, fontSize: '12px', color: '#1e40af' }}>
+                      <strong>Eelvaade:</strong><br/>
+                      • Ridu: {excelImportPreview.rows}<br/>
+                      {excelImportPreview.subgroups.length > 0 && (
+                        <>• Alamgrupid: {excelImportPreview.subgroups.join(', ')}</>
+                      )}
+                    </p>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => downloadImportTemplate(excelImportGroupId)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 12px',
+                    background: 'white',
+                    border: '1px solid var(--modus-border)',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    color: '#374151'
+                  }}
+                >
+                  <FiDownload size={14} /> Lae alla template
+                </button>
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => { setShowExcelImportModal(false); setExcelImportGroupId(null); }}>Tühista</button>
+                <button
+                  className="save"
+                  onClick={importFromExcel}
+                  disabled={saving || !excelImportFile}
+                >
+                  {saving ? 'Impordin...' : 'Impordi'}
                 </button>
               </div>
             </div>
