@@ -951,21 +951,18 @@ export default function OrganizerScreen({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [showGroupForm, showFieldForm, showBulkEdit, showDeleteConfirm, showMarkupModal, showImportModal, groupMenuId, selectedItemIds.size, selectedGroupId, selectedObjects.length, api]);
 
-  // Close sort menu when clicking outside
+  // Close all dropdown menus when clicking outside
   useEffect(() => {
-    if (!showSortMenu) return;
-    const handleClick = () => setShowSortMenu(false);
+    const anyMenuOpen = showSortMenu || showFilterMenu || groupMenuId !== null;
+    if (!anyMenuOpen) return;
+    const handleClick = () => {
+      setShowSortMenu(false);
+      setShowFilterMenu(false);
+      setGroupMenuId(null);
+    };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [showSortMenu]);
-
-  // Close filter menu when clicking outside
-  useEffect(() => {
-    if (!showFilterMenu) return;
-    const handleClick = () => setShowFilterMenu(false);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [showFilterMenu]);
+  }, [showSortMenu, showFilterMenu, groupMenuId]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -2527,15 +2524,38 @@ export default function OrganizerScreen({
       pushUndo({ type: 'move_items', itemIds: [...itemIds], fromGroupId, toGroupId: targetGroupId });
     }
 
+    // Collect items being moved and their GUIDs
+    const itemsToMove: OrganizerGroupItem[] = [];
+    const guidsToMove: string[] = [];
+    for (const itemId of itemIds) {
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+      if (item) {
+        itemsToMove.push(item);
+        if (item.guid_ifc) guidsToMove.push(item.guid_ifc);
+      }
+    }
+
+    // Optimistic UI update - move items immediately in local state
+    const previousGroupItems = new Map(groupItems);
+    setGroupItems(prev => {
+      const newMap = new Map(prev);
+      // Remove from source groups
+      for (const [gid, items] of newMap) {
+        const filtered = items.filter(i => !itemIds.includes(i.id));
+        if (filtered.length !== items.length) {
+          newMap.set(gid, filtered);
+        }
+      }
+      // Add to target group
+      const targetItems = newMap.get(targetGroupId) || [];
+      const movedItems = itemsToMove.map(i => ({ ...i, group_id: targetGroupId }));
+      newMap.set(targetGroupId, [...targetItems, ...movedItems]);
+      return newMap;
+    });
+    setSelectedItemIds(new Set());
+
     setSaving(true);
     try {
-      // Collect GUIDs being moved for realtime tracking
-      const guidsToMove: string[] = [];
-      for (const itemId of itemIds) {
-        const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
-        if (item?.guid_ifc) guidsToMove.push(item.guid_ifc);
-      }
-
       // Mark these GUIDs as local changes (for realtime sync to skip)
       guidsToMove.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
       setTimeout(() => {
@@ -2546,10 +2566,6 @@ export default function OrganizerScreen({
       if (error) throw error;
 
       showToast(`${itemIds.length} detaili liigutatud`);
-      setSelectedItemIds(new Set());
-
-      // Use silent refresh to avoid UI flash
-      await refreshData();
 
       // Auto-recolor if coloring mode is active (items may have new group color)
       if (colorByGroup) {
@@ -2558,6 +2574,8 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error moving items:', e);
       showToast('Viga detailide liigutamisel');
+      // Rollback on error
+      setGroupItems(previousGroupItems);
     } finally {
       setSaving(false);
     }
@@ -4708,7 +4726,7 @@ export default function OrganizerScreen({
 
           <button
             className={`org-menu-btn ${groupMenuId === node.id ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setGroupMenuId(groupMenuId === node.id ? null : node.id); }}
+            onClick={(e) => { e.stopPropagation(); setShowSortMenu(false); setShowFilterMenu(false); setGroupMenuId(groupMenuId === node.id ? null : node.id); }}
           >
             <FiMoreVertical size={14} />
           </button>
@@ -5200,7 +5218,7 @@ export default function OrganizerScreen({
           <div className="org-filter-dropdown-container">
             <button
               className={`org-filter-icon-btn ${showFilterMenu ? 'active' : ''} ${(searchFilterGroup !== 'all' || searchFilterColumn !== 'all') ? 'has-filter' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(!showFilterMenu); }}
+              onClick={(e) => { e.stopPropagation(); setShowSortMenu(false); setGroupMenuId(null); setShowFilterMenu(!showFilterMenu); }}
               title="Filtreeri"
             >
               <i className="modus-icons" style={{ fontSize: '18px' }}>filter</i>
@@ -5250,7 +5268,7 @@ export default function OrganizerScreen({
           <div className="org-sort-dropdown-container">
             <button
               className={`org-sort-icon-btn ${showSortMenu ? 'active' : ''}`}
-              onClick={(e) => { e.stopPropagation(); setShowSortMenu(!showSortMenu); }}
+              onClick={(e) => { e.stopPropagation(); setShowFilterMenu(false); setGroupMenuId(null); setShowSortMenu(!showSortMenu); }}
               title="Sorteeri"
             >
               <i className="modus-icons" style={{ fontSize: '18px' }}>sort</i>
@@ -5302,7 +5320,7 @@ export default function OrganizerScreen({
           <span className="separator">|</span>
           <span>{Array.from(groupItems.values()).flat().length} detaili</span>
         </div>
-        {selectedItemIds.size > 0 && selectedGroup && (
+        {selectedItemIds.size > 0 && selectedGroup && !isGroupLocked(selectedGroup.id) && (
           <div className="org-bulk-actions">
             <span>{selectedItemIds.size} valitud</span>
             <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
