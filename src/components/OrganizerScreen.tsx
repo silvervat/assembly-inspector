@@ -2312,8 +2312,13 @@ export default function OrganizerScreen({
         guidsToRemove.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
       }, 5000);
 
-      const { error } = await supabase.from('organizer_group_items').delete().in('id', itemIds);
-      if (error) throw error;
+      // Delete in batches to avoid URL length limits
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
+        const batch = itemIds.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from('organizer_group_items').delete().in('id', batch);
+        if (error) throw error;
+      }
 
       // Update local state immediately (optimistic update)
       setGroupItems(prev => {
