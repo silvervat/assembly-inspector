@@ -141,9 +141,37 @@ function FunctionButton({
   );
 }
 
+// Resource type definition
+interface ProjectResource {
+  id: string;
+  trimble_project_id: string;
+  resource_type: string;
+  name: string;
+  keywords: string | null;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+// Resource types configuration
+const RESOURCE_TYPES = [
+  { key: 'crane', label: 'Kraana', icon: '🏗️' },
+  { key: 'telescopic_loader', label: 'Teleskooplaadur', icon: '🚜' },
+  { key: 'boom_lift', label: 'Korvtõstuk', icon: '🔧' },
+  { key: 'scissor_lift', label: 'Käärtõstuk', icon: '✂️' },
+  { key: 'crane_operator', label: 'Kraanajuht', icon: '👷' },
+  { key: 'forklift_operator', label: 'Tõstukijuht', icon: '🧑‍🔧' },
+  { key: 'installer', label: 'Monteerija', icon: '🔨' },
+  { key: 'rigger', label: 'Troppija', icon: '⛓️' },
+  { key: 'welder', label: 'Keevitaja', icon: '🔥' },
+] as const;
+
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -213,6 +241,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     can_delete_inspections: false,
     // Admin
     can_access_admin: false
+  });
+
+  // Project Resources state
+  const [projectResources, setProjectResources] = useState<ProjectResource[]>([]);
+  const [resourcesLoading, setResourcesLoading] = useState(false);
+  const [resourcesSaving, setResourcesSaving] = useState(false);
+  const [selectedResourceType, setSelectedResourceType] = useState<string>('crane');
+  const [editingResource, setEditingResource] = useState<ProjectResource | null>(null);
+  const [showResourceForm, setShowResourceForm] = useState(false);
+  const [resourceFormData, setResourceFormData] = useState({
+    name: '',
+    keywords: '',
   });
 
   // GUID Controller popup state
@@ -2155,6 +2195,155 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     }
   };
 
+  // ==========================================
+  // PROJECT RESOURCES FUNCTIONS
+  // ==========================================
+
+  // Load project resources
+  const loadProjectResources = useCallback(async () => {
+    if (!projectId) return;
+    setResourcesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('project_resources')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .order('resource_type', { ascending: true })
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setProjectResources(data || []);
+    } catch (e: any) {
+      console.error('Error loading resources:', e);
+      setMessage(`Viga ressursside laadimisel: ${e.message}`);
+    } finally {
+      setResourcesLoading(false);
+    }
+  }, [projectId]);
+
+  // Save resource (create or update)
+  const saveResource = async () => {
+    if (!resourceFormData.name.trim()) {
+      setMessage('Nimi on kohustuslik');
+      return;
+    }
+
+    setResourcesSaving(true);
+    try {
+      if (editingResource) {
+        // Update existing resource
+        const { error } = await supabase
+          .from('project_resources')
+          .update({
+            name: resourceFormData.name.trim(),
+            keywords: resourceFormData.keywords.trim() || null,
+            updated_at: new Date().toISOString(),
+            updated_by: userEmail || null
+          })
+          .eq('id', editingResource.id);
+
+        if (error) throw error;
+        setMessage('Ressurss uuendatud');
+      } else {
+        // Create new resource
+        const { error } = await supabase
+          .from('project_resources')
+          .insert({
+            trimble_project_id: projectId,
+            resource_type: selectedResourceType,
+            name: resourceFormData.name.trim(),
+            keywords: resourceFormData.keywords.trim() || null,
+            created_by: userEmail || null
+          });
+
+        if (error) {
+          if (error.code === '23505') {
+            setMessage('See ressurss on juba olemas');
+            return;
+          }
+          throw error;
+        }
+        setMessage('Ressurss lisatud');
+      }
+
+      setShowResourceForm(false);
+      setEditingResource(null);
+      resetResourceForm();
+      await loadProjectResources();
+    } catch (e: any) {
+      console.error('Error saving resource:', e);
+      setMessage(`Viga salvestamisel: ${e.message}`);
+    } finally {
+      setResourcesSaving(false);
+    }
+  };
+
+  // Reset resource form
+  const resetResourceForm = () => {
+    setResourceFormData({
+      name: '',
+      keywords: '',
+    });
+  };
+
+  // Delete resource
+  const deleteResource = async (resourceId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle ressursi kustutada?')) return;
+
+    setResourcesLoading(true);
+    try {
+      const { error } = await supabase
+        .from('project_resources')
+        .delete()
+        .eq('id', resourceId);
+
+      if (error) throw error;
+      setMessage('Ressurss kustutatud');
+      await loadProjectResources();
+    } catch (e: any) {
+      console.error('Error deleting resource:', e);
+      setMessage(`Viga kustutamisel: ${e.message}`);
+    } finally {
+      setResourcesLoading(false);
+    }
+  };
+
+  // Toggle resource active status
+  const toggleResourceActive = async (resource: ProjectResource) => {
+    try {
+      const { error } = await supabase
+        .from('project_resources')
+        .update({
+          is_active: !resource.is_active,
+          updated_at: new Date().toISOString(),
+          updated_by: userEmail || null
+        })
+        .eq('id', resource.id);
+
+      if (error) throw error;
+      await loadProjectResources();
+    } catch (e: any) {
+      console.error('Error toggling resource:', e);
+      setMessage(`Viga: ${e.message}`);
+    }
+  };
+
+  // Open resource edit form
+  const openEditResourceForm = (resource: ProjectResource) => {
+    setEditingResource(resource);
+    setResourceFormData({
+      name: resource.name,
+      keywords: resource.keywords || '',
+    });
+    setShowResourceForm(true);
+  };
+
+  // Get resources by type
+  const getResourcesByType = (type: string) => {
+    return projectResources.filter(r => r.resource_type === type);
+  };
+
   // Open user edit form
   const openEditUserForm = (user: TrimbleExUser) => {
     setEditingUser(user);
@@ -3041,6 +3230,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           {adminView === 'modelObjects' && 'Saada andmebaasi'}
           {adminView === 'propertyMappings' && 'Tekla property seaded'}
           {adminView === 'userPermissions' && 'Kasutajate õigused'}
+          {adminView === 'resources' && 'Ressursside haldus'}
           {adminView === 'dataExport' && 'Ekspordi andmed'}
           {adminView === 'fontTester' && 'Fontide testija'}
         </h2>
@@ -3115,6 +3305,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           >
             <FiUsers size={18} />
             <span>Kasutajate õigused</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('resources');
+              loadProjectResources();
+            }}
+            style={{ background: '#f59e0b', color: 'white' }}
+          >
+            <FiDatabase size={18} />
+            <span>Ressursside haldus</span>
           </button>
 
           <button
@@ -8889,6 +9091,299 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Resources View */}
+      {adminView === 'resources' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          {/* Header with refresh button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>
+              Halda projekti ressursse - tehnikat ja töötajaid, mida kasutatakse mahalaadimisel ja paigaldusel.
+            </p>
+            <button
+              className="admin-tool-btn"
+              onClick={loadProjectResources}
+              disabled={resourcesLoading}
+              style={{ padding: '6px 12px' }}
+            >
+              <FiRefreshCw size={14} className={resourcesLoading ? 'spin' : ''} />
+              <span>Värskenda</span>
+            </button>
+          </div>
+
+          {/* Resource type tabs */}
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '6px',
+            marginBottom: '16px',
+            padding: '8px',
+            background: '#f3f4f6',
+            borderRadius: '8px'
+          }}>
+            {RESOURCE_TYPES.map(type => {
+              const count = getResourcesByType(type.key).length;
+              return (
+                <button
+                  key={type.key}
+                  onClick={() => setSelectedResourceType(type.key)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: selectedResourceType === type.key ? '#0a3a67' : 'white',
+                    color: selectedResourceType === type.key ? 'white' : '#374151',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: selectedResourceType === type.key ? 600 : 400,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <span>{type.icon}</span>
+                  <span>{type.label}</span>
+                  {count > 0 && (
+                    <span style={{
+                      background: selectedResourceType === type.key ? 'rgba(255,255,255,0.3)' : '#e5e7eb',
+                      padding: '2px 6px',
+                      borderRadius: '10px',
+                      fontSize: '10px'
+                    }}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Add new resource button */}
+          <div style={{ marginBottom: '16px' }}>
+            <button
+              className="btn-primary"
+              onClick={() => {
+                setEditingResource(null);
+                resetResourceForm();
+                setShowResourceForm(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FiPlus size={14} />
+              Lisa uus {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}
+            </button>
+          </div>
+
+          {/* Resource form modal */}
+          {showResourceForm && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1000
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                width: '90%',
+                maxWidth: '400px',
+                padding: '20px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0 }}>
+                    {editingResource ? 'Muuda ressurssi' : `Lisa ${RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}`}
+                  </h3>
+                  <button onClick={() => setShowResourceForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                    <FiX size={20} />
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
+                    Nimi *
+                  </label>
+                  <input
+                    type="text"
+                    value={resourceFormData.name}
+                    onChange={(e) => setResourceFormData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder={selectedResourceType.includes('operator') || ['installer', 'rigger', 'welder'].includes(selectedResourceType) ? 'Nt: Jaan Tamm' : 'Nt: Liebherr 50t'}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
+                    Märksõnad
+                  </label>
+                  <input
+                    type="text"
+                    value={resourceFormData.keywords}
+                    onChange={(e) => setResourceFormData(prev => ({ ...prev, keywords: e.target.value }))}
+                    placeholder="Nt: suur, punane, 50t (komadega eraldatud)"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px'
+                    }}
+                  />
+                  <p style={{ margin: '4px 0 0', fontSize: '11px', color: '#6b7280' }}>
+                    Märksõnad aitavad ressursse otsida ja filtreerida
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowResourceForm(false)}
+                    style={{ flex: 1 }}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    className="btn-primary"
+                    onClick={saveResource}
+                    disabled={resourcesSaving}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                  >
+                    {resourcesSaving ? <FiRefreshCw size={14} className="spin" /> : <FiSave size={14} />}
+                    {editingResource ? 'Salvesta' : 'Lisa'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Resources list */}
+          <div style={{
+            background: 'white',
+            borderRadius: '8px',
+            border: '1px solid #e5e7eb',
+            overflow: 'hidden'
+          }}>
+            {resourcesLoading ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                <FiRefreshCw size={24} className="spin" />
+                <p>Laadin ressursse...</p>
+              </div>
+            ) : getResourcesByType(selectedResourceType).length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                <p>Seda tüüpi ressursse pole veel lisatud.</p>
+                <p style={{ fontSize: '12px' }}>
+                  Klõpsa "Lisa uus" et lisada esimene {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}.
+                </p>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#f9fafb' }}>
+                    <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Nimi</th>
+                    <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Märksõnad</th>
+                    <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>Aktiivne</th>
+                    <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>Tegevused</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {getResourcesByType(selectedResourceType).map(resource => (
+                    <tr key={resource.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <td style={{ padding: '10px 12px', fontSize: '13px' }}>
+                        <span style={{ opacity: resource.is_active ? 1 : 0.5 }}>{resource.name}</span>
+                      </td>
+                      <td style={{ padding: '10px 12px', fontSize: '12px', color: '#6b7280' }}>
+                        {resource.keywords ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {resource.keywords.split(',').map((kw, i) => (
+                              <span
+                                key={i}
+                                style={{
+                                  background: '#e5e7eb',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px'
+                                }}
+                              >
+                                {kw.trim()}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ opacity: 0.5 }}>-</span>
+                        )}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <button
+                          onClick={() => toggleResourceActive(resource)}
+                          style={{
+                            background: resource.is_active ? '#10b981' : '#e5e7eb',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            color: resource.is_active ? 'white' : '#6b7280',
+                            fontSize: '11px'
+                          }}
+                        >
+                          {resource.is_active ? 'Jah' : 'Ei'}
+                        </button>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => openEditResourceForm(resource)}
+                            style={{
+                              background: '#f3f4f6',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '6px',
+                              cursor: 'pointer'
+                            }}
+                            title="Muuda"
+                          >
+                            <FiEdit2 size={14} />
+                          </button>
+                          <button
+                            onClick={() => deleteResource(resource.id)}
+                            style={{
+                              background: '#fee2e2',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '6px',
+                              cursor: 'pointer',
+                              color: '#dc2626'
+                            }}
+                            title="Kustuta"
+                          >
+                            <FiTrash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Summary */}
+          <div style={{ marginTop: '16px', fontSize: '12px', color: '#6b7280' }}>
+            Kokku: {projectResources.length} ressurssi ({projectResources.filter(r => r.is_active).length} aktiivset)
+          </div>
         </div>
       )}
 

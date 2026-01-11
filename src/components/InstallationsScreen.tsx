@@ -537,6 +537,7 @@ export default function InstallationsScreen({
   const [dayColors, setDayColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [monthColors, setMonthColors] = useState<Record<string, { r: number; g: number; b: number }>>({});
   const [coloringInProgress, setColoringInProgress] = useState(false);
+  const [coloringProgress, setColoringProgress] = useState('');
 
   // Calendar state
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -1636,15 +1637,18 @@ export default function InstallationsScreen({
   // Uses database-based approach (same as toggleColorByDay) - fetches guid_ifc from trimble_model_objects
   const applyInstallationColoring = async (guidsMap: Map<string, InstalledGuidInfo>, retryCount = 0) => {
     setColoringInProgress(true);
+    setColoringProgress('Mudeli kontroll...');
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
         console.log('[INSTALL] No models loaded for coloring, retry:', retryCount);
         if (retryCount < 5) {
+          setColoringProgress(`Ootan mudelit... (${retryCount + 1}/5)`);
           setTimeout(() => applyInstallationColoring(guidsMap, retryCount + 1), 500 * (retryCount + 1));
         } else {
           setColoringInProgress(false);
+          setColoringProgress('');
         }
         return;
       }
@@ -1654,12 +1658,17 @@ export default function InstallationsScreen({
       // Step 1: Check if we have cached foundObjects, if not fetch from DB and find
       let foundByLowercase = foundObjectsCacheRef.current;
       if (foundByLowercase.size === 0) {
+        setColoringProgress('Laadin andmebaasist...');
         console.log('[INSTALL] Cache empty, fetching GUIDs from database...');
         const PAGE_SIZE = 5000;
         const allGuids: string[] = [];
         let offset = 0;
+        let pageCount = 0;
 
         while (true) {
+          pageCount++;
+          setColoringProgress(`Laadin andmebaasist... ${offset > 0 ? `(${offset} objekti)` : ''}`);
+
           const { data, error } = await supabase
             .from('trimble_model_objects')
             .select('guid_ifc')
@@ -1682,6 +1691,7 @@ export default function InstallationsScreen({
         }
 
         console.log(`[INSTALL] Total GUIDs fetched: ${allGuids.length}`);
+        setColoringProgress(`Otsin mudelis ${allGuids.length} objekti...`);
 
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
         console.log(`[INSTALL] Found ${foundObjects.size} objects in models`);
@@ -1694,6 +1704,7 @@ export default function InstallationsScreen({
         foundObjectsCacheRef.current = foundByLowercase;
       } else {
         console.log(`[INSTALL] Using cached foundObjects: ${foundByLowercase.size}`);
+        setColoringProgress(`Värvin ${foundByLowercase.size} objekti...`);
       }
 
       // Step 2: Calculate new color state
@@ -1709,6 +1720,7 @@ export default function InstallationsScreen({
       }
 
       // Step 3: Compare with last color state and determine changes
+      setColoringProgress('Arvutan muudatused...');
       const lastState = lastColorStateRef.current;
       const toWhite: { modelId: string; runtimeId: number }[] = [];
       const toInstalled: { modelId: string; runtimeId: number }[] = [];
@@ -1718,6 +1730,7 @@ export default function InstallationsScreen({
 
       if (needsFullReset) {
         console.log('[INSTALL] No previous state, doing full coloring...');
+        setColoringProgress('Lähtestasin värvid...');
         await api.viewer.setObjectState(undefined, { color: "reset" });
 
         for (const [guidLower, found] of foundByLowercase) {
@@ -1746,6 +1759,7 @@ export default function InstallationsScreen({
       }
 
       console.log(`[INSTALL] Color changes: ${toWhite.length} to white, ${toInstalled.length} to installed`);
+      const totalChanges = toWhite.length + toInstalled.length;
 
       // Step 4: Apply color changes in batches
       const BATCH_SIZE = 5000;
@@ -1763,10 +1777,15 @@ export default function InstallationsScreen({
         installedByModel[obj.modelId].push(obj.runtimeId);
       }
 
+      let coloredCount = 0;
+
       // Apply white coloring
       for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          coloredCount += batch.length;
+          const percent = totalChanges > 0 ? Math.round((coloredCount / totalChanges) * 100) : 0;
+          setColoringProgress(`Värvin... ${percent}%`);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: { r: 255, g: 255, b: 255, a: 255 } }
@@ -1779,6 +1798,9 @@ export default function InstallationsScreen({
       for (const [modelId, runtimeIds] of Object.entries(installedByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          coloredCount += batch.length;
+          const percent = totalChanges > 0 ? Math.round((coloredCount / totalChanges) * 100) : 0;
+          setColoringProgress(`Värvin... ${percent}%`);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: INSTALLED_COLOR }
@@ -1798,17 +1820,20 @@ export default function InstallationsScreen({
       console.error('[INSTALL] Error applying installation coloring:', e);
     } finally {
       setColoringInProgress(false);
+      setColoringProgress('');
     }
   };
 
   // Apply coloring for PREASSEMBLY mode: installed items = INSTALLED_COLOR, preassembly items = PREASSEMBLY_COLOR
   const applyPreassemblyColoring = async () => {
     setColoringInProgress(true);
+    setColoringProgress('Mudeli kontroll...');
     try {
       // Get all loaded models
       const models = await api.viewer.getModels();
       if (!models || models.length === 0) {
         setColoringInProgress(false);
+        setColoringProgress('');
         return;
       }
 
@@ -1817,12 +1842,15 @@ export default function InstallationsScreen({
       // Step 1: Check if we have cached foundObjects, if not fetch from DB and find
       let foundByLowercase = foundObjectsCacheRef.current;
       if (foundByLowercase.size === 0) {
+        setColoringProgress('Laadin andmebaasist...');
         console.log('[PREASSEMBLY] Cache empty, fetching GUIDs from database...');
         const PAGE_SIZE = 5000;
         const allGuids: string[] = [];
         let offset = 0;
 
         while (true) {
+          setColoringProgress(`Laadin andmebaasist... ${offset > 0 ? `(${offset} objekti)` : ''}`);
+
           const { data, error } = await supabase
             .from('trimble_model_objects')
             .select('guid_ifc')
@@ -1833,6 +1861,7 @@ export default function InstallationsScreen({
           if (error) {
             console.error('[PREASSEMBLY] Supabase error:', error);
             setColoringInProgress(false);
+            setColoringProgress('');
             return;
           }
 
@@ -1846,6 +1875,7 @@ export default function InstallationsScreen({
         }
 
         console.log(`[PREASSEMBLY] Total GUIDs fetched: ${allGuids.length}`);
+        setColoringProgress(`Otsin mudelis ${allGuids.length} objekti...`);
 
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
         console.log(`[PREASSEMBLY] Found ${foundObjects.size} objects in models`);
@@ -1858,6 +1888,7 @@ export default function InstallationsScreen({
         foundObjectsCacheRef.current = foundByLowercase;
       } else {
         console.log(`[PREASSEMBLY] Using cached foundObjects: ${foundByLowercase.size}`);
+        setColoringProgress(`Värvin ${foundByLowercase.size} objekti...`);
       }
 
       // Step 2: Get installed and preassembly GUIDs (already lowercase)
@@ -1986,6 +2017,7 @@ export default function InstallationsScreen({
       console.error('[PREASSEMBLY] Error applying coloring:', e);
     } finally {
       setColoringInProgress(false);
+      setColoringProgress('');
     }
   };
 
@@ -4301,10 +4333,11 @@ export default function InstallationsScreen({
           gap: '12px',
           zIndex: 1000,
           fontSize: '14px',
-          color: '#374151'
+          color: '#374151',
+          minWidth: '200px'
         }}>
           <FiRefreshCw size={18} className="spinning" style={{ color: '#3b82f6' }} />
-          <span>Värvin mudelit...</span>
+          <span>{coloringProgress || 'Värvin mudelit...'}</span>
         </div>
       )}
 
