@@ -11706,13 +11706,13 @@ button.stat-toggle.off:hover {
 
 .org-items-header .org-item-weight {
   min-width: 38px;
-  text-align: right;
+  text-align: left;
 }
 
 .org-items-header .org-item-custom {
   flex: 1;
   min-width: 40px;
-  text-align: right;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
-import { Virtuoso } from 'react-virtuoso';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   supabase,
@@ -4856,13 +4855,9 @@ export default function OrganizerScreen({
                   </div>
                 )}
 
-                {/* Virtualized item list for smooth scrolling with large datasets */}
-                <Virtuoso
-                  style={{ height: Math.min(displayItems.length * 28, 400) }}
-                  totalCount={displayItems.length}
-                  itemContent={(idx) => {
-                    const item = displayItems[idx];
-                    if (!item) return null;
+                {/* Item list */}
+                <div className="org-items-list">
+                  {displayItems.map((item, idx) => {
                     const isItemSelected = selectedItemIds.has(item.id);
                     const isModelSelected = item.guid_ifc && selectedGuidsInGroups.has(item.guid_ifc.toLowerCase());
                     const isDragTarget = dragReorderTarget?.groupId === node.id && dragReorderTarget?.targetIndex === idx;
@@ -5039,20 +5034,8 @@ export default function OrganizerScreen({
                         </button>
                       </div>
                     );
-                  }}
-                  endReached={() => {
-                    // Auto-load more when scrolled to bottom
-                    if (hasMoreInDb && !isLoadingMore) {
-                      const currentLoaded = sortedItems.length;
-                      loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
-                      setVisibleItemCounts(prev => {
-                        const next = new Map(prev);
-                        next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
-                        return next;
-                      });
-                    }
-                  }}
-                />
+                  })}
+                </div>
 
                 {/* Load more button for virtualization */}
                 {hasMore && (
