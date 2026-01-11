@@ -7141,35 +7141,52 @@ button.stat-toggle.off:hover {
 
 .arrived-deliveries .resource-button .resource-qty-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% - 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding-top: 8px;
+  display: none;
+  z-index: 100;
+}
+
+.arrived-deliveries .resource-button .resource-qty-dropdown::before {
+  content: '';
+  position: absolute;
+  top: 0;
   left: 0;
-  margin-top: 4px;
+  right: 0;
+  height: 8px;
+}
+
+.arrived-deliveries .resource-button:hover .resource-qty-dropdown,
+.arrived-deliveries .resource-qty-dropdown:hover {
+  display: flex;
+}
+
+.arrived-deliveries .resource-qty-dropdown-inner {
+  display: flex;
+  flex-direction: row;
+  gap: 3px;
   background: white;
   border: 1px solid var(--modus-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   padding: 4px;
-  display: none;
-  z-index: 100;
-  flex-wrap: wrap;
-  max-width: 120px;
-}
-
-.arrived-deliveries .resource-button:hover .resource-qty-dropdown {
-  display: flex;
-  gap: 3px;
 }
 
 .arrived-deliveries .resource-qty-dropdown .qty-btn {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: var(--modus-bg-secondary);
   border-radius: 4px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   transition: all 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .arrived-deliveries .resource-qty-dropdown .qty-btn:hover {
@@ -7180,16 +7197,6 @@ button.stat-toggle.off:hover {
 .arrived-deliveries .resource-qty-dropdown .qty-btn.active {
   background: var(--modus-primary);
   color: white;
-}
-
-.arrived-deliveries .resource-qty-dropdown .qty-btn.qty-zero {
-  background: #fee2e2;
-  color: #dc2626;
-  font-size: 10px;
-}
-
-.arrived-deliveries .resource-qty-dropdown .qty-btn.qty-zero:hover {
-  background: #fecaca;
 }
 
 /* Equipment name inputs */
