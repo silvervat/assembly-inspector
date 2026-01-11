@@ -1149,6 +1149,33 @@ export interface CustomFieldValue {
   value: string | number | string[] | null;  // Actual value
 }
 
+// Permission settings for group members
+export interface GroupPermissions {
+  can_add: boolean;           // Can add items to group
+  can_delete_own: boolean;    // Can delete items they added
+  can_delete_all: boolean;    // Can delete items added by anyone
+  can_edit_group: boolean;    // Can edit group name/description
+  can_manage_fields: boolean; // Can create/edit custom fields
+}
+
+// Default permissions for all users (when sharing mode is 'project')
+export const DEFAULT_GROUP_PERMISSIONS: GroupPermissions = {
+  can_add: true,
+  can_delete_own: true,
+  can_delete_all: false,
+  can_edit_group: false,
+  can_manage_fields: false
+};
+
+// Full permissions for group creator
+export const OWNER_PERMISSIONS: GroupPermissions = {
+  can_add: true,
+  can_delete_own: true,
+  can_delete_all: true,
+  can_edit_group: true,
+  can_manage_fields: true
+};
+
 // Organizer group
 export interface OrganizerGroup {
   id: string;
@@ -1172,6 +1199,9 @@ export interface OrganizerGroup {
   updated_by: string | null;
   sort_order: number;
   level: number;                    // 0, 1, or 2 (max 3 levels)
+  // Permission settings
+  default_permissions: GroupPermissions;  // Default permissions for project members
+  user_permissions: Record<string, GroupPermissions>;  // Per-user permissions (for shared mode)
   // Computed/joined fields (not in DB)
   children?: OrganizerGroup[];
   items?: OrganizerGroupItem[];

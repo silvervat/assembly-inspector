@@ -9,6 +9,9 @@ import {
   GroupColor,
   CustomFieldDefinition,
   CustomFieldType,
+  GroupPermissions,
+  DEFAULT_GROUP_PERMISSIONS,
+  OWNER_PERMISSIONS,
   DEFAULT_PROPERTY_MAPPINGS
 } from '../supabase';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
@@ -412,6 +415,10 @@ export default function OrganizerScreen({
   const [formAssemblySelectionOn, setFormAssemblySelectionOn] = useState(true);
   const [formUniqueItems, setFormUniqueItems] = useState(true);
   const [formCustomFields, setFormCustomFields] = useState<CustomFieldDefinition[]>([]);
+
+  // Permission settings
+  const [formDefaultPermissions, setFormDefaultPermissions] = useState<GroupPermissions>({ ...DEFAULT_GROUP_PERMISSIONS });
+  const [formUserPermissions, setFormUserPermissions] = useState<Record<string, GroupPermissions>>({});
 
   // Drag & Drop
   const [draggedItems, setDraggedItems] = useState<OrganizerGroupItem[]>([]);
@@ -1139,7 +1146,9 @@ export default function OrganizerScreen({
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
         sort_order: groups.length,
-        level
+        level,
+        default_permissions: formDefaultPermissions,
+        user_permissions: formUserPermissions
       };
 
       const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
@@ -1154,7 +1163,9 @@ export default function OrganizerScreen({
         updated_by: null,
         is_locked: false,
         locked_by: null,
-        locked_at: null
+        locked_at: null,
+        default_permissions: formDefaultPermissions,
+        user_permissions: formUserPermissions
       };
 
       // Update groups state immediately
@@ -1208,6 +1219,8 @@ export default function OrganizerScreen({
           custom_fields: editingGroup.custom_fields,
           assembly_selection_on: formAssemblySelectionOn,
           unique_items: formUniqueItems,
+          default_permissions: formDefaultPermissions,
+          user_permissions: formUserPermissions,
           updated_at: new Date().toISOString(),
           updated_by: tcUserEmail
         })
@@ -1324,6 +1337,8 @@ export default function OrganizerScreen({
     setFormAssemblySelectionOn(true);
     setFormUniqueItems(true);
     setFormCustomFields([]);
+    setFormDefaultPermissions({ ...DEFAULT_GROUP_PERMISSIONS });
+    setFormUserPermissions({});
   };
 
   const openEditGroupForm = (group: OrganizerGroup) => {
@@ -1344,6 +1359,9 @@ export default function OrganizerScreen({
     setFormParentId(group.parent_id);
     setFormAssemblySelectionOn(group.assembly_selection_on !== false);
     setFormUniqueItems(group.unique_items !== false);
+    // Load permissions
+    setFormDefaultPermissions(group.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS });
+    setFormUserPermissions(group.user_permissions || {});
     setShowGroupForm(true);
     setGroupMenuId(null);
     // Load team members when editing for shared mode
@@ -1585,6 +1603,13 @@ export default function OrganizerScreen({
       return;
     }
 
+    // Check if user has permission to add items
+    const permissions = getUserPermissions(targetGroupId, tcUserEmail);
+    if (!permissions.can_add) {
+      showToast('Sul pole õigust sellesse gruppi detaile lisada');
+      return;
+    }
+
     // Check if unique items are required
     const uniqueRequired = requiresUniqueItems(targetGroupId);
     let objectsToAdd = [...selectedObjects];
@@ -1728,6 +1753,28 @@ export default function OrganizerScreen({
       const lockInfo = getGroupLockInfo(firstItem.group_id);
       showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
       return;
+    }
+
+    // Check permissions for each item
+    const itemsToDelete = itemIds.map(id => Array.from(groupItems.values()).flat().find(i => i.id === id)).filter(Boolean);
+    if (itemsToDelete.length > 0) {
+      const groupId = itemsToDelete[0]!.group_id;
+      const permissions = getUserPermissions(groupId, tcUserEmail);
+
+      // Check if user has permission to delete
+      if (!permissions.can_delete_all) {
+        // User can only delete their own items
+        if (!permissions.can_delete_own) {
+          showToast('Sul pole õigust detaile kustutada');
+          return;
+        }
+        // Check if all items were added by the current user
+        const otherUsersItems = itemsToDelete.filter(item => item!.added_by !== tcUserEmail);
+        if (otherUsersItems.length > 0) {
+          showToast(`Sul pole õigust teiste lisatud detaile kustutada (${otherUsersItems.length} detaili)`);
+          return;
+        }
+      }
     }
 
     setSaving(true);
@@ -3292,6 +3339,28 @@ export default function OrganizerScreen({
   }, [getRootParent]);
 
   // ============================================
+  // HELPER: Get user permissions for a group
+  // ============================================
+
+  const getUserPermissions = useCallback((groupId: string, userEmail: string): GroupPermissions => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return { ...DEFAULT_GROUP_PERMISSIONS };
+
+    // Owner always has full permissions
+    if (group.created_by === userEmail) {
+      return { ...OWNER_PERMISSIONS };
+    }
+
+    // Check for user-specific permissions first (for shared mode)
+    if (group.user_permissions && group.user_permissions[userEmail]) {
+      return group.user_permissions[userEmail];
+    }
+
+    // Fall back to default permissions
+    return group.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS };
+  }, [groups]);
+
+  // ============================================
   // HELPER: Collect all guids in a group tree (for uniqueness check)
   // ============================================
 
@@ -4056,6 +4125,163 @@ export default function OrganizerScreen({
                     </div>
                   )}
                 </div>
+
+              {/* Permissions settings - only for non-private groups */}
+              {formSharingMode !== 'private' && (
+                <div className="org-field">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    Õigused teistele kasutajatele
+                  </label>
+
+                  {/* Default permissions for all project members */}
+                  {formSharingMode === 'project' && (
+                    <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
+                      <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
+                        Vaikimisi õigused kõigile projekti liikmetele:
+                      </p>
+
+                      <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={formDefaultPermissions.can_add}
+                            onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_add: e.target.checked }))}
+                          />
+                          Saavad lisada detaile
+                        </label>
+                      </div>
+
+                      <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={formDefaultPermissions.can_delete_own}
+                            onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_delete_own: e.target.checked }))}
+                          />
+                          Saavad kustutada enda lisatud detaile
+                        </label>
+                      </div>
+
+                      <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={formDefaultPermissions.can_delete_all}
+                            onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_delete_all: e.target.checked }))}
+                          />
+                          Saavad kustutada kõiki detaile
+                        </label>
+                      </div>
+
+                      <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={formDefaultPermissions.can_edit_group}
+                            onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_edit_group: e.target.checked }))}
+                          />
+                          Saavad muuta grupi nime ja kirjeldust
+                        </label>
+                      </div>
+
+                      <div className="org-field checkbox">
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={formDefaultPermissions.can_manage_fields}
+                            onChange={(e) => setFormDefaultPermissions(prev => ({ ...prev, can_manage_fields: e.target.checked }))}
+                          />
+                          Saavad luua ja muuta lisaveerge
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Per-user permissions for shared mode */}
+                  {formSharingMode === 'shared' && formAllowedUsers.length > 0 && (
+                    <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
+                      <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '10px' }}>
+                        Kasutajapõhised õigused:
+                      </p>
+
+                      {formAllowedUsers.map(email => {
+                        const member = teamMembers.find(m => m.email === email);
+                        const userPerms = formUserPermissions[email] || { ...DEFAULT_GROUP_PERMISSIONS };
+
+                        return (
+                          <div key={email} style={{ marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid #e5e7eb' }}>
+                            <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '8px', color: '#374151' }}>
+                              {member ? `${member.firstName} ${member.lastName}` : email}
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', fontSize: '12px' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={userPerms.can_add}
+                                  onChange={(e) => setFormUserPermissions(prev => ({
+                                    ...prev,
+                                    [email]: { ...userPerms, can_add: e.target.checked }
+                                  }))}
+                                />
+                                Lisa detaile
+                              </label>
+
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={userPerms.can_delete_own}
+                                  onChange={(e) => setFormUserPermissions(prev => ({
+                                    ...prev,
+                                    [email]: { ...userPerms, can_delete_own: e.target.checked }
+                                  }))}
+                                />
+                                Kustuta omi
+                              </label>
+
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={userPerms.can_delete_all}
+                                  onChange={(e) => setFormUserPermissions(prev => ({
+                                    ...prev,
+                                    [email]: { ...userPerms, can_delete_all: e.target.checked }
+                                  }))}
+                                />
+                                Kustuta kõiki
+                              </label>
+
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={userPerms.can_edit_group}
+                                  onChange={(e) => setFormUserPermissions(prev => ({
+                                    ...prev,
+                                    [email]: { ...userPerms, can_edit_group: e.target.checked }
+                                  }))}
+                                />
+                                Muuda gruppi
+                              </label>
+
+                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={userPerms.can_manage_fields}
+                                  onChange={(e) => setFormUserPermissions(prev => ({
+                                    ...prev,
+                                    [email]: { ...userPerms, can_manage_fields: e.target.checked }
+                                  }))}
+                                />
+                                Halda veerge
+                              </label>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Assembly Selection and Unique Items settings - available for ALL groups */}
               <div className="org-toggle-field">
