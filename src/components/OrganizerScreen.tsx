@@ -635,6 +635,7 @@ export default function OrganizerScreen({
 
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
+  const [coloredSingleGroupId, setColoredSingleGroupId] = useState<string | null>(null); // Track if only one group is colored
   const [coloringInProgress, setColoringInProgress] = useState(false);
   const [colorMode, setColorMode] = useState<'all' | 'parents-only'>('all'); // 'all' = each group own color, 'parents-only' = subgroups get parent color
 
@@ -1614,7 +1615,18 @@ export default function OrganizerScreen({
 
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
-        setTimeout(() => colorModelByGroups(), 150);
+        // If only a single group is colored, only recolor that group (if it's the one being changed)
+        // If all groups are colored, recolor all groups
+        if (coloredSingleGroupId) {
+          // Check if the changed group is the colored one or its descendant
+          const subtreeIds = new Set(getGroupSubtreeIds(coloredSingleGroupId));
+          if (subtreeIds.has(groupId)) {
+            setTimeout(() => colorModelByGroups(coloredSingleGroupId), 150);
+          }
+          // If changing a different group's color, don't recolor at all
+        } else {
+          setTimeout(() => colorModelByGroups(), 150);
+        }
       }
     } catch (e) {
       console.error('Error updating group color:', e);
@@ -2952,6 +2964,8 @@ export default function OrganizerScreen({
       }
 
       setColorByGroup(true);
+      // Track if single group or all groups were colored
+      setColoredSingleGroupId(targetGroupId || null);
       showToast(`✓ Värvitud! Valged=${whiteCount}, Grupeeritud=${coloredCount}`);
     } catch (e) {
       console.error('Error coloring model:', e);
@@ -2966,6 +2980,7 @@ export default function OrganizerScreen({
     try {
       await api.viewer.setObjectState(undefined, { color: 'reset' });
       setColorByGroup(false);
+      setColoredSingleGroupId(null);
       showToast('Värvid lähtestatud');
     } catch (e) {
       console.error('Error resetting colors:', e);
