@@ -107,18 +107,36 @@ type SortField = 'name' | 'itemCount' | 'totalWeight' | 'created_at';
 type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
 type SortDirection = 'asc' | 'desc';
 
-// Preset colors for group color picker
+// Preset colors for group color picker (24 colors in 4 rows)
 const PRESET_COLORS: GroupColor[] = [
+  // Row 1: Reds, Oranges, Yellows
   { r: 239, g: 68, b: 68 },   // Red
+  { r: 220, g: 38, b: 38 },   // Red-600
   { r: 249, g: 115, b: 22 },  // Orange
+  { r: 234, g: 88, b: 12 },   // Orange-600
   { r: 234, g: 179, b: 8 },   // Yellow
+  { r: 245, g: 158, b: 11 },  // Amber
+  // Row 2: Greens, Teals, Cyans
   { r: 34, g: 197, b: 94 },   // Green
+  { r: 22, g: 163, b: 74 },   // Green-600
+  { r: 16, g: 185, b: 129 },  // Emerald
+  { r: 20, g: 184, b: 166 },  // Teal
   { r: 6, g: 182, b: 212 },   // Cyan
+  { r: 14, g: 165, b: 233 },  // Sky
+  // Row 3: Blues, Purples
   { r: 59, g: 130, b: 246 },  // Blue
-  { r: 139, g: 92, b: 246 },  // Purple
-  { r: 236, g: 72, b: 153 },  // Pink
-  { r: 107, g: 114, b: 128 }, // Gray
+  { r: 37, g: 99, b: 235 },   // Blue-600
   { r: 30, g: 64, b: 175 },   // Indigo
+  { r: 99, g: 102, b: 241 },  // Indigo-500
+  { r: 139, g: 92, b: 246 },  // Purple
+  { r: 168, g: 85, b: 247 },  // Violet
+  // Row 4: Pinks, Roses, Grays
+  { r: 236, g: 72, b: 153 },  // Pink
+  { r: 244, g: 63, b: 94 },   // Rose
+  { r: 217, g: 70, b: 239 },  // Fuchsia
+  { r: 107, g: 114, b: 128 }, // Gray-500
+  { r: 71, g: 85, b: 105 },   // Slate-600
+  { r: 64, g: 64, b: 64 },    // Neutral-700
 ];
 
 // ============================================
@@ -1141,13 +1159,14 @@ export default function OrganizerScreen({
         allowed_users: allowedUsers,
         display_properties: [],
         custom_fields: finalCustomFields,
-        assembly_selection_on: formAssemblySelectionOn, // Each group has its own setting
+        assembly_selection_on: formAssemblySelectionOn,
         unique_items: formParentId ? inheritedUniqueItems : formUniqueItems,
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
         sort_order: groups.length,
-        level
-        // Note: default_permissions and user_permissions are stored in frontend only for now
+        level,
+        default_permissions: formDefaultPermissions,
+        user_permissions: formUserPermissions
       };
 
       const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
@@ -1218,7 +1237,8 @@ export default function OrganizerScreen({
           custom_fields: editingGroup.custom_fields,
           assembly_selection_on: formAssemblySelectionOn,
           unique_items: formUniqueItems,
-          // Note: default_permissions and user_permissions are stored in frontend only for now
+          default_permissions: formDefaultPermissions,
+          user_permissions: formUserPermissions,
           updated_at: new Date().toISOString(),
           updated_by: tcUserEmail
         })
@@ -1306,8 +1326,9 @@ export default function OrganizerScreen({
         color: group.color,
         created_by: tcUserEmail,
         sort_order: groups.length,
-        level: group.level
-        // Note: permissions are not cloned as they're frontend-only for now
+        level: group.level,
+        default_permissions: group.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS },
+        user_permissions: group.user_permissions || {}
       };
 
       const { data: insertedGroup, error } = await supabase

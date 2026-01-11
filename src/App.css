@@ -10244,7 +10244,7 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  width: 124px;
+  width: 152px;
   z-index: 1000;
 }
 
@@ -10819,8 +10819,8 @@ button.stat-toggle.off:hover {
 
 /* Color picker */
 .org-color-picker {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(6, 28px);
   gap: 8px;
   margin-top: 8px;
 }
