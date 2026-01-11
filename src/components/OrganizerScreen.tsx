@@ -1302,6 +1302,23 @@ export default function OrganizerScreen({
 
       // Update local state immediately for responsive UI
       setGroups(prev => prev.map(g => g.id === groupId ? { ...g, color } : g));
+
+      // Also update groupTree for immediate UI update
+      setGroupTree(prev => {
+        const updateNode = (nodes: OrganizerGroupTree[]): OrganizerGroupTree[] => {
+          return nodes.map(node => {
+            if (node.id === groupId) {
+              return { ...node, color };
+            }
+            if (node.children.length > 0) {
+              return { ...node, children: updateNode(node.children) };
+            }
+            return node;
+          });
+        };
+        return updateNode(prev);
+      });
+
       setColorPickerGroupId(null);
 
       // Auto-recolor if coloring mode is active
