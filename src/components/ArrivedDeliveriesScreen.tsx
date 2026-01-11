@@ -1101,19 +1101,25 @@ export default function ArrivedDeliveriesScreen({
 
         // Upload to Supabase Storage
         const fileName = `${projectId}/${arrivedVehicleId}/${photoType}/${Date.now()}_${file.name}`;
+        console.log('Uploading to storage:', fileName);
         const { error: uploadError } = await supabase.storage
           .from('arrival-photos')
           .upload(fileName, file);
 
-        if (uploadError) throw uploadError;
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          throw uploadError;
+        }
+        console.log('Storage upload success');
 
         // Get public URL
         const { data: urlData } = supabase.storage
           .from('arrival-photos')
           .getPublicUrl(fileName);
+        console.log('Public URL:', urlData.publicUrl);
 
         // Save photo record
-        await supabase
+        const { error: insertError } = await supabase
           .from('trimble_arrival_photos')
           .insert({
             trimble_project_id: projectId,
@@ -1125,6 +1131,12 @@ export default function ArrivedDeliveriesScreen({
             photo_type: photoType,
             uploaded_by: tcUserEmail
           });
+
+        if (insertError) {
+          console.error('Insert error:', insertError);
+          throw insertError;
+        }
+        console.log('Photo saved to DB:', file.name, 'arrivedVehicleId:', arrivedVehicleId);
       }
 
       await loadPhotos();
