@@ -10750,8 +10750,8 @@ button.stat-toggle.off:hover {
   flex: none;
 }
 
-/* Responsive: narrow screens - truncate product, keep weight visible */
-@media (max-width: 350px) {
+/* Responsive: very narrow screens - hide custom fields */
+@media (max-width: 280px) {
   .org-items-dynamic .org-item-product,
   .org-items-dynamic .org-items-header .org-item-product {
     max-width: 40px !important;
@@ -10775,27 +10775,26 @@ button.stat-toggle.off:hover {
   }
 }
 
-/* Responsive: medium narrow screens - truncate product more */
-@media (max-width: 450px) and (min-width: 351px) {
+/* Responsive: narrow screens - truncate product more */
+@media (max-width: 320px) and (min-width: 281px) {
   .org-items-dynamic .org-item-product,
   .org-items-dynamic .org-items-header .org-item-product {
-    max-width: 55px !important;
+    max-width: 45px !important;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-
-  .org-items-dynamic .org-item-custom,
-  .org-items-dynamic .org-items-header .org-item-custom {
-    display: none !important;
-  }
 }
 
 .org-item-custom {
-  min-width: 60px;
+  flex: 1;
+  min-width: 40px;
   text-align: right;
   color: #6b7280;
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .org-item-custom.truncatable {
@@ -10820,13 +10819,14 @@ button.stat-toggle.off:hover {
 }
 
 .org-item-remove {
-  padding: 2px;
+  flex-shrink: 0;
+  padding: 1px;
   border: none;
   background: none;
   cursor: pointer;
   color: #d1d5db;
-  opacity: 0;
-  transition: opacity 0.1s;
+  opacity: 0.4;
+  transition: opacity 0.1s, color 0.1s;
 }
 
 .org-item:hover .org-item-remove {
@@ -10835,6 +10835,7 @@ button.stat-toggle.off:hover {
 
 .org-item-remove:hover {
   color: #dc2626;
+  opacity: 1;
 }
 
 /* Selection bar */
@@ -11705,8 +11706,12 @@ button.stat-toggle.off:hover {
 }
 
 .org-items-header .org-item-custom {
-  min-width: 45px;
+  flex: 1;
+  min-width: 40px;
   text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .org-items-header .sortable {
