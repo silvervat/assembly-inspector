@@ -6124,6 +6124,8 @@ button.stat-toggle.off:hover {
   border: 2px dashed var(--modus-border);
   border-radius: 6px;
   transition: all 0.15s ease;
+  width: 100%;
+  min-height: 50px;
 }
 
 .arrived-deliveries .no-photos.dropzone:hover {
@@ -7154,8 +7156,9 @@ button.stat-toggle.off:hover {
   height: 8px;
 }
 
-.arrived-deliveries .resource-button:hover .resource-qty-dropdown,
-.arrived-deliveries .resource-qty-dropdown:hover {
+/* Only show dropdown on hover for resources with has-dropdown class */
+.arrived-deliveries .resource-button.has-dropdown:hover .resource-qty-dropdown,
+.arrived-deliveries .resource-button.has-dropdown .resource-qty-dropdown:hover {
   display: flex;
 }
 
