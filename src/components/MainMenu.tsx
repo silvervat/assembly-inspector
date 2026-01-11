@@ -23,7 +23,8 @@ export type InspectionMode =
   | 'schedule' // Paigaldusgraafik
   | 'delivery_schedule' // Tarnegraafik
   | 'arrived_deliveries' // Saabunud tarned
-  | 'organizer'; // Organiseeri (gruppide haldus)
+  | 'organizer' // Organiseeri (gruppide haldus)
+  | 'issues'; // Probleemid (mittevastavused)
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -85,6 +86,7 @@ export default function MainMenu({
   const [loading, setLoading] = useState(true);
   const [inspectionTypes, setInspectionTypes] = useState<InspectionType[]>([]);
   const [typeStats, setTypeStats] = useState<Record<string, TypeStats>>({});
+  const [activeIssuesCount, setActiveIssuesCount] = useState(0);
 
   // Load inspection types that have plan items for this project
   useEffect(() => {
@@ -173,6 +175,29 @@ export default function MainMenu({
 
     if (projectId) {
       loadInspectionTypes();
+    }
+  }, [projectId]);
+
+  // Load active issues count for badge
+  useEffect(() => {
+    async function loadActiveIssuesCount() {
+      try {
+        const { count, error } = await supabase
+          .from('issues')
+          .select('id', { count: 'exact', head: true })
+          .eq('trimble_project_id', projectId)
+          .not('status', 'in', '("closed","cancelled")');
+
+        if (!error && count !== null) {
+          setActiveIssuesCount(count);
+        }
+      } catch (e) {
+        console.error('Error loading issues count:', e);
+      }
+    }
+
+    if (projectId) {
+      loadActiveIssuesCount();
     }
   }, [projectId]);
 
@@ -354,18 +379,26 @@ export default function MainMenu({
               </span>
             </button>
 
-            {/* Mitte vastavus - always visible but disabled for now */}
+            {/* Probleemid - issues and non-conformances */}
             <button
-              className="menu-item disabled"
-              disabled
+              className="menu-item enabled"
+              onClick={() => onSelectMode('issues')}
             >
-              <span className="menu-item-icon">
+              <span className="menu-item-icon" style={{ color: '#dc2626' }}>
                 <FiAlertTriangle size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Mitte vastavus</span>
-                <span className="menu-item-desc">Arendamisel</span>
+                <span className="menu-item-title">
+                  Probleemid
+                  {activeIssuesCount > 0 && (
+                    <span className="menu-badge">{activeIssuesCount}</span>
+                  )}
+                </span>
+                <span className="menu-item-desc">Mittevastavused ja probleemide haldus</span>
               </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
             </button>
           </>
         )}
