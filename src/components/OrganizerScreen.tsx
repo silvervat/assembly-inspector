@@ -22,7 +22,7 @@ import {
 import * as XLSX from 'xlsx-js-style';
 import {
   FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
-  FiEdit2, FiTrash2, FiX, FiDroplet,
+  FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiArrowUp, FiArrowDown, FiTag, FiUpload, FiSettings
@@ -1146,9 +1146,8 @@ export default function OrganizerScreen({
         color: formColor || generateGroupColor(groups.length),
         created_by: tcUserEmail,
         sort_order: groups.length,
-        level,
-        default_permissions: formDefaultPermissions,
-        user_permissions: formUserPermissions
+        level
+        // Note: default_permissions and user_permissions are stored in frontend only for now
       };
 
       const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
@@ -1219,8 +1218,7 @@ export default function OrganizerScreen({
           custom_fields: editingGroup.custom_fields,
           assembly_selection_on: formAssemblySelectionOn,
           unique_items: formUniqueItems,
-          default_permissions: formDefaultPermissions,
-          user_permissions: formUserPermissions,
+          // Note: default_permissions and user_permissions are stored in frontend only for now
           updated_at: new Date().toISOString(),
           updated_by: tcUserEmail
         })
@@ -1270,6 +1268,88 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error updating group color:', e);
       showToast('Viga värvi uuendamisel');
+    }
+  };
+
+  // Clone a group with a new name
+  const cloneGroup = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Generate unique name with (1), (2), etc.
+    const baseName = group.name.replace(/\s*\(\d+\)$/, ''); // Remove existing (N) suffix
+    let newName = `${baseName} (1)`;
+    let counter = 1;
+
+    // Find the next available number
+    const existingNames = groups.map(g => g.name);
+    while (existingNames.includes(newName)) {
+      counter++;
+      newName = `${baseName} (${counter})`;
+    }
+
+    setSaving(true);
+    setGroupMenuId(null);
+
+    try {
+      const newGroupData = {
+        trimble_project_id: projectId,
+        parent_id: group.parent_id,
+        name: newName,
+        description: group.description,
+        is_private: group.is_private,
+        allowed_users: group.allowed_users,
+        display_properties: group.display_properties,
+        custom_fields: group.custom_fields,
+        assembly_selection_on: group.assembly_selection_on,
+        unique_items: group.unique_items,
+        color: group.color,
+        created_by: tcUserEmail,
+        sort_order: groups.length,
+        level: group.level
+        // Note: permissions are not cloned as they're frontend-only for now
+      };
+
+      const { data: insertedGroup, error } = await supabase
+        .from('organizer_groups')
+        .insert(newGroupData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Optimistic UI update
+      const fullGroup: OrganizerGroup = {
+        ...newGroupData,
+        id: insertedGroup.id,
+        created_at: insertedGroup.created_at || new Date().toISOString(),
+        updated_at: insertedGroup.updated_at || new Date().toISOString(),
+        updated_by: null,
+        is_locked: false,
+        locked_by: null,
+        locked_at: null,
+        default_permissions: { ...DEFAULT_GROUP_PERMISSIONS },
+        user_permissions: {}
+      };
+
+      setGroups(prev => [...prev, fullGroup]);
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        newMap.set(fullGroup.id, []);
+        return newMap;
+      });
+
+      showToast(`Grupp kloonitud: ${newName}`);
+
+      // Expand parent if it's a subgroup
+      if (group.parent_id) {
+        setExpandedGroups(prev => new Set([...prev, group.parent_id!]));
+      }
+    } catch (e) {
+      console.error('Error cloning group:', e);
+      showToast('Viga grupi kloonimisel');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -3543,6 +3623,9 @@ export default function OrganizerScreen({
               )}
               <button onClick={() => openEditGroupForm(node)}>
                 <FiEdit2 size={12} /> Muuda gruppi
+              </button>
+              <button onClick={() => cloneGroup(node.id)}>
+                <FiCopy size={12} /> Klooni grupp
               </button>
               <button onClick={() => { setSelectedGroupId(node.id); setShowFieldForm(true); setGroupMenuId(null); }}>
                 <FiList size={12} /> Lisa väli
