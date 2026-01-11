@@ -2334,6 +2334,11 @@ export default function OrganizerScreen({
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
 
+      // Rebuild sort_order for affected groups (run in background)
+      for (const groupId of affectedGroups) {
+        rebuildSortOrder(groupId);
+      }
+
       // Color removed items WHITE if coloring mode is active (run in background)
       if (colorByGroup && guidsToRemove.length > 0) {
         colorItemsDirectly(guidsToRemove, { r: 255, g: 255, b: 255 });
@@ -4325,6 +4330,44 @@ export default function OrganizerScreen({
     }
   };
 
+  // Rebuild sort_order for items in a group (0, 1, 2, ...) after deletion
+  const rebuildSortOrder = async (groupId: string) => {
+    const items = groupItems.get(groupId) || [];
+    if (items.length === 0) return;
+
+    // Sort by current sort_order first to maintain relative order
+    const sortedItems = [...items].sort((a, b) => a.sort_order - b.sort_order);
+
+    // Check if rebuild is needed (any gaps in numbering)
+    const needsRebuild = sortedItems.some((item, idx) => item.sort_order !== idx);
+    if (!needsRebuild) return;
+
+    try {
+      // Update sort_order for all items (0, 1, 2, ...)
+      const updates: { id: string; sort_order: number }[] = [];
+      sortedItems.forEach((item, idx) => {
+        if (item.sort_order !== idx) {
+          updates.push({ id: item.id, sort_order: idx });
+        }
+      });
+
+      // Batch update in database (run in background)
+      for (const upd of updates) {
+        supabase.from('organizer_group_items').update({ sort_order: upd.sort_order }).eq('id', upd.id).then();
+      }
+
+      // Update local state
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        const updatedItems = sortedItems.map((item, idx) => ({ ...item, sort_order: idx }));
+        newMap.set(groupId, updatedItems);
+        return newMap;
+      });
+    } catch (err) {
+      console.error('Error rebuilding sort order:', err);
+    }
+  };
+
   // ============================================
   // SEARCH
   // ============================================
@@ -4837,7 +4880,7 @@ export default function OrganizerScreen({
                         onClick={(e) => handleItemClick(e, item, sortedItems)}
                         title={addedInfo}
                       >
-                        <span className="org-item-index">{idx + 1}</span>
+                        <span className="org-item-index">{item.sort_order + 1}</span>
                         <FiMove size={10} className="org-drag-handle" />
                         <span
                           className="org-item-mark"
