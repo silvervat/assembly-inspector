@@ -4553,6 +4553,30 @@
   color: #7f1d1d;
 }
 
+/* Missing items variant (orange/yellow background) */
+.moved-items-section.missing {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.moved-items-section.missing .moved-items-header {
+  color: #92400e;
+}
+
+.moved-items-section.missing .moved-item {
+  color: #78350f;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moved-items-section.missing .moved-item.missing {
+  background: #fde68a;
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin: 2px 0;
+}
+
 .moved-items-group {
   margin-bottom: 6px;
 }
