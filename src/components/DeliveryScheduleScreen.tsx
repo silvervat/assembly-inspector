@@ -604,6 +604,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [vehicleMenuId, setVehicleMenuId] = useState<string | null>(null);
   const [dateMenuId, setDateMenuId] = useState<string | null>(null);
   const [menuFlipUp, setMenuFlipUp] = useState(false);
+  const [autoRecalcDates, setAutoRecalcDates] = useState<Set<string>>(new Set()); // Dates with auto time recalc enabled
   const [resourceHoverId, setResourceHoverId] = useState<string | null>(null); // For quick resource assignment
   const [quickHoveredMethod, setQuickHoveredMethod] = useState<string | null>(null); // For hover on method in quick assign
   const [showMarkupSubmenu, setShowMarkupSubmenu] = useState<string | null>(null); // Vehicle ID for markup submenu
@@ -2905,12 +2906,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         ...remaining.slice(adjustedIndex)
       ];
 
-      // Update sort_order and recalculate times
+      // Update sort_order and optionally recalculate times
       const updatedVehicles = newOrder.map((v, idx) => ({ ...v, sort_order: idx }));
 
       setDraggedVehicle(null);
-      await recalculateVehicleTimes(updatedVehicles);
-      setMessage('Veokite järjekord ja kellaajad uuendatud');
+
+      // Only recalculate times if auto-recalc is enabled for this date
+      if (autoRecalcDates.has(targetDate)) {
+        await recalculateVehicleTimes(updatedVehicles);
+        setMessage('Veokite järjekord ja kellaajad uuendatud');
+      } else {
+        // Just update sort_order without recalculating times
+        setVehicles(prev => prev.map(v => {
+          const updated = updatedVehicles.find(u => u.id === v.id);
+          return updated ? { ...v, sort_order: updated.sort_order } : v;
+        }));
+        // Background update
+        for (const v of updatedVehicles) {
+          supabase.from('trimble_delivery_vehicles')
+            .update({ sort_order: v.sort_order, updated_by: tcUserEmail })
+            .eq('id', v.id)
+            .then();
+        }
+        setMessage('Veokite järjekord uuendatud');
+      }
 
     } else {
       // Moving to different date
@@ -2949,14 +2968,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Log the date change
         await logVehicleDateChange(vehicleId, oldDate, targetDate, '');
 
-        // Recalculate times for both dates
+        // Recalculate times for both dates (only if auto-recalc enabled)
         const oldDateVehicles = vehicles.filter(v => v.scheduled_date === oldDate && v.id !== vehicleId);
         const newDateVehicles = [...vehicles.filter(v => v.scheduled_date === targetDate), { ...draggedVehicle, scheduled_date: targetDate }];
 
-        if (oldDateVehicles.length > 0) {
+        if (oldDate && oldDateVehicles.length > 0 && autoRecalcDates.has(oldDate)) {
           await recalculateVehicleTimes(oldDateVehicles);
         }
-        if (newDateVehicles.length > 0) {
+        if (newDateVehicles.length > 0 && autoRecalcDates.has(targetDate)) {
           await recalculateVehicleTimes(newDateVehicles);
         }
 
@@ -6065,6 +6084,21 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       setDateMenuId(null);
                     }}>
                       <FiCopy /> Kopeeri märgid
+                    </button>
+                    <div className="context-menu-separator" />
+                    <button onClick={() => {
+                      setAutoRecalcDates(prev => {
+                        const next = new Set(prev);
+                        if (next.has(date)) {
+                          next.delete(date);
+                        } else {
+                          next.add(date);
+                        }
+                        return next;
+                      });
+                      setDateMenuId(null);
+                    }}>
+                      <FiClock /> {autoRecalcDates.has(date) ? '✓ Auto kellaajad SEES' : 'Auto kellaajad VÄLJAS'}
                     </button>
                   </div>
                 )}
