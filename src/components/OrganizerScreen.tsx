@@ -92,7 +92,7 @@ interface MarkupSettings {
   groupNameLine: MarkupLineConfig;
   includeCustomFields: string[]; // field IDs to include
   applyToSubgroups: boolean;
-  separator: 'newline' | 'comma' | 'space' | 'dash';
+  separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
   // New model property fields
   includeAssemblyMark: MarkupFieldConfig;
@@ -599,6 +599,7 @@ export default function OrganizerScreen({
   const [formAllowedUsers, setFormAllowedUsers] = useState<string[]>([]);
   const [formColor, setFormColor] = useState<GroupColor | null>(null);
   const [formParentId, setFormParentId] = useState<string | null>(null);
+  const [addItemsAfterGroupCreate, setAddItemsAfterGroupCreate] = useState<SelectedObject[]>([]); // Items to add after group creation
 
   // Team members
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -635,6 +636,7 @@ export default function OrganizerScreen({
 
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
+  const [coloredSingleGroupId, setColoredSingleGroupId] = useState<string | null>(null); // Track if only one group is colored
   const [coloringInProgress, setColoringInProgress] = useState(false);
   const [colorMode, setColorMode] = useState<'all' | 'parents-only'>('all'); // 'all' = each group own color, 'parents-only' = subgroups get parent color
 
@@ -659,7 +661,7 @@ export default function OrganizerScreen({
   // Markup state
   const [showMarkupModal, setShowMarkupModal] = useState(false);
   const [markupGroupId, setMarkupGroupId] = useState<string | null>(null);
-  const [markupSettings, setMarkupSettings] = useState<MarkupSettings>({
+  const defaultMarkupSettings: MarkupSettings = {
     includeGroupName: true,
     groupNameLine: 'line1',
     includeCustomFields: [],
@@ -670,8 +672,28 @@ export default function OrganizerScreen({
     includeWeight: { enabled: false, line: 'line2' },
     includeProductName: { enabled: false, line: 'line2' },
     onlySelectedInModel: false
+  };
+  const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
+    try {
+      const saved = localStorage.getItem('organizer_markup_settings');
+      if (saved) {
+        return { ...defaultMarkupSettings, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('Failed to load markup settings from localStorage:', e);
+    }
+    return defaultMarkupSettings;
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+
+  // Save markup settings to localStorage when changed
+  useEffect(() => {
+    try {
+      localStorage.setItem('organizer_markup_settings', JSON.stringify(markupSettings));
+    } catch (e) {
+      console.warn('Failed to save markup settings to localStorage:', e);
+    }
+  }, [markupSettings]);
 
   // Import state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -1468,12 +1490,34 @@ export default function OrganizerScreen({
       // Push to undo stack
       pushUndo({ type: 'create_group', groupId: fullGroup.id });
 
+      // Capture items to add before resetting form
+      const itemsToAdd = [...addItemsAfterGroupCreate];
+
       showToast('Grupp loodud');
       resetGroupForm();
       setShowGroupForm(false);
 
       if (formParentId) {
         setExpandedGroups(prev => new Set([...prev, formParentId]));
+      }
+
+      // Add items after group creation if any were selected
+      if (itemsToAdd.length > 0) {
+        // Use the newly created group id to add items
+        // Small delay to ensure state is updated
+        setTimeout(async () => {
+          try {
+            // Temporarily set selected objects for the add function
+            const prevSelectedObjects = selectedObjects;
+            setSelectedObjects(itemsToAdd);
+            await addSelectedToGroupInternal(fullGroup.id);
+            setSelectedObjects(prevSelectedObjects);
+            showToast(`${itemsToAdd.length} detaili lisatud gruppi`);
+          } catch (e) {
+            console.error('Error adding items to new group:', e);
+            showToast('Viga detailide lisamisel');
+          }
+        }, 100);
       }
     } catch (e) {
       console.error('Error creating group:', e);
@@ -1614,7 +1658,18 @@ export default function OrganizerScreen({
 
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
-        setTimeout(() => colorModelByGroups(), 150);
+        // If only a single group is colored, only recolor that group (if it's the one being changed)
+        // If all groups are colored, recolor all groups
+        if (coloredSingleGroupId) {
+          // Check if the changed group is the colored one or its descendant
+          const subtreeIds = new Set(getGroupSubtreeIds(coloredSingleGroupId));
+          if (subtreeIds.has(groupId)) {
+            setTimeout(() => colorModelByGroups(coloredSingleGroupId), 150);
+          }
+          // If changing a different group's color, don't recolor at all
+        } else {
+          setTimeout(() => colorModelByGroups(), 150);
+        }
       }
     } catch (e) {
       console.error('Error updating group color:', e);
@@ -1800,6 +1855,7 @@ export default function OrganizerScreen({
     setFormCustomFields([]);
     setFormDefaultPermissions({ ...DEFAULT_GROUP_PERMISSIONS });
     setFormUserPermissions({});
+    setAddItemsAfterGroupCreate([]);
   };
 
   const openEditGroupForm = (group: OrganizerGroup) => {
@@ -2952,6 +3008,8 @@ export default function OrganizerScreen({
       }
 
       setColorByGroup(true);
+      // Track if single group or all groups were colored
+      setColoredSingleGroupId(targetGroupId || null);
       showToast(`✓ Värvitud! Valged=${whiteCount}, Grupeeritud=${coloredCount}`);
     } catch (e) {
       console.error('Error coloring model:', e);
@@ -2966,6 +3024,7 @@ export default function OrganizerScreen({
     try {
       await api.viewer.setObjectState(undefined, { color: 'reset' });
       setColorByGroup(false);
+      setColoredSingleGroupId(null);
       showToast('Värvid lähtestatud');
     } catch (e) {
       console.error('Error resetting colors:', e);
@@ -2984,25 +3043,14 @@ export default function OrganizerScreen({
       case 'comma': return ', ';
       case 'space': return ' ';
       case 'dash': return ' - ';
+      case 'pipe': return ' | ';
       default: return '\n';
     }
   };
 
   const openMarkupModal = (groupId: string) => {
     setMarkupGroupId(groupId);
-    // Reset settings but keep some defaults
-    setMarkupSettings({
-      includeGroupName: true,
-      groupNameLine: 'line1',
-      includeCustomFields: [],
-      applyToSubgroups: true,
-      separator: 'newline',
-      useGroupColors: true,
-      includeAssemblyMark: { enabled: true, line: 'line1' },
-      includeWeight: { enabled: false, line: 'line2' },
-      includeProductName: { enabled: false, line: 'line2' },
-      onlySelectedInModel: false
-    });
+    // Keep last used settings (loaded from localStorage)
     setShowMarkupModal(true);
     setGroupMenuId(null);
   };
@@ -3793,27 +3841,27 @@ export default function OrganizerScreen({
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('.org-group-menu')) return;
 
+    // Calculate new selection based on CTRL state
+    let newSelectedGroupIds: Set<string>;
+
     // CTRL+click for multi-select
     if (e.ctrlKey || e.metaKey) {
-      setSelectedGroupIds(prev => {
-        const newSet = new Set(prev);
-        if (newSet.has(groupId)) {
-          newSet.delete(groupId);
-        } else {
-          newSet.add(groupId);
-        }
-        return newSet;
-      });
+      newSelectedGroupIds = new Set(selectedGroupIds);
+      if (newSelectedGroupIds.has(groupId)) {
+        newSelectedGroupIds.delete(groupId);
+      } else {
+        newSelectedGroupIds.add(groupId);
+      }
+      setSelectedGroupIds(newSelectedGroupIds);
     } else {
       // Regular click - single selection
-      setSelectedGroupIds(new Set([groupId]));
+      newSelectedGroupIds = new Set([groupId]);
+      setSelectedGroupIds(newSelectedGroupIds);
     }
     setSelectedItemIds(new Set());
 
-    // Collect GUIDs from all selected groups (including the one just clicked)
-    const groupIdsToSelect = (e.ctrlKey || e.metaKey)
-      ? [...selectedGroupIds, groupId].filter((id, idx, arr) => arr.indexOf(id) === idx) // Unique IDs
-      : [groupId];
+    // Collect GUIDs from all selected groups (using the newly calculated selection)
+    const groupIdsToSelect = Array.from(newSelectedGroupIds);
 
     const allGuids: string[] = [];
     for (const gid of groupIdsToSelect) {
@@ -3828,6 +3876,13 @@ export default function OrganizerScreen({
         await selectObjectsByGuid(api, allGuids, 'set');
       } catch (e) {
         console.error('Error selecting objects:', e);
+      }
+    } else {
+      // Clear model selection if no groups selected
+      try {
+        await api?.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      } catch (e) {
+        console.error('Error clearing selection:', e);
       }
     }
   };
@@ -4855,6 +4910,14 @@ export default function OrganizerScreen({
               {node.level < 2 && (
                 <button onClick={() => openAddSubgroupForm(node.id)}>
                   <FiFolderPlus size={12} /> Lisa alamgrupp
+                </button>
+              )}
+              {node.level < 2 && selectedObjects.length > 0 && (
+                <button onClick={() => {
+                  setAddItemsAfterGroupCreate([...selectedObjects]);
+                  openAddSubgroupForm(node.id);
+                }}>
+                  <FiFolderPlus size={12} /> Lisa alamgrupp ({selectedObjects.length} detailiga)
                 </button>
               )}
               <button onClick={() => openEditGroupForm(node)}>
@@ -6336,6 +6399,7 @@ export default function OrganizerScreen({
                     <option value="comma">Koma (,)</option>
                     <option value="space">Tühik</option>
                     <option value="dash">Kriips (-)</option>
+                    <option value="pipe">Püstkriips (|)</option>
                   </select>
                 </div>
 

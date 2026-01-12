@@ -5,6 +5,7 @@ import {
   ArrivalItemStatus, ArrivalPhotoType
 } from '../supabase';
 import { selectObjectsByGuid, findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import {
   FiArrowLeft, FiArrowRight, FiChevronLeft, FiChevronRight, FiCheck, FiX,
   FiCamera, FiClock, FiMapPin, FiTruck,
@@ -123,6 +124,7 @@ interface ItemRowProps {
   status: ArrivalItemStatus;
   isSelected: boolean;
   isExpanded: boolean;
+  isLocked: boolean; // Vehicle is confirmed, no more changes allowed
   duplicateIndex: number;
   duplicateCount: number;
   itemCommentValue: string;
@@ -145,6 +147,7 @@ const ItemRow = memo(({
   status,
   isSelected,
   isExpanded,
+  isLocked,
   duplicateIndex,
   duplicateCount,
   itemCommentValue,
@@ -232,7 +235,7 @@ const ItemRow = memo(({
             </button>
           )}
           <StatusBadge status={status} />
-          {status === 'pending' ? (
+          {status === 'pending' && !isLocked ? (
             <>
               <button
                 className="action-btn confirm"
@@ -256,7 +259,7 @@ const ItemRow = memo(({
                 <FiAlertTriangle size={12} />
               </button>
             </>
-          ) : (
+          ) : status !== 'pending' && !isLocked ? (
             <button
               className="action-btn reset"
               onClick={() => onConfirmItem(item.id, 'pending')}
@@ -264,7 +267,7 @@ const ItemRow = memo(({
             >
               <FiRefreshCw size={12} />
             </button>
-          )}
+          ) : null}
         </div>
       </div>
       {/* Expandable comment/photo section */}
@@ -335,6 +338,17 @@ const ItemRow = memo(({
   );
 });
 
+// Interface for new items selected from 3D model (not in delivery schedule)
+interface NewModelItem {
+  modelId: string;
+  runtimeId: number;
+  guid: string;
+  guidIfc: string;
+  assemblyMark: string;
+  productName?: string;
+  weight?: string;
+}
+
 export default function ArrivedDeliveriesScreen({
   api,
   user,
@@ -343,6 +357,9 @@ export default function ArrivedDeliveriesScreen({
 }: ArrivedDeliveriesScreenProps) {
   // User email
   const tcUserEmail = user?.email || 'unknown';
+
+  // Property mappings for reading model properties
+  const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
   // State - Data
   const [vehicles, setVehicles] = useState<DeliveryVehicle[]>([]);
@@ -380,6 +397,7 @@ export default function ArrivedDeliveriesScreen({
   // State - Model selection mode for adding items
   const [modelSelectionMode, setModelSelectionMode] = useState(false);
   const [modelSelectedItems, setModelSelectedItems] = useState<DeliveryItem[]>([]);
+  const [modelNewItems, setModelNewItems] = useState<NewModelItem[]>([]); // Items not in delivery schedule
   const [showModelSelectionModal, setShowModelSelectionModal] = useState(false);
 
   // State - Unplanned vehicle modal
@@ -577,6 +595,38 @@ export default function ArrivedDeliveriesScreen({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [lightboxPhoto, selectedItemsForConfirm.size, modelSelectionMode]);
 
+  // Helper to get property value from object
+  const getPropertyValue = useCallback((obj: any, setName: string | undefined, propName: string | undefined): string | undefined => {
+    if (!setName || !propName || !obj) return undefined;
+    const normalizedSetName = setName.replace(/\s+/g, '').toLowerCase();
+    const normalizedPropName = propName.replace(/\s+/g, '').toLowerCase();
+
+    // Check in propertySets
+    if (obj.propertySets) {
+      for (const ps of obj.propertySets) {
+        const psName = (ps.name || '').replace(/\s+/g, '').toLowerCase();
+        if (psName === normalizedSetName && ps.properties) {
+          for (const prop of ps.properties) {
+            const pName = (prop.name || '').replace(/\s+/g, '').toLowerCase();
+            if (pName === normalizedPropName) {
+              return prop.value?.toString();
+            }
+          }
+        }
+      }
+    }
+    // Check in properties array
+    if (obj.properties) {
+      for (const prop of obj.properties) {
+        const pName = (prop.name || '').replace(/\s+/g, '').toLowerCase();
+        if (pName === normalizedPropName) {
+          return prop.value?.toString();
+        }
+      }
+    }
+    return undefined;
+  }, []);
+
   // Model selection mode - poll for selection changes
   useEffect(() => {
     if (!modelSelectionMode || !api) return;
@@ -594,28 +644,67 @@ export default function ArrivedDeliveriesScreen({
         if (selectionKey === lastSelectionKey) return;
         lastSelectionKey = selectionKey;
 
-        // Get GUIDs from selection
-        const guids: string[] = [];
+        // Collect all selected objects with their properties
+        const selectedObjects: { modelId: string; runtimeId: number; guid: string; props: any }[] = [];
         for (const sel of selection) {
           if (sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
             const objects = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
-            for (const obj of objects) {
+            for (let i = 0; i < objects.length; i++) {
+              const obj = objects[i];
               if (obj.properties?.GUID) {
-                guids.push(obj.properties.GUID.toLowerCase());
+                selectedObjects.push({
+                  modelId: sel.modelId,
+                  runtimeId: sel.objectRuntimeIds[i],
+                  guid: obj.properties.GUID,
+                  props: obj
+                });
               }
             }
           }
         }
 
-        if (guids.length === 0) return;
+        if (selectedObjects.length === 0) return;
 
-        // Find matching items in delivery schedule
-        const matchedItems = items.filter(item =>
-          item.guid_ifc && guids.includes(item.guid_ifc.toLowerCase())
-        );
+        // Separate into existing items and new items
+        const existingItemGuids = new Set(items.map(item => item.guid_ifc?.toLowerCase()).filter(Boolean));
+        const matchedItems: DeliveryItem[] = [];
+        const newItems: NewModelItem[] = [];
 
-        if (matchedItems.length > 0) {
+        for (const obj of selectedObjects) {
+          const guidLower = obj.guid.toLowerCase();
+          if (existingItemGuids.has(guidLower)) {
+            // Item exists in delivery schedule
+            const existingItem = items.find(i => i.guid_ifc?.toLowerCase() === guidLower);
+            if (existingItem && !matchedItems.some(m => m.id === existingItem.id)) {
+              matchedItems.push(existingItem);
+            }
+          } else {
+            // New item - not in delivery schedule
+            const assemblyMark = propertyMappings
+              ? getPropertyValue(obj.props, propertyMappings.assembly_mark_set, propertyMappings.assembly_mark_prop)
+              : obj.props.properties?.Name || `Object_${obj.runtimeId}`;
+            const productName = obj.props.properties?.ObjectType || obj.props.properties?.Name;
+            const weight = propertyMappings
+              ? getPropertyValue(obj.props, propertyMappings.weight_set, propertyMappings.weight_prop)
+              : undefined;
+
+            if (!newItems.some(ni => ni.guid.toLowerCase() === guidLower)) {
+              newItems.push({
+                modelId: obj.modelId,
+                runtimeId: obj.runtimeId,
+                guid: obj.guid,
+                guidIfc: obj.guid,
+                assemblyMark: assemblyMark || `Object_${obj.runtimeId}`,
+                productName,
+                weight
+              });
+            }
+          }
+        }
+
+        if (matchedItems.length > 0 || newItems.length > 0) {
           setModelSelectedItems(matchedItems);
+          setModelNewItems(newItems);
           setShowModelSelectionModal(true);
           setModelSelectionMode(false);
           setMessage('');
@@ -632,7 +721,7 @@ export default function ArrivedDeliveriesScreen({
     checkSelection(); // Check immediately
 
     return () => clearInterval(interval);
-  }, [modelSelectionMode, api, items]);
+  }, [modelSelectionMode, api, items, propertyMappings, getPropertyValue]);
 
   // ============================================
   // HELPERS
@@ -1078,6 +1167,71 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Viga: ' + e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Add new item from model (item not in delivery schedule)
+  const addNewItemFromModel = async (arrivedVehicleId: string, newItem: NewModelItem) => {
+    try {
+      const arrival = arrivedVehicles.find(av => av.id === arrivedVehicleId);
+      if (!arrival) throw new Error('Arrival not found');
+
+      const currentVehicle = getVehicle(arrival.vehicle_id);
+
+      // First, create a new delivery item
+      const { data: createdItem, error: itemError } = await supabase
+        .from('trimble_delivery_items')
+        .insert({
+          trimble_project_id: projectId,
+          vehicle_id: arrival.vehicle_id,
+          guid: newItem.guid,
+          guid_ifc: newItem.guidIfc,
+          assembly_mark: newItem.assemblyMark,
+          product_name: newItem.productName || '',
+          cast_unit_weight: newItem.weight || '',
+          status: 'delivered',
+          scheduled_date: arrival.arrival_date,
+          sort_order: 999, // Will be at end
+          created_at: new Date().toISOString(),
+          created_by: tcUserEmail
+        })
+        .select()
+        .single();
+
+      if (itemError) throw itemError;
+
+      // Then create a confirmation with status 'added'
+      await supabase
+        .from('trimble_arrival_confirmations')
+        .insert({
+          trimble_project_id: projectId,
+          arrived_vehicle_id: arrivedVehicleId,
+          item_id: createdItem.id,
+          status: 'added',
+          source_vehicle_id: null, // No source - brand new item
+          source_vehicle_code: null,
+          notes: `Lisatud mudelist (polnud tarnegraafikus)`,
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: tcUserEmail
+        });
+
+      // Log in history
+      await supabase.from('trimble_delivery_history').insert({
+        trimble_project_id: projectId,
+        item_id: createdItem.id,
+        vehicle_id: arrival.vehicle_id,
+        change_type: 'created',
+        new_vehicle_id: arrival.vehicle_id,
+        new_vehicle_code: currentVehicle?.vehicle_code,
+        change_reason: 'Lisatud mudelist saabumise kontrolli käigus',
+        changed_by: tcUserEmail,
+        is_snapshot: false
+      });
+
+      return createdItem;
+    } catch (e: any) {
+      console.error('Error adding new item from model:', e);
+      throw e;
     }
   };
 
@@ -2759,8 +2913,8 @@ export default function ArrivedDeliveriesScreen({
                                 </button>
                               </div>
                             </div>
-                            {/* Bulk actions when items are selected */}
-                            {selectedItemsForConfirm.size > 0 && (
+                            {/* Bulk actions when items are selected (not shown for confirmed vehicles) */}
+                            {selectedItemsForConfirm.size > 0 && !arrivedVehicle.is_confirmed && (
                               <div className="items-bulk-actions">
                                 <button
                                   className="confirm-selected-btn"
@@ -2784,7 +2938,7 @@ export default function ArrivedDeliveriesScreen({
                                 </button>
                               </div>
                             )}
-                            {selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && (
+                            {selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && !arrivedVehicle.is_confirmed && (
                               <div className="items-bulk-actions">
                                 <button
                                   className="confirm-all-btn"
@@ -2817,6 +2971,7 @@ export default function ArrivedDeliveriesScreen({
                                   status={status}
                                   isSelected={isSelected}
                                   isExpanded={isExpanded}
+                                  isLocked={arrivedVehicle.is_confirmed}
                                   duplicateIndex={duplicateIndex}
                                   duplicateCount={duplicateCount}
                                   itemCommentValue={itemCommentValue}
@@ -3062,45 +3217,81 @@ export default function ArrivedDeliveriesScreen({
       )}
 
       {/* Model selection modal - show items selected from 3D model */}
-      {showModelSelectionModal && modelSelectedItems.length > 0 && activeArrivalId && (
-        <div className="modal-overlay" onClick={() => setShowModelSelectionModal(false)}>
+      {showModelSelectionModal && (modelSelectedItems.length > 0 || modelNewItems.length > 0) && activeArrivalId && (
+        <div className="modal-overlay" onClick={() => { setShowModelSelectionModal(false); setModelNewItems([]); }}>
           <div className="modal model-selection-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Lisa valitud detailid</h2>
-              <button className="close-btn" onClick={() => setShowModelSelectionModal(false)}>
+              <button className="close-btn" onClick={() => { setShowModelSelectionModal(false); setModelNewItems([]); }}>
                 <FiX />
               </button>
             </div>
             <div className="modal-body">
               <p className="modal-description">
-                Mudelist valitud {modelSelectedItems.length} detaili. Kontrolli ja kinnita lisamine.
+                Mudelist valitud {modelSelectedItems.length + modelNewItems.length} detaili. Kontrolli ja kinnita lisamine.
               </p>
-              <div className="model-selected-items">
-                {modelSelectedItems.map(item => {
-                  const plannedVehicle = vehicles.find(v => v.id === item.vehicle_id);
-                  const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
-                  const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
-                  const isFromDifferentVehicle = item.vehicle_id !== currentVehicle?.id;
 
-                  return (
-                    <div key={item.id} className={`model-selected-item ${isFromDifferentVehicle ? 'warning' : ''}`}>
-                      <div className="item-info">
-                        <span className="item-mark">{item.assembly_mark}</span>
-                        <span className="item-name">{item.product_name}</span>
-                        {item.cast_unit_weight && (
-                          <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
-                        )}
-                      </div>
-                      {isFromDifferentVehicle && plannedVehicle && (
-                        <div className="item-warning">
-                          <FiAlertTriangle />
-                          <span>Planeeritud veokis: <strong>{plannedVehicle.vehicle_code}</strong></span>
+              {/* Existing items in delivery schedule */}
+              {modelSelectedItems.length > 0 && (
+                <>
+                  <h4 style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>
+                    Tarnegraafikus olevad ({modelSelectedItems.length})
+                  </h4>
+                  <div className="model-selected-items">
+                    {modelSelectedItems.map(item => {
+                      const plannedVehicle = vehicles.find(v => v.id === item.vehicle_id);
+                      const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                      const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
+                      const isFromDifferentVehicle = item.vehicle_id !== currentVehicle?.id;
+
+                      return (
+                        <div key={item.id} className={`model-selected-item ${isFromDifferentVehicle ? 'warning' : ''}`}>
+                          <div className="item-info">
+                            <span className="item-mark">{item.assembly_mark}</span>
+                            <span className="item-name">{item.product_name}</span>
+                            {item.cast_unit_weight && (
+                              <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
+                            )}
+                          </div>
+                          {isFromDifferentVehicle && plannedVehicle && (
+                            <div className="item-warning">
+                              <FiAlertTriangle />
+                              <span>Planeeritud veokis: <strong>{plannedVehicle.vehicle_code}</strong></span>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* New items NOT in delivery schedule */}
+              {modelNewItems.length > 0 && (
+                <>
+                  <h4 style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, marginTop: modelSelectedItems.length > 0 ? 16 : 0, color: '#2563eb' }}>
+                    <FiPlus style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                    Uued detailid ({modelNewItems.length}) - pole tarnegraafikus
+                  </h4>
+                  <div className="model-selected-items new-items">
+                    {modelNewItems.map((item, idx) => (
+                      <div key={`new-${idx}`} className="model-selected-item new">
+                        <div className="item-info">
+                          <span className="item-mark">{item.assemblyMark}</span>
+                          {item.productName && <span className="item-name">{item.productName}</span>}
+                          {item.weight && (
+                            <span className="item-weight">{Math.round(Number(item.weight))} kg</span>
+                          )}
+                        </div>
+                        <div className="item-info-note" style={{ fontSize: 11, color: '#6b7280' }}>
+                          Lisatakse tarnegraafikusse selle veokiga
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
               {modelSelectedItems.some(item => {
                 const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
                 const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
@@ -3113,38 +3304,56 @@ export default function ArrivedDeliveriesScreen({
               )}
             </div>
             <div className="modal-footer">
-              <button className="cancel-btn" onClick={() => setShowModelSelectionModal(false)}>
+              <button className="cancel-btn" onClick={() => { setShowModelSelectionModal(false); setModelNewItems([]); }}>
                 Tühista
               </button>
               <button
                 className="confirm-btn"
                 disabled={saving}
                 onClick={async () => {
-                  const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
-                  const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
+                  setSaving(true);
+                  try {
+                    const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                    const currentVehicle = vehicles.find(v => v.id === currentArrival?.vehicle_id);
 
-                  for (const item of modelSelectedItems) {
-                    // Add item to current arrival
-                    await addItemFromVehicle(activeArrivalId, item.id, item.vehicle_id || '');
+                    // Process existing items from delivery schedule
+                    for (const item of modelSelectedItems) {
+                      // Add item to current arrival
+                      await addItemFromVehicle(activeArrivalId, item.id, item.vehicle_id || '');
 
-                    // If from different vehicle, add note to original vehicle's arrival
-                    if (item.vehicle_id !== currentVehicle?.id && item.vehicle_id) {
-                      const originalArrival = arrivedVehicles.find(av => av.vehicle_id === item.vehicle_id);
-                      if (originalArrival) {
-                        const existingNotes = originalArrival.notes || '';
-                        const moveNote = `[${new Date().toLocaleDateString('et-EE')}] Detail ${item.assembly_mark} saabus veokiga ${currentVehicle?.vehicle_code || 'tundmatu'}`;
-                        const newNotes = existingNotes ? `${existingNotes}\n${moveNote}` : moveNote;
-                        await updateArrival(originalArrival.id, { notes: newNotes });
+                      // If from different vehicle, add note to original vehicle's arrival
+                      if (item.vehicle_id !== currentVehicle?.id && item.vehicle_id) {
+                        const originalArrival = arrivedVehicles.find(av => av.vehicle_id === item.vehicle_id);
+                        if (originalArrival) {
+                          const existingNotes = originalArrival.notes || '';
+                          const moveNote = `[${new Date().toLocaleDateString('et-EE')}] Detail ${item.assembly_mark} saabus veokiga ${currentVehicle?.vehicle_code || 'tundmatu'}`;
+                          const newNotes = existingNotes ? `${existingNotes}\n${moveNote}` : moveNote;
+                          await updateArrival(originalArrival.id, { notes: newNotes });
+                        }
                       }
                     }
-                  }
 
-                  setShowModelSelectionModal(false);
-                  setModelSelectedItems([]);
-                  setMessage(`Lisatud ${modelSelectedItems.length} detaili`);
+                    // Process new items (not in delivery schedule)
+                    for (const newItem of modelNewItems) {
+                      await addNewItemFromModel(activeArrivalId, newItem);
+                    }
+
+                    // Reload data
+                    await Promise.all([loadItems(), loadConfirmations()]);
+
+                    setShowModelSelectionModal(false);
+                    setModelSelectedItems([]);
+                    setModelNewItems([]);
+                    setMessage(`Lisatud ${modelSelectedItems.length + modelNewItems.length} detaili`);
+                  } catch (e: any) {
+                    console.error('Error adding items:', e);
+                    setMessage('Viga detailide lisamisel: ' + e.message);
+                  } finally {
+                    setSaving(false);
+                  }
                 }}
               >
-                Lisa {modelSelectedItems.length} detaili
+                Lisa {modelSelectedItems.length + modelNewItems.length} detaili
               </button>
             </div>
           </div>

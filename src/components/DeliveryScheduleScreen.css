@@ -4528,3 +4528,48 @@
   color: #92400e;
   font-weight: 500;
 }
+
+.moved-item-vehicle.clickable {
+  cursor: pointer;
+  text-decoration: underline;
+  color: #2563eb;
+}
+
+.moved-item-vehicle.clickable:hover {
+  color: #1d4ed8;
+}
+
+/* Removed items variant (pink/red background) */
+.moved-items-section.removed {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.moved-items-section.removed .moved-items-header {
+  color: #991b1b;
+}
+
+.moved-items-section.removed .moved-item {
+  color: #7f1d1d;
+}
+
+.moved-items-group {
+  margin-bottom: 6px;
+}
+
+.moved-items-group:last-child {
+  margin-bottom: 0;
+}
+
+.moved-items-vehicle-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 12px;
+}
+
+.moved-items-date {
+  color: #6b7280;
+  font-size: 11px;
+}

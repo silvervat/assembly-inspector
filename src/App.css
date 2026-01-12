@@ -1934,10 +1934,17 @@ button.stat-toggle.off:hover {
   align-items: center;
   gap: var(--modus-spacing-sm);
   padding: var(--modus-spacing-sm) var(--modus-spacing-md);
-  padding-left: calc(var(--modus-spacing-md) + 24px);
   border-bottom: 1px solid var(--modus-border-light);
   cursor: pointer;
   transition: background 0.15s;
+}
+
+.inspection-item-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: var(--modus-primary);
 }
 
 .inspection-item:hover {
