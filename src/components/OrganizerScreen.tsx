@@ -92,7 +92,7 @@ interface MarkupSettings {
   groupNameLine: MarkupLineConfig;
   includeCustomFields: string[]; // field IDs to include
   applyToSubgroups: boolean;
-  separator: 'newline' | 'comma' | 'space' | 'dash';
+  separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
   // New model property fields
   includeAssemblyMark: MarkupFieldConfig;
@@ -660,7 +660,7 @@ export default function OrganizerScreen({
   // Markup state
   const [showMarkupModal, setShowMarkupModal] = useState(false);
   const [markupGroupId, setMarkupGroupId] = useState<string | null>(null);
-  const [markupSettings, setMarkupSettings] = useState<MarkupSettings>({
+  const defaultMarkupSettings: MarkupSettings = {
     includeGroupName: true,
     groupNameLine: 'line1',
     includeCustomFields: [],
@@ -671,8 +671,28 @@ export default function OrganizerScreen({
     includeWeight: { enabled: false, line: 'line2' },
     includeProductName: { enabled: false, line: 'line2' },
     onlySelectedInModel: false
+  };
+  const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
+    try {
+      const saved = localStorage.getItem('organizer_markup_settings');
+      if (saved) {
+        return { ...defaultMarkupSettings, ...JSON.parse(saved) };
+      }
+    } catch (e) {
+      console.warn('Failed to load markup settings from localStorage:', e);
+    }
+    return defaultMarkupSettings;
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+
+  // Save markup settings to localStorage when changed
+  useEffect(() => {
+    try {
+      localStorage.setItem('organizer_markup_settings', JSON.stringify(markupSettings));
+    } catch (e) {
+      console.warn('Failed to save markup settings to localStorage:', e);
+    }
+  }, [markupSettings]);
 
   // Import state
   const [showImportModal, setShowImportModal] = useState(false);
@@ -2999,25 +3019,14 @@ export default function OrganizerScreen({
       case 'comma': return ', ';
       case 'space': return ' ';
       case 'dash': return ' - ';
+      case 'pipe': return ' | ';
       default: return '\n';
     }
   };
 
   const openMarkupModal = (groupId: string) => {
     setMarkupGroupId(groupId);
-    // Reset settings but keep some defaults
-    setMarkupSettings({
-      includeGroupName: true,
-      groupNameLine: 'line1',
-      includeCustomFields: [],
-      applyToSubgroups: true,
-      separator: 'newline',
-      useGroupColors: true,
-      includeAssemblyMark: { enabled: true, line: 'line1' },
-      includeWeight: { enabled: false, line: 'line2' },
-      includeProductName: { enabled: false, line: 'line2' },
-      onlySelectedInModel: false
-    });
+    // Keep last used settings (loaded from localStorage)
     setShowMarkupModal(true);
     setGroupMenuId(null);
   };
@@ -6351,6 +6360,7 @@ export default function OrganizerScreen({
                     <option value="comma">Koma (,)</option>
                     <option value="space">Tühik</option>
                     <option value="dash">Kriips (-)</option>
+                    <option value="pipe">Püstkriips (|)</option>
                   </select>
                 </div>
 
