@@ -693,7 +693,11 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       const vehicleExists = item.vehicle_id && vehicleIds.has(item.vehicle_id);
       const vehicleId = vehicleExists ? item.vehicle_id! : 'unassigned';
       const vehicle = vehicleExists ? vehicles.find(v => v.id === vehicleId) : null;
-      const date = vehicle?.scheduled_date || item.scheduled_date || UNASSIGNED_DATE;
+      // Items follow their vehicle's date when assigned to a vehicle
+      // Only use item's own scheduled_date when not assigned to any vehicle
+      const date = vehicleExists
+        ? (vehicle?.scheduled_date || UNASSIGNED_DATE)
+        : (item.scheduled_date || UNASSIGNED_DATE);
 
       if (!groups[date]) groups[date] = {};
       if (!groups[date][vehicleId]) groups[date][vehicleId] = [];
