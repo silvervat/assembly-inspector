@@ -404,6 +404,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [comments, setComments] = useState<DeliveryComment[]>([]);
   // Items moved to other vehicles (from arrival confirmations)
   const [movedItemConfirmations, setMovedItemConfirmations] = useState<ArrivalItemConfirmation[]>([]);
+  // Items marked as missing during arrival confirmation
+  const [missingItemConfirmations, setMissingItemConfirmations] = useState<ArrivalItemConfirmation[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -1103,6 +1105,32 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, [projectId]);
 
+  // Load items that were marked as missing during arrival confirmation
+  const loadMissingItemConfirmations = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trimble_arrival_confirmations')
+        .select(`
+          *,
+          arrived_vehicle:trimble_arrived_vehicles(
+            id,
+            vehicle_id,
+            arrival_date,
+            arrival_time,
+            is_confirmed,
+            vehicle:trimble_delivery_vehicles(vehicle_code)
+          )
+        `)
+        .eq('trimble_project_id', projectId)
+        .eq('status', 'missing');
+
+      if (error) throw error;
+      setMissingItemConfirmations(data || []);
+    } catch (e) {
+      console.error('Error loading missing item confirmations:', e);
+    }
+  }, [projectId]);
+
   // Load full arrived vehicle details for modal
   const loadArrivedVehicleDetails = useCallback(async (arrivedVehicleId: string) => {
     setArrivedVehicleModalData({ arrivedVehicle: null, confirmations: [], photos: [], loading: true });
@@ -1158,9 +1186,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments(), loadMovedItemConfirmations()]);
+    await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments(), loadMovedItemConfirmations(), loadMissingItemConfirmations()]);
     setLoading(false);
-  }, [loadFactories, loadVehicles, loadItems, loadComments, loadMovedItemConfirmations]);
+  }, [loadFactories, loadVehicles, loadItems, loadComments, loadMovedItemConfirmations, loadMissingItemConfirmations]);
 
   // Broadcast reload signal to other windows
   const broadcastReload = useCallback(() => {
@@ -6959,6 +6987,42 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                       })}
                                     </div>
                                   ))}
+                                </div>
+                              );
+                            })()}
+                            {/* Missing items - items that were marked as missing during arrival confirmation */}
+                            {(() => {
+                              const missingItems = missingItemConfirmations.filter(c => {
+                                const arrivedVehicle = (c as any).arrived_vehicle;
+                                return arrivedVehicle?.vehicle_id === vehicle?.id;
+                              });
+                              if (missingItems.length === 0) return null;
+
+                              return (
+                                <div className="moved-items-section missing">
+                                  <div className="moved-items-header">
+                                    <FiAlertTriangle size={12} />
+                                    <span>Puuduvad detailid ({missingItems.length})</span>
+                                  </div>
+                                  {missingItems.map(conf => {
+                                    const item = items.find(i => i.id === conf.item_id);
+                                    const arrivedVehicle = (conf as any).arrived_vehicle;
+                                    if (!item) return null;
+                                    return (
+                                      <div key={conf.id} className="moved-item missing">
+                                        <span className="moved-item-mark">{item.assembly_mark}</span>
+                                        {arrivedVehicle?.arrival_date && (
+                                          <span
+                                            className="moved-item-vehicle clickable"
+                                            onClick={() => loadArrivedVehicleDetails(arrivedVehicle.id)}
+                                            title="Klõpsa saabumise detailide nägemiseks"
+                                          >
+                                            ({formatDateShort(arrivedVehicle.arrival_date)})
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               );
                             })()}
