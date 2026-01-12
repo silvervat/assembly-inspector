@@ -171,13 +171,14 @@ export default function InspectionList({
   projectId,
   currentUser,
   onZoomToInspection,
-  onSelectInspection,
+  onSelectInspection: _onSelectInspection, // Keep for backwards compat, now using onSelectGroup
   onSelectGroup,
   onZoomToGroup,
   onLoadMore,
   onClose,
   onRefresh
 }: InspectionListProps) {
+  void _onSelectInspection; // Suppress unused warning
   // Permission helpers
   const isAdminOrModerator = currentUser.role === 'admin' || currentUser.role === 'moderator';
 
@@ -202,6 +203,7 @@ export default function InspectionList({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
+  const lastClickedIdRef = useRef<string | null>(null);
 
   // Checkpoint results state
   const [checkpointResults, setCheckpointResults] = useState<ResultWithCheckpoint[]>([]);
@@ -585,11 +587,52 @@ export default function InspectionList({
     onZoomToInspection(inspection);
   };
 
-  // Handle item click - select in model
-  const handleInspectionClick = (inspection: InspectionItem) => {
-    setSelectedIds(new Set([inspection.id]));
-    onSelectInspection(inspection);
+  // Handle item click - select in model with shift+click support
+  const handleInspectionClick = (inspection: InspectionItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    const newSelected = new Set(selectedIds);
+
+    // Shift+click for range selection
+    if (e.shiftKey && lastClickedIdRef.current) {
+      const lastIdx = inspections.findIndex(i => i.id === lastClickedIdRef.current);
+      const currentIdx = inspections.findIndex(i => i.id === inspection.id);
+
+      if (lastIdx !== -1 && currentIdx !== -1) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        for (let i = start; i <= end; i++) {
+          newSelected.add(inspections[i].id);
+        }
+      } else {
+        // Toggle if indices not found
+        if (newSelected.has(inspection.id)) {
+          newSelected.delete(inspection.id);
+        } else {
+          newSelected.add(inspection.id);
+        }
+      }
+    } else {
+      // Regular click - toggle single item
+      if (newSelected.has(inspection.id)) {
+        newSelected.delete(inspection.id);
+      } else {
+        newSelected.add(inspection.id);
+      }
+    }
+
+    lastClickedIdRef.current = inspection.id;
+    setSelectedIds(newSelected);
   };
+
+  // Sync selection to model
+  useEffect(() => {
+    if (selectedIds.size === 0) return;
+    const selectedItems = inspections.filter(insp => selectedIds.has(insp.id));
+    if (selectedItems.length > 0) {
+      onSelectGroup(selectedItems);
+    }
+  }, [selectedIds, inspections, onSelectGroup]);
 
   // Handle item info button - show detail modal
   const handleShowDetail = (e: React.MouseEvent, inspection: InspectionItem) => {
@@ -629,8 +672,15 @@ export default function InspectionList({
           style={style}
           key={insp.id}
           className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
-          onClick={() => handleInspectionClick(insp)}
+          onClick={(e) => handleInspectionClick(insp, e)}
         >
+          <input
+            type="checkbox"
+            className="inspection-item-checkbox"
+            checked={selectedIds.has(insp.id)}
+            onChange={() => {}}
+            onClick={(e) => handleInspectionClick(insp, e)}
+          />
           <div className="inspection-item-main">
             <span className="inspection-mark">
               {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
@@ -707,8 +757,15 @@ export default function InspectionList({
           style={style}
           key={insp.id}
           className={`inspection-item ${selectedIds.has(insp.id) ? 'inspection-item-selected' : ''}`}
-          onClick={() => handleInspectionClick(insp)}
+          onClick={(e) => handleInspectionClick(insp, e)}
         >
+          <input
+            type="checkbox"
+            className="inspection-item-checkbox"
+            checked={selectedIds.has(insp.id)}
+            onChange={() => {}}
+            onClick={(e) => handleInspectionClick(insp, e)}
+          />
           <div className="inspection-item-main">
             <span className="inspection-mark">
               {insp.assembly_mark || `#${insp.object_runtime_id || '?'}`}
