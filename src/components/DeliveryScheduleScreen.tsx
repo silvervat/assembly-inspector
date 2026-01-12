@@ -18,7 +18,8 @@ import {
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
-  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag
+  FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag,
+  FiCamera
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -626,6 +627,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [itemEditUnloadMethods, setItemEditUnloadMethods] = useState<UnloadMethods>({});
   const [itemEditNotes, setItemEditNotes] = useState<string>('');
 
+  // Arrived vehicle detail modal state (for viewing arrival confirmations)
+  const [showArrivedVehicleModal, setShowArrivedVehicleModal] = useState(false);
+  const [arrivedVehicleModalData, setArrivedVehicleModalData] = useState<{
+    arrivedVehicle: any;
+    confirmations: ArrivalItemConfirmation[];
+    photos: any[];
+    loading: boolean;
+  } | null>(null);
+
   // Inline editing state for vehicle list
   const [inlineEditVehicleId, setInlineEditVehicleId] = useState<string | null>(null);
   const [inlineEditField, setInlineEditField] = useState<'time' | 'duration' | 'status' | 'date' | 'vehicle_code' | null>(null);
@@ -1070,12 +1080,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const loadMovedItemConfirmations = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from('trimble_arrival_item_confirmations')
+        .from('trimble_arrival_confirmations')
         .select(`
           *,
           arrived_vehicle:trimble_arrived_vehicles(
             id,
             vehicle_id,
+            arrival_date,
+            arrival_time,
+            is_confirmed,
             vehicle:trimble_delivery_vehicles(vehicle_code)
           )
         `)
@@ -1089,6 +1102,59 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.error('Error loading moved item confirmations:', e);
     }
   }, [projectId]);
+
+  // Load full arrived vehicle details for modal
+  const loadArrivedVehicleDetails = useCallback(async (arrivedVehicleId: string) => {
+    setArrivedVehicleModalData({ arrivedVehicle: null, confirmations: [], photos: [], loading: true });
+    setShowArrivedVehicleModal(true);
+
+    try {
+      // Load arrived vehicle with delivery vehicle info
+      const { data: arrivedVehicle, error: vehicleError } = await supabase
+        .from('trimble_arrived_vehicles')
+        .select(`
+          *,
+          vehicle:trimble_delivery_vehicles(*)
+        `)
+        .eq('id', arrivedVehicleId)
+        .single();
+
+      if (vehicleError) throw vehicleError;
+
+      // Load all confirmations for this arrived vehicle
+      const { data: confirmations, error: confError } = await supabase
+        .from('trimble_arrival_confirmations')
+        .select(`
+          *,
+          item:trimble_delivery_items(*)
+        `)
+        .eq('arrived_vehicle_id', arrivedVehicleId)
+        .order('confirmed_at', { ascending: true });
+
+      if (confError) throw confError;
+
+      // Load photos for this arrived vehicle
+      const { data: photos, error: photosError } = await supabase
+        .from('trimble_arrival_photos')
+        .select('*')
+        .eq('arrived_vehicle_id', arrivedVehicleId)
+        .order('uploaded_at', { ascending: true });
+
+      if (photosError) throw photosError;
+
+      setArrivedVehicleModalData({
+        arrivedVehicle,
+        confirmations: confirmations || [],
+        photos: photos || [],
+        loading: false
+      });
+    } catch (e) {
+      console.error('Error loading arrived vehicle details:', e);
+      setArrivedVehicleModalData(null);
+      setShowArrivedVehicleModal(false);
+      setMessage('Viga saabumise detailide laadimisel');
+    }
+  }, []);
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -6836,29 +6902,63 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 <span>Ühtegi detaili pole</span>
                               </div>
                             )}
-                            {/* Moved items - items that arrived with a different vehicle */}
+                            {/* Removed items - items that were moved to a different vehicle during arrival */}
                             {(() => {
                               const movedItems = movedItemConfirmations.filter(c => c.source_vehicle_id === vehicle?.id);
                               if (movedItems.length === 0) return null;
+
+                              // Group items by arrived vehicle
+                              const byArrivedVehicle = new Map<string, { arrivedVehicleId: string; vehicleCode: string; arrivalDate: string; items: typeof movedItems }>();
+                              movedItems.forEach(conf => {
+                                const arrivedVehicle = (conf as any).arrived_vehicle;
+                                const arrivedVehicleId = arrivedVehicle?.id;
+                                if (!arrivedVehicleId) return;
+                                const existing = byArrivedVehicle.get(arrivedVehicleId);
+                                if (existing) {
+                                  existing.items.push(conf);
+                                } else {
+                                  byArrivedVehicle.set(arrivedVehicleId, {
+                                    arrivedVehicleId,
+                                    vehicleCode: arrivedVehicle?.vehicle?.vehicle_code || 'tundmatu',
+                                    arrivalDate: arrivedVehicle?.arrival_date || '',
+                                    items: [conf]
+                                  });
+                                }
+                              });
+
                               return (
-                                <div className="moved-items-section">
+                                <div className="moved-items-section removed">
                                   <div className="moved-items-header">
                                     <FiExternalLink size={12} />
-                                    <span>Teise tarnega saabunud ({movedItems.length})</span>
+                                    <span>Eemaldatud detailid ({movedItems.length})</span>
                                   </div>
-                                  {movedItems.map(conf => {
-                                    const item = items.find(i => i.id === conf.item_id);
-                                    if (!item) return null;
-                                    const arrivedVehicle = (conf as any).arrived_vehicle;
-                                    const arrivedVehicleCode = arrivedVehicle?.vehicle?.vehicle_code || 'tundmatu';
-                                    return (
-                                      <div key={conf.id} className="moved-item">
-                                        <span className="moved-item-mark">{item.assembly_mark}</span>
-                                        <span className="moved-item-arrow">→</span>
-                                        <span className="moved-item-vehicle">{arrivedVehicleCode}</span>
+                                  {Array.from(byArrivedVehicle.values()).map(group => (
+                                    <div key={group.arrivedVehicleId} className="moved-items-group">
+                                      <div className="moved-items-vehicle-header">
+                                        <span
+                                          className="moved-item-vehicle clickable"
+                                          onClick={() => loadArrivedVehicleDetails(group.arrivedVehicleId)}
+                                          title="Klõpsa saabumise detailide nägemiseks"
+                                        >
+                                          {group.vehicleCode}
+                                        </span>
+                                        {group.arrivalDate && (
+                                          <span className="moved-items-date">
+                                            ({formatDateShort(group.arrivalDate)})
+                                          </span>
+                                        )}
                                       </div>
-                                    );
-                                  })}
+                                      {group.items.map(conf => {
+                                        const item = items.find(i => i.id === conf.item_id);
+                                        if (!item) return null;
+                                        return (
+                                          <div key={conf.id} className="moved-item">
+                                            <span className="moved-item-mark">{item.assembly_mark}</span>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ))}
                                 </div>
                               );
                             })()}
@@ -8887,6 +8987,173 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               </button>
               <button className="confirm-btn" onClick={confirmDateChange}>
                 Salvesta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Arrived Vehicle Detail Modal */}
+      {showArrivedVehicleModal && arrivedVehicleModalData && (
+        <div className="modal-overlay" onClick={() => { setShowArrivedVehicleModal(false); setArrivedVehicleModalData(null); }}>
+          <div className="modal arrived-vehicle-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 700 }}>
+            <div className="modal-header">
+              <h2>
+                <FiTruck style={{ marginRight: 8 }} />
+                Saabumise detailid
+                {arrivedVehicleModalData.arrivedVehicle?.vehicle?.vehicle_code && (
+                  <span style={{ fontWeight: 500, marginLeft: 8 }}>
+                    ({arrivedVehicleModalData.arrivedVehicle.vehicle.vehicle_code})
+                  </span>
+                )}
+              </h2>
+              <button className="close-btn" onClick={() => { setShowArrivedVehicleModal(false); setArrivedVehicleModalData(null); }}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {arrivedVehicleModalData.loading ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <FiRefreshCw className="spinning" />
+                  <p style={{ marginTop: 8 }}>Laadin...</p>
+                </div>
+              ) : (
+                <>
+                  {/* Vehicle Info */}
+                  <div style={{ marginBottom: 20, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+                      <div>
+                        <span style={{ color: '#6b7280' }}>Planeeritud veok:</span>{' '}
+                        <strong>{arrivedVehicleModalData.arrivedVehicle?.vehicle?.vehicle_code || '-'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#6b7280' }}>Saabumise kuupäev:</span>{' '}
+                        <strong>{arrivedVehicleModalData.arrivedVehicle?.arrival_date ? formatDateEstonian(arrivedVehicleModalData.arrivedVehicle.arrival_date) : '-'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#6b7280' }}>Saabumise aeg:</span>{' '}
+                        <strong>{arrivedVehicleModalData.arrivedVehicle?.arrival_time || '-'}</strong>
+                      </div>
+                      <div>
+                        <span style={{ color: '#6b7280' }}>Mahalaadimine:</span>{' '}
+                        <strong>
+                          {arrivedVehicleModalData.arrivedVehicle?.unload_start_time || '-'}
+                          {arrivedVehicleModalData.arrivedVehicle?.unload_end_time && ` - ${arrivedVehicleModalData.arrivedVehicle.unload_end_time}`}
+                        </strong>
+                      </div>
+                      {arrivedVehicleModalData.arrivedVehicle?.reg_number && (
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Reg. number:</span>{' '}
+                          <strong>{arrivedVehicleModalData.arrivedVehicle.reg_number}</strong>
+                        </div>
+                      )}
+                      {arrivedVehicleModalData.arrivedVehicle?.trailer_number && (
+                        <div>
+                          <span style={{ color: '#6b7280' }}>Haagis:</span>{' '}
+                          <strong>{arrivedVehicleModalData.arrivedVehicle.trailer_number}</strong>
+                        </div>
+                      )}
+                      {arrivedVehicleModalData.arrivedVehicle?.unload_location && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ color: '#6b7280' }}>Mahalaadimine asukoht:</span>{' '}
+                          <strong>{arrivedVehicleModalData.arrivedVehicle.unload_location}</strong>
+                        </div>
+                      )}
+                      {arrivedVehicleModalData.arrivedVehicle?.notes && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ color: '#6b7280' }}>Märkused:</span>{' '}
+                          <span>{arrivedVehicleModalData.arrivedVehicle.notes}</span>
+                        </div>
+                      )}
+                    </div>
+                    {arrivedVehicleModalData.arrivedVehicle?.is_confirmed && (
+                      <div style={{ marginTop: 12, padding: '6px 10px', background: '#d1fae5', borderRadius: 4, fontSize: 12, color: '#065f46' }}>
+                        <FiCheck style={{ marginRight: 4 }} />
+                        Kinnitatud{arrivedVehicleModalData.arrivedVehicle.confirmed_by ? ` (${arrivedVehicleModalData.arrivedVehicle.confirmed_by})` : ''}
+                        {arrivedVehicleModalData.arrivedVehicle.confirmed_at && ` - ${new Date(arrivedVehicleModalData.arrivedVehicle.confirmed_at).toLocaleString('et-EE')}`}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Photos */}
+                  {arrivedVehicleModalData.photos.length > 0 && (
+                    <div style={{ marginBottom: 20 }}>
+                      <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <FiCamera /> Fotod ({arrivedVehicleModalData.photos.length})
+                      </h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8 }}>
+                        {arrivedVehicleModalData.photos.map((photo: any) => (
+                          <div key={photo.id} style={{ position: 'relative' }}>
+                            <a href={photo.file_url} target="_blank" rel="noopener noreferrer">
+                              <img
+                                src={photo.file_url}
+                                alt={photo.description || 'Foto'}
+                                style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid #e5e7eb' }}
+                              />
+                            </a>
+                            {photo.photo_type === 'delivery_note' && (
+                              <span style={{ position: 'absolute', bottom: 4, left: 4, background: '#3b82f6', color: '#fff', fontSize: 9, padding: '1px 4px', borderRadius: 3 }}>
+                                Saateleht
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Confirmations */}
+                  <div>
+                    <h4 style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <FiPackage /> Detailid ({arrivedVehicleModalData.confirmations.length})
+                    </h4>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: 6, overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: '#f9fafb' }}>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Nr</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Assembly Mark</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600 }}>Toode</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 600 }}>Kaal</th>
+                            <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600 }}>Staatus</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {arrivedVehicleModalData.confirmations.map((conf: any, idx: number) => {
+                            const statusConfig: Record<string, { label: string; bg: string; color: string }> = {
+                              confirmed: { label: 'Kinnitatud', bg: '#d1fae5', color: '#065f46' },
+                              missing: { label: 'Puudub', bg: '#fee2e2', color: '#991b1b' },
+                              wrong_vehicle: { label: 'Vale veok', bg: '#fef3c7', color: '#92400e' },
+                              added: { label: 'Lisatud', bg: '#dbeafe', color: '#1e40af' },
+                              pending: { label: 'Ootel', bg: '#f3f4f6', color: '#4b5563' }
+                            };
+                            const st = statusConfig[conf.status] || statusConfig.pending;
+                            return (
+                              <tr key={conf.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                                <td style={{ padding: '8px 10px', color: '#6b7280' }}>{idx + 1}</td>
+                                <td style={{ padding: '8px 10px', fontWeight: 500 }}>{conf.item?.assembly_mark || '-'}</td>
+                                <td style={{ padding: '8px 10px', color: '#6b7280' }}>{conf.item?.product_name || '-'}</td>
+                                <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                                  {conf.item?.cast_unit_weight ? `${Math.round(Number(conf.item.cast_unit_weight))} kg` : '-'}
+                                </td>
+                                <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                                  <span style={{ background: st.bg, color: st.color, padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 500 }}>
+                                    {st.label}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => { setShowArrivedVehicleModal(false); setArrivedVehicleModalData(null); }}>
+                Sulge
               </button>
             </div>
           </div>
