@@ -406,6 +406,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [movedItemConfirmations, setMovedItemConfirmations] = useState<ArrivalItemConfirmation[]>([]);
   // Items marked as missing during arrival confirmation
   const [missingItemConfirmations, setMissingItemConfirmations] = useState<ArrivalItemConfirmation[]>([]);
+  // Items that have been confirmed as received (cannot be re-planned)
+  const [confirmedReceivedItemIds, setConfirmedReceivedItemIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -1135,6 +1137,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, [projectId]);
 
+  // Load items that have been confirmed as received (cannot be re-planned)
+  const loadConfirmedReceivedItems = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trimble_arrival_confirmations')
+        .select('item_id')
+        .eq('trimble_project_id', projectId)
+        .eq('status', 'confirmed');
+
+      if (error) throw error;
+      setConfirmedReceivedItemIds(new Set((data || []).map(d => d.item_id)));
+    } catch (e) {
+      console.error('Error loading confirmed received items:', e);
+    }
+  }, [projectId]);
+
   // Load full arrived vehicle details for modal
   const loadArrivedVehicleDetails = useCallback(async (arrivedVehicleId: string) => {
     setArrivedVehicleModalData({ arrivedVehicle: null, confirmations: [], photos: [], loading: true });
@@ -1190,9 +1208,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
-    await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments(), loadMovedItemConfirmations(), loadMissingItemConfirmations()]);
+    await Promise.all([loadFactories(), loadVehicles(), loadItems(), loadComments(), loadMovedItemConfirmations(), loadMissingItemConfirmations(), loadConfirmedReceivedItems()]);
     setLoading(false);
-  }, [loadFactories, loadVehicles, loadItems, loadComments, loadMovedItemConfirmations, loadMissingItemConfirmations]);
+  }, [loadFactories, loadVehicles, loadItems, loadComments, loadMovedItemConfirmations, loadMissingItemConfirmations, loadConfirmedReceivedItems]);
 
   // Broadcast reload signal to other windows
   const broadcastReload = useCallback(() => {
@@ -2531,6 +2549,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const moveItemsToVehicle = async (targetVehicleId: string) => {
     if (selectedItemIds.size === 0) return;
 
+    // Check if any selected items have been confirmed as received - cannot be re-planned
+    const selectedItems = items.filter(i => selectedItemIds.has(i.id));
+    const confirmedItems = selectedItems.filter(item => confirmedReceivedItemIds.has(item.id));
+    if (confirmedItems.length > 0) {
+      const marks = confirmedItems.slice(0, 3).map(i => i.assembly_mark).join(', ');
+      const more = confirmedItems.length > 3 ? ` + ${confirmedItems.length - 3} veel` : '';
+      setMessage(`⚠️ Ei saa tõsta! ${confirmedItems.length} detaili on juba vastu võetud: ${marks}${more}`);
+      return;
+    }
+
     setSaving(true);
     try {
       const targetVehicle = getVehicle(targetVehicleId);
@@ -2781,6 +2809,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     autoExpandedDatesRef.current.clear();
 
     if (draggedItems.length === 0) return;
+
+    // Check if any dragged items have been confirmed as received - cannot be re-planned
+    const confirmedItems = draggedItems.filter(item => confirmedReceivedItemIds.has(item.id));
+    if (confirmedItems.length > 0) {
+      const marks = confirmedItems.slice(0, 3).map(i => i.assembly_mark).join(', ');
+      const more = confirmedItems.length > 3 ? ` + ${confirmedItems.length - 3} veel` : '';
+      setMessage(`⚠️ Ei saa tõsta! ${confirmedItems.length} detaili on juba vastu võetud: ${marks}${more}`);
+      setDraggedItems([]);
+      return;
+    }
 
     const targetVehicle = getVehicle(targetVehicleId);
     if (!targetVehicle) return;
