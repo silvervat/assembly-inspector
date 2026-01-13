@@ -1153,7 +1153,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, [projectId]);
 
-  // Load full arrived vehicle details for modal
+  // Load full arrived vehicle details for modal (kept for future use)
+  // @ts-expect-error - unused but kept for future modal functionality
   const loadArrivedVehicleDetails = useCallback(async (arrivedVehicleId: string) => {
     setArrivedVehicleModalData({ arrivedVehicle: null, confirmations: [], photos: [], loading: true });
     setShowArrivedVehicleModal(true);
@@ -7004,9 +7005,23 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 }
                               });
 
+                              // Get all GUIDs for removed/moved items
+                              const movedGuids = movedItems
+                                .map(c => items.find(i => i.id === c.item_id)?.guid_ifc)
+                                .filter(Boolean) as string[];
+
                               return (
                                 <div className="moved-items-section removed">
-                                  <div className="moved-items-header">
+                                  <div
+                                    className="moved-items-header clickable"
+                                    onClick={async () => {
+                                      if (api && movedGuids.length > 0) {
+                                        const count = await selectObjectsByGuid(api, movedGuids, 'set');
+                                        setMessage(`${count} eemaldatud detaili märgistatud mudelis`);
+                                      }
+                                    }}
+                                    title="Märgista kõik eemaldatud detailid mudelis"
+                                  >
                                     <FiExternalLink size={12} />
                                     <span>Eemaldatud detailid ({movedItems.length})</span>
                                   </div>
@@ -7021,8 +7036,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                         <div
                                           key={conf.id}
                                           className="moved-item-row"
-                                          onClick={() => arrivedVehicle?.id && loadArrivedVehicleDetails(arrivedVehicle.id)}
-                                          title="Klõpsa saabumise detailide nägemiseks"
+                                          onClick={async () => {
+                                            if (api && item.guid_ifc) {
+                                              await selectObjectsByGuid(api, [item.guid_ifc], 'set');
+                                              setMessage(`${item.assembly_mark} märgistatud mudelis`);
+                                            }
+                                          }}
+                                          title="Märgista mudelis"
                                         >
                                           <span className="moved-item-mark">{item.assembly_mark}</span>
                                           <span className="moved-item-arrow">→</span>
