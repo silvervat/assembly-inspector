@@ -23,7 +23,7 @@ import { formatDateEnglish, formatTime, getStatusLabelEnglish, getPhotoTypeLabel
 // PDF Configuration
 const PAGE_WIDTH = 210; // A4 width in mm
 const PAGE_HEIGHT = 297; // A4 height in mm
-const MARGIN = 15;
+const MARGIN = 12; // Smaller margins for more content
 const CONTENT_WIDTH = PAGE_WIDTH - (MARGIN * 2);
 
 // Colors
@@ -92,7 +92,7 @@ async function loadImageAsDataURL(url: string): Promise<string | null> {
 }
 
 /**
- * Draw page header
+ * Draw page header (compact)
  */
 function drawHeader(
   doc: jsPDF,
@@ -101,50 +101,42 @@ function drawHeader(
   pageNum: number,
   totalPages: number
 ): void {
-  // Header background
+  // Header background - compact
   doc.setFillColor(...COLORS.primary);
-  doc.rect(0, 0, PAGE_WIDTH, 25, 'F');
+  doc.rect(0, 0, PAGE_WIDTH, 18, 'F');
 
-  // Project name
+  // Project name + Vehicle code on same line
   doc.setTextColor(...COLORS.white);
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text(projectName, MARGIN, 12);
-
-  // Vehicle code
   doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${projectName} | ${vehicleCode}`, MARGIN, 11);
+
+  // Page number and title
   doc.setFont('helvetica', 'normal');
-  doc.text(`Vehicle: ${vehicleCode}`, MARGIN, 20);
-
-  // Page number
-  doc.text(`Page ${pageNum} / ${totalPages}`, PAGE_WIDTH - MARGIN, 12, { align: 'right' });
-
-  // Title
-  doc.text('DELIVERY REPORT', PAGE_WIDTH - MARGIN, 20, { align: 'right' });
+  doc.setFontSize(9);
+  doc.text(`DELIVERY REPORT | ${pageNum}/${totalPages}`, PAGE_WIDTH - MARGIN, 11, { align: 'right' });
 }
 
 /**
- * Draw page footer
+ * Draw page footer (compact)
  */
 function drawFooter(doc: jsPDF, shareUrl: string, qrDataUrl: string): void {
-  const footerY = PAGE_HEIGHT - 25;
+  const footerY = PAGE_HEIGHT - 15;
 
   // Footer line
   doc.setDrawColor(...COLORS.lightGray);
-  doc.setLineWidth(0.5);
-  doc.line(MARGIN, footerY - 5, PAGE_WIDTH - MARGIN, footerY - 5);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN, footerY - 3, PAGE_WIDTH - MARGIN, footerY - 3);
 
-  // QR Code (small)
+  // QR Code (tiny)
   if (qrDataUrl) {
-    doc.addImage(qrDataUrl, 'PNG', MARGIN, footerY - 3, 18, 18);
+    doc.addImage(qrDataUrl, 'PNG', MARGIN, footerY - 1, 12, 12);
   }
 
   // URL text
-  doc.setTextColor(...COLORS.gray);
-  doc.setFontSize(8);
-  doc.text('View online:', MARGIN + 22, footerY + 2);
   doc.setTextColor(...COLORS.primary);
-  doc.textWithLink(shareUrl, MARGIN + 22, footerY + 7, { url: shareUrl });
+  doc.setFontSize(7);
+  doc.textWithLink(shareUrl, MARGIN + 14, footerY + 4, { url: shareUrl });
 
   // Generation date
   doc.setTextColor(...COLORS.gray);
@@ -155,7 +147,7 @@ function drawFooter(doc: jsPDF, shareUrl: string, qrDataUrl: string): void {
     hour: '2-digit',
     minute: '2-digit'
   });
-  doc.text(`Generated: ${generatedDate}`, PAGE_WIDTH - MARGIN, footerY + 7, { align: 'right' });
+  doc.text(`Generated: ${generatedDate}`, PAGE_WIDTH - MARGIN, footerY + 4, { align: 'right' });
 }
 
 /**
@@ -188,160 +180,119 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
   let currentPage = 1;
 
   // ============================================
-  // PAGE 1: OVERVIEW
+  // PAGE 1: OVERVIEW (COMPACT)
   // ============================================
 
   drawHeader(doc, projectName, vehicle?.vehicle_code || '-', currentPage, totalPages);
 
-  let y = 35;
+  let y = 24;
 
-  // Title
+  // Title row - compact
   doc.setTextColor(...COLORS.dark);
-  doc.setFontSize(20);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text('Delivery Confirmation Report', MARGIN, y);
-  y += 12;
-
-  // Subtitle
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
-  doc.setTextColor(...COLORS.gray);
   const factoryText = factory?.factory_name ? ` (${factory.factory_name})` : '';
-  doc.text(`Vehicle ${vehicle?.vehicle_code || '-'}${factoryText} - ${formatDateEnglish(arrivedVehicle.arrival_date)}`, MARGIN, y);
-  y += 15;
+  doc.text(`Delivery Report: ${vehicle?.vehicle_code || '-'}${factoryText}`, MARGIN, y);
+  y += 8;
 
-  // Summary Box
-  doc.setFillColor(...COLORS.lightGray);
-  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 45, 3, 3, 'F');
-
-  doc.setTextColor(...COLORS.dark);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DELIVERY SUMMARY', MARGIN + 5, y + 8);
-
-  // Summary grid
-  const summaryData = [
-    ['Scheduled Date:', vehicle?.scheduled_date ? formatDateEnglish(vehicle.scheduled_date) : '-'],
-    ['Arrival Date:', formatDateEnglish(arrivedVehicle.arrival_date)],
-    ['Arrival Time:', formatTime(arrivedVehicle.arrival_time)],
-    ['Total Items:', `${items.length}`],
-    ['Total Weight:', `${Math.round(totalWeight).toLocaleString()} kg`],
-    ['Status:', arrivedVehicle.is_confirmed ? 'CONFIRMED' : 'In Progress']
-  ];
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-
-  const col1X = MARGIN + 5;
-  const col2X = MARGIN + 50;
-  const col3X = MARGIN + 95;
-  const col4X = MARGIN + 140;
-
-  doc.setTextColor(...COLORS.gray);
-  doc.text(summaryData[0][0], col1X, y + 18);
-  doc.text(summaryData[1][0], col1X, y + 26);
-  doc.text(summaryData[2][0], col1X, y + 34);
-
-  doc.setTextColor(...COLORS.dark);
-  doc.setFont('helvetica', 'bold');
-  doc.text(summaryData[0][1], col2X, y + 18);
-  doc.text(summaryData[1][1], col2X, y + 26);
-  doc.text(summaryData[2][1], col2X, y + 34);
-
+  // Summary line - single row
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.setTextColor(...COLORS.gray);
-  doc.text(summaryData[3][0], col3X, y + 18);
-  doc.text(summaryData[4][0], col3X, y + 26);
-  doc.text(summaryData[5][0], col3X, y + 34);
+  const scheduledText = vehicle?.scheduled_date ? formatDateEnglish(vehicle.scheduled_date) : '-';
+  const arrivalText = `${formatDateEnglish(arrivedVehicle.arrival_date)} ${formatTime(arrivedVehicle.arrival_time)}`;
+  const statusText = arrivedVehicle.is_confirmed ? '✓ CONFIRMED' : 'In Progress';
+  doc.text(`Scheduled: ${scheduledText} | Arrived: ${arrivalText} | Items: ${items.length} | Weight: ${Math.round(totalWeight).toLocaleString()} kg | ${statusText}`, MARGIN, y);
+  y += 6;
 
-  doc.setTextColor(...COLORS.dark);
-  doc.setFont('helvetica', 'bold');
-  doc.text(summaryData[3][1], col4X, y + 18);
-  doc.text(summaryData[4][1], col4X, y + 26);
-  if (arrivedVehicle.is_confirmed) {
-    doc.setTextColor(...COLORS.success);
+  // Vehicle notes (if any)
+  if (arrivedVehicle.notes && arrivedVehicle.notes.trim()) {
+    doc.setFillColor(255, 251, 235); // Light yellow background
+    const noteLines = doc.splitTextToSize(`Vehicle notes: ${arrivedVehicle.notes}`, CONTENT_WIDTH - 6);
+    const noteHeight = noteLines.length * 4 + 4;
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, noteHeight, 2, 2, 'F');
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(8);
+    doc.text(noteLines, MARGIN + 3, y + 5);
+    y += noteHeight + 3;
   }
-  doc.text(summaryData[5][1], col4X, y + 34);
 
-  y += 55;
-
-  // Status summary badges
-  doc.setFontSize(10);
+  // Status badges - compact inline
+  const badgeWidth = 45;
+  const badgeHeight = 14;
+  doc.setFontSize(8);
 
   // Confirmed badge
   doc.setFillColor(...COLORS.success);
-  doc.roundedRect(MARGIN, y, 55, 20, 2, 2, 'F');
+  doc.roundedRect(MARGIN, y, badgeWidth, badgeHeight, 2, 2, 'F');
   doc.setTextColor(...COLORS.white);
   doc.setFont('helvetica', 'bold');
-  doc.text('CONFIRMED', MARGIN + 27.5, y + 8, { align: 'center' });
-  doc.setFontSize(14);
-  doc.text(`${confirmedCount}`, MARGIN + 27.5, y + 16, { align: 'center' });
+  doc.text(`CONFIRMED: ${confirmedCount}`, MARGIN + badgeWidth/2, y + 9, { align: 'center' });
 
   // Missing badge
   doc.setFillColor(...COLORS.danger);
-  doc.roundedRect(MARGIN + 60, y, 55, 20, 2, 2, 'F');
-  doc.setTextColor(...COLORS.white);
-  doc.setFontSize(10);
-  doc.text('MISSING', MARGIN + 87.5, y + 8, { align: 'center' });
-  doc.setFontSize(14);
-  doc.text(`${missingCount}`, MARGIN + 87.5, y + 16, { align: 'center' });
+  doc.roundedRect(MARGIN + badgeWidth + 5, y, badgeWidth, badgeHeight, 2, 2, 'F');
+  doc.text(`MISSING: ${missingCount}`, MARGIN + badgeWidth + 5 + badgeWidth/2, y + 9, { align: 'center' });
 
   // Added badge
   doc.setFillColor(...COLORS.primary);
-  doc.roundedRect(MARGIN + 120, y, 55, 20, 2, 2, 'F');
-  doc.setTextColor(...COLORS.white);
-  doc.setFontSize(10);
-  doc.text('ADDED', MARGIN + 147.5, y + 8, { align: 'center' });
-  doc.setFontSize(14);
-  doc.text(`${addedCount}`, MARGIN + 147.5, y + 16, { align: 'center' });
+  doc.roundedRect(MARGIN + (badgeWidth + 5) * 2, y, badgeWidth, badgeHeight, 2, 2, 'F');
+  doc.text(`ADDED: ${addedCount}`, MARGIN + (badgeWidth + 5) * 2 + badgeWidth/2, y + 9, { align: 'center' });
 
-  y += 30;
+  y += badgeHeight + 5;
 
-  // Items Table
+  // Items Table - compact with GUID and Notes
   doc.setTextColor(...COLORS.dark);
-  doc.setFontSize(12);
+  doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('ITEMS', MARGIN, y);
-  y += 5;
+  y += 3;
 
-  // Prepare table data
+  // Prepare table data with GUID and Notes
   const tableData = items.map((item, idx) => {
     const conf = confirmations.find(c => c.item_id === item.id);
     const status = conf?.status || 'pending';
+    const notes = conf?.notes || '';
+    // Truncate GUID for display (first 8 chars)
+    const guidShort = item.guid_ifc ? item.guid_ifc.substring(0, 8) + '...' : '-';
     return [
       (idx + 1).toString(),
       item.assembly_mark || '-',
-      item.product_name || '-',
-      item.cast_unit_weight ? `${Math.round(Number(item.cast_unit_weight))} kg` : '-',
-      getStatusLabelEnglish(status)
+      guidShort,
+      item.cast_unit_weight ? `${Math.round(Number(item.cast_unit_weight))}` : '-',
+      getStatusLabelEnglish(status),
+      notes
     ];
   });
 
   autoTable(doc, {
     startY: y,
-    head: [['#', 'Mark', 'Product', 'Weight', 'Status']],
+    head: [['#', 'Mark', 'GUID', 'kg', 'Status', 'Notes']],
     body: tableData,
     theme: 'striped',
     headStyles: {
       fillColor: COLORS.dark,
       textColor: COLORS.white,
       fontStyle: 'bold',
-      fontSize: 9
+      fontSize: 7,
+      cellPadding: 1.5
     },
     bodyStyles: {
-      fontSize: 8,
-      textColor: COLORS.dark
+      fontSize: 7,
+      textColor: COLORS.dark,
+      cellPadding: 1.5
     },
     columnStyles: {
-      0: { cellWidth: 10 },
-      1: { cellWidth: 35 },
-      2: { cellWidth: 60 },
-      3: { cellWidth: 25 },
-      4: { cellWidth: 25 }
+      0: { cellWidth: 8 },   // #
+      1: { cellWidth: 28 },  // Mark
+      2: { cellWidth: 22 },  // GUID
+      3: { cellWidth: 12 },  // Weight
+      4: { cellWidth: 18 },  // Status
+      5: { cellWidth: 'auto' } // Notes - takes remaining space
     },
     margin: { left: MARGIN, right: MARGIN },
     didParseCell: (data) => {
-      // Color status column
+      // Color status column (index 4)
       if (data.column.index === 4 && data.section === 'body') {
         const status = tableData[data.row.index]?.[4] || '';
         if (status === 'Confirmed') {
@@ -355,74 +306,65 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
           data.cell.styles.fontStyle = 'bold';
         }
       }
+      // Notes column styling (index 5)
+      if (data.column.index === 5 && data.section === 'body') {
+        data.cell.styles.textColor = COLORS.gray;
+        data.cell.styles.fontSize = 6;
+      }
     }
   });
 
   // Get final Y position after table
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  y = (doc as any).lastAutoTable.finalY + 10;
+  y = (doc as any).lastAutoTable.finalY + 5;
 
-  // Comments section if there's space
-  const commentsWithText = confirmations.filter(c => c.notes && c.notes.trim());
-  if (commentsWithText.length > 0 && y < PAGE_HEIGHT - 80) {
-    doc.setTextColor(...COLORS.dark);
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('COMMENTS', MARGIN, y);
-    y += 7;
+  // QR Code and link - compact box at bottom (only if space available)
+  const qrBoxHeight = 22;
+  const footerStart = PAGE_HEIGHT - 15; // Where footer starts
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...COLORS.gray);
+  if (y < footerStart - qrBoxHeight - 5) {
+    // Position QR box just above footer
+    y = footerStart - qrBoxHeight - 5;
 
-    for (const conf of commentsWithText.slice(0, 5)) {
-      const item = items.find(i => i.id === conf.item_id);
-      const text = `${item?.assembly_mark || '-'}: ${conf.notes}`;
-      const lines = doc.splitTextToSize(text, CONTENT_WIDTH);
-      doc.text(lines, MARGIN, y);
-      y += lines.length * 4 + 2;
-      if (y > PAGE_HEIGHT - 60) break;
+    doc.setFillColor(...COLORS.lightGray);
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, qrBoxHeight, 2, 2, 'F');
+
+    // QR Code - compact
+    if (mainQRCode) {
+      doc.addImage(mainQRCode, 'PNG', MARGIN + 2, y + 1, 20, 20);
     }
+
+    // Link info - compact
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('View Online Gallery', MARGIN + 25, y + 8);
+
+    doc.setTextColor(...COLORS.primary);
+    doc.setFontSize(7);
+    doc.textWithLink(shareUrl, MARGIN + 25, y + 14, { url: shareUrl });
+
+    doc.setTextColor(...COLORS.gray);
+    doc.setFontSize(7);
+    doc.text('Scan QR or click link', MARGIN + 25, y + 19);
   }
-
-  // QR Code and link at bottom of first page
-  if (y < PAGE_HEIGHT - 70) {
-    y = PAGE_HEIGHT - 70;
-  }
-
-  doc.setFillColor(...COLORS.lightGray);
-  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 35, 3, 3, 'F');
-
-  // QR Code
-  if (mainQRCode) {
-    doc.addImage(mainQRCode, 'PNG', MARGIN + 5, y + 2, 31, 31);
-  }
-
-  // Link info
-  doc.setTextColor(...COLORS.dark);
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.text('View Full Report Online', MARGIN + 42, y + 12);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.gray);
-  doc.text('Scan QR code or visit:', MARGIN + 42, y + 20);
-
-  doc.setTextColor(...COLORS.primary);
-  doc.setFontSize(8);
-  doc.textWithLink(shareUrl, MARGIN + 42, y + 27, { url: shareUrl });
 
   drawFooter(doc, shareUrl, footerQRCode);
 
   // ============================================
-  // PHOTO PAGES
+  // PHOTO PAGES (COMPACT - 6 photos per page)
   // ============================================
 
   if (photos.length > 0) {
-    const photosPerPage = 4;
-    const photoWidth = (CONTENT_WIDTH - 10) / 2;
-    const photoHeight = 80;
+    const photosPerPage = 6;
+    const cols = 2;
+    const photoWidth = (CONTENT_WIDTH - 8) / cols;
+    const photoHeight = 70;
+    const captionHeight = 12;
+    const gapX = 8;
+    const gapY = 6;
+    const startY = 26; // After compact header
+    const maxY = PAGE_HEIGHT - 20; // Before footer
 
     for (let pageStart = 0; pageStart < photos.length; pageStart += photosPerPage) {
       doc.addPage();
@@ -431,60 +373,50 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
       drawHeader(doc, projectName, vehicle?.vehicle_code || '-', currentPage, totalPages);
 
       doc.setTextColor(...COLORS.dark);
-      doc.setFontSize(14);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text('PHOTO DOCUMENTATION', MARGIN, 38);
+      doc.text('PHOTOS', MARGIN, startY - 2);
 
       const pagePhotos = photos.slice(pageStart, pageStart + photosPerPage);
 
       for (let i = 0; i < pagePhotos.length; i++) {
         const photo = pagePhotos[i];
-        const row = Math.floor(i / 2);
-        const col = i % 2;
-        const x = MARGIN + (col * (photoWidth + 10));
-        const y = 45 + (row * (photoHeight + 25));
+        const row = Math.floor(i / cols);
+        const col = i % cols;
+        const x = MARGIN + (col * (photoWidth + gapX));
+        const y = startY + (row * (photoHeight + captionHeight + gapY));
+
+        // Skip if would exceed page
+        if (y + photoHeight + captionHeight > maxY) continue;
 
         // Photo frame
         doc.setFillColor(...COLORS.lightGray);
-        doc.roundedRect(x, y, photoWidth, photoHeight + 18, 2, 2, 'F');
+        doc.roundedRect(x, y, photoWidth, photoHeight + captionHeight, 2, 2, 'F');
 
         // Load and add photo
         try {
           const imgData = await loadImageAsDataURL(photo.file_url);
           if (imgData) {
-            // Calculate aspect ratio to fit
-            doc.addImage(imgData, 'JPEG', x + 2, y + 2, photoWidth - 4, photoHeight - 4, undefined, 'MEDIUM');
+            doc.addImage(imgData, 'JPEG', x + 1, y + 1, photoWidth - 2, photoHeight - 2, undefined, 'MEDIUM');
           }
         } catch {
-          // Draw placeholder
           doc.setTextColor(...COLORS.gray);
-          doc.setFontSize(10);
+          doc.setFontSize(8);
           doc.text('Photo not available', x + photoWidth / 2, y + photoHeight / 2, { align: 'center' });
         }
 
-        // Photo caption
+        // Caption - compact single line
         doc.setTextColor(...COLORS.dark);
-        doc.setFontSize(8);
+        doc.setFontSize(7);
         doc.setFont('helvetica', 'bold');
         const caption = getPhotoTypeLabelEnglish(photo.photo_type || 'general');
-        doc.text(caption, x + 5, y + photoHeight + 5);
-
-        // Photo date/time
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...COLORS.gray);
         const photoDate = new Date(photo.uploaded_at).toLocaleDateString('en-GB', {
           day: 'numeric',
           month: 'short',
           hour: '2-digit',
           minute: '2-digit'
         });
-        doc.text(photoDate, x + 5, y + photoHeight + 11);
-
-        // Small QR code for individual photo
-        const photoQR = await generateQRCode(photo.file_url, 60);
-        if (photoQR) {
-          doc.addImage(photoQR, 'PNG', x + photoWidth - 18, y + photoHeight + 1, 15, 15);
-        }
+        doc.text(`${caption} - ${photoDate}`, x + 3, y + photoHeight + 7);
       }
 
       drawFooter(doc, shareUrl, footerQRCode);
