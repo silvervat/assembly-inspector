@@ -4906,11 +4906,22 @@ export default function OrganizerScreen({
               setShowFilterMenu(false);
               const isOpening = groupMenuId !== node.id;
               setGroupMenuId(groupMenuId === node.id ? null : node.id);
-              // Scroll into view when opening menu to ensure it's visible
+              // Scroll only if menu would be cut off at bottom
               if (isOpening) {
+                const btn = e.currentTarget as HTMLElement;
                 setTimeout(() => {
-                  const btn = e.currentTarget as HTMLElement;
-                  btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  // Find the menu element that just appeared
+                  const menu = btn.parentElement?.querySelector('.org-group-menu') as HTMLElement;
+                  if (menu) {
+                    const menuRect = menu.getBoundingClientRect();
+                    const viewportHeight = window.innerHeight;
+                    // Check if menu bottom is below viewport
+                    if (menuRect.bottom > viewportHeight) {
+                      // Scroll just enough to show full menu (+ 16px padding)
+                      const scrollAmount = menuRect.bottom - viewportHeight + 16;
+                      window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    }
+                  }
                 }, 50);
               }
             }}
