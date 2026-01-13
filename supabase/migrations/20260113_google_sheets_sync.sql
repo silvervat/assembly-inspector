@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS trimble_sheets_sync_config (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   trimble_project_id TEXT NOT NULL,
 
+  -- Projekti nimi (Trimble Connect'ist)
+  project_name TEXT,
+
   -- Google Drive/Sheets info
   google_drive_folder_id TEXT NOT NULL,
   google_spreadsheet_id TEXT,
@@ -66,6 +69,10 @@ ALTER TABLE trimble_delivery_vehicles
 ADD COLUMN IF NOT EXISTS sheets_row_number INTEGER,
 ADD COLUMN IF NOT EXISTS sheets_last_modified TIMESTAMPTZ,
 ADD COLUMN IF NOT EXISTS sheets_checksum TEXT;
+
+-- Lisa project_name veerg kui puudub (olemasolevate andmebaaside jaoks)
+ALTER TABLE trimble_sheets_sync_config
+ADD COLUMN IF NOT EXISTS project_name TEXT;
 
 -- Indeksid
 CREATE INDEX IF NOT EXISTS idx_sheets_sync_config_project

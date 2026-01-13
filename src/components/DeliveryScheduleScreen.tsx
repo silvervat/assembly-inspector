@@ -3348,10 +3348,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
     setSheetsLoading(true);
 
+    // Get project name from Trimble API if not already loaded
+    let currentProjectName = projectName;
+    if (!currentProjectName && api) {
+      try {
+        const project = await api.project.getProject();
+        if (project?.name) {
+          currentProjectName = project.name;
+          setProjectName(project.name);
+        }
+      } catch (e) {
+        console.error('Error getting project name:', e);
+      }
+    }
+
     const { data, error } = await supabase
       .from('trimble_sheets_sync_config')
       .insert({
         trimble_project_id: projectId,
+        project_name: currentProjectName || null,
         google_drive_folder_id: '104KWXRGYHRUZMAKmNSYjiLR4IY8hKWaD',
         sheet_name: 'Veokid',
         sync_enabled: true,
