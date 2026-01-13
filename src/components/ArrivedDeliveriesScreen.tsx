@@ -1578,6 +1578,10 @@ export default function ArrivedDeliveriesScreen({
 
     setSaving(true);
     try {
+      // Get the item's GUID before deleting (for coloring white)
+      const itemToRemove = items.find(i => i.id === itemId);
+      const guidToColorWhite = itemToRemove?.guid_ifc;
+
       // Delete the confirmation first
       const { error: confError } = await supabase
         .from('trimble_arrival_confirmations')
@@ -1593,6 +1597,23 @@ export default function ArrivedDeliveriesScreen({
         .eq('id', itemId);
 
       if (itemError) throw itemError;
+
+      // Color the removed object white in the model
+      if (api && guidToColorWhite) {
+        try {
+          const foundObjects = await findObjectsInLoadedModels(api, [guidToColorWhite]);
+          if (foundObjects.size > 0) {
+            for (const [, found] of foundObjects) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
+                { color: { r: 255, g: 255, b: 255 } }
+              );
+            }
+          }
+        } catch (colorErr) {
+          console.warn('Could not color object white:', colorErr);
+        }
+      }
 
       // Reload data
       await Promise.all([loadItems(), loadConfirmations()]);
