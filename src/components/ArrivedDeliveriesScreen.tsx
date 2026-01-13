@@ -1452,6 +1452,46 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
+  // Remove item that was added from another vehicle (moves item back to original vehicle)
+  const removeAddedItem = async (confirmationId: string, itemId: string, sourceVehicleId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle detaili eemaldada? Detail tõstetakse tagasi algsesse veokisse.')) return;
+
+    setSaving(true);
+    try {
+      const sourceVehicle = getVehicle(sourceVehicleId);
+
+      // Delete the confirmation
+      const { error: confError } = await supabase
+        .from('trimble_arrival_confirmations')
+        .delete()
+        .eq('id', confirmationId);
+
+      if (confError) throw confError;
+
+      // Move the item back to its original vehicle
+      const { error: itemError } = await supabase
+        .from('trimble_delivery_items')
+        .update({
+          vehicle_id: sourceVehicleId,
+          scheduled_date: sourceVehicle?.scheduled_date,
+          updated_at: new Date().toISOString(),
+          updated_by: tcUserEmail
+        })
+        .eq('id', itemId);
+
+      if (itemError) throw itemError;
+
+      // Reload data
+      await Promise.all([loadItems(), loadConfirmations()]);
+      setMessage(`Detail tõstetud tagasi veokisse ${sourceVehicle?.vehicle_code || ''}`);
+    } catch (e: any) {
+      console.error('Error removing added item:', e);
+      setMessage('Viga detaili eemaldamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Upload photo with type
   const handlePhotoUpload = async (
     arrivedVehicleId: string,
@@ -1751,7 +1791,7 @@ export default function ArrivedDeliveriesScreen({
     // ============================================
     // Sheet 2: Detailid (Items)
     // ============================================
-    const itemsHeader = ['Nr', 'Tähis', 'Toote nimi', 'Kaal (kg)', 'Planeeritud kuupäev', 'Staatus', 'Kommentaar', 'Fotosid'];
+    const itemsHeader = ['Nr', 'Tähis', 'GUID', 'Toote nimi', 'Kaal (kg)', 'Planeeritud kuupäev', 'Staatus', 'Kommentaar', 'Fotosid'];
 
     const itemsData = vehicleItems.map((item, idx) => {
       const status = getItemConfirmationStatus(arrivedVehicleId, item.id);
@@ -1769,6 +1809,7 @@ export default function ArrivedDeliveriesScreen({
       return [
         idx + 1,
         item.assembly_mark || '-',
+        item.guid_ifc || item.guid || '-',
         item.product_name || '-',
         item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
         item.scheduled_date ? formatDateEstonian(item.scheduled_date) : '-',
@@ -1783,13 +1824,15 @@ export default function ArrivedDeliveriesScreen({
     addedItems.forEach((conf, idx) => {
       const item = items.find(i => i.id === conf.item_id);
       if (item) {
+        const isFromModel = !conf.source_vehicle_id;
         itemsData.push([
           `+${idx + 1}`,
           item.assembly_mark || '-',
+          item.guid_ifc || item.guid || '-',
           item.product_name || '-',
           item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
           item.scheduled_date ? formatDateEstonian(item.scheduled_date) : '-',
-          `Lisatud (${conf.source_vehicle_code || 'tundmatu veok'})`,
+          isFromModel ? 'Lisatud mudelist' : `Lisatud (${conf.source_vehicle_code || 'veok'})`,
           conf.notes || '-',
           0
         ]);
@@ -1805,8 +1848,8 @@ export default function ArrivedDeliveriesScreen({
     });
 
     wsItems['!cols'] = [
-      { wch: 6 }, { wch: 20 }, { wch: 30 }, { wch: 12 },
-      { wch: 16 }, { wch: 14 }, { wch: 40 }, { wch: 10 }
+      { wch: 6 }, { wch: 20 }, { wch: 36 }, { wch: 30 }, { wch: 12 },
+      { wch: 16 }, { wch: 20 }, { wch: 40 }, { wch: 10 }
     ];
 
     XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
@@ -1814,7 +1857,7 @@ export default function ArrivedDeliveriesScreen({
     // ============================================
     // Sheet 3: Erinevused (Discrepancies)
     // ============================================
-    const discrepancyHeader = ['Probleem', 'Tähis', 'Toote nimi', 'Kommentaar', 'Algne veok'];
+    const discrepancyHeader = ['Probleem', 'Tähis', 'GUID', 'Toote nimi', 'Kommentaar', 'Algne veok'];
     const discrepancyData: (string | number)[][] = [];
 
     // Missing items
@@ -1825,6 +1868,7 @@ export default function ArrivedDeliveriesScreen({
         discrepancyData.push([
           'Puudub',
           item?.assembly_mark || '-',
+          item?.guid_ifc || item?.guid || '-',
           item?.product_name || '-',
           conf.notes || '-',
           '-'
@@ -1839,6 +1883,7 @@ export default function ArrivedDeliveriesScreen({
         discrepancyData.push([
           'Vale veok',
           item?.assembly_mark || '-',
+          item?.guid_ifc || item?.guid || '-',
           item?.product_name || '-',
           conf.notes || '-',
           conf.source_vehicle_code || '-'
@@ -1854,6 +1899,7 @@ export default function ArrivedDeliveriesScreen({
         discrepancyData.push([
           isFromModel ? 'Lisatud mudelist' : 'Lisatud teisest veokist',
           item?.assembly_mark || '-',
+          item?.guid_ifc || item?.guid || '-',
           item?.product_name || '-',
           conf.notes || '-',
           isFromModel ? '-' : (conf.source_vehicle_code || '-')
@@ -1861,7 +1907,7 @@ export default function ArrivedDeliveriesScreen({
       });
 
     if (discrepancyData.length === 0) {
-      discrepancyData.push(['Erinevusi ei leitud', '-', '-', '-', '-']);
+      discrepancyData.push(['Erinevusi ei leitud', '-', '-', '-', '-', '-']);
     }
 
     const wsDiscrepancy = XLSX.utils.aoa_to_sheet([discrepancyHeader, ...discrepancyData]);
@@ -1872,7 +1918,7 @@ export default function ArrivedDeliveriesScreen({
     });
 
     wsDiscrepancy['!cols'] = [
-      { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 40 }, { wch: 15 }
+      { wch: 22 }, { wch: 20 }, { wch: 36 }, { wch: 30 }, { wch: 40 }, { wch: 15 }
     ];
 
     XLSX.utils.book_append_sheet(wb, wsDiscrepancy, 'Erinevused');
@@ -1985,7 +2031,7 @@ export default function ArrivedDeliveriesScreen({
     // Sheet 2: Kõik detailid (All items)
     // ============================================
     const allItemsHeader = [
-      'Veok', 'Tähis', 'Toote nimi', 'Kaal (kg)', 'Staatus', 'Kommentaar'
+      'Veok', 'Tähis', 'GUID', 'Toote nimi', 'Kaal (kg)', 'Staatus', 'Kommentaar'
     ];
 
     const allItemsData: (string | number)[][] = [];
@@ -2009,6 +2055,7 @@ export default function ArrivedDeliveriesScreen({
         allItemsData.push([
           vehicle?.vehicle_code || '-',
           item.assembly_mark || '-',
+          item.guid_ifc || item.guid || '-',
           item.product_name || '-',
           item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)) : '-',
           statusLabels[status],
@@ -2025,7 +2072,7 @@ export default function ArrivedDeliveriesScreen({
     });
 
     wsAllItems['!cols'] = [
-      { wch: 12 }, { wch: 20 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 40 }
+      { wch: 12 }, { wch: 20 }, { wch: 36 }, { wch: 30 }, { wch: 12 }, { wch: 12 }, { wch: 40 }
     ];
 
     XLSX.utils.book_append_sheet(wb, wsAllItems, 'Kõik detailid');
@@ -3542,41 +3589,108 @@ export default function ArrivedDeliveriesScreen({
                               );
                             })}
 
-                            {/* Added items from other vehicles or model - only show when not searching */}
-                            {!searchTerm && arrivalConfirmations
-                              .filter(c => c.status === 'added')
-                              .map((conf, idx) => {
-                                const item = items.find(i => i.id === conf.item_id);
-                                if (!item) return null;
-                                const isFromModel = !conf.source_vehicle_id; // No source = added from model
-                                return (
-                                  <div key={conf.id} className={`item-row added ${isFromModel ? 'from-model' : ''}`}>
-                                    <span className="item-index">+{idx + 1}</span>
-                                    <div className="item-info">
-                                      <span className="item-mark">{item.assembly_mark}</span>
-                                      <span className="item-source">
-                                        {isFromModel ? '(mudelist lisatud)' : `(veokist ${conf.source_vehicle_code})`}
-                                      </span>
+                            {/* Separate sections for added items - only show when not searching */}
+                            {(() => {
+                              if (searchTerm) return null;
+
+                              const addedConfs = arrivalConfirmations.filter(c => c.status === 'added');
+                              const fromVehicle = addedConfs.filter(c => c.source_vehicle_id);
+                              const fromModel = addedConfs.filter(c => !c.source_vehicle_id);
+
+                              return (
+                                <>
+                                  {/* Items added from other vehicles */}
+                                  {fromVehicle.length > 0 && (
+                                    <div className="added-items-section from-vehicle">
+                                      <div className="section-header compact">
+                                        <FiTruck className="section-icon" size={12} />
+                                        <span>Saabunud teisest veokist ({fromVehicle.length})</span>
+                                      </div>
+                                      <div className="items-list compact">
+                                        {fromVehicle.map((conf, idx) => {
+                                          const item = items.find(i => i.id === conf.item_id);
+                                          if (!item) return null;
+                                          return (
+                                            <div
+                                              key={conf.id}
+                                              className="item-row added-from-vehicle"
+                                              onClick={() => item?.guid_ifc && selectObjectsByGuid(api, [item.guid_ifc])}
+                                              style={{ cursor: item?.guid_ifc ? 'pointer' : 'default' }}
+                                            >
+                                              <span className="item-index">+{idx + 1}</span>
+                                              <div className="item-info inline">
+                                                <span className="item-mark">{item.assembly_mark}</span>
+                                                <span className="item-name">{item.product_name || ''}</span>
+                                              </div>
+                                              <div className="item-source-info">
+                                                <FiArrowLeft size={10} />
+                                                <span>{conf.source_vehicle_code}</span>
+                                              </div>
+                                              {!arrivedVehicle.is_confirmed && (
+                                                <button
+                                                  className="delete-btn"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    removeAddedItem(conf.id, item.id, conf.source_vehicle_id || '');
+                                                  }}
+                                                  disabled={saving}
+                                                  title="Eemalda detail"
+                                                >
+                                                  <FiTrash2 size={12} />
+                                                </button>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-                                    <div className="item-actions">
-                                      <StatusBadge status="added" />
-                                      {isFromModel && !arrivedVehicle.is_confirmed && (
-                                        <button
-                                          className="delete-btn"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            removeModelAddedItem(conf.id, item.id);
-                                          }}
-                                          disabled={saving}
-                                          title="Eemalda detail"
-                                        >
-                                          <FiTrash2 size={12} />
-                                        </button>
-                                      )}
+                                  )}
+
+                                  {/* Items added from model (not in delivery schedule) */}
+                                  {fromModel.length > 0 && (
+                                    <div className="added-items-section from-model">
+                                      <div className="section-header compact">
+                                        <FiPlus className="section-icon" size={12} />
+                                        <span>Saabunud ilma tarnegraafikuta ({fromModel.length})</span>
+                                      </div>
+                                      <div className="items-list compact">
+                                        {fromModel.map((conf, idx) => {
+                                          const item = items.find(i => i.id === conf.item_id);
+                                          if (!item) return null;
+                                          return (
+                                            <div
+                                              key={conf.id}
+                                              className="item-row added-from-model"
+                                              onClick={() => item?.guid_ifc && selectObjectsByGuid(api, [item.guid_ifc])}
+                                              style={{ cursor: item?.guid_ifc ? 'pointer' : 'default' }}
+                                            >
+                                              <span className="item-index">+{idx + 1}</span>
+                                              <div className="item-info inline">
+                                                <span className="item-mark">{item.assembly_mark}</span>
+                                                <span className="item-name">{item.product_name || ''}</span>
+                                              </div>
+                                              {!arrivedVehicle.is_confirmed && (
+                                                <button
+                                                  className="delete-btn"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    removeModelAddedItem(conf.id, item.id);
+                                                  }}
+                                                  disabled={saving}
+                                                  title="Eemalda detail"
+                                                >
+                                                  <FiTrash2 size={12} />
+                                                </button>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                           );
