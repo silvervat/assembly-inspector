@@ -23,7 +23,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.515';
+export const APP_VERSION = '3.0.516';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -46,23 +46,27 @@ interface SelectedInspectionType {
 const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'delivery';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 
-// Check if this is a share gallery page (/share/:token)
-// Also handles GitHub Pages 404 redirect: /?p=/share/token
-const pathMatch = window.location.pathname.match(/^\/share\/([a-f0-9]+)$/i);
+// Check if this is a share gallery page
+// Path can be: /share/token OR /assembly-inspector/share/token (with base path)
+// Also handles GitHub Pages 404 redirect: /?p=/assembly-inspector/share/token
+const basePath = import.meta.env.BASE_URL || '/';
+const sharePathRegex = /\/share\/([a-f0-9]+)$/i;
+const pathMatch = window.location.pathname.match(sharePathRegex);
 let isShareMode = !!pathMatch;
 let shareToken = pathMatch ? pathMatch[1] : '';
 
-// GitHub Pages 404.html redirects to /?p=/share/token
+// GitHub Pages 404.html redirects to /?p=/assembly-inspector/share/token
 // Extract share token from query parameter if not found in path
 if (!isShareMode) {
   const redirectPath = new URLSearchParams(window.location.search).get('p');
   if (redirectPath) {
-    const redirectMatch = redirectPath.match(/^\/share\/([a-f0-9]+)$/i);
+    const redirectMatch = redirectPath.match(sharePathRegex);
     if (redirectMatch) {
       isShareMode = true;
       shareToken = redirectMatch[1];
-      // Clean up URL to show proper share path
-      window.history.replaceState(null, '', `/share/${shareToken}`);
+      // Clean up URL to show proper share path with base
+      const cleanBase = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
+      window.history.replaceState(null, '', `${cleanBase}/share/${shareToken}`);
     }
   }
 }
