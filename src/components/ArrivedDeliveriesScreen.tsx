@@ -263,13 +263,6 @@ const ItemRow = memo(({
               >
                 <FiX size={12} />
               </button>
-              <button
-                className="action-btn wrong"
-                onClick={() => onConfirmItem(item.id, 'wrong_vehicle')}
-                title="Vale veok"
-              >
-                <FiAlertTriangle size={12} />
-              </button>
             </>
           ) : (
             <button
@@ -1134,8 +1127,8 @@ export default function ArrivedDeliveriesScreen({
         }
       }
 
-      // If item is missing or wrong vehicle, log discrepancy in delivery history
-      if (status === 'missing' || status === 'wrong_vehicle') {
+      // If item is missing, log discrepancy in delivery history
+      if (status === 'missing') {
         const item = items.find(i => i.id === itemId);
         if (item) {
           await supabase.from('trimble_delivery_history').insert({
@@ -1144,8 +1137,8 @@ export default function ArrivedDeliveriesScreen({
             vehicle_id: item.vehicle_id,
             change_type: 'status_changed',
             old_status: item.status,
-            new_status: status === 'missing' ? 'missing' : 'wrong_delivery',
-            change_reason: status === 'missing' ? 'Puudub saabunud veokist' : 'Saabus vale veokiga',
+            new_status: 'missing',
+            change_reason: 'Puudub saabunud veokist',
             changed_by: tcUserEmail,
             is_snapshot: false
           });
@@ -1214,7 +1207,7 @@ export default function ArrivedDeliveriesScreen({
       const statusLabels: Record<ArrivalItemStatus, string> = {
         confirmed: 'kinnitatud',
         missing: 'märgitud puuduvaks',
-        wrong_vehicle: 'märgitud vale veoki alla',
+        wrong_vehicle: 'muudetud', // Legacy - pole enam kasutusel
         pending: 'ootel',
         added: 'lisatud'
       };
@@ -3644,7 +3637,21 @@ export default function ArrivedDeliveriesScreen({
                         <div className="items-section">
                           <div className="items-header">
                             <div className="items-title-row">
-                              <h3>Detailid ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
+                              <h3
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => {
+                                  // Select all arrived (confirmed) items in model
+                                  const arrivedGuids = arrivalConfirmations
+                                    .filter(c => c.status === 'confirmed')
+                                    .map(c => items.find(i => i.id === c.item_id)?.guid_ifc)
+                                    .filter(Boolean) as string[];
+                                  if (arrivedGuids.length > 0) {
+                                    selectObjectsByGuid(api, arrivedGuids);
+                                    setMessage(`${arrivedGuids.length} detaili märgistatud mudelis`);
+                                  }
+                                }}
+                                title="Märgista kõik saabunud detailid mudelis"
+                              >Detailid ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
                               <div className="items-title-buttons">
                                 <button
                                   className="add-item-btn"
@@ -3762,7 +3769,19 @@ export default function ArrivedDeliveriesScreen({
                                   {/* Items added from other vehicles */}
                                   {fromVehicle.length > 0 && (
                                     <div className="added-items-section from-vehicle">
-                                      <div className="section-header compact">
+                                      <div
+                                        className="section-header compact clickable"
+                                        onClick={() => {
+                                          const guids = fromVehicle
+                                            .map(c => items.find(i => i.id === c.item_id)?.guid_ifc)
+                                            .filter(Boolean) as string[];
+                                          if (guids.length > 0) {
+                                            selectObjectsByGuid(api, guids);
+                                            setMessage(`${guids.length} detaili märgistatud mudelis`);
+                                          }
+                                        }}
+                                        title="Märgista mudelis"
+                                      >
                                         <FiTruck className="section-icon" size={12} />
                                         <span>Saabunud teisest veokist ({fromVehicle.length})</span>
                                       </div>
@@ -3809,7 +3828,19 @@ export default function ArrivedDeliveriesScreen({
                                   {/* Items added from model (not in delivery schedule) */}
                                   {fromModel.length > 0 && (
                                     <div className="added-items-section from-model">
-                                      <div className="section-header compact">
+                                      <div
+                                        className="section-header compact clickable"
+                                        onClick={() => {
+                                          const guids = fromModel
+                                            .map(c => items.find(i => i.id === c.item_id)?.guid_ifc)
+                                            .filter(Boolean) as string[];
+                                          if (guids.length > 0) {
+                                            selectObjectsByGuid(api, guids);
+                                            setMessage(`${guids.length} detaili märgistatud mudelis`);
+                                          }
+                                        }}
+                                        title="Märgista mudelis"
+                                      >
                                         <FiPlus className="section-icon" size={12} />
                                         <span>Saabunud ilma tarnegraafikuta ({fromModel.length})</span>
                                       </div>
@@ -3859,7 +3890,19 @@ export default function ArrivedDeliveriesScreen({
                         {/* Removed items - items that were supposed to be here but arrived with another vehicle */}
                         {removedItems.length > 0 && (
                           <div className="removed-items-section">
-                            <div className="section-header compact">
+                            <div
+                              className="section-header compact clickable"
+                              onClick={() => {
+                                const guids = removedItems
+                                  .map(r => r.item?.guid_ifc)
+                                  .filter(Boolean) as string[];
+                                if (guids.length > 0) {
+                                  selectObjectsByGuid(api, guids);
+                                  setMessage(`${guids.length} detaili märgistatud mudelis`);
+                                }
+                              }}
+                              title="Märgista mudelis"
+                            >
                               <FiAlertTriangle className="warning-icon" size={12} />
                               <span>Tarnest eemaldatud ({removedItems.length})</span>
                               <span className="section-hint">Saabusid teise veokiga</span>
@@ -3999,7 +4042,15 @@ export default function ArrivedDeliveriesScreen({
                     .filter((c: ArrivalItemConfirmation) => c.arrived_vehicle_id === activeArrivalId)
                     .map((c: ArrivalItemConfirmation) => c.item_id)
                 );
-                const availableItems = sourceItems.filter(item => !alreadyAddedIds.has(item.id));
+                // Also filter out items that are already confirmed in ANY arrival
+                const confirmedItemIds = new Set(
+                  confirmations
+                    .filter((c: ArrivalItemConfirmation) => c.status === 'confirmed')
+                    .map((c: ArrivalItemConfirmation) => c.item_id)
+                );
+                const availableItems = sourceItems.filter(item =>
+                  !alreadyAddedIds.has(item.id) && !confirmedItemIds.has(item.id)
+                );
                 // Apply search filter
                 const searchLower = addItemSearchTerm.toLowerCase().trim();
                 const filteredItems = searchLower

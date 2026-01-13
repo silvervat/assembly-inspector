@@ -6792,6 +6792,15 @@ button.stat-toggle.off:hover {
   color: #92400e;
 }
 
+.arrived-deliveries .section-header.compact.clickable {
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+
+.arrived-deliveries .section-header.compact.clickable:hover {
+  filter: brightness(0.95);
+}
+
 .arrived-deliveries .section-header.compact .warning-icon {
   color: #d97706;
 }
