@@ -925,7 +925,9 @@ export default function ArrivedDeliveriesScreen({
   };
 
   const getVehicleItems = (vehicleId: string) => {
-    return items.filter(i => i.vehicle_id === vehicleId);
+    return items
+      .filter(i => i.vehicle_id === vehicleId)
+      .sort((a, b) => (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et'));
   };
 
   const getConfirmationsForArrival = (arrivedVehicleId: string) => {
@@ -2364,9 +2366,14 @@ export default function ArrivedDeliveriesScreen({
   }, [itemPhotosMap]);
 
   // Precompute duplicate counts per vehicle: { vehicleId: { assemblyMark: { count, indices: { itemId: index } } } }
+  // Sort items by assembly_mark first so indices match display order (alphabetical)
   const duplicateCountsMap = useMemo(() => {
     const map = new Map<string, Map<string, { count: number; indices: Map<string, number> }>>();
-    items.forEach(item => {
+    // Sort items by assembly_mark to ensure consistent ordering
+    const sortedItems = [...items].sort((a, b) =>
+      (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et')
+    );
+    sortedItems.forEach(item => {
       if (!item.vehicle_id) return;
       if (!map.has(item.vehicle_id)) map.set(item.vehicle_id, new Map());
       const vehicleMap = map.get(item.vehicle_id)!;

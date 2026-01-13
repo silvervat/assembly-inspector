@@ -6958,6 +6958,69 @@ button.stat-toggle.off:hover {
   font-size: 10px;
 }
 
+/* Moved items section for delivery schedule - items moved to other vehicles */
+.moved-items-section {
+  margin-top: 8px;
+  background: #fef2f2;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.moved-items-section.removed {
+  background: #fef2f2;
+}
+
+.moved-items-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #dc2626;
+  margin-bottom: 6px;
+}
+
+.moved-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.moved-item-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.moved-item-row:hover {
+  background: #fee2e2;
+}
+
+.moved-item-mark {
+  font-weight: 600;
+  color: #111827;
+}
+
+.moved-item-arrow {
+  color: #9ca3af;
+  font-size: 11px;
+}
+
+.moved-item-vehicle {
+  color: #059669;
+  font-weight: 500;
+}
+
+.moved-items-date {
+  color: #6b7280;
+  font-size: 11px;
+}
+
 /* Complete section */
 .arrived-deliveries .complete-section {
   margin-top: 20px;

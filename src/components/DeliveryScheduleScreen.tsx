@@ -7010,33 +7010,30 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                     <FiExternalLink size={12} />
                                     <span>Eemaldatud detailid ({movedItems.length})</span>
                                   </div>
-                                  {Array.from(byArrivedVehicle.values()).map(group => (
-                                    <div key={group.arrivedVehicleId} className="moved-items-group">
-                                      <div className="moved-items-vehicle-header">
-                                        <span
-                                          className="moved-item-vehicle clickable"
-                                          onClick={() => loadArrivedVehicleDetails(group.arrivedVehicleId)}
+                                  <div className="moved-items-list">
+                                    {movedItems.map(conf => {
+                                      const item = items.find(i => i.id === conf.item_id);
+                                      if (!item) return null;
+                                      const arrivedVehicle = (conf as any).arrived_vehicle;
+                                      const vehicleCode = arrivedVehicle?.vehicle?.vehicle_code || 'tundmatu';
+                                      const arrivalDate = arrivedVehicle?.arrival_date;
+                                      return (
+                                        <div
+                                          key={conf.id}
+                                          className="moved-item-row"
+                                          onClick={() => arrivedVehicle?.id && loadArrivedVehicleDetails(arrivedVehicle.id)}
                                           title="Klõpsa saabumise detailide nägemiseks"
                                         >
-                                          {group.vehicleCode}
-                                        </span>
-                                        {group.arrivalDate && (
-                                          <span className="moved-items-date">
-                                            ({formatDateShort(group.arrivalDate)})
-                                          </span>
-                                        )}
-                                      </div>
-                                      {group.items.map(conf => {
-                                        const item = items.find(i => i.id === conf.item_id);
-                                        if (!item) return null;
-                                        return (
-                                          <div key={conf.id} className="moved-item">
-                                            <span className="moved-item-mark">{item.assembly_mark}</span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ))}
+                                          <span className="moved-item-mark">{item.assembly_mark}</span>
+                                          <span className="moved-item-arrow">→</span>
+                                          <span className="moved-item-vehicle">{vehicleCode}</span>
+                                          {arrivalDate && (
+                                            <span className="moved-items-date">({formatDateShort(arrivalDate)})</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               );
                             })()}
