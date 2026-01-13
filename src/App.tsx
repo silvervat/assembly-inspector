@@ -10,6 +10,7 @@ import DeliveryScheduleScreen from './components/DeliveryScheduleScreen';
 import OrganizerScreen from './components/OrganizerScreen';
 import ArrivedDeliveriesScreen from './components/ArrivedDeliveriesScreen';
 import IssuesScreen from './components/IssuesScreen';
+import DeliveryShareGallery from './components/DeliveryShareGallery';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -22,7 +23,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.505';
+export const APP_VERSION = '3.0.507';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -44,6 +45,11 @@ interface SelectedInspectionType {
 // Check if running in popup mode
 const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'delivery';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
+
+// Check if this is a share gallery page (/share/:token)
+const pathMatch = window.location.pathname.match(/^\/share\/([a-f0-9]+)$/i);
+const isShareMode = !!pathMatch;
+const shareToken = pathMatch ? pathMatch[1] : '';
 
 // Check if this is a zoom link redirect (from shared link)
 const urlParams = new URLSearchParams(window.location.search);
@@ -624,6 +630,11 @@ export default function App() {
       </div>
     );
   };
+
+  // Share gallery mode - public page without authentication
+  if (isShareMode && shareToken) {
+    return <DeliveryShareGallery token={shareToken} />;
+  }
 
   // Popup mode - show only delivery schedule
   if (isPopupMode && projectId) {

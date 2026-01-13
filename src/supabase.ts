@@ -1457,6 +1457,43 @@ export interface IssueActivityLog {
 }
 
 // ============================================
+// DELIVERY SHARE LINKS
+// ============================================
+
+// Secure share link for delivery reports
+export interface DeliveryShareLink {
+  id: string;
+  trimble_project_id: string;
+  arrived_vehicle_id: string;
+
+  // Secure token (48 char hex string)
+  share_token: string;
+
+  // Cached metadata for quick access
+  project_name: string;
+  vehicle_code: string;
+  arrival_date: string;
+
+  // Access control
+  is_active: boolean;
+  expires_at?: string;
+  view_count: number;
+  last_viewed_at?: string;
+
+  // Audit
+  created_at: string;
+  created_by?: string;
+
+  // Joined data (when fetching with relations)
+  arrived_vehicle?: ArrivedVehicle & {
+    vehicle?: DeliveryVehicle;
+  };
+  confirmations?: ArrivalItemConfirmation[];
+  photos?: ArrivalPhoto[];
+  items?: DeliveryItem[];
+}
+
+// ============================================
 // ISSUE STATUS & PRIORITY CONFIGS
 // ============================================
 
