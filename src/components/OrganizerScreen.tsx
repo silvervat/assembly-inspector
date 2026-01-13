@@ -4900,7 +4900,20 @@ export default function OrganizerScreen({
 
           <button
             className={`org-menu-btn ${groupMenuId === node.id ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setShowSortMenu(false); setShowFilterMenu(false); setGroupMenuId(groupMenuId === node.id ? null : node.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSortMenu(false);
+              setShowFilterMenu(false);
+              const isOpening = groupMenuId !== node.id;
+              setGroupMenuId(groupMenuId === node.id ? null : node.id);
+              // Scroll into view when opening menu to ensure it's visible
+              if (isOpening) {
+                setTimeout(() => {
+                  const btn = e.currentTarget as HTMLElement;
+                  btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 50);
+              }
+            }}
           >
             <FiMoreVertical size={14} />
           </button>
