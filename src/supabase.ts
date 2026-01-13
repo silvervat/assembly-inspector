@@ -1600,3 +1600,45 @@ export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
   issue_cancelled: 'Probleem tühistatud'
 };
 
+// ============================================
+// GOOGLE SHEETS SYNC TYPES
+// ============================================
+
+export interface SheetsSyncConfig {
+  id: string;
+  trimble_project_id: string;
+  google_drive_folder_id: string;
+  google_spreadsheet_id: string | null;
+  google_spreadsheet_url: string | null;
+  sheet_name: string;
+  sync_enabled: boolean;
+  sync_interval_minutes: number;
+  last_sync_to_sheets: string | null;
+  last_sync_from_sheets: string | null;
+  last_full_sync: string | null;
+  sync_status: 'not_initialized' | 'idle' | 'syncing' | 'error';
+  last_error: string | null;
+  last_error_at: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+}
+
+export interface SheetsSyncLog {
+  id: string;
+  config_id: string;
+  trimble_project_id: string;
+  sync_direction: 'to_sheets' | 'from_sheets' | 'full';
+  sync_type: 'auto' | 'manual' | 'initial';
+  vehicles_processed: number;
+  vehicles_created: number;
+  vehicles_updated: number;
+  vehicles_deleted: number;
+  errors_count: number;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+  error_details: Record<string, unknown> | null;
+  triggered_by: string | null;
+}
+
