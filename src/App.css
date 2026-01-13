@@ -6829,6 +6829,76 @@ button.stat-toggle.off:hover {
   color: #6b7280;
 }
 
+/* Added items sections */
+.arrived-deliveries .added-items-section {
+  margin-top: 12px;
+  border-radius: 6px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.arrived-deliveries .added-items-section.from-vehicle {
+  background: #fef9c3;
+}
+
+.arrived-deliveries .added-items-section.from-vehicle .section-header.compact {
+  background: #facc15;
+  color: #854d0e;
+}
+
+.arrived-deliveries .added-items-section.from-vehicle .section-icon {
+  color: #a16207;
+}
+
+.arrived-deliveries .added-items-section.from-model {
+  background: #ffedd5;
+}
+
+.arrived-deliveries .added-items-section.from-model .section-header.compact {
+  background: #fb923c;
+  color: #7c2d12;
+}
+
+.arrived-deliveries .added-items-section.from-model .section-icon {
+  color: #c2410c;
+}
+
+.arrived-deliveries .item-row.added-from-vehicle {
+  background: #fefce8;
+  border-bottom: 1px solid #fef9c3;
+}
+
+.arrived-deliveries .item-row.added-from-vehicle:last-child {
+  border-bottom: none;
+}
+
+.arrived-deliveries .item-row.added-from-vehicle:hover {
+  background: #fef9c3;
+}
+
+.arrived-deliveries .item-row.added-from-model {
+  background: #fff7ed;
+  border-bottom: 1px solid #ffedd5;
+}
+
+.arrived-deliveries .item-row.added-from-model:last-child {
+  border-bottom: none;
+}
+
+.arrived-deliveries .item-row.added-from-model:hover {
+  background: #ffedd5;
+}
+
+.arrived-deliveries .item-source-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #a16207;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
 /* Compact model selection items */
 .arrived-deliveries .model-selected-items.compact {
   display: flex;
