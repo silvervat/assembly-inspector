@@ -12252,13 +12252,19 @@ button.stat-toggle.off:hover {
   font-weight: 600;
   color: #6b7280;
   position: sticky;
-  top: 0;
-  z-index: 1;
+  top: 28px;
+  z-index: 9;
 }
 
-/* Keep header below the blue outline of expanded root groups */
-.org-group-section.expanded-root .org-items-header {
-  top: 1px;
+/* Subgroup items header - stack below subgroup header */
+.org-subgroups .org-items-header {
+  top: 28px;
+  z-index: 8;
+}
+
+.org-subgroups .org-subgroups .org-items-header {
+  top: 28px;
+  z-index: 7;
 }
 
 /* Header cells match item row cells */
