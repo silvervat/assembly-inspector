@@ -10,9 +10,13 @@
     var search = window.location.search;
     var hash = window.location.hash;
 
+    // Base path must match vite.config.ts base setting
+    var basePath = '/assembly-inspector';
+
     // Redirect to index with path info preserved
     window.location.replace(
       window.location.origin +
+      basePath +
       '/?p=' + encodeURIComponent(path) +
       (search ? '&q=' + encodeURIComponent(search) : '') +
       hash
