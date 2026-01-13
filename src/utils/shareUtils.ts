@@ -177,12 +177,29 @@ export async function getShareLinkByToken(token: string): Promise<{
       .eq('arrived_vehicle_id', shareLink.arrived_vehicle_id)
       .order('confirmed_at', { ascending: true });
 
-    // Fetch photos
-    const { data: photos } = await supabase
+    // Fetch photos - try by arrived_vehicle_id first, then by project + vehicle combo
+    let photos: ArrivalPhoto[] = [];
+    const { data: photosData } = await supabase
       .from('trimble_arrival_photos')
       .select('*')
       .eq('arrived_vehicle_id', shareLink.arrived_vehicle_id)
       .order('created_at', { ascending: true });
+
+    photos = photosData || [];
+
+    // If no photos found by arrived_vehicle_id, try by project_id
+    if (photos.length === 0 && shareLink.trimble_project_id) {
+      const { data: projectPhotos } = await supabase
+        .from('trimble_arrival_photos')
+        .select('*')
+        .eq('trimble_project_id', shareLink.trimble_project_id)
+        .order('created_at', { ascending: true });
+
+      // Filter to only photos for this vehicle (if arrived_vehicle has vehicle_id)
+      if (projectPhotos && projectPhotos.length > 0) {
+        photos = projectPhotos;
+      }
+    }
 
     // Get item IDs from confirmations and fetch items
     const itemIds = [...new Set((confirmations || []).map(c => c.item_id))];
@@ -297,4 +314,23 @@ export function getPhotoTypeLabelEnglish(type: string): string {
     damage: 'Damage'
   };
   return labels[type] || type;
+}
+
+/**
+ * Translate Estonian notes to English
+ */
+export function translateNotesToEnglish(notes: string | null | undefined): string {
+  if (!notes) return '';
+
+  let translated = notes;
+
+  // Common patterns - order matters (more specific first)
+  translated = translated.replace(/Lisatud mudelist \(polnud tarnegraafikus\)/gi, 'Added from model (not in delivery schedule)');
+  translated = translated.replace(/Lisatud mudelist/gi, 'Added from model');
+  translated = translated.replace(/Lisatud veokist/gi, 'Added from vehicle');
+  translated = translated.replace(/saabus veokiga/gi, 'arrived with vehicle');
+  translated = translated.replace(/Detail/gi, 'Item');
+  translated = translated.replace(/polnud tarnegraafikus/gi, 'not in delivery schedule');
+
+  return translated;
 }

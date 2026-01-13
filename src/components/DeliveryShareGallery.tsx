@@ -21,7 +21,8 @@ import {
   formatDateEnglish,
   formatTime,
   getStatusLabelEnglish,
-  getPhotoTypeLabelEnglish
+  getPhotoTypeLabelEnglish,
+  translateNotesToEnglish
 } from '../utils/shareUtils';
 import {
   FiCheck,
@@ -179,7 +180,7 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
         item.product_name || '-',
         item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)).toString() : '-',
         getStatusLabelEnglish(status),
-        comment || '-',
+        translateNotesToEnglish(comment) || '-',
         item.guid_ifc || item.guid || '-'
       ]);
     });
@@ -398,7 +399,7 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
           {arrivedVehicle.notes && (
             <div className="vehicle-notes">
               <span className="notes-label">Notes:</span>
-              <span className="notes-text">{arrivedVehicle.notes}</span>
+              <span className="notes-text">{translateNotesToEnglish(arrivedVehicle.notes)}</span>
             </div>
           )}
         </section>
@@ -442,7 +443,7 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
                           <span>{getStatusLabelEnglish(status)}</span>
                         </div>
                       </td>
-                      <td className="comment">{comment || '-'}</td>
+                      <td className="comment">{translateNotesToEnglish(comment) || '-'}</td>
                       <td className="guid">{item.guid_ifc || item.guid || '-'}</td>
                     </tr>
                   );
@@ -513,7 +514,7 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
                   return (
                     <div key={conf.id} className="note-item">
                       <span className="note-mark">{item?.assembly_mark || '-'}</span>
-                      <span className="note-text">{conf.notes}</span>
+                      <span className="note-text">{translateNotesToEnglish(conf.notes)}</span>
                     </div>
                   );
                 })}
