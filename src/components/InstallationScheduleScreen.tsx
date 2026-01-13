@@ -3979,8 +3979,8 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     if (targetIndex < 0) targetIndex = 0;
     if (targetIndex >= allItems.length) targetIndex = allItems.length - 1;
 
-    // Reset all items to white first
-    await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+    // Reset database items to white first (only objects in trimble_model_objects)
+    await colorEntireModelWhite();
 
     // For day-by-day mode, find which day index we're on
     if (playbackSettings.playByDay) {

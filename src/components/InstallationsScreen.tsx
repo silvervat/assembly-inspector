@@ -1628,6 +1628,72 @@ export default function InstallationsScreen({
     }
   };
 
+  // Color all database objects white (only objects from trimble_model_objects)
+  const colorDatabaseObjectsWhite = async () => {
+    try {
+      // Use cache if available, otherwise fetch from DB
+      let foundByLowercase = foundObjectsCacheRef.current;
+
+      if (foundByLowercase.size === 0) {
+        // Fetch from database
+        const PAGE_SIZE = 5000;
+        const allGuids: string[] = [];
+        let offset = 0;
+
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null)
+            .range(offset, offset + PAGE_SIZE - 1);
+
+          if (error) {
+            console.error('Supabase error:', error);
+            return;
+          }
+          if (!data || data.length === 0) break;
+
+          for (const obj of data) {
+            if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+          }
+          offset += data.length;
+          if (data.length < PAGE_SIZE) break;
+        }
+
+        const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+        // Build cache
+        foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const [guid, found] of foundObjects) {
+          foundByLowercase.set(guid.toLowerCase(), found);
+        }
+        foundObjectsCacheRef.current = foundByLowercase;
+      }
+
+      // Group by model
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [, found] of foundByLowercase) {
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
+      }
+
+      // Color in batches
+      const BATCH_SIZE = 5000;
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+    } catch (e) {
+      console.error('Error coloring database objects white:', e);
+    }
+  };
+
   // Handle back to menu - reset colors first
   const handleBackToMenu = async () => {
     await resetColors();
@@ -3268,13 +3334,13 @@ export default function InstallationsScreen({
   };
 
   // Start playback
-  const startPlayback = () => {
+  const startPlayback = async () => {
     if (installations.length === 0) return;
     setIsPlaying(true);
     setIsPaused(false);
     setCurrentPlayIndex(0);
-    // Reset model to white
-    api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+    // Reset database objects to white (only objects from trimble_model_objects)
+    await colorDatabaseObjectsWhite();
   };
 
   // Pause playback
@@ -3315,8 +3381,8 @@ export default function InstallationsScreen({
     }
     setIsPaused(true);
 
-    // Reset to white first
-    await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+    // Reset database objects to white first (only objects from trimble_model_objects)
+    await colorDatabaseObjectsWhite();
 
     // Color all items up to target in green
     const itemsToColor = allItems.slice(0, targetIndex + 1);
