@@ -12,7 +12,7 @@ import {
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
-  FiFileText, FiDownload, FiSearch, FiDroplet
+  FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 
@@ -618,7 +618,8 @@ export default function ArrivedDeliveriesScreen({
           for (const prop of ps.properties) {
             const pName = (prop.name || '').replace(/\s+/g, '').toLowerCase();
             if (pName === normalizedPropName) {
-              return prop.value?.toString();
+              const val = (prop as any).displayValue ?? (prop as any).value;
+              return val?.toString();
             }
           }
         }
@@ -629,11 +630,90 @@ export default function ArrivedDeliveriesScreen({
       for (const prop of obj.properties) {
         const pName = (prop.name || '').replace(/\s+/g, '').toLowerCase();
         if (pName === normalizedPropName) {
-          return prop.value?.toString();
+          const val = (prop as any).displayValue ?? (prop as any).value;
+          return val?.toString();
         }
       }
     }
     return undefined;
+  }, []);
+
+  // Helper to extract assembly mark with fallbacks (like DeliveryScheduleScreen)
+  const extractAssemblyMark = useCallback((objProps: any, mappings: typeof propertyMappings): string | undefined => {
+    const propSets = objProps.propertySets || objProps.properties || [];
+    let assemblyMark: string | undefined;
+
+    for (const pset of propSets) {
+      const setName = (pset.name || '').toLowerCase();
+      const setNameNorm = setName.replace(/\s+/g, '');
+      const propArray = pset.properties || [];
+
+      for (const prop of propArray) {
+        const propNameOriginal = (prop as any).name || '';
+        const propNameNorm = propNameOriginal.replace(/\s+/g, '').toLowerCase();
+        const propName = propNameOriginal.toLowerCase();
+        const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+        if (!propValue) continue;
+
+        // Check configured mapping first (normalized comparison)
+        if (!assemblyMark && mappings) {
+          const mappingSetNorm = (mappings.assembly_mark_set || '').replace(/\s+/g, '').toLowerCase();
+          const mappingPropNorm = (mappings.assembly_mark_prop || '').replace(/\s+/g, '').toLowerCase();
+          if (setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+            assemblyMark = String(propValue);
+          }
+        }
+
+        // Fallback: look for common patterns
+        if (!assemblyMark) {
+          if (propName.includes('cast') && propName.includes('mark')) {
+            assemblyMark = String(propValue);
+          } else if (propName === 'assemblymark' || propNameNorm === 'assemblymark') {
+            assemblyMark = String(propValue);
+          }
+        }
+      }
+    }
+
+    return assemblyMark;
+  }, []);
+
+  // Helper to extract weight with fallbacks
+  const extractWeight = useCallback((objProps: any, mappings: typeof propertyMappings): string | undefined => {
+    const propSets = objProps.propertySets || objProps.properties || [];
+    let weight: string | undefined;
+
+    for (const pset of propSets) {
+      const setName = (pset.name || '').toLowerCase();
+      const setNameNorm = setName.replace(/\s+/g, '');
+      const propArray = pset.properties || [];
+
+      for (const prop of propArray) {
+        const propNameOriginal = (prop as any).name || '';
+        const propNameNorm = propNameOriginal.replace(/\s+/g, '').toLowerCase();
+        const propName = propNameOriginal.toLowerCase();
+        const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+        if (!propValue) continue;
+
+        // Check configured mapping first
+        if (!weight && mappings) {
+          const mappingSetNorm = (mappings.weight_set || '').replace(/\s+/g, '').toLowerCase();
+          const mappingPropNorm = (mappings.weight_prop || '').replace(/\s+/g, '').toLowerCase();
+          if (setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
+            weight = String(propValue);
+          }
+        }
+
+        // Fallback patterns
+        if (!weight && propName.includes('weight')) {
+          weight = String(propValue);
+        }
+      }
+    }
+
+    return weight;
   }, []);
 
   // Helper to extract GUID from object properties (nested in property sets)
@@ -764,13 +844,10 @@ export default function ArrivedDeliveriesScreen({
             }
           } else {
             // New item - not in delivery schedule
-            const assemblyMark = propertyMappings
-              ? getPropertyValue(obj.props, propertyMappings.assembly_mark_set, propertyMappings.assembly_mark_prop)
-              : undefined;
+            // Use improved extraction with fallbacks (like DeliveryScheduleScreen)
+            const assemblyMark = extractAssemblyMark(obj.props, propertyMappings);
             const nameInfo = extractNameFromProps(obj.props);
-            const weight = propertyMappings
-              ? getPropertyValue(obj.props, propertyMappings.weight_set, propertyMappings.weight_prop)
-              : undefined;
+            const weight = extractWeight(obj.props, propertyMappings);
 
             if (!newItems.some(ni => ni.guid.toLowerCase() === guidLower)) {
               newItems.push({
@@ -1320,6 +1397,39 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
+  // Remove item that was added from model (deletes both confirmation and delivery item)
+  const removeModelAddedItem = async (confirmationId: string, itemId: string) => {
+    if (!confirm('Kas oled kindel, et soovid selle detaili eemaldada?')) return;
+
+    setSaving(true);
+    try {
+      // Delete the confirmation first
+      const { error: confError } = await supabase
+        .from('trimble_arrival_confirmations')
+        .delete()
+        .eq('id', confirmationId);
+
+      if (confError) throw confError;
+
+      // Delete the delivery item (it was created when adding from model)
+      const { error: itemError } = await supabase
+        .from('trimble_delivery_items')
+        .delete()
+        .eq('id', itemId);
+
+      if (itemError) throw itemError;
+
+      // Reload data
+      await Promise.all([loadItems(), loadConfirmations()]);
+      setMessage('Detail eemaldatud');
+    } catch (e: any) {
+      console.error('Error removing model-added item:', e);
+      setMessage('Viga detaili eemaldamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Upload photo with type
   const handlePhotoUpload = async (
     arrivedVehicleId: string,
@@ -1713,17 +1823,18 @@ export default function ArrivedDeliveriesScreen({
         ]);
       });
 
-    // Added items (came from other vehicle)
+    // Added items (came from other vehicle or model)
     arrivalConfirmations
       .filter(c => c.status === 'added')
       .forEach(conf => {
         const item = items.find(i => i.id === conf.item_id);
+        const isFromModel = !conf.source_vehicle_id;
         discrepancyData.push([
-          'Lisatud teisest veokist',
+          isFromModel ? 'Lisatud mudelist' : 'Lisatud teisest veokist',
           item?.assembly_mark || '-',
           item?.product_name || '-',
           conf.notes || '-',
-          conf.source_vehicle_code || '-'
+          isFromModel ? '-' : (conf.source_vehicle_code || '-')
         ]);
       });
 
@@ -3221,23 +3332,37 @@ export default function ArrivedDeliveriesScreen({
                               );
                             })}
 
-                            {/* Added items from other vehicles - only show when not searching */}
+                            {/* Added items from other vehicles or model - only show when not searching */}
                             {!searchTerm && arrivalConfirmations
                               .filter(c => c.status === 'added')
                               .map((conf, idx) => {
                                 const item = items.find(i => i.id === conf.item_id);
                                 if (!item) return null;
+                                const isFromModel = !conf.source_vehicle_id; // No source = added from model
                                 return (
-                                  <div key={conf.id} className="item-row added">
+                                  <div key={conf.id} className={`item-row added ${isFromModel ? 'from-model' : ''}`}>
                                     <span className="item-index">+{idx + 1}</span>
                                     <div className="item-info">
                                       <span className="item-mark">{item.assembly_mark}</span>
                                       <span className="item-source">
-                                        (veokist {conf.source_vehicle_code})
+                                        {isFromModel ? '(mudelist lisatud)' : `(veokist ${conf.source_vehicle_code})`}
                                       </span>
                                     </div>
                                     <div className="item-actions">
                                       <StatusBadge status="added" />
+                                      {isFromModel && !arrivedVehicle.is_confirmed && (
+                                        <button
+                                          className="delete-btn"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeModelAddedItem(conf.id, item.id);
+                                          }}
+                                          disabled={saving}
+                                          title="Eemalda detail"
+                                        >
+                                          <FiTrash2 size={12} />
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                 );
@@ -3250,25 +3375,29 @@ export default function ArrivedDeliveriesScreen({
                         {/* Removed items - items that were supposed to be here but arrived with another vehicle */}
                         {removedItems.length > 0 && (
                           <div className="removed-items-section">
-                            <div className="removed-items-header">
-                              <FiAlertTriangle className="warning-icon" />
-                              <h4>Tarnest eemaldatud detailid ({removedItems.length})</h4>
+                            <div className="section-header compact">
+                              <FiAlertTriangle className="warning-icon" size={12} />
+                              <span>Tarnest eemaldatud ({removedItems.length})</span>
+                              <span className="section-hint">Saabusid teise veokiga</span>
                             </div>
-                            <p className="removed-items-description">
-                              Need detailid pidid saabuma selle veokiga, kuid saabusid teise veokiga.
-                            </p>
-                            <div className="removed-items-list">
-                              {removedItems.map(({ confirmation, item, receivingVehicle, receivingArrival }) => (
-                                <div key={confirmation.id} className="removed-item">
-                                  <div className="removed-item-info">
-                                    <span className="removed-item-mark">{item?.assembly_mark}</span>
-                                    <span className="removed-item-name">{item?.product_name}</span>
+                            <div className="items-list compact">
+                              {removedItems.map(({ confirmation, item, receivingVehicle, receivingArrival }, idx) => (
+                                <div
+                                  key={confirmation.id}
+                                  className="item-row removed"
+                                  onClick={() => item?.guid_ifc && selectObjectsByGuid(api, [item.guid_ifc])}
+                                  style={{ cursor: item?.guid_ifc ? 'pointer' : 'default' }}
+                                >
+                                  <span className="item-index">{idx + 1}</span>
+                                  <div className="item-info inline">
+                                    <span className="item-mark">{item?.assembly_mark || '-'}</span>
+                                    <span className="item-name">{item?.product_name || ''}</span>
                                   </div>
-                                  <div className="removed-item-destination">
-                                    <FiArrowRight />
-                                    <span>Saabus veokiga: <strong>{receivingVehicle?.vehicle_code || 'tundmatu'}</strong></span>
+                                  <div className="item-destination">
+                                    <FiArrowRight size={10} />
+                                    <span>{receivingVehicle?.vehicle_code || '?'}</span>
                                     {receivingArrival?.arrival_date && (
-                                      <span className="arrival-date">({formatDateEstonian(receivingArrival.arrival_date)})</span>
+                                      <span className="date-hint">({formatDateEstonian(receivingArrival.arrival_date)})</span>
                                     )}
                                   </div>
                                 </div>
@@ -3550,19 +3679,15 @@ export default function ArrivedDeliveriesScreen({
                     <FiPlus style={{ marginRight: 4, verticalAlign: 'middle' }} />
                     Uued detailid ({modelNewItems.length}) - pole tarnegraafikus
                   </h4>
-                  <div className="model-selected-items new-items">
+                  <div className="model-selected-items new-items compact">
                     {modelNewItems.map((item, idx) => (
-                      <div key={`new-${idx}`} className="model-selected-item new">
-                        <div className="item-info">
-                          <span className="item-mark">{item.assemblyMark}</span>
-                          {item.productName && <span className="item-name">{item.productName}</span>}
-                          {item.weight && (
-                            <span className="item-weight">{Math.round(Number(item.weight))} kg</span>
-                          )}
-                        </div>
-                        <div className="item-info-note" style={{ fontSize: 11, color: '#6b7280' }}>
-                          Lisatakse tarnegraafikusse selle veokiga
-                        </div>
+                      <div key={`new-${idx}`} className="model-selected-item new compact">
+                        <span className="item-index">{idx + 1}</span>
+                        <span className="item-mark">{item.assemblyMark}</span>
+                        {item.productName && <span className="item-name">{item.productName}</span>}
+                        {item.weight && (
+                          <span className="item-weight">{Math.round(Number(item.weight))} kg</span>
+                        )}
                       </div>
                     ))}
                   </div>
