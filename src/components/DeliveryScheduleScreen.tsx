@@ -666,30 +666,46 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const filteredItems = useMemo(() => {
     if (!searchQuery.trim()) return items;
     const query = searchQuery.toLowerCase();
-    return items.filter(item =>
-      item.assembly_mark.toLowerCase().includes(query) ||
-      item.product_name?.toLowerCase().includes(query) ||
-      item.cast_unit_position_code?.toLowerCase().includes(query) ||
-      item.guid?.toLowerCase().includes(query)
-    );
-  }, [items, searchQuery]);
+    return items.filter(item => {
+      // Search by item properties
+      if (item.assembly_mark.toLowerCase().includes(query) ||
+          item.product_name?.toLowerCase().includes(query) ||
+          item.cast_unit_position_code?.toLowerCase().includes(query) ||
+          item.guid?.toLowerCase().includes(query)) {
+        return true;
+      }
+      // Search by vehicle code
+      if (item.vehicle_id) {
+        const vehicle = vehicles.find(v => v.id === item.vehicle_id);
+        if (vehicle?.vehicle_code?.toLowerCase().includes(query)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }, [items, searchQuery, vehicles]);
 
   // Special key for vehicles without date
   const UNASSIGNED_DATE = 'MÄÄRAMATA';
 
-  // Group items by date -> vehicle (includes ALL vehicles, even empty ones)
+  // Group items by date -> vehicle
+  // When searching: only show dates/vehicles with matching items
+  // When not searching: show all vehicles (even empty ones)
   const itemsByDateAndVehicle = useMemo(() => {
     const groups: Record<string, Record<string, DeliveryItem[]>> = {};
     const vehicleIds = new Set(vehicles.map(v => v.id));
+    const isSearching = searchQuery.trim().length > 0;
 
-    // First, add all vehicles to their dates (creates empty arrays)
-    vehicles.forEach(vehicle => {
-      const date = vehicle.scheduled_date || UNASSIGNED_DATE;
-      if (!groups[date]) groups[date] = {};
-      if (!groups[date][vehicle.id]) groups[date][vehicle.id] = [];
-    });
+    // When NOT searching, add all vehicles to their dates (creates empty arrays)
+    if (!isSearching) {
+      vehicles.forEach(vehicle => {
+        const date = vehicle.scheduled_date || UNASSIGNED_DATE;
+        if (!groups[date]) groups[date] = {};
+        if (!groups[date][vehicle.id]) groups[date][vehicle.id] = [];
+      });
+    }
 
-    // Then, add items to their vehicles
+    // Add items to their vehicles
     // If item's vehicle_id points to a deleted vehicle, treat as unassigned
     filteredItems.forEach(item => {
       const vehicleExists = item.vehicle_id && vehicleIds.has(item.vehicle_id);
@@ -714,7 +730,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     });
 
     return groups;
-  }, [filteredItems, vehicles]);
+  }, [filteredItems, vehicles, searchQuery]);
 
   // Get sorted dates (MÄÄRAMATA always at end)
   // Filter out past dates if hidePastDates is true (but always show selectedDate)
