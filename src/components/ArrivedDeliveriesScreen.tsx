@@ -925,7 +925,9 @@ export default function ArrivedDeliveriesScreen({
   };
 
   const getVehicleItems = (vehicleId: string) => {
-    return items.filter(i => i.vehicle_id === vehicleId);
+    return items
+      .filter(i => i.vehicle_id === vehicleId)
+      .sort((a, b) => (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et'));
   };
 
   const getConfirmationsForArrival = (arrivedVehicleId: string) => {
@@ -1578,6 +1580,10 @@ export default function ArrivedDeliveriesScreen({
 
     setSaving(true);
     try {
+      // Get the item's GUID before deleting (for coloring white)
+      const itemToRemove = items.find(i => i.id === itemId);
+      const guidToColorWhite = itemToRemove?.guid_ifc;
+
       // Delete the confirmation first
       const { error: confError } = await supabase
         .from('trimble_arrival_confirmations')
@@ -1593,6 +1599,23 @@ export default function ArrivedDeliveriesScreen({
         .eq('id', itemId);
 
       if (itemError) throw itemError;
+
+      // Color the removed object white in the model
+      if (api && guidToColorWhite) {
+        try {
+          const foundObjects = await findObjectsInLoadedModels(api, [guidToColorWhite]);
+          if (foundObjects.size > 0) {
+            for (const [, found] of foundObjects) {
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
+                { color: { r: 255, g: 255, b: 255 } }
+              );
+            }
+          }
+        } catch (colorErr) {
+          console.warn('Could not color object white:', colorErr);
+        }
+      }
 
       // Reload data
       await Promise.all([loadItems(), loadConfirmations()]);
@@ -2343,9 +2366,14 @@ export default function ArrivedDeliveriesScreen({
   }, [itemPhotosMap]);
 
   // Precompute duplicate counts per vehicle: { vehicleId: { assemblyMark: { count, indices: { itemId: index } } } }
+  // Sort items by assembly_mark first so indices match display order (alphabetical)
   const duplicateCountsMap = useMemo(() => {
     const map = new Map<string, Map<string, { count: number; indices: Map<string, number> }>>();
-    items.forEach(item => {
+    // Sort items by assembly_mark to ensure consistent ordering
+    const sortedItems = [...items].sort((a, b) =>
+      (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et')
+    );
+    sortedItems.forEach(item => {
       if (!item.vehicle_id) return;
       if (!map.has(item.vehicle_id)) map.set(item.vehicle_id, new Map());
       const vehicleMap = map.get(item.vehicle_id)!;
