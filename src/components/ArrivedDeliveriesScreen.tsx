@@ -55,7 +55,15 @@ const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
 ];
 
 // Color type for model coloring
-type ColorMode = 'off' | 'all-green' | 'by-vehicle';
+type ColorMode = 'off' | 'all-green' | 'by-vehicle' | 'by-status';
+
+// Status colors for coloring by confirmation status
+const STATUS_COLORS = {
+  confirmed: { r: 34, g: 197, b: 94 },   // Green - kohal
+  pending: { r: 250, g: 204, b: 21 },    // Yellow - ootel
+  missing: { r: 239, g: 68, b: 68 },     // Red - puudub
+  added: { r: 59, g: 130, b: 246 },      // Blue - teisest veokist lisatud
+};
 
 // Preset colors for vehicle coloring (different from other screens)
 const VEHICLE_COLORS = [
@@ -147,7 +155,7 @@ const ItemRow = memo(({
   status,
   isSelected,
   isExpanded,
-  isLocked,
+  isLocked: _isLocked,
   duplicateIndex,
   duplicateCount,
   itemCommentValue,
@@ -235,7 +243,7 @@ const ItemRow = memo(({
             </button>
           )}
           <StatusBadge status={status} />
-          {status === 'pending' && !isLocked ? (
+          {status === 'pending' ? (
             <>
               <button
                 className="action-btn confirm"
@@ -259,7 +267,7 @@ const ItemRow = memo(({
                 <FiAlertTriangle size={12} />
               </button>
             </>
-          ) : status !== 'pending' && !isLocked ? (
+          ) : (
             <button
               className="action-btn reset"
               onClick={() => onConfirmItem(item.id, 'pending')}
@@ -267,7 +275,7 @@ const ItemRow = memo(({
             >
               <FiRefreshCw size={12} />
             </button>
-          ) : null}
+          )}
         </div>
       </div>
       {/* Expandable comment/photo section */}
@@ -393,6 +401,7 @@ export default function ArrivedDeliveriesScreen({
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [addItemSourceVehicleId, setAddItemSourceVehicleId] = useState<string>('');
   const [selectedItemsToAdd, setSelectedItemsToAdd] = useState<Set<string>>(new Set());
+  const [addItemSearchTerm, setAddItemSearchTerm] = useState('');
 
   // State - Model selection mode for adding items
   const [modelSelectionMode, setModelSelectionMode] = useState(false);
@@ -627,6 +636,63 @@ export default function ArrivedDeliveriesScreen({
     return undefined;
   }, []);
 
+  // Helper to extract GUID from object properties (nested in property sets)
+  const extractGuidFromProps = useCallback((objProps: any): string | undefined => {
+    // First try direct properties.GUID (some models have this)
+    if (objProps.properties?.GUID) {
+      return objProps.properties.GUID;
+    }
+
+    // Search through property sets for GUID
+    const propSets = objProps.properties || objProps.propertySets || [];
+    for (const pset of propSets) {
+      const propArray = pset.properties || [];
+      for (const prop of propArray) {
+        const propName = ((prop as any).name || '').toLowerCase().replace(/[\s_()]/g, '');
+        if (propName.includes('guid') || propName === 'globalid') {
+          const value = (prop as any).displayValue ?? (prop as any).value;
+          if (value) {
+            // Normalize GUID - remove urn: prefix if present
+            return String(value).replace(/^urn:(uuid:)?/i, '').trim();
+          }
+        }
+      }
+    }
+    return undefined;
+  }, []);
+
+  // Helper to extract name/type from object properties
+  const extractNameFromProps = useCallback((objProps: any): { name?: string; type?: string } => {
+    // Try direct access first
+    let name = objProps.name || objProps.properties?.Name;
+    let type = objProps.type || objProps.properties?.ObjectType;
+
+    // Search through property sets
+    if (!name || !type) {
+      const propSets = objProps.properties || objProps.propertySets || [];
+      for (const pset of propSets) {
+        const setName = ((pset as any).set || (pset as any).name || '').toLowerCase();
+        const propArray = pset.properties || [];
+        for (const prop of propArray) {
+          const propName = ((prop as any).name || '').toLowerCase();
+          const value = (prop as any).displayValue ?? (prop as any).value;
+          if (!value) continue;
+
+          // Product name
+          if (setName === 'product' && propName === 'name' && !name) {
+            name = String(value);
+          }
+          // Object type
+          if (propName === 'objecttype' && !type) {
+            type = String(value);
+          }
+        }
+      }
+    }
+
+    return { name, type };
+  }, []);
+
   // Model selection mode - poll for selection changes
   useEffect(() => {
     if (!modelSelectionMode || !api) return;
@@ -651,11 +717,12 @@ export default function ArrivedDeliveriesScreen({
             const objects = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
             for (let i = 0; i < objects.length; i++) {
               const obj = objects[i];
-              if (obj.properties?.GUID) {
+              const guid = extractGuidFromProps(obj);
+              if (guid) {
                 selectedObjects.push({
                   modelId: sel.modelId,
                   runtimeId: sel.objectRuntimeIds[i],
-                  guid: obj.properties.GUID,
+                  guid,
                   props: obj
                 });
               }
@@ -663,7 +730,10 @@ export default function ArrivedDeliveriesScreen({
           }
         }
 
-        if (selectedObjects.length === 0) return;
+        if (selectedObjects.length === 0) {
+          setMessage('Valitud objektidel pole GUID-i');
+          return;
+        }
 
         // Separate into existing items and new items
         const existingItemGuids = new Set(items.map(item => item.guid_ifc?.toLowerCase()).filter(Boolean));
@@ -682,8 +752,8 @@ export default function ArrivedDeliveriesScreen({
             // New item - not in delivery schedule
             const assemblyMark = propertyMappings
               ? getPropertyValue(obj.props, propertyMappings.assembly_mark_set, propertyMappings.assembly_mark_prop)
-              : obj.props.properties?.Name || `Object_${obj.runtimeId}`;
-            const productName = obj.props.properties?.ObjectType || obj.props.properties?.Name;
+              : undefined;
+            const nameInfo = extractNameFromProps(obj.props);
             const weight = propertyMappings
               ? getPropertyValue(obj.props, propertyMappings.weight_set, propertyMappings.weight_prop)
               : undefined;
@@ -694,8 +764,8 @@ export default function ArrivedDeliveriesScreen({
                 runtimeId: obj.runtimeId,
                 guid: obj.guid,
                 guidIfc: obj.guid,
-                assemblyMark: assemblyMark || `Object_${obj.runtimeId}`,
-                productName,
+                assemblyMark: assemblyMark || nameInfo.name || `Object_${obj.runtimeId}`,
+                productName: nameInfo.type || nameInfo.name,
                 weight
               });
             }
@@ -713,6 +783,7 @@ export default function ArrivedDeliveriesScreen({
         }
       } catch (e) {
         console.error('Error handling model selection:', e);
+        setMessage('Viga mudeli valiku töötlemisel');
       }
     };
 
@@ -721,7 +792,7 @@ export default function ArrivedDeliveriesScreen({
     checkSelection(); // Check immediately
 
     return () => clearInterval(interval);
-  }, [modelSelectionMode, api, items, propertyMappings, getPropertyValue]);
+  }, [modelSelectionMode, api, items, propertyMappings, getPropertyValue, extractGuidFromProps, extractNameFromProps]);
 
   // ============================================
   // HELPERS
@@ -2062,7 +2133,7 @@ export default function ArrivedDeliveriesScreen({
   }, [arrivedVehicles, confirmations, items, vehicles, selectedDate]);
 
   // Color the model based on mode
-  const colorModel = useCallback(async (mode: ColorMode) => {
+  const colorModel = useCallback(async (mode: ColorMode, specificVehicleId?: string) => {
     if (!api) return;
 
     setColoringInProgress(true);
@@ -2078,7 +2149,98 @@ export default function ArrivedDeliveriesScreen({
       // First, color entire model white
       await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
 
-      // Get confirmed items
+      if (mode === 'by-status') {
+        // Color by confirmation status for specific vehicle or all on selected date
+        const dateArrivals = specificVehicleId
+          ? arrivedVehicles.filter(av => av.id === specificVehicleId)
+          : arrivedVehicles.filter(av => av.arrival_date === selectedDate);
+
+        if (dateArrivals.length === 0) {
+          setMessage('Saabunud veokeid pole');
+          setColorMode(mode);
+          return;
+        }
+
+        // Group items by status
+        const statusGroups: Record<string, string[]> = {
+          confirmed: [],
+          pending: [],
+          missing: [],
+          added: []
+        };
+
+        for (const arrival of dateArrivals) {
+          const vehicle = vehicles.find(v => v.id === arrival.vehicle_id);
+          if (!vehicle) continue;
+
+          // Get all items for this vehicle
+          const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+
+          for (const item of vehicleItems) {
+            if (!item.guid_ifc) continue;
+
+            // Check confirmation status
+            const conf = confirmations.find(c =>
+              c.arrived_vehicle_id === arrival.id && c.item_id === item.id
+            );
+
+            const status = conf?.status || 'pending';
+            if (statusGroups[status]) {
+              statusGroups[status].push(item.guid_ifc);
+            } else {
+              statusGroups.pending.push(item.guid_ifc);
+            }
+          }
+        }
+
+        // Collect all GUIDs
+        const allGuids = [...statusGroups.confirmed, ...statusGroups.pending, ...statusGroups.missing, ...statusGroups.added];
+        if (allGuids.length === 0) {
+          setMessage('Detailidel puuduvad GUID-id');
+          setColorMode(mode);
+          return;
+        }
+
+        // Find objects in model
+        const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+        if (foundObjects.size === 0) {
+          setMessage('Detaile ei leitud mudelist');
+          setColorMode(mode);
+          return;
+        }
+
+        // Color each status group
+        const statusCounts: Record<string, number> = { confirmed: 0, pending: 0, missing: 0, added: 0 };
+
+        for (const [status, guids] of Object.entries(statusGroups)) {
+          if (guids.length === 0) continue;
+
+          const byModel: Record<string, number[]> = {};
+          for (const guid of guids) {
+            const found = foundObjects.get(guid.toLowerCase()) || foundObjects.get(guid);
+            if (found) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+              statusCounts[status]++;
+            }
+          }
+
+          const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS];
+          for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: { ...color, a: 255 } }
+            );
+          }
+        }
+
+        const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+        setMessage(`${total} detaili värvitud: ${statusCounts.confirmed} kohal, ${statusCounts.pending} ootel, ${statusCounts.missing} puudu, ${statusCounts.added} lisatud`);
+        setColorMode(mode);
+        return;
+      }
+
+      // Get confirmed items for other modes
       const confirmedItems = getConfirmedItemsForDate();
       if (confirmedItems.length === 0) {
         setMessage('Kinnitatud detaile pole');
@@ -2171,7 +2333,7 @@ export default function ArrivedDeliveriesScreen({
     } finally {
       setColoringInProgress(false);
     }
-  }, [api, getConfirmedItemsForDate]);
+  }, [api, getConfirmedItemsForDate, arrivedVehicles, selectedDate, vehicles, items, confirmations]);
 
   // Toggle coloring mode
   const toggleColoring = useCallback((newMode: ColorMode) => {
@@ -2214,6 +2376,7 @@ export default function ArrivedDeliveriesScreen({
             style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
           >
             <option value="off">Värvimine väljas</option>
+            <option value="by-status">Staatuse järgi</option>
             <option value="all-green">Kõik roheliseks</option>
             <option value="by-vehicle">Veokite kaupa</option>
           </select>
@@ -2913,8 +3076,8 @@ export default function ArrivedDeliveriesScreen({
                                 </button>
                               </div>
                             </div>
-                            {/* Bulk actions when items are selected (not shown for confirmed vehicles) */}
-                            {selectedItemsForConfirm.size > 0 && !arrivedVehicle.is_confirmed && (
+                            {/* Bulk actions when items are selected */}
+                            {selectedItemsForConfirm.size > 0 && (
                               <div className="items-bulk-actions">
                                 <button
                                   className="confirm-selected-btn"
@@ -2938,7 +3101,7 @@ export default function ArrivedDeliveriesScreen({
                                 </button>
                               </div>
                             )}
-                            {selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && !arrivedVehicle.is_confirmed && (
+                            {selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && (
                               <div className="items-bulk-actions">
                                 <button
                                   className="confirm-all-btn"
@@ -3069,11 +3232,11 @@ export default function ArrivedDeliveriesScreen({
 
       {/* Add item modal */}
       {showAddItemModal && activeArrivalId && (
-        <div className="modal-overlay" onClick={() => setShowAddItemModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowAddItemModal(false); setAddItemSearchTerm(''); }}>
           <div className="modal add-item-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Lisa detail teisest veokist</h2>
-              <button className="close-btn" onClick={() => setShowAddItemModal(false)}>
+              <button className="close-btn" onClick={() => { setShowAddItemModal(false); setAddItemSearchTerm(''); }}>
                 <FiX />
               </button>
             </div>
@@ -3085,6 +3248,7 @@ export default function ArrivedDeliveriesScreen({
                   onChange={(e) => {
                     setAddItemSourceVehicleId(e.target.value);
                     setSelectedItemsToAdd(new Set());
+                    setAddItemSearchTerm('');
                   }}
                 >
                   <option value="">Vali veok...</option>
@@ -3104,35 +3268,78 @@ export default function ArrivedDeliveriesScreen({
                 </select>
               </div>
 
-              {addItemSourceVehicleId && (
-                <div className="form-group">
-                  <label>Vali detailid</label>
-                  <div className="items-selection">
-                    {getVehicleItems(addItemSourceVehicleId).map(item => (
-                      <label key={item.id} className="item-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={selectedItemsToAdd.has(item.id)}
-                          onChange={(e) => {
-                            const next = new Set(selectedItemsToAdd);
-                            if (e.target.checked) {
-                              next.add(item.id);
-                            } else {
-                              next.delete(item.id);
-                            }
-                            setSelectedItemsToAdd(next);
-                          }}
-                        />
-                        <span className="item-mark">{item.assembly_mark}</span>
-                        <span className="item-name">{item.product_name}</span>
-                      </label>
-                    ))}
+              {addItemSourceVehicleId && (() => {
+                const sourceItems = getVehicleItems(addItemSourceVehicleId);
+                // Filter already added items to this arrival
+                const alreadyAddedIds = new Set(
+                  confirmations
+                    .filter((c: ArrivalItemConfirmation) => c.arrived_vehicle_id === activeArrivalId)
+                    .map((c: ArrivalItemConfirmation) => c.item_id)
+                );
+                const availableItems = sourceItems.filter(item => !alreadyAddedIds.has(item.id));
+                // Apply search filter
+                const searchLower = addItemSearchTerm.toLowerCase().trim();
+                const filteredItems = searchLower
+                  ? availableItems.filter(item =>
+                      (item.assembly_mark?.toLowerCase() || '').includes(searchLower) ||
+                      (item.product_name?.toLowerCase() || '').includes(searchLower)
+                    )
+                  : availableItems;
+
+                return (
+                  <div className="form-group">
+                    <label>Vali detailid ({filteredItems.length}/{availableItems.length})</label>
+                    <div className="search-input-wrapper" style={{ marginBottom: 8 }}>
+                      <FiSearch className="search-icon" />
+                      <input
+                        type="text"
+                        className="item-search-input"
+                        placeholder="Otsi detaile..."
+                        value={addItemSearchTerm}
+                        onChange={(e) => setAddItemSearchTerm(e.target.value)}
+                      />
+                      {addItemSearchTerm && (
+                        <button
+                          className="clear-search-btn"
+                          onClick={() => setAddItemSearchTerm('')}
+                        >
+                          <FiX />
+                        </button>
+                      )}
+                    </div>
+                    <div className="items-selection">
+                      {filteredItems.length === 0 ? (
+                        <div className="no-items-message" style={{ padding: '12px', color: '#6b7280', textAlign: 'center' }}>
+                          {availableItems.length === 0 ? 'Kõik detailid on juba lisatud' : 'Otsingule vastavaid detaile ei leitud'}
+                        </div>
+                      ) : (
+                        filteredItems.map(item => (
+                          <label key={item.id} className="item-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={selectedItemsToAdd.has(item.id)}
+                              onChange={(e) => {
+                                const next = new Set(selectedItemsToAdd);
+                                if (e.target.checked) {
+                                  next.add(item.id);
+                                } else {
+                                  next.delete(item.id);
+                                }
+                                setSelectedItemsToAdd(next);
+                              }}
+                            />
+                            <span className="item-mark">{item.assembly_mark}</span>
+                            <span className="item-name">{item.product_name}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
             <div className="modal-footer">
-              <button className="cancel-btn" onClick={() => setShowAddItemModal(false)}>
+              <button className="cancel-btn" onClick={() => { setShowAddItemModal(false); setAddItemSearchTerm(''); }}>
                 Tühista
               </button>
               <button
@@ -3145,6 +3352,7 @@ export default function ArrivedDeliveriesScreen({
                   setShowAddItemModal(false);
                   setAddItemSourceVehicleId('');
                   setSelectedItemsToAdd(new Set());
+                  setAddItemSearchTerm('');
                 }}
               >
                 Lisa {selectedItemsToAdd.size > 0 ? `(${selectedItemsToAdd.size})` : ''}
