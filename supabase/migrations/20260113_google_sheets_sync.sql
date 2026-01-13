@@ -9,6 +9,9 @@ CREATE TABLE IF NOT EXISTS trimble_sheets_sync_config (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   trimble_project_id TEXT NOT NULL,
 
+  -- Projekti nimi (Trimble Connect'ist)
+  project_name TEXT,
+
   -- Google Drive/Sheets info
   google_drive_folder_id TEXT NOT NULL,
   google_spreadsheet_id TEXT,
@@ -67,6 +70,10 @@ ADD COLUMN IF NOT EXISTS sheets_row_number INTEGER,
 ADD COLUMN IF NOT EXISTS sheets_last_modified TIMESTAMPTZ,
 ADD COLUMN IF NOT EXISTS sheets_checksum TEXT;
 
+-- Lisa project_name veerg kui puudub (olemasolevate andmebaaside jaoks)
+ALTER TABLE trimble_sheets_sync_config
+ADD COLUMN IF NOT EXISTS project_name TEXT;
+
 -- Indeksid
 CREATE INDEX IF NOT EXISTS idx_sheets_sync_config_project
   ON trimble_sheets_sync_config(trimble_project_id);
@@ -81,6 +88,12 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_sheets_row
 -- RLS Policies
 ALTER TABLE trimble_sheets_sync_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trimble_sheets_sync_log ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotent migration)
+DROP POLICY IF EXISTS "Project members can view sheets config" ON trimble_sheets_sync_config;
+DROP POLICY IF EXISTS "Admins can manage sheets config" ON trimble_sheets_sync_config;
+DROP POLICY IF EXISTS "Project members can view sync logs" ON trimble_sheets_sync_log;
+DROP POLICY IF EXISTS "Allow insert sync logs" ON trimble_sheets_sync_log;
 
 CREATE POLICY "Project members can view sheets config"
   ON trimble_sheets_sync_config FOR SELECT

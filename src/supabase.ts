@@ -1607,6 +1607,7 @@ export const ACTIVITY_ACTION_LABELS: Record<ActivityAction, string> = {
 export interface SheetsSyncConfig {
   id: string;
   trimble_project_id: string;
+  project_name: string | null;
   google_drive_folder_id: string;
   google_spreadsheet_id: string | null;
   google_spreadsheet_url: string | null;
