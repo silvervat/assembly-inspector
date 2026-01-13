@@ -10640,6 +10640,39 @@ button.stat-toggle.off:hover {
   outline-offset: -2px;
 }
 
+/* Group being dragged over as potential parent (for nesting) */
+.org-group-header.drag-over-as-parent {
+  background: #dbeafe;
+  outline: 2px dashed #3b82f6;
+  outline-offset: -2px;
+}
+
+/* Group section while being dragged */
+.org-group-section.dragging {
+  opacity: 0.5;
+}
+
+/* Group drag handle */
+.org-group-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  color: #9ca3af;
+  cursor: grab;
+  border-radius: 2px;
+  transition: color 0.15s;
+}
+
+.org-group-drag-handle:hover {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
+.org-group-drag-handle:active {
+  cursor: grabbing;
+}
+
 .org-collapse-btn {
   padding: 2px;
   border: none;

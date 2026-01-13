@@ -634,6 +634,10 @@ export default function OrganizerScreen({
   const [dragOverGroupId, setDragOverGroupId] = useState<string | null>(null);
   const [dragReorderTarget, setDragReorderTarget] = useState<{ groupId: string; targetIndex: number } | null>(null);
 
+  // Group-to-group drag & drop
+  const [draggedGroup, setDraggedGroup] = useState<OrganizerGroup | null>(null);
+  const [dragOverGroupAsParent, setDragOverGroupAsParent] = useState<string | null>(null);
+
   // Coloring
   const [colorByGroup, setColorByGroup] = useState(false);
   const [coloredSingleGroupId, setColoredSingleGroupId] = useState<string | null>(null); // Track if only one group is colored
@@ -4556,6 +4560,207 @@ export default function OrganizerScreen({
   };
 
   // ============================================
+  // GROUP-TO-GROUP DRAG & DROP (NESTING)
+  // ============================================
+
+  // Check if groupId is an ancestor (parent, grandparent, etc.) of potentialDescendantId
+  const isAncestorOf = (groupId: string, potentialDescendantId: string): boolean => {
+    const descendant = groups.find(g => g.id === potentialDescendantId);
+    if (!descendant) return false;
+    if (!descendant.parent_id) return false;
+    if (descendant.parent_id === groupId) return true;
+    return isAncestorOf(groupId, descendant.parent_id);
+  };
+
+  // Calculate the level of a group (0 = root, 1 = child, 2 = grandchild)
+  const getGroupLevel = (groupId: string): number => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return 0;
+    if (!group.parent_id) return 0;
+    return 1 + getGroupLevel(group.parent_id);
+  };
+
+  // Calculate the maximum depth of a group's children (how many levels deep the subtree goes)
+  const getSubtreeDepth = (groupId: string): number => {
+    const children = groups.filter(g => g.parent_id === groupId);
+    if (children.length === 0) return 0;
+    return 1 + Math.max(...children.map(c => getSubtreeDepth(c.id)));
+  };
+
+  // Move a group to become a child of another group
+  const moveGroupToParent = async (groupId: string, newParentId: string | null) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Validation: Can't move to itself
+    if (groupId === newParentId) {
+      showToast('Gruppi ei saa iseenda sisse lohistada');
+      return;
+    }
+
+    // Validation: Check if group is locked
+    if (isGroupLocked(groupId)) {
+      showToast('🔒 Lukustatud gruppi ei saa liigutada');
+      return;
+    }
+
+    // Validation: Check if target parent is locked
+    if (newParentId && isGroupLocked(newParentId)) {
+      showToast('🔒 Ei saa lohistada lukustatud gruppi');
+      return;
+    }
+
+    // Validation: Can't move a group into its own descendant (circular reference)
+    if (newParentId && isAncestorOf(groupId, newParentId)) {
+      showToast('Gruppi ei saa liigutada enda alamgruppi');
+      return;
+    }
+
+    // Validation: Check max nesting level (max 3 levels: 0, 1, 2)
+    if (newParentId) {
+      const targetParentLevel = getGroupLevel(newParentId);
+      const subtreeDepth = getSubtreeDepth(groupId);
+      // If target parent is at level 2, can't add children
+      if (targetParentLevel >= 2) {
+        showToast('Maksimaalne grupi sügavus on 3 taset');
+        return;
+      }
+      // Check if moving the group with its subtree would exceed max level
+      if (targetParentLevel + 1 + subtreeDepth > 2) {
+        showToast('Liigutamine ületaks maksimaalse sügavuse (3 taset)');
+        return;
+      }
+    }
+
+    // Already has this parent
+    if (group.parent_id === newParentId) {
+      return;
+    }
+
+    // Mark this group as local change
+    recentLocalChangesRef.current.add(groupId);
+    setTimeout(() => recentLocalChangesRef.current.delete(groupId), 5000);
+
+    setSaving(true);
+    try {
+      // Calculate new level based on parent
+      const newLevel = newParentId ? getGroupLevel(newParentId) + 1 : 0;
+
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({
+          parent_id: newParentId,
+          level: newLevel,
+          updated_at: new Date().toISOString(),
+          updated_by: tcUserEmail
+        })
+        .eq('id', groupId);
+
+      if (error) throw error;
+
+      // Update levels of all descendants recursively
+      const updateDescendantLevels = async (parentId: string, parentLevel: number) => {
+        const children = groups.filter(g => g.parent_id === parentId);
+        for (const child of children) {
+          const childNewLevel = parentLevel + 1;
+          await supabase
+            .from('organizer_groups')
+            .update({ level: childNewLevel })
+            .eq('id', child.id);
+          await updateDescendantLevels(child.id, childNewLevel);
+        }
+      };
+      await updateDescendantLevels(groupId, newLevel);
+
+      showToast(newParentId ? 'Grupp liigutatud alamgrupiks' : 'Grupp liigutatud tipptasemele');
+      await refreshData();
+    } catch (e) {
+      console.error('Error moving group:', e);
+      showToast('Viga grupi liigutamisel');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Group drag handlers
+  const handleGroupDragStart = (e: React.DragEvent, group: OrganizerGroup) => {
+    // Check if group is locked
+    if (isGroupLocked(group.id)) {
+      e.preventDefault();
+      showToast('🔒 Lukustatud gruppi ei saa lohistada');
+      return;
+    }
+
+    setDraggedGroup(group);
+    setDraggedItems([]); // Clear item drag state
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'group'); // Mark as group drag
+  };
+
+  const handleGroupDragOver = (e: React.DragEvent, targetGroupId: string) => {
+    // Only handle if we're dragging a group
+    if (!draggedGroup) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Don't allow dropping on itself
+    if (draggedGroup.id === targetGroupId) {
+      setDragOverGroupAsParent(null);
+      return;
+    }
+
+    // Don't allow dropping on descendants
+    if (isAncestorOf(draggedGroup.id, targetGroupId)) {
+      setDragOverGroupAsParent(null);
+      return;
+    }
+
+    // Check if target is locked
+    if (isGroupLocked(targetGroupId)) {
+      setDragOverGroupAsParent(null);
+      return;
+    }
+
+    // Check level constraints
+    const targetLevel = getGroupLevel(targetGroupId);
+    const subtreeDepth = getSubtreeDepth(draggedGroup.id);
+    if (targetLevel >= 2 || targetLevel + 1 + subtreeDepth > 2) {
+      setDragOverGroupAsParent(null);
+      return;
+    }
+
+    setDragOverGroupAsParent(targetGroupId);
+  };
+
+  const handleGroupDragLeave = (e: React.DragEvent) => {
+    // Only clear if we're actually leaving (not entering a child element)
+    const relatedTarget = e.relatedTarget as HTMLElement;
+    if (relatedTarget && e.currentTarget.contains(relatedTarget)) {
+      return;
+    }
+    setDragOverGroupAsParent(null);
+  };
+
+  const handleGroupDrop = async (e: React.DragEvent, targetGroupId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedGroup) return;
+
+    const groupToMove = draggedGroup;
+    setDraggedGroup(null);
+    setDragOverGroupAsParent(null);
+
+    await moveGroupToParent(groupToMove.id, targetGroupId);
+  };
+
+  const handleGroupDragEnd = () => {
+    setDraggedGroup(null);
+    setDragOverGroupAsParent(null);
+  };
+
+  // ============================================
   // SEARCH
   // ============================================
 
@@ -4803,19 +5008,61 @@ export default function OrganizerScreen({
     const numericFields = effectiveCustomFields.filter(f => f.type === 'number' || f.type === 'currency');
     const selectedFilteredItems = filteredItems.filter(i => selectedItemIds.has(i.id));
 
+    // Check if this group is being dragged over as potential parent
+    const isDragOverAsParent = dragOverGroupAsParent === node.id;
+    const isBeingDragged = draggedGroup?.id === node.id;
+    const isEffectivelyLocked = isGroupLocked(node.id);
+
     return (
-      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''}`}>
+      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''}`}>
         <div
-          className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''}`}
+          className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragOverAsParent ? 'drag-over-as-parent' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''}`}
           style={{ paddingLeft: `${8 + depth * 10}px` }}
+          draggable={!isEffectivelyLocked}
           onClick={(e) => handleGroupClick(e, node.id)}
-          onDragOver={(e) => handleDragOver(e, node.id)}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, node.id)}
+          onDragStart={(e) => {
+            // Check if we're starting from a drag handle or the header itself
+            const target = e.target as HTMLElement;
+            if (target.closest('.org-group-drag-handle') || target.classList.contains('org-group-header')) {
+              handleGroupDragStart(e, node);
+            }
+          }}
+          onDragOver={(e) => {
+            // Handle both item drag and group drag
+            if (draggedGroup) {
+              handleGroupDragOver(e, node.id);
+            } else {
+              handleDragOver(e, node.id);
+            }
+          }}
+          onDragLeave={(e) => {
+            if (draggedGroup) {
+              handleGroupDragLeave(e);
+            } else {
+              handleDragLeave();
+            }
+          }}
+          onDrop={(e) => {
+            if (draggedGroup) {
+              handleGroupDrop(e, node.id);
+            } else {
+              handleDrop(e, node.id);
+            }
+          }}
+          onDragEnd={handleGroupDragEnd}
         >
           <button className="org-collapse-btn" onClick={(e) => toggleGroupExpand(e, node.id)}>
             {isExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
           </button>
+
+          {!isEffectivelyLocked && (
+            <span
+              className="org-group-drag-handle"
+              title="Lohista teise grupi peale, et muuta alamgrupiks"
+            >
+              <FiMove size={11} />
+            </span>
+          )}
 
           {node.color && (
             <span
@@ -4931,12 +5178,12 @@ export default function OrganizerScreen({
 
           {groupMenuId === node.id && (
             <div className="org-group-menu" onClick={(e) => e.stopPropagation()}>
-              {node.level < 2 && (
+              {node.level < 2 && !isEffectivelyLocked && (
                 <button onClick={() => openAddSubgroupForm(node.id)}>
                   <FiFolderPlus size={12} /> Lisa alamgrupp
                 </button>
               )}
-              {node.level < 2 && selectedObjects.length > 0 && (
+              {node.level < 2 && selectedObjects.length > 0 && !isEffectivelyLocked && (
                 <button onClick={() => {
                   setAddItemsAfterGroupCreate([...selectedObjects]);
                   openAddSubgroupForm(node.id);
@@ -4944,15 +5191,27 @@ export default function OrganizerScreen({
                   <FiFolderPlus size={12} /> Lisa alamgrupp ({selectedObjects.length} detailiga)
                 </button>
               )}
-              <button onClick={() => openEditGroupForm(node)}>
-                <FiEdit2 size={12} /> Muuda gruppi
-              </button>
+              {isEffectivelyLocked ? (
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa muuta">
+                  <FiLock size={12} /> Muuda gruppi
+                </button>
+              ) : (
+                <button onClick={() => openEditGroupForm(node)}>
+                  <FiEdit2 size={12} /> Muuda gruppi
+                </button>
+              )}
               <button onClick={() => cloneGroup(node.id)}>
                 <FiCopy size={12} /> Klooni grupp
               </button>
-              <button onClick={() => { setSelectedGroupIds(new Set([node.id])); setShowFieldForm(true); setGroupMenuId(null); }}>
-                <FiList size={12} /> Lisa väli
-              </button>
+              {isEffectivelyLocked ? (
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa välju lisada">
+                  <FiLock size={12} /> Lisa väli
+                </button>
+              ) : (
+                <button onClick={() => { setSelectedGroupIds(new Set([node.id])); setShowFieldForm(true); setGroupMenuId(null); }}>
+                  <FiList size={12} /> Lisa väli
+                </button>
+              )}
               <button onClick={() => { setGroupMenuId(null); colorModelByGroups(node.id); }}>
                 <FiDroplet size={12} /> Värvi see grupp
               </button>
@@ -4968,12 +5227,24 @@ export default function OrganizerScreen({
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
               </button>
-              <button onClick={() => openImportModal(node.id)}>
-                <FiUpload size={12} /> Impordi GUID
-              </button>
-              <button onClick={() => openExcelImportModal(node.id)}>
-                <FiUpload size={12} /> Impordi Excelist
-              </button>
+              {isEffectivelyLocked ? (
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa importida">
+                  <FiLock size={12} /> Impordi GUID
+                </button>
+              ) : (
+                <button onClick={() => openImportModal(node.id)}>
+                  <FiUpload size={12} /> Impordi GUID
+                </button>
+              )}
+              {isEffectivelyLocked ? (
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa importida">
+                  <FiLock size={12} /> Impordi Excelist
+                </button>
+              ) : (
+                <button onClick={() => openExcelImportModal(node.id)}>
+                  <FiUpload size={12} /> Impordi Excelist
+                </button>
+              )}
               {(() => {
                 const parentLocked = node.parent_id && isGroupLocked(node.parent_id);
                 if (parentLocked) {
