@@ -627,6 +627,63 @@ export default function ArrivedDeliveriesScreen({
     return undefined;
   }, []);
 
+  // Helper to extract GUID from object properties (nested in property sets)
+  const extractGuidFromProps = useCallback((objProps: any): string | undefined => {
+    // First try direct properties.GUID (some models have this)
+    if (objProps.properties?.GUID) {
+      return objProps.properties.GUID;
+    }
+
+    // Search through property sets for GUID
+    const propSets = objProps.properties || objProps.propertySets || [];
+    for (const pset of propSets) {
+      const propArray = pset.properties || [];
+      for (const prop of propArray) {
+        const propName = ((prop as any).name || '').toLowerCase().replace(/[\s_()]/g, '');
+        if (propName.includes('guid') || propName === 'globalid') {
+          const value = (prop as any).displayValue ?? (prop as any).value;
+          if (value) {
+            // Normalize GUID - remove urn: prefix if present
+            return String(value).replace(/^urn:(uuid:)?/i, '').trim();
+          }
+        }
+      }
+    }
+    return undefined;
+  }, []);
+
+  // Helper to extract name/type from object properties
+  const extractNameFromProps = useCallback((objProps: any): { name?: string; type?: string } => {
+    // Try direct access first
+    let name = objProps.name || objProps.properties?.Name;
+    let type = objProps.type || objProps.properties?.ObjectType;
+
+    // Search through property sets
+    if (!name || !type) {
+      const propSets = objProps.properties || objProps.propertySets || [];
+      for (const pset of propSets) {
+        const setName = ((pset as any).set || (pset as any).name || '').toLowerCase();
+        const propArray = pset.properties || [];
+        for (const prop of propArray) {
+          const propName = ((prop as any).name || '').toLowerCase();
+          const value = (prop as any).displayValue ?? (prop as any).value;
+          if (!value) continue;
+
+          // Product name
+          if (setName === 'product' && propName === 'name' && !name) {
+            name = String(value);
+          }
+          // Object type
+          if (propName === 'objecttype' && !type) {
+            type = String(value);
+          }
+        }
+      }
+    }
+
+    return { name, type };
+  }, []);
+
   // Model selection mode - poll for selection changes
   useEffect(() => {
     if (!modelSelectionMode || !api) return;
@@ -651,11 +708,12 @@ export default function ArrivedDeliveriesScreen({
             const objects = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
             for (let i = 0; i < objects.length; i++) {
               const obj = objects[i];
-              if (obj.properties?.GUID) {
+              const guid = extractGuidFromProps(obj);
+              if (guid) {
                 selectedObjects.push({
                   modelId: sel.modelId,
                   runtimeId: sel.objectRuntimeIds[i],
-                  guid: obj.properties.GUID,
+                  guid,
                   props: obj
                 });
               }
@@ -663,7 +721,10 @@ export default function ArrivedDeliveriesScreen({
           }
         }
 
-        if (selectedObjects.length === 0) return;
+        if (selectedObjects.length === 0) {
+          setMessage('Valitud objektidel pole GUID-i');
+          return;
+        }
 
         // Separate into existing items and new items
         const existingItemGuids = new Set(items.map(item => item.guid_ifc?.toLowerCase()).filter(Boolean));
@@ -682,8 +743,8 @@ export default function ArrivedDeliveriesScreen({
             // New item - not in delivery schedule
             const assemblyMark = propertyMappings
               ? getPropertyValue(obj.props, propertyMappings.assembly_mark_set, propertyMappings.assembly_mark_prop)
-              : obj.props.properties?.Name || `Object_${obj.runtimeId}`;
-            const productName = obj.props.properties?.ObjectType || obj.props.properties?.Name;
+              : undefined;
+            const nameInfo = extractNameFromProps(obj.props);
             const weight = propertyMappings
               ? getPropertyValue(obj.props, propertyMappings.weight_set, propertyMappings.weight_prop)
               : undefined;
@@ -694,8 +755,8 @@ export default function ArrivedDeliveriesScreen({
                 runtimeId: obj.runtimeId,
                 guid: obj.guid,
                 guidIfc: obj.guid,
-                assemblyMark: assemblyMark || `Object_${obj.runtimeId}`,
-                productName,
+                assemblyMark: assemblyMark || nameInfo.name || `Object_${obj.runtimeId}`,
+                productName: nameInfo.type || nameInfo.name,
                 weight
               });
             }
@@ -713,6 +774,7 @@ export default function ArrivedDeliveriesScreen({
         }
       } catch (e) {
         console.error('Error handling model selection:', e);
+        setMessage('Viga mudeli valiku töötlemisel');
       }
     };
 
@@ -721,7 +783,7 @@ export default function ArrivedDeliveriesScreen({
     checkSelection(); // Check immediately
 
     return () => clearInterval(interval);
-  }, [modelSelectionMode, api, items, propertyMappings, getPropertyValue]);
+  }, [modelSelectionMode, api, items, propertyMappings, getPropertyValue, extractGuidFromProps, extractNameFromProps]);
 
   // ============================================
   // HELPERS
