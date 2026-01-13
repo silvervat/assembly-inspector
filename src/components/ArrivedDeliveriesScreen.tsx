@@ -55,14 +55,15 @@ const UNLOAD_RESOURCES: UnloadResourceConfig[] = [
 ];
 
 // Color type for model coloring
-type ColorMode = 'off' | 'all-green' | 'by-vehicle' | 'by-status';
+type ColorMode = 'off' | 'all-green' | 'by-vehicle' | 'by-status' | 'active-vehicle';
 
 // Status colors for coloring by confirmation status
 const STATUS_COLORS = {
-  confirmed: { r: 34, g: 197, b: 94 },   // Green - kohal
-  pending: { r: 250, g: 204, b: 21 },    // Yellow - ootel
+  confirmed: { r: 34, g: 197, b: 94 },   // Green - kohal/vastuvõetud
+  pending: { r: 107, g: 114, b: 128 },   // Dark gray - ootel (selle veoki planeeritud detailid)
   missing: { r: 239, g: 68, b: 68 },     // Red - puudub
-  added: { r: 59, g: 130, b: 246 },      // Blue - teisest veokist lisatud
+  added_from_vehicle: { r: 250, g: 204, b: 21 },  // Yellow - teisest veokist lisatud
+  added_from_model: { r: 249, g: 115, b: 22 },    // Orange - mudelist lisatud (polnud graafikus)
 };
 
 // Preset colors for vehicle coloring (different from other screens)
@@ -434,6 +435,7 @@ export default function ArrivedDeliveriesScreen({
   // State - Model coloring
   const [colorMode, setColorMode] = useState<ColorMode>('off');
   const [coloringInProgress, setColoringInProgress] = useState(false);
+  const [activeColoredVehicleId, setActiveColoredVehicleId] = useState<string | null>(null);
 
   // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -1095,6 +1097,15 @@ export default function ArrivedDeliveriesScreen({
           : c
       ));
 
+      // Update model color if active vehicle coloring is enabled
+      if (activeColoredVehicleId) {
+        const item = items.find(i => i.id === itemId);
+        if (item?.guid_ifc) {
+          const colorStatus = status === 'confirmed' ? 'confirmed' : status === 'missing' ? 'missing' : 'pending';
+          updateItemColor(item.guid_ifc, colorStatus);
+        }
+      }
+
       // If item is missing or wrong vehicle, log discrepancy in delivery history
       if (status === 'missing' || status === 'wrong_vehicle') {
         const item = items.find(i => i.id === itemId);
@@ -1323,6 +1334,12 @@ export default function ArrivedDeliveriesScreen({
       });
 
       await Promise.all([loadItems(), loadConfirmations()]);
+
+      // Update model color for added item (yellow - from other vehicle)
+      if (activeColoredVehicleId && item?.guid_ifc) {
+        updateItemColor(item.guid_ifc, 'added_from_vehicle');
+      }
+
       setMessage('Detail lisatud');
     } catch (e: any) {
       console.error('Error adding item:', e);
@@ -1389,6 +1406,11 @@ export default function ArrivedDeliveriesScreen({
         changed_by: tcUserEmail,
         is_snapshot: false
       });
+
+      // Update model color for added item (orange - from model, not in schedule)
+      if (activeColoredVehicleId && newItem.guidIfc) {
+        updateItemColor(newItem.guidIfc, 'added_from_model');
+      }
 
       return createdItem;
     } catch (e: any) {
@@ -2525,6 +2547,181 @@ export default function ArrivedDeliveriesScreen({
     }
   }, [colorMode, colorModel]);
 
+  // Color model for active vehicle data entry
+  // When a vehicle is expanded for data entry, color:
+  // - All other objects: white
+  // - This vehicle's pending items: dark gray
+  // - Confirmed items: green
+  // - Missing items: red
+  // - Added from other vehicle: yellow
+  // - Added from model (not in schedule): orange
+  const colorActiveVehicle = useCallback(async (vehicleId: string, arrivedVehicleId: string) => {
+    if (!api) return;
+
+    setColoringInProgress(true);
+    setActiveColoredVehicleId(vehicleId);
+    setColorMode('active-vehicle');
+
+    try {
+      // Step 1: Get all database objects for white base coloring
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) break;
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      // Find objects in model
+      const dbFoundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+      // Step 2: Get items for THIS vehicle
+      const vehicleItems = items.filter(i => i.vehicle_id === vehicleId);
+      const vehicleGuids = new Set(vehicleItems.map(i => i.guid_ifc).filter(Boolean));
+
+      // Step 3: Color all non-vehicle objects white
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of dbFoundObjects) {
+        if (!vehicleGuids.has(guid)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      // Step 4: Get confirmations for this arrival
+      const arrivalConfirmations = confirmations.filter(c => c.arrived_vehicle_id === arrivedVehicleId);
+
+      // Step 5: Group items by status
+      const statusGroups: Record<string, { guid: string; color: typeof STATUS_COLORS.confirmed }[]> = {
+        pending: [],
+        confirmed: [],
+        missing: [],
+        added_from_vehicle: [],
+        added_from_model: []
+      };
+
+      // Process vehicle items (original items planned for this vehicle)
+      for (const item of vehicleItems) {
+        if (!item.guid_ifc) continue;
+
+        const conf = arrivalConfirmations.find(c => c.item_id === item.id);
+        const status = conf?.status || 'pending';
+
+        if (status === 'confirmed') {
+          statusGroups.confirmed.push({ guid: item.guid_ifc, color: STATUS_COLORS.confirmed });
+        } else if (status === 'missing') {
+          statusGroups.missing.push({ guid: item.guid_ifc, color: STATUS_COLORS.missing });
+        } else {
+          // Pending (not yet confirmed)
+          statusGroups.pending.push({ guid: item.guid_ifc, color: STATUS_COLORS.pending });
+        }
+      }
+
+      // Process added items (items added to this arrival from elsewhere)
+      const addedConfs = arrivalConfirmations.filter(c => c.status === 'added');
+      for (const conf of addedConfs) {
+        const item = items.find(i => i.id === conf.item_id);
+        if (!item?.guid_ifc) continue;
+
+        if (conf.source_vehicle_id) {
+          // Added from another vehicle (was in delivery schedule)
+          statusGroups.added_from_vehicle.push({ guid: item.guid_ifc, color: STATUS_COLORS.added_from_vehicle });
+        } else {
+          // Added from model (was NOT in delivery schedule)
+          statusGroups.added_from_model.push({ guid: item.guid_ifc, color: STATUS_COLORS.added_from_model });
+        }
+      }
+
+      // Step 6: Color each group
+      const statusCounts: Record<string, number> = {};
+
+      for (const [status, itemsArr] of Object.entries(statusGroups)) {
+        if (itemsArr.length === 0) continue;
+
+        const guids = itemsArr.map(i => i.guid);
+        const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+        const byModel: Record<string, number[]> = {};
+        for (const [, found] of foundObjects) {
+          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+          byModel[found.modelId].push(found.runtimeId);
+        }
+
+        const color = itemsArr[0]?.color || STATUS_COLORS.pending;
+        for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+            { color: { ...color, a: 255 } }
+          );
+        }
+
+        statusCounts[status] = foundObjects.size;
+      }
+
+      setMessage(`Veoki värvitud: ${statusCounts.pending || 0} ootel, ${statusCounts.confirmed || 0} kohal, ${statusCounts.missing || 0} puudu`);
+
+    } catch (e) {
+      console.error('Error coloring active vehicle:', e);
+      setMessage('Viga mudeli värvimisel');
+    } finally {
+      setColoringInProgress(false);
+    }
+  }, [api, projectId, items, confirmations]);
+
+  // Update coloring when confirmation status changes
+  const updateItemColor = useCallback(async (guidIfc: string, status: 'confirmed' | 'missing' | 'pending' | 'added_from_vehicle' | 'added_from_model') => {
+    if (!api || !guidIfc) return;
+
+    try {
+      const foundObjects = await findObjectsInLoadedModels(api, [guidIfc]);
+      if (foundObjects.size === 0) return;
+
+      const color = STATUS_COLORS[status] || STATUS_COLORS.pending;
+      for (const [, found] of foundObjects) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
+          { color: { ...color, a: 255 } }
+        );
+      }
+    } catch (e) {
+      console.error('Error updating item color:', e);
+    }
+  }, [api]);
+
+  // Reset coloring when vehicle is collapsed
+  const resetActiveVehicleColoring = useCallback(async () => {
+    if (!api || !activeColoredVehicleId) return;
+
+    setActiveColoredVehicleId(null);
+    setColorMode('off');
+    await api.viewer.setObjectState(undefined, { color: 'reset' });
+  }, [api, activeColoredVehicleId]);
+
   // ============================================
   // RENDER
   // ============================================
@@ -2697,15 +2894,28 @@ export default function ArrivedDeliveriesScreen({
                 {/* Vehicle header */}
                 <div
                   className="vehicle-header"
-                  onClick={() => setCollapsedVehicles(prev => {
-                    const next = new Set(prev);
-                    if (next.has(vehicle.id)) {
-                      next.delete(vehicle.id);
-                    } else {
-                      next.add(vehicle.id);
+                  onClick={() => {
+                    const wasCollapsed = collapsedVehicles.has(vehicle.id);
+
+                    setCollapsedVehicles(prev => {
+                      const next = new Set(prev);
+                      if (next.has(vehicle.id)) {
+                        next.delete(vehicle.id);
+                      } else {
+                        next.add(vehicle.id);
+                      }
+                      return next;
+                    });
+
+                    // When expanding vehicle with arrival, start active coloring
+                    if (wasCollapsed && arrivedVehicle) {
+                      colorActiveVehicle(vehicle.id, arrivedVehicle.id);
                     }
-                    return next;
-                  })}
+                    // When collapsing the active colored vehicle, reset colors
+                    else if (!wasCollapsed && activeColoredVehicleId === vehicle.id) {
+                      resetActiveVehicleColoring();
+                    }
+                  }}
                 >
                   <div className="vehicle-title">
                     <span className="vehicle-code">{vehicle.vehicle_code}</span>
