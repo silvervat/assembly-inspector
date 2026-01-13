@@ -23,7 +23,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.508';
+export const APP_VERSION = '3.0.509';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -47,9 +47,25 @@ const isPopupMode = new URLSearchParams(window.location.search).get('popup') ===
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 
 // Check if this is a share gallery page (/share/:token)
+// Also handles GitHub Pages 404 redirect: /?p=/share/token
 const pathMatch = window.location.pathname.match(/^\/share\/([a-f0-9]+)$/i);
-const isShareMode = !!pathMatch;
-const shareToken = pathMatch ? pathMatch[1] : '';
+let isShareMode = !!pathMatch;
+let shareToken = pathMatch ? pathMatch[1] : '';
+
+// GitHub Pages 404.html redirects to /?p=/share/token
+// Extract share token from query parameter if not found in path
+if (!isShareMode) {
+  const redirectPath = new URLSearchParams(window.location.search).get('p');
+  if (redirectPath) {
+    const redirectMatch = redirectPath.match(/^\/share\/([a-f0-9]+)$/i);
+    if (redirectMatch) {
+      isShareMode = true;
+      shareToken = redirectMatch[1];
+      // Clean up URL to show proper share path
+      window.history.replaceState(null, '', `/share/${shareToken}`);
+    }
+  }
+}
 
 // Check if this is a zoom link redirect (from shared link)
 const urlParams = new URLSearchParams(window.location.search);
