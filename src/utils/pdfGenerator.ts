@@ -20,6 +20,28 @@ import {
 } from '../supabase';
 import { formatDateEnglish, formatTime, getStatusLabelEnglish, getPhotoTypeLabelEnglish } from './shareUtils';
 
+/**
+ * Translate Estonian notes to English
+ */
+function translateNotesToEnglish(notes: string): string {
+  if (!notes) return '';
+
+  let translated = notes;
+
+  // Common patterns
+  translated = translated.replace(/Lisatud mudelist \(polnud tarnegraafikus\)/gi, 'Added from model (not in delivery schedule)');
+  translated = translated.replace(/Lisatud mudelist/gi, 'Added from model');
+  translated = translated.replace(/Lisatud veokist/gi, 'Added from vehicle');
+  translated = translated.replace(/saabus veokiga/gi, 'arrived with vehicle');
+  translated = translated.replace(/Detail/gi, 'Item');
+  translated = translated.replace(/polnud tarnegraafikus/gi, 'not in delivery schedule');
+  translated = translated.replace(/puudub/gi, 'missing');
+  translated = translated.replace(/kinnitatud/gi, 'confirmed');
+  translated = translated.replace(/lisatud/gi, 'added');
+
+  return translated;
+}
+
 // PDF Configuration
 const PAGE_WIDTH = 210; // A4 width in mm
 const PAGE_HEIGHT = 297; // A4 height in mm
@@ -205,10 +227,11 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
   doc.text(`Scheduled: ${scheduledText} | Arrived: ${arrivalText} | Items: ${items.length} | Weight: ${Math.round(totalWeight).toLocaleString()} kg | ${statusText}`, MARGIN, y);
   y += 6;
 
-  // Vehicle notes (if any)
+  // Vehicle notes (if any) - translated to English
   if (arrivedVehicle.notes && arrivedVehicle.notes.trim()) {
     doc.setFillColor(255, 251, 235); // Light yellow background
-    const noteLines = doc.splitTextToSize(`Vehicle notes: ${arrivedVehicle.notes}`, CONTENT_WIDTH - 6);
+    const translatedNotes = translateNotesToEnglish(arrivedVehicle.notes);
+    const noteLines = doc.splitTextToSize(`Vehicle notes: ${translatedNotes}`, CONTENT_WIDTH - 6);
     const noteHeight = noteLines.length * 4 + 4;
     doc.roundedRect(MARGIN, y, CONTENT_WIDTH, noteHeight, 2, 2, 'F');
     doc.setTextColor(...COLORS.dark);
@@ -241,33 +264,36 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
 
   y += badgeHeight + 5;
 
-  // Items Table - compact with GUID and Notes
+  // Items Table - compact with GUID on the right
   doc.setTextColor(...COLORS.dark);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('ITEMS', MARGIN, y);
   y += 3;
 
-  // Prepare table data with GUID and Notes
-  const tableData = items.map((item, idx) => {
+  // Sort items alphabetically by assembly_mark
+  const sortedItems = [...items].sort((a, b) =>
+    (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et')
+  );
+
+  // Prepare table data - GUID on the right, notes translated
+  const tableData = sortedItems.map((item, idx) => {
     const conf = confirmations.find(c => c.item_id === item.id);
     const status = conf?.status || 'pending';
-    const notes = conf?.notes || '';
-    // Truncate GUID for display (first 8 chars)
-    const guidShort = item.guid_ifc ? item.guid_ifc.substring(0, 8) + '...' : '-';
+    const notes = conf?.notes ? translateNotesToEnglish(conf.notes) : '';
     return [
       (idx + 1).toString(),
       item.assembly_mark || '-',
-      guidShort,
       item.cast_unit_weight ? `${Math.round(Number(item.cast_unit_weight))}` : '-',
       getStatusLabelEnglish(status),
-      notes
+      notes,
+      item.guid_ifc || '-'  // Full GUID on the right
     ];
   });
 
   autoTable(doc, {
     startY: y,
-    head: [['#', 'Mark', 'GUID', 'kg', 'Status', 'Notes']],
+    head: [['#', 'Mark', 'kg', 'Status', 'Notes', 'GUID']],
     body: tableData,
     theme: 'striped',
     headStyles: {
@@ -278,23 +304,23 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
       cellPadding: 1.5
     },
     bodyStyles: {
-      fontSize: 7,
+      fontSize: 6,
       textColor: COLORS.dark,
       cellPadding: 1.5
     },
     columnStyles: {
-      0: { cellWidth: 8 },   // #
-      1: { cellWidth: 28 },  // Mark
-      2: { cellWidth: 22 },  // GUID
-      3: { cellWidth: 12 },  // Weight
-      4: { cellWidth: 18 },  // Status
-      5: { cellWidth: 'auto' } // Notes - takes remaining space
+      0: { cellWidth: 7 },   // #
+      1: { cellWidth: 22 },  // Mark
+      2: { cellWidth: 10 },  // Weight
+      3: { cellWidth: 16 },  // Status
+      4: { cellWidth: 'auto' }, // Notes - flexible
+      5: { cellWidth: 45, fontSize: 5 }  // GUID - full width, smaller font
     },
     margin: { left: MARGIN, right: MARGIN },
     didParseCell: (data) => {
-      // Color status column (index 4)
-      if (data.column.index === 4 && data.section === 'body') {
-        const status = tableData[data.row.index]?.[4] || '';
+      // Color status column (index 3)
+      if (data.column.index === 3 && data.section === 'body') {
+        const status = tableData[data.row.index]?.[3] || '';
         if (status === 'Confirmed') {
           data.cell.styles.textColor = COLORS.success;
           data.cell.styles.fontStyle = 'bold';
@@ -306,10 +332,15 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
           data.cell.styles.fontStyle = 'bold';
         }
       }
-      // Notes column styling (index 5)
+      // Notes column styling (index 4)
+      if (data.column.index === 4 && data.section === 'body') {
+        data.cell.styles.textColor = COLORS.gray;
+        data.cell.styles.fontSize = 5;
+      }
+      // GUID column styling (index 5)
       if (data.column.index === 5 && data.section === 'body') {
         data.cell.styles.textColor = COLORS.gray;
-        data.cell.styles.fontSize = 6;
+        data.cell.styles.fontSize = 5;
       }
     }
   });
