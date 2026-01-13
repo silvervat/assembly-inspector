@@ -1222,31 +1222,89 @@ export default function ArrivedDeliveriesScreen({
     }
   };
 
-  // Update arrival details
-  const updateArrival = async (arrivedVehicleId: string, updates: Partial<ArrivedVehicle>) => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('trimble_arrived_vehicles')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-          updated_by: tcUserEmail
-        })
-        .eq('id', arrivedVehicleId);
+  // Debounce timers for arrival updates
+  const arrivalUpdateTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const pendingArrivalUpdatesRef = useRef<Map<string, Partial<ArrivedVehicle>>>(new Map());
 
-      if (error) throw error;
+  // Update arrival details with debouncing for text fields
+  // Updates local state immediately, but debounces database save
+  const updateArrival = useCallback((arrivedVehicleId: string, updates: Partial<ArrivedVehicle>, immediate = false) => {
+    // Update local state immediately for responsive UI
+    setArrivedVehicles(prev => prev.map(av =>
+      av.id === arrivedVehicleId ? { ...av, ...updates } : av
+    ));
 
-      setArrivedVehicles(prev => prev.map(av =>
-        av.id === arrivedVehicleId ? { ...av, ...updates } : av
-      ));
-    } catch (e: any) {
-      console.error('Error updating arrival:', e);
-      setMessage('Viga: ' + e.message);
-    } finally {
-      setSaving(false);
+    // Merge with pending updates
+    const pending = pendingArrivalUpdatesRef.current.get(arrivedVehicleId) || {};
+    pendingArrivalUpdatesRef.current.set(arrivedVehicleId, { ...pending, ...updates });
+
+    // Clear existing timer
+    const existingTimer = arrivalUpdateTimersRef.current.get(arrivedVehicleId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
     }
-  };
+
+    // Save function
+    const saveToDatabase = async () => {
+      const allUpdates = pendingArrivalUpdatesRef.current.get(arrivedVehicleId);
+      if (!allUpdates) return;
+
+      pendingArrivalUpdatesRef.current.delete(arrivedVehicleId);
+      arrivalUpdateTimersRef.current.delete(arrivedVehicleId);
+
+      try {
+        const { error } = await supabase
+          .from('trimble_arrived_vehicles')
+          .update({
+            ...allUpdates,
+            updated_at: new Date().toISOString(),
+            updated_by: tcUserEmail
+          })
+          .eq('id', arrivedVehicleId);
+
+        if (error) throw error;
+      } catch (e: any) {
+        console.error('Error updating arrival:', e);
+        setMessage('Viga: ' + e.message);
+      }
+    };
+
+    if (immediate) {
+      // Save immediately (for dropdowns, checkboxes)
+      saveToDatabase();
+    } else {
+      // Debounce save (for text inputs) - 800ms delay
+      const timer = setTimeout(saveToDatabase, 800);
+      arrivalUpdateTimersRef.current.set(arrivedVehicleId, timer);
+    }
+  }, [tcUserEmail]);
+
+  // Flush pending updates on unmount
+  useEffect(() => {
+    return () => {
+      // Save all pending updates immediately when component unmounts
+      pendingArrivalUpdatesRef.current.forEach(async (updates, arrivedVehicleId) => {
+        // Clear timer
+        const timer = arrivalUpdateTimersRef.current.get(arrivedVehicleId);
+        if (timer) clearTimeout(timer);
+
+        // Save immediately
+        try {
+          await supabase
+            .from('trimble_arrived_vehicles')
+            .update({
+              ...updates,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', arrivedVehicleId);
+        } catch (e) {
+          console.error('Error saving pending arrival update on unmount:', e);
+        }
+      });
+      pendingArrivalUpdatesRef.current.clear();
+      arrivalUpdateTimersRef.current.clear();
+    };
+  }, []);
 
   // Complete arrival confirmation
   const completeArrival = async (arrivedVehicleId: string) => {
@@ -3197,7 +3255,7 @@ export default function ArrivedDeliveriesScreen({
                               <input
                                 type="date"
                                 value={arrivedVehicle.arrival_date || ''}
-                                onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_date: e.target.value })}
+                                onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_date: e.target.value }, true)}
                               />
                             </div>
                             <div className="detail-field">
@@ -3308,14 +3366,14 @@ export default function ArrivedDeliveriesScreen({
                                           [`${res.key}_name`]: undefined,
                                           [`${res.key}_workers`]: undefined
                                         };
-                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources }, true);
                                       } else {
                                         // Toggle on - set to 1
                                         const newResources = {
                                           ...(arrivedVehicle.unload_resources || {}),
                                           [res.key]: 1
                                         };
-                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                        updateArrival(arrivedVehicle.id, { unload_resources: newResources }, true);
                                       }
                                     }}
                                   >
@@ -3344,7 +3402,7 @@ export default function ArrivedDeliveriesScreen({
                                                   ...(arrivedVehicle.unload_resources || {}),
                                                   [res.key]: num
                                                 };
-                                                updateArrival(arrivedVehicle.id, { unload_resources: newResources });
+                                                updateArrival(arrivedVehicle.id, { unload_resources: newResources }, true);
                                               }}
                                             >
                                               {num}
@@ -4334,7 +4392,7 @@ export default function ArrivedDeliveriesScreen({
                           const existingNotes = originalArrival.notes || '';
                           const moveNote = `[${new Date().toLocaleDateString('et-EE')}] Detail ${item.assembly_mark} saabus veokiga ${currentVehicle?.vehicle_code || 'tundmatu'}`;
                           const newNotes = existingNotes ? `${existingNotes}\n${moveNote}` : moveNote;
-                          await updateArrival(originalArrival.id, { notes: newNotes });
+                          await updateArrival(originalArrival.id, { notes: newNotes }, true);
                         }
                       }
                     }
