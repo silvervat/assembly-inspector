@@ -14027,6 +14027,166 @@ button.stat-toggle.off:hover {
   color: #94a3b8;
 }
 
+/* Compact styles for share gallery */
+.summary-section.compact {
+  padding: 16px 20px;
+}
+
+.summary-section.compact h2 {
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.summary-grid.compact {
+  gap: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.summary-grid.compact .summary-item .label {
+  font-size: 10px;
+}
+
+.summary-grid.compact .summary-item .value {
+  font-size: 13px;
+}
+
+.status-badges.compact {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.status-badges.compact .badge {
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.status-badges.compact .badge .count {
+  font-size: 14px;
+}
+
+.status-badges.compact .badge .label {
+  font-size: 11px;
+}
+
+.status-badges.compact .badge svg {
+  font-size: 14px;
+}
+
+/* Resources section */
+.resources-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.resources-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.resources-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.resource-badge {
+  display: inline-flex;
+  padding: 3px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #475569;
+}
+
+/* Vehicle notes */
+.vehicle-notes {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  font-size: 12px;
+}
+
+.vehicle-notes .notes-label {
+  font-weight: 600;
+  color: #64748b;
+  margin-right: 6px;
+}
+
+.vehicle-notes .notes-text {
+  color: #475569;
+  white-space: pre-wrap;
+}
+
+/* Compact table */
+.items-table.compact th {
+  padding: 8px 10px;
+  font-size: 10px;
+}
+
+.items-table.compact td {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.items-table.compact td.num {
+  font-size: 10px;
+  width: 30px;
+}
+
+.items-table.compact td.guid {
+  font-family: monospace;
+  font-size: 10px;
+  color: #64748b;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.items-table.compact .status-cell {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.items-table.compact .status-icon {
+  font-size: 12px;
+}
+
+/* Download Excel button */
+.items-section .section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.download-excel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #16a34a;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.download-excel-btn:hover {
+  background: #15803d;
+}
+
 /* Lightbox */
 .lightbox-overlay {
   position: fixed;
