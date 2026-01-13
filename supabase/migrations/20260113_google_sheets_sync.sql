@@ -82,6 +82,12 @@ CREATE INDEX IF NOT EXISTS idx_vehicles_sheets_row
 ALTER TABLE trimble_sheets_sync_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trimble_sheets_sync_log ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for idempotent migration)
+DROP POLICY IF EXISTS "Project members can view sheets config" ON trimble_sheets_sync_config;
+DROP POLICY IF EXISTS "Admins can manage sheets config" ON trimble_sheets_sync_config;
+DROP POLICY IF EXISTS "Project members can view sync logs" ON trimble_sheets_sync_log;
+DROP POLICY IF EXISTS "Allow insert sync logs" ON trimble_sheets_sync_log;
+
 CREATE POLICY "Project members can view sheets config"
   ON trimble_sheets_sync_config FOR SELECT
   USING (
