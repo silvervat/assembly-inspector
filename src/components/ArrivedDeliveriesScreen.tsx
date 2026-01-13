@@ -12,9 +12,12 @@ import {
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
-  FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2
+  FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
+  FiExternalLink, FiLoader, FiCopy
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
+import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
+import { createOrGetShareLink, getShareUrl } from '../utils/shareUtils';
 
 // Props
 interface ArrivedDeliveriesScreenProps {
@@ -371,6 +374,7 @@ export default function ArrivedDeliveriesScreen({
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
   // State - Data
+  const [projectName, setProjectName] = useState<string>('');
   const [vehicles, setVehicles] = useState<DeliveryVehicle[]>([]);
   const [items, setItems] = useState<DeliveryItem[]>([]);
   const [factories, setFactories] = useState<DeliveryFactory[]>([]);
@@ -440,6 +444,11 @@ export default function ArrivedDeliveriesScreen({
   // Photo upload refs
   const photoInputRef = useRef<HTMLInputElement>(null);
   const deliveryNotePhotoInputRef = useRef<HTMLInputElement>(null);
+
+  // State - PDF/Share
+  const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [generatingShareLink, setGeneratingShareLink] = useState<string | null>(null);
+  const [shareLinks, setShareLinks] = useState<Record<string, { url: string; token: string }>>({});
 
   // ============================================
   // DATA LOADING
@@ -535,10 +544,29 @@ export default function ArrivedDeliveriesScreen({
     }
   }, [projectId]);
 
+  const loadProjectName = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trimble_projects')
+        .select('project_name')
+        .eq('trimble_project_id', projectId)
+        .single();
+
+      if (!error && data) {
+        setProjectName(data.project_name || projectId);
+      } else {
+        setProjectName(projectId);
+      }
+    } catch {
+      setProjectName(projectId);
+    }
+  }, [projectId]);
+
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
       await Promise.all([
+        loadProjectName(),
         loadVehicles(),
         loadItems(),
         loadFactories(),
@@ -549,7 +577,7 @@ export default function ArrivedDeliveriesScreen({
     } finally {
       setLoading(false);
     }
-  }, [loadVehicles, loadItems, loadFactories, loadArrivedVehicles, loadConfirmations, loadPhotos]);
+  }, [loadProjectName, loadVehicles, loadItems, loadFactories, loadArrivedVehicles, loadConfirmations, loadPhotos]);
 
   // Initial load
   useEffect(() => {
@@ -1279,6 +1307,138 @@ export default function ArrivedDeliveriesScreen({
       setMessage('Viga: ' + e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ============================================
+  // PDF & SHARE FUNCTIONS
+  // ============================================
+
+  // Generate and download PDF report
+  const generatePdfReport = async (arrivedVehicleId: string, vehicleId: string) => {
+    const arrival = arrivedVehicles.find(av => av.id === arrivedVehicleId);
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    if (!arrival || !vehicle) return;
+
+    setGeneratingPdf(arrivedVehicleId);
+    try {
+      const factory = getFactory(vehicle.factory_id);
+      const vehicleItems = getVehicleItems(vehicleId);
+      const vehicleConfirmations = getConfirmationsForArrival(arrivedVehicleId);
+      const vehiclePhotos = photos.filter(p => p.arrived_vehicle_id === arrivedVehicleId);
+
+      // Get or create share link for QR code
+      let shareUrl = '';
+      if (shareLinks[arrivedVehicleId]) {
+        shareUrl = shareLinks[arrivedVehicleId].url;
+      } else {
+        const result = await createOrGetShareLink(
+          projectId,
+          projectName,
+          arrivedVehicleId,
+          vehicle.vehicle_code,
+          arrival.arrival_date,
+          tcUserEmail
+        );
+        if (result.shareLink) {
+          shareUrl = getShareUrl(result.shareLink.share_token);
+          setShareLinks(prev => ({
+            ...prev,
+            [arrivedVehicleId]: { url: shareUrl, token: result.shareLink!.share_token }
+          }));
+        }
+      }
+
+      await downloadDeliveryReportPDF({
+        projectName,
+        vehicle,
+        factory: factory || undefined,
+        arrivedVehicle: arrival,
+        items: vehicleItems,
+        confirmations: vehicleConfirmations,
+        photos: vehiclePhotos,
+        shareUrl
+      });
+
+      setMessage('PDF raport loodud');
+    } catch (e: any) {
+      console.error('Error generating PDF:', e);
+      setMessage('Viga PDF loomisel: ' + e.message);
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
+
+  // Create or get share link
+  const getOrCreateShareLink = async (arrivedVehicleId: string, vehicleId: string): Promise<string | null> => {
+    // Check if we already have the link
+    if (shareLinks[arrivedVehicleId]) {
+      return shareLinks[arrivedVehicleId].url;
+    }
+
+    const arrival = arrivedVehicles.find(av => av.id === arrivedVehicleId);
+    const vehicle = vehicles.find(v => v.id === vehicleId);
+    if (!arrival || !vehicle) return null;
+
+    setGeneratingShareLink(arrivedVehicleId);
+    try {
+      const result = await createOrGetShareLink(
+        projectId,
+        projectName,
+        arrivedVehicleId,
+        vehicle.vehicle_code,
+        arrival.arrival_date,
+        tcUserEmail
+      );
+
+      if (result.error) {
+        setMessage('Viga jagamislingi loomisel: ' + result.error);
+        return null;
+      }
+
+      if (result.shareLink) {
+        const shareUrl = getShareUrl(result.shareLink.share_token);
+        setShareLinks(prev => ({
+          ...prev,
+          [arrivedVehicleId]: { url: shareUrl, token: result.shareLink!.share_token }
+        }));
+        return shareUrl;
+      }
+      return null;
+    } catch (e: any) {
+      console.error('Error creating share link:', e);
+      setMessage('Viga jagamislingi loomisel: ' + e.message);
+      return null;
+    } finally {
+      setGeneratingShareLink(null);
+    }
+  };
+
+  // Copy share link to clipboard
+  const copyShareLink = async (arrivedVehicleId: string, vehicleId: string) => {
+    const url = await getOrCreateShareLink(arrivedVehicleId, vehicleId);
+    if (url) {
+      try {
+        await navigator.clipboard.writeText(url);
+        setMessage('Link kopeeritud lõikelauale');
+      } catch {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        setMessage('Link kopeeritud lõikelauale');
+      }
+    }
+  };
+
+  // Open share link in new tab
+  const openShareLink = async (arrivedVehicleId: string, vehicleId: string) => {
+    const url = await getOrCreateShareLink(arrivedVehicleId, vehicleId);
+    if (url) {
+      window.open(url, '_blank');
     }
   };
 
@@ -3742,6 +3902,47 @@ export default function ArrivedDeliveriesScreen({
                             </button>
                           </div>
                         )}
+
+                        {/* Share/Export section */}
+                        <div className="share-export-section">
+                          <div className="share-export-title">Jaga / Eksport</div>
+                          <div className="share-export-buttons">
+                            <button
+                              className="share-btn pdf"
+                              onClick={() => generatePdfReport(arrivedVehicle.id, vehicle.id)}
+                              disabled={generatingPdf === arrivedVehicle.id}
+                              title="Laadi alla PDF raport"
+                            >
+                              {generatingPdf === arrivedVehicle.id ? (
+                                <><FiLoader className="spinning" /> PDF...</>
+                              ) : (
+                                <><FiFileText /> PDF raport</>
+                              )}
+                            </button>
+
+                            <button
+                              className="share-btn copy"
+                              onClick={() => copyShareLink(arrivedVehicle.id, vehicle.id)}
+                              disabled={generatingShareLink === arrivedVehicle.id}
+                              title="Kopeeri jagamislink"
+                            >
+                              {generatingShareLink === arrivedVehicle.id ? (
+                                <><FiLoader className="spinning" /> ...</>
+                              ) : (
+                                <><FiCopy /> Kopeeri link</>
+                              )}
+                            </button>
+
+                            <button
+                              className="share-btn open"
+                              onClick={() => openShareLink(arrivedVehicle.id, vehicle.id)}
+                              disabled={generatingShareLink === arrivedVehicle.id}
+                              title="Ava brauseris"
+                            >
+                              <FiExternalLink /> Ava brauseris
+                            </button>
+                          </div>
+                        </div>
                       </>
                     )}
                   </div>
