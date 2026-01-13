@@ -3,7 +3,7 @@ import { WorkspaceAPI } from 'trimble-connect-workspace-api';
 import {
   supabase, TrimbleExUser, DeliveryFactory, DeliveryVehicle, DeliveryItem,
   DeliveryComment, DeliveryHistory, UnloadMethods, DeliveryResources,
-  DeliveryVehicleStatus, ArrivalItemConfirmation
+  DeliveryVehicleStatus, ArrivalItemConfirmation, SheetsSyncConfig, SheetsSyncLog
 } from '../supabase';
 import {
   findObjectsInLoadedModels,
@@ -527,6 +527,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // History modal
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyData, setHistoryData] = useState<DeliveryHistory[]>([]);
+
+  // Google Sheets Sync
+  const [showSheetsModal, setShowSheetsModal] = useState(false);
+  const [sheetsConfig, setSheetsConfig] = useState<SheetsSyncConfig | null>(null);
+  const [sheetsLogs, setSheetsLogs] = useState<SheetsSyncLog[]>([]);
+  const [sheetsLoading, setSheetsLoading] = useState(false);
   const [_historyItemId, setHistoryItemId] = useState<string | null>(null);
 
   // Date change comment modal
@@ -1534,6 +1540,25 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       broadcastChannelRef.current = null;
     };
   }, [projectId, loadAllData]);
+
+  // Load Google Sheets sync config
+  useEffect(() => {
+    const loadSheetsConfig = async () => {
+      if (!projectId) return;
+
+      const { data } = await supabase
+        .from('trimble_sheets_sync_config')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .single();
+
+      if (data) {
+        setSheetsConfig(data);
+      }
+    };
+
+    loadSheetsConfig();
+  }, [projectId]);
 
   // Collapse all dates and vehicles on initial load
   useEffect(() => {
@@ -3295,6 +3320,81 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       console.error('Error loading vehicle history:', e);
       setMessage('Viga ajaloo laadimisel');
     }
+  };
+
+  // ============================================
+  // GOOGLE SHEETS SYNC
+  // ============================================
+
+  // Load sync logs
+  const loadSheetsLogs = async () => {
+    if (!projectId) return;
+
+    const { data } = await supabase
+      .from('trimble_sheets_sync_log')
+      .select('*')
+      .eq('trimble_project_id', projectId)
+      .order('started_at', { ascending: false })
+      .limit(10);
+
+    if (data) {
+      setSheetsLogs(data);
+    }
+  };
+
+  // Initialize sheets config for this project
+  const initializeSheetsConfig = async () => {
+    if (!projectId) return;
+
+    setSheetsLoading(true);
+
+    const { data, error } = await supabase
+      .from('trimble_sheets_sync_config')
+      .insert({
+        trimble_project_id: projectId,
+        google_drive_folder_id: '104KWXRGYHRUZMAKmNSYjiLR4IY8hKWaD',
+        sheet_name: 'Veokid',
+        sync_enabled: true,
+        created_by: tcUserEmail || 'unknown'
+      })
+      .select()
+      .single();
+
+    setSheetsLoading(false);
+
+    if (data) {
+      setSheetsConfig(data);
+    } else if (error) {
+      console.error('Failed to initialize sheets config:', error);
+      alert('Sheets konfiguratsiooni loomine ebaõnnestus!');
+    }
+  };
+
+  // Refresh sheets config from database
+  const refreshSheetsConfig = async () => {
+    if (!projectId) return;
+
+    const { data } = await supabase
+      .from('trimble_sheets_sync_config')
+      .select('*')
+      .eq('trimble_project_id', projectId)
+      .single();
+
+    if (data) {
+      setSheetsConfig(data);
+    }
+  };
+
+  // Toggle sync enabled/disabled
+  const toggleSheetsSync = async (enabled: boolean) => {
+    if (!sheetsConfig) return;
+
+    await supabase
+      .from('trimble_sheets_sync_config')
+      .update({ sync_enabled: enabled })
+      .eq('id', sheetsConfig.id);
+
+    refreshSheetsConfig();
   };
 
   // ============================================
@@ -7798,6 +7898,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               <FiSettings size={18} />
             </button>
           </div>
+
+          {/* GOOGLE SHEETS SYNC */}
+          <div className="icon-menu-wrapper">
+            <button
+              className="icon-btn"
+              onClick={() => {
+                setShowSheetsModal(true);
+                loadSheetsLogs();
+              }}
+              title="Google Sheets sünkroonimine"
+            >
+              <FiExternalLink size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -10009,6 +10123,175 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Google Sheets Sync Modal */}
+      {showSheetsModal && (
+        <div className="modal-overlay" onClick={() => setShowSheetsModal(false)}>
+          <div className="modal settings-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2><FiExternalLink style={{ marginRight: 8 }} />Google Sheets Sünkroonimine</h2>
+              <button className="close-btn" onClick={() => setShowSheetsModal(false)}>
+                <FiX />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {sheetsLoading ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <FiRefreshCw className="spin" size={24} />
+                  <p>Laadin...</p>
+                </div>
+              ) : !sheetsConfig ? (
+                <div className="sheets-not-initialized">
+                  <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                    <FiExternalLink size={48} style={{ color: '#9ca3af', marginBottom: 16 }} />
+                    <p style={{ marginBottom: 16, color: '#374151' }}>
+                      Google Sheets sünkroonimine pole veel seadistatud.
+                    </p>
+                    <button
+                      className="submit-btn primary"
+                      onClick={initializeSheetsConfig}
+                    >
+                      <FiPlus style={{ marginRight: 8 }} />
+                      Seadista sünkroonimine
+                    </button>
+                  </div>
+                  <div className="sheets-hint" style={{
+                    marginTop: 24,
+                    padding: 16,
+                    background: '#f9fafb',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: '#6b7280'
+                  }}>
+                    <strong>Järgmised sammud pärast seadistamist:</strong>
+                    <ol style={{ marginTop: 8, paddingLeft: 20 }}>
+                      <li>Ava Google Apps Script</li>
+                      <li>Käivita <code>initializeSheet()</code> funktsioon</li>
+                      <li>Sheet luuakse automaatselt</li>
+                    </ol>
+                  </div>
+                </div>
+              ) : (
+                <div className="sheets-config">
+                  {/* Status */}
+                  <div className="sheets-status-row">
+                    <span>Staatus:</span>
+                    <span className={`sheets-status-badge ${sheetsConfig.sync_status}`}>
+                      {sheetsConfig.sync_status === 'not_initialized' && '⚪ Ootab initsialiseerimist'}
+                      {sheetsConfig.sync_status === 'idle' && '🟢 Valmis'}
+                      {sheetsConfig.sync_status === 'syncing' && '🔄 Sünkroonib...'}
+                      {sheetsConfig.sync_status === 'error' && '🔴 Viga'}
+                    </span>
+                  </div>
+
+                  {/* Sheet Link */}
+                  {sheetsConfig.google_spreadsheet_url ? (
+                    <div className="sheets-link-row">
+                      <span>Google Sheet:</span>
+                      <a
+                        href={sheetsConfig.google_spreadsheet_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="sheets-link"
+                      >
+                        <FiExternalLink style={{ marginRight: 4 }} />
+                        Ava Sheets'is
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="sheets-pending">
+                      <FiClock style={{ marginRight: 8 }} />
+                      Sheet pole veel loodud. Käivita Google Apps Scriptis <code>initializeSheet()</code>
+                      <button
+                        className="refresh-btn"
+                        onClick={refreshSheetsConfig}
+                        style={{ marginLeft: 12 }}
+                      >
+                        <FiRefreshCw size={14} />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Sync times */}
+                  <div className="sheets-times">
+                    <div className="sheets-time-row">
+                      <span>Viimane sünkr. Sheeti:</span>
+                      <span>{sheetsConfig.last_sync_to_sheets
+                        ? new Date(sheetsConfig.last_sync_to_sheets).toLocaleString('et-EE')
+                        : '-'
+                      }</span>
+                    </div>
+                    <div className="sheets-time-row">
+                      <span>Viimane sünkr. Sheetist:</span>
+                      <span>{sheetsConfig.last_sync_from_sheets
+                        ? new Date(sheetsConfig.last_sync_from_sheets).toLocaleString('et-EE')
+                        : '-'
+                      }</span>
+                    </div>
+                  </div>
+
+                  {/* Error */}
+                  {sheetsConfig.last_error && (
+                    <div className="sheets-error">
+                      <FiAlertTriangle style={{ marginRight: 8 }} />
+                      <div>
+                        <strong>Viimane viga:</strong>
+                        <code>{sheetsConfig.last_error}</code>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Toggle */}
+                  <div className="sheets-toggle-row">
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={sheetsConfig.sync_enabled}
+                        onChange={(e) => toggleSheetsSync(e.target.checked)}
+                      />
+                      <span>Automaatne sünkroonimine aktiivne</span>
+                    </label>
+                  </div>
+
+                  {/* Logs */}
+                  {sheetsLogs.length > 0 && (
+                    <div className="sheets-logs">
+                      <h4>Viimased sünkroonimised</h4>
+                      <table className="sheets-logs-table">
+                        <thead>
+                          <tr>
+                            <th>Aeg</th>
+                            <th>Suund</th>
+                            <th>Veokeid</th>
+                            <th>Kestus</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sheetsLogs.slice(0, 5).map(log => (
+                            <tr key={log.id} className={log.errors_count > 0 ? 'has-error' : ''}>
+                              <td>{new Date(log.started_at).toLocaleString('et-EE')}</td>
+                              <td>{log.sync_direction === 'to_sheets' ? '→ Sheets' : '← Sheets'}</td>
+                              <td>{log.vehicles_processed}</td>
+                              <td>{log.duration_ms ? `${log.duration_ms}ms` : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowSheetsModal(false)}>
+                Sulge
+              </button>
             </div>
           </div>
         </div>
