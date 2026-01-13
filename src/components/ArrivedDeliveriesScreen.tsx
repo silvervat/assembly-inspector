@@ -2160,8 +2160,63 @@ export default function ArrivedDeliveriesScreen({
         return;
       }
 
-      // First, color entire model white
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+      // Database-based white coloring: Only color objects from trimble_model_objects white
+      setMessage('Värvin... Loen Supabasest...');
+
+      // Step 1: Fetch all GUIDs from database
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          break;
+        }
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      // Step 2: Find objects in loaded models
+      setMessage('Värvin... Otsin mudelitest...');
+      const dbFoundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+      // Step 3: Get all delivery items GUIDs (these will be colored, not white)
+      const scheduleGuids = new Set(
+        items.map(i => i.guid_ifc).filter((g): g is string => !!g)
+      );
+
+      // Step 4: Color non-schedule database objects white
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [guid, found] of dbFoundObjects) {
+        if (!scheduleGuids.has(guid)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      const BATCH_SIZE = 5000;
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
 
       if (mode === 'by-status') {
         // Color by confirmation status for specific vehicle or all on selected date
