@@ -138,6 +138,28 @@ export async function getShareLinkByToken(token: string): Promise<{
       })
       .eq('id', shareLink.id);
 
+    // Try to get fresh project name from trimble_projects table
+    let projectName = shareLink.project_name;
+    if (shareLink.trimble_project_id) {
+      const { data: projectData } = await supabase
+        .from('trimble_projects')
+        .select('project_name')
+        .eq('trimble_project_id', shareLink.trimble_project_id)
+        .single();
+
+      if (projectData?.project_name) {
+        projectName = projectData.project_name;
+        // Also update the share link with fresh name for next time
+        await supabase
+          .from('trimble_delivery_share_links')
+          .update({ project_name: projectName })
+          .eq('id', shareLink.id);
+      }
+    }
+
+    // Update shareLink with fresh project name
+    const updatedShareLink = { ...shareLink, project_name: projectName };
+
     // Fetch arrived vehicle with delivery vehicle info
     const { data: arrivedVehicle } = await supabase
       .from('trimble_arrived_vehicles')
@@ -191,7 +213,7 @@ export async function getShareLinkByToken(token: string): Promise<{
     }
 
     return {
-      shareLink,
+      shareLink: updatedShareLink,
       arrivedVehicle: arrivedVehicle as (ArrivedVehicle & { vehicle?: DeliveryVehicle }) | null,
       confirmations: confirmations || [],
       photos: photos || [],
