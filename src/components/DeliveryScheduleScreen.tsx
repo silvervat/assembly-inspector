@@ -5039,12 +5039,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     const foundObjects = await findObjectsInLoadedModels(api, allGuids);
     console.log(`Playback: Found ${foundObjects.size} objects in loaded models`);
 
-    // Step 3: Color ALL objects WHITE in batches (using runtime IDs directly)
+    // Step 3: Color NON-SCHEDULED objects WHITE in batches
+    // First, build a set of GUIDs that are in the delivery schedule
     setMessage('Playback: Värvin valged...');
+    const scheduleGuids = new Set(
+      items.map(i => i.guid_ifc || i.guid).filter((g): g is string => !!g)
+    );
+
     const whiteByModel: Record<string, number[]> = {};
-    for (const [, found] of foundObjects) {
-      if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
-      whiteByModel[found.modelId].push(found.runtimeId);
+    for (const [guid, found] of foundObjects) {
+      // Only color white if NOT in the delivery schedule
+      if (!scheduleGuids.has(guid)) {
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
+      }
     }
 
     const BATCH_SIZE = 5000;
