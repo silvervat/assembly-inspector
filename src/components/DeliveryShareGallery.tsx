@@ -548,15 +548,30 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
               <FiChevronLeft />
             </button>
 
-            <div className="lightbox-image-wrapper">
-              <img src={photos[lightboxIndex].file_url} alt="" />
-              <div className="lightbox-caption">
-                <span className="photo-type">
-                  {getPhotoTypeLabelEnglish(photos[lightboxIndex].photo_type || 'general')}
-                </span>
-                <span className="photo-counter">
-                  {lightboxIndex + 1} / {photos.length}
-                </span>
+            <div className="lightbox-main">
+              <div className="lightbox-image-wrapper">
+                <img src={photos[lightboxIndex].file_url} alt="" />
+                <div className="lightbox-caption">
+                  <span className="photo-type">
+                    {getPhotoTypeLabelEnglish(photos[lightboxIndex].photo_type || 'general')}
+                  </span>
+                  <span className="photo-counter">
+                    {lightboxIndex + 1} / {photos.length}
+                  </span>
+                </div>
+              </div>
+
+              {/* Thumbnails */}
+              <div className="lightbox-thumbnails">
+                {photos.map((photo, idx) => (
+                  <div
+                    key={photo.id}
+                    className={`lightbox-thumb ${idx === lightboxIndex ? 'active' : ''}`}
+                    onClick={() => setLightboxIndex(idx)}
+                  >
+                    <img src={photo.file_url} alt="" />
+                  </div>
+                ))}
               </div>
             </div>
 
