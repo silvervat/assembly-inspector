@@ -20,9 +20,14 @@ export function generateShareToken(): string {
 
 /**
  * Generate the full share URL for a given token
+ * Uses Vite's BASE_URL to ensure correct path for GitHub Pages
  */
 export function getShareUrl(token: string): string {
-  return `${window.location.origin}/share/${token}`;
+  // import.meta.env.BASE_URL is set in vite.config.ts (e.g., '/assembly-inspector/')
+  const basePath = import.meta.env.BASE_URL || '/';
+  // Remove trailing slash from base path for clean URL
+  const cleanBase = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
+  return `${window.location.origin}${cleanBase}/share/${token}`;
 }
 
 /**
