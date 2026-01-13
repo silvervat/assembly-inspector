@@ -7021,6 +7021,31 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+.moved-items-header.clickable {
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.moved-items-header.clickable:hover {
+  opacity: 0.8;
+}
+
+.moved-items-section.missing {
+  background: #fef9c3;
+}
+
+.moved-items-section.missing .moved-items-header {
+  color: #ca8a04;
+}
+
+.moved-item-row.missing {
+  cursor: pointer;
+}
+
+.moved-item-row.missing:hover {
+  background: #fef08a;
+}
+
 /* Complete section */
 .arrived-deliveries .complete-section {
   margin-top: 20px;

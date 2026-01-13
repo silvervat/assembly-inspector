@@ -7045,31 +7045,51 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                               });
                               if (missingItems.length === 0) return null;
 
+                              // Get all GUIDs for missing items
+                              const missingGuids = missingItems
+                                .map(c => items.find(i => i.id === c.item_id)?.guid_ifc)
+                                .filter(Boolean) as string[];
+
                               return (
                                 <div className="moved-items-section missing">
-                                  <div className="moved-items-header">
+                                  <div
+                                    className="moved-items-header clickable"
+                                    onClick={async () => {
+                                      if (api && missingGuids.length > 0) {
+                                        const count = await selectObjectsByGuid(api, missingGuids, 'set');
+                                        setMessage(`${count} puuduvat detaili märgistatud mudelis`);
+                                      }
+                                    }}
+                                    title="Märgista kõik puuduvad detailid mudelis"
+                                  >
                                     <FiAlertTriangle size={12} />
                                     <span>Puuduvad detailid ({missingItems.length})</span>
                                   </div>
-                                  {missingItems.map(conf => {
-                                    const item = items.find(i => i.id === conf.item_id);
-                                    const arrivedVehicle = (conf as any).arrived_vehicle;
-                                    if (!item) return null;
-                                    return (
-                                      <div key={conf.id} className="moved-item missing">
-                                        <span className="moved-item-mark">{item.assembly_mark}</span>
-                                        {arrivedVehicle?.arrival_date && (
-                                          <span
-                                            className="moved-item-vehicle clickable"
-                                            onClick={() => loadArrivedVehicleDetails(arrivedVehicle.id)}
-                                            title="Klõpsa saabumise detailide nägemiseks"
-                                          >
-                                            ({formatDateShort(arrivedVehicle.arrival_date)})
-                                          </span>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
+                                  <div className="moved-items-list">
+                                    {missingItems.map(conf => {
+                                      const item = items.find(i => i.id === conf.item_id);
+                                      const arrivedVehicle = (conf as any).arrived_vehicle;
+                                      if (!item) return null;
+                                      return (
+                                        <div
+                                          key={conf.id}
+                                          className="moved-item-row missing"
+                                          onClick={async () => {
+                                            if (api && item.guid_ifc) {
+                                              await selectObjectsByGuid(api, [item.guid_ifc], 'set');
+                                              setMessage(`${item.assembly_mark} märgistatud mudelis`);
+                                            }
+                                          }}
+                                          title="Märgista mudelis"
+                                        >
+                                          <span className="moved-item-mark">{item.assembly_mark}</span>
+                                          {arrivedVehicle?.arrival_date && (
+                                            <span className="moved-items-date">({formatDateShort(arrivedVehicle.arrival_date)})</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               );
                             })()}
