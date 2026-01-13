@@ -6542,6 +6542,33 @@ button.stat-toggle.off:hover {
   background: #eff6ff;
 }
 
+.arrived-deliveries .item-row.added.from-model {
+  background: #f0fdf4;
+}
+
+.arrived-deliveries .item-row.added .delete-btn {
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.arrived-deliveries .item-row.added:hover .delete-btn {
+  opacity: 1;
+}
+
+.arrived-deliveries .item-row.added .delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
 .arrived-deliveries .item-info {
   display: flex;
   align-items: center;
@@ -6747,81 +6774,99 @@ button.stat-toggle.off:hover {
 
 /* Removed items section - items that were supposed to be here but arrived with another vehicle */
 .arrived-deliveries .removed-items-section {
-  margin-top: 16px;
-  padding: 12px;
+  margin-top: 12px;
   background: #fef3c7;
-  border: 1px solid #f59e0b;
-  border-radius: 8px;
+  border-radius: 6px;
+  padding: 0;
+  overflow: hidden;
 }
 
-.arrived-deliveries .removed-items-header {
+.arrived-deliveries .section-header.compact {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.arrived-deliveries .removed-items-header .warning-icon {
-  color: #d97706;
-  flex-shrink: 0;
-}
-
-.arrived-deliveries .removed-items-header h4 {
-  margin: 0;
-  font-size: 13px;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #fcd34d;
+  font-size: 11px;
   font-weight: 600;
   color: #92400e;
 }
 
-.arrived-deliveries .removed-items-description {
-  margin: 0 0 12px 0;
-  font-size: 11px;
+.arrived-deliveries .section-header.compact .warning-icon {
+  color: #d97706;
+}
+
+.arrived-deliveries .section-header.compact .section-hint {
+  font-weight: 400;
+  font-size: 10px;
   color: #a16207;
+  margin-left: auto;
 }
 
-.arrived-deliveries .removed-items-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.arrived-deliveries .item-row.removed {
+  background: #fffbeb;
+  border-bottom: 1px solid #fef3c7;
 }
 
-.arrived-deliveries .removed-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #fcd34d;
+.arrived-deliveries .item-row.removed:last-child {
+  border-bottom: none;
 }
 
-.arrived-deliveries .removed-item-info {
+.arrived-deliveries .item-row.removed:hover {
+  background: #fef3c7;
+}
+
+.arrived-deliveries .item-destination {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
+  font-size: 10px;
+  color: #059669;
+  margin-left: auto;
 }
 
-.arrived-deliveries .removed-item-mark {
-  font-weight: 600;
-  color: #1f2937;
-  font-size: 12px;
-}
-
-.arrived-deliveries .removed-item-name {
-  font-size: 11px;
+.arrived-deliveries .item-destination .date-hint {
   color: #6b7280;
 }
 
-.arrived-deliveries .removed-item-destination {
+/* Compact model selection items */
+.arrived-deliveries .model-selected-items.compact {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #059669;
+  flex-direction: column;
+  gap: 1px;
+  background: #f3f4f6;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-.arrived-deliveries .removed-item-destination svg {
-  color: #10b981;
+.arrived-deliveries .model-selected-item.compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: white;
+  font-size: 12px;
+}
+
+.arrived-deliveries .model-selected-item.compact .item-index {
+  color: #9ca3af;
+  font-size: 10px;
+  min-width: 16px;
+}
+
+.arrived-deliveries .model-selected-item.compact .item-mark {
+  font-weight: 600;
+}
+
+.arrived-deliveries .model-selected-item.compact .item-name {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.arrived-deliveries .model-selected-item.compact .item-weight {
+  color: #9ca3af;
+  font-size: 10px;
+  margin-left: auto;
   flex-shrink: 0;
 }
 
