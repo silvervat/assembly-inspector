@@ -710,23 +710,37 @@ export default function ArrivedDeliveriesScreen({
         if (selectionKey === lastSelectionKey) return;
         lastSelectionKey = selectionKey;
 
-        // Collect all selected objects with their properties
+        // Collect all selected objects - use convertToObjectIds for GUID (like Organizer does)
         const selectedObjects: { modelId: string; runtimeId: number; guid: string; props: any }[] = [];
+
         for (const sel of selection) {
-          if (sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
-            const objects = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
-            for (let i = 0; i < objects.length; i++) {
-              const obj = objects[i];
-              const guid = extractGuidFromProps(obj);
-              if (guid) {
-                selectedObjects.push({
-                  modelId: sel.modelId,
-                  runtimeId: sel.objectRuntimeIds[i],
-                  guid,
-                  props: obj
-                });
-              }
-            }
+          if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+          const modelId = sel.modelId;
+          const runtimeIds = sel.objectRuntimeIds;
+
+          // Get external IDs (GUIDs) using convertToObjectIds - this is the reliable way
+          let externalIds: string[] = [];
+          try {
+            externalIds = await api.viewer.convertToObjectIds(modelId, runtimeIds) || [];
+          } catch (e) {
+            console.warn('Could not get external IDs:', e);
+          }
+
+          // Get properties for each object
+          const objects = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+          for (let i = 0; i < runtimeIds.length; i++) {
+            const guidIfc = externalIds[i] || '';
+            if (!guidIfc) continue; // Skip objects without GUID
+
+            const obj = objects?.[i];
+            selectedObjects.push({
+              modelId,
+              runtimeId: runtimeIds[i],
+              guid: guidIfc,
+              props: obj || {}
+            });
           }
         }
 

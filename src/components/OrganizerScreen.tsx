@@ -4900,7 +4900,31 @@ export default function OrganizerScreen({
 
           <button
             className={`org-menu-btn ${groupMenuId === node.id ? 'active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setShowSortMenu(false); setShowFilterMenu(false); setGroupMenuId(groupMenuId === node.id ? null : node.id); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowSortMenu(false);
+              setShowFilterMenu(false);
+              const isOpening = groupMenuId !== node.id;
+              setGroupMenuId(groupMenuId === node.id ? null : node.id);
+              // Scroll only if menu would be cut off at bottom
+              if (isOpening) {
+                const btn = e.currentTarget as HTMLElement;
+                setTimeout(() => {
+                  // Find the menu element that just appeared
+                  const menu = btn.parentElement?.querySelector('.org-group-menu') as HTMLElement;
+                  if (menu) {
+                    const menuRect = menu.getBoundingClientRect();
+                    const viewportHeight = window.innerHeight;
+                    // Check if menu bottom is below viewport
+                    if (menuRect.bottom > viewportHeight) {
+                      // Scroll just enough to show full menu (+ 16px padding)
+                      const scrollAmount = menuRect.bottom - viewportHeight + 16;
+                      window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    }
+                  }
+                }, 50);
+              }
+            }}
           >
             <FiMoreVertical size={14} />
           </button>
