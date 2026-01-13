@@ -539,6 +539,18 @@ export default function ArrivedDeliveriesScreen({
 
   const loadProjectName = useCallback(async () => {
     try {
+      // First try to get project name from Trimble API
+      const project = await api.project.getProject();
+      if (project?.name) {
+        setProjectName(project.name);
+        return;
+      }
+    } catch (e) {
+      console.warn('Could not get project name from API:', e);
+    }
+
+    // Fallback: try database
+    try {
       const { data, error } = await supabase
         .from('trimble_projects')
         .select('project_name')
@@ -553,7 +565,7 @@ export default function ArrivedDeliveriesScreen({
     } catch {
       setProjectName(projectId);
     }
-  }, [projectId]);
+  }, [projectId, api]);
 
   const loadAllData = useCallback(async () => {
     setLoading(true);

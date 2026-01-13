@@ -37,8 +37,10 @@ import {
   FiLoader,
   FiChevronLeft,
   FiChevronRight,
-  FiMaximize2
+  FiMaximize2,
+  FiFileText
 } from 'react-icons/fi';
+import * as XLSX from 'xlsx-js-style';
 
 interface DeliveryShareGalleryProps {
   token: string;
@@ -152,6 +154,72 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
     }
   };
 
+  // Download items as Excel
+  const downloadExcel = () => {
+    if (items.length === 0) return;
+
+    // Sort items alphabetically
+    const sortedItems = [...items].sort((a, b) =>
+      (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'en')
+    );
+
+    // Create worksheet data
+    const wsData = [
+      // Header row
+      ['#', 'Mark', 'Product', 'Weight (kg)', 'Status', 'Comment', 'GUID']
+    ];
+
+    // Data rows
+    sortedItems.forEach((item, idx) => {
+      const status = getItemStatus(item.id);
+      const comment = getItemComment(item.id);
+      wsData.push([
+        (idx + 1).toString(),
+        item.assembly_mark || '-',
+        item.product_name || '-',
+        item.cast_unit_weight ? Math.round(Number(item.cast_unit_weight)).toString() : '-',
+        getStatusLabelEnglish(status),
+        comment || '-',
+        item.guid_ifc || item.guid || '-'
+      ]);
+    });
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Column widths
+    ws['!cols'] = [
+      { wch: 5 },   // #
+      { wch: 15 },  // Mark
+      { wch: 25 },  // Product
+      { wch: 12 },  // Weight
+      { wch: 12 },  // Status
+      { wch: 30 },  // Comment
+      { wch: 40 }   // GUID
+    ];
+
+    // Style header row
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '2563EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    for (let i = 0; i < 7; i++) {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: i });
+      if (ws[cellRef]) {
+        ws[cellRef].s = headerStyle;
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Delivery Items');
+
+    // Download
+    const fileName = `${shareLink?.vehicle_code || 'delivery'}_${arrivedVehicle?.arrival_date || 'items'}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  };
+
   // Lightbox navigation
   const openLightbox = (index: number) => {
     setLightboxIndex(index);
@@ -226,39 +294,11 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
 
       <main className="share-gallery-main">
         {/* Summary Section */}
-        <section className="summary-section">
+        <section className="summary-section compact">
           <h2>Delivery Summary</h2>
-          <div className="summary-grid">
-            <div className="summary-item">
-              <span className="label">Scheduled Date</span>
-              <span className="value">{vehicle?.scheduled_date ? formatDateEnglish(vehicle.scheduled_date) : '-'}</span>
-            </div>
-            <div className="summary-item">
-              <span className="label">Arrival Date</span>
-              <span className="value">{formatDateEnglish(arrivedVehicle.arrival_date)}</span>
-            </div>
-            <div className="summary-item">
-              <span className="label">Arrival Time</span>
-              <span className="value">{formatTime(arrivedVehicle.arrival_time)}</span>
-            </div>
-            <div className="summary-item">
-              <span className="label">Total Items</span>
-              <span className="value">{items.length}</span>
-            </div>
-            <div className="summary-item">
-              <span className="label">Total Weight</span>
-              <span className="value">{Math.round(totalWeight).toLocaleString()} kg</span>
-            </div>
-            <div className="summary-item">
-              <span className="label">Status</span>
-              <span className={`value status ${arrivedVehicle.is_confirmed ? 'confirmed' : 'pending'}`}>
-                {arrivedVehicle.is_confirmed ? 'Confirmed' : 'In Progress'}
-              </span>
-            </div>
-          </div>
 
-          {/* Status badges */}
-          <div className="status-badges">
+          {/* Status badges - compact row at top */}
+          <div className="status-badges compact">
             <div className="badge confirmed">
               <FiCheck />
               <span className="count">{confirmedCount}</span>
@@ -280,32 +320,119 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
               <span className="label">Added</span>
             </div>
           </div>
+
+          <div className="summary-grid compact">
+            <div className="summary-item">
+              <span className="label">Scheduled</span>
+              <span className="value">{vehicle?.scheduled_date ? formatDateEnglish(vehicle.scheduled_date) : '-'}</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Arrival</span>
+              <span className="value">{formatDateEnglish(arrivedVehicle.arrival_date)} {formatTime(arrivedVehicle.arrival_time)}</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Unload</span>
+              <span className="value">{formatTime(arrivedVehicle.unload_start_time)} - {formatTime(arrivedVehicle.unload_end_time)}</span>
+            </div>
+            <div className="summary-item">
+              <span className="label">Items</span>
+              <span className="value">{items.length} ({Math.round(totalWeight).toLocaleString()} kg)</span>
+            </div>
+            {arrivedVehicle.reg_number && (
+              <div className="summary-item">
+                <span className="label">Reg. Number</span>
+                <span className="value">{arrivedVehicle.reg_number}</span>
+              </div>
+            )}
+            {arrivedVehicle.trailer_number && (
+              <div className="summary-item">
+                <span className="label">Trailer</span>
+                <span className="value">{arrivedVehicle.trailer_number}</span>
+              </div>
+            )}
+            {arrivedVehicle.unload_location && (
+              <div className="summary-item">
+                <span className="label">Location</span>
+                <span className="value">{arrivedVehicle.unload_location}</span>
+              </div>
+            )}
+            {arrivedVehicle.checked_by_workers && (
+              <div className="summary-item">
+                <span className="label">Inspectors</span>
+                <span className="value">{arrivedVehicle.checked_by_workers}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Unload Resources */}
+          {(() => {
+            const res = arrivedVehicle.unload_resources as Record<string, string | number> | null;
+            if (!res) return null;
+            const hasResources = ['crane', 'forklift', 'poomtostuk', 'manual', 'workforce'].some(k => Number(res[k]) > 0);
+            if (!hasResources) return null;
+            return (
+              <div className="resources-section">
+                <span className="resources-label">Resources:</span>
+                <div className="resources-list">
+                  {Number(res.crane) > 0 && (
+                    <span className="resource-badge">Crane ×{res.crane}{res.crane_name ? `: ${res.crane_name}` : ''}</span>
+                  )}
+                  {Number(res.forklift) > 0 && (
+                    <span className="resource-badge">Telehandler ×{res.forklift}{res.forklift_name ? `: ${res.forklift_name}` : ''}</span>
+                  )}
+                  {Number(res.poomtostuk) > 0 && (
+                    <span className="resource-badge">Boom Lift ×{res.poomtostuk}{res.poomtostuk_name ? `: ${res.poomtostuk_name}` : ''}</span>
+                  )}
+                  {Number(res.manual) > 0 && (
+                    <span className="resource-badge">Manual</span>
+                  )}
+                  {Number(res.workforce) > 0 && (
+                    <span className="resource-badge">Workers ×{res.workforce}{res.workforce_workers ? `: ${res.workforce_workers}` : ''}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Notes */}
+          {arrivedVehicle.notes && (
+            <div className="vehicle-notes">
+              <span className="notes-label">Notes:</span>
+              <span className="notes-text">{arrivedVehicle.notes}</span>
+            </div>
+          )}
         </section>
 
         {/* Items Section */}
         <section className="items-section">
-          <h2>Items</h2>
+          <div className="section-header">
+            <h2>Items ({items.length})</h2>
+            <button className="download-excel-btn" onClick={downloadExcel}>
+              <FiFileText /> Download Excel
+            </button>
+          </div>
           <div className="items-table-wrapper">
-            <table className="items-table">
+            <table className="items-table compact">
               <thead>
                 <tr>
                   <th>#</th>
                   <th>Mark</th>
-                  <th>Product</th>
                   <th>Weight</th>
                   <th>Status</th>
                   <th>Comment</th>
+                  <th>GUID</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item, idx) => {
+                {[...items]
+                  .sort((a, b) => (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'en'))
+                  .map((item, idx) => {
                   const status = getItemStatus(item.id);
                   const comment = getItemComment(item.id);
                   return (
                     <tr key={item.id} className={status}>
                       <td className="num">{idx + 1}</td>
                       <td className="mark">{item.assembly_mark || '-'}</td>
-                      <td className="product">{item.product_name || '-'}</td>
                       <td className="weight">
                         {item.cast_unit_weight ? `${Math.round(Number(item.cast_unit_weight))} kg` : '-'}
                       </td>
@@ -316,6 +443,7 @@ export default function DeliveryShareGallery({ token }: DeliveryShareGalleryProp
                         </div>
                       </td>
                       <td className="comment">{comment || '-'}</td>
+                      <td className="guid">{item.guid_ifc || item.guid || '-'}</td>
                     </tr>
                   );
                 })}
