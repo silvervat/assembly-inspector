@@ -13,7 +13,7 @@ import {
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
   FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
-  FiExternalLink, FiLoader, FiCopy, FiEdit2
+  FiExternalLink, FiLoader, FiCopy, FiEdit2, FiMoreVertical, FiShare2
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
@@ -430,6 +430,10 @@ export default function ArrivedDeliveriesScreen({
   // State - Expanded item for comment/photo editing
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
+  // State - Vehicle 3-dot menu
+  const [vehicleMenuOpen, setVehicleMenuOpen] = useState<string | null>(null);
+  const vehicleMenuRef = useRef<HTMLDivElement>(null);
+
   // State - Photo lightbox (stores full photo object for metadata access)
   const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: ArrivalPhoto; vehicleCode: string } | null>(null);
 
@@ -598,6 +602,19 @@ export default function ArrivedDeliveriesScreen({
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Close vehicle menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (vehicleMenuRef.current && !vehicleMenuRef.current.contains(event.target as Node)) {
+        setVehicleMenuOpen(null);
+      }
+    }
+    if (vehicleMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [vehicleMenuOpen]);
 
   // Generate date range for calendar
   useEffect(() => {
@@ -3408,6 +3425,98 @@ export default function ArrivedDeliveriesScreen({
                       <span className="status-badge pending">Ootel</span>
                     )}
                   </div>
+
+                  {/* 3-dot menu */}
+                  {arrivedVehicle && (
+                    <div
+                      className="vehicle-menu-wrapper"
+                      ref={vehicleMenuOpen === vehicle.id ? vehicleMenuRef : null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className="vehicle-menu-btn"
+                        onClick={() => setVehicleMenuOpen(vehicleMenuOpen === vehicle.id ? null : vehicle.id)}
+                        title="Rohkem valikuid"
+                      >
+                        <FiMoreVertical size={16} />
+                      </button>
+                      {vehicleMenuOpen === vehicle.id && (
+                        <div className="vehicle-menu-dropdown">
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              exportDeliveryReport(arrivedVehicle.id);
+                            }}
+                          >
+                            <FiDownload size={14} />
+                            <span>Ekspordi Excel</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              generatePdfReport(arrivedVehicle.id, vehicle.id);
+                            }}
+                          >
+                            <FiFileText size={14} />
+                            <span>Lae PDF raport</span>
+                          </button>
+                          <div className="menu-divider" />
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              colorActiveVehicle(vehicle.id, arrivedVehicle.id);
+                            }}
+                          >
+                            <FiDroplet size={14} />
+                            <span>Värvi see veok</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              const guids = vehicleItems
+                                .map(i => i.guid_ifc)
+                                .filter((g): g is string => !!g);
+                              if (guids.length > 0) {
+                                selectObjectsByGuid(api, guids);
+                              }
+                            }}
+                          >
+                            <FiSearch size={14} />
+                            <span>Vali kõik mudelis</span>
+                          </button>
+                          <div className="menu-divider" />
+                          <button
+                            onClick={async () => {
+                              setVehicleMenuOpen(null);
+                              setGeneratingShareLink(arrivedVehicle.id);
+                              try {
+                                const result = await createOrGetShareLink(
+                                  projectId,
+                                  projectName,
+                                  arrivedVehicle.id,
+                                  vehicle.vehicle_code,
+                                  arrivedVehicle.arrival_date || ''
+                                );
+                                if (result.error || !result.shareLink) {
+                                  setMessage('Viga lingi loomisel');
+                                } else {
+                                  const url = getShareUrl(result.shareLink.share_token);
+                                  setShareLinks(prev => ({ ...prev, [arrivedVehicle.id]: { url, token: result.shareLink!.share_token } }));
+                                  navigator.clipboard.writeText(url);
+                                  setMessage('Link kopeeritud!');
+                                }
+                              } finally {
+                                setGeneratingShareLink(null);
+                              }
+                            }}
+                          >
+                            <FiShare2 size={14} />
+                            <span>Kopeeri jagamise link</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <button className="expand-btn">
                     {isExpanded ? <FiChevronUp /> : <FiChevronDown />}

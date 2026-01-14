@@ -6099,6 +6099,67 @@ button.stat-toggle.off:hover {
   color: #dc2626;
 }
 
+/* Vehicle 3-dot menu */
+.arrived-deliveries .vehicle-menu-wrapper {
+  position: relative;
+}
+
+.arrived-deliveries .vehicle-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+}
+
+.arrived-deliveries .vehicle-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--modus-text-primary);
+}
+
+.arrived-deliveries .vehicle-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  padding: 4px;
+  z-index: 100;
+}
+
+.arrived-deliveries .vehicle-menu-dropdown button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--modus-text-primary);
+}
+
+.arrived-deliveries .vehicle-menu-dropdown button:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.arrived-deliveries .vehicle-menu-dropdown .menu-divider {
+  height: 1px;
+  background: var(--modus-border);
+  margin: 4px 0;
+}
+
 .arrived-deliveries .expand-btn {
   background: none;
   border: none;
