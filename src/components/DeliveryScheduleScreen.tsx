@@ -13,7 +13,7 @@ import {
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
 import {
-  FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
+  FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiRefreshCw, FiPause, FiSearch, FiEdit2, FiCheck,
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
@@ -27,6 +27,9 @@ import './DeliveryScheduleScreen.css';
 // INTERFACES
 // ============================================
 
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
+
 interface Props {
   api: WorkspaceAPI;
   projectId: string;
@@ -35,6 +38,7 @@ interface Props {
   tcUserName?: string;
   onBackToMenu?: () => void;
   onBack?: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
   isPopupMode?: boolean;
 }
 
@@ -374,7 +378,7 @@ const generateDateColors = (dates: string[]): Record<string, { r: number; g: num
 // MAIN COMPONENT
 // ============================================
 
-export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, isPopupMode }: Props) {
+export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, onNavigate, isPopupMode }: Props) {
   // ============================================
   // STATE
   // ============================================
@@ -7731,41 +7735,50 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // MAIN RENDER
   // ============================================
 
+  // Handle navigation from header menu
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      onBackToMenu?.();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="delivery-schedule-screen">
-      {/* Header */}
-      <header className="delivery-header">
-        <button className="back-btn" onClick={onBackToMenu}>
-          <FiArrowLeft />
+      {/* Header with hamburger menu */}
+      <PageHeader
+        title="Tarnegraafik"
+        onBack={() => onBackToMenu?.()}
+        onNavigate={handleHeaderNavigate}
+        currentMode="delivery_schedule"
+        user={_user}
+      >
+        <button
+          className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}
+          onClick={() => setViewMode('dates')}
+          title="Kuupäevade järgi"
+        >
+          <FiCalendar />
         </button>
-        <h1>Tarnegraafik</h1>
-        <div className="header-actions">
+        <button
+          className={`view-toggle-btn ${viewMode === 'factories' ? 'active' : ''}`}
+          onClick={() => setViewMode('factories')}
+          title="Tehaste järgi"
+        >
+          <FiLayers />
+        </button>
+        {/* Open full table in popup window - only show in extension mode */}
+        {!isPopupMode && (
           <button
-            className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}
-            onClick={() => setViewMode('dates')}
-            title="Kuupäevade järgi"
+            className="view-toggle-btn popup-btn"
+            onClick={openPopupWindow}
+            title="Ava täisvaade eraldi aknas"
           >
-            <FiCalendar />
+            <FiExternalLink />
           </button>
-          <button
-            className={`view-toggle-btn ${viewMode === 'factories' ? 'active' : ''}`}
-            onClick={() => setViewMode('factories')}
-            title="Tehaste järgi"
-          >
-            <FiLayers />
-          </button>
-          {/* Open full table in popup window - only show in extension mode */}
-          {!isPopupMode && (
-            <button
-              className="view-toggle-btn popup-btn"
-              onClick={openPopupWindow}
-              title="Ava täisvaade eraldi aknas"
-            >
-              <FiExternalLink />
-            </button>
-          )}
-        </div>
-      </header>
+        )}
+      </PageHeader>
 
       {/* Compact toolbar with stats and icon menus */}
       <div className="delivery-toolbar-compact">

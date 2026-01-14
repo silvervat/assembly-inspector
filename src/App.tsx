@@ -832,6 +832,7 @@ export default function App() {
           tcUserEmail={tcUser?.email || ''}
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
@@ -867,6 +868,7 @@ export default function App() {
           tcUserEmail={tcUser?.email || ''}
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
