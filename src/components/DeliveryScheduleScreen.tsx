@@ -547,6 +547,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [importText, setImportText] = useState('');
   const [importFactoryId, setImportFactoryId] = useState<string>('');
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{
+    stage: 'idle' | 'searching' | 'fetching' | 'saving';
+    current: number;
+    total: number;
+    message: string;
+  }>({ stage: 'idle', current: 0, total: 0, message: '' });
   const importFileRef = useRef<HTMLInputElement>(null);
   // Parsed import data from Excel with full details
   const [parsedImportData, setParsedImportData] = useState<{
@@ -3594,8 +3600,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     // DEBUG: Log that function was called
     console.log('🚀 handleImport called');
 
-    // ALERT so user sees it on phone
-    const importInfo = `Import algas!\nGUID-e: ${importText.split('\n').length}\nParsed: ${parsedImportData.length}\nVeoki koodidega: ${parsedImportData.filter(r => r.vehicleCode).length}`;
+    // Reset progress
+    setImportProgress({ stage: 'idle', current: 0, total: 0, message: 'Alustame...' });
+
     console.log('📊 Import state:', {
       importTextLength: importText.length,
       parsedDataLength: parsedImportData.length,
@@ -3604,9 +3611,6 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       addModalDate,
       importing
     });
-
-    // Show immediate feedback
-    setMessage(importInfo);
 
     if (!importText.trim()) {
       console.log('❌ Import text is empty');
@@ -3696,58 +3700,34 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       // Continue with unique GUIDs only
       const guidsToImport = uniqueGuids;
 
-      // NEW APPROACH: Get fresh data from Trimble model, not database!
-      console.log('🔄 Getting model_id and runtime_id from database...');
-      setMessage(`Otsin mudelit... ${guidsToImport.length} detaili`);
+      // NEW APPROACH: Search loaded models directly (like refresh does)
+      // This is more reliable than relying on database which may be stale
+      console.log('🔄 Searching loaded models for objects...');
+      setImportProgress({ stage: 'searching', current: 0, total: guidsToImport.length, message: 'Otsin mudelitest...' });
 
       // Convert all GUIDs to IFC format for lookup
       const ifcGuidsToLookup = guidsToImport.map(guid =>
         guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '')
       ).filter(Boolean);
 
-      // Lookup model_id and object_runtime_id ONLY (not data!)
-      const BATCH_SIZE = 100;
-      const modelObjectsMap = new Map<string, {
-        guid_ifc: string;
-        model_id: string | null;
-        object_runtime_id: number | null;
-      }>();
-
-      for (let i = 0; i < ifcGuidsToLookup.length; i += BATCH_SIZE) {
-        const batch = ifcGuidsToLookup.slice(i, i + BATCH_SIZE);
-        const { data: batchObjects, error: lookupError } = await supabase
-          .from('trimble_model_objects')
-          .select('guid_ifc, model_id, object_runtime_id')
-          .eq('trimble_project_id', projectId)
-          .in('guid_ifc', batch);
-
-        if (lookupError) {
-          console.error('Error looking up model objects batch:', lookupError);
-          continue;
-        }
-
-        for (const obj of batchObjects || []) {
-          modelObjectsMap.set(obj.guid_ifc, obj);
-        }
-
-        const progress = Math.min(i + BATCH_SIZE, ifcGuidsToLookup.length);
-        setMessage(`Otsin mudelit... ${progress}/${ifcGuidsToLookup.length}`);
-      }
-
-      console.log(`✅ Found ${modelObjectsMap.size}/${guidsToImport.length} objects in database`);
+      // Use findObjectsInLoadedModels to search currently loaded models
+      const foundObjects = await findObjectsInLoadedModels(api, ifcGuidsToLookup);
+      console.log(`✅ Found ${foundObjects.size}/${guidsToImport.length} objects in loaded models`);
 
       // Track which GUIDs weren't found
       const notFoundGuids: string[] = [];
       for (const guid of guidsToImport) {
         const ifcGuid = guid.length === 36 ? msToIfcGuid(guid) : (guid.length === 22 ? guid : '');
-        if (ifcGuid && !modelObjectsMap.has(ifcGuid)) {
+        if (ifcGuid && !foundObjects.has(ifcGuid)) {
           notFoundGuids.push(guid);
         }
       }
 
       if (notFoundGuids.length > 0) {
-        console.log(`⚠️ GUIDs not in database:`, notFoundGuids.slice(0, 10));
+        console.log(`⚠️ GUIDs not found in loaded models:`, notFoundGuids.slice(0, 10));
       }
+
+      setImportProgress({ stage: 'searching', current: foundObjects.size, total: guidsToImport.length, message: `Leitud ${foundObjects.size} objekti` });
 
       // Group objects by model_id to fetch properties efficiently
       console.log('📦 Grouping objects by model...');
@@ -3757,24 +3737,22 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         runtime_id: number;
       }>>();
 
-      for (const [guid_ifc, obj] of modelObjectsMap) {
-        if (obj.model_id && obj.object_runtime_id) {
-          if (!objectsByModel.has(obj.model_id)) {
-            objectsByModel.set(obj.model_id, []);
-          }
-          objectsByModel.get(obj.model_id)!.push({
-            guid_ifc,
-            guid_ms: ifcToMsGuid(guid_ifc),
-            runtime_id: obj.object_runtime_id
-          });
+      for (const [guid_ifc, found] of foundObjects) {
+        if (!objectsByModel.has(found.modelId)) {
+          objectsByModel.set(found.modelId, []);
         }
+        objectsByModel.get(found.modelId)!.push({
+          guid_ifc,
+          guid_ms: ifcToMsGuid(guid_ifc),
+          runtime_id: found.runtimeId
+        });
       }
 
       console.log(`📊 Objects grouped into ${objectsByModel.size} models`);
 
       // NOW: Fetch FRESH properties from Trimble model using API
       console.log('🔍 Fetching fresh properties from Trimble model...');
-      setMessage('Loen andmeid mudelist...');
+      setImportProgress({ stage: 'fetching', current: 0, total: foundObjects.size, message: 'Loen andmeid mudelist...' });
 
       const freshPropertiesMap = new Map<string, {
         assembly_mark: string;
@@ -3899,7 +3877,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             }
           }
 
-            setMessage(`Loen mudelist... ${processedCount}/${totalObjects}`);
+            setImportProgress({ stage: 'fetching', current: processedCount, total: totalObjects, message: 'Loen andmeid mudelist...' });
           } catch (error) {
             console.error(`❌ Error fetching properties for model ${modelId}, batch:`, error);
             // Continue with other batches/models
@@ -3908,7 +3886,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       } // End of model loop
 
       console.log(`✅ Fetched fresh properties for ${freshPropertiesMap.size} objects from model`);
-      setMessage(`✅ Loetud ${freshPropertiesMap.size} detaili mudelist`);
+      setImportProgress({ stage: 'saving', current: 0, total: guidsToImport.length, message: 'Salvestan andmebaasi...' });
 
       if (hasDetailedData) {
         // DETAILED IMPORT: Group items by date + vehicleCode + factoryCode
@@ -4032,7 +4010,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         for (const [groupKey, groupItems] of groups) {
           const [dateStr, vehicleCode, factoryId, timeStr] = groupKey.split('|');
 
-          setMessage(`Salvestan... ${totalImported}/${totalToImport} (${vehicleCode || 'uus veok'})`);
+          setImportProgress({ stage: 'saving', current: totalImported, total: totalToImport, message: `Salvestan... (${vehicleCode || 'uus veok'})` });
 
           // Convert 'UNASSIGNED' to null for database
           const scheduledDate = dateStr === 'UNASSIGNED' ? null : dateStr;
@@ -4110,7 +4088,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           // Create items for this group - use FRESH data from Trimble model!
           const newItems = groupItems.map((row, idx) => {
             const ifcGuid = row.guid.length === 22 ? row.guid : (row.guid.length === 36 ? msToIfcGuid(row.guid) : '');
-            const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+            const foundObj = ifcGuid ? foundObjects.get(ifcGuid) : undefined;
             const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
             return {
@@ -4124,12 +4102,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               product_name: freshProps?.product_name || null,
               cast_unit_weight: freshProps?.cast_unit_weight || null,
               cast_unit_position_code: freshProps?.cast_unit_position_code || null,
-              // NOTE: Elevations need migration first! Uncomment after running 20251222_delivery_add_elevations.sql
-              // cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
-              // cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
-              // Model references (still from database for performance)
-              model_id: modelObj?.model_id || null,
-              object_runtime_id: modelObj?.object_runtime_id || null,
+              // Model references from loaded models
+              model_id: foundObj?.modelId || null,
+              object_runtime_id: foundObj?.runtimeId || null,
               scheduled_date: scheduledDate,
               sort_order: idx,
               status: 'planned' as const,
@@ -4182,7 +4157,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         // Create items with FRESH data from Trimble model!
         const newItems = guidsToImport.map((guid, idx) => {
           const ifcGuid = guid.length === 22 ? guid : (guid.length === 36 ? msToIfcGuid(guid) : '');
-          const modelObj = ifcGuid ? modelObjectsMap.get(ifcGuid) : undefined;
+          const foundObj = ifcGuid ? foundObjects.get(ifcGuid) : undefined;
           const freshProps = ifcGuid ? freshPropertiesMap.get(ifcGuid) : undefined;
 
           return {
@@ -4196,11 +4171,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             product_name: freshProps?.product_name || null,
             cast_unit_weight: freshProps?.cast_unit_weight || null,
             cast_unit_position_code: freshProps?.cast_unit_position_code || null,
-            cast_unit_bottom_elevation: freshProps?.cast_unit_bottom_elevation || null,
-            cast_unit_top_elevation: freshProps?.cast_unit_top_elevation || null,
-            // Model references (still from database for performance)
-            model_id: modelObj?.model_id || null,
-            object_runtime_id: modelObj?.object_runtime_id || null,
+            // Model references from loaded models
+            model_id: foundObj?.modelId || null,
+            object_runtime_id: foundObj?.runtimeId || null,
             scheduled_date: addModalDate,
             sort_order: idx,
             status: 'planned' as const,
@@ -4217,7 +4190,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             .insert(batch);
 
           if (error) throw error;
-          setMessage(`Salvestan... ${Math.min(i + INSERT_BATCH_SIZE, newItems.length)}/${newItems.length}`);
+          setImportProgress({ stage: 'saving', current: Math.min(i + INSERT_BATCH_SIZE, newItems.length), total: newItems.length, message: 'Salvestan andmebaasi...' });
         }
 
         await Promise.all([loadItems(), loadVehicles()]);
@@ -4249,6 +4222,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     } finally {
       console.log('🏁 Import finished. Setting importing=false');
       setImporting(false);
+      setImportProgress({ stage: 'idle', current: 0, total: 0, message: '' });
     }
   };
 
@@ -9763,6 +9737,41 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                 </div>
               </details>
             </div>
+            {/* Progress bar - shown during import */}
+            {importing && importProgress.total > 0 && (
+              <div style={{
+                padding: '16px',
+                background: '#f8fafc',
+                borderTop: '1px solid #e2e8f0',
+                borderBottom: '1px solid #e2e8f0'
+              }}>
+                <div style={{ marginBottom: 8, fontSize: 13, color: '#475569', fontWeight: 500 }}>
+                  {importProgress.stage === 'searching' && '🔍 Otsin mudelitest...'}
+                  {importProgress.stage === 'fetching' && '📥 Loen andmeid mudelist...'}
+                  {importProgress.stage === 'saving' && '💾 Salvestan andmebaasi...'}
+                </div>
+                <div style={{
+                  width: '100%',
+                  height: 8,
+                  background: '#e2e8f0',
+                  borderRadius: 4,
+                  overflow: 'hidden'
+                }}>
+                  <div style={{
+                    width: `${Math.round((importProgress.current / importProgress.total) * 100)}%`,
+                    height: '100%',
+                    background: importProgress.stage === 'saving' ? '#22c55e' : '#3b82f6',
+                    borderRadius: 4,
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+                <div style={{ marginTop: 6, fontSize: 12, color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{importProgress.current} / {importProgress.total}</span>
+                  <span>{Math.round((importProgress.current / importProgress.total) * 100)}%</span>
+                </div>
+              </div>
+            )}
+
             <div className="modal-footer">
               {/* Validation message */}
               {(() => {
