@@ -3534,6 +3534,12 @@ export default function ArrivedDeliveriesScreen({
                                 if ((e.target as HTMLElement).closest('.photo-item')) return;
                                 photoInputRef.current?.click();
                               }}
+                              onFocus={(e) => {
+                                e.currentTarget.classList.add('paste-ready');
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.classList.remove('paste-ready');
+                              }}
                               onDragOver={(e) => {
                                 e.preventDefault();
                                 e.currentTarget.classList.add('drag-over');
@@ -3585,6 +3591,7 @@ export default function ArrivedDeliveriesScreen({
                                 <div className="no-photos dropzone">
                                   <FiImage />
                                   <span>Lohista, kleebi või klõpsa</span>
+                                  <span className="paste-hint">Ctrl+V kleepimiseks</span>
                                 </div>
                               )}
                             </div>
@@ -3620,6 +3627,12 @@ export default function ArrivedDeliveriesScreen({
                                 // Only trigger if clicking on empty area or no-photos div
                                 if ((e.target as HTMLElement).closest('.photo-item')) return;
                                 deliveryNotePhotoInputRef.current?.click();
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.classList.add('paste-ready');
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.classList.remove('paste-ready');
                               }}
                               onDragOver={(e) => {
                                 e.preventDefault();
@@ -3673,6 +3686,7 @@ export default function ArrivedDeliveriesScreen({
                                 <div className="no-photos dropzone">
                                   <FiFileText />
                                   <span>Lohista, kleebi või klõpsa</span>
+                                  <span className="paste-hint">Ctrl+V kleepimiseks</span>
                                 </div>
                               )}
                             </div>

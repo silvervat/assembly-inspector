@@ -6156,6 +6156,48 @@ button.stat-toggle.off:hover {
   background: rgba(0, 99, 163, 0.15);
 }
 
+/* Paste hint styling */
+.arrived-deliveries .paste-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--modus-text-tertiary);
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+/* Focus state for paste-ready - shows when grid is focused */
+.arrived-deliveries .photos-grid:focus {
+  outline: 2px solid var(--modus-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.arrived-deliveries .photos-grid.paste-ready {
+  position: relative;
+}
+
+/* Show paste hint overlay when focused and has photos */
+.arrived-deliveries .photos-grid.paste-ready::after {
+  content: '📋 Ctrl+V kleepimiseks';
+  position: absolute;
+  bottom: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--modus-primary);
+  color: white;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 10;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
 /* Delivery notes section - saatelehed */
 .arrived-deliveries .photos-section.delivery-notes {
   background: #fef9f3;
