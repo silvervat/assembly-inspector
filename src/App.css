@@ -10730,23 +10730,23 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border: none;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--modus-bg-secondary);
   border-radius: 6px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--modus-text-secondary);
 }
 
 .org-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.25);
-  color: white;
+  background: var(--modus-bg-tertiary);
+  color: var(--modus-text-primary);
 }
 
 .org-icon-btn.active {
-  background: #10b981;
-  color: white;
+  background: #d1fae5;
+  color: #059669;
 }
 
 .org-color-mode-select {
