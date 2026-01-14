@@ -2481,6 +2481,198 @@ export default function ArrivedDeliveriesScreen({
   };
 
   // ============================================
+  // PROJECT SUMMARY REPORT (Excel)
+  // ============================================
+
+  const exportProjectSummaryExcel = async () => {
+    const wb = XLSX.utils.book_new();
+    const exportDate = new Date().toLocaleDateString('et-EE');
+    const exportDateTime = new Date().toLocaleString('et-EE');
+
+    // Header styles
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '2563EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+    const subHeaderStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: 'E5E7EB' } },
+      alignment: { horizontal: 'left' }
+    };
+    const warningStyle = {
+      font: { color: { rgb: 'DC2626' } },
+      fill: { fgColor: { rgb: 'FEE2E2' } }
+    };
+
+    // Calculate overall statistics
+    const totalVehicles = vehicles.length;
+    const arrivedVehicleIds = new Set(arrivedVehicles.map(av => av.vehicle_id));
+    const arrivedCount = arrivedVehicles.filter(av => av.is_confirmed).length;
+    const inProgressCount = arrivedVehicles.filter(av => !av.is_confirmed).length;
+    const notArrivedCount = vehicles.filter(v => !arrivedVehicleIds.has(v.id)).length;
+
+    const totalItems = items.length;
+    const confirmedItems = confirmations.filter(c => c.status === 'confirmed').length;
+    const missingItems = confirmations.filter(c => c.status === 'missing').length;
+    const pendingItems = totalItems - confirmedItems;
+
+    // ============================================
+    // Sheet 1: Ülevaade (Overview)
+    // ============================================
+    const overviewData = [
+      [`PROJEKTI TARNETE KOKKUVÕTE - ${projectName}`],
+      [''],
+      ['Ekspordi kuupäev:', exportDateTime],
+      [''],
+      ['ÜLDSTATISTIKA'],
+      [''],
+      ['Veokeid kokku:', totalVehicles],
+      ['Saabunud ja kinnitatud:', arrivedCount],
+      ['Saabunud, töös:', inProgressCount],
+      ['Saabumata:', notArrivedCount],
+      [''],
+      ['Detaile kokku:', totalItems],
+      ['Kinnitatud:', confirmedItems],
+      ['Puudu:', missingItems],
+      ['Ootel:', pendingItems],
+      [''],
+      [`Kinnitamise protsent: ${totalItems > 0 ? Math.round((confirmedItems / totalItems) * 100) : 0}%`]
+    ];
+
+    const wsOverview = XLSX.utils.aoa_to_sheet(overviewData);
+    wsOverview['A1'] = { v: overviewData[0][0], s: { ...headerStyle, font: { ...headerStyle.font, sz: 14 } } };
+    wsOverview['A5'] = { v: 'ÜLDSTATISTIKA', s: subHeaderStyle };
+    wsOverview['!cols'] = [{ wch: 35 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsOverview, 'Ülevaade');
+
+    // ============================================
+    // Sheet 2: Saabumata veokid (Not arrived vehicles)
+    // ============================================
+    const notArrivedVehicles = vehicles.filter(v => !arrivedVehicleIds.has(v.id));
+    const notArrivedHeader = ['Veok', 'Tehas', 'Planeeritud kuupäev', 'Detaile', 'Kaal (kg)'];
+    const notArrivedData = notArrivedVehicles.map(v => {
+      const factory = getFactory(v.factory_id);
+      const vItems = getVehicleItems(v.id);
+      return [
+        v.vehicle_code,
+        factory?.factory_name || '-',
+        v.scheduled_date ? formatDateEstonian(v.scheduled_date) : '-',
+        vItems.length,
+        Math.round(v.total_weight || 0)
+      ];
+    });
+
+    const wsNotArrived = XLSX.utils.aoa_to_sheet([notArrivedHeader, ...notArrivedData]);
+    notArrivedHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsNotArrived[cellRef] = { v: notArrivedHeader[colIdx], s: headerStyle };
+    });
+    wsNotArrived['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsNotArrived, 'Saabumata veokid');
+
+    // ============================================
+    // Sheet 3: Puuduvad detailid (Missing items)
+    // ============================================
+    const missingConfirmations = confirmations.filter(c => c.status === 'missing');
+    const missingHeader = ['Veok', 'Tehas', 'Assembly Mark', 'Toote nimi', 'GUID', 'Kommentaar'];
+    const missingData = missingConfirmations.map(conf => {
+      const arrival = arrivedVehicles.find(av => av.id === conf.arrived_vehicle_id);
+      const vehicle = getVehicle(arrival?.vehicle_id);
+      const factory = getFactory(vehicle?.factory_id);
+      const item = items.find(i => i.id === conf.item_id);
+      return [
+        vehicle?.vehicle_code || '-',
+        factory?.factory_name || '-',
+        item?.assembly_mark || '-',
+        item?.product_name || '-',
+        item?.guid_ifc || '-',
+        conf.notes || '-'
+      ];
+    });
+
+    const wsMissing = XLSX.utils.aoa_to_sheet([missingHeader, ...missingData]);
+    missingHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsMissing[cellRef] = { v: missingHeader[colIdx], s: headerStyle };
+    });
+    // Apply warning style to rows
+    missingData.forEach((_, rowIdx) => {
+      missingHeader.forEach((__, colIdx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIdx + 1, c: colIdx });
+        if (wsMissing[cellRef]) {
+          wsMissing[cellRef].s = warningStyle;
+        }
+      });
+    });
+    wsMissing['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 36 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, wsMissing, 'Puuduvad detailid');
+
+    // ============================================
+    // Sheet 4: Kõik veokid (All vehicles status)
+    // ============================================
+    const allVehiclesHeader = ['Veok', 'Tehas', 'Planeeritud', 'Saabunud', 'Hilinemine', 'Detaile', 'Kinnitatud', 'Puudu', 'Staatus'];
+    const allVehiclesData = vehicles.map(v => {
+      const factory = getFactory(v.factory_id);
+      const vItems = getVehicleItems(v.id);
+      const arrival = arrivedVehicles.find(av => av.vehicle_id === v.id);
+
+      if (!arrival) {
+        return [
+          v.vehicle_code,
+          factory?.factory_name || '-',
+          v.scheduled_date ? formatDateEstonian(v.scheduled_date) : '-',
+          '-',
+          '-',
+          vItems.length,
+          0,
+          0,
+          'Saabumata'
+        ];
+      }
+
+      const arrConfs = getConfirmationsForArrival(arrival.id);
+      const confirmed = arrConfs.filter(c => c.status === 'confirmed').length;
+      const missing = arrConfs.filter(c => c.status === 'missing').length;
+
+      const scheduledDate = v.scheduled_date ? new Date(v.scheduled_date + 'T00:00:00') : null;
+      const arrivalDate = arrival.arrival_date ? new Date(arrival.arrival_date + 'T00:00:00') : null;
+      const delayDays = scheduledDate && arrivalDate
+        ? Math.round((arrivalDate.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      return [
+        v.vehicle_code,
+        factory?.factory_name || '-',
+        v.scheduled_date ? formatDateEstonian(v.scheduled_date) : '-',
+        arrival.arrival_date ? formatDateEstonian(arrival.arrival_date) : '-',
+        delayDays !== null ? (delayDays === 0 ? '0' : `${delayDays > 0 ? '+' : ''}${delayDays}`) : '-',
+        vItems.length,
+        confirmed,
+        missing,
+        arrival.is_confirmed ? 'Kinnitatud' : 'Töös'
+      ];
+    });
+
+    const wsAllVehicles = XLSX.utils.aoa_to_sheet([allVehiclesHeader, ...allVehiclesData]);
+    allVehiclesHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsAllVehicles[cellRef] = { v: allVehiclesHeader[colIdx], s: headerStyle };
+    });
+    wsAllVehicles['!cols'] = [
+      { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsAllVehicles, 'Kõik veokid');
+
+    // Generate filename with project name and date
+    const sanitizedProjectName = projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s]/g, '').replace(/\s+/g, '_');
+    const fileName = `Projekti_kokkuvote_${sanitizedProjectName}_${exportDate.replace(/\./g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    setMessage('Projekti kokkuvõte allalaetud');
+  };
+
+  // ============================================
   // PLAYBACK
   // ============================================
 
@@ -3226,6 +3418,14 @@ export default function ArrivedDeliveriesScreen({
           style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
         >
           <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
+        </button>
+        {/* Project summary button */}
+        <button
+          className="view-toggle-btn"
+          onClick={exportProjectSummaryExcel}
+          title="Projekti kokkuvõte (Excel)"
+        >
+          <FiFileText />
         </button>
         {/* Refresh button */}
         <button
