@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo } from 'react-icons/fi';
+import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
@@ -194,8 +194,8 @@ const RESOURCE_TYPES = [
 ] as const;
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -330,6 +330,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
   }>>([]);
   const [orphanedLoading, setOrphanedLoading] = useState(false);
   const [showOrphanedPanel, setShowOrphanedPanel] = useState(false);
+
+  // Delivery Schedule Admin state
+  const [deliveryAdminLoading, setDeliveryAdminLoading] = useState(false);
+  const [deliveryAdminStats, setDeliveryAdminStats] = useState<{
+    vehicles: number;
+    items: number;
+    factories: number;
+    sheetsConfig: boolean;
+  } | null>(null);
+  const [showDeliveryDeleteConfirm, setShowDeliveryDeleteConfirm] = useState(false);
 
   // Data export state
   const [dataExportLoading, setDataExportLoading] = useState(false);
@@ -2022,6 +2032,121 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     );
   }, [projectId]);
 
+  // Load delivery schedule admin stats
+  const loadDeliveryAdminStats = useCallback(async () => {
+    if (!projectId) return;
+    setDeliveryAdminLoading(true);
+    try {
+      // Count vehicles
+      const { count: vehicleCount } = await supabase
+        .from('trimble_delivery_vehicles')
+        .select('*', { count: 'exact', head: true })
+        .eq('trimble_project_id', projectId);
+
+      // Count items
+      const { count: itemCount } = await supabase
+        .from('trimble_delivery_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('trimble_project_id', projectId);
+
+      // Count factories
+      const { count: factoryCount } = await supabase
+        .from('trimble_delivery_factories')
+        .select('*', { count: 'exact', head: true })
+        .eq('trimble_project_id', projectId);
+
+      // Check if sheets config exists
+      const { data: sheetsConfig } = await supabase
+        .from('trimble_sheets_sync_config')
+        .select('id')
+        .eq('trimble_project_id', projectId)
+        .single();
+
+      setDeliveryAdminStats({
+        vehicles: vehicleCount || 0,
+        items: itemCount || 0,
+        factories: factoryCount || 0,
+        sheetsConfig: !!sheetsConfig
+      });
+    } catch (e: any) {
+      console.error('Error loading delivery stats:', e);
+      setMessage(`Viga statistika laadimisel: ${e.message}`);
+    } finally {
+      setDeliveryAdminLoading(false);
+    }
+  }, [projectId]);
+
+  // Delete ALL delivery schedule data for this project
+  const deleteAllDeliveryData = useCallback(async () => {
+    if (!projectId) return;
+    setDeliveryAdminLoading(true);
+    try {
+      // Delete in order due to foreign key constraints
+      // 1. Delete delivery items first
+      const { error: itemsError } = await supabase
+        .from('trimble_delivery_items')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (itemsError) throw itemsError;
+
+      // 2. Delete delivery history
+      const { error: historyError } = await supabase
+        .from('trimble_delivery_history')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (historyError) console.warn('History delete error:', historyError);
+
+      // 3. Delete delivery comments
+      const { error: commentsError } = await supabase
+        .from('trimble_delivery_comments')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (commentsError) console.warn('Comments delete error:', commentsError);
+
+      // 4. Delete vehicles
+      const { error: vehiclesError } = await supabase
+        .from('trimble_delivery_vehicles')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (vehiclesError) throw vehiclesError;
+
+      // 5. Delete factories
+      const { error: factoriesError } = await supabase
+        .from('trimble_delivery_factories')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (factoriesError) throw factoriesError;
+
+      // 6. Delete sheets sync config
+      const { error: sheetsConfigError } = await supabase
+        .from('trimble_sheets_sync_config')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (sheetsConfigError) console.warn('Sheets config delete error:', sheetsConfigError);
+
+      // 7. Delete sheets sync logs
+      const { error: sheetsLogsError } = await supabase
+        .from('trimble_sheets_sync_log')
+        .delete()
+        .eq('trimble_project_id', projectId);
+      if (sheetsLogsError) console.warn('Sheets logs delete error:', sheetsLogsError);
+
+      setMessage('✓ Kõik tarnegraafiku andmed kustutatud!');
+      setShowDeliveryDeleteConfirm(false);
+      setDeliveryAdminStats({
+        vehicles: 0,
+        items: 0,
+        factories: 0,
+        sheetsConfig: false
+      });
+    } catch (e: any) {
+      console.error('Error deleting delivery data:', e);
+      setMessage(`Viga kustutamisel: ${e.message}`);
+    } finally {
+      setDeliveryAdminLoading(false);
+    }
+  }, [projectId]);
+
   // Load project users from database
   const loadProjectUsers = useCallback(async () => {
     if (!projectId) return;
@@ -3428,6 +3553,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           {adminView === 'cameraPositions' && 'Kaamera positsioonid'}
           {adminView === 'dataExport' && 'Ekspordi andmed'}
           {adminView === 'fontTester' && 'Fontide testija'}
+          {adminView === 'deliveryScheduleAdmin' && 'Tarnegraafikud'}
         </h2>
       </div>
 
@@ -3542,6 +3668,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
           >
             <FiZap size={18} />
             <span>Fontide testija</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('deliveryScheduleAdmin');
+              loadDeliveryAdminStats();
+            }}
+            style={{ background: '#0ea5e9', color: 'white' }}
+          >
+            <FiTruck size={18} />
+            <span>Tarnegraafikud</span>
           </button>
         </div>
 
@@ -10507,6 +10645,219 @@ document.body.appendChild(div);`;
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Delivery Schedule Admin View */}
+      {adminView === 'deliveryScheduleAdmin' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <p style={{ fontSize: '13px', color: '#6b7280', marginBottom: '16px' }}>
+              Halda selle projekti tarnegraafiku andmeid. Siit saad kustutada kõik tarnegraafiku andmed.
+            </p>
+          </div>
+
+          {/* Stats Section */}
+          {deliveryAdminLoading ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <FiRefreshCw className="spin" size={32} style={{ color: '#6b7280' }} />
+              <p style={{ marginTop: '12px', color: '#6b7280' }}>Laadin statistikat...</p>
+            </div>
+          ) : deliveryAdminStats ? (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))',
+              gap: '16px',
+              marginBottom: '24px'
+            }}>
+              <div style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+                color: 'white'
+              }}>
+                <div style={{ fontSize: '28px', fontWeight: '700' }}>{deliveryAdminStats.vehicles}</div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>Veokid</div>
+              </div>
+              <div style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                color: 'white'
+              }}>
+                <div style={{ fontSize: '28px', fontWeight: '700' }}>{deliveryAdminStats.items}</div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>Tarnedetailid</div>
+              </div>
+              <div style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                color: 'white'
+              }}>
+                <div style={{ fontSize: '28px', fontWeight: '700' }}>{deliveryAdminStats.factories}</div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>Tehased</div>
+              </div>
+              <div style={{
+                padding: '16px',
+                borderRadius: '12px',
+                background: deliveryAdminStats.sheetsConfig
+                  ? 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)'
+                  : 'linear-gradient(135deg, #6b7280 0%, #4b5563 100%)',
+                color: 'white'
+              }}>
+                <div style={{ fontSize: '28px', fontWeight: '700' }}>
+                  {deliveryAdminStats.sheetsConfig ? '✓' : '—'}
+                </div>
+                <div style={{ fontSize: '12px', opacity: 0.9 }}>Sheets sünk.</div>
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              padding: '20px',
+              textAlign: 'center',
+              color: '#6b7280',
+              background: '#f9fafb',
+              borderRadius: '12px',
+              marginBottom: '24px'
+            }}>
+              Statistika pole saadaval
+            </div>
+          )}
+
+          {/* Danger Zone */}
+          <div style={{
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            borderRadius: '12px',
+            padding: '20px'
+          }}>
+            <h3 style={{
+              margin: '0 0 12px',
+              fontSize: '16px',
+              fontWeight: '600',
+              color: '#dc2626',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <FiAlertTriangle size={18} />
+              Ohtlik tsoon
+            </h3>
+            <p style={{ fontSize: '13px', color: '#7f1d1d', marginBottom: '16px' }}>
+              Allpool olevad toimingud on pöördumatud. Palun veendu, et tead mida teed.
+            </p>
+
+            {!showDeliveryDeleteConfirm ? (
+              <button
+                onClick={() => setShowDeliveryDeleteConfirm(true)}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: '#dc2626',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}
+              >
+                <FiTrash2 size={16} />
+                Kustuta kõik tarnegraafiku andmed
+              </button>
+            ) : (
+              <div style={{
+                background: 'white',
+                borderRadius: '8px',
+                padding: '16px',
+                border: '2px solid #dc2626'
+              }}>
+                <p style={{ fontSize: '14px', color: '#dc2626', fontWeight: '500', marginBottom: '12px' }}>
+                  Kas oled kindel? See kustutab:
+                </p>
+                <ul style={{ fontSize: '13px', color: '#7f1d1d', marginBottom: '16px', paddingLeft: '20px' }}>
+                  <li>Kõik veokid ({deliveryAdminStats?.vehicles || 0})</li>
+                  <li>Kõik tarnedetailid ({deliveryAdminStats?.items || 0})</li>
+                  <li>Kõik tehased ({deliveryAdminStats?.factories || 0})</li>
+                  <li>Veokite ajalugu ja kommentaarid</li>
+                  <li>Google Sheets sünkroonimise seaded</li>
+                </ul>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={deleteAllDeliveryData}
+                    disabled={deliveryAdminLoading}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: '#dc2626',
+                      color: 'white',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      cursor: deliveryAdminLoading ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      opacity: deliveryAdminLoading ? 0.7 : 1
+                    }}
+                  >
+                    {deliveryAdminLoading ? (
+                      <>
+                        <FiRefreshCw size={14} className="spin" />
+                        Kustutan...
+                      </>
+                    ) : (
+                      <>
+                        <FiTrash2 size={14} />
+                        Jah, kustuta kõik
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setShowDeliveryDeleteConfirm(false)}
+                    disabled={deliveryAdminLoading}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: '6px',
+                      border: '1px solid #d1d5db',
+                      background: 'white',
+                      color: '#374151',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Tühista
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Refresh button */}
+          <button
+            onClick={loadDeliveryAdminStats}
+            disabled={deliveryAdminLoading}
+            style={{
+              marginTop: '20px',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              border: '1px solid #d1d5db',
+              background: 'white',
+              color: '#374151',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: deliveryAdminLoading ? 'wait' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+          >
+            <FiRefreshCw size={14} className={deliveryAdminLoading ? 'spin' : ''} />
+            Värskenda statistikat
+          </button>
         </div>
       )}
     </div>
