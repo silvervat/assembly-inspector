@@ -960,7 +960,7 @@ export default function ArrivedDeliveriesScreen({
   };
 
   const getArrivedVehicle = (vehicleId: string) => {
-    return arrivedVehicles.find(av => av.vehicle_id === vehicleId);
+    return arrivedVehicles.find(av => av && av.vehicle_id === vehicleId);
   };
 
   const getVehicleItems = (vehicleId: string) => {
@@ -1088,11 +1088,12 @@ export default function ArrivedDeliveriesScreen({
 
   // Cancel editing and discard changes
   const cancelEditArrival = () => {
-    if (originalArrivalDataRef.current && editingArrivalId) {
+    const originalData = originalArrivalDataRef.current;
+    if (originalData && editingArrivalId) {
       // Restore original data
       setArrivedVehicles(prev => prev.map(av =>
-        av.id === editingArrivalId ? originalArrivalDataRef.current! : av
-      ));
+        av.id === editingArrivalId ? originalData : av
+      ).filter((av): av is ArrivedVehicle => av !== null));
     }
     setEditingArrivalId(null);
     setHasUnsavedChanges(false);
@@ -1157,10 +1158,11 @@ export default function ArrivedDeliveriesScreen({
   // Handle confirmed navigation (discard changes)
   const handleConfirmNavigation = () => {
     // Restore original data and clear edit mode
-    if (originalArrivalDataRef.current && editingArrivalId) {
+    const originalData = originalArrivalDataRef.current;
+    if (originalData && editingArrivalId) {
       setArrivedVehicles(prev => prev.map(av =>
-        av.id === editingArrivalId ? originalArrivalDataRef.current! : av
-      ));
+        av.id === editingArrivalId ? originalData : av
+      ).filter((av): av is ArrivedVehicle => av !== null));
     }
     setEditingArrivalId(null);
     setHasUnsavedChanges(false);
