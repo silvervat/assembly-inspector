@@ -10921,6 +10921,11 @@ button.stat-toggle.off:hover {
   color: #a16207;
 }
 
+/* When menu is open, raise z-index to show menu above other groups */
+.org-group-header.menu-open {
+  z-index: 1000;
+}
+
 .org-group-header.drag-over {
   background: #dcfce7;
   outline: 2px dashed #22c55e;
