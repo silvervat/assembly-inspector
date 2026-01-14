@@ -95,22 +95,103 @@ async function generateQRCode(url: string, size: number = 100): Promise<string> 
   }
 }
 
+// Maximum image dimension for PDF (keeps quality while reducing file size)
+const MAX_IMAGE_DIMENSION = 2048;
+
 /**
- * Load image as data URL
+ * Load image as data URL with dimensions, resizing if too large
  */
-async function loadImageAsDataURL(url: string): Promise<string | null> {
+async function loadImageAsDataURL(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
-    return new Promise((resolve) => {
+    const originalDataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
+      reader.onerror = () => reject();
       reader.readAsDataURL(blob);
     });
+
+    // Load image to get dimensions and potentially resize
+    const result = await new Promise<{ dataUrl: string; width: number; height: number }>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const { width, height } = img;
+
+        // Check if resizing is needed
+        if (width <= MAX_IMAGE_DIMENSION && height <= MAX_IMAGE_DIMENSION) {
+          // No resize needed
+          resolve({ dataUrl: originalDataUrl, width, height });
+          return;
+        }
+
+        // Calculate new dimensions maintaining aspect ratio
+        let newWidth = width;
+        let newHeight = height;
+
+        if (width > height) {
+          newWidth = MAX_IMAGE_DIMENSION;
+          newHeight = Math.round((height / width) * MAX_IMAGE_DIMENSION);
+        } else {
+          newHeight = MAX_IMAGE_DIMENSION;
+          newWidth = Math.round((width / height) * MAX_IMAGE_DIMENSION);
+        }
+
+        // Resize using canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        const ctx = canvas.getContext('2d');
+
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, newWidth, newHeight);
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ dataUrl: resizedDataUrl, width: newWidth, height: newHeight });
+        } else {
+          // Fallback to original if canvas fails
+          resolve({ dataUrl: originalDataUrl, width, height });
+        }
+      };
+      img.onerror = () => resolve({ dataUrl: originalDataUrl, width: 1, height: 1 });
+      img.src = originalDataUrl;
+    });
+
+    return result;
   } catch {
     return null;
   }
+}
+
+/**
+ * Calculate image dimensions to fit within a box while maintaining aspect ratio
+ */
+function calculateFitDimensions(
+  imgWidth: number,
+  imgHeight: number,
+  boxWidth: number,
+  boxHeight: number
+): { width: number; height: number; offsetX: number; offsetY: number } {
+  const imgAspect = imgWidth / imgHeight;
+  const boxAspect = boxWidth / boxHeight;
+
+  let width: number;
+  let height: number;
+
+  if (imgAspect > boxAspect) {
+    // Image is wider than box - fit to width
+    width = boxWidth;
+    height = boxWidth / imgAspect;
+  } else {
+    // Image is taller than box - fit to height
+    height = boxHeight;
+    width = boxHeight * imgAspect;
+  }
+
+  // Center the image in the box
+  const offsetX = (boxWidth - width) / 2;
+  const offsetY = (boxHeight - height) / 2;
+
+  return { width, height, offsetX, offsetY };
 }
 
 /**
@@ -140,36 +221,29 @@ function drawHeader(
 }
 
 /**
- * Draw page footer (compact)
+ * Draw simple page footer (without QR - for photo pages)
  */
-function drawFooter(doc: jsPDF, shareUrl: string, qrDataUrl: string): void {
-  const footerY = PAGE_HEIGHT - 15;
+function drawSimpleFooter(doc: jsPDF, shareUrl: string): void {
+  const footerY = PAGE_HEIGHT - 10;
 
   // Footer line
   doc.setDrawColor(...COLORS.lightGray);
   doc.setLineWidth(0.3);
   doc.line(MARGIN, footerY - 3, PAGE_WIDTH - MARGIN, footerY - 3);
 
-  // QR Code (tiny)
-  if (qrDataUrl) {
-    doc.addImage(qrDataUrl, 'PNG', MARGIN, footerY - 1, 12, 12);
-  }
-
   // URL text
   doc.setTextColor(...COLORS.primary);
-  doc.setFontSize(7);
-  doc.textWithLink(shareUrl, MARGIN + 14, footerY + 4, { url: shareUrl });
+  doc.setFontSize(6);
+  doc.textWithLink(shareUrl, MARGIN, footerY + 2, { url: shareUrl });
 
   // Generation date
   doc.setTextColor(...COLORS.gray);
   const generatedDate = new Date().toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: 'numeric'
   });
-  doc.text(`Generated: ${generatedDate}`, PAGE_WIDTH - MARGIN, footerY + 4, { align: 'right' });
+  doc.text(`Generated: ${generatedDate}`, PAGE_WIDTH - MARGIN, footerY + 2, { align: 'right' });
 }
 
 /**
@@ -178,9 +252,8 @@ function drawFooter(doc: jsPDF, shareUrl: string, qrDataUrl: string): void {
 export async function generateDeliveryReportPDF(data: DeliveryReportData): Promise<Blob> {
   const { projectName, vehicle, factory, arrivedVehicle, items, confirmations, photos, shareUrl } = data;
 
-  // Pre-generate QR codes
+  // Pre-generate QR code for first page only
   const mainQRCode = await generateQRCode(shareUrl, 150);
-  const footerQRCode = await generateQRCode(shareUrl, 80);
 
   // Calculate totals
   const confirmedCount = confirmations.filter(c => c.status === 'confirmed').length;
@@ -240,29 +313,38 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
     y += noteHeight + 3;
   }
 
-  // Status badges - compact inline
-  const badgeWidth = 45;
-  const badgeHeight = 14;
-  doc.setFontSize(8);
+  // Status badges - compact inline (small pills)
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+
+  // Calculate badge widths based on text
+  const badgeHeight = 6;
+  const badgePadding = 4;
+  const badgeGap = 3;
 
   // Confirmed badge
+  const confirmedText = `✓ ${confirmedCount} Confirmed`;
+  const confirmedWidth = doc.getTextWidth(confirmedText) + badgePadding * 2;
   doc.setFillColor(...COLORS.success);
-  doc.roundedRect(MARGIN, y, badgeWidth, badgeHeight, 2, 2, 'F');
+  doc.roundedRect(MARGIN, y, confirmedWidth, badgeHeight, 1.5, 1.5, 'F');
   doc.setTextColor(...COLORS.white);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`CONFIRMED: ${confirmedCount}`, MARGIN + badgeWidth/2, y + 9, { align: 'center' });
+  doc.text(confirmedText, MARGIN + badgePadding, y + 4.2);
 
   // Missing badge
+  const missingText = `✗ ${missingCount} Missing`;
+  const missingWidth = doc.getTextWidth(missingText) + badgePadding * 2;
   doc.setFillColor(...COLORS.danger);
-  doc.roundedRect(MARGIN + badgeWidth + 5, y, badgeWidth, badgeHeight, 2, 2, 'F');
-  doc.text(`MISSING: ${missingCount}`, MARGIN + badgeWidth + 5 + badgeWidth/2, y + 9, { align: 'center' });
+  doc.roundedRect(MARGIN + confirmedWidth + badgeGap, y, missingWidth, badgeHeight, 1.5, 1.5, 'F');
+  doc.text(missingText, MARGIN + confirmedWidth + badgeGap + badgePadding, y + 4.2);
 
   // Added badge
+  const addedText = `+ ${addedCount} Added`;
+  const addedWidth = doc.getTextWidth(addedText) + badgePadding * 2;
   doc.setFillColor(...COLORS.primary);
-  doc.roundedRect(MARGIN + (badgeWidth + 5) * 2, y, badgeWidth, badgeHeight, 2, 2, 'F');
-  doc.text(`ADDED: ${addedCount}`, MARGIN + (badgeWidth + 5) * 2 + badgeWidth/2, y + 9, { align: 'center' });
+  doc.roundedRect(MARGIN + confirmedWidth + badgeGap + missingWidth + badgeGap, y, addedWidth, badgeHeight, 1.5, 1.5, 'F');
+  doc.text(addedText, MARGIN + confirmedWidth + badgeGap + missingWidth + badgeGap + badgePadding, y + 4.2);
 
-  y += badgeHeight + 5;
+  y += badgeHeight + 4;
 
   // Items Table - compact with GUID on the right
   doc.setTextColor(...COLORS.dark);
@@ -349,38 +431,38 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   y = (doc as any).lastAutoTable.finalY + 5;
 
-  // QR Code and link - compact box at bottom (only if space available)
-  const qrBoxHeight = 22;
-  const footerStart = PAGE_HEIGHT - 15; // Where footer starts
+  // QR Code and link - compact box at bottom of page 1 only
+  const qrBoxHeight = 18;
+  const footerStart = PAGE_HEIGHT - 10; // Where simple footer starts
 
-  if (y < footerStart - qrBoxHeight - 5) {
+  if (y < footerStart - qrBoxHeight - 3) {
     // Position QR box just above footer
-    y = footerStart - qrBoxHeight - 5;
+    y = footerStart - qrBoxHeight - 3;
 
     doc.setFillColor(...COLORS.lightGray);
     doc.roundedRect(MARGIN, y, CONTENT_WIDTH, qrBoxHeight, 2, 2, 'F');
 
     // QR Code - compact
     if (mainQRCode) {
-      doc.addImage(mainQRCode, 'PNG', MARGIN + 2, y + 1, 20, 20);
+      doc.addImage(mainQRCode, 'PNG', MARGIN + 2, y + 1, 16, 16);
     }
 
     // Link info - compact
     doc.setTextColor(...COLORS.dark);
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text('View Online Gallery', MARGIN + 25, y + 8);
+    doc.text('View Online Gallery', MARGIN + 20, y + 7);
 
     doc.setTextColor(...COLORS.primary);
-    doc.setFontSize(7);
-    doc.textWithLink(shareUrl, MARGIN + 25, y + 14, { url: shareUrl });
+    doc.setFontSize(6);
+    doc.textWithLink(shareUrl, MARGIN + 20, y + 12, { url: shareUrl });
 
     doc.setTextColor(...COLORS.gray);
-    doc.setFontSize(7);
-    doc.text('Scan QR or click link', MARGIN + 25, y + 19);
+    doc.setFontSize(6);
+    doc.text('Scan QR code or click link to view photos online', MARGIN + 20, y + 16);
   }
 
-  drawFooter(doc, shareUrl, footerQRCode);
+  drawSimpleFooter(doc, shareUrl);
 
   // ============================================
   // PHOTO PAGES (COMPACT - 6 photos per page)
@@ -424,11 +506,23 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
         doc.setFillColor(...COLORS.lightGray);
         doc.roundedRect(x, y, photoWidth, photoHeight + captionHeight, 2, 2, 'F');
 
-        // Load and add photo
+        // Load and add photo with proper aspect ratio
         try {
-          const imgData = await loadImageAsDataURL(photo.file_url);
-          if (imgData) {
-            doc.addImage(imgData, 'JPEG', x + 1, y + 1, photoWidth - 2, photoHeight - 2, undefined, 'MEDIUM');
+          const imgResult = await loadImageAsDataURL(photo.file_url);
+          if (imgResult) {
+            const boxW = photoWidth - 2;
+            const boxH = photoHeight - 2;
+            const fit = calculateFitDimensions(imgResult.width, imgResult.height, boxW, boxH);
+            doc.addImage(
+              imgResult.dataUrl,
+              'JPEG',
+              x + 1 + fit.offsetX,
+              y + 1 + fit.offsetY,
+              fit.width,
+              fit.height,
+              undefined,
+              'MEDIUM'
+            );
           }
         } catch {
           doc.setTextColor(...COLORS.gray);
@@ -450,7 +544,7 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
         doc.text(`${caption} - ${photoDate}`, x + 3, y + photoHeight + 7);
       }
 
-      drawFooter(doc, shareUrl, footerQRCode);
+      drawSimpleFooter(doc, shareUrl);
     }
   }
 
