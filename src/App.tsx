@@ -10,6 +10,7 @@ import DeliveryScheduleScreen from './components/DeliveryScheduleScreen';
 import OrganizerScreen from './components/OrganizerScreen';
 import ArrivedDeliveriesScreen from './components/ArrivedDeliveriesScreen';
 import IssuesScreen from './components/IssuesScreen';
+import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
 import { supabase, TrimbleExUser } from './supabase';
 import {
@@ -23,7 +24,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.545';
+export const APP_VERSION = '3.0.546';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -761,6 +762,8 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           projectId={projectId}
           userEmail={tcUser?.email || ''}
+          user={user}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
@@ -777,7 +780,9 @@ export default function App() {
           projectId={projectId}
           userEmail={tcUser?.email || ''}
           userName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
+          user={user}
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
@@ -796,6 +801,7 @@ export default function App() {
           tcUserEmail={tcUser?.email || ''}
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
@@ -887,6 +893,24 @@ export default function App() {
           tcUserEmail={tcUser?.email || ''}
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Tööriistad ekraan
+  if (currentMode === 'tools') {
+    return (
+      <>
+        <NavigationOverlay />
+        <ToolsScreen
+          api={api}
+          user={user}
+          projectId={projectId}
+          onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
@@ -908,6 +932,7 @@ export default function App() {
           inspectionTypeCode={selectedInspectionType.code}
           inspectionTypeName={selectedInspectionType.name}
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
         />
         <VersionFooter />
       </>
@@ -925,6 +950,7 @@ export default function App() {
         tcUserEmail={tcUser?.email || ''}
         inspectionMode={currentMode}
         onBackToMenu={handleBackToMenu}
+        onNavigate={setCurrentMode}
       />
       <VersionFooter />
     </>

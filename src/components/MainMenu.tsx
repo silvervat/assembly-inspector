@@ -24,7 +24,8 @@ export type InspectionMode =
   | 'delivery_schedule' // Tarnegraafik
   | 'arrived_deliveries' // Saabunud tarned
   | 'organizer' // Organiseeri (gruppide haldus)
-  | 'issues'; // Probleemid (mittevastavused)
+  | 'issues' // Probleemid (mittevastavused)
+  | 'tools'; // Tööriistad
 
 interface MainMenuProps {
   user: TrimbleExUser;

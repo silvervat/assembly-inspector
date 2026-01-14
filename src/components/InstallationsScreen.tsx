@@ -5,6 +5,8 @@ import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevron
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -68,6 +70,7 @@ interface InstallationsScreenProps {
   tcUserEmail?: string;
   tcUserName?: string;
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 interface SelectedObject {
@@ -379,7 +382,8 @@ export default function InstallationsScreen({
   projectId,
   tcUserEmail,
   tcUserName,
-  onBackToMenu
+  onBackToMenu,
+  onNavigate
 }: InstallationsScreenProps) {
   // Property mappings for this project
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -4581,16 +4585,25 @@ export default function InstallationsScreen({
     );
   };
 
+  // Handle navigation from header
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      handleBackToMenu();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="installations-screen">
-      {/* Mode title bar - same as InspectorScreen */}
-      <div className="mode-title-bar">
-        <button className="back-to-menu-btn" onClick={handleBackToMenu}>
-          <FiArrowLeft size={14} />
-          <span>Menüü</span>
-        </button>
-        <span className="mode-title">Paigaldamised</span>
-      </div>
+      {/* PageHeader with hamburger menu */}
+      <PageHeader
+        title="Paigaldamised"
+        onBack={handleBackToMenu}
+        onNavigate={handleHeaderNavigate}
+        currentMode="installations"
+        user={user}
+      />
 
       {/* Coloring progress indicator - floating overlay */}
       {coloringInProgress && (

@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiArrowLeft, FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats } from '../supabase';
+import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser } from '../supabase';
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -34,7 +36,9 @@ interface InspectionPlanScreenProps {
   projectId: string;
   userEmail: string;
   userName: string;
+  user?: TrimbleExUser;
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 // Selected object data from Trimble
@@ -64,7 +68,9 @@ export default function InspectionPlanScreen({
   projectId,
   userEmail,
   userName,
-  onBackToMenu
+  user,
+  onBackToMenu,
+  onNavigate
 }: InspectionPlanScreenProps) {
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('add');
@@ -958,16 +964,25 @@ export default function InspectionPlanScreen({
     return colors[color || 'blue'] || colors.blue;
   };
 
+  // Handle navigation from header
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      onBackToMenu();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="inspector-container">
-      {/* Header - sama stiil nagu InspectorScreen */}
-      <div className="mode-title-bar">
-        <button className="back-to-menu-btn" onClick={onBackToMenu}>
-          <FiArrowLeft size={14} />
-          <span>Menüü</span>
-        </button>
-        <span className="mode-title">📋 Inspektsiooni kava</span>
-      </div>
+      {/* PageHeader with hamburger menu */}
+      <PageHeader
+        title="Inspektsiooni kava"
+        onBack={onBackToMenu}
+        onNavigate={handleHeaderNavigate}
+        currentMode="inspection_plan"
+        user={user}
+      />
 
       {/* View Mode Toggle */}
       <div className="plan-view-toggle">
