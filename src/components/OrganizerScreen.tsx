@@ -21,7 +21,7 @@ import {
 } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import {
-  FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
+  FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
@@ -32,6 +32,9 @@ import {
 // TYPES
 // ============================================
 
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
+
 interface OrganizerScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
   user: TrimbleExUser;
@@ -39,6 +42,7 @@ interface OrganizerScreenProps {
   tcUserEmail: string;
   tcUserName?: string;
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 interface SelectedObject {
@@ -375,9 +379,11 @@ function sortGroupTree(nodes: OrganizerGroupTree[], field: SortField, dir: SortD
 
 export default function OrganizerScreen({
   api,
+  user,
   projectId,
   tcUserEmail,
-  onBackToMenu
+  onBackToMenu,
+  onNavigate
 }: OrganizerScreenProps) {
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -5639,26 +5645,31 @@ export default function OrganizerScreen({
   return (
     <div className="organizer-screen" ref={containerRef}>
       {/* Header */}
-      <div className="org-header">
-        <button className="org-back-btn" onClick={onBackToMenu}><FiArrowLeft size={18} /></button>
-        <h1>Organiseerija</h1>
-        <div className="org-header-actions">
-          <button
-            className="org-icon-btn"
-            onClick={toggleAllExpanded}
-            title={allExpanded ? 'Voldi kokku' : 'Voldi lahti'}
-          >
-            {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
-          </button>
-          <button
-            className="org-icon-btn"
-            onClick={() => setShowSettingsModal(true)}
-            title="Seaded"
-          >
-            <FiSettings size={16} />
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Organiseerija"
+        onBack={onBackToMenu}
+        onNavigate={(mode) => {
+          if (mode === null) onBackToMenu();
+          else if (onNavigate) onNavigate(mode);
+        }}
+        currentMode="organizer"
+        user={user}
+      >
+        <button
+          className="org-icon-btn"
+          onClick={toggleAllExpanded}
+          title={allExpanded ? 'Voldi kokku' : 'Voldi lahti'}
+        >
+          {allExpanded ? <FiChevronsUp size={16} /> : <FiChevronsDown size={16} />}
+        </button>
+        <button
+          className="org-icon-btn"
+          onClick={() => setShowSettingsModal(true)}
+          title="Seaded"
+        >
+          <FiSettings size={16} />
+        </button>
+      </PageHeader>
 
       {/* Secondary header row - coloring and add group buttons */}
       <div className="org-header-secondary">

@@ -13,11 +13,14 @@ import {
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
   FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
-  FiExternalLink, FiLoader, FiCopy, FiEdit2
+  FiExternalLink, FiLoader, FiCopy, FiEdit2, FiMoreVertical, FiShare2
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
 import { createOrGetShareLink, getShareUrl } from '../utils/shareUtils';
+
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 
 // Props
 interface ArrivedDeliveriesScreenProps {
@@ -25,6 +28,7 @@ interface ArrivedDeliveriesScreenProps {
   user?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   projectId: string;
   onBack: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 // Time options for dropdowns
@@ -358,7 +362,8 @@ export default function ArrivedDeliveriesScreen({
   api,
   user,
   projectId,
-  onBack
+  onBack,
+  onNavigate
 }: ArrivedDeliveriesScreenProps) {
   // User email
   const tcUserEmail = user?.email || 'unknown';
@@ -424,6 +429,10 @@ export default function ArrivedDeliveriesScreen({
 
   // State - Expanded item for comment/photo editing
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+
+  // State - Vehicle 3-dot menu
+  const [vehicleMenuOpen, setVehicleMenuOpen] = useState<string | null>(null);
+  const vehicleMenuRef = useRef<HTMLDivElement>(null);
 
   // State - Photo lightbox (stores full photo object for metadata access)
   const [lightboxPhoto, setLightboxPhoto] = useState<{ photo: ArrivalPhoto; vehicleCode: string } | null>(null);
@@ -593,6 +602,19 @@ export default function ArrivedDeliveriesScreen({
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+
+  // Close vehicle menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (vehicleMenuRef.current && !vehicleMenuRef.current.contains(event.target as Node)) {
+        setVehicleMenuOpen(null);
+      }
+    }
+    if (vehicleMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [vehicleMenuOpen]);
 
   // Generate date range for calendar
   useEffect(() => {
@@ -1164,7 +1186,12 @@ export default function ArrivedDeliveriesScreen({
           return next;
         });
       } else if (type === 'back') {
-        onBack();
+        // If value is set, navigate to that mode; otherwise go back
+        if (value && onNavigate) {
+          onNavigate(value as InspectionMode);
+        } else {
+          onBack();
+        }
       }
     }
   };
@@ -2454,6 +2481,198 @@ export default function ArrivedDeliveriesScreen({
   };
 
   // ============================================
+  // PROJECT SUMMARY REPORT (Excel)
+  // ============================================
+
+  const exportProjectSummaryExcel = async () => {
+    const wb = XLSX.utils.book_new();
+    const exportDate = new Date().toLocaleDateString('et-EE');
+    const exportDateTime = new Date().toLocaleString('et-EE');
+
+    // Header styles
+    const headerStyle = {
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      fill: { fgColor: { rgb: '2563EB' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+    const subHeaderStyle = {
+      font: { bold: true },
+      fill: { fgColor: { rgb: 'E5E7EB' } },
+      alignment: { horizontal: 'left' }
+    };
+    const warningStyle = {
+      font: { color: { rgb: 'DC2626' } },
+      fill: { fgColor: { rgb: 'FEE2E2' } }
+    };
+
+    // Calculate overall statistics
+    const totalVehicles = vehicles.length;
+    const arrivedVehicleIds = new Set(arrivedVehicles.map(av => av.vehicle_id));
+    const arrivedCount = arrivedVehicles.filter(av => av.is_confirmed).length;
+    const inProgressCount = arrivedVehicles.filter(av => !av.is_confirmed).length;
+    const notArrivedCount = vehicles.filter(v => !arrivedVehicleIds.has(v.id)).length;
+
+    const totalItems = items.length;
+    const confirmedItems = confirmations.filter(c => c.status === 'confirmed').length;
+    const missingItems = confirmations.filter(c => c.status === 'missing').length;
+    const pendingItems = totalItems - confirmedItems;
+
+    // ============================================
+    // Sheet 1: Ülevaade (Overview)
+    // ============================================
+    const overviewData = [
+      [`PROJEKTI TARNETE KOKKUVÕTE - ${projectName}`],
+      [''],
+      ['Ekspordi kuupäev:', exportDateTime],
+      [''],
+      ['ÜLDSTATISTIKA'],
+      [''],
+      ['Veokeid kokku:', totalVehicles],
+      ['Saabunud ja kinnitatud:', arrivedCount],
+      ['Saabunud, töös:', inProgressCount],
+      ['Saabumata:', notArrivedCount],
+      [''],
+      ['Detaile kokku:', totalItems],
+      ['Kinnitatud:', confirmedItems],
+      ['Puudu:', missingItems],
+      ['Ootel:', pendingItems],
+      [''],
+      [`Kinnitamise protsent: ${totalItems > 0 ? Math.round((confirmedItems / totalItems) * 100) : 0}%`]
+    ];
+
+    const wsOverview = XLSX.utils.aoa_to_sheet(overviewData);
+    wsOverview['A1'] = { v: overviewData[0][0], s: { ...headerStyle, font: { ...headerStyle.font, sz: 14 } } };
+    wsOverview['A5'] = { v: 'ÜLDSTATISTIKA', s: subHeaderStyle };
+    wsOverview['!cols'] = [{ wch: 35 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsOverview, 'Ülevaade');
+
+    // ============================================
+    // Sheet 2: Saabumata veokid (Not arrived vehicles)
+    // ============================================
+    const notArrivedVehicles = vehicles.filter(v => !arrivedVehicleIds.has(v.id));
+    const notArrivedHeader = ['Veok', 'Tehas', 'Planeeritud kuupäev', 'Detaile', 'Kaal (kg)'];
+    const notArrivedData = notArrivedVehicles.map(v => {
+      const factory = getFactory(v.factory_id);
+      const vItems = getVehicleItems(v.id);
+      return [
+        v.vehicle_code,
+        factory?.factory_name || '-',
+        v.scheduled_date ? formatDateEstonian(v.scheduled_date) : '-',
+        vItems.length,
+        Math.round(v.total_weight || 0)
+      ];
+    });
+
+    const wsNotArrived = XLSX.utils.aoa_to_sheet([notArrivedHeader, ...notArrivedData]);
+    notArrivedHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsNotArrived[cellRef] = { v: notArrivedHeader[colIdx], s: headerStyle };
+    });
+    wsNotArrived['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 18 }, { wch: 10 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsNotArrived, 'Saabumata veokid');
+
+    // ============================================
+    // Sheet 3: Puuduvad detailid (Missing items)
+    // ============================================
+    const missingConfirmations = confirmations.filter(c => c.status === 'missing');
+    const missingHeader = ['Veok', 'Tehas', 'Assembly Mark', 'Toote nimi', 'GUID', 'Kommentaar'];
+    const missingData = missingConfirmations.map(conf => {
+      const arrival = arrivedVehicles.find(av => av.id === conf.arrived_vehicle_id);
+      const vehicle = getVehicle(arrival?.vehicle_id);
+      const factory = getFactory(vehicle?.factory_id);
+      const item = items.find(i => i.id === conf.item_id);
+      return [
+        vehicle?.vehicle_code || '-',
+        factory?.factory_name || '-',
+        item?.assembly_mark || '-',
+        item?.product_name || '-',
+        item?.guid_ifc || '-',
+        conf.notes || '-'
+      ];
+    });
+
+    const wsMissing = XLSX.utils.aoa_to_sheet([missingHeader, ...missingData]);
+    missingHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsMissing[cellRef] = { v: missingHeader[colIdx], s: headerStyle };
+    });
+    // Apply warning style to rows
+    missingData.forEach((_, rowIdx) => {
+      missingHeader.forEach((__, colIdx) => {
+        const cellRef = XLSX.utils.encode_cell({ r: rowIdx + 1, c: colIdx });
+        if (wsMissing[cellRef]) {
+          wsMissing[cellRef].s = warningStyle;
+        }
+      });
+    });
+    wsMissing['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 20 }, { wch: 30 }, { wch: 36 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, wsMissing, 'Puuduvad detailid');
+
+    // ============================================
+    // Sheet 4: Kõik veokid (All vehicles status)
+    // ============================================
+    const allVehiclesHeader = ['Veok', 'Tehas', 'Planeeritud', 'Saabunud', 'Hilinemine', 'Detaile', 'Kinnitatud', 'Puudu', 'Staatus'];
+    const allVehiclesData = vehicles.map(v => {
+      const factory = getFactory(v.factory_id);
+      const vItems = getVehicleItems(v.id);
+      const arrival = arrivedVehicles.find(av => av.vehicle_id === v.id);
+
+      if (!arrival) {
+        return [
+          v.vehicle_code,
+          factory?.factory_name || '-',
+          v.scheduled_date ? formatDateEstonian(v.scheduled_date) : '-',
+          '-',
+          '-',
+          vItems.length,
+          0,
+          0,
+          'Saabumata'
+        ];
+      }
+
+      const arrConfs = getConfirmationsForArrival(arrival.id);
+      const confirmed = arrConfs.filter(c => c.status === 'confirmed').length;
+      const missing = arrConfs.filter(c => c.status === 'missing').length;
+
+      const scheduledDate = v.scheduled_date ? new Date(v.scheduled_date + 'T00:00:00') : null;
+      const arrivalDate = arrival.arrival_date ? new Date(arrival.arrival_date + 'T00:00:00') : null;
+      const delayDays = scheduledDate && arrivalDate
+        ? Math.round((arrivalDate.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      return [
+        v.vehicle_code,
+        factory?.factory_name || '-',
+        v.scheduled_date ? formatDateEstonian(v.scheduled_date) : '-',
+        arrival.arrival_date ? formatDateEstonian(arrival.arrival_date) : '-',
+        delayDays !== null ? (delayDays === 0 ? '0' : `${delayDays > 0 ? '+' : ''}${delayDays}`) : '-',
+        vItems.length,
+        confirmed,
+        missing,
+        arrival.is_confirmed ? 'Kinnitatud' : 'Töös'
+      ];
+    });
+
+    const wsAllVehicles = XLSX.utils.aoa_to_sheet([allVehiclesHeader, ...allVehiclesData]);
+    allVehiclesHeader.forEach((_, colIdx) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 0, c: colIdx });
+      wsAllVehicles[cellRef] = { v: allVehiclesHeader[colIdx], s: headerStyle };
+    });
+    wsAllVehicles['!cols'] = [
+      { wch: 12 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 },
+      { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 15 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsAllVehicles, 'Kõik veokid');
+
+    // Generate filename with project name and date
+    const sanitizedProjectName = projectName.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ\s]/g, '').replace(/\s+/g, '_');
+    const fileName = `Projekti_kokkuvote_${sanitizedProjectName}_${exportDate.replace(/\./g, '-')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    setMessage('Projekti kokkuvõte allalaetud');
+  };
+
+  // ============================================
   // PLAYBACK
   // ============================================
 
@@ -3162,52 +3381,62 @@ export default function ArrivedDeliveriesScreen({
     );
   }
 
+  // Handle navigation from header menu
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedChangesModal(true);
+      setPendingNavigation({ type: 'back', value: mode === null ? undefined : mode });
+      return;
+    }
+    if (mode === null) {
+      onBack();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="delivery-schedule arrived-deliveries">
-      {/* Header - same style as Tarnegraafik */}
-      <header className="delivery-header">
-        <button className="back-btn" onClick={() => {
+      {/* Header with hamburger menu */}
+      <PageHeader
+        title="Saabunud tarned"
+        onBack={() => {
           if (checkUnsavedChangesAndNavigate('back')) {
             onBack();
           }
-        }}>
-          <FiArrowLeft />
+        }}
+        onNavigate={handleHeaderNavigate}
+        currentMode="arrived_deliveries"
+        user={user}
+      >
+        {/* Color toggle button */}
+        <button
+          className={`view-toggle-btn ${colorMode !== 'off' ? 'active' : ''}`}
+          onClick={() => toggleColoring(colorMode === 'off' ? 'by-status' : 'off')}
+          disabled={coloringInProgress}
+          title={colorMode !== 'off' ? 'Lähtesta värvid' : 'Värvi staatuse järgi'}
+          style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
+        >
+          <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
         </button>
-        <h1>Saabunud tarned</h1>
-        <div className="header-actions">
-          {/* Color mode selector */}
-          <select
-            className="color-mode-select"
-            value={colorMode}
-            onChange={(e) => toggleColoring(e.target.value as ColorMode)}
-            disabled={coloringInProgress}
-            title="Mudeli värvimine"
-            style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
-          >
-            <option value="off">Värvimine väljas</option>
-            <option value="by-status">Staatuse järgi</option>
-            <option value="all-green">Kõik roheliseks</option>
-            <option value="by-vehicle">Veokite kaupa</option>
-          </select>
-          <button
-            className={`view-toggle-btn ${colorMode !== 'off' ? 'active' : ''}`}
-            onClick={() => colorModel(colorMode === 'off' ? 'all-green' : 'off')}
-            disabled={coloringInProgress}
-            title={colorMode !== 'off' ? 'Lähtesta värvid' : 'Värvi mudel'}
-            style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
-          >
-            <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
-          </button>
-          <button
-            className="view-toggle-btn"
-            onClick={loadAllData}
-            disabled={loading}
-            title="Värskenda"
-          >
-            <FiRefreshCw className={loading ? 'spinning' : ''} />
-          </button>
-        </div>
-      </header>
+        {/* Project summary button */}
+        <button
+          className="view-toggle-btn"
+          onClick={exportProjectSummaryExcel}
+          title="Projekti kokkuvõte (Excel)"
+        >
+          <FiFileText />
+        </button>
+        {/* Refresh button */}
+        <button
+          className="view-toggle-btn"
+          onClick={loadAllData}
+          disabled={loading}
+          title="Värskenda"
+        >
+          <FiRefreshCw className={loading ? 'spinning' : ''} />
+        </button>
+      </PageHeader>
 
       {/* Message */}
       {message && (
@@ -3377,14 +3606,117 @@ export default function ArrivedDeliveriesScreen({
                         <FiCheck /> Kinnitatud
                       </span>
                     ) : arrivedVehicle ? (
-                      <span className="status-badge in-progress">
-                        {confirmedCount}/{vehicleItems.length} kinnitatud
-                        {missingCount > 0 && <span className="missing-count"> • {missingCount} puudub</span>}
-                      </span>
+                      <div className="status-counts">
+                        <span className="count-badge confirmed" title="Kinnitatud">
+                          <FiCheck size={10} /> {confirmedCount}
+                        </span>
+                        {missingCount > 0 && (
+                          <span className="count-badge missing" title="Puudu">
+                            <FiX size={10} /> {missingCount}
+                          </span>
+                        )}
+                        {pendingCount > 0 && (
+                          <span className="count-badge pending" title="Ootel">
+                            <FiClock size={10} /> {pendingCount}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="status-badge pending">Ootel</span>
                     )}
                   </div>
+
+                  {/* 3-dot menu */}
+                  {arrivedVehicle && (
+                    <div
+                      className="vehicle-menu-wrapper"
+                      ref={vehicleMenuOpen === vehicle.id ? vehicleMenuRef : null}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className="vehicle-menu-btn"
+                        onClick={() => setVehicleMenuOpen(vehicleMenuOpen === vehicle.id ? null : vehicle.id)}
+                        title="Rohkem valikuid"
+                      >
+                        <FiMoreVertical size={16} />
+                      </button>
+                      {vehicleMenuOpen === vehicle.id && (
+                        <div className="vehicle-menu-dropdown">
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              exportDeliveryReport(arrivedVehicle.id);
+                            }}
+                          >
+                            <FiDownload size={14} />
+                            <span>Ekspordi Excel</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              generatePdfReport(arrivedVehicle.id, vehicle.id);
+                            }}
+                          >
+                            <FiFileText size={14} />
+                            <span>Lae PDF raport</span>
+                          </button>
+                          <div className="menu-divider" />
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              colorActiveVehicle(vehicle.id, arrivedVehicle.id);
+                            }}
+                          >
+                            <FiDroplet size={14} />
+                            <span>Värvi see veok</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setVehicleMenuOpen(null);
+                              const guids = vehicleItems
+                                .map(i => i.guid_ifc)
+                                .filter((g): g is string => !!g);
+                              if (guids.length > 0) {
+                                selectObjectsByGuid(api, guids);
+                              }
+                            }}
+                          >
+                            <FiSearch size={14} />
+                            <span>Vali kõik mudelis</span>
+                          </button>
+                          <div className="menu-divider" />
+                          <button
+                            onClick={async () => {
+                              setVehicleMenuOpen(null);
+                              setGeneratingShareLink(arrivedVehicle.id);
+                              try {
+                                const result = await createOrGetShareLink(
+                                  projectId,
+                                  projectName,
+                                  arrivedVehicle.id,
+                                  vehicle.vehicle_code,
+                                  arrivedVehicle.arrival_date || ''
+                                );
+                                if (result.error || !result.shareLink) {
+                                  setMessage('Viga lingi loomisel');
+                                } else {
+                                  const url = getShareUrl(result.shareLink.share_token);
+                                  setShareLinks(prev => ({ ...prev, [arrivedVehicle.id]: { url, token: result.shareLink!.share_token } }));
+                                  navigator.clipboard.writeText(url);
+                                  setMessage('Link kopeeritud!');
+                                }
+                              } finally {
+                                setGeneratingShareLink(null);
+                              }
+                            }}
+                          >
+                            <FiShare2 size={14} />
+                            <span>Kopeeri jagamise link</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <button className="expand-btn">
                     {isExpanded ? <FiChevronUp /> : <FiChevronDown />}
@@ -4345,35 +4677,70 @@ export default function ArrivedDeliveriesScreen({
               </button>
             </div>
             <div className="modal-body">
+              {/* Search across all vehicles */}
               <div className="form-group">
-                <label>Vali veok, kust detail tuli</label>
-                <select
-                  value={addItemSourceVehicleId}
-                  onChange={(e) => {
-                    setAddItemSourceVehicleId(e.target.value);
-                    setSelectedItemsToAdd(new Set());
-                    setAddItemSearchTerm('');
-                  }}
-                >
-                  <option value="">Vali veok...</option>
-                  {vehicles
-                    .filter(v => {
-                      const arrival = arrivedVehicles.find(av => av.id === activeArrivalId);
-                      return v.id !== arrival?.vehicle_id;
-                    })
-                    .map(v => {
-                      const factory = getFactory(v.factory_id);
-                      return (
-                        <option key={v.id} value={v.id}>
-                          {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'määramata'})
-                        </option>
-                      );
-                    })}
-                </select>
+                <label>Otsi detaile kõikidest veokitest</label>
+                <div className="search-input-wrapper" style={{ marginBottom: 8 }}>
+                  <FiSearch className="search-icon" />
+                  <input
+                    type="text"
+                    className="item-search-input"
+                    placeholder="Otsi assembly mark või toote järgi..."
+                    value={addItemSearchTerm}
+                    onChange={(e) => {
+                      setAddItemSearchTerm(e.target.value);
+                      // Clear vehicle filter when searching
+                      if (e.target.value.trim()) {
+                        setAddItemSourceVehicleId('');
+                      }
+                    }}
+                    autoFocus
+                  />
+                  {addItemSearchTerm && (
+                    <button
+                      className="clear-search-btn"
+                      onClick={() => setAddItemSearchTerm('')}
+                    >
+                      <FiX />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {addItemSourceVehicleId && (() => {
-                const sourceItems = getVehicleItems(addItemSourceVehicleId);
+              {/* Optional vehicle filter */}
+              {!addItemSearchTerm.trim() && (
+                <div className="form-group">
+                  <label>Või vali konkreetne veok</label>
+                  <select
+                    value={addItemSourceVehicleId}
+                    onChange={(e) => {
+                      setAddItemSourceVehicleId(e.target.value);
+                      setSelectedItemsToAdd(new Set());
+                    }}
+                  >
+                    <option value="">Kõik veokid...</option>
+                    {vehicles
+                      .filter(v => {
+                        const arrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                        return v.id !== arrival?.vehicle_id;
+                      })
+                      .map(v => {
+                        const factory = getFactory(v.factory_id);
+                        return (
+                          <option key={v.id} value={v.id}>
+                            {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'määramata'})
+                          </option>
+                        );
+                      })}
+                  </select>
+                </div>
+              )}
+
+              {/* Items list - grouped by vehicle when searching all */}
+              {(() => {
+                const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                const currentVehicleId = currentArrival?.vehicle_id;
+
                 // Filter already added items to this arrival
                 const alreadyAddedIds = new Set(
                   confirmations
@@ -4386,64 +4753,107 @@ export default function ArrivedDeliveriesScreen({
                     .filter((c: ArrivalItemConfirmation) => c.status === 'confirmed')
                     .map((c: ArrivalItemConfirmation) => c.item_id)
                 );
-                const availableItems = sourceItems.filter(item =>
-                  !alreadyAddedIds.has(item.id) && !confirmedItemIds.has(item.id)
-                );
-                // Apply search filter
+
                 const searchLower = addItemSearchTerm.toLowerCase().trim();
-                const filteredItems = searchLower
-                  ? availableItems.filter(item =>
-                      (item.assembly_mark?.toLowerCase() || '').includes(searchLower) ||
-                      (item.product_name?.toLowerCase() || '').includes(searchLower)
-                    )
-                  : availableItems;
+
+                // Get items from all other vehicles or specific vehicle
+                const vehiclesToSearch = addItemSourceVehicleId
+                  ? vehicles.filter(v => v.id === addItemSourceVehicleId)
+                  : vehicles.filter(v => v.id !== currentVehicleId);
+
+                // Group items by vehicle
+                const itemsByVehicle: { vehicle: DeliveryVehicle; items: DeliveryItem[] }[] = [];
+                let totalAvailable = 0;
+                let totalFiltered = 0;
+
+                for (const v of vehiclesToSearch) {
+                  const vItems = getVehicleItems(v.id)
+                    .filter(item => !alreadyAddedIds.has(item.id) && !confirmedItemIds.has(item.id));
+                  totalAvailable += vItems.length;
+
+                  const filtered = searchLower
+                    ? vItems.filter(item =>
+                        (item.assembly_mark?.toLowerCase() || '').includes(searchLower) ||
+                        (item.product_name?.toLowerCase() || '').includes(searchLower)
+                      )
+                    : vItems;
+
+                  if (filtered.length > 0) {
+                    totalFiltered += filtered.length;
+                    itemsByVehicle.push({ vehicle: v, items: filtered });
+                  }
+                }
+
+                // If no search and no vehicle selected, show message
+                if (!searchLower && !addItemSourceVehicleId) {
+                  return (
+                    <div className="form-group">
+                      <div className="no-items-message" style={{ padding: '16px', color: '#6b7280', textAlign: 'center' }}>
+                        Sisesta otsingutermin või vali veok
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div className="form-group">
-                    <label>Vali detailid ({filteredItems.length}/{availableItems.length})</label>
-                    <div className="search-input-wrapper" style={{ marginBottom: 8 }}>
-                      <FiSearch className="search-icon" />
-                      <input
-                        type="text"
-                        className="item-search-input"
-                        placeholder="Otsi detaile..."
-                        value={addItemSearchTerm}
-                        onChange={(e) => setAddItemSearchTerm(e.target.value)}
-                      />
-                      {addItemSearchTerm && (
-                        <button
-                          className="clear-search-btn"
-                          onClick={() => setAddItemSearchTerm('')}
-                        >
-                          <FiX />
-                        </button>
-                      )}
-                    </div>
-                    <div className="items-selection">
-                      {filteredItems.length === 0 ? (
+                    <label>
+                      {searchLower
+                        ? `Leitud detailid (${totalFiltered})`
+                        : `Vali detailid (${totalFiltered}/${totalAvailable})`
+                      }
+                    </label>
+                    <div className="items-selection" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                      {itemsByVehicle.length === 0 ? (
                         <div className="no-items-message" style={{ padding: '12px', color: '#6b7280', textAlign: 'center' }}>
-                          {availableItems.length === 0 ? 'Kõik detailid on juba lisatud' : 'Otsingule vastavaid detaile ei leitud'}
+                          {totalAvailable === 0 ? 'Kõik detailid on juba lisatud' : 'Otsingule vastavaid detaile ei leitud'}
                         </div>
                       ) : (
-                        filteredItems.map(item => (
-                          <label key={item.id} className="item-checkbox">
-                            <input
-                              type="checkbox"
-                              checked={selectedItemsToAdd.has(item.id)}
-                              onChange={(e) => {
-                                const next = new Set(selectedItemsToAdd);
-                                if (e.target.checked) {
-                                  next.add(item.id);
-                                } else {
-                                  next.delete(item.id);
-                                }
-                                setSelectedItemsToAdd(next);
-                              }}
-                            />
-                            <span className="item-mark">{item.assembly_mark}</span>
-                            <span className="item-name">{item.product_name}</span>
-                          </label>
-                        ))
+                        itemsByVehicle.map(({ vehicle, items: vehicleItems }) => {
+                          const factory = getFactory(vehicle.factory_id);
+                          return (
+                            <div key={vehicle.id} className="vehicle-items-group">
+                              {/* Show vehicle header when searching all */}
+                              {!addItemSourceVehicleId && (
+                                <div className="vehicle-group-header" style={{
+                                  padding: '6px 8px',
+                                  background: '#f3f4f6',
+                                  fontWeight: 500,
+                                  fontSize: '12px',
+                                  borderBottom: '1px solid #e5e7eb',
+                                  position: 'sticky',
+                                  top: 0,
+                                  zIndex: 1
+                                }}>
+                                  <FiTruck size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                                  {vehicle.vehicle_code} - {factory?.factory_name}
+                                  <span style={{ color: '#6b7280', marginLeft: 4 }}>
+                                    ({vehicle.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : 'määramata'})
+                                  </span>
+                                </div>
+                              )}
+                              {vehicleItems.map(item => (
+                                <label key={item.id} className="item-checkbox" data-vehicle-id={vehicle.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedItemsToAdd.has(item.id)}
+                                    onChange={(e) => {
+                                      const next = new Set(selectedItemsToAdd);
+                                      if (e.target.checked) {
+                                        next.add(item.id);
+                                      } else {
+                                        next.delete(item.id);
+                                      }
+                                      setSelectedItemsToAdd(next);
+                                    }}
+                                  />
+                                  <span className="item-mark">{item.assembly_mark}</span>
+                                  <span className="item-name">{item.product_name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -4458,8 +4868,12 @@ export default function ArrivedDeliveriesScreen({
                 className="confirm-btn"
                 disabled={selectedItemsToAdd.size === 0 || saving}
                 onClick={async () => {
+                  // Find the source vehicle for each item
                   for (const itemId of selectedItemsToAdd) {
-                    await addItemFromVehicle(activeArrivalId, itemId, addItemSourceVehicleId);
+                    const item = items.find(i => i.id === itemId);
+                    if (item?.vehicle_id) {
+                      await addItemFromVehicle(activeArrivalId, itemId, item.vehicle_id);
+                    }
                   }
                   setShowAddItemModal(false);
                   setAddItemSourceVehicleId('');
@@ -4778,7 +5192,12 @@ export default function ArrivedDeliveriesScreen({
                     if (type === 'date' && value) {
                       setSelectedDate(value);
                     } else if (type === 'back') {
-                      onBack();
+                      // If value is set, navigate to that mode; otherwise go back
+                      if (value && onNavigate) {
+                        onNavigate(value as InspectionMode);
+                      } else {
+                        onBack();
+                      }
                     }
                   }
                 }}
