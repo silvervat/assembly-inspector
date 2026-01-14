@@ -13583,6 +13583,8 @@ button.stat-toggle.off:hover {
 
 .share-gallery {
   min-height: 100vh;
+  height: 100vh;
+  overflow-y: auto;
   background: #f8fafc;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
