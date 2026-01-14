@@ -552,6 +552,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [parsedImportData, setParsedImportData] = useState<{
     guid: string;
     date?: string;
+    time?: string;  // Kellaaeg (HH:MM)
     vehicleCode?: string;
     factoryCode?: string;
     comment?: string;
@@ -3452,6 +3453,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
               ? headerRow.findIndex(h => h.includes('guid'))
               : 0;
             const dateColIdx = headerRow.findIndex(h => h.includes('date') || h.includes('kuupäev'));
+            const timeColIdx = headerRow.findIndex(h => h.includes('time') || h.includes('kellaaeg') || h.includes('aeg'));
             const vehicleColIdx = headerRow.findIndex(h => h.includes('vehicle') || h.includes('veok'));
             const factoryColIdx = headerRow.findIndex(h => h.includes('factory') || h.includes('tehas'));
             const commentColIdx = headerRow.findIndex(h => h.includes('comment') || h.includes('kommentaar'));
@@ -3485,9 +3487,28 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                   }
                 }
 
+                // Parse time value
+                let timeVal = timeColIdx !== -1 ? row[timeColIdx] : undefined;
+                if (typeof timeVal === 'number') {
+                  // Excel stores time as decimal (e.g., 0.5 = 12:00, 0.375 = 09:00)
+                  const totalMinutes = Math.round(timeVal * 24 * 60);
+                  const hours = Math.floor(totalMinutes / 60);
+                  const minutes = totalMinutes % 60;
+                  timeVal = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+                } else if (typeof timeVal === 'string') {
+                  // Parse HH:MM or H:MM format
+                  const timeStr = timeVal.trim();
+                  const timeMatch = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+                  if (timeMatch) {
+                    const [, hours, minutes] = timeMatch;
+                    timeVal = `${hours.padStart(2, '0')}:${minutes}`;
+                  }
+                }
+
                 parsedRows.push({
                   guid,
                   date: dateVal ? String(dateVal).trim() : undefined,
+                  time: timeVal ? String(timeVal).trim() : undefined,
                   vehicleCode: vehicleColIdx !== -1 && row[vehicleColIdx] ? String(row[vehicleColIdx]).trim() : undefined,
                   factoryCode: factoryColIdx !== -1 && row[factoryColIdx] ? String(row[factoryColIdx]).trim() : undefined,
                   comment: commentColIdx !== -1 && row[commentColIdx] ? String(row[commentColIdx]).trim() : undefined,
@@ -3541,10 +3562,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const downloadImportTemplate = () => {
     // Create template data with example rows
     const templateData = [
-      ['guid_ms', 'scheduled_date', 'vehicle_code', 'factory_code', 'comment'],
-      ['12345678-1234-1234-1234-123456789ABC', '2025-01-15', 'TRE-1', 'TRE', 'Näidis kommentaar'],
-      ['87654321-4321-4321-4321-CBA987654321', '2025-01-15', 'TRE-1', 'TRE', ''],
-      ['ABCDEF12-3456-7890-ABCD-EF1234567890', '2025-01-16', 'TRE-2', 'TRE', 'Teine veok'],
+      ['guid_ms', 'scheduled_date', 'time', 'vehicle_code', 'factory_code', 'comment'],
+      ['12345678-1234-1234-1234-123456789ABC', '2025-01-15', '08:00', 'TRE-1', 'TRE', 'Näidis kommentaar'],
+      ['87654321-4321-4321-4321-CBA987654321', '2025-01-15', '08:00', 'TRE-1', 'TRE', ''],
+      ['ABCDEF12-3456-7890-ABCD-EF1234567890', '2025-01-16', '10:30', 'TRE-2', 'TRE', 'Teine veok'],
     ];
 
     // Create worksheet
@@ -3554,6 +3575,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     ws['!cols'] = [
       { wch: 40 },  // guid_ms
       { wch: 15 },  // scheduled_date
+      { wch: 10 },  // time
       { wch: 15 },  // vehicle_code
       { wch: 15 },  // factory_code
       { wch: 30 },  // comment
@@ -3592,9 +3614,9 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       return;
     }
 
-    // Check if we have detailed import data with dates/vehicles
+    // Check if we have detailed import data with dates/vehicles/times
     const hasDetailedData = parsedImportData.length > 0 &&
-      parsedImportData.some(row => row.date || row.vehicleCode);
+      parsedImportData.some(row => row.date || row.vehicleCode || row.time);
 
     console.log('📋 Import type:', hasDetailedData ? 'Detailed' : 'Simple');
 
@@ -3988,7 +4010,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           // If no date in Excel row, use 'UNASSIGNED' (don't fall back to addModalDate)
           const date = row.date || 'UNASSIGNED';
           const vehicleCode = row.vehicleCode || '';
-          const groupKey = `${date}|${vehicleCode}|${factoryId}`;
+          const time = row.time || '';
+          const groupKey = `${date}|${vehicleCode}|${factoryId}|${time}`;
 
           if (!groups.has(groupKey)) {
             groups.set(groupKey, []);
@@ -4001,7 +4024,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         // Process each group
         for (const [groupKey, groupItems] of groups) {
-          const [dateStr, vehicleCode, factoryId] = groupKey.split('|');
+          const [dateStr, vehicleCode, factoryId, timeStr] = groupKey.split('|');
 
           // Convert 'UNASSIGNED' to null for database
           const scheduledDate = dateStr === 'UNASSIGNED' ? null : dateStr;
@@ -4060,6 +4083,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 vehicle_number: vehicleNumber,
                 vehicle_code: newVehicleCode,
                 scheduled_date: scheduledDate,
+                unload_start_time: timeStr || null,
                 status: 'planned',
                 created_by: tcUserEmail
               })
@@ -9552,7 +9576,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 />
               </div>
               {/* Show info if detailed import data was detected */}
-              {parsedImportData.length > 0 && parsedImportData.some(r => r.date || r.vehicleCode) && (
+              {parsedImportData.length > 0 && parsedImportData.some(r => r.date || r.vehicleCode || r.time) && (
                 <div style={{
                   padding: '8px 12px',
                   background: '#ecfdf5',
@@ -9565,7 +9589,10 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     ✓ Detailne import tuvastatud
                   </div>
                   <div style={{ color: '#047857' }}>
-                    {parsedImportData.length} rida kuupäevade ja veokitega.
+                    {parsedImportData.length} rida
+                    {parsedImportData.some(r => r.date) && ' kuupäevadega'}
+                    {parsedImportData.some(r => r.time) && ' kellaaegadega'}
+                    {parsedImportData.some(r => r.vehicleCode) && ' veokitega'}.
                     {parsedImportData.some(r => r.vehicleCode) && ' Tehas tuvastatakse veoki koodist automaatselt.'}
                   </div>
                 </div>
@@ -9627,6 +9654,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                       <>
                         Veoki koodidega: {parsedImportData.filter(r => r.vehicleCode).length}<br />
                         Kuupäevadega: {parsedImportData.filter(r => r.date).length}<br />
+                        Kellaaegadega: {parsedImportData.filter(r => r.time).length}<br />
                         Tehase koodidega: {parsedImportData.filter(r => r.factoryCode).length}<br />
                         Esimene rida: {JSON.stringify(parsedImportData[0], null, 2).substring(0, 100)}...
                       </>
@@ -9668,6 +9696,7 @@ Import Text Tühi: ${!importText.trim()}
 Parsed Data Ridu: ${parsedImportData.length}
 Veoki koodidega: ${parsedImportData.filter(r => r.vehicleCode).length}
 Kuupäevadega: ${parsedImportData.filter(r => r.date).length}
+Kellaaegadega: ${parsedImportData.filter(r => r.time).length}
 Tehase koodidega: ${parsedImportData.filter(r => r.factoryCode).length}
 
 Valitud Tehas ID: ${importFactoryId || 'VALIMATA'}
