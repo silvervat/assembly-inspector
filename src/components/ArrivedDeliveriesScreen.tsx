@@ -1010,7 +1010,7 @@ export default function ArrivedDeliveriesScreen({
           trimble_project_id: projectId,
           vehicle_id: vehicleId,
           arrival_date: vehicle.scheduled_date || new Date().toISOString().split('T')[0],
-          arrival_time: new Date().toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }),
+          arrival_time: null, // User should enter time manually
           is_confirmed: false,
           created_by: tcUserEmail,
           updated_by: tcUserEmail
@@ -1083,7 +1083,7 @@ export default function ArrivedDeliveriesScreen({
           trimble_project_id: projectId,
           vehicle_id: vehicleData.id,
           arrival_date: selectedDate,
-          arrival_time: new Date().toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }),
+          arrival_time: null, // User should enter time manually
           is_confirmed: false,
           notes: unplannedNotes || 'Planeerimata veok',
           created_by: tcUserEmail,
@@ -3274,12 +3274,12 @@ export default function ArrivedDeliveriesScreen({
                               <label><FiClock /> Saabumise aeg</label>
                               <input
                                 type="text"
-                                list="arrival-times"
+                                list={`arrival-times-${arrivedVehicle.id}`}
                                 value={arrivedVehicle.arrival_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_time: e.target.value })}
                                 placeholder="HH:MM"
                               />
-                              <datalist id="arrival-times">
+                              <datalist id={`arrival-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
                               </datalist>
                             </div>
@@ -3287,12 +3287,12 @@ export default function ArrivedDeliveriesScreen({
                               <label><FiClock /> Mahalaadimine algus</label>
                               <input
                                 type="text"
-                                list="unload-start-times"
+                                list={`unload-start-times-${arrivedVehicle.id}`}
                                 value={arrivedVehicle.unload_start_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_start_time: e.target.value })}
                                 placeholder="HH:MM"
                               />
-                              <datalist id="unload-start-times">
+                              <datalist id={`unload-start-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
                               </datalist>
                             </div>
@@ -3300,12 +3300,12 @@ export default function ArrivedDeliveriesScreen({
                               <label><FiClock /> Mahalaadimine lõpp</label>
                               <input
                                 type="text"
-                                list="unload-end-times"
+                                list={`unload-end-times-${arrivedVehicle.id}`}
                                 value={arrivedVehicle.unload_end_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_end_time: e.target.value })}
                                 placeholder="HH:MM"
                               />
-                              <datalist id="unload-end-times">
+                              <datalist id={`unload-end-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
                               </datalist>
                             </div>
