@@ -19,12 +19,16 @@ import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
 import { createOrGetShareLink, getShareUrl } from '../utils/shareUtils';
 
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
+
 // Props
 interface ArrivedDeliveriesScreenProps {
   api: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   user?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   projectId: string;
   onBack: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 // Time options for dropdowns
@@ -358,7 +362,8 @@ export default function ArrivedDeliveriesScreen({
   api,
   user,
   projectId,
-  onBack
+  onBack,
+  onNavigate
 }: ArrivedDeliveriesScreenProps) {
   // User email
   const tcUserEmail = user?.email || 'unknown';
@@ -1164,7 +1169,12 @@ export default function ArrivedDeliveriesScreen({
           return next;
         });
       } else if (type === 'back') {
-        onBack();
+        // If value is set, navigate to that mode; otherwise go back
+        if (value && onNavigate) {
+          onNavigate(value as InspectionMode);
+        } else {
+          onBack();
+        }
       }
     }
   };
@@ -3162,52 +3172,54 @@ export default function ArrivedDeliveriesScreen({
     );
   }
 
+  // Handle navigation from header menu
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedChangesModal(true);
+      setPendingNavigation({ type: 'back', value: mode === null ? undefined : mode });
+      return;
+    }
+    if (mode === null) {
+      onBack();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="delivery-schedule arrived-deliveries">
-      {/* Header - same style as Tarnegraafik */}
-      <header className="delivery-header">
-        <button className="back-btn" onClick={() => {
+      {/* Header with hamburger menu */}
+      <PageHeader
+        title="Saabunud tarned"
+        onBack={() => {
           if (checkUnsavedChangesAndNavigate('back')) {
             onBack();
           }
-        }}>
-          <FiArrowLeft />
+        }}
+        onNavigate={handleHeaderNavigate}
+        currentMode="arrived_deliveries"
+        user={user}
+      >
+        {/* Color toggle button */}
+        <button
+          className={`view-toggle-btn ${colorMode !== 'off' ? 'active' : ''}`}
+          onClick={() => toggleColoring(colorMode === 'off' ? 'by-status' : 'off')}
+          disabled={coloringInProgress}
+          title={colorMode !== 'off' ? 'Lähtesta värvid' : 'Värvi staatuse järgi'}
+          style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
+        >
+          <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
         </button>
-        <h1>Saabunud tarned</h1>
-        <div className="header-actions">
-          {/* Color mode selector */}
-          <select
-            className="color-mode-select"
-            value={colorMode}
-            onChange={(e) => toggleColoring(e.target.value as ColorMode)}
-            disabled={coloringInProgress}
-            title="Mudeli värvimine"
-            style={{ fontSize: '12px', padding: '4px 8px', borderRadius: '4px', border: '1px solid #e5e7eb' }}
-          >
-            <option value="off">Värvimine väljas</option>
-            <option value="by-status">Staatuse järgi</option>
-            <option value="all-green">Kõik roheliseks</option>
-            <option value="by-vehicle">Veokite kaupa</option>
-          </select>
-          <button
-            className={`view-toggle-btn ${colorMode !== 'off' ? 'active' : ''}`}
-            onClick={() => colorModel(colorMode === 'off' ? 'all-green' : 'off')}
-            disabled={coloringInProgress}
-            title={colorMode !== 'off' ? 'Lähtesta värvid' : 'Värvi mudel'}
-            style={{ backgroundColor: colorMode !== 'off' ? '#d1fae5' : undefined }}
-          >
-            <FiDroplet className={coloringInProgress ? 'spinning' : ''} />
-          </button>
-          <button
-            className="view-toggle-btn"
-            onClick={loadAllData}
-            disabled={loading}
-            title="Värskenda"
-          >
-            <FiRefreshCw className={loading ? 'spinning' : ''} />
-          </button>
-        </div>
-      </header>
+        {/* Refresh button */}
+        <button
+          className="view-toggle-btn"
+          onClick={loadAllData}
+          disabled={loading}
+          title="Värskenda"
+        >
+          <FiRefreshCw className={loading ? 'spinning' : ''} />
+        </button>
+      </PageHeader>
 
       {/* Message */}
       {message && (
@@ -4871,7 +4883,12 @@ export default function ArrivedDeliveriesScreen({
                     if (type === 'date' && value) {
                       setSelectedDate(value);
                     } else if (type === 'back') {
-                      onBack();
+                      // If value is set, navigate to that mode; otherwise go back
+                      if (value && onNavigate) {
+                        onNavigate(value as InspectionMode);
+                      } else {
+                        onBack();
+                      }
                     }
                   }
                 }}
