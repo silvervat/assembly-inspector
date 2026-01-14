@@ -3377,10 +3377,21 @@ export default function ArrivedDeliveriesScreen({
                         <FiCheck /> Kinnitatud
                       </span>
                     ) : arrivedVehicle ? (
-                      <span className="status-badge in-progress">
-                        {confirmedCount}/{vehicleItems.length} kinnitatud
-                        {missingCount > 0 && <span className="missing-count"> • {missingCount} puudub</span>}
-                      </span>
+                      <div className="status-counts">
+                        <span className="count-badge confirmed" title="Kinnitatud">
+                          <FiCheck size={10} /> {confirmedCount}
+                        </span>
+                        {missingCount > 0 && (
+                          <span className="count-badge missing" title="Puudu">
+                            <FiX size={10} /> {missingCount}
+                          </span>
+                        )}
+                        {pendingCount > 0 && (
+                          <span className="count-badge pending" title="Ootel">
+                            <FiClock size={10} /> {pendingCount}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <span className="status-badge pending">Ootel</span>
                     )}

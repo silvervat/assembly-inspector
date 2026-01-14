@@ -5854,7 +5854,6 @@ button.stat-toggle.off:hover {
   border: 1px solid var(--modus-border);
   border-radius: 6px;
   margin-bottom: 8px;
-  overflow: hidden;
 }
 
 .arrived-deliveries .vehicle-card.confirmed {
@@ -5928,6 +5927,39 @@ button.stat-toggle.off:hover {
 }
 
 .arrived-deliveries .status-badge.pending {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Status counts in vehicle header */
+.arrived-deliveries .status-counts {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.arrived-deliveries .count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.arrived-deliveries .count-badge.confirmed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.arrived-deliveries .count-badge.missing {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.arrived-deliveries .count-badge.pending {
   background: #f3f4f6;
   color: #6b7280;
 }
