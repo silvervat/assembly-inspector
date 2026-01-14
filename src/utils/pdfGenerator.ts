@@ -96,21 +96,63 @@ async function generateQRCode(url: string, size: number = 100): Promise<string> 
 }
 
 /**
- * Load image as data URL
+ * Load image as data URL with dimensions
  */
-async function loadImageAsDataURL(url: string): Promise<string | null> {
+async function loadImageAsDataURL(url: string): Promise<{ dataUrl: string; width: number; height: number } | null> {
   try {
     const response = await fetch(url);
     const blob = await response.blob();
-    return new Promise((resolve) => {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
+      reader.onerror = () => reject();
       reader.readAsDataURL(blob);
     });
+
+    // Get image dimensions
+    const dimensions = await new Promise<{ width: number; height: number }>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ width: img.width, height: img.height });
+      img.onerror = () => resolve({ width: 1, height: 1 }); // Default to square if error
+      img.src = dataUrl;
+    });
+
+    return { dataUrl, ...dimensions };
   } catch {
     return null;
   }
+}
+
+/**
+ * Calculate image dimensions to fit within a box while maintaining aspect ratio
+ */
+function calculateFitDimensions(
+  imgWidth: number,
+  imgHeight: number,
+  boxWidth: number,
+  boxHeight: number
+): { width: number; height: number; offsetX: number; offsetY: number } {
+  const imgAspect = imgWidth / imgHeight;
+  const boxAspect = boxWidth / boxHeight;
+
+  let width: number;
+  let height: number;
+
+  if (imgAspect > boxAspect) {
+    // Image is wider than box - fit to width
+    width = boxWidth;
+    height = boxWidth / imgAspect;
+  } else {
+    // Image is taller than box - fit to height
+    height = boxHeight;
+    width = boxHeight * imgAspect;
+  }
+
+  // Center the image in the box
+  const offsetX = (boxWidth - width) / 2;
+  const offsetY = (boxHeight - height) / 2;
+
+  return { width, height, offsetX, offsetY };
 }
 
 /**
@@ -424,11 +466,23 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
         doc.setFillColor(...COLORS.lightGray);
         doc.roundedRect(x, y, photoWidth, photoHeight + captionHeight, 2, 2, 'F');
 
-        // Load and add photo
+        // Load and add photo with proper aspect ratio
         try {
-          const imgData = await loadImageAsDataURL(photo.file_url);
-          if (imgData) {
-            doc.addImage(imgData, 'JPEG', x + 1, y + 1, photoWidth - 2, photoHeight - 2, undefined, 'MEDIUM');
+          const imgResult = await loadImageAsDataURL(photo.file_url);
+          if (imgResult) {
+            const boxW = photoWidth - 2;
+            const boxH = photoHeight - 2;
+            const fit = calculateFitDimensions(imgResult.width, imgResult.height, boxW, boxH);
+            doc.addImage(
+              imgResult.dataUrl,
+              'JPEG',
+              x + 1 + fit.offsetX,
+              y + 1 + fit.offsetY,
+              fit.width,
+              fit.height,
+              undefined,
+              'MEDIUM'
+            );
           }
         } catch {
           doc.setTextColor(...COLORS.gray);
