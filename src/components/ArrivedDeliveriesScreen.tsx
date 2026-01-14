@@ -3236,11 +3236,14 @@ export default function ArrivedDeliveriesScreen({
               }
             }}
           >
-            {dateRange.map(date => (
-              <option key={date} value={date}>
-                {formatDateFull(date)}
-              </option>
-            ))}
+            {dateRange.map(date => {
+              const vehicleCount = vehicles.filter(v => v.scheduled_date === date).length;
+              return (
+                <option key={date} value={date}>
+                  {formatDateFull(date)} ({vehicleCount} veok{vehicleCount === 1 ? '' : 'it'})
+                </option>
+              );
+            })}
           </select>
         </div>
 
@@ -3335,13 +3338,19 @@ export default function ArrivedDeliveriesScreen({
                     const wasCollapsed = collapsedVehicles.has(vehicle.id);
 
                     setCollapsedVehicles(prev => {
-                      const next = new Set(prev);
-                      if (next.has(vehicle.id)) {
-                        next.delete(vehicle.id);
+                      if (wasCollapsed) {
+                        // Expanding - collapse all others, only this one expanded
+                        // Create set with all vehicle IDs except this one
+                        const allOtherVehicles = new Set(
+                          vehicles.filter(v => v.id !== vehicle.id).map(v => v.id)
+                        );
+                        return allOtherVehicles;
                       } else {
+                        // Collapsing this vehicle
+                        const next = new Set(prev);
                         next.add(vehicle.id);
+                        return next;
                       }
-                      return next;
                     });
 
                     // When expanding vehicle with arrival, start active coloring

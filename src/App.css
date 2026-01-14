@@ -5873,6 +5873,9 @@ button.stat-toggle.off:hover {
   background: var(--modus-bg-secondary);
   cursor: pointer;
   gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .arrived-deliveries .vehicle-header:hover {
@@ -6582,9 +6585,9 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 6px 6px;
   background: var(--modus-bg-secondary);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .arrived-deliveries .item-row.confirmed {
