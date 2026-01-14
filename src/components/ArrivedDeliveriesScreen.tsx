@@ -13,7 +13,7 @@ import {
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
   FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
-  FiExternalLink, FiLoader, FiCopy
+  FiExternalLink, FiLoader, FiCopy, FiEdit2
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
@@ -392,8 +392,13 @@ export default function ArrivedDeliveriesScreen({
 
   // State - Active arrival
   const [activeArrivalId, setActiveArrivalId] = useState<string | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_editingArrival, _setEditingArrival] = useState<Partial<ArrivedVehicle> | null>(null);
+
+  // State - Edit mode (user must explicitly edit and save)
+  const [editingArrivalId, setEditingArrivalId] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<{ type: 'date' | 'vehicle' | 'back'; value?: string } | null>(null);
+  const originalArrivalDataRef = useRef<ArrivedVehicle | null>(null);
 
   // State - Modal
   const [showAddItemModal, setShowAddItemModal] = useState(false);
@@ -1038,12 +1043,129 @@ export default function ArrivedDeliveriesScreen({
 
       await Promise.all([loadArrivedVehicles(), loadConfirmations()]);
       setActiveArrivalId(data.id);
-      setMessage('Saabumise registreerimine alustatud');
+      // Enter edit mode for new arrivals
+      setEditingArrivalId(data.id);
+      originalArrivalDataRef.current = data;
+      setHasUnsavedChanges(false);
+      setMessage('Saabumise registreerimine alustatud - täida andmed ja salvesta');
     } catch (e: any) {
       console.error('Error starting arrival:', e);
       setMessage('Viga: ' + e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Start editing an existing arrival
+  const startEditArrival = (arrivedVehicle: ArrivedVehicle) => {
+    // Store original data for potential rollback
+    originalArrivalDataRef.current = { ...arrivedVehicle };
+    setEditingArrivalId(arrivedVehicle.id);
+    setHasUnsavedChanges(false);
+  };
+
+  // Cancel editing and discard changes
+  const cancelEditArrival = () => {
+    if (originalArrivalDataRef.current && editingArrivalId) {
+      // Restore original data
+      setArrivedVehicles(prev => prev.map(av =>
+        av.id === editingArrivalId ? originalArrivalDataRef.current! : av
+      ));
+    }
+    setEditingArrivalId(null);
+    setHasUnsavedChanges(false);
+    originalArrivalDataRef.current = null;
+    setMessage('Muudatused tühistatud');
+  };
+
+  // Save current arrival edits
+  const saveArrivalEdits = async () => {
+    if (!editingArrivalId) return;
+
+    const arrivedVehicle = arrivedVehicles.find(av => av.id === editingArrivalId);
+    if (!arrivedVehicle) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('trimble_arrived_vehicles')
+        .update({
+          arrival_date: arrivedVehicle.arrival_date,
+          arrival_time: arrivedVehicle.arrival_time,
+          unload_start_time: arrivedVehicle.unload_start_time,
+          unload_end_time: arrivedVehicle.unload_end_time,
+          reg_number: arrivedVehicle.reg_number,
+          trailer_number: arrivedVehicle.trailer_number,
+          unload_location: arrivedVehicle.unload_location,
+          checked_by_workers: arrivedVehicle.checked_by_workers,
+          unload_resources: arrivedVehicle.unload_resources,
+          notes: arrivedVehicle.notes,
+          updated_at: new Date().toISOString(),
+          updated_by: tcUserEmail
+        })
+        .eq('id', editingArrivalId);
+
+      if (error) throw error;
+
+      setEditingArrivalId(null);
+      setHasUnsavedChanges(false);
+      originalArrivalDataRef.current = null;
+      setMessage('Andmed salvestatud');
+    } catch (e: any) {
+      console.error('Error saving arrival:', e);
+      setMessage('Viga salvestamisel: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Check for unsaved changes before navigation
+  const checkUnsavedChangesAndNavigate = (
+    navType: 'date' | 'vehicle' | 'back',
+    value?: string
+  ): boolean => {
+    if (editingArrivalId && hasUnsavedChanges) {
+      setPendingNavigation({ type: navType, value });
+      setShowUnsavedChangesModal(true);
+      return false; // Block navigation
+    }
+    return true; // Allow navigation
+  };
+
+  // Handle confirmed navigation (discard changes)
+  const handleConfirmNavigation = () => {
+    // Restore original data and clear edit mode
+    if (originalArrivalDataRef.current && editingArrivalId) {
+      setArrivedVehicles(prev => prev.map(av =>
+        av.id === editingArrivalId ? originalArrivalDataRef.current! : av
+      ));
+    }
+    setEditingArrivalId(null);
+    setHasUnsavedChanges(false);
+    originalArrivalDataRef.current = null;
+    setShowUnsavedChangesModal(false);
+
+    // Execute pending navigation
+    if (pendingNavigation) {
+      const { type, value } = pendingNavigation;
+      setPendingNavigation(null);
+
+      if (type === 'date' && value) {
+        setSelectedDate(value);
+      } else if (type === 'vehicle' && value) {
+        // Expand/collapse vehicle
+        setCollapsedVehicles(prev => {
+          const next = new Set(prev);
+          if (next.has(value)) {
+            next.delete(value);
+          } else {
+            next.add(value);
+          }
+          return next;
+        });
+      } else if (type === 'back') {
+        onBack();
+      }
     }
   };
 
@@ -1238,14 +1360,21 @@ export default function ArrivedDeliveriesScreen({
   const arrivalUpdateTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const pendingArrivalUpdatesRef = useRef<Map<string, Partial<ArrivedVehicle>>>(new Map());
 
-  // Update arrival details with debouncing for text fields
-  // Updates local state immediately, but debounces database save
-  const updateArrival = useCallback((arrivedVehicleId: string, updates: Partial<ArrivedVehicle>, immediate = false) => {
+  // Update arrival details - in edit mode just update local state
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const updateArrival = useCallback((arrivedVehicleId: string, updates: Partial<ArrivedVehicle>, _immediate = false) => {
     // Update local state immediately for responsive UI
     setArrivedVehicles(prev => prev.map(av =>
       av.id === arrivedVehicleId ? { ...av, ...updates } : av
     ));
 
+    // If in edit mode, just mark as dirty (don't save to DB)
+    if (editingArrivalId === arrivedVehicleId) {
+      setHasUnsavedChanges(true);
+      return;
+    }
+
+    // For non-edit mode changes (shouldn't happen in new flow, but keep for safety)
     // Merge with pending updates
     const pending = pendingArrivalUpdatesRef.current.get(arrivedVehicleId) || {};
     pendingArrivalUpdatesRef.current.set(arrivedVehicleId, { ...pending, ...updates });
@@ -1281,15 +1410,10 @@ export default function ArrivedDeliveriesScreen({
       }
     };
 
-    if (immediate) {
-      // Save immediately (for dropdowns, checkboxes)
-      saveToDatabase();
-    } else {
-      // Debounce save (for text inputs) - 800ms delay
-      const timer = setTimeout(saveToDatabase, 800);
-      arrivalUpdateTimersRef.current.set(arrivedVehicleId, timer);
-    }
-  }, [tcUserEmail]);
+    // Debounce save (for text inputs) - 800ms delay
+    const timer = setTimeout(saveToDatabase, 800);
+    arrivalUpdateTimersRef.current.set(arrivedVehicleId, timer);
+  }, [tcUserEmail, editingArrivalId]);
 
   // Flush pending updates on unmount
   useEffect(() => {
@@ -2376,14 +2500,20 @@ export default function ArrivedDeliveriesScreen({
   const goToPrevDate = () => {
     const idx = dateRange.indexOf(selectedDate);
     if (idx > 0) {
-      setSelectedDate(dateRange[idx - 1]);
+      const newDate = dateRange[idx - 1];
+      if (checkUnsavedChangesAndNavigate('date', newDate)) {
+        setSelectedDate(newDate);
+      }
     }
   };
 
   const goToNextDate = () => {
     const idx = dateRange.indexOf(selectedDate);
     if (idx < dateRange.length - 1) {
-      setSelectedDate(dateRange[idx + 1]);
+      const newDate = dateRange[idx + 1];
+      if (checkUnsavedChangesAndNavigate('date', newDate)) {
+        setSelectedDate(newDate);
+      }
     }
   };
 
@@ -3036,7 +3166,11 @@ export default function ArrivedDeliveriesScreen({
     <div className="delivery-schedule arrived-deliveries">
       {/* Header - same style as Tarnegraafik */}
       <header className="delivery-header">
-        <button className="back-btn" onClick={onBack}>
+        <button className="back-btn" onClick={() => {
+          if (checkUnsavedChangesAndNavigate('back')) {
+            onBack();
+          }
+        }}>
           <FiArrowLeft />
         </button>
         <h1>Saabunud tarned</h1>
@@ -3095,7 +3229,12 @@ export default function ArrivedDeliveriesScreen({
         <div className="date-selector">
           <select
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            onChange={(e) => {
+              const newDate = e.target.value;
+              if (checkUnsavedChangesAndNavigate('date', newDate)) {
+                setSelectedDate(newDate);
+              }
+            }}
           >
             {dateRange.map(date => (
               <option key={date} value={date}>
@@ -3259,6 +3398,83 @@ export default function ArrivedDeliveriesScreen({
                       </div>
                     ) : (
                       <>
+                        {/* Edit mode toolbar */}
+                        {!arrivedVehicle.is_confirmed && (
+                          <div className="edit-toolbar" style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '8px 12px',
+                            background: editingArrivalId === arrivedVehicle.id ? '#fef3c7' : '#f8fafc',
+                            borderRadius: '6px',
+                            marginBottom: '12px',
+                            border: editingArrivalId === arrivedVehicle.id ? '1px solid #f59e0b' : '1px solid #e5e7eb'
+                          }}>
+                            {editingArrivalId === arrivedVehicle.id ? (
+                              <>
+                                <span style={{ color: '#92400e', fontSize: '12px', fontWeight: 500 }}>
+                                  <FiEdit2 style={{ marginRight: '4px' }} />
+                                  Redigeerimise režiim {hasUnsavedChanges && '• Salvestamata muudatused'}
+                                </span>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button
+                                    onClick={cancelEditArrival}
+                                    disabled={saving}
+                                    style={{
+                                      padding: '6px 12px',
+                                      fontSize: '12px',
+                                      borderRadius: '4px',
+                                      border: '1px solid #e5e7eb',
+                                      background: 'white',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Loobu
+                                  </button>
+                                  <button
+                                    onClick={saveArrivalEdits}
+                                    disabled={saving}
+                                    style={{
+                                      padding: '6px 12px',
+                                      fontSize: '12px',
+                                      borderRadius: '4px',
+                                      border: 'none',
+                                      background: '#10b981',
+                                      color: 'white',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {saving ? 'Salvestab...' : 'Salvesta'}
+                                  </button>
+                                </div>
+                              </>
+                            ) : (
+                              <>
+                                <span style={{ color: '#64748b', fontSize: '12px' }}>
+                                  Vaatamisrežiim - muutmiseks vajuta "Muuda"
+                                </span>
+                                <button
+                                  onClick={() => startEditArrival(arrivedVehicle)}
+                                  style={{
+                                    padding: '6px 12px',
+                                    fontSize: '12px',
+                                    borderRadius: '4px',
+                                    border: 'none',
+                                    background: '#3b82f6',
+                                    color: 'white',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <FiEdit2 size={12} /> Muuda
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+
                         {/* Arrival details form */}
                         <div className="arrival-details">
                           <div className="detail-row">
@@ -3268,6 +3484,7 @@ export default function ArrivedDeliveriesScreen({
                                 type="date"
                                 value={arrivedVehicle.arrival_date || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_date: e.target.value }, true)}
+                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                             </div>
                             <div className="detail-field">
@@ -4506,6 +4723,65 @@ export default function ArrivedDeliveriesScreen({
           </div>
         );
       })()}
+
+      {/* Unsaved changes confirmation modal */}
+      {showUnsavedChangesModal && (
+        <div className="modal-overlay" onClick={() => setShowUnsavedChangesModal(false)}>
+          <div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Salvestamata muudatused</h2>
+              <button className="close-btn" onClick={() => setShowUnsavedChangesModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ marginBottom: '16px', color: '#64748b' }}>
+                Sul on salvestamata muudatusi. Kas soovid need enne lahkumist salvestada?
+              </p>
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowUnsavedChangesModal(false);
+                  setPendingNavigation(null);
+                }}
+                style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #e5e7eb', background: 'white' }}
+              >
+                Jätka muutmist
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={handleConfirmNavigation}
+                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#ef4444', color: 'white' }}
+              >
+                Loobu muudatustest
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  await saveArrivalEdits();
+                  setShowUnsavedChangesModal(false);
+                  // After saving, execute pending navigation
+                  if (pendingNavigation) {
+                    const { type, value } = pendingNavigation;
+                    setPendingNavigation(null);
+                    if (type === 'date' && value) {
+                      setSelectedDate(value);
+                    } else if (type === 'back') {
+                      onBack();
+                    }
+                  }
+                }}
+                disabled={saving}
+                style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#10b981', color: 'white' }}
+              >
+                {saving ? 'Salvestab...' : 'Salvesta ja jätka'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
