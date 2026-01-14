@@ -4356,35 +4356,70 @@ export default function ArrivedDeliveriesScreen({
               </button>
             </div>
             <div className="modal-body">
+              {/* Search across all vehicles */}
               <div className="form-group">
-                <label>Vali veok, kust detail tuli</label>
-                <select
-                  value={addItemSourceVehicleId}
-                  onChange={(e) => {
-                    setAddItemSourceVehicleId(e.target.value);
-                    setSelectedItemsToAdd(new Set());
-                    setAddItemSearchTerm('');
-                  }}
-                >
-                  <option value="">Vali veok...</option>
-                  {vehicles
-                    .filter(v => {
-                      const arrival = arrivedVehicles.find(av => av.id === activeArrivalId);
-                      return v.id !== arrival?.vehicle_id;
-                    })
-                    .map(v => {
-                      const factory = getFactory(v.factory_id);
-                      return (
-                        <option key={v.id} value={v.id}>
-                          {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'määramata'})
-                        </option>
-                      );
-                    })}
-                </select>
+                <label>Otsi detaile kõikidest veokitest</label>
+                <div className="search-input-wrapper" style={{ marginBottom: 8 }}>
+                  <FiSearch className="search-icon" />
+                  <input
+                    type="text"
+                    className="item-search-input"
+                    placeholder="Otsi assembly mark või toote järgi..."
+                    value={addItemSearchTerm}
+                    onChange={(e) => {
+                      setAddItemSearchTerm(e.target.value);
+                      // Clear vehicle filter when searching
+                      if (e.target.value.trim()) {
+                        setAddItemSourceVehicleId('');
+                      }
+                    }}
+                    autoFocus
+                  />
+                  {addItemSearchTerm && (
+                    <button
+                      className="clear-search-btn"
+                      onClick={() => setAddItemSearchTerm('')}
+                    >
+                      <FiX />
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {addItemSourceVehicleId && (() => {
-                const sourceItems = getVehicleItems(addItemSourceVehicleId);
+              {/* Optional vehicle filter */}
+              {!addItemSearchTerm.trim() && (
+                <div className="form-group">
+                  <label>Või vali konkreetne veok</label>
+                  <select
+                    value={addItemSourceVehicleId}
+                    onChange={(e) => {
+                      setAddItemSourceVehicleId(e.target.value);
+                      setSelectedItemsToAdd(new Set());
+                    }}
+                  >
+                    <option value="">Kõik veokid...</option>
+                    {vehicles
+                      .filter(v => {
+                        const arrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                        return v.id !== arrival?.vehicle_id;
+                      })
+                      .map(v => {
+                        const factory = getFactory(v.factory_id);
+                        return (
+                          <option key={v.id} value={v.id}>
+                            {v.vehicle_code} - {factory?.factory_name} ({v.scheduled_date ? formatDateEstonian(v.scheduled_date) : 'määramata'})
+                          </option>
+                        );
+                      })}
+                  </select>
+                </div>
+              )}
+
+              {/* Items list - grouped by vehicle when searching all */}
+              {(() => {
+                const currentArrival = arrivedVehicles.find(av => av.id === activeArrivalId);
+                const currentVehicleId = currentArrival?.vehicle_id;
+
                 // Filter already added items to this arrival
                 const alreadyAddedIds = new Set(
                   confirmations
@@ -4397,64 +4432,107 @@ export default function ArrivedDeliveriesScreen({
                     .filter((c: ArrivalItemConfirmation) => c.status === 'confirmed')
                     .map((c: ArrivalItemConfirmation) => c.item_id)
                 );
-                const availableItems = sourceItems.filter(item =>
-                  !alreadyAddedIds.has(item.id) && !confirmedItemIds.has(item.id)
-                );
-                // Apply search filter
+
                 const searchLower = addItemSearchTerm.toLowerCase().trim();
-                const filteredItems = searchLower
-                  ? availableItems.filter(item =>
-                      (item.assembly_mark?.toLowerCase() || '').includes(searchLower) ||
-                      (item.product_name?.toLowerCase() || '').includes(searchLower)
-                    )
-                  : availableItems;
+
+                // Get items from all other vehicles or specific vehicle
+                const vehiclesToSearch = addItemSourceVehicleId
+                  ? vehicles.filter(v => v.id === addItemSourceVehicleId)
+                  : vehicles.filter(v => v.id !== currentVehicleId);
+
+                // Group items by vehicle
+                const itemsByVehicle: { vehicle: DeliveryVehicle; items: DeliveryItem[] }[] = [];
+                let totalAvailable = 0;
+                let totalFiltered = 0;
+
+                for (const v of vehiclesToSearch) {
+                  const vItems = getVehicleItems(v.id)
+                    .filter(item => !alreadyAddedIds.has(item.id) && !confirmedItemIds.has(item.id));
+                  totalAvailable += vItems.length;
+
+                  const filtered = searchLower
+                    ? vItems.filter(item =>
+                        (item.assembly_mark?.toLowerCase() || '').includes(searchLower) ||
+                        (item.product_name?.toLowerCase() || '').includes(searchLower)
+                      )
+                    : vItems;
+
+                  if (filtered.length > 0) {
+                    totalFiltered += filtered.length;
+                    itemsByVehicle.push({ vehicle: v, items: filtered });
+                  }
+                }
+
+                // If no search and no vehicle selected, show message
+                if (!searchLower && !addItemSourceVehicleId) {
+                  return (
+                    <div className="form-group">
+                      <div className="no-items-message" style={{ padding: '16px', color: '#6b7280', textAlign: 'center' }}>
+                        Sisesta otsingutermin või vali veok
+                      </div>
+                    </div>
+                  );
+                }
 
                 return (
                   <div className="form-group">
-                    <label>Vali detailid ({filteredItems.length}/{availableItems.length})</label>
-                    <div className="search-input-wrapper" style={{ marginBottom: 8 }}>
-                      <FiSearch className="search-icon" />
-                      <input
-                        type="text"
-                        className="item-search-input"
-                        placeholder="Otsi detaile..."
-                        value={addItemSearchTerm}
-                        onChange={(e) => setAddItemSearchTerm(e.target.value)}
-                      />
-                      {addItemSearchTerm && (
-                        <button
-                          className="clear-search-btn"
-                          onClick={() => setAddItemSearchTerm('')}
-                        >
-                          <FiX />
-                        </button>
-                      )}
-                    </div>
-                    <div className="items-selection">
-                      {filteredItems.length === 0 ? (
+                    <label>
+                      {searchLower
+                        ? `Leitud detailid (${totalFiltered})`
+                        : `Vali detailid (${totalFiltered}/${totalAvailable})`
+                      }
+                    </label>
+                    <div className="items-selection" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                      {itemsByVehicle.length === 0 ? (
                         <div className="no-items-message" style={{ padding: '12px', color: '#6b7280', textAlign: 'center' }}>
-                          {availableItems.length === 0 ? 'Kõik detailid on juba lisatud' : 'Otsingule vastavaid detaile ei leitud'}
+                          {totalAvailable === 0 ? 'Kõik detailid on juba lisatud' : 'Otsingule vastavaid detaile ei leitud'}
                         </div>
                       ) : (
-                        filteredItems.map(item => (
-                          <label key={item.id} className="item-checkbox">
-                            <input
-                              type="checkbox"
-                              checked={selectedItemsToAdd.has(item.id)}
-                              onChange={(e) => {
-                                const next = new Set(selectedItemsToAdd);
-                                if (e.target.checked) {
-                                  next.add(item.id);
-                                } else {
-                                  next.delete(item.id);
-                                }
-                                setSelectedItemsToAdd(next);
-                              }}
-                            />
-                            <span className="item-mark">{item.assembly_mark}</span>
-                            <span className="item-name">{item.product_name}</span>
-                          </label>
-                        ))
+                        itemsByVehicle.map(({ vehicle, items: vehicleItems }) => {
+                          const factory = getFactory(vehicle.factory_id);
+                          return (
+                            <div key={vehicle.id} className="vehicle-items-group">
+                              {/* Show vehicle header when searching all */}
+                              {!addItemSourceVehicleId && (
+                                <div className="vehicle-group-header" style={{
+                                  padding: '6px 8px',
+                                  background: '#f3f4f6',
+                                  fontWeight: 500,
+                                  fontSize: '12px',
+                                  borderBottom: '1px solid #e5e7eb',
+                                  position: 'sticky',
+                                  top: 0,
+                                  zIndex: 1
+                                }}>
+                                  <FiTruck size={12} style={{ marginRight: 4, verticalAlign: 'middle' }} />
+                                  {vehicle.vehicle_code} - {factory?.factory_name}
+                                  <span style={{ color: '#6b7280', marginLeft: 4 }}>
+                                    ({vehicle.scheduled_date ? formatDateEstonian(vehicle.scheduled_date) : 'määramata'})
+                                  </span>
+                                </div>
+                              )}
+                              {vehicleItems.map(item => (
+                                <label key={item.id} className="item-checkbox" data-vehicle-id={vehicle.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedItemsToAdd.has(item.id)}
+                                    onChange={(e) => {
+                                      const next = new Set(selectedItemsToAdd);
+                                      if (e.target.checked) {
+                                        next.add(item.id);
+                                      } else {
+                                        next.delete(item.id);
+                                      }
+                                      setSelectedItemsToAdd(next);
+                                    }}
+                                  />
+                                  <span className="item-mark">{item.assembly_mark}</span>
+                                  <span className="item-name">{item.product_name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          );
+                        })
                       )}
                     </div>
                   </div>
@@ -4469,8 +4547,12 @@ export default function ArrivedDeliveriesScreen({
                 className="confirm-btn"
                 disabled={selectedItemsToAdd.size === 0 || saving}
                 onClick={async () => {
+                  // Find the source vehicle for each item
                   for (const itemId of selectedItemsToAdd) {
-                    await addItemFromVehicle(activeArrivalId, itemId, addItemSourceVehicleId);
+                    const item = items.find(i => i.id === itemId);
+                    if (item?.vehicle_id) {
+                      await addItemFromVehicle(activeArrivalId, itemId, item.vehicle_id);
+                    }
                   }
                   setShowAddItemModal(false);
                   setAddItemSourceVehicleId('');
