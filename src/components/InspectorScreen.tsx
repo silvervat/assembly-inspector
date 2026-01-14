@@ -6,6 +6,7 @@ import { FiArrowLeft, FiClipboard, FiAlertCircle, FiChevronLeft, FiChevronRight 
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
 import InspectionList, { InspectionItem } from './InspectionList';
 import CheckpointForm from './CheckpointForm';
+import PageHeader from './PageHeader';
 
 // Inspection plan with joined type and category
 interface PlanWithDetails extends InspectionPlanItem {
@@ -38,6 +39,7 @@ interface InspectorScreenProps {
   inspectionTypeCode?: string;
   inspectionTypeName?: string;
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 interface SelectedObject {
@@ -90,7 +92,8 @@ export default function InspectorScreen({
   inspectionTypeId,
   inspectionTypeCode: _inspectionTypeCode, // Reserved for future use
   inspectionTypeName,
-  onBackToMenu
+  onBackToMenu,
+  onNavigate
 }: InspectorScreenProps) {
   // Režiimi nimi
   const getModeTitle = (mode: InspectionMode): string => {
@@ -115,7 +118,8 @@ export default function InspectorScreen({
       delivery_schedule: 'Tarnegraafik',
       arrived_deliveries: 'Saabunud tarned',
       organizer: 'Organiseerija',
-      issues: 'Probleemid'
+      issues: 'Probleemid',
+      tools: 'Tööriistad'
     };
     return titles[mode] || mode;
   };
@@ -1001,7 +1005,7 @@ export default function InspectorScreen({
         topview_url: topviewUrl,
         project_id: projectId,
         // inspection_type is for legacy modes only; inspection_type mode uses plan-based tracking
-        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues')
+        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues' || inspectionMode === 'tools')
           ? undefined
           : inspectionMode,
         // Additional Tekla fields
@@ -1924,16 +1928,25 @@ export default function InspectorScreen({
     setMessage('');
   };
 
+  // Handle navigation from header
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      onBackToMenu();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="inspector-container">
-      {/* Mode title bar with back button */}
-      <div className="mode-title-bar">
-        <button className="back-to-menu-btn" onClick={onBackToMenu}>
-          <FiArrowLeft size={14} />
-          <span>Menüü</span>
-        </button>
-        <span className="mode-title">{getModeTitle(inspectionMode)}</span>
-      </div>
+      {/* PageHeader with hamburger menu */}
+      <PageHeader
+        title={getModeTitle(inspectionMode)}
+        onBack={onBackToMenu}
+        onNavigate={handleHeaderNavigate}
+        currentMode={inspectionMode}
+        user={user}
+      />
 
       {/* Compact plan info for inspection_type mode */}
       {inspectionMode === 'inspection_type' && assignedPlan && (

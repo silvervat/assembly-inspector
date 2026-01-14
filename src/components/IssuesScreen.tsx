@@ -21,13 +21,15 @@ import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext'
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import {
-  FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight,
+  FiPlus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiCamera, FiDownload,
   FiRefreshCw, FiFilter, FiUser, FiCalendar, FiClock, FiAlertTriangle,
   FiAlertCircle, FiCheckCircle, FiXCircle, FiLoader, FiCheckSquare,
   FiTarget, FiMessageSquare, FiActivity, FiLayers, FiSend,
   FiArrowUp, FiArrowDown, FiMinus, FiAlertOctagon, FiEye
 } from 'react-icons/fi';
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 
 // ============================================
 // TYPES
@@ -40,6 +42,7 @@ interface IssuesScreenProps {
   tcUserEmail: string;
   tcUserName?: string;
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 interface SelectedObject {
@@ -145,11 +148,12 @@ function isOverdue(issue: Issue): boolean {
 
 export default function IssuesScreen({
   api,
-  user: _user,
+  user,
   projectId,
   tcUserEmail,
   tcUserName,
-  onBackToMenu
+  onBackToMenu,
+  onNavigate
 }: IssuesScreenProps) {
   // ============================================
   // STATE
@@ -1216,50 +1220,54 @@ export default function IssuesScreen({
   // RENDER
   // ============================================
 
+  // Handle navigation from header
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      onBackToMenu();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="issues-screen">
-      {/* Header */}
-      <div className="issues-header">
-        <div className="issues-header-left">
-          <button className="back-button" onClick={onBackToMenu}>
-            <FiArrowLeft size={20} />
-          </button>
-          <h1>Probleemid</h1>
-          <span className="issues-count">
-            {filteredIssues.length} / {issues.length}
-          </span>
-        </div>
-        <div className="issues-header-right">
-          <button
-            className="icon-button"
-            onClick={() => setShowFilters(!showFilters)}
-            title="Filtrid"
-          >
-            <FiFilter size={18} />
-          </button>
-          <button
-            className="icon-button"
-            onClick={colorModelByIssueStatus}
-            title="Värvi mudel"
-          >
-            <FiRefreshCw size={18} />
-          </button>
-          <button
-            className="icon-button"
-            onClick={exportToExcel}
-            title="Ekspordi Excel"
-          >
-            <FiDownload size={18} />
-          </button>
-          <button
-            className="primary-button"
-            onClick={handleCreateIssue}
-          >
-            <FiPlus size={18} />
-            Lisa probleem
-          </button>
-        </div>
-      </div>
+      {/* PageHeader with hamburger menu */}
+      <PageHeader
+        title={`Probleemid (${filteredIssues.length}/${issues.length})`}
+        onBack={onBackToMenu}
+        onNavigate={handleHeaderNavigate}
+        currentMode="issues"
+        user={user}
+      >
+        <button
+          className="icon-button"
+          onClick={() => setShowFilters(!showFilters)}
+          title="Filtrid"
+        >
+          <FiFilter size={18} />
+        </button>
+        <button
+          className="icon-button"
+          onClick={colorModelByIssueStatus}
+          title="Värvi mudel"
+        >
+          <FiRefreshCw size={18} />
+        </button>
+        <button
+          className="icon-button"
+          onClick={exportToExcel}
+          title="Ekspordi Excel"
+        >
+          <FiDownload size={18} />
+        </button>
+        <button
+          className="primary-button"
+          onClick={handleCreateIssue}
+        >
+          <FiPlus size={18} />
+          Lisa
+        </button>
+      </PageHeader>
 
       {/* Message */}
       {message && (

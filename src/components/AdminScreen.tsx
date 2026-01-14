@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiArrowLeft, FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle } from 'react-icons/fi';
+import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 
 // Test result type for function explorer
 interface FunctionTestResult {
@@ -18,6 +20,8 @@ interface AdminScreenProps {
   onBackToMenu: () => void;
   projectId: string;
   userEmail?: string;
+  user?: TrimbleExUser;
+  onNavigate?: (mode: InspectionMode | null) => void;
 }
 
 interface PropertySet {
@@ -193,7 +197,7 @@ const RESOURCE_TYPES = [
   { key: 'welder', label: 'Keevitaja', icon: '🔥' },
 ] as const;
 
-export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }: AdminScreenProps) {
+export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate }: AdminScreenProps) {
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
   const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
 
@@ -3526,36 +3530,44 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail }:
     return String(value);
   };
 
+  // Handle navigation from header
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      onBackToMenu();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
+  // Get admin page title
+  const getAdminTitle = () => {
+    switch (adminView) {
+      case 'main': return 'Administratsioon';
+      case 'properties': return 'Avasta propertised';
+      case 'assemblyList': return 'Assembly list & Poldid';
+      case 'guidImport': return 'Import GUID (MS)';
+      case 'modelObjects': return 'Saada andmebaasi';
+      case 'propertyMappings': return 'Tekla property seaded';
+      case 'userPermissions': return 'Kasutajate õigused';
+      case 'resources': return 'Ressursside haldus';
+      case 'cameraPositions': return 'Kaamera positsioonid';
+      case 'dataExport': return 'Ekspordi andmed';
+      case 'fontTester': return 'Fontide testija';
+      case 'deliveryScheduleAdmin': return 'Tarnegraafikud';
+      default: return 'Administratsioon';
+    }
+  };
+
   return (
     <div className="admin-container">
-      {/* Header */}
-      <div className="admin-header">
-        {adminView === 'main' ? (
-          <button className="back-btn" onClick={onBackToMenu}>
-            <FiArrowLeft size={18} />
-            <span>Menüü</span>
-          </button>
-        ) : (
-          <button className="back-btn" onClick={() => setAdminView('main')}>
-            <FiArrowLeft size={18} />
-            <span>Tagasi</span>
-          </button>
-        )}
-        <h2>
-          {adminView === 'main' && 'Administratsioon'}
-          {adminView === 'properties' && 'Avasta propertised'}
-          {adminView === 'assemblyList' && 'Assembly list & Poldid'}
-          {adminView === 'guidImport' && 'Import GUID (MS)'}
-          {adminView === 'modelObjects' && 'Saada andmebaasi'}
-          {adminView === 'propertyMappings' && 'Tekla property seaded'}
-          {adminView === 'userPermissions' && 'Kasutajate õigused'}
-          {adminView === 'resources' && 'Ressursside haldus'}
-          {adminView === 'cameraPositions' && 'Kaamera positsioonid'}
-          {adminView === 'dataExport' && 'Ekspordi andmed'}
-          {adminView === 'fontTester' && 'Fontide testija'}
-          {adminView === 'deliveryScheduleAdmin' && 'Tarnegraafikud'}
-        </h2>
-      </div>
+      {/* PageHeader with hamburger menu */}
+      <PageHeader
+        title={getAdminTitle()}
+        onBack={adminView === 'main' ? onBackToMenu : () => setAdminView('main')}
+        onNavigate={adminView === 'main' ? handleHeaderNavigate : undefined}
+        currentMode="admin"
+        user={user}
+      />
 
       {/* Main Tools View */}
       {adminView === 'main' && (

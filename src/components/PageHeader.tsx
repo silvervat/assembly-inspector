@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import {
   FiArrowLeft, FiMenu, FiTruck, FiCalendar, FiClipboard,
-  FiFolder, FiAlertTriangle, FiShield, FiX
+  FiFolder, FiAlertTriangle, FiShield, FiX, FiTool
 } from 'react-icons/fi';
 import { InspectionMode } from './MainMenu';
 import { TrimbleExUser } from '../supabase';
@@ -31,6 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   { mode: 'arrived_deliveries', label: 'Saabunud tarned', icon: <FiClipboard size={18} />, color: '#0891b2' },
   { mode: 'organizer', label: 'Organiseerija', icon: <FiFolder size={18} />, color: '#7c3aed' },
   { mode: 'issues', label: 'Probleemid', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
+  { mode: 'tools', label: 'Tööriistad', icon: <FiTool size={18} />, color: '#f59e0b' },
   { mode: 'inspection_plan', label: 'Inspektsiooni kava', icon: <FiClipboard size={18} />, color: '#6b7280', adminOnly: true },
   { mode: 'admin', label: 'Administratsioon', icon: <FiShield size={18} />, color: '#6b7280', adminOnly: true },
   { mode: null, label: 'Peamenüü', icon: <FiMenu size={18} />, color: '#6b7280' },
