@@ -3787,20 +3787,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
       let processedCount = 0;
       const totalObjects = guidsToImport.length;
+      const PROPERTY_BATCH_SIZE = 100; // Batch size for Trimble API calls
 
       for (const [modelId, objects] of objectsByModel) {
-        const runtimeIds = objects.map(o => o.runtime_id);
-        console.log(`🔍 Fetching properties for model ${modelId}, ${runtimeIds.length} objects...`);
+        // Batch the Trimble API calls to avoid timeouts with large imports
+        for (let batchStart = 0; batchStart < objects.length; batchStart += PROPERTY_BATCH_SIZE) {
+          const batchObjects = objects.slice(batchStart, batchStart + PROPERTY_BATCH_SIZE);
+          const runtimeIds = batchObjects.map(o => o.runtime_id);
+          console.log(`🔍 Fetching properties for model ${modelId}, batch ${Math.floor(batchStart / PROPERTY_BATCH_SIZE) + 1}, ${runtimeIds.length} objects...`);
 
-        try {
-          // Fetch properties from Trimble API (like InspectorScreen does)
-          const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+          try {
+            // Fetch properties from Trimble API (like InspectorScreen does)
+            const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
 
-          if (props && props.length > 0) {
-            // Process each object's properties
-            for (let idx = 0; idx < props.length; idx++) {
-              const objProps = props[idx];
-              const objInfo = objects[idx];
+            if (props && props.length > 0) {
+              // Process each object's properties
+              for (let idx = 0; idx < props.length; idx++) {
+                const objProps = props[idx];
+                const objInfo = batchObjects[idx];
 
               let assemblyMark: string | undefined;
               let productName: string | undefined;
@@ -3895,12 +3899,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             }
           }
 
-          setMessage(`Loen mudelist... ${processedCount}/${totalObjects}`);
-        } catch (error) {
-          console.error(`❌ Error fetching properties for model ${modelId}:`, error);
-          // Continue with other models
-        }
-      }
+            setMessage(`Loen mudelist... ${processedCount}/${totalObjects}`);
+          } catch (error) {
+            console.error(`❌ Error fetching properties for model ${modelId}, batch:`, error);
+            // Continue with other batches/models
+          }
+        } // End of batch loop
+      } // End of model loop
 
       console.log(`✅ Fetched fresh properties for ${freshPropertiesMap.size} objects from model`);
       setMessage(`✅ Loetud ${freshPropertiesMap.size} detaili mudelist`);
@@ -4021,10 +4026,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
         let totalImported = 0;
         const createdVehicles: string[] = [];
+        const totalToImport = Array.from(groups.values()).reduce((sum, items) => sum + items.length, 0);
 
         // Process each group
         for (const [groupKey, groupItems] of groups) {
           const [dateStr, vehicleCode, factoryId, timeStr] = groupKey.split('|');
+
+          setMessage(`Salvestan... ${totalImported}/${totalToImport} (${vehicleCode || 'uus veok'})`);
 
           // Convert 'UNASSIGNED' to null for database
           const scheduledDate = dateStr === 'UNASSIGNED' ? null : dateStr;
@@ -4130,11 +4138,16 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
             };
           });
 
-          const { error } = await supabase
-            .from('trimble_delivery_items')
-            .insert(newItems);
+          // Batch insert to avoid Supabase row limits
+          const INSERT_BATCH_SIZE = 500;
+          for (let i = 0; i < newItems.length; i += INSERT_BATCH_SIZE) {
+            const batch = newItems.slice(i, i + INSERT_BATCH_SIZE);
+            const { error } = await supabase
+              .from('trimble_delivery_items')
+              .insert(batch);
 
-          if (error) throw error;
+            if (error) throw error;
+          }
           totalImported += newItems.length;
         }
 
@@ -4195,11 +4208,17 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           };
         });
 
-        const { error } = await supabase
-          .from('trimble_delivery_items')
-          .insert(newItems);
+        // Batch insert to avoid Supabase row limits (max ~1000 rows per insert)
+        const INSERT_BATCH_SIZE = 500;
+        for (let i = 0; i < newItems.length; i += INSERT_BATCH_SIZE) {
+          const batch = newItems.slice(i, i + INSERT_BATCH_SIZE);
+          const { error } = await supabase
+            .from('trimble_delivery_items')
+            .insert(batch);
 
-        if (error) throw error;
+          if (error) throw error;
+          setMessage(`Salvestan... ${Math.min(i + INSERT_BATCH_SIZE, newItems.length)}/${newItems.length}`);
+        }
 
         await Promise.all([loadItems(), loadVehicles()]);
         broadcastReload();
