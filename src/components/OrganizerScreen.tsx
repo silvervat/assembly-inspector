@@ -167,6 +167,26 @@ function generateUUID(): string {
   });
 }
 
+// IFC GUID to MS GUID conversion
+const IFC_GUID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+
+const ifcToMsGuid = (ifcGuid: string): string => {
+  if (!ifcGuid || ifcGuid.length !== 22) return '';
+  let bits = '';
+  for (let i = 0; i < 22; i++) {
+    const idx = IFC_GUID_CHARS.indexOf(ifcGuid[i]);
+    if (idx < 0) return '';
+    const numBits = i === 0 ? 2 : 6;
+    bits += idx.toString(2).padStart(numBits, '0');
+  }
+  if (bits.length !== 128) return '';
+  let hex = '';
+  for (let i = 0; i < 128; i += 4) {
+    hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
+  }
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+};
+
 function buildGroupTree(
   groups: OrganizerGroup[],
   groupItems: Map<string, OrganizerGroupItem[]>,
@@ -395,6 +415,9 @@ export default function OrganizerScreen({
   const [groupTree, setGroupTree] = useState<OrganizerGroupTree[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Export progress overlay
+  const [exportProgress, setExportProgress] = useState<{ message: string; percent: number } | null>(null);
 
   // Toast
   const [toast, setToast] = useState<string | null>(null);
@@ -3949,7 +3972,7 @@ export default function OrganizerScreen({
     return result;
   };
 
-  const exportGroupToExcel = (groupId: string) => {
+  const exportGroupToExcel = async (groupId: string) => {
     const group = groups.find(g => g.id === groupId);
     if (!group) return;
 
@@ -3957,40 +3980,91 @@ export default function OrganizerScreen({
     const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
+    // Show progress for large exports (>100 items)
+    const showProgress = allItems.length > 100;
+    if (showProgress) {
+      setExportProgress({ message: 'Koostan Exceli...', percent: 0 });
+    }
+
+    // Allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     const wb = XLSX.utils.book_new();
-    // Headers: Grupp column added after #
-    const headers = ['#', 'Grupp', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Headers: GUIDs moved to right side before Lisatud columns
+    const headers = ['#', 'Grupp', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
-    headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
+    headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
     // Get timezone name
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-    const data: any[][] = [headers];
-    allItems.forEach(({ item, groupName }, idx) => {
-      const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
-      const row: any[] = [
-        idx + 1,
-        groupName,
-        item.guid_ifc || '',
-        (item as any).guid_ms || '',
-        item.assembly_mark || '',
-        item.product_name || '',
-        formatWeight(item.cast_unit_weight),
-        item.cast_unit_position_code || ''
-      ];
-      // Add custom fields
-      customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
-      // Add Lisatud, Ajavöönd, Lisaja at the end
-      row.push(addedDate, item.added_at ? timeZone : '', item.added_by || '');
-      data.push(row);
-    });
+    // Trimble blue header style
+    const headerStyle = {
+      fill: { fgColor: { rgb: '003F87' } }, // Trimble blue
+      font: { bold: true, color: { rgb: 'FFFFFF' } },
+      alignment: { horizontal: 'center', vertical: 'center' }
+    };
+
+    const data: any[][] = [headers.map(h => ({ v: h, s: headerStyle }))];
+
+    // Process items in batches for progress updates
+    const batchSize = 500;
+    for (let i = 0; i < allItems.length; i += batchSize) {
+      const batch = allItems.slice(i, Math.min(i + batchSize, allItems.length));
+
+      batch.forEach(({ item, groupName }, batchIdx) => {
+        const idx = i + batchIdx;
+        const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        // Calculate GUID_MS from GUID_IFC
+        const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
+
+        const row: any[] = [
+          idx + 1,
+          groupName,
+          item.assembly_mark || '',
+          item.product_name || '',
+          formatWeight(item.cast_unit_weight),
+          item.cast_unit_position_code || ''
+        ];
+        // Add custom fields
+        customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
+        // Add GUIDs, then Lisatud columns at the end
+        row.push(item.guid_ifc || '', guidMs, addedDate, item.added_at ? timeZone : '', item.added_by || '');
+        data.push(row);
+      });
+
+      if (showProgress) {
+        const percent = Math.round(((i + batch.length) / allItems.length) * 80); // 0-80% for data
+        setExportProgress({ message: `Töötlen andmeid... (${i + batch.length}/${allItems.length})`, percent });
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    if (showProgress) {
+      setExportProgress({ message: 'Loon Exceli faili...', percent: 90 });
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 5 }, { wch: 20 }, { wch: 38 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }, ...customFields.map(() => ({ wch: 15 })), { wch: 16 }, { wch: 20 }, { wch: 25 }];
+
+    // Column widths: adjusted for new order
+    const baseColWidths = [{ wch: 5 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    const customColWidths = customFields.map(() => ({ wch: 15 }));
+    const guidAndEndColWidths = [{ wch: 24 }, { wch: 38 }, { wch: 16 }, { wch: 20 }, { wch: 25 }];
+    ws['!cols'] = [...baseColWidths, ...customColWidths, ...guidAndEndColWidths];
+
+    // Add autoFilter for all columns
+    const lastCol = String.fromCharCode(65 + headers.length - 1); // A + number of columns
+    ws['!autofilter'] = { ref: `A1:${lastCol}${data.length}` };
+
     XLSX.utils.book_append_sheet(wb, ws, 'Grupp');
 
     XLSX.writeFile(wb, `${group.name.replace(/[^a-zA-Z0-9äöüõÄÖÜÕ]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+
+    if (showProgress) {
+      setExportProgress(null);
+    }
     showToast(`Eksport loodud (${allItems.length} rida)`);
     setGroupMenuId(null);
   };
@@ -4004,10 +4078,10 @@ export default function OrganizerScreen({
     const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
-    // Build headers: Grupp column added after #
-    const headers = ['#', 'Grupp', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Build headers: GUIDs moved to right side before Lisatud columns
+    const headers = ['#', 'Grupp', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
-    headers.push('Lisatud', 'Ajavöönd', 'Lisaja');
+    headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
     // Get timezone name
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -4018,11 +4092,13 @@ export default function OrganizerScreen({
       const addedDate = item.added_at
         ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
         : '';
+
+      // Calculate GUID_MS from GUID_IFC
+      const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
+
       const row: string[] = [
         String(idx + 1),
         groupName,
-        item.guid_ifc || '',
-        (item as any).guid_ms || '',
         item.assembly_mark || '',
         item.product_name || '',
         formatWeight(item.cast_unit_weight),
@@ -4030,8 +4106,8 @@ export default function OrganizerScreen({
       ];
       // Add custom fields
       customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
-      // Add Lisatud, Ajavöönd, Lisaja at the end
-      row.push(addedDate, item.added_at ? timeZone : '', item.added_by || '');
+      // Add GUIDs, then Lisatud columns at the end
+      row.push(item.guid_ifc || '', guidMs, addedDate, item.added_at ? timeZone : '', item.added_by || '');
       rows.push(row);
     });
 
@@ -5646,6 +5722,19 @@ export default function OrganizerScreen({
 
   return (
     <div className="organizer-screen" ref={containerRef}>
+      {/* Export Progress Overlay */}
+      {exportProgress && (
+        <div className="color-white-overlay">
+          <div className="color-white-card">
+            <div className="color-white-message">{exportProgress.message}</div>
+            <div className="color-white-bar-container">
+              <div className="color-white-bar" style={{ width: `${exportProgress.percent}%` }} />
+            </div>
+            <div className="color-white-percent">{exportProgress.percent}%</div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <PageHeader
         title="Organiseerija"

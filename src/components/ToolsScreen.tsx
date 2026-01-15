@@ -843,67 +843,71 @@ export default function ToolsScreen({
                 </button>
               </div>
 
+              {/* Scan button - always visible */}
               <div className="tools-buttons">
                 <button
                   className="tools-btn tools-btn-primary"
                   onClick={handleScanBolts}
                   disabled={scanLoading}
-                  style={{ background: '#22c55e' }}
+                  style={{ background: '#22c55e', width: '100%' }}
                 >
                   {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
                   <span>Skaneeri poldid</span>
                 </button>
+              </div>
 
-                <button
-                  className="tools-btn tools-btn-secondary"
-                  onClick={handleExportBolts}
-                  disabled={exportLoading || boltSummary.length === 0}
-                >
-                  {exportLoading ? <FiLoader className="spinning" size={14} /> : <FiDownload size={14} />}
-                  <span>Ekspordi Excel</span>
-                </button>
+              {/* Action buttons - only show when data available */}
+              {boltSummary.length > 0 && (
+                <div className="tools-buttons-grid">
+                  <button
+                    className="tools-btn tools-btn-compact"
+                    onClick={handleExportBolts}
+                    disabled={exportLoading}
+                  >
+                    {exportLoading ? <FiLoader className="spinning" size={14} /> : <FiDownload size={14} />}
+                    <span>Ekspordi Excel</span>
+                  </button>
 
-                <button
-                  className="tools-btn tools-btn-secondary"
-                  onClick={handleCopySummary}
-                  disabled={boltSummary.length === 0 || !tableDisplayAllowed}
-                  title={!tableDisplayAllowed ? `Liiga palju ridu (${boltSummary.length}). Max ${MAX_TABLE_DISPLAY_ROWS}.` : ''}
-                >
-                  <FiCopy size={14} />
-                  <span>Kopeeri tabel</span>
-                </button>
+                  <button
+                    className="tools-btn tools-btn-compact"
+                    onClick={handleCopySummary}
+                    disabled={!tableDisplayAllowed}
+                    title={!tableDisplayAllowed ? `Max ${MAX_TABLE_DISPLAY_ROWS} rida` : ''}
+                  >
+                    <FiCopy size={14} />
+                    <span>Kopeeri tabel</span>
+                  </button>
 
-                <button
-                  className="tools-btn tools-btn-secondary"
-                  onClick={handleCopyAsImage}
-                  disabled={boltSummary.length === 0 || !tableDisplayAllowed}
-                  style={{ background: tableDisplayAllowed ? '#dbeafe' : '#f3f4f6' }}
-                  title={!tableDisplayAllowed ? `Liiga palju ridu (${boltSummary.length}). Max ${MAX_TABLE_DISPLAY_ROWS}.` : ''}
-                >
-                  <FiCamera size={14} />
-                  <span>Kopeeri pildina</span>
-                </button>
+                  <button
+                    className="tools-btn tools-btn-compact"
+                    onClick={handleCopyAsImage}
+                    disabled={!tableDisplayAllowed}
+                    title={!tableDisplayAllowed ? `Max ${MAX_TABLE_DISPLAY_ROWS} rida` : ''}
+                  >
+                    <FiCamera size={14} />
+                    <span>Kopeeri pildina</span>
+                  </button>
 
-                <button
-                  className="tools-btn tools-btn-secondary"
-                  onClick={handleDownloadAsImage}
-                  disabled={boltSummary.length === 0 || !tableDisplayAllowed}
-                  style={{ background: tableDisplayAllowed ? '#e0e7ff' : '#f3f4f6' }}
-                  title={!tableDisplayAllowed ? `Liiga palju ridu (${boltSummary.length}). Max ${MAX_TABLE_DISPLAY_ROWS}.` : ''}
-                >
-                  <FiDownload size={14} />
-              <span>Salvesta pilt</span>
-            </button>
+                  <button
+                    className="tools-btn tools-btn-compact"
+                    onClick={handleDownloadAsImage}
+                    disabled={!tableDisplayAllowed}
+                    title={!tableDisplayAllowed ? `Max ${MAX_TABLE_DISPLAY_ROWS} rida` : ''}
+                  >
+                    <FiDownload size={14} />
+                    <span>Salvesta pilt</span>
+                  </button>
 
-            <button
-              className="tools-btn tools-btn-danger"
-              onClick={handleClearResults}
-              disabled={boltSummary.length === 0}
-            >
-              <FiX size={14} />
-              <span>Tühjenda</span>
-            </button>
-          </div>
+                  <button
+                    className="tools-btn tools-btn-compact tools-btn-danger-compact"
+                    onClick={handleClearResults}
+                    style={{ gridColumn: 'span 2' }}
+                  >
+                    <FiX size={14} />
+                    <span>Tühjenda</span>
+                  </button>
+                </div>
+              )}
 
           {/* Bolt Summary Table - only show if <= 10 rows */}
           {boltSummary.length > 0 && tableDisplayAllowed && (
@@ -1069,22 +1073,23 @@ export default function ToolsScreen({
                 Lisa poltidele markupid Bolt Name väärtusega. Max {MAX_MARKUPS_PER_BATCH} markupit korraga.
               </p>
 
-              <div className="tools-buttons">
+              <div className="tools-buttons-grid">
                 <button
-                  className="tools-btn tools-btn-primary"
+                  className="tools-btn tools-btn-compact"
                   onClick={handleAddBoltMarkups}
                   disabled={boltLoading}
+                  style={{ background: '#dcfce7', borderColor: '#22c55e' }}
                 >
                   {boltLoading ? (
                     <FiLoader className="spinning" size={14} />
                   ) : (
-                    <span style={{ color: '#22c55e' }}>●</span>
+                    <FiTag size={14} style={{ color: '#22c55e' }} />
                   )}
-                  <span>Lisa markupid</span>
+                  <span>Lisa</span>
                 </button>
 
                 <button
-                  className="tools-btn tools-btn-danger"
+                  className="tools-btn tools-btn-compact tools-btn-danger-compact"
                   onClick={handleRemoveMarkups}
                   disabled={removeLoading}
                 >
@@ -1093,7 +1098,7 @@ export default function ToolsScreen({
                   ) : (
                     <FiTrash2 size={14} />
                   )}
-                  <span>Eemalda markupid</span>
+                  <span>Eemalda</span>
                 </button>
               </div>
             </>
