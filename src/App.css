@@ -1884,39 +1884,61 @@ button.stat-toggle.off:hover {
   font-weight: 500;
 }
 
-/* Color white progress overlay */
+/* Color white progress overlay - centered */
 .color-white-overlay {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2000;
-  animation: slideUp 0.2s ease-out;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-.color-white-progress {
-  background: white;
-  border-radius: 8px;
-  padding: 10px 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  font-size: 13px;
-  font-weight: 500;
-  color: #374151;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  white-space: nowrap;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 2000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.color-white-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 28px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  min-width: 220px;
+  text-align: center;
+}
+
+.color-white-message {
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.color-white-bar-container {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.color-white-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  border-radius: 4px;
+  transition: width 0.2s ease-out;
+}
+
+.color-white-percent {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
 }
 
 /* EOS2 Navigation Status Indicator */
