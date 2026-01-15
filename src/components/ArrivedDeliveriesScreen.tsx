@@ -29,6 +29,7 @@ interface ArrivedDeliveriesScreenProps {
   projectId: string;
   onBack: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 // Time options for dropdowns
@@ -3410,6 +3411,8 @@ export default function ArrivedDeliveriesScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="arrived_deliveries"
         user={user}
+        api={api}
+        projectId={projectId}
       >
         {/* Color toggle button */}
         <button

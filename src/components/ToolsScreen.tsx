@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
+import html2canvas from 'html2canvas';
 import { TrimbleExUser } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 
@@ -12,6 +13,7 @@ interface ToolsScreenProps {
   projectId: string;
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface Toast {
@@ -37,7 +39,8 @@ export default function ToolsScreen({
   user,
   projectId: _projectId,
   onBackToMenu,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: ToolsScreenProps) {
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
@@ -49,6 +52,9 @@ export default function ToolsScreen({
   // Toast state
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Ref for bolt summary table (for image copy)
+  const boltSummaryRef = useRef<HTMLDivElement>(null);
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -409,10 +415,49 @@ export default function ToolsScreen({
 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Bolts');
+
+      // Add bolt summary sheet if we have summary data
+      if (boltSummary.length > 0) {
+        const summaryHeaders = exportLanguage === 'en'
+          ? ['Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nuts', 'Washer Name', 'Washer Type', 'Washers']
+          : ['Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutreid', 'Seibi nimi', 'Seibi tüüp', 'Seibe'];
+
+        const summaryRows = boltSummary.map(b => [
+          b.boltName, b.boltStandard, b.boltSize, b.boltLength, b.boltCount,
+          b.nutName, b.nutCount, b.washerName, b.washerType, b.washerCount
+        ]);
+
+        // Add totals row
+        summaryRows.push([
+          exportLanguage === 'en' ? 'TOTAL' : 'KOKKU', '', '', '',
+          boltSummary.reduce((sum, b) => sum + b.boltCount, 0),
+          '', boltSummary.reduce((sum, b) => sum + b.nutCount, 0),
+          '', '', boltSummary.reduce((sum, b) => sum + b.washerCount, 0)
+        ]);
+
+        const summaryWs = XLSX.utils.aoa_to_sheet([summaryHeaders, ...summaryRows]);
+        summaryWs['!cols'] = summaryHeaders.map(() => ({ wch: 14 }));
+
+        // Apply header style to summary sheet
+        for (let c = 0; c < summaryHeaders.length; c++) {
+          const cell = summaryWs[XLSX.utils.encode_cell({ r: 0, c })];
+          if (cell) cell.s = headerStyle;
+        }
+
+        // Style the totals row
+        const lastRowIdx = summaryRows.length;
+        for (let c = 0; c < summaryHeaders.length; c++) {
+          const cell = summaryWs[XLSX.utils.encode_cell({ r: lastRowIdx, c })];
+          if (cell) cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+        }
+
+        XLSX.utils.book_append_sheet(wb, summaryWs, exportLanguage === 'en' ? 'Summary' : 'Kokkuvõte');
+      }
+
       const fileName = `${projectName}_poldid_${new Date().toISOString().slice(0, 10)}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
-      showToast(`${exportRows.length} rida eksporditud`, 'success');
+      showToast(`${exportRows.length} rida eksporditud${boltSummary.length > 0 ? ' + kokkuvõte' : ''}`, 'success');
     } catch (e: any) {
       console.error('Export error:', e);
       showToast(e.message || 'Viga eksportimisel', 'error');
@@ -546,6 +591,46 @@ export default function ToolsScreen({
     showToast(`${boltSummary.length} rida kopeeritud`, 'success');
   };
 
+  // Copy bolt summary as image
+  const handleCopyAsImage = async () => {
+    if (!boltSummaryRef.current || boltSummary.length === 0) return;
+
+    try {
+      // Use html2canvas to capture the table
+      const canvas = await html2canvas(boltSummaryRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Higher resolution
+        logging: false
+      });
+
+      // Convert to blob
+      canvas.toBlob(async (blob) => {
+        if (blob) {
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob })
+            ]);
+            showToast('Pilt kopeeritud lõikelauale', 'success');
+          } catch {
+            // Fallback: open in new window
+            const url = URL.createObjectURL(blob);
+            window.open(url, '_blank');
+            showToast('Pilt avatud uues aknas', 'success');
+          }
+        }
+      }, 'image/png');
+    } catch (e) {
+      console.error('Error copying as image:', e);
+      showToast('Pildi kopeerimine ebaõnnestus', 'error');
+    }
+  };
+
+  // Clear bolt summary results
+  const handleClearResults = () => {
+    setBoltSummary([]);
+    showToast('Tulemused tühjendatud', 'success');
+  };
+
   return (
     <div className="tools-screen">
       <PageHeader
@@ -554,6 +639,9 @@ export default function ToolsScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="tools"
         user={user}
+        onColorModelWhite={onColorModelWhite}
+        api={api}
+        projectId={_projectId}
       />
 
       {/* Toast notification */}
@@ -617,11 +705,30 @@ export default function ToolsScreen({
               <FiCopy size={14} />
               <span>Kopeeri tabel</span>
             </button>
+
+            <button
+              className="tools-btn tools-btn-secondary"
+              onClick={handleCopyAsImage}
+              disabled={boltSummary.length === 0}
+              style={{ background: '#dbeafe' }}
+            >
+              <FiCamera size={14} />
+              <span>Kopeeri pildina</span>
+            </button>
+
+            <button
+              className="tools-btn tools-btn-danger"
+              onClick={handleClearResults}
+              disabled={boltSummary.length === 0}
+            >
+              <FiX size={14} />
+              <span>Tühjenda</span>
+            </button>
           </div>
 
           {/* Bolt Summary Table */}
           {boltSummary.length > 0 && (
-            <div className="bolt-summary-section" style={{ marginTop: '16px' }}>
+            <div className="bolt-summary-section" ref={boltSummaryRef} style={{ marginTop: '16px' }}>
               <div style={{
                 display: 'flex',
                 alignItems: 'center',

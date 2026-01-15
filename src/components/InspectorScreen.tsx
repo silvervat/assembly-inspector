@@ -40,6 +40,7 @@ interface InspectorScreenProps {
   inspectionTypeName?: string;
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface SelectedObject {
@@ -1946,6 +1947,8 @@ export default function InspectorScreen({
         onNavigate={handleHeaderNavigate}
         currentMode={inspectionMode}
         user={user}
+        api={api}
+        projectId={projectId}
       />
 
       {/* Compact plan info for inspection_type mode */}

@@ -71,6 +71,7 @@ interface InstallationsScreenProps {
   tcUserName?: string;
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface SelectedObject {
@@ -4603,6 +4604,8 @@ export default function InstallationsScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="installations"
         user={user}
+        api={api}
+        projectId={projectId}
       />
 
       {/* Coloring progress indicator - floating overlay */}

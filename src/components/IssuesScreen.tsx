@@ -43,6 +43,7 @@ interface IssuesScreenProps {
   tcUserName?: string;
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface SelectedObject {
@@ -1238,6 +1239,8 @@ export default function IssuesScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="issues"
         user={user}
+        api={api}
+        projectId={projectId}
       >
         <button
           className="icon-button"
