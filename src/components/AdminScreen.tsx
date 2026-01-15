@@ -3,6 +3,7 @@ import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoade
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -307,15 +308,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const [markSearchInput, setMarkSearchInput] = useState('');
   const [markSearchResults, setMarkSearchResults] = useState<Array<{
     mark: string;
-    runtimeId: number;
-    modelId: string;
+    guid_ifc: string;
     similarity: number;
   }>>([]);
   const [markSearchLoading, setMarkSearchLoading] = useState(false);
   const [allMarksCache, setAllMarksCache] = useState<Array<{
     mark: string;
-    runtimeId: number;
-    modelId: string;
+    guid_ifc: string;
   }>>([]);
 
   // Assembly & Bolts list state
@@ -5274,7 +5273,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             <div className="function-section">
               <h4>🔍 Cast Unit Mark otsing</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Otsi mudelist detaile Cast Unit Mark järgi. Näitab ka sarnaseid tulemusi.
+                Otsi andmebaasist detaile Cast Unit Mark järgi. <strong>NB:</strong> Kasuta enne "Saada andmebaasi" funktsiooni!
               </p>
 
               {/* Search input */}
@@ -5311,68 +5310,32 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     try {
                       const searchTerm = markSearchInput.trim().toLowerCase();
 
-                      // Use cache if available, otherwise fetch all marks
+                      // Use cache if available, otherwise fetch from DATABASE (much faster!)
                       let marks = allMarksCache;
                       if (marks.length === 0) {
-                        // Get all objects from model
-                        const allModelObjects = await api.viewer.getObjects();
-                        if (!allModelObjects || allModelObjects.length === 0) {
-                          setMarkSearchResults([]);
-                          setMarkSearchLoading(false);
-                          return;
-                        }
+                        // Load from database - FAST!
+                        const { data, error } = await supabase
+                          .from('trimble_model_objects')
+                          .select('assembly_mark, guid_ifc')
+                          .eq('trimble_project_id', projectId)
+                          .not('assembly_mark', 'is', null);
 
-                        marks = [];
-                        for (const modelObj of allModelObjects) {
-                          const modelId = modelObj.modelId;
-                          const objects = (modelObj as any).objects || [];
-                          const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
-
-                          if (runtimeIds.length > 0) {
-                            // Get properties in batches
-                            const batchSize = 100;
-                            for (let i = 0; i < runtimeIds.length; i += batchSize) {
-                              const batch = runtimeIds.slice(i, i + batchSize);
-                              const props = await api.viewer.getObjectProperties(modelId, batch);
-
-                              for (let j = 0; j < props.length; j++) {
-                                const p = props[j];
-                                if (p?.properties && Array.isArray(p.properties)) {
-                                  for (const pset of p.properties as any[]) {
-                                    if (pset.name === 'Tekla Assembly') {
-                                      for (const prop of pset.properties || []) {
-                                        if (prop.name === 'Assembly/Cast unit Mark' && prop.value) {
-                                          marks.push({
-                                            mark: String(prop.value),
-                                            runtimeId: batch[j],
-                                            modelId
-                                          });
-                                        }
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
+                        if (error) throw error;
+                        marks = (data || [])
+                          .filter(r => r.assembly_mark && r.guid_ifc)
+                          .map(r => ({ mark: r.assembly_mark!, guid_ifc: r.guid_ifc! }));
                         setAllMarksCache(marks);
                       }
 
                       // Calculate similarity and filter results
                       const calculateSimilarity = (mark: string, search: string): number => {
                         const markLower = mark.toLowerCase();
-                        // Exact match
                         if (markLower === search) return 100;
-                        // Starts with
                         if (markLower.startsWith(search)) return 90;
-                        // Contains
                         if (markLower.includes(search)) return 70;
-                        // Check if numbers match (for patterns like S-101 searching for 101)
                         const searchNums = search.match(/\d+/g)?.join('') || '';
                         const markNums = markLower.match(/\d+/g)?.join('') || '';
                         if (searchNums && markNums && markNums.includes(searchNums)) return 50;
-                        // Check letter prefix match (S-101 vs S-102)
                         const searchPrefix = search.replace(/\d+/g, '').trim();
                         const markPrefix = markLower.replace(/\d+/g, '').trim();
                         if (searchPrefix && markPrefix && markPrefix === searchPrefix) return 40;
@@ -5380,13 +5343,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                       };
 
                       const results = marks
-                        .map(m => ({
-                          ...m,
-                          similarity: calculateSimilarity(m.mark, searchTerm)
-                        }))
+                        .map(m => ({ ...m, similarity: calculateSimilarity(m.mark, searchTerm) }))
                         .filter(m => m.similarity > 0)
                         .sort((a, b) => b.similarity - a.similarity || a.mark.localeCompare(b.mark))
-                        .slice(0, 50); // Limit to 50 results
+                        .slice(0, 50);
 
                       setMarkSearchResults(results);
                     } catch (e) {
@@ -5420,47 +5380,19 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     setMarkSearchLoading(true);
                     setAllMarksCache([]);
                     try {
-                      const allModelObjects = await api.viewer.getObjects();
-                      if (!allModelObjects || allModelObjects.length === 0) {
-                        setMarkSearchResults([]);
-                        return;
-                      }
+                      // Load from DATABASE - FAST!
+                      const { data, error } = await supabase
+                        .from('trimble_model_objects')
+                        .select('assembly_mark, guid_ifc')
+                        .eq('trimble_project_id', projectId)
+                        .not('assembly_mark', 'is', null);
 
-                      const marks: typeof allMarksCache = [];
-                      for (const modelObj of allModelObjects) {
-                        const modelId = modelObj.modelId;
-                        const objects = (modelObj as any).objects || [];
-                        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+                      if (error) throw error;
+                      const marks = (data || [])
+                        .filter(r => r.assembly_mark && r.guid_ifc)
+                        .map(r => ({ mark: r.assembly_mark!, guid_ifc: r.guid_ifc! }));
 
-                        if (runtimeIds.length > 0) {
-                          const batchSize = 100;
-                          for (let i = 0; i < runtimeIds.length; i += batchSize) {
-                            const batch = runtimeIds.slice(i, i + batchSize);
-                            const props = await api.viewer.getObjectProperties(modelId, batch);
-
-                            for (let j = 0; j < props.length; j++) {
-                              const p = props[j];
-                              if (p?.properties && Array.isArray(p.properties)) {
-                                for (const pset of p.properties as any[]) {
-                                  if (pset.name === 'Tekla Assembly') {
-                                    for (const prop of pset.properties || []) {
-                                      if (prop.name === 'Assembly/Cast unit Mark' && prop.value) {
-                                        marks.push({
-                                          mark: String(prop.value),
-                                          runtimeId: batch[j],
-                                          modelId
-                                        });
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                      }
                       setAllMarksCache(marks);
-                      // Show all marks sorted alphabetically
                       setMarkSearchResults(marks.map(m => ({ ...m, similarity: 100 })).sort((a, b) => a.mark.localeCompare(b.mark)));
                     } catch (e) {
                       console.error('Load all marks error:', e);
@@ -5547,11 +5479,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                             <button
                               onClick={async () => {
                                 try {
-                                  // Select and zoom to this object
+                                  // Find runtime ID from guid_ifc
+                                  const found = await findObjectsInLoadedModels(api, [result.guid_ifc]);
+                                  const obj = found.get(result.guid_ifc) || found.get(result.guid_ifc.toLowerCase());
+                                  if (!obj) {
+                                    console.warn('Object not found in model:', result.guid_ifc);
+                                    return;
+                                  }
+                                  // Select and zoom
                                   await api.viewer.setSelection({
-                                    modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }]
+                                    modelObjectIds: [{ modelId: obj.modelId, objectRuntimeIds: [obj.runtimeId] }]
                                   }, 'set');
-                                  await api.viewer.setCamera({ modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }] } as any, { animationTime: 300 });
+                                  await api.viewer.setCamera({ modelObjectIds: [{ modelId: obj.modelId, objectRuntimeIds: [obj.runtimeId] }] } as any, { animationTime: 300 });
                                 } catch (e) {
                                   console.error('Select error:', e);
                                 }
