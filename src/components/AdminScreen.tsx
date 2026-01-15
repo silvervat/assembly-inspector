@@ -5998,6 +5998,281 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     }
                   }}
                 />
+                <FunctionButton
+                  name="📍 Lisa mõõtjooned (XYZ)"
+                  result={functionResults["addMeasurementXYZ"]}
+                  onClick={async () => {
+                    updateFunctionResult("addMeasurementXYZ", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                        for (const bbox of boundingBoxes) {
+                          const box = bbox.boundingBox;
+                          const min = { x: box.min.x * 1000, y: box.min.y * 1000, z: box.min.z * 1000 };
+                          const max = { x: box.max.x * 1000, y: box.max.y * 1000, z: box.max.z * 1000 };
+
+                          const measurements: any[] = [
+                            // X dimension (width) - Red
+                            {
+                              start: { positionX: min.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                              end: { positionX: max.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                              mainLineStart: { positionX: min.x, positionY: min.y, positionZ: min.z },
+                              mainLineEnd: { positionX: max.x, positionY: min.y, positionZ: min.z },
+                              color: { r: 255, g: 0, b: 0, a: 255 }
+                            },
+                            // Y dimension (depth) - Green
+                            {
+                              start: { positionX: min.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                              end: { positionX: min.x, positionY: max.y, positionZ: min.z, modelId, objectId: bbox.id },
+                              mainLineStart: { positionX: min.x, positionY: min.y, positionZ: min.z },
+                              mainLineEnd: { positionX: min.x, positionY: max.y, positionZ: min.z },
+                              color: { r: 0, g: 255, b: 0, a: 255 }
+                            },
+                            // Z dimension (height) - Blue
+                            {
+                              start: { positionX: min.x, positionY: min.y, positionZ: min.z, modelId, objectId: bbox.id },
+                              end: { positionX: min.x, positionY: min.y, positionZ: max.z, modelId, objectId: bbox.id },
+                              mainLineStart: { positionX: min.x, positionY: min.y, positionZ: min.z },
+                              mainLineEnd: { positionX: min.x, positionY: min.y, positionZ: max.z },
+                              color: { r: 0, g: 0, b: 255, a: 255 }
+                            }
+                          ];
+
+                          await api.markup.addMeasurementMarkups(measurements);
+
+                          const width = Math.abs(max.x - min.x);
+                          const depth = Math.abs(max.y - min.y);
+                          const height = Math.abs(max.z - min.z);
+
+                          updateFunctionResult("addMeasurementXYZ", {
+                            status: 'success',
+                            result: `Mõõtjooned lisatud:\n🔴 X: ${width.toFixed(0)} mm\n🟢 Y: ${depth.toFixed(0)} mm\n🔵 Z: ${height.toFixed(0)} mm`
+                          });
+                          return;
+                        }
+                      }
+                      throw new Error('Bounding box andmeid ei leitud');
+                    } catch (e: any) {
+                      updateFunctionResult("addMeasurementXYZ", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📏 Kahe objekti vahe"
+                  result={functionResults["twoObjectDistance"]}
+                  onClick={async () => {
+                    updateFunctionResult("twoObjectDistance", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali kaks objekti!');
+
+                      const allBoxes: { modelId: string; id: number; box: any }[] = [];
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                        for (const bbox of boundingBoxes) {
+                          allBoxes.push({ modelId, id: bbox.id, box: bbox.boundingBox });
+                        }
+                      }
+
+                      if (allBoxes.length < 2) throw new Error('Vali vähemalt 2 objekti!');
+
+                      const box1 = allBoxes[0].box;
+                      const box2 = allBoxes[1].box;
+
+                      const center1 = {
+                        x: (box1.min.x + box1.max.x) / 2 * 1000,
+                        y: (box1.min.y + box1.max.y) / 2 * 1000,
+                        z: (box1.min.z + box1.max.z) / 2 * 1000
+                      };
+                      const center2 = {
+                        x: (box2.min.x + box2.max.x) / 2 * 1000,
+                        y: (box2.min.y + box2.max.y) / 2 * 1000,
+                        z: (box2.min.z + box2.max.z) / 2 * 1000
+                      };
+
+                      await api.markup.addMeasurementMarkups([{
+                        start: { positionX: center1.x, positionY: center1.y, positionZ: center1.z },
+                        end: { positionX: center2.x, positionY: center2.y, positionZ: center2.z },
+                        mainLineStart: { positionX: center1.x, positionY: center1.y, positionZ: center1.z },
+                        mainLineEnd: { positionX: center2.x, positionY: center2.y, positionZ: center2.z },
+                        color: { r: 255, g: 165, b: 0, a: 255 }
+                      }]);
+
+                      const distance = Math.sqrt(
+                        Math.pow(center2.x - center1.x, 2) +
+                        Math.pow(center2.y - center1.y, 2) +
+                        Math.pow(center2.z - center1.z, 2)
+                      );
+
+                      updateFunctionResult("twoObjectDistance", {
+                        status: 'success',
+                        result: `🟠 Keskpunktide vahe: ${distance.toFixed(0)} mm`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("twoObjectDistance", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🔲 Kõik 12 serva"
+                  result={functionResults["all12Edges"]}
+                  onClick={async () => {
+                    updateFunctionResult("all12Edges", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                        for (const bbox of boundingBoxes) {
+                          const b = bbox.boundingBox;
+                          const min = { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 };
+                          const max = { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 };
+
+                          const edges: any[] = [
+                            // Bottom face (4 edges) - BLUE
+                            { start: { positionX: min.x, positionY: min.y, positionZ: min.z }, end: { positionX: max.x, positionY: min.y, positionZ: min.z }, color: { r: 0, g: 100, b: 255, a: 255 } },
+                            { start: { positionX: max.x, positionY: min.y, positionZ: min.z }, end: { positionX: max.x, positionY: max.y, positionZ: min.z }, color: { r: 0, g: 100, b: 255, a: 255 } },
+                            { start: { positionX: max.x, positionY: max.y, positionZ: min.z }, end: { positionX: min.x, positionY: max.y, positionZ: min.z }, color: { r: 0, g: 100, b: 255, a: 255 } },
+                            { start: { positionX: min.x, positionY: max.y, positionZ: min.z }, end: { positionX: min.x, positionY: min.y, positionZ: min.z }, color: { r: 0, g: 100, b: 255, a: 255 } },
+                            // Top face (4 edges) - GREEN
+                            { start: { positionX: min.x, positionY: min.y, positionZ: max.z }, end: { positionX: max.x, positionY: min.y, positionZ: max.z }, color: { r: 0, g: 200, b: 100, a: 255 } },
+                            { start: { positionX: max.x, positionY: min.y, positionZ: max.z }, end: { positionX: max.x, positionY: max.y, positionZ: max.z }, color: { r: 0, g: 200, b: 100, a: 255 } },
+                            { start: { positionX: max.x, positionY: max.y, positionZ: max.z }, end: { positionX: min.x, positionY: max.y, positionZ: max.z }, color: { r: 0, g: 200, b: 100, a: 255 } },
+                            { start: { positionX: min.x, positionY: max.y, positionZ: max.z }, end: { positionX: min.x, positionY: min.y, positionZ: max.z }, color: { r: 0, g: 200, b: 100, a: 255 } },
+                            // Vertical edges (4 edges) - RED
+                            { start: { positionX: min.x, positionY: min.y, positionZ: min.z }, end: { positionX: min.x, positionY: min.y, positionZ: max.z }, color: { r: 255, g: 50, b: 50, a: 255 } },
+                            { start: { positionX: max.x, positionY: min.y, positionZ: min.z }, end: { positionX: max.x, positionY: min.y, positionZ: max.z }, color: { r: 255, g: 50, b: 50, a: 255 } },
+                            { start: { positionX: max.x, positionY: max.y, positionZ: min.z }, end: { positionX: max.x, positionY: max.y, positionZ: max.z }, color: { r: 255, g: 50, b: 50, a: 255 } },
+                            { start: { positionX: min.x, positionY: max.y, positionZ: min.z }, end: { positionX: min.x, positionY: max.y, positionZ: max.z }, color: { r: 255, g: 50, b: 50, a: 255 } },
+                          ];
+
+                          const measurements = edges.map(e => ({
+                            start: e.start,
+                            end: e.end,
+                            mainLineStart: e.start,
+                            mainLineEnd: e.end,
+                            color: e.color
+                          }));
+
+                          await api.markup.addMeasurementMarkups(measurements);
+
+                          const width = Math.abs(max.x - min.x);
+                          const depth = Math.abs(max.y - min.y);
+                          const height = Math.abs(max.z - min.z);
+
+                          updateFunctionResult("all12Edges", {
+                            status: 'success',
+                            result: `12 serva lisatud:\n🔵 Põhi: ${width.toFixed(0)}×${depth.toFixed(0)} mm\n🟢 Üla: ${width.toFixed(0)}×${depth.toFixed(0)} mm\n🔴 Kõrgus: ${height.toFixed(0)} mm`
+                          });
+                          return;
+                        }
+                      }
+                      throw new Error('Ei õnnestunud');
+                    } catch (e: any) {
+                      updateFunctionResult("all12Edges", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="✖️ Diagonaalid"
+                  result={functionResults["diagonals"]}
+                  onClick={async () => {
+                    updateFunctionResult("diagonals", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                        for (const bbox of boundingBoxes) {
+                          const b = bbox.boundingBox;
+                          const min = { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 };
+                          const max = { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 };
+
+                          const diagonals: any[] = [
+                            // Space diagonal - PURPLE
+                            { start: { positionX: min.x, positionY: min.y, positionZ: min.z }, end: { positionX: max.x, positionY: max.y, positionZ: max.z }, color: { r: 150, g: 0, b: 255, a: 255 } },
+                            // Bottom face diagonal - CYAN
+                            { start: { positionX: min.x, positionY: min.y, positionZ: min.z }, end: { positionX: max.x, positionY: max.y, positionZ: min.z }, color: { r: 0, g: 200, b: 200, a: 255 } },
+                            // Front face diagonal - YELLOW
+                            { start: { positionX: min.x, positionY: min.y, positionZ: min.z }, end: { positionX: max.x, positionY: min.y, positionZ: max.z }, color: { r: 255, g: 200, b: 0, a: 255 } },
+                            // Side face diagonal - PINK
+                            { start: { positionX: min.x, positionY: min.y, positionZ: min.z }, end: { positionX: min.x, positionY: max.y, positionZ: max.z }, color: { r: 255, g: 100, b: 150, a: 255 } },
+                          ];
+
+                          const measurements = diagonals.map(d => ({
+                            start: d.start,
+                            end: d.end,
+                            mainLineStart: d.start,
+                            mainLineEnd: d.end,
+                            color: d.color
+                          }));
+
+                          await api.markup.addMeasurementMarkups(measurements);
+
+                          const spaceDiag = Math.sqrt(
+                            Math.pow(max.x - min.x, 2) +
+                            Math.pow(max.y - min.y, 2) +
+                            Math.pow(max.z - min.z, 2)
+                          );
+                          const bottomDiag = Math.sqrt(
+                            Math.pow(max.x - min.x, 2) +
+                            Math.pow(max.y - min.y, 2)
+                          );
+
+                          updateFunctionResult("diagonals", {
+                            status: 'success',
+                            result: `Diagonaalid lisatud:\n🟣 Ruumi: ${spaceDiag.toFixed(0)} mm\n🔵 Põhi: ${bottomDiag.toFixed(0)} mm`
+                          });
+                          return;
+                        }
+                      }
+                      throw new Error('Ei õnnestunud');
+                    } catch (e: any) {
+                      updateFunctionResult("diagonals", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🗑️ Eemalda mõõtjooned"
+                  result={functionResults["removeMeasurements"]}
+                  onClick={async () => {
+                    updateFunctionResult("removeMeasurements", { status: 'pending' });
+                    try {
+                      await api.markup.removeMarkups(undefined);
+                      updateFunctionResult("removeMeasurements", {
+                        status: 'success',
+                        result: 'Kõik mõõtjooned eemaldatud'
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("removeMeasurements", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
               </div>
               <div style={{ marginTop: '12px', padding: '10px', background: '#fefce8', borderRadius: '6px', fontSize: '11px', color: '#854d0e' }}>
                 <strong>⚠️ Pööratud objektide mõõtmine:</strong>
