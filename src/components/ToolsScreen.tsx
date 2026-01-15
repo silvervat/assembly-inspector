@@ -591,35 +591,54 @@ export default function ToolsScreen({
     showToast(`${boltSummary.length} rida kopeeritud`, 'success');
   };
 
-  // Copy bolt summary as image (full table, not just visible part)
+  // Capture bolt summary as image (full table, regardless of extension width)
+  const captureTableAsCanvas = async (): Promise<HTMLCanvasElement | null> => {
+    if (!boltSummaryRef.current || boltSummary.length === 0) return null;
+
+    // Find the scrollable container and temporarily remove height restriction
+    const scrollContainer = boltSummaryRef.current.querySelector('div[style*="maxHeight"]') as HTMLElement;
+    const originalMaxHeight = scrollContainer?.style.maxHeight || '';
+    const originalOverflow = scrollContainer?.style.overflowY || '';
+
+    // Set minimum width for proper table rendering (390px is default extension width)
+    const originalWidth = boltSummaryRef.current.style.width;
+    const originalMinWidth = boltSummaryRef.current.style.minWidth;
+    boltSummaryRef.current.style.minWidth = '500px';
+    boltSummaryRef.current.style.width = 'auto';
+
+    if (scrollContainer) {
+      scrollContainer.style.maxHeight = 'none';
+      scrollContainer.style.overflowY = 'visible';
+    }
+
+    // Use html2canvas to capture the full table
+    const canvas = await html2canvas(boltSummaryRef.current, {
+      backgroundColor: '#ffffff',
+      scale: 2, // Higher resolution
+      logging: false,
+      width: Math.max(boltSummaryRef.current.scrollWidth, 500),
+      windowWidth: Math.max(boltSummaryRef.current.scrollWidth, 500),
+      windowHeight: boltSummaryRef.current.scrollHeight
+    });
+
+    // Restore original styles
+    boltSummaryRef.current.style.width = originalWidth;
+    boltSummaryRef.current.style.minWidth = originalMinWidth;
+    if (scrollContainer) {
+      scrollContainer.style.maxHeight = originalMaxHeight;
+      scrollContainer.style.overflowY = originalOverflow;
+    }
+
+    return canvas;
+  };
+
+  // Copy bolt summary as image
   const handleCopyAsImage = async () => {
     if (!boltSummaryRef.current || boltSummary.length === 0) return;
 
     try {
-      // Find the scrollable container and temporarily remove height restriction
-      const scrollContainer = boltSummaryRef.current.querySelector('div[style*="maxHeight"]') as HTMLElement;
-      const originalMaxHeight = scrollContainer?.style.maxHeight || '';
-      const originalOverflow = scrollContainer?.style.overflowY || '';
-
-      if (scrollContainer) {
-        scrollContainer.style.maxHeight = 'none';
-        scrollContainer.style.overflowY = 'visible';
-      }
-
-      // Use html2canvas to capture the full table
-      const canvas = await html2canvas(boltSummaryRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 2, // Higher resolution
-        logging: false,
-        windowWidth: boltSummaryRef.current.scrollWidth,
-        windowHeight: boltSummaryRef.current.scrollHeight
-      });
-
-      // Restore original styles
-      if (scrollContainer) {
-        scrollContainer.style.maxHeight = originalMaxHeight;
-        scrollContainer.style.overflowY = originalOverflow;
-      }
+      const canvas = await captureTableAsCanvas();
+      if (!canvas) return;
 
       // Convert to blob
       canvas.toBlob(async (blob) => {
@@ -640,6 +659,27 @@ export default function ToolsScreen({
     } catch (e) {
       console.error('Error copying as image:', e);
       showToast('Pildi kopeerimine ebaõnnestus', 'error');
+    }
+  };
+
+  // Download bolt summary as image
+  const handleDownloadAsImage = async () => {
+    if (!boltSummaryRef.current || boltSummary.length === 0) return;
+
+    try {
+      const canvas = await captureTableAsCanvas();
+      if (!canvas) return;
+
+      // Convert to data URL and trigger download
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `poldid_${new Date().toISOString().slice(0, 10)}.png`;
+      link.href = dataUrl;
+      link.click();
+      showToast('Pilt allalaaditud', 'success');
+    } catch (e) {
+      console.error('Error downloading image:', e);
+      showToast('Pildi allalaadimine ebaõnnestus', 'error');
     }
   };
 
@@ -732,6 +772,16 @@ export default function ToolsScreen({
             >
               <FiCamera size={14} />
               <span>Kopeeri pildina</span>
+            </button>
+
+            <button
+              className="tools-btn tools-btn-secondary"
+              onClick={handleDownloadAsImage}
+              disabled={boltSummary.length === 0}
+              style={{ background: '#e0e7ff' }}
+            >
+              <FiDownload size={14} />
+              <span>Salvesta pilt</span>
             </button>
 
             <button
