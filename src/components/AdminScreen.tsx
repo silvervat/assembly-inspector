@@ -6106,6 +6106,169 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               )}
             </div>
 
+            {/* DEVICE INFO section */}
+            <div className="function-section">
+              <h4>📱 Seadme info (Device Info)</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Tuvasta millise seadme ja brauseriga extensionit kasutatakse.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="🔍 Tuvasta seade"
+                  result={functionResults["detectDevice"]}
+                  onClick={async () => {
+                    updateFunctionResult("detectDevice", { status: 'pending' });
+                    try {
+                      const ua = navigator.userAgent;
+                      const platform = navigator.platform || 'Unknown';
+
+                      // Detect OS
+                      let os = 'Unknown OS';
+                      if (ua.includes('Windows NT 10') || ua.includes('Windows NT 11')) {
+                        os = ua.includes('Windows NT 11') ? 'Windows 11' : 'Windows 10/11';
+                      } else if (ua.includes('Windows NT')) os = 'Windows';
+                      else if (ua.includes('Mac OS X')) {
+                        const match = ua.match(/Mac OS X (\d+[._]\d+)/);
+                        os = match ? `macOS ${match[1].replace('_', '.')}` : 'macOS';
+                      }
+                      else if (ua.includes('iPhone')) os = 'iOS (iPhone)';
+                      else if (ua.includes('iPad')) os = 'iPadOS';
+                      else if (ua.includes('Android')) {
+                        const match = ua.match(/Android (\d+(\.\d+)?)/);
+                        os = match ? `Android ${match[1]}` : 'Android';
+                      }
+                      else if (ua.includes('Linux')) os = 'Linux';
+                      else if (ua.includes('CrOS')) os = 'Chrome OS';
+
+                      // Detect Browser
+                      let browser = 'Unknown Browser';
+                      if (ua.includes('Edg/')) {
+                        const match = ua.match(/Edg\/(\d+)/);
+                        browser = match ? `Microsoft Edge ${match[1]}` : 'Microsoft Edge';
+                      } else if (ua.includes('Chrome/')) {
+                        const match = ua.match(/Chrome\/(\d+)/);
+                        browser = match ? `Google Chrome ${match[1]}` : 'Google Chrome';
+                      } else if (ua.includes('Firefox/')) {
+                        const match = ua.match(/Firefox\/(\d+)/);
+                        browser = match ? `Mozilla Firefox ${match[1]}` : 'Mozilla Firefox';
+                      } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
+                        const match = ua.match(/Version\/(\d+)/);
+                        browser = match ? `Safari ${match[1]}` : 'Safari';
+                      }
+
+                      // Detect Device Type
+                      let deviceType = 'Desktop';
+                      if (ua.includes('Mobile') || ua.includes('iPhone')) deviceType = 'Mobile';
+                      else if (ua.includes('Tablet') || ua.includes('iPad')) deviceType = 'Tablet';
+
+                      // Screen info
+                      const screenWidth = window.screen.width;
+                      const screenHeight = window.screen.height;
+                      const viewportWidth = window.innerWidth;
+                      const viewportHeight = window.innerHeight;
+                      const pixelRatio = window.devicePixelRatio || 1;
+
+                      // Touch support
+                      const touchSupport = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+                      // Memory (if available)
+                      const memory = (navigator as any).deviceMemory;
+
+                      // Connection (if available)
+                      const connection = (navigator as any).connection;
+                      const connectionType = connection?.effectiveType || 'Unknown';
+
+                      // Language
+                      const language = navigator.language || 'Unknown';
+
+                      const result = {
+                        '🖥️ Operatsioonisüsteem': os,
+                        '🌐 Brauser': browser,
+                        '📱 Seadme tüüp': deviceType,
+                        '📐 Ekraani suurus': `${screenWidth} × ${screenHeight} px`,
+                        '📏 Viewport suurus': `${viewportWidth} × ${viewportHeight} px`,
+                        '🔍 Pixel ratio': `${pixelRatio}x`,
+                        '👆 Touch support': touchSupport ? 'Jah' : 'Ei',
+                        '🧠 RAM (hinnang)': memory ? `${memory} GB` : 'N/A',
+                        '📶 Ühendus': connectionType,
+                        '🌍 Keel': language,
+                        '📋 Platform': platform,
+                      };
+
+                      updateFunctionResult("detectDevice", {
+                        status: 'success',
+                        result: Object.entries(result).map(([k, v]) => `${k}: ${v}`).join('\n')
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("detectDevice", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📋 Kopeeri User Agent"
+                  result={functionResults["copyUserAgent"]}
+                  onClick={async () => {
+                    updateFunctionResult("copyUserAgent", { status: 'pending' });
+                    try {
+                      const ua = navigator.userAgent;
+                      await navigator.clipboard.writeText(ua);
+                      updateFunctionResult("copyUserAgent", {
+                        status: 'success',
+                        result: `Kopeeritud!\n${ua.substring(0, 100)}...`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("copyUserAgent", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📊 Võimekuse test"
+                  result={functionResults["performanceTest"]}
+                  onClick={async () => {
+                    updateFunctionResult("performanceTest", { status: 'pending' });
+                    try {
+                      // Simple performance test
+                      const start = performance.now();
+
+                      // Test 1: Array operations
+                      const arr = Array.from({ length: 100000 }, (_, i) => i);
+                      arr.sort(() => Math.random() - 0.5);
+                      const arrTime = performance.now() - start;
+
+                      // Test 2: DOM operations
+                      const start2 = performance.now();
+                      const div = document.createElement('div');
+                      for (let i = 0; i < 1000; i++) {
+                        const child = document.createElement('span');
+                        child.textContent = `Test ${i}`;
+                        div.appendChild(child);
+                      }
+                      const domTime = performance.now() - start2;
+
+                      // Test 3: JSON operations
+                      const start3 = performance.now();
+                      const obj = { data: arr.slice(0, 10000) };
+                      const json = JSON.stringify(obj);
+                      JSON.parse(json);
+                      const jsonTime = performance.now() - start3;
+
+                      const totalTime = arrTime + domTime + jsonTime;
+                      let rating = 'Kiire 🚀';
+                      if (totalTime > 500) rating = 'Keskmine ⚡';
+                      if (totalTime > 1000) rating = 'Aeglane 🐌';
+
+                      updateFunctionResult("performanceTest", {
+                        status: 'success',
+                        result: `Hinnang: ${rating}\n\n📊 Tulemused:\n• Array (100k): ${arrTime.toFixed(0)} ms\n• DOM (1k): ${domTime.toFixed(0)} ms\n• JSON (10k): ${jsonTime.toFixed(0)} ms\n\nKokku: ${totalTime.toFixed(0)} ms`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("performanceTest", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
             {/* MEASUREMENT section */}
             <div className="function-section">
               <h4>📏 Mõõtmine (Measurement)</h4>
