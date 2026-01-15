@@ -154,7 +154,8 @@ export default function IssuesScreen({
   tcUserEmail,
   tcUserName,
   onBackToMenu,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: IssuesScreenProps) {
   // ============================================
   // STATE
@@ -1239,6 +1240,7 @@ export default function IssuesScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="issues"
         user={user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       >

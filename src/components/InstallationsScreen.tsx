@@ -384,7 +384,8 @@ export default function InstallationsScreen({
   tcUserEmail,
   tcUserName,
   onBackToMenu,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: InstallationsScreenProps) {
   // Property mappings for this project
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -4604,6 +4605,7 @@ export default function InstallationsScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="installations"
         user={user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       />
