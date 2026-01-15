@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.569';
+export const APP_VERSION = '3.0.570';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -426,7 +426,7 @@ export default function App() {
   };
 
   // Color all model objects white using database - optimized with cache like InstallationsScreen
-  const [colorWhiteProgress, setColorWhiteProgress] = useState<string | null>(null);
+  const [colorWhiteProgress, setColorWhiteProgress] = useState<{ message: string; percent: number } | null>(null);
 
   const handleColorModelWhite = useCallback(async () => {
     if (!api || !projectId) {
@@ -441,12 +441,22 @@ export default function App() {
       let foundByLowercase = colorWhiteCacheRef.current;
 
       if (foundByLowercase.size === 0) {
-        setColorWhiteProgress('Laen andmebaasist...');
+        setColorWhiteProgress({ message: 'Valmistan ette värvimist', percent: 0 });
 
         // Fetch from database
         const PAGE_SIZE = 5000;
         const allGuids: string[] = [];
         let offset = 0;
+        let fetchedCount = 0;
+
+        // First get count for progress
+        const { count } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc', { count: 'exact', head: true })
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null);
+
+        const totalCount = count || 0;
 
         while (true) {
           const { data, error } = await supabase
@@ -466,7 +476,13 @@ export default function App() {
           for (const obj of data) {
             if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
           }
+          fetchedCount += data.length;
           offset += data.length;
+
+          // Update progress (0-50% for fetching)
+          const fetchPercent = totalCount > 0 ? Math.round((fetchedCount / totalCount) * 50) : 25;
+          setColorWhiteProgress({ message: 'Valmistan ette värvimist', percent: fetchPercent });
+
           if (data.length < PAGE_SIZE) break;
         }
 
@@ -477,7 +493,7 @@ export default function App() {
           return;
         }
 
-        setColorWhiteProgress('Otsin mudelist...');
+        setColorWhiteProgress({ message: 'Valmistan ette värvimist', percent: 50 });
 
         // Find objects in loaded models
         const foundObjects = await findObjectsInLoadedModels(api, allGuids);
@@ -499,14 +515,16 @@ export default function App() {
         return;
       }
 
-      setColorWhiteProgress('Värvin...');
-
       // Group by model
       const whiteByModel: Record<string, number[]> = {};
       for (const [, found] of foundByLowercase) {
         if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
         whiteByModel[found.modelId].push(found.runtimeId);
       }
+
+      // Count total objects for coloring progress
+      const totalToColor = foundByLowercase.size;
+      let coloredCount = 0;
 
       // Color in large batches (5000 like InstallationsScreen)
       const BATCH_SIZE = 5000;
@@ -519,6 +537,11 @@ export default function App() {
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: white }
           );
+          coloredCount += batch.length;
+
+          // Update progress (50-100% for coloring)
+          const colorPercent = 50 + Math.round((coloredCount / totalToColor) * 50);
+          setColorWhiteProgress({ message: 'Värvin mudelit', percent: colorPercent });
         }
       }
 
@@ -747,15 +770,21 @@ export default function App() {
     </div>
   );
 
-  // Navigation overlay - shown when navigating from EOS2
-  // Color white progress overlay
+  // Color white progress overlay - centered floating message
   const ColorWhiteOverlay = () => {
     if (!colorWhiteProgress) return null;
 
     return (
       <div className="color-white-overlay">
-        <div className="color-white-progress">
-          ⬜ {colorWhiteProgress}
+        <div className="color-white-card">
+          <div className="color-white-message">{colorWhiteProgress.message}</div>
+          <div className="color-white-bar-container">
+            <div
+              className="color-white-bar"
+              style={{ width: `${colorWhiteProgress.percent}%` }}
+            />
+          </div>
+          <div className="color-white-percent">{colorWhiteProgress.percent}%</div>
         </div>
       </div>
     );

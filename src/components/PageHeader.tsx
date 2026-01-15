@@ -292,8 +292,7 @@ export default function PageHeader({
                         className="submenu-item"
                         onClick={() => handleNavigate('tools')}
                       >
-                        <FiTool size={16} />
-                        <span>Kõik tööriistad</span>
+                        Kõik tööriistad
                       </button>
                       <button
                         className="submenu-item"
@@ -303,8 +302,7 @@ export default function PageHeader({
                           onColorModelWhite?.();
                         }}
                       >
-                        ⬜
-                        <span>Värvi mudel valgeks</span>
+                        Värvi mudel valgeks
                       </button>
                     </div>
                   )}
