@@ -1802,103 +1802,117 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         product_name: string | null;
       }[] = [];
 
-      // Process the selection (parent assemblies only due to Assembly Selection mode)
+      // Process the selection with PARALLEL batches for speed
+      const BATCH_SIZE = 50;
+      const PARALLEL_BATCHES = 4;
       let processed = 0;
+
       for (const sel of selection) {
         const modelId = sel.modelId;
         const runtimeIds = sel.objectRuntimeIds || [];
 
         if (runtimeIds.length === 0) continue;
 
-        // Process in batches
-        const BATCH_SIZE = 100;
+        // Create all batches
+        const batches: number[][] = [];
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
-          processed += batch.length;
+          batches.push(runtimeIds.slice(i, i + BATCH_SIZE));
+        }
 
-          setModelObjectsStatus(`Laadin propertiseid... ${processed}/${assemblyCount}`);
+        // Process batches in parallel groups
+        for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+          const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+          const batchCount = parallelBatches.reduce((sum, b) => sum + b.length, 0);
 
-          // Get properties for batch
-          let propsArray: any[] = [];
-          try {
-            propsArray = await (api.viewer as any).getObjectProperties(modelId, batch, { includeHidden: true });
-          } catch (e) {
-            console.warn('Error getting properties:', e);
-            continue;
-          }
+          setModelObjectsStatus(`Laadin propertiseid... ${processed}/${assemblyCount} (${PARALLEL_BATCHES}x paralleelselt)`);
 
-          // Get GUIDs for batch
-          let guidsArray: string[] = [];
-          try {
-            guidsArray = await api.viewer.convertToObjectIds(modelId, batch);
-          } catch (e) {
-            console.warn('Error getting GUIDs:', e);
-          }
+          // Process multiple batches in parallel
+          const batchResults = await Promise.all(
+            parallelBatches.map(async (batch) => {
+              const records: typeof allRecords = [];
 
-          // Process each assembly
-          for (let j = 0; j < batch.length; j++) {
-            const runtimeId = batch[j];
-            const props = propsArray[j];
-            const ifcGuid = guidsArray[j] || '';
+              try {
+                // Fetch properties and GUIDs in parallel
+                const [propsArray, guidsArray] = await Promise.all([
+                  (api.viewer as any).getObjectProperties(modelId, batch, { includeHidden: true }).catch(() => []),
+                  api.viewer.convertToObjectIds(modelId, batch).catch(() => [] as string[])
+                ]);
 
-            let assemblyMark: string | null = null;
-            let productName: string | null = null;
+                // Process each assembly in this batch
+                for (let j = 0; j < batch.length; j++) {
+                  const runtimeId = batch[j];
+                  const props = propsArray[j];
+                  const ifcGuid = guidsArray[j] || '';
 
-            // Check properties array structure
-            if (props?.properties && Array.isArray(props.properties)) {
-              for (const pset of props.properties) {
-                const setName = (pset as any).set || (pset as any).name || '';
-                const setNameNorm = normalize(setName);
-                const propArray = (pset as any).properties || [];
+                  if (!ifcGuid) continue;
 
-                for (const prop of propArray) {
-                  const propNameOriginal = (prop as any).name || '';
-                  const propNameNorm = normalize(propNameOriginal);
-                  const propValue = (prop as any).displayValue ?? (prop as any).value;
+                  let assemblyMark: string | null = null;
+                  let productName: string | null = null;
 
-                  if (!propValue) continue;
+                  // Check properties array structure
+                  if (props?.properties && Array.isArray(props.properties)) {
+                    for (const pset of props.properties) {
+                      const setName = (pset as any).set || (pset as any).name || '';
+                      const setNameNorm = normalize(setName);
+                      const propArray = (pset as any).properties || [];
 
-                  // Assembly Mark - use configured mapping OR common fallback names
-                  if (!assemblyMark && setNameNorm === mappingSetNorm) {
-                    // Check exact match first
-                    if (propNameNorm === mappingPropNorm) {
-                      assemblyMark = String(propValue);
-                    }
-                    // Fallback: check for common Tekla property names
-                    else if (
-                      propNameOriginal === 'Assembly/Cast unit Mark' ||
-                      propNameOriginal === 'Cast_unit_Mark' ||
-                      propNameNorm.includes('castunitmark') ||
-                      propNameNorm.includes('assemblymark')
-                    ) {
-                      assemblyMark = String(propValue);
+                      for (const prop of propArray) {
+                        const propNameOriginal = (prop as any).name || '';
+                        const propNameNorm = normalize(propNameOriginal);
+                        const propValue = (prop as any).displayValue ?? (prop as any).value;
+
+                        if (!propValue) continue;
+
+                        // Assembly Mark - use configured mapping OR common fallback names
+                        if (!assemblyMark && setNameNorm === mappingSetNorm) {
+                          if (propNameNorm === mappingPropNorm) {
+                            assemblyMark = String(propValue);
+                          } else if (
+                            propNameOriginal === 'Assembly/Cast unit Mark' ||
+                            propNameOriginal === 'Cast_unit_Mark' ||
+                            propNameNorm.includes('castunitmark') ||
+                            propNameNorm.includes('assemblymark')
+                          ) {
+                            assemblyMark = String(propValue);
+                          }
+                        }
+
+                        // Product name - check multiple locations
+                        if (!productName) {
+                          if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                            productName = String(propValue);
+                          } else if (propNameOriginal === 'Product_Name' || propNameOriginal === 'ProductName') {
+                            productName = String(propValue);
+                          }
+                        }
+                      }
                     }
                   }
 
-                  // Product name - check multiple locations
-                  if (!productName) {
-                    if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                      productName = String(propValue);
-                    } else if (propNameOriginal === 'Product_Name' || propNameOriginal === 'ProductName') {
-                      productName = String(propValue);
-                    }
-                  }
+                  records.push({
+                    trimble_project_id: projectId,
+                    model_id: modelId,
+                    object_runtime_id: runtimeId,
+                    guid: ifcGuid,
+                    guid_ifc: ifcGuid,
+                    assembly_mark: assemblyMark,
+                    product_name: productName
+                  });
                 }
+              } catch (e) {
+                console.warn('Batch processing error:', e);
               }
-            }
 
-            if (ifcGuid) {
-              allRecords.push({
-                trimble_project_id: projectId,
-                model_id: modelId,
-                object_runtime_id: runtimeId,
-                guid: ifcGuid,
-                guid_ifc: ifcGuid,
-                assembly_mark: assemblyMark,
-                product_name: productName
-              });
-            }
+              return records;
+            })
+          );
+
+          // Collect results from all parallel batches
+          for (const records of batchResults) {
+            allRecords.push(...records);
           }
+
+          processed += batchCount;
         }
       }
 
@@ -1965,11 +1979,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       }
 
       // Insert deduplicated records
-      const BATCH_SIZE = 1000;
+      const INSERT_BATCH_SIZE = 1000;
       let savedCount = 0;
 
-      for (let i = 0; i < uniqueRecords.length; i += BATCH_SIZE) {
-        const batch = uniqueRecords.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < uniqueRecords.length; i += INSERT_BATCH_SIZE) {
+        const batch = uniqueRecords.slice(i, i + INSERT_BATCH_SIZE);
         setModelObjectsStatus(`Salvestan... ${savedCount}/${uniqueRecords.length}`);
 
         const { error } = await supabase
