@@ -333,8 +333,41 @@ body {
 .page-header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex-shrink: 0;
+}
+
+/* Header action buttons - clean icon buttons without borders */
+.page-header-actions .view-toggle-btn,
+.page-header-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+  transition: all 0.15s;
+}
+
+.page-header-actions .view-toggle-btn:hover,
+.page-header-actions button:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-text-primary);
+}
+
+.page-header-actions .view-toggle-btn.active {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.page-header-actions .view-toggle-btn:disabled,
+.page-header-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* INSPECTOR SCREEN */
