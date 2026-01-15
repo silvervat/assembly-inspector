@@ -210,7 +210,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Property Mappings state (configurable Tekla property locations)
   const [propertyMappings, setPropertyMappings] = useState({
     assembly_mark_set: 'Tekla Assembly',
-    assembly_mark_prop: 'Cast_unit_Mark',
+    assembly_mark_prop: 'Assembly/Cast unit Mark',
     position_code_set: 'Tekla Assembly',
     position_code_prop: 'Cast_unit_Position_Code',
     top_elevation_set: 'Tekla Assembly',
@@ -1544,13 +1544,17 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               if (setName === 'Reference Object' && ps.properties) {
                 msGuid = ps.properties['GUID'] as string || msGuid;
               }
-              // Use configured mapping for assembly mark
+              // Use configured mapping for assembly mark + fallbacks
               if (setNameNorm === mappingSetNorm && ps.properties) {
-                const propValue = ps.properties[propertyMappings.assembly_mark_prop];
+                // Try configured property name first
+                let propValue = ps.properties[propertyMappings.assembly_mark_prop];
+                // Fallback to common property names
+                if (!propValue) propValue = ps.properties['Assembly/Cast unit Mark'];
+                if (!propValue) propValue = ps.properties['Cast_unit_Mark'];
                 if (propValue) assemblyMark = String(propValue);
               }
               if (setName === 'Product' && ps.properties) {
-                productName = ps.properties['Name'] as string || productName;
+                productName = ps.properties['Name'] as string || ps.properties['Product_Name'] as string || productName;
               }
             }
           }
@@ -1574,14 +1578,30 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   msGuid = String(propValue);
                 }
 
-                // Assembly Mark - use configured mapping
-                if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
-                  assemblyMark = String(propValue);
+                // Assembly Mark - use configured mapping OR common fallback names
+                if (!assemblyMark && setNameNorm === mappingSetNorm) {
+                  // Check exact match first
+                  if (propNameNorm === mappingPropNorm) {
+                    assemblyMark = String(propValue);
+                  }
+                  // Fallback: check for common Tekla property names
+                  else if (
+                    propNameOriginal === 'Assembly/Cast unit Mark' ||
+                    propNameOriginal === 'Cast_unit_Mark' ||
+                    propNameNorm.includes('castunitmark') ||
+                    propNameNorm.includes('assemblymark')
+                  ) {
+                    assemblyMark = String(propValue);
+                  }
                 }
 
-                // Product name
-                if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                  productName = String(propValue);
+                // Product name - check multiple locations
+                if (!productName) {
+                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                    productName = String(propValue);
+                  } else if (propNameOriginal === 'Product_Name' || propNameOriginal === 'ProductName') {
+                    productName = String(propValue);
+                  }
                 }
               }
             }
@@ -1838,14 +1858,30 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
                   if (!propValue) continue;
 
-                  // Assembly Mark using configured mapping
-                  if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
-                    assemblyMark = String(propValue);
+                  // Assembly Mark - use configured mapping OR common fallback names
+                  if (!assemblyMark && setNameNorm === mappingSetNorm) {
+                    // Check exact match first
+                    if (propNameNorm === mappingPropNorm) {
+                      assemblyMark = String(propValue);
+                    }
+                    // Fallback: check for common Tekla property names
+                    else if (
+                      propNameOriginal === 'Assembly/Cast unit Mark' ||
+                      propNameOriginal === 'Cast_unit_Mark' ||
+                      propNameNorm.includes('castunitmark') ||
+                      propNameNorm.includes('assemblymark')
+                    ) {
+                      assemblyMark = String(propValue);
+                    }
                   }
 
-                  // Product name
-                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                    productName = String(propValue);
+                  // Product name - check multiple locations
+                  if (!productName) {
+                    if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                      productName = String(propValue);
+                    } else if (propNameOriginal === 'Product_Name' || propNameOriginal === 'ProductName') {
+                      productName = String(propValue);
+                    }
                   }
                 }
               }
@@ -2753,7 +2789,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       if (data) {
         setPropertyMappings({
           assembly_mark_set: data.assembly_mark_set || 'Tekla Assembly',
-          assembly_mark_prop: data.assembly_mark_prop || 'Cast_unit_Mark',
+          assembly_mark_prop: data.assembly_mark_prop || 'Assembly/Cast unit Mark',
           position_code_set: data.position_code_set || 'Tekla Assembly',
           position_code_prop: data.position_code_prop || 'Cast_unit_Position_Code',
           top_elevation_set: data.top_elevation_set || 'Tekla Assembly',
@@ -5783,12 +5819,167 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     cursor: 'pointer'
                   }}
                 >
-                  {modelSearchLoading ? '⏳ Laen...' : '📋 Laadi kõik markid (aeglane!)'}
+                  {modelSearchLoading ? '⏳ Laen...' : '📋 Laadi kõik (aeglane)'}
+                </button>
+                <button
+                  onClick={async () => {
+                    // FAST VERSION: Uses localStorage cache + Assembly Selection + Parallel batches
+                    setModelSearchLoading(true);
+                    setModelSearchError(null);
+                    try {
+                      const cacheKey = `model_marks_${projectId}`;
+
+                      // Try localStorage first
+                      const cached = localStorage.getItem(cacheKey);
+                      if (cached) {
+                        try {
+                          const parsed = JSON.parse(cached);
+                          if (parsed.marks && Array.isArray(parsed.marks) && parsed.marks.length > 0) {
+                            // Check if cache is less than 1 hour old
+                            const cacheAge = Date.now() - (parsed.timestamp || 0);
+                            if (cacheAge < 60 * 60 * 1000) {
+                              setModelMarksCache(parsed.marks);
+                              setModelSearchResults(parsed.marks.map((m: any) => ({ ...m, similarity: 100 })).sort((a: any, b: any) => a.mark.localeCompare(b.mark)));
+                              setModelSearchLoading(false);
+                              return;
+                            }
+                          }
+                        } catch (e) {
+                          console.warn('Cache parse error:', e);
+                        }
+                      }
+
+                      // Enable Assembly Selection to get only parent assemblies
+                      await (api.viewer as any).setSettings?.({ assemblySelection: true });
+
+                      // Get all objects
+                      const allObjs = await api.viewer.getObjects();
+                      if (!allObjs || allObjs.length === 0) throw new Error('Mudeleid pole laetud!');
+
+                      // Select ALL objects - with Assembly Selection ON, this consolidates to parents
+                      const modelObjectIds: { modelId: string; objectRuntimeIds: number[] }[] = [];
+                      for (const modelObj of allObjs) {
+                        const objects = (modelObj as any).objects || [];
+                        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+                        if (runtimeIds.length > 0) {
+                          modelObjectIds.push({ modelId: modelObj.modelId, objectRuntimeIds: runtimeIds });
+                        }
+                      }
+
+                      await api.viewer.setSelection({ modelObjectIds }, 'set');
+                      await new Promise(r => setTimeout(r, 200));
+
+                      // Get selection back - now only parent assemblies
+                      const selection = await api.viewer.getSelection();
+                      if (!selection || selection.length === 0) throw new Error('Valik tühi!');
+
+                      const collectedMarks: typeof modelMarksCache = [];
+
+                      // Process with PARALLEL batches
+                      const BATCH_SIZE = 50;
+                      const PARALLEL_BATCHES = 4;
+
+                      for (const sel of selection) {
+                        const modelId = sel.modelId;
+                        const runtimeIds = sel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        // Create batches
+                        const batches: number[][] = [];
+                        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                          batches.push(runtimeIds.slice(i, i + BATCH_SIZE));
+                        }
+
+                        // Process batches in parallel groups
+                        for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+                          const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+
+                          const results = await Promise.all(
+                            parallelBatches.map(async (batch) => {
+                              const [props, guids] = await Promise.all([
+                                api.viewer.getObjectProperties(modelId, batch),
+                                api.viewer.convertToObjectIds(modelId, batch).catch(() => [] as string[])
+                              ]);
+
+                              const marks: typeof collectedMarks = [];
+                              for (let j = 0; j < batch.length; j++) {
+                                const p = props[j];
+                                const guidIfc = guids[j] || '';
+                                if (!p?.properties || !guidIfc) continue;
+
+                                let mark = '';
+                                for (const pset of p.properties as any[]) {
+                                  const setName = (pset as any).name || '';
+                                  if (setName !== 'Tekla Assembly' && setName !== 'Tekla Common') continue;
+                                  for (const prop of (pset as any).properties || []) {
+                                    if (prop.name === 'Assembly/Cast unit Mark' || prop.name === 'Cast_unit_Mark') {
+                                      mark = String(prop.displayValue ?? prop.value ?? '');
+                                      break;
+                                    }
+                                  }
+                                  if (mark) break;
+                                }
+
+                                if (mark && guidIfc) {
+                                  marks.push({ mark, guid_ifc: guidIfc, modelId, runtimeId: batch[j] });
+                                }
+                              }
+                              return marks;
+                            })
+                          );
+
+                          for (const r of results) {
+                            collectedMarks.push(...r);
+                          }
+                        }
+                      }
+
+                      // Clear selection
+                      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
+                      if (collectedMarks.length === 0) {
+                        throw new Error('Ühtegi Cast Unit Mark väärtust ei leitud!');
+                      }
+
+                      // Save to localStorage
+                      try {
+                        localStorage.setItem(cacheKey, JSON.stringify({
+                          marks: collectedMarks,
+                          timestamp: Date.now()
+                        }));
+                      } catch (e) {
+                        console.warn('Could not save to localStorage:', e);
+                      }
+
+                      setModelMarksCache(collectedMarks);
+                      setModelSearchResults(collectedMarks.map(m => ({ ...m, similarity: 100 })).sort((a, b) => a.mark.localeCompare(b.mark)));
+                    } catch (e: any) {
+                      console.error('Fast load error:', e);
+                      setModelSearchError(e.message || 'Viga');
+                    } finally {
+                      setModelSearchLoading(false);
+                    }
+                  }}
+                  disabled={modelSearchLoading}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#dcfce7',
+                    border: '1px solid #22c55e',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {modelSearchLoading ? '⏳ Laen...' : '⚡ Laadi KIIRELT (cache)'}
                 </button>
                 <button
                   onClick={() => {
+                    // Clear localStorage cache
+                    const cacheKey = `model_marks_${projectId}`;
+                    localStorage.removeItem(cacheKey);
                     setModelSearchResults([]);
                     setModelSearchInput('');
+                    setModelMarksCache([]);
                   }}
                   style={{
                     padding: '6px 10px',
