@@ -303,6 +303,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Reference to external GUID Controller window
   const guidControllerWindowRef = useRef<Window | null>(null);
 
+  // Cast Unit Mark search state
+  const [markSearchInput, setMarkSearchInput] = useState('');
+  const [markSearchResults, setMarkSearchResults] = useState<Array<{
+    mark: string;
+    runtimeId: number;
+    modelId: string;
+    similarity: number;
+  }>>([]);
+  const [markSearchLoading, setMarkSearchLoading] = useState(false);
+  const [allMarksCache, setAllMarksCache] = useState<Array<{
+    mark: string;
+    runtimeId: number;
+    modelId: string;
+  }>>([]);
+
   // Assembly & Bolts list state
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
   const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
@@ -5168,6 +5183,402 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   onClick={() => testFunction("getUI()", () => api.ui.getUI())}
                 />
               </div>
+            </div>
+
+            {/* EXTENSION SIZE section */}
+            <div className="function-section">
+              <h4>📐 Extensioni suurus</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Mõõda ja jälgi extensioni paneeli suurust pikslites.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="📏 Mõõda laius"
+                  result={functionResults["measureWidth"]}
+                  onClick={() => testFunction("measureWidth", async () => {
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
+                    const clientWidth = document.documentElement.clientWidth;
+                    const clientHeight = document.documentElement.clientHeight;
+                    const devicePixelRatio = window.devicePixelRatio || 1;
+                    return {
+                      innerWidth: width,
+                      innerHeight: height,
+                      clientWidth,
+                      clientHeight,
+                      devicePixelRatio,
+                      actualWidth: Math.round(width * devicePixelRatio),
+                      orientation: width > height ? 'landscape' : 'portrait'
+                    };
+                  })}
+                />
+                <FunctionButton
+                  name="📱 Screen info"
+                  result={functionResults["screenInfo"]}
+                  onClick={() => testFunction("screenInfo", async () => ({
+                    screenWidth: window.screen.width,
+                    screenHeight: window.screen.height,
+                    availWidth: window.screen.availWidth,
+                    availHeight: window.screen.availHeight,
+                    colorDepth: window.screen.colorDepth,
+                    pixelDepth: window.screen.pixelDepth,
+                    orientation: (window.screen as any).orientation?.type || 'unknown'
+                  }))}
+                />
+                <FunctionButton
+                  name="🔄 Live monitor"
+                  result={functionResults["liveMonitor"]}
+                  onClick={() => testFunction("liveMonitor", async () => {
+                    // Add resize listener and update every 500ms for 10 seconds
+                    let count = 0;
+                    const maxCount = 20;
+                    const interval = setInterval(() => {
+                      count++;
+                      const w = window.innerWidth;
+                      const h = window.innerHeight;
+                      console.log(`📐 Extension size: ${w}x${h}px (${count}/${maxCount})`);
+                      if (count >= maxCount) {
+                        clearInterval(interval);
+                        console.log('📐 Monitor stopped');
+                      }
+                    }, 500);
+                    return `Monitoring ${maxCount * 0.5}s... Check console (F12)`;
+                  })}
+                />
+                <FunctionButton
+                  name="🖥️ Extension layout"
+                  result={functionResults["extensionLayout"]}
+                  onClick={() => testFunction("extensionLayout", async () => {
+                    // Try to get extension state from TC API
+                    const uiState = await api.ui.getUI();
+                    return {
+                      uiState,
+                      windowSize: { width: window.innerWidth, height: window.innerHeight },
+                      sidePanelEstimate: window.innerWidth < 400 ? 'narrow' : window.innerWidth < 500 ? 'medium' : 'wide'
+                    };
+                  })}
+                />
+              </div>
+              <div style={{ marginTop: '12px', padding: '10px', background: '#f8fafc', borderRadius: '6px', fontSize: '11px', color: '#64748b' }}>
+                <strong>NB:</strong> Trimble Connecti SidePanel laius on fikseeritud (~350-450px) ja seda ei saa API kaudu muuta.
+                Tahvlil landscape režiimis on see sama laiusega kui desktopil. Lahendused:
+                <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
+                  <li>Kasutage responsiivseid komponente mis kohanduvad laiusega</li>
+                  <li>Väiksema teksti/paddingu stiilid kitsamal laiusel</li>
+                  <li>Horisontaalne kerimine tabelites</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* CAST UNIT MARK SEARCH section */}
+            <div className="function-section">
+              <h4>🔍 Cast Unit Mark otsing</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Otsi mudelist detaile Cast Unit Mark järgi. Näitab ka sarnaseid tulemusi.
+              </p>
+
+              {/* Search input */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  value={markSearchInput}
+                  onChange={(e) => setMarkSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Trigger search
+                      const searchBtn = document.getElementById('mark-search-btn');
+                      searchBtn?.click();
+                    }
+                  }}
+                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '13px'
+                  }}
+                />
+                <button
+                  id="mark-search-btn"
+                  onClick={async () => {
+                    if (!markSearchInput.trim()) {
+                      setMarkSearchResults([]);
+                      return;
+                    }
+
+                    setMarkSearchLoading(true);
+                    try {
+                      const searchTerm = markSearchInput.trim().toLowerCase();
+
+                      // Use cache if available, otherwise fetch all marks
+                      let marks = allMarksCache;
+                      if (marks.length === 0) {
+                        // Get all objects from model
+                        const allModelObjects = await api.viewer.getObjects();
+                        if (!allModelObjects || allModelObjects.length === 0) {
+                          setMarkSearchResults([]);
+                          setMarkSearchLoading(false);
+                          return;
+                        }
+
+                        marks = [];
+                        for (const modelObj of allModelObjects) {
+                          const modelId = modelObj.modelId;
+                          const objects = (modelObj as any).objects || [];
+                          const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                          if (runtimeIds.length > 0) {
+                            // Get properties in batches
+                            const batchSize = 100;
+                            for (let i = 0; i < runtimeIds.length; i += batchSize) {
+                              const batch = runtimeIds.slice(i, i + batchSize);
+                              const props = await api.viewer.getObjectProperties(modelId, batch);
+
+                              for (let j = 0; j < props.length; j++) {
+                                const p = props[j];
+                                if (p?.properties && Array.isArray(p.properties)) {
+                                  for (const pset of p.properties as any[]) {
+                                    if (pset.name === 'Tekla Assembly') {
+                                      for (const prop of pset.properties || []) {
+                                        if (prop.name === 'Assembly/Cast unit Mark' && prop.value) {
+                                          marks.push({
+                                            mark: String(prop.value),
+                                            runtimeId: batch[j],
+                                            modelId
+                                          });
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        setAllMarksCache(marks);
+                      }
+
+                      // Calculate similarity and filter results
+                      const calculateSimilarity = (mark: string, search: string): number => {
+                        const markLower = mark.toLowerCase();
+                        // Exact match
+                        if (markLower === search) return 100;
+                        // Starts with
+                        if (markLower.startsWith(search)) return 90;
+                        // Contains
+                        if (markLower.includes(search)) return 70;
+                        // Check if numbers match (for patterns like S-101 searching for 101)
+                        const searchNums = search.match(/\d+/g)?.join('') || '';
+                        const markNums = markLower.match(/\d+/g)?.join('') || '';
+                        if (searchNums && markNums && markNums.includes(searchNums)) return 50;
+                        // Check letter prefix match (S-101 vs S-102)
+                        const searchPrefix = search.replace(/\d+/g, '').trim();
+                        const markPrefix = markLower.replace(/\d+/g, '').trim();
+                        if (searchPrefix && markPrefix && markPrefix === searchPrefix) return 40;
+                        return 0;
+                      };
+
+                      const results = marks
+                        .map(m => ({
+                          ...m,
+                          similarity: calculateSimilarity(m.mark, searchTerm)
+                        }))
+                        .filter(m => m.similarity > 0)
+                        .sort((a, b) => b.similarity - a.similarity || a.mark.localeCompare(b.mark))
+                        .slice(0, 50); // Limit to 50 results
+
+                      setMarkSearchResults(results);
+                    } catch (e) {
+                      console.error('Mark search error:', e);
+                    } finally {
+                      setMarkSearchLoading(false);
+                    }
+                  }}
+                  disabled={markSearchLoading}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: markSearchLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {markSearchLoading ? <FiRefreshCw size={14} className="spin" /> : <FiSearch size={14} />}
+                  Otsi
+                </button>
+              </div>
+
+              {/* Quick actions */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={async () => {
+                    setMarkSearchLoading(true);
+                    setAllMarksCache([]);
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        setMarkSearchResults([]);
+                        return;
+                      }
+
+                      const marks: typeof allMarksCache = [];
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                        if (runtimeIds.length > 0) {
+                          const batchSize = 100;
+                          for (let i = 0; i < runtimeIds.length; i += batchSize) {
+                            const batch = runtimeIds.slice(i, i + batchSize);
+                            const props = await api.viewer.getObjectProperties(modelId, batch);
+
+                            for (let j = 0; j < props.length; j++) {
+                              const p = props[j];
+                              if (p?.properties && Array.isArray(p.properties)) {
+                                for (const pset of p.properties as any[]) {
+                                  if (pset.name === 'Tekla Assembly') {
+                                    for (const prop of pset.properties || []) {
+                                      if (prop.name === 'Assembly/Cast unit Mark' && prop.value) {
+                                        marks.push({
+                                          mark: String(prop.value),
+                                          runtimeId: batch[j],
+                                          modelId
+                                        });
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      setAllMarksCache(marks);
+                      // Show all marks sorted alphabetically
+                      setMarkSearchResults(marks.map(m => ({ ...m, similarity: 100 })).sort((a, b) => a.mark.localeCompare(b.mark)));
+                    } catch (e) {
+                      console.error('Load all marks error:', e);
+                    } finally {
+                      setMarkSearchLoading(false);
+                    }
+                  }}
+                  disabled={markSearchLoading}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#f3f4f6',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📋 Laadi kõik markid
+                </button>
+                <button
+                  onClick={() => {
+                    setMarkSearchResults([]);
+                    setMarkSearchInput('');
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#f3f4f6',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗑️ Tühjenda
+                </button>
+                {allMarksCache.length > 0 && (
+                  <span style={{ fontSize: '11px', color: '#666', padding: '6px 0' }}>
+                    Cache: {allMarksCache.length} marki
+                  </span>
+                )}
+              </div>
+
+              {/* Results list */}
+              {markSearchResults.length > 0 && (
+                <div style={{
+                  maxHeight: '300px',
+                  overflow: 'auto',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  background: 'white'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Match</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>Tegevus</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {markSearchResults.map((result, idx) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            background: result.similarity === 100 ? '#f0fdf4' : result.similarity >= 70 ? '#fefce8' : 'white',
+                            borderBottom: '1px solid #f3f4f6'
+                          }}
+                        >
+                          <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>
+                            {result.mark}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '10px',
+                              fontSize: '10px',
+                              background: result.similarity === 100 ? '#22c55e' : result.similarity >= 70 ? '#eab308' : '#94a3b8',
+                              color: 'white'
+                            }}>
+                              {result.similarity}%
+                            </span>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  // Select and zoom to this object
+                                  await api.viewer.setSelection({
+                                    modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }]
+                                  }, 'set');
+                                  await api.viewer.setCamera({ modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }] } as any, { animationTime: 300 });
+                                } catch (e) {
+                                  console.error('Select error:', e);
+                                }
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                cursor: 'pointer'
+                              }}
+                              title="Vali ja suumi"
+                            >
+                              🎯
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: '8px', background: '#f8fafc', fontSize: '11px', color: '#666', borderTop: '1px solid #e5e7eb' }}>
+                    Kokku: {markSearchResults.length} tulemust
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* SELECTION section */}
