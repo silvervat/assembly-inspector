@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import { TrimbleExUser } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 
@@ -19,6 +19,19 @@ interface Toast {
   type: 'success' | 'error';
 }
 
+interface BoltSummaryItem {
+  boltName: string;
+  boltStandard: string;
+  boltSize: string;
+  boltLength: string;
+  boltCount: number;
+  nutName: string;
+  nutCount: number;
+  washerName: string;
+  washerType: string;
+  washerCount: number;
+}
+
 export default function ToolsScreen({
   api,
   user,
@@ -29,8 +42,9 @@ export default function ToolsScreen({
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
-  const [copyLoading, setCopyLoading] = useState(false);
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
+  const [scanLoading, setScanLoading] = useState(false);
+  const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
 
   // Toast state
   const [toast, setToast] = useState<Toast | null>(null);
@@ -407,9 +421,10 @@ export default function ToolsScreen({
     }
   };
 
-  // Copy bolts to clipboard
-  const handleCopyBolts = async () => {
-    setCopyLoading(true);
+  // Scan bolts and create summary table
+  const handleScanBolts = async () => {
+    setScanLoading(true);
+    setBoltSummary([]);
     try {
       const selected = await api.viewer.getSelection();
       if (!selected || selected.length === 0) {
@@ -429,9 +444,7 @@ export default function ToolsScreen({
         return;
       }
 
-      const boltData = new Map<string, { name: string; standard: string; count: number }>();
-      const nutData = new Map<string, { name: string; type: string; count: number }>();
-      const washerData = new Map<string, { name: string; type: string; count: number }>();
+      const summaryMap = new Map<string, BoltSummaryItem>();
 
       for (const runtimeId of allRuntimeIds) {
         try {
@@ -442,10 +455,8 @@ export default function ToolsScreen({
               const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
               for (const childProp of childProps) {
                 if (childProp?.properties && Array.isArray(childProp.properties)) {
-                  let boltName = '', boltStandard = '', boltCount = 0;
-                  let nutName = '', nutType = '', nutCount = 0;
-                  let washerName = '', washerType = '', washerCount = 0;
                   let hasTeklaBolt = false;
+                  const boltInfo: Partial<BoltSummaryItem> = {};
 
                   for (const pset of childProp.properties) {
                     const psetName = (pset.name || '').toLowerCase();
@@ -454,37 +465,42 @@ export default function ToolsScreen({
                       for (const p of pset.properties || []) {
                         const propName = (p.name || '').toLowerCase();
                         const val = String(p.value ?? p.displayValue ?? '');
-                        if (propName.includes('bolt') && propName.includes('name')) boltName = val;
-                        if (propName.includes('bolt') && propName.includes('standard')) boltStandard = val;
-                        if (propName.includes('bolt') && propName.includes('count')) boltCount = parseInt(val) || 0;
-                        if (propName.includes('nut') && propName.includes('name')) nutName = val;
-                        if (propName.includes('nut') && propName.includes('type')) nutType = val;
-                        if (propName.includes('nut') && propName.includes('count')) nutCount = parseInt(val) || 0;
-                        if (propName.includes('washer') && propName.includes('name')) washerName = val;
-                        if (propName.includes('washer') && propName.includes('type')) washerType = val;
-                        if (propName.includes('washer') && propName.includes('count')) washerCount = parseInt(val) || 0;
+                        const roundNum = (v: string) => { const num = parseFloat(v); return isNaN(num) ? v : String(Math.round(num)); };
+
+                        if (propName.includes('bolt') && propName.includes('name')) boltInfo.boltName = val;
+                        if (propName.includes('bolt') && propName.includes('standard')) boltInfo.boltStandard = val;
+                        if (propName.includes('bolt') && propName.includes('size')) boltInfo.boltSize = roundNum(val);
+                        if (propName.includes('bolt') && propName.includes('length')) boltInfo.boltLength = roundNum(val);
+                        if (propName.includes('bolt') && propName.includes('count')) boltInfo.boltCount = parseInt(val) || 0;
+                        if (propName.includes('nut') && propName.includes('name')) boltInfo.nutName = val;
+                        if (propName.includes('nut') && propName.includes('count')) boltInfo.nutCount = parseInt(val) || 0;
+                        if (propName.includes('washer') && propName.includes('name')) boltInfo.washerName = val;
+                        if (propName.includes('washer') && propName.includes('type')) boltInfo.washerType = val;
+                        if (propName.includes('washer') && propName.includes('count')) boltInfo.washerCount = parseInt(val) || 0;
                       }
                     }
                   }
 
-                  if (hasTeklaBolt && washerCount > 0) {
-                    if (boltName) {
-                      const bKey = `${boltName}|${boltStandard}`;
-                      const existing = boltData.get(bKey);
-                      if (existing) existing.count += boltCount;
-                      else boltData.set(bKey, { name: boltName, standard: boltStandard, count: boltCount });
-                    }
-                    if (nutName) {
-                      const nKey = `${nutName}|${nutType}`;
-                      const existing = nutData.get(nKey);
-                      if (existing) existing.count += nutCount;
-                      else nutData.set(nKey, { name: nutName, type: nutType, count: nutCount });
-                    }
-                    if (washerName) {
-                      const wKey = `${washerName}|${washerType}`;
-                      const existing = washerData.get(wKey);
-                      if (existing) existing.count += washerCount;
-                      else washerData.set(wKey, { name: washerName, type: washerType, count: washerCount });
+                  if (hasTeklaBolt && (boltInfo.washerCount || 0) > 0) {
+                    const key = `${boltInfo.boltName}|${boltInfo.boltStandard}|${boltInfo.boltSize}|${boltInfo.boltLength}`;
+                    const existing = summaryMap.get(key);
+                    if (existing) {
+                      existing.boltCount += boltInfo.boltCount || 0;
+                      existing.nutCount += boltInfo.nutCount || 0;
+                      existing.washerCount += boltInfo.washerCount || 0;
+                    } else {
+                      summaryMap.set(key, {
+                        boltName: boltInfo.boltName || '',
+                        boltStandard: boltInfo.boltStandard || '',
+                        boltSize: boltInfo.boltSize || '',
+                        boltLength: boltInfo.boltLength || '',
+                        boltCount: boltInfo.boltCount || 0,
+                        nutName: boltInfo.nutName || '',
+                        nutCount: boltInfo.nutCount || 0,
+                        washerName: boltInfo.washerName || '',
+                        washerType: boltInfo.washerType || '',
+                        washerCount: boltInfo.washerCount || 0,
+                      });
                     }
                   }
                 }
@@ -494,37 +510,40 @@ export default function ToolsScreen({
         } catch (e) { console.warn('Could not get children for', runtimeId, e); }
       }
 
-      const sortedBolts = Array.from(boltData.values()).sort((a, b) => a.name.localeCompare(b.name));
-      const sortedNuts = Array.from(nutData.values()).sort((a, b) => a.name.localeCompare(b.name));
-      const sortedWashers = Array.from(washerData.values()).sort((a, b) => a.name.localeCompare(b.name));
+      const sortedSummary = Array.from(summaryMap.values()).sort((a, b) => {
+        if (a.boltStandard !== b.boltStandard) return a.boltStandard.localeCompare(b.boltStandard);
+        return a.boltName.localeCompare(b.boltName);
+      });
 
-      let clipText = '';
-      if (sortedBolts.length > 0) {
-        clipText += 'POLDID:\n';
-        for (const b of sortedBolts) clipText += `${b.name}\t${b.standard}\t${b.count}\n`;
+      setBoltSummary(sortedSummary);
+      if (sortedSummary.length === 0) {
+        showToast('Polte ei leitud (või washer count = 0)', 'error');
+      } else {
+        showToast(`${sortedSummary.length} erinevat polti leitud`, 'success');
       }
-      if (sortedNuts.length > 0) {
-        clipText += '\nMUTRID:\n';
-        for (const n of sortedNuts) clipText += `${n.name}\t${n.type}\t${n.count}\n`;
-      }
-      if (sortedWashers.length > 0) {
-        clipText += '\nSEIBID:\n';
-        for (const w of sortedWashers) clipText += `${w.name}\t${w.type}\t${w.count}\n`;
-      }
-
-      if (!clipText) {
-        showToast('Polte ei leitud', 'error');
-        return;
-      }
-
-      await navigator.clipboard.writeText(clipText);
-      showToast(`${sortedBolts.length} polti, ${sortedNuts.length} mutrit, ${sortedWashers.length} seibi kopeeritud`, 'success');
     } catch (e: any) {
-      console.error('Clipboard error:', e);
-      showToast(e.message || 'Viga kopeerimisel', 'error');
+      console.error('Scan error:', e);
+      showToast(e.message || 'Viga skanneerimisel', 'error');
     } finally {
-      setCopyLoading(false);
+      setScanLoading(false);
     }
+  };
+
+  // Copy summary to clipboard
+  const handleCopySummary = async () => {
+    if (boltSummary.length === 0) return;
+
+    const headers = exportLanguage === 'en'
+      ? ['Bolt Name', 'Standard', 'Size', 'Length', 'Bolts', 'Nut Name', 'Nuts', 'Washer Name', 'Washer Type', 'Washers']
+      : ['Poldi nimi', 'Standard', 'Suurus', 'Pikkus', 'Polte', 'Mutri nimi', 'Mutreid', 'Seibi nimi', 'Seibi tüüp', 'Seibe'];
+
+    let text = headers.join('\t') + '\n';
+    for (const b of boltSummary) {
+      text += `${b.boltName}\t${b.boltStandard}\t${b.boltSize}\t${b.boltLength}\t${b.boltCount}\t${b.nutName}\t${b.nutCount}\t${b.washerName}\t${b.washerType}\t${b.washerCount}\n`;
+    }
+
+    await navigator.clipboard.writeText(text);
+    showToast(`${boltSummary.length} rida kopeeritud`, 'success');
   };
 
   return (
@@ -552,7 +571,7 @@ export default function ToolsScreen({
             <h3>Poltide eksport</h3>
           </div>
           <p className="tools-section-desc">
-            Vali mudelist detailid ja ekspordi poldid Excelisse.
+            Vali mudelist detailid ja skaneeri poldid koondtabelisse.
           </p>
 
           <div className="tools-lang-toggle">
@@ -572,6 +591,16 @@ export default function ToolsScreen({
 
           <div className="tools-buttons">
             <button
+              className="tools-btn tools-btn-primary"
+              onClick={handleScanBolts}
+              disabled={scanLoading}
+              style={{ background: '#22c55e' }}
+            >
+              {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
+              <span>Skaneeri poldid</span>
+            </button>
+
+            <button
               className="tools-btn tools-btn-secondary"
               onClick={handleExportBolts}
               disabled={exportLoading}
@@ -582,13 +611,138 @@ export default function ToolsScreen({
 
             <button
               className="tools-btn tools-btn-secondary"
-              onClick={handleCopyBolts}
-              disabled={copyLoading}
+              onClick={handleCopySummary}
+              disabled={boltSummary.length === 0}
             >
-              {copyLoading ? <FiLoader className="spinning" size={14} /> : <FiCopy size={14} />}
-              <span>Kopeeri poldid</span>
+              <FiCopy size={14} />
+              <span>Kopeeri tabel</span>
             </button>
           </div>
+
+          {/* Bolt Summary Table */}
+          {boltSummary.length > 0 && (
+            <div className="bolt-summary-section" style={{ marginTop: '16px' }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: '8px',
+                padding: '8px 12px',
+                background: '#f0fdf4',
+                borderRadius: '8px 8px 0 0',
+                borderBottom: '2px solid #22c55e'
+              }}>
+                <span style={{ fontWeight: 600, color: '#166534' }}>
+                  🔩 Poltide kokkuvõte ({boltSummary.length})
+                </span>
+                <span style={{ fontSize: '12px', color: '#666' }}>
+                  Kokku: {boltSummary.reduce((sum, b) => sum + b.boltCount, 0)} polti
+                </span>
+              </div>
+              <div style={{
+                maxHeight: '350px',
+                overflowY: 'auto',
+                border: '1px solid #e5e7eb',
+                borderTop: 'none',
+                borderRadius: '0 0 8px 8px',
+                background: '#fff'
+              }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '12px'
+                }}>
+                  <thead>
+                    <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                      <th style={{ padding: '10px 8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Bolt Name' : 'Poldi nimi'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        Standard
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Size' : 'Suurus'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Length' : 'Pikkus'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, background: '#dbeafe', whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Bolts' : 'Polte'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Nut' : 'Mutter'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, background: '#fef3c7', whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Nuts' : 'Mutreid'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'left', borderBottom: '1px solid #e5e7eb', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Washer' : 'Seib'}
+                      </th>
+                      <th style={{ padding: '10px 6px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', fontWeight: 600, background: '#dcfce7', whiteSpace: 'nowrap' }}>
+                        {exportLanguage === 'en' ? 'Washers' : 'Seibe'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {boltSummary.map((item, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ padding: '8px', fontFamily: 'monospace', fontSize: '11px', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.boltName}>
+                          {item.boltName || '-'}
+                        </td>
+                        <td style={{ padding: '8px 6px', fontSize: '11px', color: '#666' }}>
+                          {item.boltStandard || '-'}
+                        </td>
+                        <td style={{ padding: '8px 6px', textAlign: 'center', fontSize: '11px' }}>
+                          {item.boltSize || '-'}
+                        </td>
+                        <td style={{ padding: '8px 6px', textAlign: 'center', fontSize: '11px' }}>
+                          {item.boltLength || '-'}
+                        </td>
+                        <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, background: '#eff6ff', color: '#1d4ed8' }}>
+                          {item.boltCount}
+                        </td>
+                        <td style={{ padding: '8px 6px', fontSize: '10px', color: '#666', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.nutName}>
+                          {item.nutName || '-'}
+                        </td>
+                        <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, background: '#fefce8', color: '#a16207' }}>
+                          {item.nutCount}
+                        </td>
+                        <td style={{ padding: '8px 6px', fontSize: '10px', color: '#666', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${item.washerName} (${item.washerType})`}>
+                          {item.washerName || '-'}
+                        </td>
+                        <td style={{ padding: '8px 6px', textAlign: 'center', fontWeight: 600, background: '#f0fdf4', color: '#166534' }}>
+                          {item.washerCount}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Totals row */}
+              <div style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '16px',
+                padding: '10px 12px',
+                background: '#f8fafc',
+                borderRadius: '0 0 8px 8px',
+                border: '1px solid #e5e7eb',
+                borderTop: 'none',
+                fontSize: '12px',
+                fontWeight: 600
+              }}>
+                <span style={{ color: '#1d4ed8' }}>
+                  {exportLanguage === 'en' ? 'Total bolts' : 'Kokku polte'}: {boltSummary.reduce((sum, b) => sum + b.boltCount, 0)}
+                </span>
+                <span style={{ color: '#a16207' }}>
+                  {exportLanguage === 'en' ? 'Total nuts' : 'Kokku mutreid'}: {boltSummary.reduce((sum, b) => sum + b.nutCount, 0)}
+                </span>
+                <span style={{ color: '#166534' }}>
+                  {exportLanguage === 'en' ? 'Total washers' : 'Kokku seibe'}: {boltSummary.reduce((sum, b) => sum + b.washerCount, 0)}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bolt Markups Section */}
