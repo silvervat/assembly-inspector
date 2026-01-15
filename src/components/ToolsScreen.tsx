@@ -591,19 +591,71 @@ export default function ToolsScreen({
     showToast(`${boltSummary.length} rida kopeeritud`, 'success');
   };
 
-  // Capture bolt summary as image (full table, regardless of extension width)
+  // Calculate required width based on data content
+  const calculateTableWidth = (): number => {
+    if (boltSummary.length === 0) return 500;
+
+    // Estimate character width (monospace ~7px, normal ~6px at 11-12px font)
+    const charWidth = 7;
+    const padding = 16; // Cell padding
+
+    // Find max length in each column
+    let maxBoltName = 10; // "Poldi nimi"
+    let maxStandard = 8;  // "Standard"
+    let maxSize = 6;      // "Suurus"
+    let maxLength = 6;    // "Pikkus"
+    let maxNut = 6;       // "Mutter"
+    let maxWasher = 5;    // "Seib"
+
+    for (const item of boltSummary) {
+      if (item.boltName) maxBoltName = Math.max(maxBoltName, item.boltName.length);
+      if (item.boltStandard) maxStandard = Math.max(maxStandard, item.boltStandard.length);
+      if (item.boltSize) maxSize = Math.max(maxSize, item.boltSize.length);
+      if (item.boltLength) maxLength = Math.max(maxLength, String(item.boltLength).length);
+      if (item.nutName) maxNut = Math.max(maxNut, item.nutName.length);
+      if (item.washerName) maxWasher = Math.max(maxWasher, item.washerName.length);
+    }
+
+    // Calculate total width: columns + fixed width columns (counts ~50px each)
+    const totalWidth =
+      (maxBoltName * charWidth + padding) +   // Bolt name
+      (maxStandard * charWidth + padding) +   // Standard
+      (maxSize * charWidth + padding) +       // Size
+      (maxLength * charWidth + padding) +     // Length
+      50 +                                     // Bolt count
+      (maxNut * charWidth + padding) +        // Nut
+      50 +                                     // Nut count
+      (maxWasher * charWidth + padding) +     // Washer
+      50 +                                     // Washer count
+      20;                                      // Extra padding
+
+    return Math.max(totalWidth, 500); // Minimum 500px
+  };
+
+  // Capture bolt summary as image (full table based on data width)
   const captureTableAsCanvas = async (): Promise<HTMLCanvasElement | null> => {
     if (!boltSummaryRef.current || boltSummary.length === 0) return null;
+
+    // Calculate width based on actual data
+    const requiredWidth = calculateTableWidth();
 
     // Find the scrollable container and temporarily remove height restriction
     const scrollContainer = boltSummaryRef.current.querySelector('div[style*="maxHeight"]') as HTMLElement;
     const originalMaxHeight = scrollContainer?.style.maxHeight || '';
     const originalOverflow = scrollContainer?.style.overflowY || '';
 
-    // Set minimum width for proper table rendering (390px is default extension width)
+    // Find all cells with maxWidth and temporarily remove constraints
+    const cellsWithMaxWidth = boltSummaryRef.current.querySelectorAll('td[style*="maxWidth"], th[style*="maxWidth"]') as NodeListOf<HTMLElement>;
+    const originalMaxWidths: string[] = [];
+    cellsWithMaxWidth.forEach((cell, i) => {
+      originalMaxWidths[i] = cell.style.maxWidth;
+      cell.style.maxWidth = 'none';
+    });
+
+    // Set width for proper table rendering
     const originalWidth = boltSummaryRef.current.style.width;
     const originalMinWidth = boltSummaryRef.current.style.minWidth;
-    boltSummaryRef.current.style.minWidth = '500px';
+    boltSummaryRef.current.style.minWidth = `${requiredWidth}px`;
     boltSummaryRef.current.style.width = 'auto';
 
     if (scrollContainer) {
@@ -616,14 +668,17 @@ export default function ToolsScreen({
       backgroundColor: '#ffffff',
       scale: 2, // Higher resolution
       logging: false,
-      width: Math.max(boltSummaryRef.current.scrollWidth, 500),
-      windowWidth: Math.max(boltSummaryRef.current.scrollWidth, 500),
+      width: Math.max(boltSummaryRef.current.scrollWidth, requiredWidth),
+      windowWidth: Math.max(boltSummaryRef.current.scrollWidth, requiredWidth),
       windowHeight: boltSummaryRef.current.scrollHeight
     });
 
     // Restore original styles
     boltSummaryRef.current.style.width = originalWidth;
     boltSummaryRef.current.style.minWidth = originalMinWidth;
+    cellsWithMaxWidth.forEach((cell, i) => {
+      cell.style.maxWidth = originalMaxWidths[i];
+    });
     if (scrollContainer) {
       scrollContainer.style.maxHeight = originalMaxHeight;
       scrollContainer.style.overflowY = originalOverflow;
