@@ -23,6 +23,7 @@ interface AdminScreenProps {
   userEmail?: string;
   user?: TrimbleExUser;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface PropertySet {
@@ -198,7 +199,7 @@ const RESOURCE_TYPES = [
   { key: 'welder', label: 'Keevitaja', icon: '🔥' },
 ] as const;
 
-export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate }: AdminScreenProps) {
+export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite }: AdminScreenProps) {
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
   const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
 
@@ -3650,6 +3651,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         onNavigate={adminView === 'main' ? handleHeaderNavigate : undefined}
         currentMode="admin"
         user={user}
+        onColorModelWhite={onColorModelWhite}
+        api={api}
+        projectId={projectId}
       />
 
       {/* Main Tools View */}

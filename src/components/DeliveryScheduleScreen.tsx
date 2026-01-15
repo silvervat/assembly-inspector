@@ -40,6 +40,7 @@ interface Props {
   onBack?: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   isPopupMode?: boolean;
+  onColorModelWhite?: () => void;
 }
 
 interface SelectedObject {
@@ -7753,6 +7754,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         onNavigate={handleHeaderNavigate}
         currentMode="delivery_schedule"
         user={_user}
+        api={api}
+        projectId={projectId}
       >
         <button
           className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}

@@ -43,6 +43,7 @@ interface OrganizerScreenProps {
   tcUserName?: string;
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface SelectedObject {
@@ -5654,6 +5655,8 @@ export default function OrganizerScreen({
         }}
         currentMode="organizer"
         user={user}
+        api={api}
+        projectId={projectId}
       >
         <button
           className="org-icon-btn"

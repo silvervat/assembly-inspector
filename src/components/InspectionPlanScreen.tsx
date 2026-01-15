@@ -39,6 +39,7 @@ interface InspectionPlanScreenProps {
   user?: TrimbleExUser;
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 // Selected object data from Trimble
@@ -982,6 +983,8 @@ export default function InspectionPlanScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="inspection_plan"
         user={user}
+        api={api}
+        projectId={projectId}
       />
 
       {/* View Mode Toggle */}

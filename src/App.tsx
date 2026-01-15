@@ -16,7 +16,8 @@ import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
   fetchInspectionForNavigation,
-  navigateToInspection
+  navigateToInspection,
+  findObjectsInLoadedModels
 } from './utils/navigationHelper';
 import { initOfflineQueue } from './utils/offlineQueue';
 import './App.css';
@@ -24,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.557';
+export const APP_VERSION = '3.0.563';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -421,6 +422,73 @@ export default function App() {
     setSelectedInspectionType(null);
   };
 
+  // Color all model objects white using database
+  const handleColorModelWhite = useCallback(async () => {
+    if (!api || !projectId) {
+      console.warn('API or projectId not available');
+      return;
+    }
+
+    try {
+      console.log('[COLOR WHITE] Starting...');
+
+      // Fetch all GUIDs from database
+      const PAGE_SIZE = 5000;
+      const allGuids: string[] = [];
+      let offset = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allGuids.push(...data.map(d => d.guid_ifc).filter(Boolean));
+        offset += PAGE_SIZE;
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      console.log(`[COLOR WHITE] Found ${allGuids.length} GUIDs in database`);
+
+      if (allGuids.length === 0) {
+        console.warn('No objects found in database');
+        return;
+      }
+
+      // Find objects in loaded models
+      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+      console.log(`[COLOR WHITE] Found ${foundObjects.size} objects in model`);
+
+      // Group by model
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+
+      // Color white in batches
+      const BATCH_SIZE = 500;
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+        }
+      }
+
+      console.log('[COLOR WHITE] Done!');
+    } catch (e) {
+      console.error('[COLOR WHITE] Error:', e);
+    }
+  }, [api, projectId]);
+
   // Helper: normalize GUID
   const normalizeGuid = (s: string): string => {
     return s.replace(/^urn:(uuid:)?/i, "").trim();
@@ -764,6 +832,7 @@ export default function App() {
           userEmail={tcUser?.email || ''}
           user={user}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -783,6 +852,7 @@ export default function App() {
           user={user}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -802,6 +872,7 @@ export default function App() {
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -839,6 +910,7 @@ export default function App() {
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -856,6 +928,7 @@ export default function App() {
           projectId={projectId}
           onBack={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -875,6 +948,7 @@ export default function App() {
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -894,6 +968,7 @@ export default function App() {
           tcUserName={tcUser ? `${tcUser.firstName || ''} ${tcUser.lastName || ''}`.trim() : ''}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -911,6 +986,7 @@ export default function App() {
           projectId={projectId}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -933,6 +1009,7 @@ export default function App() {
           inspectionTypeName={selectedInspectionType.name}
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
+          onColorModelWhite={handleColorModelWhite}
         />
         <VersionFooter />
       </>
@@ -951,6 +1028,7 @@ export default function App() {
         inspectionMode={currentMode}
         onBackToMenu={handleBackToMenu}
         onNavigate={setCurrentMode}
+        onColorModelWhite={handleColorModelWhite}
       />
       <VersionFooter />
     </>
