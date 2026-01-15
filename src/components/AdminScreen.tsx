@@ -7324,7 +7324,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         return;
                       }
 
-                      // Step 1: Collect ALL child IDs across all objects
+                      // Step 1: Collect ALL child IDs and build parent->children map
                       const allChildIds = new Set<number>();
                       const objectsWithChildren = new Map<number, number[]>(); // id -> childIds
                       let totalObjects = 0;
@@ -7334,11 +7334,6 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         const objects = (modelObj as any).objects || [];
                         const allIds = objects.map((o: any) => o.id).filter((id: any) => id > 0);
                         totalObjects += allIds.length;
-
-                        updateFunctionResult("countRootAssemblies", {
-                          status: 'pending',
-                          result: `Samm 1/2: Kogun hierarhia andmeid...\n${totalObjects} objekti`
-                        });
 
                         // Process in batches
                         const BATCH_SIZE = 50;
@@ -7361,47 +7356,59 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                           if (processed % 500 === 0 || processed === allIds.length) {
                             updateFunctionResult("countRootAssemblies", {
                               status: 'pending',
-                              result: `Samm 1/2: Kogun hierarhia andmeid...\n${processed}/${allIds.length} objekti\nLeitud ${objectsWithChildren.size} assemblyt`
+                              result: `Samm 1/2: Kogun hierarhia...\n${processed}/${allIds.length}`
                             });
                           }
                         }
                       }
 
-                      // Step 2: Find ROOT assemblies (have children but are not anyone's child)
+                      // Step 2: Find TRUE ROOT(s) and their direct children
                       updateFunctionResult("countRootAssemblies", {
                         status: 'pending',
-                        result: `Samm 2/2: Filtreerin ROOT assemblyd...`
+                        result: `Samm 2/2: Analüüsin hierarhiat...`
                       });
 
-                      let rootAssemblies = 0;
-                      let subAssemblies = 0;
-
+                      // Find ROOT objects (have children, NOT in anyone's children)
+                      const rootIds: number[] = [];
                       for (const [id] of objectsWithChildren) {
                         if (!allChildIds.has(id)) {
-                          // This object HAS children but is NOT in anyone's children list = ROOT
-                          rootAssemblies++;
-                        } else {
-                          // This object HAS children but IS someone's child = SUB-ASSEMBLY
-                          subAssemblies++;
+                          rootIds.push(id);
                         }
                       }
 
-                      const standaloneCount = totalObjects - rootAssemblies - subAssemblies - allChildIds.size;
+                      // Get ROOT's direct children (Level 1) - these should be assemblies
+                      let level1Children: number[] = [];
+                      for (const rootId of rootIds) {
+                        const children = objectsWithChildren.get(rootId) || [];
+                        level1Children.push(...children);
+                      }
+
+                      // Count how many Level 1 children have their own children (are assemblies)
+                      let level1Assemblies = 0;
+                      let level1Parts = 0;
+                      for (const childId of level1Children) {
+                        if (objectsWithChildren.has(childId)) {
+                          level1Assemblies++;
+                        } else {
+                          level1Parts++;
+                        }
+                      }
+
+                      // Also count objects not in hierarchy at all
+                      const inHierarchy = new Set([...objectsWithChildren.keys(), ...allChildIds]);
+                      const notInHierarchy = totalObjects - inHierarchy.size;
 
                       updateFunctionResult("countRootAssemblies", {
                         status: 'success',
                         result: `KOKKU: ${totalObjects} objekti\n\n` +
-                          `🎯 ROOT ASSEMBLYD: ${rootAssemblies}\n` +
-                          `   (tipptase - need tahame salvestada)\n\n` +
-                          `📦 Sub-assemblyd: ${subAssemblies}\n` +
-                          `   (omavad children AGA on ise lapsed)\n\n` +
-                          `📄 Osad/Parts: ${allChildIds.size}\n` +
-                          `   (on kellegi lapsed)\n\n` +
-                          `❓ Eraldi seisvad: ${standaloneCount}\n` +
-                          `   (pole assembly ega kellegi laps)\n\n` +
-                          `💡 Andmebaasi peaks minema:\n` +
-                          `   ROOT: ${rootAssemblies} + Eraldi: ${standaloneCount}\n` +
-                          `   = ${rootAssemblies + standaloneCount} rida`
+                          `🔝 ROOT konteiner(id): ${rootIds.length}\n\n` +
+                          `📦 ROOT-i otsesed lapsed (Level 1): ${level1Children.length}\n` +
+                          `   └─ Neist assemblyd (omavad children): ${level1Assemblies}\n` +
+                          `   └─ Neist parts (pole children): ${level1Parts}\n\n` +
+                          `📄 Kõik kellegi lapsed: ${allChildIds.size}\n` +
+                          `📦 Kõik kellel on lapsed: ${objectsWithChildren.size}\n\n` +
+                          `❓ Pole hierarhias: ${notInHierarchy}\n\n` +
+                          `💡 Andmebaasi: ${level1Children.length} (Level 1)`
                       });
                     } catch (e: any) {
                       updateFunctionResult("countRootAssemblies", { status: 'error', error: e.message });
