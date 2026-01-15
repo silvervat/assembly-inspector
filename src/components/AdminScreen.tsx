@@ -304,7 +304,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Reference to external GUID Controller window
   const guidControllerWindowRef = useRef<Window | null>(null);
 
-  // Cast Unit Mark search state
+  // Cast Unit Mark search state (DATABASE - fast)
   const [markSearchInput, setMarkSearchInput] = useState('');
   const [markSearchResults, setMarkSearchResults] = useState<Array<{
     mark: string;
@@ -312,9 +312,28 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     similarity: number;
   }>>([]);
   const [markSearchLoading, setMarkSearchLoading] = useState(false);
+  const [markSearchError, setMarkSearchError] = useState<string | null>(null);
   const [allMarksCache, setAllMarksCache] = useState<Array<{
     mark: string;
     guid_ifc: string;
+  }>>([]);
+
+  // Cast Unit Mark search state (MODEL - slow but no database needed)
+  const [modelSearchInput, setModelSearchInput] = useState('');
+  const [modelSearchResults, setModelSearchResults] = useState<Array<{
+    mark: string;
+    guid_ifc: string;
+    modelId: string;
+    runtimeId: number;
+    similarity: number;
+  }>>([]);
+  const [modelSearchLoading, setModelSearchLoading] = useState(false);
+  const [modelSearchError, setModelSearchError] = useState<string | null>(null);
+  const [modelMarksCache, setModelMarksCache] = useState<Array<{
+    mark: string;
+    guid_ifc: string;
+    modelId: string;
+    runtimeId: number;
   }>>([]);
 
   // Assembly & Bolts list state
@@ -5307,6 +5326,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     }
 
                     setMarkSearchLoading(true);
+                    setMarkSearchError(null);
                     try {
                       const searchTerm = markSearchInput.trim().toLowerCase();
 
@@ -5320,10 +5340,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                           .eq('trimble_project_id', projectId)
                           .not('assembly_mark', 'is', null);
 
-                        if (error) throw error;
+                        if (error) throw new Error(`DB viga: ${error.message}`);
+                        if (!data || data.length === 0) {
+                          throw new Error(`Andmebaasis pole objekte projektile ${projectId}. Kasuta enne "Saada andmebaasi"!`);
+                        }
                         marks = (data || [])
                           .filter(r => r.assembly_mark && r.guid_ifc)
                           .map(r => ({ mark: r.assembly_mark!, guid_ifc: r.guid_ifc! }));
+                        if (marks.length === 0) {
+                          throw new Error('Andmebaasis on objekte, aga assembly_mark on tühi kõigil!');
+                        }
                         setAllMarksCache(marks);
                       }
 
@@ -5348,9 +5374,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         .sort((a, b) => b.similarity - a.similarity || a.mark.localeCompare(b.mark))
                         .slice(0, 50);
 
+                      if (results.length === 0) {
+                        setMarkSearchError(`Tulemusi ei leitud otsinguterminile "${markSearchInput.trim()}" (${marks.length} marki andmebaasis)`);
+                      }
                       setMarkSearchResults(results);
-                    } catch (e) {
+                    } catch (e: any) {
                       console.error('Mark search error:', e);
+                      setMarkSearchError(e.message || 'Tundmatu viga');
+                      setMarkSearchResults([]);
                     } finally {
                       setMarkSearchLoading(false);
                     }
@@ -5435,6 +5466,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                 )}
               </div>
 
+              {/* Error message */}
+              {markSearchError && (
+                <div style={{
+                  padding: '10px 12px',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '6px',
+                  color: '#b91c1c',
+                  fontSize: '12px',
+                  marginBottom: '12px'
+                }}>
+                  ⚠️ {markSearchError}
+                </div>
+              )}
+
               {/* Results list */}
               {markSearchResults.length > 0 && (
                 <div style={{
@@ -5515,6 +5561,341 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   </table>
                   <div style={{ padding: '8px', background: '#f8fafc', fontSize: '11px', color: '#666', borderTop: '1px solid #e5e7eb' }}>
                     Kokku: {markSearchResults.length} tulemust
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* CAST UNIT MARK SEARCH FROM MODEL section */}
+            <div className="function-section">
+              <h4>🔎 Cast Unit Mark otsing (MUDELIST)</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Otsi otse mudeli propertidest. <strong>Aeglasem</strong>, aga ei vaja andmebaasi!
+              </p>
+
+              {/* Search input */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  value={modelSearchInput}
+                  onChange={(e) => setModelSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      const searchBtn = document.getElementById('model-search-btn');
+                      searchBtn?.click();
+                    }
+                  }}
+                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '13px'
+                  }}
+                />
+                <button
+                  id="model-search-btn"
+                  onClick={async () => {
+                    if (!modelSearchInput.trim()) {
+                      setModelSearchResults([]);
+                      return;
+                    }
+
+                    setModelSearchLoading(true);
+                    setModelSearchError(null);
+                    try {
+                      const searchTerm = modelSearchInput.trim().toLowerCase();
+
+                      // Use cache if available, otherwise fetch from MODEL
+                      let marks = modelMarksCache;
+                      if (marks.length === 0) {
+                        // Load from model - SLOW!
+                        const allObjs = await api.viewer.getObjects();
+                        if (!allObjs || allObjs.length === 0) throw new Error('Mudeleid pole laetud!');
+
+                        const collectedMarks: typeof marks = [];
+
+                        for (const modelObj of allObjs) {
+                          const modelId = modelObj.modelId;
+                          const objects = (modelObj as any).objects || [];
+                          const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                          if (runtimeIds.length === 0) continue;
+
+                          // Process in batches to avoid overloading
+                          const batchSize = 100;
+                          for (let i = 0; i < runtimeIds.length; i += batchSize) {
+                            const batch = runtimeIds.slice(i, i + batchSize);
+                            const props = await api.viewer.getObjectProperties(modelId, batch);
+
+                            for (let j = 0; j < props.length; j++) {
+                              const p = props[j];
+                              if (!p?.properties) continue;
+
+                              let mark = '';
+                              let guidIfc = '';
+
+                              for (const pset of p.properties as any[]) {
+                                if (pset.name === 'Tekla Assembly' || pset.name === 'Tekla Common') {
+                                  for (const prop of pset.properties || []) {
+                                    if (prop.name === 'Assembly/Cast unit Mark') mark = String(prop.value || '');
+                                  }
+                                }
+                                if (pset.name === 'Identification') {
+                                  for (const prop of pset.properties || []) {
+                                    if (prop.name === 'GUID') guidIfc = String(prop.value || '');
+                                  }
+                                }
+                              }
+
+                              if (mark && guidIfc) {
+                                collectedMarks.push({ mark, guid_ifc: guidIfc, modelId, runtimeId: batch[j] });
+                              }
+                            }
+                          }
+                        }
+
+                        if (collectedMarks.length === 0) {
+                          throw new Error('Mudelist ei leitud ühtegi Cast Unit Mark väärtust!');
+                        }
+                        marks = collectedMarks;
+                        setModelMarksCache(marks);
+                      }
+
+                      // Calculate similarity
+                      const calculateSimilarity = (mark: string, search: string): number => {
+                        const markLower = mark.toLowerCase();
+                        if (markLower === search) return 100;
+                        if (markLower.startsWith(search)) return 90;
+                        if (markLower.includes(search)) return 70;
+                        const searchNums = search.match(/\d+/g)?.join('') || '';
+                        const markNums = markLower.match(/\d+/g)?.join('') || '';
+                        if (searchNums && markNums && markNums.includes(searchNums)) return 50;
+                        const searchPrefix = search.replace(/\d+/g, '').trim();
+                        const markPrefix = markLower.replace(/\d+/g, '').trim();
+                        if (searchPrefix && markPrefix && markPrefix === searchPrefix) return 40;
+                        return 0;
+                      };
+
+                      const results = marks
+                        .map(m => ({ ...m, similarity: calculateSimilarity(m.mark, searchTerm) }))
+                        .filter(m => m.similarity > 0)
+                        .sort((a, b) => b.similarity - a.similarity || a.mark.localeCompare(b.mark))
+                        .slice(0, 50);
+
+                      if (results.length === 0) {
+                        setModelSearchError(`Tulemusi ei leitud otsinguterminile "${modelSearchInput.trim()}" (${marks.length} marki mudelis)`);
+                      }
+                      setModelSearchResults(results);
+                    } catch (e: any) {
+                      console.error('Model search error:', e);
+                      setModelSearchError(e.message || 'Tundmatu viga');
+                      setModelSearchResults([]);
+                    } finally {
+                      setModelSearchLoading(false);
+                    }
+                  }}
+                  disabled={modelSearchLoading}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#f59e0b',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: modelSearchLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {modelSearchLoading ? <FiRefreshCw size={14} className="spin" /> : <FiSearch size={14} />}
+                  Otsi
+                </button>
+              </div>
+
+              {/* Quick actions */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={async () => {
+                    setModelSearchLoading(true);
+                    setModelMarksCache([]);
+                    try {
+                      const allObjs = await api.viewer.getObjects();
+                      if (!allObjs || allObjs.length === 0) throw new Error('Mudeleid pole laetud!');
+
+                      const collectedMarks: typeof modelMarksCache = [];
+
+                      for (const modelObj of allObjs) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                        if (runtimeIds.length === 0) continue;
+
+                        const batchSize = 100;
+                        for (let i = 0; i < runtimeIds.length; i += batchSize) {
+                          const batch = runtimeIds.slice(i, i + batchSize);
+                          const props = await api.viewer.getObjectProperties(modelId, batch);
+
+                          for (let j = 0; j < props.length; j++) {
+                            const p = props[j];
+                            if (!p?.properties) continue;
+
+                            let mark = '';
+                            let guidIfc = '';
+
+                            for (const pset of p.properties as any[]) {
+                              if (pset.name === 'Tekla Assembly' || pset.name === 'Tekla Common') {
+                                for (const prop of pset.properties || []) {
+                                  if (prop.name === 'Assembly/Cast unit Mark') mark = String(prop.value || '');
+                                }
+                              }
+                              if (pset.name === 'Identification') {
+                                for (const prop of pset.properties || []) {
+                                  if (prop.name === 'GUID') guidIfc = String(prop.value || '');
+                                }
+                              }
+                            }
+
+                            if (mark && guidIfc) {
+                              collectedMarks.push({ mark, guid_ifc: guidIfc, modelId, runtimeId: batch[j] });
+                            }
+                          }
+                        }
+                      }
+
+                      setModelMarksCache(collectedMarks);
+                      setModelSearchResults(collectedMarks.map(m => ({ ...m, similarity: 100 })).sort((a, b) => a.mark.localeCompare(b.mark)));
+                    } catch (e) {
+                      console.error('Load model marks error:', e);
+                    } finally {
+                      setModelSearchLoading(false);
+                    }
+                  }}
+                  disabled={modelSearchLoading}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#fef3c7',
+                    border: '1px solid #f59e0b',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {modelSearchLoading ? '⏳ Laen...' : '📋 Laadi kõik markid (aeglane!)'}
+                </button>
+                <button
+                  onClick={() => {
+                    setModelSearchResults([]);
+                    setModelSearchInput('');
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#f3f4f6',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗑️ Tühjenda
+                </button>
+                {modelMarksCache.length > 0 && (
+                  <span style={{ fontSize: '11px', color: '#92400e', padding: '6px 0' }}>
+                    Cache: {modelMarksCache.length} marki (mudelist)
+                  </span>
+                )}
+              </div>
+
+              {/* Error message */}
+              {modelSearchError && (
+                <div style={{
+                  padding: '10px 12px',
+                  background: '#fef3c7',
+                  border: '1px solid #f59e0b',
+                  borderRadius: '6px',
+                  color: '#92400e',
+                  fontSize: '12px',
+                  marginBottom: '12px'
+                }}>
+                  ⚠️ {modelSearchError}
+                </div>
+              )}
+
+              {/* Results list */}
+              {modelSearchResults.length > 0 && (
+                <div style={{
+                  maxHeight: '300px',
+                  overflow: 'auto',
+                  border: '1px solid #fbbf24',
+                  borderRadius: '6px',
+                  background: 'white'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: '#fef3c7', position: 'sticky', top: 0 }}>
+                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #fbbf24' }}>Mark</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '60px' }}>Match</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #fbbf24', width: '80px' }}>Tegevus</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modelSearchResults.map((result, idx) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            background: result.similarity === 100 ? '#fef9c3' : result.similarity >= 70 ? '#fffbeb' : 'white',
+                            borderBottom: '1px solid #fef3c7'
+                          }}
+                        >
+                          <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>
+                            {result.mark}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '10px',
+                              fontSize: '10px',
+                              background: result.similarity === 100 ? '#f59e0b' : result.similarity >= 70 ? '#fbbf24' : '#d1d5db',
+                              color: 'white'
+                            }}>
+                              {result.similarity}%
+                            </span>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  // Use runtimeId directly - no need to search!
+                                  await api.viewer.setSelection({
+                                    modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }]
+                                  }, 'set');
+                                  await api.viewer.setCamera({ modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }] } as any, { animationTime: 300 });
+                                } catch (e) {
+                                  console.error('Select error:', e);
+                                }
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                background: '#f59e0b',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                cursor: 'pointer'
+                              }}
+                              title="Vali ja suumi"
+                            >
+                              🎯
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: '8px', background: '#fef3c7', fontSize: '11px', color: '#92400e', borderTop: '1px solid #fbbf24' }}>
+                    Kokku: {modelSearchResults.length} tulemust (mudelist)
                   </div>
                 </div>
               )}
@@ -6062,6 +6443,94 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                       throw new Error('Bounding box andmeid ei leitud');
                     } catch (e: any) {
                       updateFunctionResult("addMeasurementXYZ", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📐 Piki pikkust (auto)"
+                  result={functionResults["measureAlongLength"]}
+                  onClick={async () => {
+                    updateFunctionResult("measureAlongLength", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                        for (const bbox of boundingBoxes) {
+                          const box = bbox.boundingBox;
+                          const min = { x: box.min.x * 1000, y: box.min.y * 1000, z: box.min.z * 1000 };
+                          const max = { x: box.max.x * 1000, y: box.max.y * 1000, z: box.max.z * 1000 };
+
+                          const width = Math.abs(max.x - min.x);
+                          const depth = Math.abs(max.y - min.y);
+                          const height = Math.abs(max.z - min.z);
+
+                          // Calculate all possible "lengths" for rotated objects
+                          const xyDiag = Math.sqrt(width * width + depth * depth);
+                          const xzDiag = Math.sqrt(width * width + height * height);
+                          const yzDiag = Math.sqrt(depth * depth + height * height);
+
+                          // Find the longest dimension or diagonal
+                          const candidates = [
+                            { name: 'X', value: width, start: { x: min.x, y: min.y, z: min.z }, end: { x: max.x, y: min.y, z: min.z }, color: { r: 255, g: 0, b: 0, a: 255 } },
+                            { name: 'Y', value: depth, start: { x: min.x, y: min.y, z: min.z }, end: { x: min.x, y: max.y, z: min.z }, color: { r: 0, g: 255, b: 0, a: 255 } },
+                            { name: 'Z', value: height, start: { x: min.x, y: min.y, z: min.z }, end: { x: min.x, y: min.y, z: max.z }, color: { r: 0, g: 0, b: 255, a: 255 } },
+                            { name: 'XY diag', value: xyDiag, start: { x: min.x, y: min.y, z: min.z }, end: { x: max.x, y: max.y, z: min.z }, color: { r: 255, g: 0, b: 255, a: 255 } },
+                            { name: 'XZ diag', value: xzDiag, start: { x: min.x, y: min.y, z: min.z }, end: { x: max.x, y: min.y, z: max.z }, color: { r: 255, g: 165, b: 0, a: 255 } },
+                            { name: 'YZ diag', value: yzDiag, start: { x: min.x, y: min.y, z: min.z }, end: { x: min.x, y: max.y, z: max.z }, color: { r: 0, g: 200, b: 200, a: 255 } },
+                          ];
+
+                          // Check if object might be rotated: if XY diagonal is significantly longer than X or Y alone
+                          // For a beam rotated 45° in XY plane: xyDiag will be close to actual length
+                          // Actual length ≈ xyDiag * 0.707 for 45° rotation
+                          const xyRatio = Math.min(width, depth) / Math.max(width, depth);
+                          const isLikelyRotatedXY = xyRatio > 0.5 && width > height * 0.3 && depth > height * 0.3;
+
+                          let selectedCandidate;
+                          let estimatedActualLength: number | null = null;
+
+                          if (isLikelyRotatedXY && xyDiag > Math.max(width, depth) * 1.2) {
+                            // Object appears rotated in XY plane - use diagonal
+                            selectedCandidate = candidates.find(c => c.name === 'XY diag')!;
+                            // For 45° rotation, actual length ≈ diagonal × cos(45°) ≈ diagonal × 0.707
+                            estimatedActualLength = xyDiag * 0.707;
+                          } else {
+                            // Use the longest axis
+                            selectedCandidate = candidates.slice(0, 3).sort((a, b) => b.value - a.value)[0];
+                          }
+
+                          const measurements: any[] = [{
+                            start: { positionX: selectedCandidate.start.x, positionY: selectedCandidate.start.y, positionZ: selectedCandidate.start.z, modelId, objectId: bbox.id },
+                            end: { positionX: selectedCandidate.end.x, positionY: selectedCandidate.end.y, positionZ: selectedCandidate.end.z, modelId, objectId: bbox.id },
+                            mainLineStart: { positionX: selectedCandidate.start.x, positionY: selectedCandidate.start.y, positionZ: selectedCandidate.start.z },
+                            mainLineEnd: { positionX: selectedCandidate.end.x, positionY: selectedCandidate.end.y, positionZ: selectedCandidate.end.z },
+                            color: selectedCandidate.color
+                          }];
+
+                          await api.markup.addMeasurementMarkups(measurements);
+
+                          let resultText = `Mõõtjoon piki ${selectedCandidate.name}: ${selectedCandidate.value.toFixed(0)} mm`;
+                          if (estimatedActualLength) {
+                            resultText += `\n⚠️ Objekt tundub pööratud! Tegelik pikkus ~${estimatedActualLength.toFixed(0)} mm`;
+                          }
+                          resultText += `\n\n📊 Kõik mõõdud:\nX: ${width.toFixed(0)} mm\nY: ${depth.toFixed(0)} mm\nZ: ${height.toFixed(0)} mm\nXY diag: ${xyDiag.toFixed(0)} mm`;
+
+                          updateFunctionResult("measureAlongLength", {
+                            status: 'success',
+                            result: resultText
+                          });
+                          return;
+                        }
+                      }
+                      throw new Error('Bounding box andmeid ei leitud');
+                    } catch (e: any) {
+                      updateFunctionResult("measureAlongLength", { status: 'error', error: e.message });
                     }
                   }}
                 />
