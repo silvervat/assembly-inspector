@@ -71,7 +71,8 @@ export default function InspectionPlanScreen({
   userName,
   user,
   onBackToMenu,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: InspectionPlanScreenProps) {
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('add');
@@ -983,6 +984,7 @@ export default function InspectionPlanScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="inspection_plan"
         user={user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       />

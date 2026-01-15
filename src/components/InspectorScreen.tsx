@@ -94,7 +94,8 @@ export default function InspectorScreen({
   inspectionTypeCode: _inspectionTypeCode, // Reserved for future use
   inspectionTypeName,
   onBackToMenu,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: InspectorScreenProps) {
   // Režiimi nimi
   const getModeTitle = (mode: InspectionMode): string => {
@@ -1947,6 +1948,7 @@ export default function InspectorScreen({
         onNavigate={handleHeaderNavigate}
         currentMode={inspectionMode}
         user={user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       />

@@ -379,7 +379,7 @@ const generateDateColors = (dates: string[]): Record<string, { r: number; g: num
 // MAIN COMPONENT
 // ============================================
 
-export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, onNavigate, isPopupMode }: Props) {
+export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, onNavigate, onColorModelWhite, isPopupMode }: Props) {
   // ============================================
   // STATE
   // ============================================
@@ -7754,6 +7754,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         onNavigate={handleHeaderNavigate}
         currentMode="delivery_schedule"
         user={_user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       >

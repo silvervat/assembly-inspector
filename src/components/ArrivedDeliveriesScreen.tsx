@@ -364,7 +364,8 @@ export default function ArrivedDeliveriesScreen({
   user,
   projectId,
   onBack,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: ArrivedDeliveriesScreenProps) {
   // User email
   const tcUserEmail = user?.email || 'unknown';
@@ -3411,6 +3412,7 @@ export default function ArrivedDeliveriesScreen({
         onNavigate={handleHeaderNavigate}
         currentMode="arrived_deliveries"
         user={user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       >

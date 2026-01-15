@@ -384,7 +384,8 @@ export default function OrganizerScreen({
   projectId,
   tcUserEmail,
   onBackToMenu,
-  onNavigate
+  onNavigate,
+  onColorModelWhite
 }: OrganizerScreenProps) {
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -5655,6 +5656,7 @@ export default function OrganizerScreen({
         }}
         currentMode="organizer"
         user={user}
+        onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
       >
