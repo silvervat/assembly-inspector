@@ -303,6 +303,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Reference to external GUID Controller window
   const guidControllerWindowRef = useRef<Window | null>(null);
 
+  // Cast Unit Mark search state
+  const [markSearchInput, setMarkSearchInput] = useState('');
+  const [markSearchResults, setMarkSearchResults] = useState<Array<{
+    mark: string;
+    runtimeId: number;
+    modelId: string;
+    similarity: number;
+  }>>([]);
+  const [markSearchLoading, setMarkSearchLoading] = useState(false);
+  const [allMarksCache, setAllMarksCache] = useState<Array<{
+    mark: string;
+    runtimeId: number;
+    modelId: string;
+  }>>([]);
+
   // Assembly & Bolts list state
   const [assemblyListLoading, setAssemblyListLoading] = useState(false);
   const [assemblyList, setAssemblyList] = useState<AssemblyListItem[]>([]);
@@ -5253,6 +5268,317 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   <li>Horisontaalne kerimine tabelites</li>
                 </ul>
               </div>
+            </div>
+
+            {/* CAST UNIT MARK SEARCH section */}
+            <div className="function-section">
+              <h4>🔍 Cast Unit Mark otsing</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Otsi mudelist detaile Cast Unit Mark järgi. Näitab ka sarnaseid tulemusi.
+              </p>
+
+              {/* Search input */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <input
+                  type="text"
+                  value={markSearchInput}
+                  onChange={(e) => setMarkSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Trigger search
+                      const searchBtn = document.getElementById('mark-search-btn');
+                      searchBtn?.click();
+                    }
+                  }}
+                  placeholder="Sisesta mark (nt: S-101, B-22...)"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    border: '1px solid #ddd',
+                    borderRadius: '6px',
+                    fontSize: '13px'
+                  }}
+                />
+                <button
+                  id="mark-search-btn"
+                  onClick={async () => {
+                    if (!markSearchInput.trim()) {
+                      setMarkSearchResults([]);
+                      return;
+                    }
+
+                    setMarkSearchLoading(true);
+                    try {
+                      const searchTerm = markSearchInput.trim().toLowerCase();
+
+                      // Use cache if available, otherwise fetch all marks
+                      let marks = allMarksCache;
+                      if (marks.length === 0) {
+                        // Get all objects from model
+                        const allModelObjects = await api.viewer.getObjects();
+                        if (!allModelObjects || allModelObjects.length === 0) {
+                          setMarkSearchResults([]);
+                          setMarkSearchLoading(false);
+                          return;
+                        }
+
+                        marks = [];
+                        for (const modelObj of allModelObjects) {
+                          const modelId = modelObj.modelId;
+                          const objects = (modelObj as any).objects || [];
+                          const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                          if (runtimeIds.length > 0) {
+                            // Get properties in batches
+                            const batchSize = 100;
+                            for (let i = 0; i < runtimeIds.length; i += batchSize) {
+                              const batch = runtimeIds.slice(i, i + batchSize);
+                              const props = await api.viewer.getObjectProperties(modelId, batch);
+
+                              for (let j = 0; j < props.length; j++) {
+                                const p = props[j];
+                                if (p?.properties && Array.isArray(p.properties)) {
+                                  for (const pset of p.properties as any[]) {
+                                    if (pset.name === 'Tekla Assembly') {
+                                      for (const prop of pset.properties || []) {
+                                        if (prop.name === 'Assembly/Cast unit Mark' && prop.value) {
+                                          marks.push({
+                                            mark: String(prop.value),
+                                            runtimeId: batch[j],
+                                            modelId
+                                          });
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                        setAllMarksCache(marks);
+                      }
+
+                      // Calculate similarity and filter results
+                      const calculateSimilarity = (mark: string, search: string): number => {
+                        const markLower = mark.toLowerCase();
+                        // Exact match
+                        if (markLower === search) return 100;
+                        // Starts with
+                        if (markLower.startsWith(search)) return 90;
+                        // Contains
+                        if (markLower.includes(search)) return 70;
+                        // Check if numbers match (for patterns like S-101 searching for 101)
+                        const searchNums = search.match(/\d+/g)?.join('') || '';
+                        const markNums = markLower.match(/\d+/g)?.join('') || '';
+                        if (searchNums && markNums && markNums.includes(searchNums)) return 50;
+                        // Check letter prefix match (S-101 vs S-102)
+                        const searchPrefix = search.replace(/\d+/g, '').trim();
+                        const markPrefix = markLower.replace(/\d+/g, '').trim();
+                        if (searchPrefix && markPrefix && markPrefix === searchPrefix) return 40;
+                        return 0;
+                      };
+
+                      const results = marks
+                        .map(m => ({
+                          ...m,
+                          similarity: calculateSimilarity(m.mark, searchTerm)
+                        }))
+                        .filter(m => m.similarity > 0)
+                        .sort((a, b) => b.similarity - a.similarity || a.mark.localeCompare(b.mark))
+                        .slice(0, 50); // Limit to 50 results
+
+                      setMarkSearchResults(results);
+                    } catch (e) {
+                      console.error('Mark search error:', e);
+                    } finally {
+                      setMarkSearchLoading(false);
+                    }
+                  }}
+                  disabled={markSearchLoading}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: markSearchLoading ? 'wait' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {markSearchLoading ? <FiRefreshCw size={14} className="spin" /> : <FiSearch size={14} />}
+                  Otsi
+                </button>
+              </div>
+
+              {/* Quick actions */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={async () => {
+                    setMarkSearchLoading(true);
+                    setAllMarksCache([]);
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        setMarkSearchResults([]);
+                        return;
+                      }
+
+                      const marks: typeof allMarksCache = [];
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const runtimeIds = objects.map((obj: any) => obj.id).filter((id: any) => id && id > 0);
+
+                        if (runtimeIds.length > 0) {
+                          const batchSize = 100;
+                          for (let i = 0; i < runtimeIds.length; i += batchSize) {
+                            const batch = runtimeIds.slice(i, i + batchSize);
+                            const props = await api.viewer.getObjectProperties(modelId, batch);
+
+                            for (let j = 0; j < props.length; j++) {
+                              const p = props[j];
+                              if (p?.properties && Array.isArray(p.properties)) {
+                                for (const pset of p.properties as any[]) {
+                                  if (pset.name === 'Tekla Assembly') {
+                                    for (const prop of pset.properties || []) {
+                                      if (prop.name === 'Assembly/Cast unit Mark' && prop.value) {
+                                        marks.push({
+                                          mark: String(prop.value),
+                                          runtimeId: batch[j],
+                                          modelId
+                                        });
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                      setAllMarksCache(marks);
+                      // Show all marks sorted alphabetically
+                      setMarkSearchResults(marks.map(m => ({ ...m, similarity: 100 })).sort((a, b) => a.mark.localeCompare(b.mark)));
+                    } catch (e) {
+                      console.error('Load all marks error:', e);
+                    } finally {
+                      setMarkSearchLoading(false);
+                    }
+                  }}
+                  disabled={markSearchLoading}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#f3f4f6',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📋 Laadi kõik markid
+                </button>
+                <button
+                  onClick={() => {
+                    setMarkSearchResults([]);
+                    setMarkSearchInput('');
+                  }}
+                  style={{
+                    padding: '6px 10px',
+                    background: '#f3f4f6',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    fontSize: '11px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🗑️ Tühjenda
+                </button>
+                {allMarksCache.length > 0 && (
+                  <span style={{ fontSize: '11px', color: '#666', padding: '6px 0' }}>
+                    Cache: {allMarksCache.length} marki
+                  </span>
+                )}
+              </div>
+
+              {/* Results list */}
+              {markSearchResults.length > 0 && (
+                <div style={{
+                  maxHeight: '300px',
+                  overflow: 'auto',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  background: 'white'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', position: 'sticky', top: 0 }}>
+                        <th style={{ padding: '8px', textAlign: 'left', borderBottom: '1px solid #e5e7eb' }}>Mark</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '60px' }}>Match</th>
+                        <th style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #e5e7eb', width: '80px' }}>Tegevus</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {markSearchResults.map((result, idx) => (
+                        <tr
+                          key={idx}
+                          style={{
+                            background: result.similarity === 100 ? '#f0fdf4' : result.similarity >= 70 ? '#fefce8' : 'white',
+                            borderBottom: '1px solid #f3f4f6'
+                          }}
+                        >
+                          <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>
+                            {result.mark}
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '10px',
+                              fontSize: '10px',
+                              background: result.similarity === 100 ? '#22c55e' : result.similarity >= 70 ? '#eab308' : '#94a3b8',
+                              color: 'white'
+                            }}>
+                              {result.similarity}%
+                            </span>
+                          </td>
+                          <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                            <button
+                              onClick={async () => {
+                                try {
+                                  // Select and zoom to this object
+                                  await api.viewer.setSelection({
+                                    modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }]
+                                  }, 'set');
+                                  await api.viewer.setCamera({ modelObjectIds: [{ modelId: result.modelId, objectRuntimeIds: [result.runtimeId] }] } as any, { animationTime: 300 });
+                                } catch (e) {
+                                  console.error('Select error:', e);
+                                }
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                background: '#3b82f6',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontSize: '10px',
+                                cursor: 'pointer'
+                              }}
+                              title="Vali ja suumi"
+                            >
+                              🎯
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div style={{ padding: '8px', background: '#f8fafc', fontSize: '11px', color: '#666', borderTop: '1px solid #e5e7eb' }}>
+                    Kokku: {markSearchResults.length} tulemust
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* SELECTION section */}
