@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.566';
+export const APP_VERSION = '3.0.567';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -127,6 +127,9 @@ export default function App() {
   const [matchedTypeIds, setMatchedTypeIds] = useState<string[]>([]);
   const [completedTypeIds, setCompletedTypeIds] = useState<string[]>([]); // Types where selected detail is already inspected
   const lastMenuSelectionRef = useRef<string>('');
+
+  // Cache for color white function (guid lowercase -> { modelId, runtimeId })
+  const colorWhiteCacheRef = useRef<Map<string, { modelId: string; runtimeId: number }>>(new Map());
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
@@ -422,7 +425,7 @@ export default function App() {
     setSelectedInspectionType(null);
   };
 
-  // Color all model objects white using database - optimized with parallel batches
+  // Color all model objects white using database - optimized with cache like InstallationsScreen
   const [colorWhiteProgress, setColorWhiteProgress] = useState<string | null>(null);
 
   const handleColorModelWhite = useCallback(async () => {
@@ -432,120 +435,90 @@ export default function App() {
     }
 
     try {
-      setColorWhiteProgress('Laen andmebaasist...');
       console.log('[COLOR WHITE] Starting...');
 
-      // Fetch all GUIDs from database in parallel batches
-      const PAGE_SIZE = 5000;
-      const PARALLEL_DB_BATCHES = 4;
+      // Use cache if available
+      let foundByLowercase = colorWhiteCacheRef.current;
 
-      // First, get count to know how many pages we need
-      const { count, error: countError } = await supabase
-        .from('trimble_model_objects')
-        .select('guid_ifc', { count: 'exact', head: true })
-        .eq('trimble_project_id', projectId)
-        .not('guid_ifc', 'is', null);
+      if (foundByLowercase.size === 0) {
+        setColorWhiteProgress('Laen andmebaasist...');
 
-      if (countError) throw countError;
+        // Fetch from database
+        const PAGE_SIZE = 5000;
+        const allGuids: string[] = [];
+        let offset = 0;
 
-      const totalCount = count || 0;
-      console.log(`[COLOR WHITE] Total count: ${totalCount}`);
+        while (true) {
+          const { data, error } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null)
+            .range(offset, offset + PAGE_SIZE - 1);
 
-      if (totalCount === 0) {
-        setColorWhiteProgress(null);
-        console.warn('No objects found in database');
-        return;
-      }
-
-      // Calculate number of pages
-      const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-      const allGuids: string[] = [];
-
-      // Fetch pages in parallel batches
-      for (let startPage = 0; startPage < totalPages; startPage += PARALLEL_DB_BATCHES) {
-        const pagePromises: Promise<any>[] = [];
-        const endPage = Math.min(startPage + PARALLEL_DB_BATCHES, totalPages);
-
-        for (let page = startPage; page < endPage; page++) {
-          const offset = page * PAGE_SIZE;
-          pagePromises.push(
-            (async () => {
-              return await supabase
-                .from('trimble_model_objects')
-                .select('guid_ifc')
-                .eq('trimble_project_id', projectId)
-                .not('guid_ifc', 'is', null)
-                .range(offset, offset + PAGE_SIZE - 1);
-            })()
-          );
-        }
-
-        const results = await Promise.all(pagePromises);
-        for (const result of results) {
-          if (result.data) {
-            allGuids.push(...result.data.map((d: any) => d.guid_ifc).filter(Boolean));
+          if (error) {
+            console.error('Supabase error:', error);
+            setColorWhiteProgress(null);
+            return;
           }
+          if (!data || data.length === 0) break;
+
+          for (const obj of data) {
+            if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+          }
+          offset += data.length;
+          if (data.length < PAGE_SIZE) break;
         }
 
-        setColorWhiteProgress(`Laen andmebaasist... ${Math.min((endPage / totalPages) * 100, 100).toFixed(0)}%`);
+        console.log(`[COLOR WHITE] Found ${allGuids.length} GUIDs in database`);
+
+        if (allGuids.length === 0) {
+          setColorWhiteProgress(null);
+          return;
+        }
+
+        setColorWhiteProgress('Otsin mudelist...');
+
+        // Find objects in loaded models
+        const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+        // Build cache
+        foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const [guid, found] of foundObjects) {
+          foundByLowercase.set(guid.toLowerCase(), found);
+        }
+        colorWhiteCacheRef.current = foundByLowercase;
+
+        console.log(`[COLOR WHITE] Cached ${foundByLowercase.size} objects`);
+      } else {
+        console.log(`[COLOR WHITE] Using cache with ${foundByLowercase.size} objects`);
       }
 
-      console.log(`[COLOR WHITE] Found ${allGuids.length} GUIDs in database`);
-      setColorWhiteProgress('Otsin mudelist...');
-
-      // Find objects in loaded models
-      const foundObjects = await findObjectsInLoadedModels(api, allGuids);
-      console.log(`[COLOR WHITE] Found ${foundObjects.size} objects in model`);
-
-      if (foundObjects.size === 0) {
+      if (foundByLowercase.size === 0) {
         setColorWhiteProgress(null);
-        console.warn('No objects found in model');
         return;
       }
+
+      setColorWhiteProgress('Värvin...');
 
       // Group by model
-      const byModel: Record<string, number[]> = {};
-      for (const [, found] of foundObjects) {
-        if (!byModel[found.modelId]) byModel[found.modelId] = [];
-        byModel[found.modelId].push(found.runtimeId);
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [, found] of foundByLowercase) {
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
       }
 
-      // Color white using parallel batches
-      const BATCH_SIZE = 500;
-      const PARALLEL_COLOR_BATCHES = 4;
+      // Color in large batches (5000 like InstallationsScreen)
+      const BATCH_SIZE = 5000;
       const white = { r: 255, g: 255, b: 255, a: 255 };
 
-      let totalBatches = 0;
-      let completedBatches = 0;
-
-      // Count total batches
-      for (const runtimeIds of Object.values(byModel)) {
-        totalBatches += Math.ceil(runtimeIds.length / BATCH_SIZE);
-      }
-
-      setColorWhiteProgress(`Värvin... 0%`);
-
-      // Process each model
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
-        const batches: number[][] = [];
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
-          batches.push(runtimeIds.slice(i, i + BATCH_SIZE));
-        }
-
-        // Process batches in parallel
-        for (let i = 0; i < batches.length; i += PARALLEL_COLOR_BATCHES) {
-          const parallelBatches = batches.slice(i, i + PARALLEL_COLOR_BATCHES);
-
-          await Promise.all(parallelBatches.map(batch =>
-            api.viewer.setObjectState(
-              { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
-              { color: white }
-            )
-          ));
-
-          completedBatches += parallelBatches.length;
-          const percent = Math.round((completedBatches / totalBatches) * 100);
-          setColorWhiteProgress(`Värvin... ${percent}%`);
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: white }
+          );
         }
       }
 
@@ -553,6 +526,7 @@ export default function App() {
       console.log('[COLOR WHITE] Done!');
     } catch (e) {
       console.error('[COLOR WHITE] Error:', e);
+      setColorWhiteProgress(null);
     }
   }, [api, projectId]);
 
