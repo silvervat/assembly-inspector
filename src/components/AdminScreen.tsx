@@ -7247,6 +7247,72 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="📊 Loenda assemblyd vs eraldi detailid"
+                  result={functionResults["countAssembliesVsStandalone"]}
+                  onClick={async () => {
+                    updateFunctionResult("countAssembliesVsStandalone", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("countAssembliesVsStandalone", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      let totalObjects = 0;
+                      let assemblies = 0;      // Objects WITH children
+                      let standalone = 0;      // Objects WITHOUT children
+                      let totalChildren = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const allIds = objects.map((o: any) => o.id).filter((id: any) => id > 0);
+                        totalObjects += allIds.length;
+
+                        // Process in batches for speed
+                        const BATCH_SIZE = 50;
+                        for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+                          const batch = allIds.slice(i, i + BATCH_SIZE);
+
+                          // Check each object in batch
+                          for (const id of batch) {
+                            try {
+                              const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
+                              if (children && Array.isArray(children) && children.length > 0) {
+                                assemblies++;
+                                totalChildren += children.length;
+                              } else {
+                                standalone++;
+                              }
+                            } catch {
+                              standalone++; // If error, assume standalone
+                            }
+                          }
+
+                          // Progress update
+                          const processed = i + batch.length;
+                          updateFunctionResult("countAssembliesVsStandalone", {
+                            status: 'pending',
+                            result: `Kontrollin... ${processed}/${allIds.length}\nAssemblyd: ${assemblies} | Eraldi: ${standalone}`
+                          });
+                        }
+                      }
+
+                      updateFunctionResult("countAssembliesVsStandalone", {
+                        status: 'success',
+                        result: `KOKKU: ${totalObjects} objekti\n\n` +
+                          `📦 ASSEMBLYD (omavad alamdetaile): ${assemblies}\n` +
+                          `   → Kokku alamdetaile: ${totalChildren}\n\n` +
+                          `📄 ERALDI DETAILID (pole alamdetaile): ${standalone}\n\n` +
+                          `💡 Andmebaasi salvestada: ${assemblies + standalone} rida\n` +
+                          `   (vs praegu ~${totalChildren} rida)`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("countAssembliesVsStandalone", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🔲 Vali AINULT assemblyd (kellel on alamdetailid)"
                   result={functionResults["selectOnlyAssemblies"]}
                   onClick={async () => {
