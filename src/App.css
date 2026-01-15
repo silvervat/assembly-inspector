@@ -15012,6 +15012,18 @@ button.stat-toggle.off:hover {
   margin-bottom: 4px;
 }
 
+.tools-section-header-clickable {
+  cursor: pointer;
+  padding: 8px;
+  margin: -8px -8px 4px -8px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.tools-section-header-clickable:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 .tools-section-header h3 {
   font-size: 14px;
   font-weight: 600;

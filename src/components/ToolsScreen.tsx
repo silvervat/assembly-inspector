@@ -3,9 +3,13 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+
+// Constants
+const MAX_MARKUPS_PER_BATCH = 200;
+const MAX_TABLE_DISPLAY_ROWS = 10;
 
 interface ToolsScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -49,12 +53,23 @@ export default function ToolsScreen({
   const [scanLoading, setScanLoading] = useState(false);
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
 
+  // Accordion state - which section is expanded
+  const [expandedSection, setExpandedSection] = useState<'export' | 'markup' | null>('export');
+
+  // Progress overlay state for batch operations
+  const [batchProgress, setBatchProgress] = useState<{ message: string; percent: number } | null>(null);
+
   // Toast state
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Ref for bolt summary table (for image copy)
   const boltSummaryRef = useRef<HTMLDivElement>(null);
+
+  // Toggle section expansion (accordion style)
+  const toggleSection = (section: 'export' | 'markup') => {
+    setExpandedSection(prev => prev === section ? null : section);
+  };
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -71,7 +86,7 @@ export default function ToolsScreen({
     }
   };
 
-  // Add bolt markups
+  // Add bolt markups - with batch limit of 200 per selection
   const handleAddBoltMarkups = async () => {
     setBoltLoading(true);
     try {
@@ -101,10 +116,22 @@ export default function ToolsScreen({
 
       console.log(`🏷️ Adding markups for ${allRuntimeIds.length} selected objects...`);
 
+      // Show progress for large selections
+      const showProgress = allRuntimeIds.length > 10;
+      if (showProgress) {
+        setBatchProgress({ message: 'Kogun poltide andmeid', percent: 0 });
+      }
+
       const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
 
       // Process each selected object
-      for (const runtimeId of allRuntimeIds) {
+      for (let idx = 0; idx < allRuntimeIds.length; idx++) {
+        const runtimeId = allRuntimeIds[idx];
+
+        if (showProgress && idx % 5 === 0) {
+          setBatchProgress({ message: 'Kogun poltide andmeid', percent: Math.round((idx / allRuntimeIds.length) * 50) });
+        }
+
         // Get children (bolt assemblies) using getHierarchyChildren
         try {
           const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
@@ -113,10 +140,7 @@ export default function ToolsScreen({
             const childIds = hierarchyChildren.map((c: any) => c.id);
 
             if (childIds.length > 0) {
-              // Get properties for children
               const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
-
-              // Get bounding boxes for children
               const childBBoxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
 
               for (let i = 0; i < childProps.length; i++) {
@@ -126,25 +150,18 @@ export default function ToolsScreen({
                 if (childProp?.properties && Array.isArray(childProp.properties)) {
                   let boltName = '';
                   let hasTeklaBolt = false;
-                  let washerCount = -1; // -1 means not found
+                  let washerCount = -1;
 
                   for (const pset of childProp.properties) {
-                    const psetName = (pset.name || '');
-                    const psetNameLower = psetName.toLowerCase();
-
-                    // Check for Tekla Bolt property set (more specific matching)
+                    const psetNameLower = (pset.name || '').toLowerCase();
                     if (psetNameLower.includes('tekla') && psetNameLower.includes('bolt')) {
                       hasTeklaBolt = true;
                       for (const p of pset.properties || []) {
                         const propName = (p.name || '').toLowerCase();
                         const val = String(p.value ?? p.displayValue ?? '');
-
-                        // Get bolt name - check various naming patterns
-                        if (propName === 'bolt_name' || propName === 'bolt.name' ||
-                            (propName.includes('bolt') && propName.includes('name'))) {
+                        if (propName === 'bolt_name' || propName === 'bolt.name' || (propName.includes('bolt') && propName.includes('name'))) {
                           boltName = val;
                         }
-                        // Get washer count
                         if (propName.includes('washer') && propName.includes('count')) {
                           washerCount = parseInt(val) || 0;
                         }
@@ -152,43 +169,16 @@ export default function ToolsScreen({
                     }
                   }
 
-                  // Skip if no Tekla Bolt property set found
-                  if (!hasTeklaBolt) {
-                    continue;
-                  }
+                  if (!hasTeklaBolt || washerCount === 0 || !boltName) continue;
 
-                  // Skip if washer count is 0 (opening/hole, not a real bolt)
-                  if (washerCount === 0) {
-                    continue;
-                  }
-
-                  // Skip if no bolt name (required for markup text)
-                  if (!boltName) {
-                    continue;
-                  }
-
-                  // Get center position from bounding box
                   if (childBBox?.boundingBox) {
                     const box = childBBox.boundingBox;
-                    const midPoint = {
-                      x: (box.min.x + box.max.x) / 2,
-                      y: (box.min.y + box.max.y) / 2,
-                      z: (box.min.z + box.max.z) / 2
-                    };
-
-                    // Use same format as InstallationScheduleScreen (position in mm)
                     const pos = {
-                      positionX: midPoint.x * 1000,
-                      positionY: midPoint.y * 1000,
-                      positionZ: midPoint.z * 1000,
+                      positionX: ((box.min.x + box.max.x) / 2) * 1000,
+                      positionY: ((box.min.y + box.max.y) / 2) * 1000,
+                      positionZ: ((box.min.z + box.max.z) / 2) * 1000,
                     };
-
-                    markupsToCreate.push({
-                      text: boltName,
-                      start: pos,
-                      end: pos,
-                    });
-                    console.log(`   ✅ Will create markup: "${boltName}"`);
+                    markupsToCreate.push({ text: boltName, start: pos, end: pos });
                   }
                 }
               }
@@ -200,12 +190,25 @@ export default function ToolsScreen({
       }
 
       if (markupsToCreate.length === 0) {
+        setBatchProgress(null);
         showToast('Polte ei leitud (või washer count = 0)', 'error');
         setBoltLoading(false);
         return;
       }
 
+      // Check batch limit
+      if (markupsToCreate.length > MAX_MARKUPS_PER_BATCH) {
+        setBatchProgress(null);
+        showToast(`Liiga palju markupe (${markupsToCreate.length}). Max ${MAX_MARKUPS_PER_BATCH} korraga!`, 'error');
+        setBoltLoading(false);
+        return;
+      }
+
       console.log('🏷️ Creating', markupsToCreate.length, 'markups');
+
+      if (showProgress) {
+        setBatchProgress({ message: 'Loon markupe', percent: 60 });
+      }
 
       // Create markups
       const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
@@ -222,19 +225,28 @@ export default function ToolsScreen({
       }
 
       // Color them green
+      if (showProgress) {
+        setBatchProgress({ message: 'Värvin markupe', percent: 80 });
+      }
+
       const greenColor = '#22C55E';
-      for (const id of createdIds) {
+      for (let i = 0; i < createdIds.length; i++) {
         try {
-          await (api.markup as any)?.editMarkup?.(id, { color: greenColor });
+          await (api.markup as any)?.editMarkup?.(createdIds[i], { color: greenColor });
         } catch (e) {
-          console.warn('Could not set color for markup', id, e);
+          console.warn('Could not set color for markup', createdIds[i], e);
+        }
+        if (showProgress && i % 20 === 0) {
+          setBatchProgress({ message: 'Värvin markupe', percent: 80 + Math.round((i / createdIds.length) * 20) });
         }
       }
 
+      setBatchProgress(null);
       console.log('🏷️ Markups created successfully');
       showToast(`${createdIds.length} markupit loodud`, 'success');
     } catch (e: any) {
       console.error('Markup error:', e);
+      setBatchProgress(null);
       showToast(e.message || 'Viga markupite lisamisel', 'error');
     } finally {
       setBoltLoading(false);
@@ -466,7 +478,7 @@ export default function ToolsScreen({
     }
   };
 
-  // Scan bolts and create summary table
+  // Scan bolts and create summary table - with batch processing for large selections
   const handleScanBolts = async () => {
     setScanLoading(true);
     setBoltSummary([]);
@@ -489,9 +501,22 @@ export default function ToolsScreen({
         return;
       }
 
+      // Show progress for large selections
+      const showProgress = allRuntimeIds.length > 20;
+      if (showProgress) {
+        setBatchProgress({ message: 'Skaneerin polte', percent: 0 });
+      }
+
       const summaryMap = new Map<string, BoltSummaryItem>();
 
-      for (const runtimeId of allRuntimeIds) {
+      // Process in batches for large selections
+      for (let idx = 0; idx < allRuntimeIds.length; idx++) {
+        const runtimeId = allRuntimeIds[idx];
+
+        if (showProgress && idx % 10 === 0) {
+          setBatchProgress({ message: 'Skaneerin polte', percent: Math.round((idx / allRuntimeIds.length) * 100) });
+        }
+
         try {
           const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
           if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
@@ -555,6 +580,8 @@ export default function ToolsScreen({
         } catch (e) { console.warn('Could not get children for', runtimeId, e); }
       }
 
+      setBatchProgress(null);
+
       const sortedSummary = Array.from(summaryMap.values()).sort((a, b) => {
         if (a.boltStandard !== b.boltStandard) return a.boltStandard.localeCompare(b.boltStandard);
         return a.boltName.localeCompare(b.boltName);
@@ -563,11 +590,14 @@ export default function ToolsScreen({
       setBoltSummary(sortedSummary);
       if (sortedSummary.length === 0) {
         showToast('Polte ei leitud (või washer count = 0)', 'error');
+      } else if (sortedSummary.length > MAX_TABLE_DISPLAY_ROWS) {
+        showToast(`${sortedSummary.length} erinevat polti leitud (tabel >10 - ainult eksport)`, 'success');
       } else {
         showToast(`${sortedSummary.length} erinevat polti leitud`, 'success');
       }
     } catch (e: any) {
       console.error('Scan error:', e);
+      setBatchProgress(null);
       showToast(e.message || 'Viga skanneerimisel', 'error');
     } finally {
       setScanLoading(false);
@@ -744,6 +774,9 @@ export default function ToolsScreen({
     showToast('Tulemused tühjendatud', 'success');
   };
 
+  // Check if table display is allowed (max 10 rows)
+  const tableDisplayAllowed = boltSummary.length <= MAX_TABLE_DISPLAY_ROWS;
+
   return (
     <div className="tools-screen">
       <PageHeader
@@ -757,6 +790,19 @@ export default function ToolsScreen({
         projectId={_projectId}
       />
 
+      {/* Batch progress overlay */}
+      {batchProgress && (
+        <div className="color-white-overlay">
+          <div className="color-white-card">
+            <div className="color-white-message">{batchProgress.message}</div>
+            <div className="color-white-bar-container">
+              <div className="color-white-bar" style={{ width: `${batchProgress.percent}%` }} />
+            </div>
+            <div className="color-white-percent">{batchProgress.percent}%</div>
+          </div>
+        </div>
+      )}
+
       {/* Toast notification */}
       {toast && (
         <div className={`tools-toast tools-toast-${toast.type}`}>
@@ -765,77 +811,87 @@ export default function ToolsScreen({
       )}
 
       <div className="tools-content">
-        {/* Bolt Export Section */}
+        {/* Bolt Export Section - Collapsible */}
         <div className="tools-section">
-          <div className="tools-section-header">
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('export')}
+          >
+            {expandedSection === 'export' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiDownload size={18} style={{ color: '#3b82f6' }} />
             <h3>Poltide eksport</h3>
           </div>
-          <p className="tools-section-desc">
-            Vali mudelist detailid ja skaneeri poldid koondtabelisse.
-          </p>
 
-          <div className="tools-lang-toggle">
-            <button
-              className={`tools-lang-btn ${exportLanguage === 'et' ? 'active' : ''}`}
-              onClick={() => setExportLanguage('et')}
-            >
-              🇪🇪 Eesti
-            </button>
-            <button
-              className={`tools-lang-btn ${exportLanguage === 'en' ? 'active' : ''}`}
-              onClick={() => setExportLanguage('en')}
-            >
-              🇬🇧 English
-            </button>
-          </div>
+          {expandedSection === 'export' && (
+            <>
+              <p className="tools-section-desc">
+                Vali mudelist detailid ja skaneeri poldid koondtabelisse.
+              </p>
 
-          <div className="tools-buttons">
-            <button
-              className="tools-btn tools-btn-primary"
-              onClick={handleScanBolts}
-              disabled={scanLoading}
-              style={{ background: '#22c55e' }}
-            >
-              {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
-              <span>Skaneeri poldid</span>
-            </button>
+              <div className="tools-lang-toggle">
+                <button
+                  className={`tools-lang-btn ${exportLanguage === 'et' ? 'active' : ''}`}
+                  onClick={() => setExportLanguage('et')}
+                >
+                  🇪🇪 Eesti
+                </button>
+                <button
+                  className={`tools-lang-btn ${exportLanguage === 'en' ? 'active' : ''}`}
+                  onClick={() => setExportLanguage('en')}
+                >
+                  🇬🇧 English
+                </button>
+              </div>
 
-            <button
-              className="tools-btn tools-btn-secondary"
-              onClick={handleExportBolts}
-              disabled={exportLoading}
-            >
-              {exportLoading ? <FiLoader className="spinning" size={14} /> : <FiDownload size={14} />}
-              <span>Ekspordi Excel</span>
-            </button>
+              <div className="tools-buttons">
+                <button
+                  className="tools-btn tools-btn-primary"
+                  onClick={handleScanBolts}
+                  disabled={scanLoading}
+                  style={{ background: '#22c55e' }}
+                >
+                  {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
+                  <span>Skaneeri poldid</span>
+                </button>
 
-            <button
-              className="tools-btn tools-btn-secondary"
-              onClick={handleCopySummary}
-              disabled={boltSummary.length === 0}
-            >
-              <FiCopy size={14} />
-              <span>Kopeeri tabel</span>
-            </button>
+                <button
+                  className="tools-btn tools-btn-secondary"
+                  onClick={handleExportBolts}
+                  disabled={exportLoading || boltSummary.length === 0}
+                >
+                  {exportLoading ? <FiLoader className="spinning" size={14} /> : <FiDownload size={14} />}
+                  <span>Ekspordi Excel</span>
+                </button>
 
-            <button
-              className="tools-btn tools-btn-secondary"
-              onClick={handleCopyAsImage}
-              disabled={boltSummary.length === 0}
-              style={{ background: '#dbeafe' }}
-            >
-              <FiCamera size={14} />
-              <span>Kopeeri pildina</span>
-            </button>
+                <button
+                  className="tools-btn tools-btn-secondary"
+                  onClick={handleCopySummary}
+                  disabled={boltSummary.length === 0 || !tableDisplayAllowed}
+                  title={!tableDisplayAllowed ? `Liiga palju ridu (${boltSummary.length}). Max ${MAX_TABLE_DISPLAY_ROWS}.` : ''}
+                >
+                  <FiCopy size={14} />
+                  <span>Kopeeri tabel</span>
+                </button>
 
-            <button
-              className="tools-btn tools-btn-secondary"
-              onClick={handleDownloadAsImage}
-              disabled={boltSummary.length === 0}
-              style={{ background: '#e0e7ff' }}
-            >
-              <FiDownload size={14} />
+                <button
+                  className="tools-btn tools-btn-secondary"
+                  onClick={handleCopyAsImage}
+                  disabled={boltSummary.length === 0 || !tableDisplayAllowed}
+                  style={{ background: tableDisplayAllowed ? '#dbeafe' : '#f3f4f6' }}
+                  title={!tableDisplayAllowed ? `Liiga palju ridu (${boltSummary.length}). Max ${MAX_TABLE_DISPLAY_ROWS}.` : ''}
+                >
+                  <FiCamera size={14} />
+                  <span>Kopeeri pildina</span>
+                </button>
+
+                <button
+                  className="tools-btn tools-btn-secondary"
+                  onClick={handleDownloadAsImage}
+                  disabled={boltSummary.length === 0 || !tableDisplayAllowed}
+                  style={{ background: tableDisplayAllowed ? '#e0e7ff' : '#f3f4f6' }}
+                  title={!tableDisplayAllowed ? `Liiga palju ridu (${boltSummary.length}). Max ${MAX_TABLE_DISPLAY_ROWS}.` : ''}
+                >
+                  <FiDownload size={14} />
               <span>Salvesta pilt</span>
             </button>
 
@@ -849,8 +905,8 @@ export default function ToolsScreen({
             </button>
           </div>
 
-          {/* Bolt Summary Table */}
-          {boltSummary.length > 0 && (
+          {/* Bolt Summary Table - only show if <= 10 rows */}
+          {boltSummary.length > 0 && tableDisplayAllowed && (
             <div className="bolt-summary-section" ref={boltSummaryRef} style={{ marginTop: '16px' }}>
               <div style={{
                 display: 'flex',
@@ -973,45 +1029,75 @@ export default function ToolsScreen({
               </div>
             </div>
           )}
+
+          {/* Message when too many rows */}
+          {boltSummary.length > MAX_TABLE_DISPLAY_ROWS && (
+            <div style={{
+              marginTop: '16px',
+              padding: '12px 16px',
+              background: '#fef3c7',
+              borderRadius: '8px',
+              border: '1px solid #f59e0b',
+              color: '#92400e',
+              fontSize: '13px'
+            }}>
+              <strong>⚠️ {boltSummary.length} erinevat polti leitud</strong>
+              <br />
+              <span style={{ fontSize: '12px' }}>
+                Tabel kuvatakse max {MAX_TABLE_DISPLAY_ROWS} rea korral. Kasuta "Ekspordi Excel" allalaadimiseks.
+              </span>
+            </div>
+          )}
+            </>
+          )}
         </div>
 
-        {/* Bolt Markups Section */}
+        {/* Bolt Markups Section - Collapsible */}
         <div className="tools-section">
-          <div className="tools-section-header">
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('markup')}
+          >
+            {expandedSection === 'markup' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
             <FiTag size={18} style={{ color: '#f59e0b' }} />
             <h3>Poltide markupid</h3>
           </div>
-          <p className="tools-section-desc">
-            Lisa poltidele markupid Bolt Name väärtusega.
-          </p>
 
-          <div className="tools-buttons">
-            <button
-              className="tools-btn tools-btn-primary"
-              onClick={handleAddBoltMarkups}
-              disabled={boltLoading}
-            >
-              {boltLoading ? (
-                <FiLoader className="spinning" size={14} />
-              ) : (
-                <span style={{ color: '#22c55e' }}>●</span>
-              )}
-              <span>Lisa markupid</span>
-            </button>
+          {expandedSection === 'markup' && (
+            <>
+              <p className="tools-section-desc">
+                Lisa poltidele markupid Bolt Name väärtusega. Max {MAX_MARKUPS_PER_BATCH} markupit korraga.
+              </p>
 
-            <button
-              className="tools-btn tools-btn-danger"
-              onClick={handleRemoveMarkups}
-              disabled={removeLoading}
-            >
-              {removeLoading ? (
-                <FiLoader className="spinning" size={14} />
-              ) : (
-                <FiTrash2 size={14} />
-              )}
-              <span>Eemalda markupid</span>
-            </button>
-          </div>
+              <div className="tools-buttons">
+                <button
+                  className="tools-btn tools-btn-primary"
+                  onClick={handleAddBoltMarkups}
+                  disabled={boltLoading}
+                >
+                  {boltLoading ? (
+                    <FiLoader className="spinning" size={14} />
+                  ) : (
+                    <span style={{ color: '#22c55e' }}>●</span>
+                  )}
+                  <span>Lisa markupid</span>
+                </button>
+
+                <button
+                  className="tools-btn tools-btn-danger"
+                  onClick={handleRemoveMarkups}
+                  disabled={removeLoading}
+                >
+                  {removeLoading ? (
+                    <FiLoader className="spinning" size={14} />
+                  ) : (
+                    <FiTrash2 size={14} />
+                  )}
+                  <span>Eemalda markupid</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
