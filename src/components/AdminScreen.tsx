@@ -6447,6 +6447,94 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="📐 Piki pikkust (auto)"
+                  result={functionResults["measureAlongLength"]}
+                  onClick={async () => {
+                    updateFunctionResult("measureAlongLength", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                        for (const bbox of boundingBoxes) {
+                          const box = bbox.boundingBox;
+                          const min = { x: box.min.x * 1000, y: box.min.y * 1000, z: box.min.z * 1000 };
+                          const max = { x: box.max.x * 1000, y: box.max.y * 1000, z: box.max.z * 1000 };
+
+                          const width = Math.abs(max.x - min.x);
+                          const depth = Math.abs(max.y - min.y);
+                          const height = Math.abs(max.z - min.z);
+
+                          // Calculate all possible "lengths" for rotated objects
+                          const xyDiag = Math.sqrt(width * width + depth * depth);
+                          const xzDiag = Math.sqrt(width * width + height * height);
+                          const yzDiag = Math.sqrt(depth * depth + height * height);
+
+                          // Find the longest dimension or diagonal
+                          const candidates = [
+                            { name: 'X', value: width, start: { x: min.x, y: min.y, z: min.z }, end: { x: max.x, y: min.y, z: min.z }, color: { r: 255, g: 0, b: 0, a: 255 } },
+                            { name: 'Y', value: depth, start: { x: min.x, y: min.y, z: min.z }, end: { x: min.x, y: max.y, z: min.z }, color: { r: 0, g: 255, b: 0, a: 255 } },
+                            { name: 'Z', value: height, start: { x: min.x, y: min.y, z: min.z }, end: { x: min.x, y: min.y, z: max.z }, color: { r: 0, g: 0, b: 255, a: 255 } },
+                            { name: 'XY diag', value: xyDiag, start: { x: min.x, y: min.y, z: min.z }, end: { x: max.x, y: max.y, z: min.z }, color: { r: 255, g: 0, b: 255, a: 255 } },
+                            { name: 'XZ diag', value: xzDiag, start: { x: min.x, y: min.y, z: min.z }, end: { x: max.x, y: min.y, z: max.z }, color: { r: 255, g: 165, b: 0, a: 255 } },
+                            { name: 'YZ diag', value: yzDiag, start: { x: min.x, y: min.y, z: min.z }, end: { x: min.x, y: max.y, z: max.z }, color: { r: 0, g: 200, b: 200, a: 255 } },
+                          ];
+
+                          // Check if object might be rotated: if XY diagonal is significantly longer than X or Y alone
+                          // For a beam rotated 45° in XY plane: xyDiag will be close to actual length
+                          // Actual length ≈ xyDiag * 0.707 for 45° rotation
+                          const xyRatio = Math.min(width, depth) / Math.max(width, depth);
+                          const isLikelyRotatedXY = xyRatio > 0.5 && width > height * 0.3 && depth > height * 0.3;
+
+                          let selectedCandidate;
+                          let estimatedActualLength: number | null = null;
+
+                          if (isLikelyRotatedXY && xyDiag > Math.max(width, depth) * 1.2) {
+                            // Object appears rotated in XY plane - use diagonal
+                            selectedCandidate = candidates.find(c => c.name === 'XY diag')!;
+                            // For 45° rotation, actual length ≈ diagonal × cos(45°) ≈ diagonal × 0.707
+                            estimatedActualLength = xyDiag * 0.707;
+                          } else {
+                            // Use the longest axis
+                            selectedCandidate = candidates.slice(0, 3).sort((a, b) => b.value - a.value)[0];
+                          }
+
+                          const measurements: any[] = [{
+                            start: { positionX: selectedCandidate.start.x, positionY: selectedCandidate.start.y, positionZ: selectedCandidate.start.z, modelId, objectId: bbox.id },
+                            end: { positionX: selectedCandidate.end.x, positionY: selectedCandidate.end.y, positionZ: selectedCandidate.end.z, modelId, objectId: bbox.id },
+                            mainLineStart: { positionX: selectedCandidate.start.x, positionY: selectedCandidate.start.y, positionZ: selectedCandidate.start.z },
+                            mainLineEnd: { positionX: selectedCandidate.end.x, positionY: selectedCandidate.end.y, positionZ: selectedCandidate.end.z },
+                            color: selectedCandidate.color
+                          }];
+
+                          await api.markup.addMeasurementMarkups(measurements);
+
+                          let resultText = `Mõõtjoon piki ${selectedCandidate.name}: ${selectedCandidate.value.toFixed(0)} mm`;
+                          if (estimatedActualLength) {
+                            resultText += `\n⚠️ Objekt tundub pööratud! Tegelik pikkus ~${estimatedActualLength.toFixed(0)} mm`;
+                          }
+                          resultText += `\n\n📊 Kõik mõõdud:\nX: ${width.toFixed(0)} mm\nY: ${depth.toFixed(0)} mm\nZ: ${height.toFixed(0)} mm\nXY diag: ${xyDiag.toFixed(0)} mm`;
+
+                          updateFunctionResult("measureAlongLength", {
+                            status: 'success',
+                            result: resultText
+                          });
+                          return;
+                        }
+                      }
+                      throw new Error('Bounding box andmeid ei leitud');
+                    } catch (e: any) {
+                      updateFunctionResult("measureAlongLength", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="📏 Kahe objekti vahe"
                   result={functionResults["twoObjectDistance"]}
                   onClick={async () => {
