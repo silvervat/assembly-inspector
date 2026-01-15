@@ -7313,6 +7313,102 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="🎯 Loenda ROOT assemblyd (tipptase)"
+                  result={functionResults["countRootAssemblies"]}
+                  onClick={async () => {
+                    updateFunctionResult("countRootAssemblies", { status: 'pending' });
+                    try {
+                      const allModelObjects = await api.viewer.getObjects();
+                      if (!allModelObjects || allModelObjects.length === 0) {
+                        updateFunctionResult("countRootAssemblies", { status: 'error', error: 'Mudeleid pole' });
+                        return;
+                      }
+
+                      // Step 1: Collect ALL child IDs across all objects
+                      const allChildIds = new Set<number>();
+                      const objectsWithChildren = new Map<number, number[]>(); // id -> childIds
+                      let totalObjects = 0;
+
+                      for (const modelObj of allModelObjects) {
+                        const modelId = modelObj.modelId;
+                        const objects = (modelObj as any).objects || [];
+                        const allIds = objects.map((o: any) => o.id).filter((id: any) => id > 0);
+                        totalObjects += allIds.length;
+
+                        updateFunctionResult("countRootAssemblies", {
+                          status: 'pending',
+                          result: `Samm 1/2: Kogun hierarhia andmeid...\n${totalObjects} objekti`
+                        });
+
+                        // Process in batches
+                        const BATCH_SIZE = 50;
+                        for (let i = 0; i < allIds.length; i += BATCH_SIZE) {
+                          const batch = allIds.slice(i, i + BATCH_SIZE);
+
+                          for (const id of batch) {
+                            try {
+                              const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [id]);
+                              if (children && Array.isArray(children) && children.length > 0) {
+                                const childIds = children.map((c: any) => c.id);
+                                objectsWithChildren.set(id, childIds);
+                                childIds.forEach((cid: number) => allChildIds.add(cid));
+                              }
+                            } catch { /* ignore */ }
+                          }
+
+                          // Progress update
+                          const processed = i + batch.length;
+                          if (processed % 500 === 0 || processed === allIds.length) {
+                            updateFunctionResult("countRootAssemblies", {
+                              status: 'pending',
+                              result: `Samm 1/2: Kogun hierarhia andmeid...\n${processed}/${allIds.length} objekti\nLeitud ${objectsWithChildren.size} assemblyt`
+                            });
+                          }
+                        }
+                      }
+
+                      // Step 2: Find ROOT assemblies (have children but are not anyone's child)
+                      updateFunctionResult("countRootAssemblies", {
+                        status: 'pending',
+                        result: `Samm 2/2: Filtreerin ROOT assemblyd...`
+                      });
+
+                      let rootAssemblies = 0;
+                      let subAssemblies = 0;
+
+                      for (const [id] of objectsWithChildren) {
+                        if (!allChildIds.has(id)) {
+                          // This object HAS children but is NOT in anyone's children list = ROOT
+                          rootAssemblies++;
+                        } else {
+                          // This object HAS children but IS someone's child = SUB-ASSEMBLY
+                          subAssemblies++;
+                        }
+                      }
+
+                      const standaloneCount = totalObjects - rootAssemblies - subAssemblies - allChildIds.size;
+
+                      updateFunctionResult("countRootAssemblies", {
+                        status: 'success',
+                        result: `KOKKU: ${totalObjects} objekti\n\n` +
+                          `🎯 ROOT ASSEMBLYD: ${rootAssemblies}\n` +
+                          `   (tipptase - need tahame salvestada)\n\n` +
+                          `📦 Sub-assemblyd: ${subAssemblies}\n` +
+                          `   (omavad children AGA on ise lapsed)\n\n` +
+                          `📄 Osad/Parts: ${allChildIds.size}\n` +
+                          `   (on kellegi lapsed)\n\n` +
+                          `❓ Eraldi seisvad: ${standaloneCount}\n` +
+                          `   (pole assembly ega kellegi laps)\n\n` +
+                          `💡 Andmebaasi peaks minema:\n` +
+                          `   ROOT: ${rootAssemblies} + Eraldi: ${standaloneCount}\n` +
+                          `   = ${rootAssemblies + standaloneCount} rida`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("countRootAssemblies", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🔲 Vali AINULT assemblyd (kellel on alamdetailid)"
                   result={functionResults["selectOnlyAssemblies"]}
                   onClick={async () => {
