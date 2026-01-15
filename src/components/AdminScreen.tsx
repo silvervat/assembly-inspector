@@ -5581,6 +5581,496 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               )}
             </div>
 
+            {/* MEASUREMENT section */}
+            <div className="function-section">
+              <h4>📏 Mõõtmine (Measurement)</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Mõõda valitud detailide mõõtmeid ja arvuta orientatsioon.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="📐 Bounding Box (valitud)"
+                  result={functionResults["boundingBoxSelected"]}
+                  onClick={async () => {
+                    updateFunctionResult("boundingBoxSelected", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
+
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                      if (!bboxes || bboxes.length === 0) throw new Error('Bounding box pole saadaval');
+
+                      const results = bboxes.map((bbox: any, idx: number) => {
+                        if (!bbox?.boundingBox) return { id: runtimeIds[idx], error: 'no bbox' };
+                        const b = bbox.boundingBox;
+                        const width = Math.abs(b.max.x - b.min.x);
+                        const depth = Math.abs(b.max.y - b.min.y);
+                        const height = Math.abs(b.max.z - b.min.z);
+                        return {
+                          id: runtimeIds[idx],
+                          min: b.min,
+                          max: b.max,
+                          dimensions: {
+                            width: Math.round(width * 1000) / 1000,
+                            depth: Math.round(depth * 1000) / 1000,
+                            height: Math.round(height * 1000) / 1000,
+                            maxDim: Math.round(Math.max(width, depth, height) * 1000) / 1000
+                          },
+                          center: {
+                            x: (b.min.x + b.max.x) / 2,
+                            y: (b.min.y + b.max.y) / 2,
+                            z: (b.min.z + b.max.z) / 2
+                          }
+                        };
+                      });
+
+                      updateFunctionResult("boundingBoxSelected", {
+                        status: 'success',
+                        result: JSON.stringify(results, null, 2)
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("boundingBoxSelected", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📏 Alamdetailide mõõdud"
+                  result={functionResults["childDimensions"]}
+                  onClick={async () => {
+                    updateFunctionResult("childDimensions", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get hierarchy children
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                      if (!children || children.length === 0) {
+                        updateFunctionResult("childDimensions", {
+                          status: 'success',
+                          result: 'Alamdetaile pole (leaf node)'
+                        });
+                        return;
+                      }
+
+                      const childIds = children.map((c: any) => c.id);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                      // Calculate combined bounding box from children
+                      let minX = Infinity, minY = Infinity, minZ = Infinity;
+                      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+                      const childResults = bboxes.map((bbox: any, idx: number) => {
+                        if (!bbox?.boundingBox) return null;
+                        const b = bbox.boundingBox;
+
+                        // Update combined bounds
+                        minX = Math.min(minX, b.min.x);
+                        minY = Math.min(minY, b.min.y);
+                        minZ = Math.min(minZ, b.min.z);
+                        maxX = Math.max(maxX, b.max.x);
+                        maxY = Math.max(maxY, b.max.y);
+                        maxZ = Math.max(maxZ, b.max.z);
+
+                        const width = Math.abs(b.max.x - b.min.x);
+                        const depth = Math.abs(b.max.y - b.min.y);
+                        const height = Math.abs(b.max.z - b.min.z);
+
+                        // Get name from properties
+                        let name = children[idx]?.name || `Child ${idx}`;
+
+                        return {
+                          name,
+                          id: childIds[idx],
+                          width: Math.round(width * 1000),
+                          depth: Math.round(depth * 1000),
+                          height: Math.round(height * 1000),
+                          maxDim: Math.round(Math.max(width, depth, height) * 1000)
+                        };
+                      }).filter(Boolean);
+
+                      // Calculate assembly dimensions from combined children
+                      const assemblyWidth = maxX - minX;
+                      const assemblyDepth = maxY - minY;
+                      const assemblyHeight = maxZ - minZ;
+
+                      updateFunctionResult("childDimensions", {
+                        status: 'success',
+                        result: JSON.stringify({
+                          assemblyFromChildren: {
+                            width_mm: Math.round(assemblyWidth * 1000),
+                            depth_mm: Math.round(assemblyDepth * 1000),
+                            height_mm: Math.round(assemblyHeight * 1000),
+                            maxDim_mm: Math.round(Math.max(assemblyWidth, assemblyDepth, assemblyHeight) * 1000),
+                            orientation: assemblyWidth > assemblyDepth && assemblyWidth > assemblyHeight ? 'X-axis' :
+                                        assemblyDepth > assemblyWidth && assemblyDepth > assemblyHeight ? 'Y-axis' : 'Z-axis'
+                          },
+                          childCount: childResults.length,
+                          children: childResults.slice(0, 10) // Limit to first 10
+                        }, null, 2)
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("childDimensions", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🧭 Orientatsiooni arvutus"
+                  result={functionResults["orientationCalc"]}
+                  onClick={async () => {
+                    updateFunctionResult("orientationCalc", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get parent bbox
+                      const parentBbox = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
+                      const pb = parentBbox[0]?.boundingBox;
+                      if (!pb) throw new Error('Parent bbox puudub');
+
+                      // Get children for more accurate calculation
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+
+                      let angle = 0;
+                      let primaryAxis = 'unknown';
+                      let secondaryAxis = 'unknown';
+
+                      const width = Math.abs(pb.max.x - pb.min.x);
+                      const depth = Math.abs(pb.max.y - pb.min.y);
+                      const height = Math.abs(pb.max.z - pb.min.z);
+
+                      // Determine primary axis (longest dimension)
+                      const dims = [
+                        { axis: 'X', value: width },
+                        { axis: 'Y', value: depth },
+                        { axis: 'Z', value: height }
+                      ].sort((a, b) => b.value - a.value);
+
+                      primaryAxis = dims[0].axis;
+                      secondaryAxis = dims[1].axis;
+
+                      // Calculate aspect ratio to determine if it's a beam, plate, or cube-like
+                      const aspectRatio1 = dims[0].value / dims[1].value;
+                      const aspectRatio2 = dims[1].value / dims[2].value;
+
+                      let shapeType = 'cube';
+                      if (aspectRatio1 > 3) shapeType = 'beam/column';
+                      else if (aspectRatio1 > 1.5 && aspectRatio2 < 1.5) shapeType = 'plate';
+
+                      // Estimate rotation based on bounding box aspect ratios
+                      // If X and Y dimensions are similar, object might be rotated 45°
+                      const xyRatio = Math.min(width, depth) / Math.max(width, depth);
+                      if (xyRatio > 0.9 && width > height * 0.5 && depth > height * 0.5) {
+                        // Could be rotated in XY plane
+                        angle = Math.round(Math.atan2(depth - width, width + depth) * 180 / Math.PI);
+                      }
+
+                      // Calculate diagonal for rotated objects
+                      const xyDiagonal = Math.sqrt(width * width + depth * depth);
+                      const possibleLength = Math.max(width, depth, xyDiagonal * 0.707); // 0.707 = cos(45°)
+
+                      updateFunctionResult("orientationCalc", {
+                        status: 'success',
+                        result: JSON.stringify({
+                          boundingBox: {
+                            width_mm: Math.round(width * 1000),
+                            depth_mm: Math.round(depth * 1000),
+                            height_mm: Math.round(height * 1000)
+                          },
+                          analysis: {
+                            primaryAxis,
+                            secondaryAxis,
+                            shapeType,
+                            estimatedRotationXY: angle + '°',
+                            aspectRatio: Math.round(aspectRatio1 * 100) / 100
+                          },
+                          center: {
+                            x: Math.round((pb.min.x + pb.max.x) / 2 * 1000) / 1000,
+                            y: Math.round((pb.min.y + pb.max.y) / 2 * 1000) / 1000,
+                            z: Math.round((pb.min.z + pb.max.z) / 2 * 1000) / 1000
+                          },
+                          rotatedEstimate: {
+                            xyDiagonal_mm: Math.round(xyDiagonal * 1000),
+                            possibleActualLength_mm: Math.round(possibleLength * 1000),
+                            note: 'Kui objekt on pööratud, võib tegelik pikkus olla ~70% diagonaalist'
+                          },
+                          childCount: children?.length || 0
+                        }, null, 2)
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("orientationCalc", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📊 Kõigi mõõtude võrdlus"
+                  result={functionResults["allDimensionsCompare"]}
+                  onClick={async () => {
+                    updateFunctionResult("allDimensionsCompare", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objektid!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
+
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+                      const results = await Promise.all(bboxes.map(async (bbox: any, idx: number) => {
+                        if (!bbox?.boundingBox) return null;
+                        const b = bbox.boundingBox;
+
+                        const width = Math.abs(b.max.x - b.min.x);
+                        const depth = Math.abs(b.max.y - b.min.y);
+                        const height = Math.abs(b.max.z - b.min.z);
+                        const maxDim = Math.max(width, depth, height);
+
+                        // Get assembly mark from properties
+                        let mark = 'unknown';
+                        const p = props[idx];
+                        if (p?.properties) {
+                          for (const pset of p.properties as any[]) {
+                            if (pset.name === 'Tekla Assembly') {
+                              for (const prop of pset.properties || []) {
+                                if (prop.name === 'Assembly/Cast unit Mark') {
+                                  mark = String(prop.value || 'unknown');
+                                }
+                              }
+                            }
+                          }
+                        }
+
+                        return {
+                          mark,
+                          maxDim_mm: Math.round(maxDim * 1000),
+                          width_mm: Math.round(width * 1000),
+                          depth_mm: Math.round(depth * 1000),
+                          height_mm: Math.round(height * 1000),
+                          primaryAxis: width >= depth && width >= height ? 'X' :
+                                      depth >= width && depth >= height ? 'Y' : 'Z'
+                        };
+                      }));
+
+                      const validResults = results.filter(Boolean);
+                      const sorted = validResults.sort((a: any, b: any) => b.maxDim_mm - a.maxDim_mm);
+
+                      updateFunctionResult("allDimensionsCompare", {
+                        status: 'success',
+                        result: JSON.stringify({
+                          count: sorted.length,
+                          longestFirst: sorted.slice(0, 20),
+                          stats: {
+                            maxLength_mm: sorted[0]?.maxDim_mm || 0,
+                            minLength_mm: sorted[sorted.length - 1]?.maxDim_mm || 0,
+                            avgLength_mm: Math.round(sorted.reduce((sum: number, r: any) => sum + r.maxDim_mm, 0) / sorted.length)
+                          }
+                        }, null, 2)
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("allDimensionsCompare", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🔄 Pööratud detaili mõõdud"
+                  result={functionResults["rotatedDimensions"]}
+                  onClick={async () => {
+                    updateFunctionResult("rotatedDimensions", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get bbox of selected object
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
+                      const b = bboxes[0]?.boundingBox;
+                      if (!b) throw new Error('Bbox puudub');
+
+                      const width = b.max.x - b.min.x;
+                      const depth = b.max.y - b.min.y;
+                      const height = b.max.z - b.min.z;
+
+                      // For a rotated rectangular object, the actual dimensions can be estimated:
+                      // If rotated 45° in XY plane, actual length ≈ diagonal / √2
+                      const xyDiagonal = Math.sqrt(width * width + depth * depth);
+                      const xzDiagonal = Math.sqrt(width * width + height * height);
+                      const yzDiagonal = Math.sqrt(depth * depth + height * height);
+
+                      // Check if object appears to be rotated (similar X and Y dimensions)
+                      const xyRatio = Math.min(width, depth) / Math.max(width, depth);
+                      const isLikelyRotatedXY = xyRatio > 0.7 && xyRatio < 1.0 && width > height * 0.3 && depth > height * 0.3;
+
+                      // Estimate actual dimensions for common rotation angles
+                      const estimates: any = {
+                        bbox: {
+                          width_mm: Math.round(width * 1000),
+                          depth_mm: Math.round(depth * 1000),
+                          height_mm: Math.round(height * 1000)
+                        },
+                        diagonals: {
+                          xy_mm: Math.round(xyDiagonal * 1000),
+                          xz_mm: Math.round(xzDiagonal * 1000),
+                          yz_mm: Math.round(yzDiagonal * 1000)
+                        },
+                        analysis: {
+                          isLikelyRotatedXY,
+                          xyRatio: Math.round(xyRatio * 100) / 100
+                        }
+                      };
+
+                      if (isLikelyRotatedXY) {
+                        // For 45° rotation: actual length ≈ diagonal × 0.707
+                        // For 30° rotation: actual length ≈ max(w,d) × 1.15
+                        // For 60° rotation: actual length ≈ max(w,d) × 1.15
+                        const maxWD = Math.max(width, depth);
+                        const minWD = Math.min(width, depth);
+
+                        // Estimate rotation angle from aspect ratio
+                        // tan(θ) = minWD / maxWD for a rectangle rotated by θ
+                        const estimatedAngle = Math.atan(minWD / maxWD) * 180 / Math.PI;
+
+                        estimates.rotationEstimates = {
+                          estimatedAngle: Math.round(estimatedAngle) + '°',
+                          actualLength_45deg: Math.round(xyDiagonal * 0.707 * 1000),
+                          actualLength_30deg: Math.round(maxWD * 1.15 * 1000),
+                          actualWidth_estimate: Math.round(minWD / Math.sin(estimatedAngle * Math.PI / 180) * 1000) || 'N/A',
+                          formula: 'actualLength = bboxDiagonal × cos(45°) = diagonal × 0.707'
+                        };
+                      } else {
+                        estimates.rotationEstimates = {
+                          note: 'Objekt ei paista olevat pööratud XY tasandil',
+                          actualDimensions: 'Tõenäoliselt sama kui bbox'
+                        };
+                      }
+
+                      updateFunctionResult("rotatedDimensions", {
+                        status: 'success',
+                        result: JSON.stringify(estimates, null, 2)
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("rotatedDimensions", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🎯 Positsiooni arvutus"
+                  result={functionResults["positionCalc"]}
+                  onClick={async () => {
+                    updateFunctionResult("positionCalc", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
+
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+                      // Get model info for reference
+                      const models = await api.viewer.getModels();
+                      const modelInfo = models?.find((m: any) => m.id === modelId);
+
+                      const results = bboxes.map((bbox: any, idx: number) => {
+                        if (!bbox?.boundingBox) return null;
+                        const b = bbox.boundingBox;
+
+                        const width = b.max.x - b.min.x;
+                        const depth = b.max.y - b.min.y;
+                        const height = b.max.z - b.min.z;
+                        const maxDim = Math.max(width, depth, height);
+
+                        // Calculate position based on max dimension axis
+                        let positionValue = 0;
+                        let positionAxis = 'X';
+
+                        if (width >= depth && width >= height) {
+                          positionAxis = 'X';
+                          positionValue = (b.min.x + b.max.x) / 2;
+                        } else if (depth >= width && depth >= height) {
+                          positionAxis = 'Y';
+                          positionValue = (b.min.y + b.max.y) / 2;
+                        } else {
+                          positionAxis = 'Z';
+                          positionValue = (b.min.z + b.max.z) / 2;
+                        }
+
+                        // Get mark
+                        let mark = `Object_${runtimeIds[idx]}`;
+                        const p = props[idx];
+                        if (p?.properties) {
+                          for (const pset of p.properties as any[]) {
+                            if (pset.name === 'Tekla Assembly') {
+                              for (const prop of pset.properties || []) {
+                                if (prop.name === 'Assembly/Cast unit Mark') {
+                                  mark = String(prop.value || mark);
+                                }
+                              }
+                            }
+                          }
+                        }
+
+                        return {
+                          mark,
+                          primaryAxis: positionAxis,
+                          maxDim_mm: Math.round(maxDim * 1000),
+                          position: {
+                            alongPrimaryAxis_m: Math.round(positionValue * 1000) / 1000,
+                            center: {
+                              x: Math.round((b.min.x + b.max.x) / 2 * 1000) / 1000,
+                              y: Math.round((b.min.y + b.max.y) / 2 * 1000) / 1000,
+                              z: Math.round((b.min.z + b.max.z) / 2 * 1000) / 1000
+                            }
+                          }
+                        };
+                      }).filter(Boolean);
+
+                      // Sort by position along their primary axis
+                      const sorted = results.sort((a: any, b: any) => {
+                        const aVal = a.position.center[a.primaryAxis.toLowerCase()];
+                        const bVal = b.position.center[b.primaryAxis.toLowerCase()];
+                        return aVal - bVal;
+                      });
+
+                      updateFunctionResult("positionCalc", {
+                        status: 'success',
+                        result: JSON.stringify({
+                          modelName: modelInfo?.name || 'unknown',
+                          objectCount: sorted.length,
+                          sortedByPosition: sorted.slice(0, 20)
+                        }, null, 2)
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("positionCalc", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+              </div>
+              <div style={{ marginTop: '12px', padding: '10px', background: '#fefce8', borderRadius: '6px', fontSize: '11px', color: '#854d0e' }}>
+                <strong>⚠️ Pööratud objektide mõõtmine:</strong>
+                <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
+                  <li>Bounding box on alati telgedega joondatud (axis-aligned)</li>
+                  <li>Pööratud objekti tegelik pikkus ≈ diagonaal × cos(nurk)</li>
+                  <li>45° pööratud objektil: tegelik pikkus ≈ diagonaal × 0.707</li>
+                  <li>Kasuta "Alamdetailide mõõdud" täpsemaks arvutuseks</li>
+                </ul>
+              </div>
+            </div>
+
             {/* SELECTION section */}
             <div className="function-section">
               <h4>🎯 Valik (Selection)</h4>
