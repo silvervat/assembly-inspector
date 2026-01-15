@@ -210,7 +210,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Property Mappings state (configurable Tekla property locations)
   const [propertyMappings, setPropertyMappings] = useState({
     assembly_mark_set: 'Tekla Assembly',
-    assembly_mark_prop: 'Cast_unit_Mark',
+    assembly_mark_prop: 'Assembly/Cast unit Mark',
     position_code_set: 'Tekla Assembly',
     position_code_prop: 'Cast_unit_Position_Code',
     top_elevation_set: 'Tekla Assembly',
@@ -1544,13 +1544,17 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               if (setName === 'Reference Object' && ps.properties) {
                 msGuid = ps.properties['GUID'] as string || msGuid;
               }
-              // Use configured mapping for assembly mark
+              // Use configured mapping for assembly mark + fallbacks
               if (setNameNorm === mappingSetNorm && ps.properties) {
-                const propValue = ps.properties[propertyMappings.assembly_mark_prop];
+                // Try configured property name first
+                let propValue = ps.properties[propertyMappings.assembly_mark_prop];
+                // Fallback to common property names
+                if (!propValue) propValue = ps.properties['Assembly/Cast unit Mark'];
+                if (!propValue) propValue = ps.properties['Cast_unit_Mark'];
                 if (propValue) assemblyMark = String(propValue);
               }
               if (setName === 'Product' && ps.properties) {
-                productName = ps.properties['Name'] as string || productName;
+                productName = ps.properties['Name'] as string || ps.properties['Product_Name'] as string || productName;
               }
             }
           }
@@ -1574,14 +1578,30 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   msGuid = String(propValue);
                 }
 
-                // Assembly Mark - use configured mapping
-                if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
-                  assemblyMark = String(propValue);
+                // Assembly Mark - use configured mapping OR common fallback names
+                if (!assemblyMark && setNameNorm === mappingSetNorm) {
+                  // Check exact match first
+                  if (propNameNorm === mappingPropNorm) {
+                    assemblyMark = String(propValue);
+                  }
+                  // Fallback: check for common Tekla property names
+                  else if (
+                    propNameOriginal === 'Assembly/Cast unit Mark' ||
+                    propNameOriginal === 'Cast_unit_Mark' ||
+                    propNameNorm.includes('castunitmark') ||
+                    propNameNorm.includes('assemblymark')
+                  ) {
+                    assemblyMark = String(propValue);
+                  }
                 }
 
-                // Product name
-                if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                  productName = String(propValue);
+                // Product name - check multiple locations
+                if (!productName) {
+                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                    productName = String(propValue);
+                  } else if (propNameOriginal === 'Product_Name' || propNameOriginal === 'ProductName') {
+                    productName = String(propValue);
+                  }
                 }
               }
             }
@@ -1838,14 +1858,30 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
                   if (!propValue) continue;
 
-                  // Assembly Mark using configured mapping
-                  if (!assemblyMark && setNameNorm === mappingSetNorm && propNameNorm === mappingPropNorm) {
-                    assemblyMark = String(propValue);
+                  // Assembly Mark - use configured mapping OR common fallback names
+                  if (!assemblyMark && setNameNorm === mappingSetNorm) {
+                    // Check exact match first
+                    if (propNameNorm === mappingPropNorm) {
+                      assemblyMark = String(propValue);
+                    }
+                    // Fallback: check for common Tekla property names
+                    else if (
+                      propNameOriginal === 'Assembly/Cast unit Mark' ||
+                      propNameOriginal === 'Cast_unit_Mark' ||
+                      propNameNorm.includes('castunitmark') ||
+                      propNameNorm.includes('assemblymark')
+                    ) {
+                      assemblyMark = String(propValue);
+                    }
                   }
 
-                  // Product name
-                  if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
-                    productName = String(propValue);
+                  // Product name - check multiple locations
+                  if (!productName) {
+                    if (setName === 'Product' && propNameOriginal.toLowerCase() === 'name') {
+                      productName = String(propValue);
+                    } else if (propNameOriginal === 'Product_Name' || propNameOriginal === 'ProductName') {
+                      productName = String(propValue);
+                    }
                   }
                 }
               }
@@ -2753,7 +2789,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       if (data) {
         setPropertyMappings({
           assembly_mark_set: data.assembly_mark_set || 'Tekla Assembly',
-          assembly_mark_prop: data.assembly_mark_prop || 'Cast_unit_Mark',
+          assembly_mark_prop: data.assembly_mark_prop || 'Assembly/Cast unit Mark',
           position_code_set: data.position_code_set || 'Tekla Assembly',
           position_code_prop: data.position_code_prop || 'Cast_unit_Position_Code',
           top_elevation_set: data.top_elevation_set || 'Tekla Assembly',
