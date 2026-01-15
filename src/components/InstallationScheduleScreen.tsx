@@ -13,14 +13,16 @@ import {
 } from '../utils/navigationHelper';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import {
-  FiArrowLeft, FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
+  FiChevronLeft, FiChevronRight, FiPlus, FiPlay, FiSquare,
   FiTrash2, FiCalendar, FiMove, FiX, FiDownload, FiChevronDown,
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
-  FiMessageSquare, FiAlertTriangle, FiFilter, FiMenu, FiEdit3, FiTruck, FiLayers, FiSave, FiEdit,
+  FiMessageSquare, FiAlertTriangle, FiFilter, FiEdit3, FiTruck, FiLayers, FiSave, FiEdit,
   FiPackage, FiTag, FiBarChart2
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
+import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 
 interface Props {
   api: WorkspaceAPI;
@@ -29,6 +31,8 @@ interface Props {
   tcUserEmail: string;
   tcUserName?: string;
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
+  onColorModelWhite?: () => void;
 }
 
 interface SelectedObject {
@@ -192,7 +196,7 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
   }
 };
 
-export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu }: Props) {
+export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu, onNavigate, onColorModelWhite }: Props) {
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -6051,27 +6055,40 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     return dates;
   };
 
+  // Handle navigation from PageHeader
+  const handleHeaderNavigate = (mode: InspectionMode | null) => {
+    if (mode === null) {
+      onBackToMenu();
+    } else if (onNavigate) {
+      onNavigate(mode);
+    }
+  };
+
   return (
     <div className="schedule-screen">
-      {/* Header - Dark blue topbar */}
-      <div className="mode-title-bar dark-blue">
-        <button className="back-to-menu-btn" onClick={onBackToMenu}>
-          <FiArrowLeft size={14} />
-          <span>Menüü</span>
-        </button>
-        <span className="mode-title">Paigaldusgraafik</span>
-
-        {/* Hamburger menu */}
-        <div className="hamburger-menu-wrapper" ref={hamburgerMenuRef}>
+      {/* PageHeader with standard hamburger menu */}
+      <PageHeader
+        title="Paigaldusgraafik"
+        onBack={onBackToMenu}
+        onNavigate={handleHeaderNavigate}
+        currentMode="schedule"
+        user={user}
+        onColorModelWhite={onColorModelWhite}
+        api={api}
+        projectId={projectId}
+      >
+        {/* Three-dot menu for schedule-specific actions */}
+        <div className="schedule-actions-menu" ref={hamburgerMenuRef}>
           <button
-            className="hamburger-btn"
+            className="schedule-actions-btn"
             onClick={() => setShowHamburgerMenu(!showHamburgerMenu)}
+            title="Tegevused"
           >
-            <FiMenu size={20} />
+            <FiMoreVertical size={18} />
           </button>
 
           {showHamburgerMenu && (
-            <div className="hamburger-dropdown">
+            <div className="schedule-actions-dropdown">
               {/* Ressursside statistika */}
               <div
                 className="dropdown-item"
@@ -6140,7 +6157,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
             </div>
           )}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Version bar */}
       <div className="version-bar">

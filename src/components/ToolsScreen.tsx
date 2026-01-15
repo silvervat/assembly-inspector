@@ -591,17 +591,35 @@ export default function ToolsScreen({
     showToast(`${boltSummary.length} rida kopeeritud`, 'success');
   };
 
-  // Copy bolt summary as image
+  // Copy bolt summary as image (full table, not just visible part)
   const handleCopyAsImage = async () => {
     if (!boltSummaryRef.current || boltSummary.length === 0) return;
 
     try {
-      // Use html2canvas to capture the table
+      // Find the scrollable container and temporarily remove height restriction
+      const scrollContainer = boltSummaryRef.current.querySelector('div[style*="maxHeight"]') as HTMLElement;
+      const originalMaxHeight = scrollContainer?.style.maxHeight || '';
+      const originalOverflow = scrollContainer?.style.overflowY || '';
+
+      if (scrollContainer) {
+        scrollContainer.style.maxHeight = 'none';
+        scrollContainer.style.overflowY = 'visible';
+      }
+
+      // Use html2canvas to capture the full table
       const canvas = await html2canvas(boltSummaryRef.current, {
         backgroundColor: '#ffffff',
         scale: 2, // Higher resolution
-        logging: false
+        logging: false,
+        windowWidth: boltSummaryRef.current.scrollWidth,
+        windowHeight: boltSummaryRef.current.scrollHeight
       });
+
+      // Restore original styles
+      if (scrollContainer) {
+        scrollContainer.style.maxHeight = originalMaxHeight;
+        scrollContainer.style.overflowY = originalOverflow;
+      }
 
       // Convert to blob
       canvas.toBlob(async (blob) => {

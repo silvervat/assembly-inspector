@@ -141,6 +141,108 @@
   margin: 2px 0;
 }
 
+/* Three-dot actions menu (in PageHeader) */
+.schedule-actions-menu {
+  position: relative;
+}
+
+.schedule-actions-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--modus-text-secondary);
+}
+
+.schedule-actions-btn:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-text-primary);
+}
+
+.schedule-actions-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 200px;
+  background: white;
+  border: 1px solid var(--modus-border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 200;
+  padding: 4px;
+}
+
+.schedule-actions-dropdown .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  color: var(--modus-text-primary);
+  font-size: 13px;
+}
+
+.schedule-actions-dropdown .dropdown-item:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.schedule-actions-dropdown .dropdown-item.with-submenu {
+  justify-content: flex-start;
+}
+
+.schedule-actions-dropdown .dropdown-item .submenu-arrow {
+  margin-right: 2px;
+  opacity: 0.5;
+  transition: transform 0.15s;
+}
+
+.schedule-actions-dropdown .dropdown-item .submenu-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.schedule-actions-dropdown .dropdown-item.expanded {
+  background: var(--modus-bg-secondary);
+}
+
+.schedule-actions-dropdown .submenu-inline {
+  padding: 2px 0 2px 8px;
+  border-left: 2px solid var(--modus-border);
+  margin-left: 12px;
+  margin-bottom: 4px;
+}
+
+.schedule-actions-dropdown .submenu-inline button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  color: var(--modus-text-primary);
+  font-size: 12px;
+  text-align: left;
+}
+
+.schedule-actions-dropdown .submenu-inline button:hover {
+  background: var(--modus-bg-secondary);
+}
+
+.schedule-actions-dropdown .submenu-inline .submenu-divider {
+  height: 1px;
+  background: var(--modus-border);
+  margin: 4px 0;
+}
+
 /* Version bar */
 .version-bar {
   display: flex;
