@@ -11483,6 +11483,11 @@ button.stat-toggle.off:hover {
   color: #374151;
 }
 
+/* When menu is open, raise the header z-index to ensure menu is visible */
+.org-group-header.menu-open {
+  z-index: 1000 !important;
+}
+
 /* Group dropdown menu */
 .org-group-menu {
   position: absolute;
@@ -11492,7 +11497,7 @@ button.stat-toggle.off:hover {
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 100;
+  z-index: 1001;
   min-width: 160px;
   padding: 4px 0;
 }
