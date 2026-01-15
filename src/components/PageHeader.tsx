@@ -79,6 +79,17 @@ export default function PageHeader({
     }
   }, [menuOpen]);
 
+  // Clear search when menu closes
+  useEffect(() => {
+    if (!menuOpen) {
+      setSearchQuery('');
+      setSearchResult(null);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    }
+  }, [menuOpen]);
+
   // Filter nav items based on admin status
   const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin);
 
@@ -171,7 +182,16 @@ export default function PageHeader({
     }
   }, [api, projectId]);
 
-  // Debounced search on input change
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResult(null);
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+  };
+
+  // Debounced search on input change - faster with shorter delay
   const handleSearchInputChange = (value: string) => {
     setSearchQuery(value);
 
@@ -180,11 +200,11 @@ export default function PageHeader({
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Debounce search
+    // Debounce search - shorter delay for faster response
     if (value.trim().length >= 2) {
       searchTimeoutRef.current = setTimeout(() => {
         handleQuickSearch(value);
-      }, 500);
+      }, 300);
     } else {
       setSearchResult(null);
     }
@@ -226,19 +246,20 @@ export default function PageHeader({
                       autoFocus
                     />
                     {searchLoading && <FiLoader size={14} className="quick-search-spinner spin" />}
+                    {!searchLoading && searchQuery && (
+                      <button
+                        className="quick-search-clear"
+                        onClick={clearSearch}
+                        title="Tühjenda"
+                      >
+                        <FiX size={14} />
+                      </button>
+                    )}
                   </div>
                   {searchResult && (
                     <div className={`quick-search-result ${searchResult.count > 0 ? 'success' : 'empty'}`}>
                       {searchResult.message}
                     </div>
-                  )}
-                  {searchQuery.trim().length >= 2 && (
-                    <button
-                      className="quick-search-detail-btn"
-                      onClick={() => handleNavigate('admin')}
-                    >
-                      🔍 Detailsem otsing...
-                    </button>
                   )}
                   <div className="quick-search-divider" />
                 </div>

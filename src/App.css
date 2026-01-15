@@ -268,7 +268,8 @@ body {
   border-left: none;
   border-radius: 0 8px 8px 0;
   box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 180px;
+  min-width: 160px;
+  max-width: 180px;
   padding: 4px;
   z-index: 1000;
   animation: slideInLeft 0.15s ease-out;
@@ -386,10 +387,10 @@ body {
 
 .quick-search-input {
   width: 100%;
-  padding: 8px 32px 8px 32px;
+  padding: 6px 28px 6px 28px;
   border: 1px solid var(--modus-border);
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
 }
 
@@ -402,6 +403,26 @@ body {
   position: absolute;
   right: 10px;
   color: var(--modus-primary);
+}
+
+.quick-search-clear {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: var(--modus-text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.quick-search-clear:hover {
+  background: var(--modus-bg-secondary);
+  color: var(--modus-text-primary);
 }
 
 .quick-search-result {
@@ -1861,6 +1882,41 @@ button.stat-toggle.off:hover {
   font-size: 14px;
   color: #495057;
   font-weight: 500;
+}
+
+/* Color white progress overlay */
+.color-white-overlay {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.color-white-progress {
+  background: white;
+  border-radius: 8px;
+  padding: 10px 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 /* EOS2 Navigation Status Indicator */
