@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.570';
+export const APP_VERSION = '3.0.572';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -508,6 +508,10 @@ export default function App() {
         console.log(`[COLOR WHITE] Cached ${foundByLowercase.size} objects`);
       } else {
         console.log(`[COLOR WHITE] Using cache with ${foundByLowercase.size} objects`);
+        // Show progress even when using cache
+        setColorWhiteProgress({ message: 'Värvin mudelit', percent: 50 });
+        // Small delay to ensure overlay renders
+        await new Promise(resolve => setTimeout(resolve, 50));
       }
 
       if (foundByLowercase.size === 0) {
