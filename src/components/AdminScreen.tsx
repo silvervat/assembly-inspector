@@ -5170,6 +5170,91 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               </div>
             </div>
 
+            {/* EXTENSION SIZE section */}
+            <div className="function-section">
+              <h4>📐 Extensioni suurus</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Mõõda ja jälgi extensioni paneeli suurust pikslites.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="📏 Mõõda laius"
+                  result={functionResults["measureWidth"]}
+                  onClick={() => testFunction("measureWidth", async () => {
+                    const width = window.innerWidth;
+                    const height = window.innerHeight;
+                    const clientWidth = document.documentElement.clientWidth;
+                    const clientHeight = document.documentElement.clientHeight;
+                    const devicePixelRatio = window.devicePixelRatio || 1;
+                    return {
+                      innerWidth: width,
+                      innerHeight: height,
+                      clientWidth,
+                      clientHeight,
+                      devicePixelRatio,
+                      actualWidth: Math.round(width * devicePixelRatio),
+                      orientation: width > height ? 'landscape' : 'portrait'
+                    };
+                  })}
+                />
+                <FunctionButton
+                  name="📱 Screen info"
+                  result={functionResults["screenInfo"]}
+                  onClick={() => testFunction("screenInfo", async () => ({
+                    screenWidth: window.screen.width,
+                    screenHeight: window.screen.height,
+                    availWidth: window.screen.availWidth,
+                    availHeight: window.screen.availHeight,
+                    colorDepth: window.screen.colorDepth,
+                    pixelDepth: window.screen.pixelDepth,
+                    orientation: (window.screen as any).orientation?.type || 'unknown'
+                  }))}
+                />
+                <FunctionButton
+                  name="🔄 Live monitor"
+                  result={functionResults["liveMonitor"]}
+                  onClick={() => testFunction("liveMonitor", async () => {
+                    // Add resize listener and update every 500ms for 10 seconds
+                    let count = 0;
+                    const maxCount = 20;
+                    const interval = setInterval(() => {
+                      count++;
+                      const w = window.innerWidth;
+                      const h = window.innerHeight;
+                      console.log(`📐 Extension size: ${w}x${h}px (${count}/${maxCount})`);
+                      if (count >= maxCount) {
+                        clearInterval(interval);
+                        console.log('📐 Monitor stopped');
+                      }
+                    }, 500);
+                    return `Monitoring ${maxCount * 0.5}s... Check console (F12)`;
+                  })}
+                />
+                <FunctionButton
+                  name="🖥️ Extension layout"
+                  result={functionResults["extensionLayout"]}
+                  onClick={() => testFunction("extensionLayout", async () => {
+                    // Try to get extension state from TC API
+                    const uiState = await api.ui.getUI();
+                    return {
+                      uiState,
+                      windowSize: { width: window.innerWidth, height: window.innerHeight },
+                      sidePanelEstimate: window.innerWidth < 400 ? 'narrow' : window.innerWidth < 500 ? 'medium' : 'wide'
+                    };
+                  })}
+                />
+              </div>
+              <div style={{ marginTop: '12px', padding: '10px', background: '#f8fafc', borderRadius: '6px', fontSize: '11px', color: '#64748b' }}>
+                <strong>NB:</strong> Trimble Connecti SidePanel laius on fikseeritud (~350-450px) ja seda ei saa API kaudu muuta.
+                Tahvlil landscape režiimis on see sama laiusega kui desktopil. Lahendused:
+                <ul style={{ marginTop: '4px', paddingLeft: '16px' }}>
+                  <li>Kasutage responsiivseid komponente mis kohanduvad laiusega</li>
+                  <li>Väiksema teksti/paddingu stiilid kitsamal laiusel</li>
+                  <li>Horisontaalne kerimine tabelites</li>
+                </ul>
+              </div>
+            </div>
+
             {/* SELECTION section */}
             <div className="function-section">
               <h4>🎯 Valik (Selection)</h4>
