@@ -106,6 +106,10 @@ interface MarkupSettings {
   includeProductName: MarkupFieldConfig;
   // Filter options
   onlySelectedInModel: boolean;
+  // Line suffixes - custom text added after each line
+  line1Suffix: string;
+  line2Suffix: string;
+  line3Suffix: string;
 }
 
 // Sorting options
@@ -708,7 +712,10 @@ export default function OrganizerScreen({
     includeAssemblyMark: { enabled: true, line: 'line1' },
     includeWeight: { enabled: false, line: 'line2' },
     includeProductName: { enabled: false, line: 'line2' },
-    onlySelectedInModel: false
+    onlySelectedInModel: false,
+    line1Suffix: '',
+    line2Suffix: '',
+    line3Suffix: ''
   };
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
@@ -3203,9 +3210,21 @@ export default function OrganizerScreen({
     const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
     const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
+    // Get suffix for each line
+    const lineSuffixes: Record<MarkupLineConfig, string> = {
+      'line1': markupSettings.line1Suffix || '',
+      'line2': markupSettings.line2Suffix || '',
+      'line3': markupSettings.line3Suffix || '',
+      'none': ''
+    };
+
     const lineTexts = lines
       .filter(l => l.parts.length > 0)
-      .map(l => l.parts.join(inlineSeparator));
+      .map(l => {
+        const text = l.parts.join(inlineSeparator);
+        const suffix = lineSuffixes[l.line];
+        return suffix ? `${text}${suffix}` : text;
+      });
 
     if (lineTexts.length === 0) {
       // Fallback to assembly mark
@@ -7354,9 +7373,21 @@ export default function OrganizerScreen({
           const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
           const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
+          // Get suffix for each line
+          const lineSuffixes: Record<MarkupLineConfig, string> = {
+            'line1': markupSettings.line1Suffix || '',
+            'line2': markupSettings.line2Suffix || '',
+            'line3': markupSettings.line3Suffix || '',
+            'none': ''
+          };
+
           const lineTexts = lines
             .filter(l => l.parts.length > 0)
-            .map(l => l.parts.join(inlineSeparator));
+            .map(l => {
+              const text = l.parts.join(inlineSeparator);
+              const suffix = lineSuffixes[l.line];
+              return suffix ? `${text}${suffix}` : text;
+            });
 
           return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
         };
@@ -7504,38 +7535,52 @@ export default function OrganizerScreen({
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
 
+          // Get and set suffix for this line
+          const suffixKey = `${line}Suffix` as 'line1Suffix' | 'line2Suffix' | 'line3Suffix';
+          const suffix = markupSettings[suffixKey] || '';
+
           return (
-            <div
-              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOverLine(line);
-              }}
-              onDragLeave={() => setDragOverLine(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (draggedField) {
-                  moveFieldToLine(draggedField, line);
-                }
-                setDraggedField(null);
-                setDragOverLine(null);
-              }}
-            >
-              <span className="line-label">{label}</span>
-              <div className="line-fields">
-                {fields.length > 0 ? (
-                  fields.map(f => (
-                    <FieldChip
-                      key={f.id}
-                      field={f}
-                      onRemove={() => toggleField(f.id)}
-                      isDragging={draggedField === f.id}
-                    />
-                  ))
-                ) : (
-                  <span className="line-placeholder">Lohista siia</span>
-                )}
+            <div className="markup-line-row">
+              <div
+                className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverLine(line);
+                }}
+                onDragLeave={() => setDragOverLine(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedField) {
+                    moveFieldToLine(draggedField, line);
+                  }
+                  setDraggedField(null);
+                  setDragOverLine(null);
+                }}
+              >
+                <span className="line-label">{label}</span>
+                <div className="line-fields">
+                  {fields.length > 0 ? (
+                    fields.map(f => (
+                      <FieldChip
+                        key={f.id}
+                        field={f}
+                        onRemove={() => toggleField(f.id)}
+                        isDragging={draggedField === f.id}
+                      />
+                    ))
+                  ) : (
+                    <span className="line-placeholder">Lohista siia</span>
+                  )}
+                </div>
               </div>
+              <input
+                type="text"
+                className="markup-line-suffix"
+                placeholder="+ tekst"
+                value={suffix}
+                onChange={(e) => setMarkupSettings(prev => ({ ...prev, [suffixKey]: e.target.value }))}
+                title="Lisa tekst rea lõppu"
+              />
             </div>
           );
         };

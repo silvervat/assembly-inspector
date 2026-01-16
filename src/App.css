@@ -11488,6 +11488,7 @@ button.stat-toggle.off:hover {
 .org-group-section.expanded-root {
   position: relative;
   border-radius: 6px;
+  z-index: 1; /* Keep below navigation menus */
 }
 
 .org-group-section.expanded-root::after {
@@ -11497,7 +11498,7 @@ button.stat-toggle.off:hover {
   border: 1px solid #3b82f6;
   border-radius: 6px;
   pointer-events: none;
-  z-index: 15;
+  z-index: 1; /* Just above content but below navigation */
 }
 
 /* Group header */
@@ -11874,16 +11875,31 @@ button.stat-toggle.off:hover {
   top: 33px;
 }
 
+.org-subgroups .org-group-name {
+  color: #374151;
+  font-weight: 500;
+}
+
 .org-subgroups .org-subgroups .org-group-header {
   z-index: 8;
   background: #f5f5f5;
   top: 66px;
 }
 
+.org-subgroups .org-subgroups .org-group-name {
+  color: #4b5563;
+  font-weight: 400;
+}
+
 .org-subgroups .org-subgroups .org-subgroups .org-group-header {
   z-index: 7;
   background: #f0f0f0;
   top: 99px;
+}
+
+.org-subgroups .org-subgroups .org-subgroups .org-group-name {
+  color: #6b7280;
+  font-weight: 400;
 }
 
 /* Items list */
@@ -12451,17 +12467,24 @@ button.stat-toggle.off:hover {
   flex-direction: column;
 }
 
+.markup-line-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.markup-line-row:last-child {
+  border-bottom: none;
+}
+
 .markup-line-zone {
   display: flex;
   align-items: center;
   min-height: 40px;
   padding: 6px 12px;
-  border-bottom: 1px solid #e5e7eb;
   transition: all 0.15s ease;
-}
-
-.markup-line-zone:last-child {
-  border-bottom: none;
+  flex: 1;
 }
 
 .markup-line-zone.drag-over {
@@ -12470,6 +12493,28 @@ button.stat-toggle.off:hover {
 
 .markup-line-zone.empty {
   background: #fafafa;
+}
+
+.markup-line-suffix {
+  width: 80px;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  margin-right: 8px;
+  background: #fafafa;
+  color: #374151;
+}
+
+.markup-line-suffix:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+}
+
+.markup-line-suffix::placeholder {
+  color: #9ca3af;
+  font-style: italic;
 }
 
 .line-label {
@@ -12702,6 +12747,12 @@ button.stat-toggle.off:hover {
   .markup-line-zone {
     min-height: 44px;
     padding: 8px 12px;
+  }
+
+  .markup-line-suffix {
+    width: 70px;
+    padding: 6px 8px;
+    font-size: 12px;
   }
 
   .separator-btn {
