@@ -209,9 +209,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
 
   // Property Mappings state (configurable Tekla property locations)
+  // Defaults match DEFAULT_PROPERTY_MAPPINGS in supabase.ts
   const [propertyMappings, setPropertyMappings] = useState({
     assembly_mark_set: 'Tekla Assembly',
-    assembly_mark_prop: 'Assembly/Cast unit Mark',
+    assembly_mark_prop: 'Cast_unit_Mark',
     position_code_set: 'Tekla Assembly',
     position_code_prop: 'Cast_unit_Position_Code',
     top_elevation_set: 'Tekla Assembly',
@@ -2804,7 +2805,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       if (data) {
         setPropertyMappings({
           assembly_mark_set: data.assembly_mark_set || 'Tekla Assembly',
-          assembly_mark_prop: data.assembly_mark_prop || 'Assembly/Cast unit Mark',
+          assembly_mark_prop: data.assembly_mark_prop || 'Cast_unit_Mark',
           position_code_set: data.position_code_set || 'Tekla Assembly',
           position_code_prop: data.position_code_prop || 'Cast_unit_Position_Code',
           top_elevation_set: data.top_elevation_set || 'Tekla Assembly',
@@ -2828,12 +2829,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     }
   }, [projectId]);
 
-  // Load property mappings when entering modelObjects view (so we use correct property names)
+  // Load property mappings when component mounts and when entering modelObjects view
   useEffect(() => {
-    if (adminView === 'modelObjects') {
-      loadPropertyMappings();
-    }
-  }, [adminView, loadPropertyMappings]);
+    loadPropertyMappings();
+  }, [loadPropertyMappings]);
 
   // Save property mappings to database
   const savePropertyMappings = useCallback(async () => {
@@ -5690,15 +5689,35 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                               let mark = '';
                               let guidIfc = '';
 
+                              // Try to find Cast Unit Mark with flexible property matching
                               for (const pset of p.properties as any[]) {
-                                if (pset.name === 'Tekla Assembly' || pset.name === 'Tekla Common') {
-                                  for (const prop of pset.properties || []) {
-                                    if (prop.name === 'Assembly/Cast unit Mark') mark = String(prop.value || '');
+                                const setName = pset.name || '';
+                                // Check property set (try mappings + common alternatives)
+                                const isAssemblySet = setName === propertyMappings.assembly_mark_set ||
+                                                      setName === 'Tekla Assembly' ||
+                                                      setName === 'Tekla Common';
+                                const isGuidSet = setName === propertyMappings.guid_set ||
+                                                  setName === 'Tekla Common' ||
+                                                  setName === 'Identification' ||
+                                                  setName === 'Reference Object';
+
+                                for (const prop of pset.properties || []) {
+                                  const propName = prop.name || '';
+                                  // Assembly mark - try multiple formats
+                                  if (!mark && isAssemblySet) {
+                                    if (propName === propertyMappings.assembly_mark_prop ||
+                                        propName === 'Assembly/Cast unit Mark' ||
+                                        propName === 'Cast_unit_Mark') {
+                                      mark = String(prop.displayValue ?? prop.value ?? '');
+                                    }
                                   }
-                                }
-                                if (pset.name === 'Identification') {
-                                  for (const prop of pset.properties || []) {
-                                    if (prop.name === 'GUID') guidIfc = String(prop.value || '');
+                                  // GUID - try multiple formats
+                                  if (!guidIfc && isGuidSet) {
+                                    if (propName === propertyMappings.guid_prop ||
+                                        propName === 'GUID' ||
+                                        propName === 'GUID (MS)') {
+                                      guidIfc = String(prop.displayValue ?? prop.value ?? '');
+                                    }
                                   }
                                 }
                               }
@@ -5799,15 +5818,35 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                             let mark = '';
                             let guidIfc = '';
 
+                            // Try to find Cast Unit Mark with flexible property matching
                             for (const pset of p.properties as any[]) {
-                              if (pset.name === 'Tekla Assembly' || pset.name === 'Tekla Common') {
-                                for (const prop of pset.properties || []) {
-                                  if (prop.name === 'Assembly/Cast unit Mark') mark = String(prop.value || '');
+                              const setName = pset.name || '';
+                              // Check property set (try mappings + common alternatives)
+                              const isAssemblySet = setName === propertyMappings.assembly_mark_set ||
+                                                    setName === 'Tekla Assembly' ||
+                                                    setName === 'Tekla Common';
+                              const isGuidSet = setName === propertyMappings.guid_set ||
+                                                setName === 'Tekla Common' ||
+                                                setName === 'Identification' ||
+                                                setName === 'Reference Object';
+
+                              for (const prop of pset.properties || []) {
+                                const propName = prop.name || '';
+                                // Assembly mark - try multiple formats
+                                if (!mark && isAssemblySet) {
+                                  if (propName === propertyMappings.assembly_mark_prop ||
+                                      propName === 'Assembly/Cast unit Mark' ||
+                                      propName === 'Cast_unit_Mark') {
+                                    mark = String(prop.displayValue ?? prop.value ?? '');
+                                  }
                                 }
-                              }
-                              if (pset.name === 'Identification') {
-                                for (const prop of pset.properties || []) {
-                                  if (prop.name === 'GUID') guidIfc = String(prop.value || '');
+                                // GUID - try multiple formats
+                                if (!guidIfc && isGuidSet) {
+                                  if (propName === propertyMappings.guid_prop ||
+                                      propName === 'GUID' ||
+                                      propName === 'GUID (MS)') {
+                                    guidIfc = String(prop.displayValue ?? prop.value ?? '');
+                                  }
                                 }
                               }
                             }
@@ -5926,11 +5965,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                                 if (!p?.properties || !guidIfc) continue;
 
                                 let mark = '';
+                                // Try to find Cast Unit Mark with flexible property matching
                                 for (const pset of p.properties as any[]) {
                                   const setName = (pset as any).name || '';
-                                  if (setName !== 'Tekla Assembly' && setName !== 'Tekla Common') continue;
+                                  // Check property set (try mappings + common alternatives)
+                                  const isAssemblySet = setName === propertyMappings.assembly_mark_set ||
+                                                        setName === 'Tekla Assembly' ||
+                                                        setName === 'Tekla Common';
+                                  if (!isAssemblySet) continue;
+
                                   for (const prop of (pset as any).properties || []) {
-                                    if (prop.name === 'Assembly/Cast unit Mark' || prop.name === 'Cast_unit_Mark') {
+                                    const propName = prop.name || '';
+                                    // Assembly mark - try multiple formats
+                                    if (propName === propertyMappings.assembly_mark_prop ||
+                                        propName === 'Assembly/Cast unit Mark' ||
+                                        propName === 'Cast_unit_Mark') {
                                       mark = String(prop.displayValue ?? prop.value ?? '');
                                       break;
                                     }
