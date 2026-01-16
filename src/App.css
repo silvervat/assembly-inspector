@@ -12122,15 +12122,16 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 8px 16px;
+  gap: 8px;
+  padding: 5px 12px;
   background: #0a3a67;
   color: white;
-  font-size: 13px;
+  font-size: 9px;
 }
 
 .org-selection-bar .hint {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 8px;
 }
 
 /* Modal overlay */
