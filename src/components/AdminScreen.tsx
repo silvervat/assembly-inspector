@@ -7356,59 +7356,76 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                           if (processed % 500 === 0 || processed === allIds.length) {
                             updateFunctionResult("countRootAssemblies", {
                               status: 'pending',
-                              result: `Samm 1/2: Kogun hierarhia...\n${processed}/${allIds.length}`
+                              result: `Kogun hierarhia...\n${processed}/${allIds.length}`
                             });
                           }
                         }
                       }
 
-                      // Step 2: Find TRUE ROOT(s) and their direct children
+                      // Step 2: Find ROOT(s) and traverse levels
                       updateFunctionResult("countRootAssemblies", {
                         status: 'pending',
-                        result: `Samm 2/2: Analüüsin hierarhiat...`
+                        result: `Analüüsin hierarhiat...`
                       });
 
                       // Find ROOT objects (have children, NOT in anyone's children)
-                      const rootIds: number[] = [];
+                      let currentLevel: number[] = [];
                       for (const [id] of objectsWithChildren) {
                         if (!allChildIds.has(id)) {
-                          rootIds.push(id);
+                          currentLevel.push(id);
                         }
                       }
 
-                      // Get ROOT's direct children (Level 1) - these should be assemblies
-                      let level1Children: number[] = [];
-                      for (const rootId of rootIds) {
-                        const children = objectsWithChildren.get(rootId) || [];
-                        level1Children.push(...children);
-                      }
+                      // Traverse levels and collect stats
+                      const levelStats: { level: number; count: number; withChildren: number; withoutChildren: number }[] = [];
+                      let levelNum = 0;
 
-                      // Count how many Level 1 children have their own children (are assemblies)
-                      let level1Assemblies = 0;
-                      let level1Parts = 0;
-                      for (const childId of level1Children) {
-                        if (objectsWithChildren.has(childId)) {
-                          level1Assemblies++;
-                        } else {
-                          level1Parts++;
+                      while (currentLevel.length > 0 && levelNum < 10) {
+                        let withChildren = 0;
+                        let withoutChildren = 0;
+                        const nextLevel: number[] = [];
+
+                        for (const id of currentLevel) {
+                          const children = objectsWithChildren.get(id);
+                          if (children && children.length > 0) {
+                            withChildren++;
+                            nextLevel.push(...children);
+                          } else {
+                            withoutChildren++;
+                          }
                         }
+
+                        levelStats.push({
+                          level: levelNum,
+                          count: currentLevel.length,
+                          withChildren,
+                          withoutChildren
+                        });
+
+                        currentLevel = nextLevel;
+                        levelNum++;
                       }
 
-                      // Also count objects not in hierarchy at all
-                      const inHierarchy = new Set([...objectsWithChildren.keys(), ...allChildIds]);
-                      const notInHierarchy = totalObjects - inHierarchy.size;
+                      // Build result string
+                      let resultStr = `KOKKU: ${totalObjects} objekti\n\n`;
+                      resultStr += `📊 HIERARHIA TASEMED:\n`;
+
+                      for (const stat of levelStats) {
+                        const marker = stat.count > 100 && stat.count < 20000 ? '🎯' : '  ';
+                        resultStr += `${marker} Level ${stat.level}: ${stat.count} objekti\n`;
+                        resultStr += `      └─ Assemblyd: ${stat.withChildren} | Parts: ${stat.withoutChildren}\n`;
+                      }
+
+                      // Find likely assembly level (first level with >100 and <20000 assemblies)
+                      const assemblyLevel = levelStats.find(s => s.withChildren > 100 && s.withChildren < 20000);
+                      if (assemblyLevel) {
+                        resultStr += `\n💡 Tõenäoline assembly tase: Level ${assemblyLevel.level}\n`;
+                        resultStr += `   Andmebaasi: ${assemblyLevel.count} rida`;
+                      }
 
                       updateFunctionResult("countRootAssemblies", {
                         status: 'success',
-                        result: `KOKKU: ${totalObjects} objekti\n\n` +
-                          `🔝 ROOT konteiner(id): ${rootIds.length}\n\n` +
-                          `📦 ROOT-i otsesed lapsed (Level 1): ${level1Children.length}\n` +
-                          `   └─ Neist assemblyd (omavad children): ${level1Assemblies}\n` +
-                          `   └─ Neist parts (pole children): ${level1Parts}\n\n` +
-                          `📄 Kõik kellegi lapsed: ${allChildIds.size}\n` +
-                          `📦 Kõik kellel on lapsed: ${objectsWithChildren.size}\n\n` +
-                          `❓ Pole hierarhias: ${notInHierarchy}\n\n` +
-                          `💡 Andmebaasi: ${level1Children.length} (Level 1)`
+                        result: resultStr
                       });
                     } catch (e: any) {
                       updateFunctionResult("countRootAssemblies", { status: 'error', error: e.message });
