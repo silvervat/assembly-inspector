@@ -6733,10 +6733,40 @@ export default function OrganizerScreen({
         <div className="org-modal-overlay" onClick={() => setShowGroupForm(false)}>
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
-              <h2>{editingGroup ? 'Muuda gruppi' : formParentId ? 'Lisa alamgrupp' : 'Uus grupp'}</h2>
+              {editingGroup ? (
+                <h2>Muuda gruppi</h2>
+              ) : (
+                <div className="org-modal-tabs">
+                  <button
+                    className={`org-modal-tab ${!formParentId ? 'active' : ''}`}
+                    onClick={() => setFormParentId(null)}
+                  >
+                    Uus grupp
+                  </button>
+                  {groups.length > 0 && (
+                    <button
+                      className={`org-modal-tab ${formParentId ? 'active' : ''}`}
+                      onClick={() => setFormParentId(groups[0]?.id || null)}
+                    >
+                      Uus alamgrupp
+                    </button>
+                  )}
+                </div>
+              )}
               <button onClick={() => setShowGroupForm(false)}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
+              {/* Parent group selector - show when creating subgroup */}
+              {!editingGroup && formParentId && groups.length > 0 && (
+                <div className="org-field">
+                  <label>Ülemgrupp *</label>
+                  <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
+                    {groups.filter(g => g.level < 2).map(g => (
+                      <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="org-field">
                 <label>Nimi *</label>
                 <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Grupi nimi" autoFocus />
@@ -6758,17 +6788,6 @@ export default function OrganizerScreen({
                   ))}
                 </div>
               </div>
-              {!editingGroup && !formParentId && (
-                <div className="org-field">
-                  <label>Ülemgrupp</label>
-                  <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
-                    <option value="">Peagrupp</option>
-                    {groups.filter(g => g.level < 2).map(g => (
-                      <option key={g.id} value={g.id}>{'—'.repeat(g.level + 1)} {g.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
               {/* Sharing settings - available for all groups including subgroups */}
               <div className="org-field">
                 <label>Jagamine</label>
