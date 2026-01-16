@@ -925,9 +925,6 @@ export default function ToolsScreen({
                 <span style={{ fontWeight: 600, color: '#166534' }}>
                   🔩 Poltide kokkuvõte ({boltSummary.length})
                 </span>
-                <span style={{ fontSize: '12px', color: '#666' }}>
-                  Kokku: {boltSummary.reduce((sum, b) => sum + b.boltCount, 0)} polti
-                </span>
               </div>
               <div style={{
                 maxHeight: '350px',
