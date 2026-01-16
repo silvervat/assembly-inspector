@@ -4558,14 +4558,6 @@ export default function OrganizerScreen({
         return ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
       };
 
-      // Helper to determine if text should be light or dark based on background
-      const getContrastTextColor = (c: GroupColor | null): string => {
-        if (!c) return '000000';
-        // Calculate luminance
-        const luminance = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
-        return luminance > 0.5 ? '000000' : 'FFFFFF';
-      };
-
       // Build group hierarchy map for name lookup
       const groupMap = new Map(groups.map(g => [g.id, g]));
 
@@ -4592,8 +4584,9 @@ export default function OrganizerScreen({
       };
 
       // ============ GRUPID SHEET ============
-      const groupHeaders = ['Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
-      const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
+      // First column is narrow color indicator (no header text), rest are normal headers
+      const groupHeaders = ['', 'Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
+      const groupData: any[][] = [groupHeaders.map((h, idx) => idx === 0 ? { v: '', s: headerStyle } : { v: h, s: headerStyle })];
 
       // Sort groups hierarchically (parents before children, then by sort_order)
       const sortedGroups = [...groups].sort((a, b) => {
@@ -4611,21 +4604,20 @@ export default function OrganizerScreen({
       for (let i = 0; i < sortedGroups.length; i++) {
         const group = sortedGroups[i];
         const colorHex = rgbToHexRaw(group.color);
-        const textColor = getContrastTextColor(group.color);
         const stats = getGroupStats(group.id);
 
         // Create hierarchy display with indentation
         const indent = '  '.repeat(group.level);
         const groupName = indent + group.name;
 
-        // Style for group name cell with color
-        const nameStyle = colorHex ? {
-          fill: { fgColor: { rgb: colorHex } },
-          font: { color: { rgb: textColor } }
+        // Style for color indicator cell (narrow colored cell)
+        const colorCellStyle = colorHex ? {
+          fill: { fgColor: { rgb: colorHex } }
         } : undefined;
 
         const row = [
-          { v: groupName, s: nameStyle },
+          { v: '', s: colorCellStyle }, // Color indicator column (empty text, just background)
+          groupName, // Group name with normal text
           group.description || '',
           stats.count,
           stats.weight > 0 ? Math.round(stats.weight / 100) / 10 : ''
@@ -4645,7 +4637,7 @@ export default function OrganizerScreen({
       }
 
       const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-      wsGroups['!cols'] = [{ wch: 40 }, { wch: 40 }, { wch: 10 }, { wch: 12 }];
+      wsGroups['!cols'] = [{ wch: 2 }, { wch: 40 }, { wch: 40 }, { wch: 10 }, { wch: 12 }]; // Narrow color column first
       XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
       // ============ DETAILID SHEET ============

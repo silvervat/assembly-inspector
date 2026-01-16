@@ -13350,8 +13350,9 @@ button.stat-toggle.off:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
+  padding: 8px 0;
   border-bottom: 1px solid #e5e7eb;
+  gap: 12px;
 }
 
 .org-toggle-field:last-child {
@@ -13363,25 +13364,26 @@ button.stat-toggle.off:hover {
 }
 
 .org-toggle-label .title {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 500;
   color: #374151;
 }
 
 .org-toggle-label .description {
-  font-size: 12px;
+  font-size: 10px;
   color: #6b7280;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .org-toggle {
   position: relative;
-  width: 44px;
-  height: 24px;
+  width: 36px;
+  height: 20px;
   background: #d1d5db;
-  border-radius: 12px;
+  border-radius: 10px;
   cursor: pointer;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 
 .org-toggle.active {
@@ -13393,8 +13395,8 @@ button.stat-toggle.off:hover {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   background: white;
   border-radius: 50%;
   transition: transform 0.2s;
@@ -13402,7 +13404,7 @@ button.stat-toggle.off:hover {
 }
 
 .org-toggle.active::after {
-  transform: translateX(20px);
+  transform: translateX(16px);
 }
 
 /* Group description in header */
