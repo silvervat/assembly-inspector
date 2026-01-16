@@ -11805,6 +11805,11 @@ button.stat-toggle.off:hover {
   z-index: 1000 !important;
 }
 
+/* When color picker is open, raise z-index so it appears above other groups */
+.org-group-header.color-picker-open {
+  z-index: 1000 !important;
+}
+
 /* Group dropdown menu */
 .org-group-menu {
   position: absolute;
