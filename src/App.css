@@ -10999,69 +10999,115 @@ button.stat-toggle.off:hover {
   color: #059669;
 }
 
-.org-color-mode-select {
-  padding: 6px 8px;
-  border: none;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border-radius: 4px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.org-color-mode-select option {
-  background: #0a3a67;
-  color: white;
-}
-
 .org-add-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 5px;
+  padding: 6px 12px;
   border: none;
   background: white;
   color: #0a3a67;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  transition: background 0.15s;
 }
 
 .org-add-btn:hover {
   background: #f0f0f0;
 }
 
-/* Secondary header row - for mobile-friendly button layout */
+/* Secondary header row */
 .org-header-secondary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 6px 10px;
   background: #0d4a7f;
   flex-shrink: 0;
 }
 
-.org-header-secondary .org-header-left {
+/* Color controls - droplet with dropdown */
+.org-color-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
 }
 
-.org-header-secondary .org-color-mode-select {
-  padding: 6px 10px;
+.org-color-dropdown-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+}
+
+.org-icon-btn.color-btn {
+  padding: 6px 8px;
+  border-radius: 5px 0 0 5px;
+}
+
+.org-color-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 4px;
   border: none;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border-radius: 4px;
-  font-size: 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 5px 5px 0;
+  transition: all 0.15s;
 }
 
-.org-header-secondary .org-add-btn {
-  padding: 6px 12px;
+.org-color-mode-btn:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.org-color-mode-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 140px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.org-color-mode-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
   font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s;
+}
+
+.org-color-mode-menu button:hover {
+  background: #f3f4f6;
+}
+
+.org-color-mode-menu button.active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.org-color-mode-menu .menu-check {
+  width: 14px;
+  font-size: 11px;
+  color: #10b981;
 }
 
 /* Toolbar */
@@ -11327,6 +11373,22 @@ button.stat-toggle.off:hover {
   border-radius: 6px;
   font-size: 12px;
   color: #1e40af;
+  flex: 1;
+}
+
+.org-bulk-actions .bulk-count {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.org-bulk-actions .bulk-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.org-bulk-actions .bulk-actions-right {
+  margin-left: auto;
 }
 
 .org-bulk-actions button {
@@ -11340,6 +11402,11 @@ button.stat-toggle.off:hover {
   border-radius: 4px;
   cursor: pointer;
   font-size: 11px;
+  white-space: nowrap;
+}
+
+.org-bulk-actions button.cancel {
+  background: #6b7280;
 }
 
 .org-bulk-actions button.delete {
@@ -12569,6 +12636,99 @@ button.stat-toggle.off:hover {
     padding: 8px 12px;
     font-size: 12px;
   }
+}
+
+/* Settings modal - compact modern design */
+.settings-modal {
+  max-width: 360px !important;
+  width: 90vw;
+}
+
+.settings-modal .org-modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.1s;
+  margin: 0 -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row:hover {
+  background: #f8fafc;
+}
+
+.settings-row:active {
+  background: #f1f5f9;
+}
+
+.settings-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-title {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1f2937;
+  margin-bottom: 2px;
+}
+
+.settings-desc {
+  display: block;
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.3;
+}
+
+.settings-toggle {
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: #d1d5db;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.settings-toggle.active {
+  background: #10b981;
+}
+
+.settings-toggle .toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 0.2s ease;
+}
+
+.settings-toggle.active .toggle-knob {
+  transform: translateX(18px);
 }
 
 /* Toast notifications */

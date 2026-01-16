@@ -604,6 +604,7 @@ export default function OrganizerScreen({
   const [searchFilterColumn, setSearchFilterColumn] = useState<string>('all'); // 'all', 'mark', 'product', 'weight', or custom field id
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [showColorModeMenu, setShowColorModeMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
   const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
@@ -1000,16 +1001,17 @@ export default function OrganizerScreen({
 
   // Close all dropdown menus when clicking outside
   useEffect(() => {
-    const anyMenuOpen = showSortMenu || showFilterMenu || groupMenuId !== null;
+    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || groupMenuId !== null;
     if (!anyMenuOpen) return;
     const handleClick = () => {
       setShowSortMenu(false);
       setShowFilterMenu(false);
+      setShowColorModeMenu(false);
       setGroupMenuId(null);
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [showSortMenu, showFilterMenu, groupMenuId]);
+  }, [showSortMenu, showFilterMenu, showColorModeMenu, groupMenuId]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -5759,30 +5761,48 @@ export default function OrganizerScreen({
         </button>
       </PageHeader>
 
-      {/* Secondary header row - coloring and add group buttons */}
+      {/* Secondary header row - add group and coloring */}
       <div className="org-header-secondary">
-        <div className="org-header-left">
-          <select
-            className="org-color-mode-select"
-            value={colorMode}
-            onChange={(e) => setColorMode(e.target.value as 'all' | 'parents-only')}
-            title="Värvimise režiim"
-          >
-            <option value="all">Kõik grupid</option>
-            <option value="parents-only">Ainult peagrupid</option>
-          </select>
-          <button
-            className={`org-icon-btn ${colorByGroup ? 'active' : ''}`}
-            onClick={() => colorByGroup ? resetColors() : colorModelByGroups()}
-            disabled={coloringInProgress || groups.length === 0}
-            title={colorByGroup ? 'Lähtesta värvid' : 'Värvi gruppide kaupa'}
-          >
-            {colorByGroup ? <FiRefreshCw size={16} /> : <FiDroplet size={16} />}
-          </button>
-        </div>
         <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
-          <FiPlus size={16} /><span>Uus grupp</span>
+          <FiPlus size={14} /> Uus grupp
         </button>
+        <div className="org-color-controls">
+          <div className="org-color-dropdown-wrapper">
+            <button
+              className={`org-icon-btn color-btn ${colorByGroup ? 'active' : ''}`}
+              onClick={() => colorByGroup ? resetColors() : colorModelByGroups()}
+              disabled={coloringInProgress || groups.length === 0}
+              title={colorByGroup ? 'Lähtesta värvid' : 'Värvi gruppide kaupa'}
+            >
+              {colorByGroup ? <FiRefreshCw size={15} /> : <FiDroplet size={15} />}
+            </button>
+            <button
+              className="org-color-mode-btn"
+              onClick={(e) => { e.stopPropagation(); setShowColorModeMenu(!showColorModeMenu); }}
+              title="Värvimise režiim"
+            >
+              <FiChevronDown size={12} />
+            </button>
+            {showColorModeMenu && (
+              <div className="org-color-mode-menu" onClick={(e) => e.stopPropagation()}>
+                <button
+                  className={colorMode === 'all' ? 'active' : ''}
+                  onClick={() => { setColorMode('all'); setShowColorModeMenu(false); }}
+                >
+                  <span className="menu-check">{colorMode === 'all' ? '✓' : ''}</span>
+                  Kõik grupid
+                </button>
+                <button
+                  className={colorMode === 'parents-only' ? 'active' : ''}
+                  onClick={() => { setColorMode('parents-only'); setShowColorModeMenu(false); }}
+                >
+                  <span className="menu-check">{colorMode === 'parents-only' ? '✓' : ''}</span>
+                  Ainult peagrupid
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Search bar - separate row */}
@@ -5902,9 +5922,14 @@ export default function OrganizerScreen({
         </div>
         {selectedItemIds.size > 0 && selectedGroup && !isGroupLocked(selectedGroup.id) && (
           <div className="org-bulk-actions">
-            <span>{selectedItemIds.size} valitud</span>
-            <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
-            <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
+            <span className="bulk-count">{selectedItemIds.size} valitud</span>
+            <div className="bulk-actions-left">
+              <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
+              <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> Tühista</button>
+            </div>
+            <div className="bulk-actions-right">
+              <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
+            </div>
           </div>
         )}
       </div>
@@ -7125,101 +7150,36 @@ export default function OrganizerScreen({
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="org-modal-overlay" onClick={() => setShowSettingsModal(false)}>
-          <div className="org-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+          <div className="org-modal settings-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
-              <h2>Seaded</h2>
+              <h2><FiSettings size={16} /> Seaded</h2>
               <button onClick={() => setShowSettingsModal(false)}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 0',
-                borderBottom: '1px solid var(--modus-border)'
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
-                    Mudelis märgistatud detail voldib lahti grupi
+              <div className="settings-section">
+                <label className="settings-row" onClick={toggleAutoExpandOnSelection}>
+                  <div className="settings-info">
+                    <span className="settings-title">Automaatne laiendamine</span>
+                    <span className="settings-desc">Mudelis valitud detail avab vastava grupi</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    Kui detail on mõnes grupis, siis valik laieneb automaatselt
+                  <div className={`settings-toggle ${autoExpandOnSelection ? 'active' : ''}`}>
+                    <span className="toggle-knob" />
                   </div>
-                </div>
-                <button
-                  onClick={toggleAutoExpandOnSelection}
-                  style={{
-                    width: '50px',
-                    height: '26px',
-                    borderRadius: '13px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    background: autoExpandOnSelection ? '#059669' : '#d1d5db',
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <span style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: autoExpandOnSelection ? '27px' : '3px',
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    background: 'white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    transition: 'left 0.2s'
-                  }} />
-                </button>
-              </div>
+                </label>
 
-              {/* Hide item on add setting */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 0',
-                borderBottom: '1px solid var(--modus-border)'
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, marginBottom: '4px' }}>
-                    Gruppi lisatud detail peidetakse mudelist
+                <label className="settings-row" onClick={toggleHideItemOnAdd}>
+                  <div className="settings-info">
+                    <span className="settings-title">Peida lisamisel</span>
+                    <span className="settings-desc">Gruppi lisatud detail peidetakse mudelist</span>
                   </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    Hea andmete sisestamiseks, et ei tekiks topeltvalikuid mudelist
+                  <div className={`settings-toggle ${hideItemOnAdd ? 'active' : ''}`}>
+                    <span className="toggle-knob" />
                   </div>
-                </div>
-                <button
-                  onClick={toggleHideItemOnAdd}
-                  style={{
-                    width: '50px',
-                    height: '26px',
-                    borderRadius: '13px',
-                    border: 'none',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    background: hideItemOnAdd ? '#059669' : '#d1d5db',
-                    transition: 'background 0.2s'
-                  }}
-                >
-                  <span style={{
-                    position: 'absolute',
-                    top: '3px',
-                    left: hideItemOnAdd ? '27px' : '3px',
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
-                    background: 'white',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                    transition: 'left 0.2s'
-                  }} />
-                </button>
+                </label>
               </div>
             </div>
             <div className="org-modal-footer">
-              <button className="save" onClick={() => setShowSettingsModal(false)}>
-                Sulge
-              </button>
+              <button className="save" onClick={() => setShowSettingsModal(false)}>Valmis</button>
             </div>
           </div>
         </div>
