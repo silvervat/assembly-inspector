@@ -86,6 +86,7 @@ const MARKUP_BATCH_SIZE = 50;  // Markups to create/remove per batch
 
 // Markup settings - which fields to include in markup
 type MarkupLineConfig = 'line1' | 'line2' | 'line3' | 'none';
+type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' | string;
 
 interface MarkupFieldConfig {
   enabled: boolean;
@@ -721,6 +722,8 @@ export default function OrganizerScreen({
     return defaultMarkupSettings;
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+  const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
+  const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
   // Save markup settings to localStorage when changed
   useEffect(() => {
@@ -6616,7 +6619,6 @@ export default function OrganizerScreen({
         const hasSubgroups = groups.some(g => g.parent_id === markupGroupId);
 
         // Field definitions for drag & drop
-        type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' | string;
         interface MarkupFieldDef {
           id: MarkupFieldType;
           label: string;
@@ -6722,10 +6724,6 @@ export default function OrganizerScreen({
             return prev;
           });
         };
-
-        // Drag state
-        const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
-        const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
         // Render field chip
         const FieldChip = ({ field, onRemove, isDragging }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean }) => (
