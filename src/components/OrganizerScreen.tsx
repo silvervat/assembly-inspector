@@ -1721,17 +1721,35 @@ export default function OrganizerScreen({
 
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
-        // If only a single group is colored, only recolor that group (if it's the one being changed)
-        // If all groups are colored, recolor all groups
+        // If only a single group is being colored, check if we should recolor
         if (coloredSingleGroupId) {
-          // Check if the changed group is the colored one or its descendant
-          const subtreeIds = new Set(getGroupSubtreeIds(coloredSingleGroupId));
-          if (subtreeIds.has(groupId)) {
-            setTimeout(() => colorModelByGroups(coloredSingleGroupId), 150);
+          const subtreeCheck = new Set(getGroupSubtreeIds(coloredSingleGroupId));
+          if (!subtreeCheck.has(groupId)) {
+            // Changing a different group's color - don't recolor
+            return;
           }
-          // If changing a different group's color, don't recolor at all
-        } else {
-          setTimeout(() => colorModelByGroups(), 150);
+        }
+
+        // Directly recolor this group's items with the new color (avoids stale closure issue)
+        const items = groupItems.get(groupId) || [];
+        const guids = items.map(item => item.guid_ifc).filter(Boolean) as string[];
+
+        // Also get items from all subgroups if they don't have their own color
+        const subtreeIds = getGroupSubtreeIds(groupId);
+        for (const subId of subtreeIds) {
+          if (subId === groupId) continue;
+          const subGroup = groups.find(g => g.id === subId);
+          // Only include subgroup items if the subgroup doesn't have its own color
+          if (subGroup && !subGroup.color) {
+            const subItems = groupItems.get(subId) || [];
+            for (const item of subItems) {
+              if (item.guid_ifc) guids.push(item.guid_ifc);
+            }
+          }
+        }
+
+        if (guids.length > 0) {
+          colorItemsDirectly(guids, color);
         }
       }
     } catch (e) {
@@ -4558,14 +4576,6 @@ export default function OrganizerScreen({
         return ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
       };
 
-      // Helper to determine if text should be light or dark based on background
-      const getContrastTextColor = (c: GroupColor | null): string => {
-        if (!c) return '000000';
-        // Calculate luminance
-        const luminance = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
-        return luminance > 0.5 ? '000000' : 'FFFFFF';
-      };
-
       // Build group hierarchy map for name lookup
       const groupMap = new Map(groups.map(g => [g.id, g]));
 
@@ -4592,8 +4602,9 @@ export default function OrganizerScreen({
       };
 
       // ============ GRUPID SHEET ============
-      const groupHeaders = ['Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
-      const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
+      // First column is narrow color indicator (no header text), rest are normal headers
+      const groupHeaders = ['', 'Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
+      const groupData: any[][] = [groupHeaders.map((h, idx) => idx === 0 ? { v: '', s: headerStyle } : { v: h, s: headerStyle })];
 
       // Sort groups hierarchically (parents before children, then by sort_order)
       const sortedGroups = [...groups].sort((a, b) => {
@@ -4611,21 +4622,20 @@ export default function OrganizerScreen({
       for (let i = 0; i < sortedGroups.length; i++) {
         const group = sortedGroups[i];
         const colorHex = rgbToHexRaw(group.color);
-        const textColor = getContrastTextColor(group.color);
         const stats = getGroupStats(group.id);
 
         // Create hierarchy display with indentation
         const indent = '  '.repeat(group.level);
         const groupName = indent + group.name;
 
-        // Style for group name cell with color
-        const nameStyle = colorHex ? {
-          fill: { fgColor: { rgb: colorHex } },
-          font: { color: { rgb: textColor } }
+        // Style for color indicator cell (narrow colored cell)
+        const colorCellStyle = colorHex ? {
+          fill: { fgColor: { rgb: colorHex } }
         } : undefined;
 
         const row = [
-          { v: groupName, s: nameStyle },
+          { v: '', s: colorCellStyle }, // Color indicator column (empty text, just background)
+          groupName, // Group name with normal text
           group.description || '',
           stats.count,
           stats.weight > 0 ? Math.round(stats.weight / 100) / 10 : ''
@@ -4645,7 +4655,7 @@ export default function OrganizerScreen({
       }
 
       const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-      wsGroups['!cols'] = [{ wch: 40 }, { wch: 40 }, { wch: 10 }, { wch: 12 }];
+      wsGroups['!cols'] = [{ wch: 2 }, { wch: 40 }, { wch: 40 }, { wch: 10 }, { wch: 12 }]; // Narrow color column first
       XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
       // ============ DETAILID SHEET ============
@@ -5838,8 +5848,18 @@ export default function OrganizerScreen({
     const isBeingDragged = draggedGroup?.id === node.id;
     const isEffectivelyLocked = isGroupLocked(node.id);
 
+    // Check if this group or any descendant has menu/color picker open (for z-index)
+    const hasMenuInSubtree = (checkNode: OrganizerGroupTree): boolean => {
+      if (groupMenuId === checkNode.id || colorPickerGroupId === checkNode.id) return true;
+      for (const child of checkNode.children) {
+        if (hasMenuInSubtree(child)) return true;
+      }
+      return false;
+    };
+    const menuOpenInSubtree = hasMenuInSubtree(node);
+
     return (
-      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''} ${groupMenuId === node.id || colorPickerGroupId === node.id ? 'menu-open' : ''}`}>
+      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''} ${menuOpenInSubtree ? 'menu-open' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragOverAsParent ? 'drag-over-as-parent' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''} ${groupMenuId === node.id ? 'menu-open' : ''} ${colorPickerGroupId === node.id ? 'color-picker-open' : ''}`}
           style={{ paddingLeft: `${4 + depth * 8}px` }}
@@ -7549,11 +7569,11 @@ export default function OrganizerScreen({
           });
         };
 
-        // Render field chip with suffix input
-        const FieldChip = ({ field, onRemove, isDragging, showSuffix = false }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean; showSuffix?: boolean }) => {
+        // Helper to render inline field chip with suffix
+        const renderFieldChip = (field: MarkupFieldDef, onRemove?: () => void, isDragging?: boolean, showSuffix = false) => {
           const suffix = getFieldSuffix(field.id);
           return (
-            <div className="markup-field-with-suffix">
+            <div key={field.id} className="markup-field-with-suffix">
               <div
                 className={`markup-field-chip ${isDragging ? 'dragging' : ''}`}
                 draggable
@@ -7586,6 +7606,7 @@ export default function OrganizerScreen({
                   value={suffix}
                   onChange={(e) => setFieldSuffix(field.id, e.target.value)}
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
                   title="Lisa tekst välja järele"
                 />
               )}
@@ -7593,13 +7614,14 @@ export default function OrganizerScreen({
           );
         };
 
-        // Render drop zone for a line
-        const LineDropZone = ({ line, label }: { line: MarkupLineConfig; label: string }) => {
+        // Helper to render inline drop zone for a line
+        const renderLineDropZone = (line: MarkupLineConfig, label: string) => {
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
 
           return (
             <div
+              key={line}
               className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -7618,15 +7640,7 @@ export default function OrganizerScreen({
               <span className="line-label">{label}</span>
               <div className="line-fields">
                 {fields.length > 0 ? (
-                  fields.map(f => (
-                    <FieldChip
-                      key={f.id}
-                      field={f}
-                      onRemove={() => toggleField(f.id)}
-                      isDragging={draggedField === f.id}
-                      showSuffix={true}
-                    />
-                  ))
+                  fields.map(f => renderFieldChip(f, () => toggleField(f.id), draggedField === f.id, true))
                 ) : (
                   <span className="line-placeholder">Lohista siia</span>
                 )}
@@ -7700,9 +7714,9 @@ export default function OrganizerScreen({
 
                   {/* Lines */}
                   <div className="markup-lines">
-                    <LineDropZone line="line1" label="Rida 1" />
-                    <LineDropZone line="line2" label="Rida 2" />
-                    <LineDropZone line="line3" label="Rida 3" />
+                    {renderLineDropZone('line1', 'Rida 1')}
+                    {renderLineDropZone('line2', 'Rida 2')}
+                    {renderLineDropZone('line3', 'Rida 3')}
                   </div>
 
                   {/* Available fields */}
