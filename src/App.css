@@ -11354,6 +11354,7 @@ button.stat-toggle.off:hover {
   align-items: center;
   gap: 6px;
   margin-left: 8px;
+  margin-bottom: 4px;
   font-size: 11px;
   color: #6b7280;
   white-space: nowrap;
