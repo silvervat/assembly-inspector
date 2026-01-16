@@ -4532,34 +4532,83 @@ export default function OrganizerScreen({
         alignment: { horizontal: 'center', vertical: 'center' }
       };
 
-      // ============ GRUPID SHEET ============
-      const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Tase'];
-      const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
-
       // Helper to convert RGB to hex (without #)
       const rgbToHexRaw = (c: GroupColor | null): string => {
         if (!c) return '';
         return ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
       };
 
-      // Sort groups by level to maintain hierarchy
-      const sortedGroups = [...groups].sort((a, b) => a.level - b.level);
+      // Helper to determine if text should be light or dark based on background
+      const getContrastTextColor = (c: GroupColor | null): string => {
+        if (!c) return '000000';
+        // Calculate luminance
+        const luminance = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+        return luminance > 0.5 ? '000000' : 'FFFFFF';
+      };
+
+      // Build group hierarchy map for name lookup
+      const groupMap = new Map(groups.map(g => [g.id, g]));
+
+      // Get full hierarchy path for a group
+      const getGroupPath = (group: typeof groups[0]): string[] => {
+        const path: string[] = [];
+        let current: typeof groups[0] | undefined = group;
+        while (current) {
+          path.unshift(current.name);
+          current = current.parent_id ? groupMap.get(current.parent_id) : undefined;
+        }
+        return path;
+      };
+
+      // Calculate group statistics (items count and total weight)
+      const getGroupStats = (groupId: string): { count: number; weight: number } => {
+        const items = groupItems.get(groupId) || [];
+        let weight = 0;
+        for (const item of items) {
+          const w = parseFloat(String(item.cast_unit_weight || 0));
+          if (!isNaN(w)) weight += w;
+        }
+        return { count: items.length, weight };
+      };
+
+      // ============ GRUPID SHEET ============
+      const groupHeaders = ['Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
+      const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
+
+      // Sort groups hierarchically (parents before children, then by sort_order)
+      const sortedGroups = [...groups].sort((a, b) => {
+        const pathA = getGroupPath(a);
+        const pathB = getGroupPath(b);
+        // Compare paths level by level
+        for (let i = 0; i < Math.min(pathA.length, pathB.length); i++) {
+          if (pathA[i] !== pathB[i]) {
+            return pathA[i].localeCompare(pathB[i], 'et');
+          }
+        }
+        return pathA.length - pathB.length;
+      });
 
       for (let i = 0; i < sortedGroups.length; i++) {
         const group = sortedGroups[i];
         const colorHex = rgbToHexRaw(group.color);
+        const textColor = getContrastTextColor(group.color);
+        const stats = getGroupStats(group.id);
 
-        // Create styled cells with background color if group has color
-        const rowStyle = colorHex ? {
-          fill: { fgColor: { rgb: colorHex } }
+        // Create hierarchy display with indentation
+        const indent = '  '.repeat(group.level);
+        const groupName = indent + group.name;
+
+        // Style for group name cell with color
+        const nameStyle = colorHex ? {
+          fill: { fgColor: { rgb: colorHex } },
+          font: { color: { rgb: textColor } }
         } : undefined;
 
         const row = [
-          { v: group.id, s: rowStyle },
-          { v: group.name, s: rowStyle },
-          { v: group.parent_id || '', s: rowStyle },
-          { v: group.description || '', s: rowStyle },
-          { v: group.level, s: rowStyle }
+          { v: groupName, s: nameStyle },
+          group.description || '',
+          stats.count,
+          stats.weight > 0 ? Math.round(stats.weight / 100) / 10 : ''
         ];
         groupData.push(row);
 
@@ -4576,14 +4625,14 @@ export default function OrganizerScreen({
       }
 
       const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-      wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 6 }];
+      wsGroups['!cols'] = [{ wch: 40 }, { wch: 40 }, { wch: 10 }, { wch: 12 }];
       XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
-      // ============ ELEMENDID SHEET ============
-      setGroupsImportProgress({ phase: 'Töötlen elemente...', current: 0, total: 100, percent: 35 });
+      // ============ DETAILID SHEET ============
+      setGroupsImportProgress({ phase: 'Töötlen detaile...', current: 0, total: 100, percent: 35 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      const itemHeaders = ['Grupi_ID', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'Lisatud', 'Lisaja'];
+      const itemHeaders = ['Grupp', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'GUID_IFC', 'GUID_MS', 'Lisatud', 'Lisaja'];
       const itemData: any[][] = [itemHeaders.map(h => ({ v: h, s: headerStyle }))];
 
       let totalItems = 0;
@@ -4592,27 +4641,27 @@ export default function OrganizerScreen({
       for (const group of sortedGroups) {
         const items = groupItems.get(group.id) || [];
         for (const item of items) {
-          allItemsFlat.push({ groupId: group.id, item });
+          allItemsFlat.push({ groupName: group.name, item });
           totalItems++;
         }
       }
 
       for (let i = 0; i < allItemsFlat.length; i++) {
-        const { groupId, item } = allItemsFlat[i];
+        const { groupName, item } = allItemsFlat[i];
         const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
         const addedDate = item.added_at
           ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
           : '';
 
         itemData.push([
-          groupId,
-          item.guid_ifc || '',
-          guidMs,
+          groupName,
           item.assembly_mark || '',
           item.product_name || '',
           item.cast_unit_weight || '',
           item.cast_unit_position_code || '',
           item.notes || '',
+          item.guid_ifc || '',
+          guidMs,
           addedDate,
           item.added_by || ''
         ]);
@@ -4620,7 +4669,7 @@ export default function OrganizerScreen({
         if (i % 100 === 0) {
           const percent = 35 + Math.round((i / allItemsFlat.length) * 55);
           setGroupsImportProgress({
-            phase: `Töötlen elemente... (${i}/${allItemsFlat.length})`,
+            phase: `Töötlen detaile... (${i}/${allItemsFlat.length})`,
             current: i,
             total: allItemsFlat.length,
             percent
@@ -4630,40 +4679,34 @@ export default function OrganizerScreen({
       }
 
       const wsItems = XLSX.utils.aoa_to_sheet(itemData);
-      wsItems['!cols'] = [{ wch: 38 }, { wch: 24 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 18 }, { wch: 25 }];
-      XLSX.utils.book_append_sheet(wb, wsItems, 'Elemendid');
+      wsItems['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 24 }, { wch: 38 }, { wch: 18 }, { wch: 25 }];
+      XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
 
       // ============ JUHEND SHEET ============
       setGroupsImportProgress({ phase: 'Loon faili...', current: 90, total: 100, percent: 92 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       const guideData = [
-        ['GRUPPIDE IMPORT/EKSPORT JUHEND'],
+        ['GRUPPIDE EKSPORT'],
         [''],
         ['GRUPID leht:'],
-        ['- Grupi_ID: Unikaalne grupi tunnus (impordi puhul genereeritakse uus)'],
-        ['- Grupi_nimi: Grupi nimi (kohustuslik)'],
-        ['- Ülemgrupi_ID: Viide ülemgrupile (tühi = peagrupp)'],
-        ['- Kirjeldus: Grupi kirjeldus (valikuline)'],
-        ['- Tase: 0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp'],
-        ['- Grupi värv on näidatud rea taustavärviga'],
+        ['- Grupp: Grupi nimi (taandega hierarhia näitamiseks)'],
+        ['- Kirjeldus: Grupi kirjeldus'],
+        ['- Detaile: Grupis olevate detailide arv'],
+        ['- Kaal (t): Grupi detailide kogukaal tonnides'],
+        ['- Grupi värv on näidatud grupi nime lahtri taustavärviga'],
         [''],
-        ['ELEMENDID leht:'],
-        ['- Grupi_ID: Grupi tunnus kuhu element lisada'],
-        ['- GUID_IFC: 22-kohaline IFC GUID (kohustuslik)'],
-        ['- GUID_MS: 36-kohaline MS GUID (valikuline, arvutatakse automaatselt)'],
+        ['DETAILID leht:'],
+        ['- Grupp: Grupi nimi kuhu detail kuulub'],
         ['- Mark: Assembly mark'],
         ['- Toode: Toote nimetus'],
-        ['- Kaal: Elemendi kaal'],
+        ['- Kaal: Detaili kaal'],
         ['- Positsioon: Positsiooni kood'],
-        ['- Märkused: Valikulised märkused'],
-        ['- Lisatud: Millal element gruppi lisati'],
-        ['- Lisaja: Kes elemendi gruppi lisas'],
-        [''],
-        ['IMPORTIMISE REEGLID:'],
-        ['- Grupid luuakse taseme järjekorras (peagrupid enne alamgruppe)'],
-        ['- Kui ülemgrupi ID-d ei leita, luuakse peagrupp'],
-        ['- Duplikaatsed GUID-id samasse gruppi ei lisata'],
+        ['- Märkused: Märkused'],
+        ['- GUID_IFC: 22-kohaline IFC GUID'],
+        ['- GUID_MS: 36-kohaline MS GUID'],
+        ['- Lisatud: Millal detail gruppi lisati'],
+        ['- Lisaja: Kes detaili gruppi lisas'],
         [''],
         ['Eksporditud:', new Date().toLocaleString('et-EE')],
         ['Kasutaja:', tcUserEmail]
