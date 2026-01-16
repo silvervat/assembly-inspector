@@ -5758,7 +5758,7 @@ export default function OrganizerScreen({
     return (
       <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''}`}>
         <div
-          className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragOverAsParent ? 'drag-over-as-parent' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''} ${groupMenuId === node.id ? 'menu-open' : ''}`}
+          className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragOverAsParent ? 'drag-over-as-parent' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''} ${groupMenuId === node.id ? 'menu-open' : ''} ${colorPickerGroupId === node.id ? 'color-picker-open' : ''}`}
           style={{ paddingLeft: `${4 + depth * 8}px` }}
           draggable={!isEffectivelyLocked}
           onClick={(e) => handleGroupClick(e, node.id)}
