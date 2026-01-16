@@ -11506,6 +11506,18 @@ button.stat-toggle.off:hover {
   min-height: 32px;
 }
 
+/* Cover gap above sticky header when scrolling */
+.org-group-header::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  height: 8px;
+  background: #f3f4f6;
+  z-index: -1;
+}
+
 .org-group-header:hover {
   background: #f3f4f6;
 }
@@ -11564,6 +11576,7 @@ button.stat-toggle.off:hover {
   position: relative;
   display: inline-flex;
   align-items: center;
+  align-self: center;
 }
 
 .org-color-dot {

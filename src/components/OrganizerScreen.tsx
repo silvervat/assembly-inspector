@@ -1394,12 +1394,13 @@ export default function OrganizerScreen({
                       }
 
                       // Weight - configured mapping first (normalized comparison)
+                      // Exclude rebar weight - only use Cast_unit_Weight or configured mapping
                       if (!castUnitWeight) {
                         if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
                           castUnitWeight = String(propValue);
-                        } else if (propName.includes('cast') && propName.includes('weight')) {
+                        } else if (propName.includes('cast') && propName.includes('weight') && !propName.includes('rebar')) {
                           castUnitWeight = String(propValue);
-                        } else if (propName === 'weight' || propName === 'kaal') {
+                        } else if ((propName === 'weight' || propName === 'kaal') && !propName.includes('rebar')) {
                           castUnitWeight = String(propValue);
                         }
                       }
@@ -3689,12 +3690,13 @@ export default function OrganizerScreen({
                                 }
 
                                 // Weight - configured mapping first
+                                // Exclude rebar weight - only use Cast_unit_Weight or configured mapping
                                 if (!castUnitWeight) {
                                   if (setNameNorm === mappingWeightSetNorm && propNameNorm === mappingWeightPropNorm) {
                                     castUnitWeight = String(propValue);
-                                  } else if (propName.includes('cast') && propName.includes('weight')) {
+                                  } else if (propName.includes('cast') && propName.includes('weight') && !propName.includes('rebar')) {
                                     castUnitWeight = String(propValue);
-                                  } else if (propName === 'weight' || propName === 'kaal') {
+                                  } else if ((propName === 'weight' || propName === 'kaal') && !propName.includes('rebar')) {
                                     castUnitWeight = String(propValue);
                                   }
                                 }
@@ -3976,15 +3978,15 @@ export default function OrganizerScreen({
   // EXPORT
   // ============================================
 
-  // Helper to collect all items from a group and its subgroups with group names
-  const collectAllGroupItems = (groupId: string): { item: any; groupName: string }[] => {
-    const result: { item: any; groupName: string }[] = [];
+  // Helper to collect all items from a group and its subgroups with group names and colors
+  const collectAllGroupItems = (groupId: string): { item: any; groupName: string; groupColor: GroupColor | null }[] => {
+    const result: { item: any; groupName: string; groupColor: GroupColor | null }[] = [];
     const group = groups.find(g => g.id === groupId);
     if (!group) return result;
 
     // Add items from this group
     const items = groupItems.get(groupId) || [];
-    items.forEach(item => result.push({ item, groupName: group.name }));
+    items.forEach(item => result.push({ item, groupName: group.name, groupColor: group.color }));
 
     // Recursively add items from child groups
     const children = groups.filter(g => g.parent_id === groupId);
@@ -4014,7 +4016,7 @@ export default function OrganizerScreen({
 
     const wb = XLSX.utils.book_new();
     // Headers: GUIDs moved to right side before Lisatud columns
-    const headers = ['#', 'Grupp', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    const headers = ['#', 'Grupp', 'Grupi värv', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
     headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -4035,16 +4037,31 @@ export default function OrganizerScreen({
     for (let i = 0; i < allItems.length; i += batchSize) {
       const batch = allItems.slice(i, Math.min(i + batchSize, allItems.length));
 
-      batch.forEach(({ item, groupName }, batchIdx) => {
+      batch.forEach(({ item, groupName, groupColor }, batchIdx) => {
         const idx = i + batchIdx;
         const addedDate = item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' }) : '';
 
         // Calculate GUID_MS from GUID_IFC
         const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
 
+        // Create color cell with background if group has color
+        const colorCell = groupColor
+          ? {
+              v: '',
+              s: {
+                fill: {
+                  fgColor: {
+                    rgb: ((1 << 24) + (groupColor.r << 16) + (groupColor.g << 8) + groupColor.b).toString(16).slice(1).toUpperCase()
+                  }
+                }
+              }
+            }
+          : '';
+
         const row: any[] = [
           idx + 1,
           groupName,
+          colorCell,
           item.assembly_mark || '',
           item.product_name || '',
           formatWeight(item.cast_unit_weight),
@@ -4071,8 +4088,8 @@ export default function OrganizerScreen({
 
     const ws = XLSX.utils.aoa_to_sheet(data);
 
-    // Column widths: adjusted for new order
-    const baseColWidths = [{ wch: 5 }, { wch: 20 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    // Column widths: adjusted for new order (includes Grupi värv column)
+    const baseColWidths = [{ wch: 5 }, { wch: 20 }, { wch: 8 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
     const customColWidths = customFields.map(() => ({ wch: 15 }));
     const guidAndEndColWidths = [{ wch: 24 }, { wch: 38 }, { wch: 16 }, { wch: 20 }, { wch: 25 }];
     ws['!cols'] = [...baseColWidths, ...customColWidths, ...guidAndEndColWidths];
@@ -4101,17 +4118,23 @@ export default function OrganizerScreen({
     const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
-    // Build headers: GUIDs moved to right side before Lisatud columns
-    const headers = ['#', 'Grupp', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Build headers: GUIDs moved to right side before Lisatud columns (includes Grupi värv)
+    const headers = ['#', 'Grupp', 'Grupi värv', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
     customFields.forEach(f => headers.push(f.name));
     headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
     // Get timezone name
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+    // Helper to convert RGB to hex
+    const rgbToHex = (c: GroupColor | null): string => {
+      if (!c) return '';
+      return '#' + ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
+    };
+
     // Build rows
     const rows: string[][] = [headers];
-    allItems.forEach(({ item, groupName }, idx) => {
+    allItems.forEach(({ item, groupName, groupColor }, idx) => {
       const addedDate = item.added_at
         ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
         : '';
@@ -4122,6 +4145,7 @@ export default function OrganizerScreen({
       const row: string[] = [
         String(idx + 1),
         groupName,
+        rgbToHex(groupColor),
         item.assembly_mark || '',
         item.product_name || '',
         formatWeight(item.cast_unit_weight),
