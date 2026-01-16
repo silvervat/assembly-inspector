@@ -5922,9 +5922,14 @@ export default function OrganizerScreen({
         </div>
         {selectedItemIds.size > 0 && selectedGroup && !isGroupLocked(selectedGroup.id) && (
           <div className="org-bulk-actions">
-            <span>{selectedItemIds.size} valitud</span>
-            <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
-            <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
+            <span className="bulk-count">{selectedItemIds.size} valitud</span>
+            <div className="bulk-actions-left">
+              <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
+              <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> Tühista</button>
+            </div>
+            <div className="bulk-actions-right">
+              <button className="delete" onClick={() => removeItemsFromGroup(Array.from(selectedItemIds))}><FiTrash2 size={12} /></button>
+            </div>
           </div>
         )}
       </div>
