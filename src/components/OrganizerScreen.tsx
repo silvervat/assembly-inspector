@@ -6315,35 +6315,60 @@ export default function OrganizerScreen({
                   })}
                 </div>
 
-                {/* Load more button for virtualization */}
+                {/* Load more buttons for virtualization */}
                 {hasMore && (
-                  <button
-                    className="org-load-more-btn"
-                    disabled={isLoadingMore}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (hasMoreLocal) {
-                        // First, show more already-loaded items
+                  <div className="org-load-more-row">
+                    <button
+                      className="org-load-more-btn"
+                      disabled={isLoadingMore}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasMoreLocal) {
+                          // First, show more already-loaded items
+                          setVisibleItemCounts(prev => {
+                            const next = new Map(prev);
+                            next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                            return next;
+                          });
+                        } else if (hasMoreInDb && !isLoadingMore) {
+                          // Need to fetch more from database
+                          const currentLoaded = sortedItems.length;
+                          loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
+                          // Also increase visible count to show new items when they arrive
+                          setVisibleItemCounts(prev => {
+                            const next = new Map(prev);
+                            next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
+                            return next;
+                          });
+                        }
+                      }}
+                    >
+                      {isLoadingMore ? 'Laen...' : `Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, totalItemCount - displayItems.length)} (kokku ${totalItemCount})`}
+                    </button>
+                    <button
+                      className="org-load-more-btn org-show-all-btn"
+                      disabled={isLoadingMore}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Show all items - set visible count to total
                         setVisibleItemCounts(prev => {
                           const next = new Map(prev);
-                          next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                          next.set(node.id, totalItemCount);
                           return next;
                         });
-                      } else if (hasMoreInDb && !isLoadingMore) {
-                        // Need to fetch more from database
-                        const currentLoaded = sortedItems.length;
-                        loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
-                        // Also increase visible count to show new items when they arrive
-                        setVisibleItemCounts(prev => {
-                          const next = new Map(prev);
-                          next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
-                          return next;
-                        });
-                      }
-                    }}
-                  >
-                    {isLoadingMore ? 'Laen...' : `Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, totalItemCount - displayItems.length)} (kokku ${totalItemCount})`}
-                  </button>
+                        // Also load all from DB if needed
+                        if (hasMoreInDb && !isLoadingMore) {
+                          const currentLoaded = sortedItems.length;
+                          const remaining = totalItemCount - currentLoaded;
+                          if (remaining > 0) {
+                            loadGroupItemsPage(node.id, currentLoaded, remaining);
+                          }
+                        }
+                      }}
+                    >
+                      Näita kõike
+                    </button>
+                  </div>
                 )}
                 {/* Loading indicator when fetching items */}
                 {isLoadingMore && filteredItems.length === 0 && (
