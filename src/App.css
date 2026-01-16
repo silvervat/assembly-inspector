@@ -11570,6 +11570,7 @@ button.stat-toggle.off:hover {
   cursor: pointer;
   color: #9ca3af;
   display: flex;
+  align-self: center;
 }
 
 .org-color-dot-wrapper {
