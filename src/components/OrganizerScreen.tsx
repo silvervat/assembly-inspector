@@ -725,6 +725,7 @@ export default function OrganizerScreen({
     return defaultMarkupSettings;
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+  const [hasMarkups, setHasMarkups] = useState(false);
   const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
   const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
@@ -3426,6 +3427,7 @@ export default function OrganizerScreen({
       setMarkupProgress(null);
       setShowMarkupModal(false);
       setMarkupGroupId(null);
+      setHasMarkups(true);
       showToast(`✓ ${createdIds.length} markupit loodud`);
     } catch (e) {
       console.error('Error adding markups:', e);
@@ -3436,12 +3438,23 @@ export default function OrganizerScreen({
     }
   };
 
+  // Check if there are markups in the model
+  const checkForMarkups = async () => {
+    try {
+      const allMarkups = await (api.markup as any)?.getTextMarkups?.();
+      setHasMarkups(allMarkups && allMarkups.length > 0);
+    } catch (e) {
+      setHasMarkups(false);
+    }
+  };
+
   const removeAllMarkups = async () => {
     setSaving(true);
     try {
       const allMarkups = await (api.markup as any)?.getTextMarkups?.();
       if (!allMarkups || allMarkups.length === 0) {
         showToast('Markupe pole');
+        setHasMarkups(false);
         setSaving(false);
         return;
       }
@@ -3467,6 +3480,7 @@ export default function OrganizerScreen({
       }
 
       setMarkupProgress(null);
+      setHasMarkups(false);
       showToast(`✓ ${allIds.length} markupit eemaldatud`);
     } catch (e) {
       console.error('Error removing markups:', e);
@@ -5959,6 +5973,10 @@ export default function OrganizerScreen({
               setShowFilterMenu(false);
               const isOpening = groupMenuId !== node.id;
               setGroupMenuId(groupMenuId === node.id ? null : node.id);
+              // Check for markups when opening menu
+              if (isOpening) {
+                checkForMarkups();
+              }
               // Scroll container so menu is fully visible
               if (isOpening) {
                 const btn = e.currentTarget as HTMLElement;
@@ -6026,7 +6044,12 @@ export default function OrganizerScreen({
               <button onClick={() => openMarkupModal(node.id)}>
                 <FiTag size={12} /> Lisa markupid
               </button>
-              <button onClick={() => { setGroupMenuId(null); removeAllMarkups(); }}>
+              <button
+                onClick={() => { if (hasMarkups) { setGroupMenuId(null); removeAllMarkups(); } }}
+                disabled={!hasMarkups}
+                style={!hasMarkups ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+                title={!hasMarkups ? 'Markupe pole mudelis' : undefined}
+              >
                 <FiTag size={12} /> Eemalda markupid
               </button>
               <button onClick={() => copyGroupDataToClipboard(node.id)}>

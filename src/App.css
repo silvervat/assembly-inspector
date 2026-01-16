@@ -11110,6 +11110,14 @@ button.stat-toggle.off:hover {
   color: #10b981;
 }
 
+/* Global checkbox styling for organizer - Trimble blue */
+[class^="org-"] input[type="checkbox"],
+[class*=" org-"] input[type="checkbox"],
+.org-modal input[type="checkbox"],
+.markup-option input[type="checkbox"]:not([style]) {
+  accent-color: #0a3a67;
+}
+
 /* Toolbar */
 .org-toolbar {
   display: flex;
