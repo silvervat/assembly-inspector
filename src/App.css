@@ -1909,7 +1909,7 @@ button.stat-toggle.off:hover {
   border-radius: 12px;
   padding: 20px 28px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-  min-width: 220px;
+  width: 260px;  /* Fixed width to prevent jumping */
   text-align: center;
 }
 
@@ -1932,7 +1932,7 @@ button.stat-toggle.off:hover {
   height: 100%;
   background: linear-gradient(90deg, #3b82f6, #60a5fa);
   border-radius: 4px;
-  transition: width 0.3s linear;
+  transition: width 0.15s ease-out;  /* Faster, smoother transition */
   min-width: 4px;
 }
 
