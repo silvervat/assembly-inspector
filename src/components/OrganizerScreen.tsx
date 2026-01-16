@@ -91,11 +91,13 @@ type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' |
 interface MarkupFieldConfig {
   enabled: boolean;
   line: MarkupLineConfig;
+  suffix: string; // Text to add after this field
 }
 
 interface MarkupSettings {
   includeGroupName: boolean;
   groupNameLine: MarkupLineConfig;
+  groupNameSuffix: string; // Text to add after group name
   includeCustomFields: string[]; // field IDs to include
   applyToSubgroups: boolean;
   separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
@@ -106,10 +108,6 @@ interface MarkupSettings {
   includeProductName: MarkupFieldConfig;
   // Filter options
   onlySelectedInModel: boolean;
-  // Line suffixes - custom text added after each line
-  line1Suffix: string;
-  line2Suffix: string;
-  line3Suffix: string;
 }
 
 // Sorting options
@@ -705,17 +703,15 @@ export default function OrganizerScreen({
   const defaultMarkupSettings: MarkupSettings = {
     includeGroupName: true,
     groupNameLine: 'line1',
+    groupNameSuffix: '',
     includeCustomFields: [],
     applyToSubgroups: true,
     separator: 'newline',
     useGroupColors: true,
-    includeAssemblyMark: { enabled: true, line: 'line1' },
-    includeWeight: { enabled: false, line: 'line2' },
-    includeProductName: { enabled: false, line: 'line2' },
-    onlySelectedInModel: false,
-    line1Suffix: '',
-    line2Suffix: '',
-    line3Suffix: ''
+    includeAssemblyMark: { enabled: true, line: 'line1', suffix: '' },
+    includeWeight: { enabled: false, line: 'line2', suffix: '' },
+    includeProductName: { enabled: false, line: 'line2', suffix: '' },
+    onlySelectedInModel: false
   };
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
@@ -729,6 +725,7 @@ export default function OrganizerScreen({
     return defaultMarkupSettings;
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+  const [hasMarkups, setHasMarkups] = useState(false);
   const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
   const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
@@ -3158,40 +3155,43 @@ export default function OrganizerScreen({
       { line: 'line3', parts: [] }
     ];
 
-    const addToLine = (line: MarkupLineConfig, value: string) => {
+    const addToLine = (line: MarkupLineConfig, value: string, suffix: string = '') => {
       if (line === 'none' || !value) return;
       const lineObj = lines.find(l => l.line === line);
-      if (lineObj) lineObj.parts.push(value);
+      if (lineObj) {
+        // Add value with its suffix
+        lineObj.parts.push(suffix ? `${value}${suffix}` : value);
+      }
     };
 
-    // Group name
+    // Group name with its suffix
     if (markupSettings.includeGroupName) {
-      addToLine(markupSettings.groupNameLine, itemGroup.name);
+      addToLine(markupSettings.groupNameLine, itemGroup.name, markupSettings.groupNameSuffix || '');
     }
 
-    // Assembly mark from model or item
+    // Assembly mark from model or item with its suffix
     if (markupSettings.includeAssemblyMark.enabled) {
       const mark = modelProps?.assemblyMark || item.assembly_mark;
       if (mark && !mark.startsWith('Object_')) {
-        addToLine(markupSettings.includeAssemblyMark.line, mark);
+        addToLine(markupSettings.includeAssemblyMark.line, mark, markupSettings.includeAssemblyMark.suffix || '');
       }
     }
 
-    // Weight from model or item
+    // Weight from model or item with its suffix
     if (markupSettings.includeWeight.enabled) {
       const weight = modelProps?.weight || item.cast_unit_weight;
       if (weight) {
         const numWeight = parseFloat(weight);
         const formatted = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
-        addToLine(markupSettings.includeWeight.line, formatted);
+        addToLine(markupSettings.includeWeight.line, formatted, markupSettings.includeWeight.suffix || '');
       }
     }
 
-    // Product name from model or item
+    // Product name from model or item with its suffix
     if (markupSettings.includeProductName.enabled) {
       const productName = modelProps?.productName || item.product_name;
       if (productName) {
-        addToLine(markupSettings.includeProductName.line, productName);
+        addToLine(markupSettings.includeProductName.line, productName, markupSettings.includeProductName.suffix || '');
       }
     }
 
@@ -3210,21 +3210,9 @@ export default function OrganizerScreen({
     const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
     const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
-    // Get suffix for each line
-    const lineSuffixes: Record<MarkupLineConfig, string> = {
-      'line1': markupSettings.line1Suffix || '',
-      'line2': markupSettings.line2Suffix || '',
-      'line3': markupSettings.line3Suffix || '',
-      'none': ''
-    };
-
     const lineTexts = lines
       .filter(l => l.parts.length > 0)
-      .map(l => {
-        const text = l.parts.join(inlineSeparator);
-        const suffix = lineSuffixes[l.line];
-        return suffix ? `${text}${suffix}` : text;
-      });
+      .map(l => l.parts.join(inlineSeparator));
 
     if (lineTexts.length === 0) {
       // Fallback to assembly mark
@@ -3439,6 +3427,7 @@ export default function OrganizerScreen({
       setMarkupProgress(null);
       setShowMarkupModal(false);
       setMarkupGroupId(null);
+      setHasMarkups(true);
       showToast(`✓ ${createdIds.length} markupit loodud`);
     } catch (e) {
       console.error('Error adding markups:', e);
@@ -3449,12 +3438,23 @@ export default function OrganizerScreen({
     }
   };
 
+  // Check if there are markups in the model
+  const checkForMarkups = async () => {
+    try {
+      const allMarkups = await (api.markup as any)?.getTextMarkups?.();
+      setHasMarkups(allMarkups && allMarkups.length > 0);
+    } catch (e) {
+      setHasMarkups(false);
+    }
+  };
+
   const removeAllMarkups = async () => {
     setSaving(true);
     try {
       const allMarkups = await (api.markup as any)?.getTextMarkups?.();
       if (!allMarkups || allMarkups.length === 0) {
         showToast('Markupe pole');
+        setHasMarkups(false);
         setSaving(false);
         return;
       }
@@ -3480,6 +3480,7 @@ export default function OrganizerScreen({
       }
 
       setMarkupProgress(null);
+      setHasMarkups(false);
       showToast(`✓ ${allIds.length} markupit eemaldatud`);
     } catch (e) {
       console.error('Error removing markups:', e);
@@ -5838,7 +5839,7 @@ export default function OrganizerScreen({
     const isEffectivelyLocked = isGroupLocked(node.id);
 
     return (
-      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''}`}>
+      <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''} ${groupMenuId === node.id || colorPickerGroupId === node.id ? 'menu-open' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragOverAsParent ? 'drag-over-as-parent' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''} ${groupMenuId === node.id ? 'menu-open' : ''} ${colorPickerGroupId === node.id ? 'color-picker-open' : ''}`}
           style={{ paddingLeft: `${4 + depth * 8}px` }}
@@ -5972,6 +5973,10 @@ export default function OrganizerScreen({
               setShowFilterMenu(false);
               const isOpening = groupMenuId !== node.id;
               setGroupMenuId(groupMenuId === node.id ? null : node.id);
+              // Check for markups when opening menu
+              if (isOpening) {
+                checkForMarkups();
+              }
               // Scroll container so menu is fully visible
               if (isOpening) {
                 const btn = e.currentTarget as HTMLElement;
@@ -6039,7 +6044,12 @@ export default function OrganizerScreen({
               <button onClick={() => openMarkupModal(node.id)}>
                 <FiTag size={12} /> Lisa markupid
               </button>
-              <button onClick={() => { setGroupMenuId(null); removeAllMarkups(); }}>
+              <button
+                onClick={() => { if (hasMarkups) { setGroupMenuId(null); removeAllMarkups(); } }}
+                disabled={!hasMarkups}
+                style={!hasMarkups ? { opacity: 0.4, cursor: 'not-allowed' } : undefined}
+                title={!hasMarkups ? 'Markupe pole mudelis' : undefined}
+              >
                 <FiTag size={12} /> Eemalda markupid
               </button>
               <button onClick={() => copyGroupDataToClipboard(node.id)}>
@@ -6746,10 +6756,40 @@ export default function OrganizerScreen({
         <div className="org-modal-overlay" onClick={() => setShowGroupForm(false)}>
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
-              <h2>{editingGroup ? 'Muuda gruppi' : formParentId ? 'Lisa alamgrupp' : 'Uus grupp'}</h2>
+              {editingGroup ? (
+                <h2>Muuda gruppi</h2>
+              ) : (
+                <div className="org-modal-tabs">
+                  <button
+                    className={`org-modal-tab ${!formParentId ? 'active' : ''}`}
+                    onClick={() => setFormParentId(null)}
+                  >
+                    Uus grupp
+                  </button>
+                  {groups.length > 0 && (
+                    <button
+                      className={`org-modal-tab ${formParentId ? 'active' : ''}`}
+                      onClick={() => setFormParentId(groups[0]?.id || null)}
+                    >
+                      Uus alamgrupp
+                    </button>
+                  )}
+                </div>
+              )}
               <button onClick={() => setShowGroupForm(false)}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
+              {/* Parent group selector - show when creating subgroup */}
+              {!editingGroup && formParentId && groups.length > 0 && (
+                <div className="org-field">
+                  <label>Ülemgrupp *</label>
+                  <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
+                    {groups.filter(g => g.level < 2).map(g => (
+                      <option key={g.id} value={g.id}>{'—'.repeat(g.level)} {g.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="org-field">
                 <label>Nimi *</label>
                 <input type="text" value={formName} onChange={(e) => setFormName(e.target.value)} placeholder="Grupi nimi" autoFocus />
@@ -6771,17 +6811,6 @@ export default function OrganizerScreen({
                   ))}
                 </div>
               </div>
-              {!editingGroup && !formParentId && (
-                <div className="org-field">
-                  <label>Ülemgrupp</label>
-                  <select value={formParentId || ''} onChange={(e) => setFormParentId(e.target.value || null)}>
-                    <option value="">Peagrupp</option>
-                    {groups.filter(g => g.level < 2).map(g => (
-                      <option key={g.id} value={g.id}>{'—'.repeat(g.level + 1)} {g.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
               {/* Sharing settings - available for all groups including subgroups */}
               <div className="org-field">
                 <label>Jagamine</label>
@@ -7333,20 +7362,22 @@ export default function OrganizerScreen({
             { line: 'line3', parts: [] }
           ];
 
-          const addToLine = (line: MarkupLineConfig, value: string) => {
+          const addToLine = (line: MarkupLineConfig, value: string, suffix: string = '') => {
             if (line === 'none' || !value) return;
             const lineObj = lines.find(l => l.line === line);
-            if (lineObj) lineObj.parts.push(value);
+            if (lineObj) {
+              lineObj.parts.push(suffix ? `${value}${suffix}` : value);
+            }
           };
 
           if (markupSettings.includeGroupName) {
-            addToLine(markupSettings.groupNameLine, markupGroup.name);
+            addToLine(markupSettings.groupNameLine, markupGroup.name, markupSettings.groupNameSuffix || '');
           }
 
           if (markupSettings.includeAssemblyMark.enabled) {
             const mark = firstItem.assembly_mark || 'W-101';
             if (!mark.startsWith('Object_')) {
-              addToLine(markupSettings.includeAssemblyMark.line, mark);
+              addToLine(markupSettings.includeAssemblyMark.line, mark, markupSettings.includeAssemblyMark.suffix || '');
             }
           }
 
@@ -7354,12 +7385,12 @@ export default function OrganizerScreen({
             const weight = firstItem.cast_unit_weight || '1234.5';
             const numWeight = parseFloat(weight);
             const formatted = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
-            addToLine(markupSettings.includeWeight.line, formatted);
+            addToLine(markupSettings.includeWeight.line, formatted, markupSettings.includeWeight.suffix || '');
           }
 
           if (markupSettings.includeProductName.enabled) {
             const productName = firstItem.product_name || 'BEAM';
-            addToLine(markupSettings.includeProductName.line, productName);
+            addToLine(markupSettings.includeProductName.line, productName, markupSettings.includeProductName.suffix || '');
           }
 
           for (const fieldId of markupSettings.includeCustomFields) {
@@ -7373,21 +7404,9 @@ export default function OrganizerScreen({
           const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
           const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
-          // Get suffix for each line
-          const lineSuffixes: Record<MarkupLineConfig, string> = {
-            'line1': markupSettings.line1Suffix || '',
-            'line2': markupSettings.line2Suffix || '',
-            'line3': markupSettings.line3Suffix || '',
-            'none': ''
-          };
-
           const lineTexts = lines
             .filter(l => l.parts.length > 0)
-            .map(l => {
-              const text = l.parts.join(inlineSeparator);
-              const suffix = lineSuffixes[l.line];
-              return suffix ? `${text}${suffix}` : text;
-            });
+            .map(l => l.parts.join(inlineSeparator));
 
           return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
         };
@@ -7460,13 +7479,13 @@ export default function OrganizerScreen({
               return { ...prev, includeGroupName: !prev.includeGroupName, groupNameLine: targetLine };
             }
             if (fieldId === 'assemblyMark') {
-              return { ...prev, includeAssemblyMark: { enabled: !prev.includeAssemblyMark.enabled, line: targetLine } };
+              return { ...prev, includeAssemblyMark: { ...prev.includeAssemblyMark, enabled: !prev.includeAssemblyMark.enabled, line: targetLine } };
             }
             if (fieldId === 'weight') {
-              return { ...prev, includeWeight: { enabled: !prev.includeWeight.enabled, line: targetLine } };
+              return { ...prev, includeWeight: { ...prev.includeWeight, enabled: !prev.includeWeight.enabled, line: targetLine } };
             }
             if (fieldId === 'productName') {
-              return { ...prev, includeProductName: { enabled: !prev.includeProductName.enabled, line: targetLine } };
+              return { ...prev, includeProductName: { ...prev.includeProductName, enabled: !prev.includeProductName.enabled, line: targetLine } };
             }
             // Custom field
             const isIncluded = prev.includeCustomFields.includes(fieldId);
@@ -7486,13 +7505,13 @@ export default function OrganizerScreen({
               return { ...prev, includeGroupName: true, groupNameLine: targetLine };
             }
             if (fieldId === 'assemblyMark') {
-              return { ...prev, includeAssemblyMark: { enabled: true, line: targetLine } };
+              return { ...prev, includeAssemblyMark: { ...prev.includeAssemblyMark, enabled: true, line: targetLine } };
             }
             if (fieldId === 'weight') {
-              return { ...prev, includeWeight: { enabled: true, line: targetLine } };
+              return { ...prev, includeWeight: { ...prev.includeWeight, enabled: true, line: targetLine } };
             }
             if (fieldId === 'productName') {
-              return { ...prev, includeProductName: { enabled: true, line: targetLine } };
+              return { ...prev, includeProductName: { ...prev.includeProductName, enabled: true, line: targetLine } };
             }
             // Custom fields always go to line3
             if (!prev.includeCustomFields.includes(fieldId)) {
@@ -7502,85 +7521,116 @@ export default function OrganizerScreen({
           });
         };
 
-        // Render field chip
-        const FieldChip = ({ field, onRemove, isDragging }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean }) => (
-          <div
-            className={`markup-field-chip ${isDragging ? 'dragging' : ''}`}
-            draggable
-            onDragStart={(e) => {
-              setDraggedField(field.id);
-              e.dataTransfer.effectAllowed = 'move';
-            }}
-            onDragEnd={() => {
-              setDraggedField(null);
-              setDragOverLine(null);
-            }}
-            onTouchStart={() => setDraggedField(field.id)}
-            onTouchEnd={() => {
-              setDraggedField(null);
-              setDragOverLine(null);
-            }}
-          >
-            <span className="chip-label">{field.label}</span>
-            {onRemove && (
-              <button className="chip-remove" onClick={onRemove} title="Eemalda">
-                <FiX size={12} />
-              </button>
-            )}
-          </div>
-        );
+        // Get suffix for a field
+        const getFieldSuffix = (fieldId: MarkupFieldType): string => {
+          if (fieldId === 'groupName') return markupSettings.groupNameSuffix || '';
+          if (fieldId === 'assemblyMark') return markupSettings.includeAssemblyMark.suffix || '';
+          if (fieldId === 'weight') return markupSettings.includeWeight.suffix || '';
+          if (fieldId === 'productName') return markupSettings.includeProductName.suffix || '';
+          return '';
+        };
+
+        // Set suffix for a field
+        const setFieldSuffix = (fieldId: MarkupFieldType, suffix: string) => {
+          setMarkupSettings(prev => {
+            if (fieldId === 'groupName') {
+              return { ...prev, groupNameSuffix: suffix };
+            }
+            if (fieldId === 'assemblyMark') {
+              return { ...prev, includeAssemblyMark: { ...prev.includeAssemblyMark, suffix } };
+            }
+            if (fieldId === 'weight') {
+              return { ...prev, includeWeight: { ...prev.includeWeight, suffix } };
+            }
+            if (fieldId === 'productName') {
+              return { ...prev, includeProductName: { ...prev.includeProductName, suffix } };
+            }
+            return prev;
+          });
+        };
+
+        // Render field chip with suffix input
+        const FieldChip = ({ field, onRemove, isDragging, showSuffix = false }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean; showSuffix?: boolean }) => {
+          const suffix = getFieldSuffix(field.id);
+          return (
+            <div className="markup-field-with-suffix">
+              <div
+                className={`markup-field-chip ${isDragging ? 'dragging' : ''}`}
+                draggable
+                onDragStart={(e) => {
+                  setDraggedField(field.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragEnd={() => {
+                  setDraggedField(null);
+                  setDragOverLine(null);
+                }}
+                onTouchStart={() => setDraggedField(field.id)}
+                onTouchEnd={() => {
+                  setDraggedField(null);
+                  setDragOverLine(null);
+                }}
+              >
+                <span className="chip-label">{field.label}</span>
+                {onRemove && (
+                  <button className="chip-remove" onClick={onRemove} title="Eemalda">
+                    <FiX size={12} />
+                  </button>
+                )}
+              </div>
+              {showSuffix && !field.isCustom && (
+                <input
+                  type="text"
+                  className="markup-field-suffix"
+                  placeholder="+ tekst"
+                  value={suffix}
+                  onChange={(e) => setFieldSuffix(field.id, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  title="Lisa tekst välja järele"
+                />
+              )}
+            </div>
+          );
+        };
 
         // Render drop zone for a line
         const LineDropZone = ({ line, label }: { line: MarkupLineConfig; label: string }) => {
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
 
-          // Get and set suffix for this line
-          const suffixKey = `${line}Suffix` as 'line1Suffix' | 'line2Suffix' | 'line3Suffix';
-          const suffix = markupSettings[suffixKey] || '';
-
           return (
-            <div className="markup-line-row">
-              <div
-                className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragOverLine(line);
-                }}
-                onDragLeave={() => setDragOverLine(null)}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (draggedField) {
-                    moveFieldToLine(draggedField, line);
-                  }
-                  setDraggedField(null);
-                  setDragOverLine(null);
-                }}
-              >
-                <span className="line-label">{label}</span>
-                <div className="line-fields">
-                  {fields.length > 0 ? (
-                    fields.map(f => (
-                      <FieldChip
-                        key={f.id}
-                        field={f}
-                        onRemove={() => toggleField(f.id)}
-                        isDragging={draggedField === f.id}
-                      />
-                    ))
-                  ) : (
-                    <span className="line-placeholder">Lohista siia</span>
-                  )}
-                </div>
+            <div
+              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverLine(line);
+              }}
+              onDragLeave={() => setDragOverLine(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedField) {
+                  moveFieldToLine(draggedField, line);
+                }
+                setDraggedField(null);
+                setDragOverLine(null);
+              }}
+            >
+              <span className="line-label">{label}</span>
+              <div className="line-fields">
+                {fields.length > 0 ? (
+                  fields.map(f => (
+                    <FieldChip
+                      key={f.id}
+                      field={f}
+                      onRemove={() => toggleField(f.id)}
+                      isDragging={draggedField === f.id}
+                      showSuffix={true}
+                    />
+                  ))
+                ) : (
+                  <span className="line-placeholder">Lohista siia</span>
+                )}
               </div>
-              <input
-                type="text"
-                className="markup-line-suffix"
-                placeholder="+ tekst"
-                value={suffix}
-                onChange={(e) => setMarkupSettings(prev => ({ ...prev, [suffixKey]: e.target.value }))}
-                title="Lisa tekst rea lõppu"
-              />
             </div>
           );
         };

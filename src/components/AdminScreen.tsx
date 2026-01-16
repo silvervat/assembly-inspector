@@ -178,6 +178,9 @@ interface CameraPosition {
     projectionType?: 'ortho' | 'perspective';
     fieldOfView?: number;
     orthoSize?: number;
+    // Color settings for view
+    colorOthersWhite?: boolean;
+    highlightColor?: { r: number; g: number; b: number };
   };
   sort_order: number;
   created_at: string;
@@ -185,6 +188,18 @@ interface CameraPosition {
   updated_at: string;
   updated_by: string | null;
 }
+
+// Preset colors for view color picker
+const VIEW_PRESET_COLORS = [
+  { r: 59, g: 130, b: 246 },   // Blue
+  { r: 16, g: 185, b: 129 },   // Green
+  { r: 245, g: 158, b: 11 },   // Amber
+  { r: 239, g: 68, b: 68 },    // Red
+  { r: 139, g: 92, b: 246 },   // Purple
+  { r: 236, g: 72, b: 153 },   // Pink
+  { r: 6, g: 182, b: 212 },    // Cyan
+  { r: 249, g: 115, b: 22 },   // Orange
+];
 
 // Resource types configuration
 const RESOURCE_TYPES = [
@@ -295,6 +310,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const [cameraFormData, setCameraFormData] = useState({
     name: '',
     description: '',
+    colorOthersWhite: false,
+    highlightColor: VIEW_PRESET_COLORS[0],
   });
 
   // GUID Controller popup state
@@ -2632,12 +2649,19 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       const camera = await api.viewer.getCamera();
 
       if (editingCameraPosition) {
-        // Update existing position (just name/description, not camera state)
+        // Update existing position (name/description and color settings, not camera state)
+        const updatedCameraState = {
+          ...editingCameraPosition.camera_state,
+          colorOthersWhite: cameraFormData.colorOthersWhite,
+          highlightColor: cameraFormData.highlightColor,
+        };
+
         const { error } = await supabase
           .from('camera_positions')
           .update({
             name: cameraFormData.name.trim(),
             description: cameraFormData.description.trim() || null,
+            camera_state: updatedCameraState,
             updated_at: new Date().toISOString(),
             updated_by: userEmail || null
           })
@@ -2646,14 +2670,20 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         if (error) throw error;
         setMessage('Kaamera positsioon uuendatud');
       } else {
-        // Create new position with current camera state
+        // Create new position with current camera state + color settings
+        const cameraStateWithColors = {
+          ...camera,
+          colorOthersWhite: cameraFormData.colorOthersWhite,
+          highlightColor: cameraFormData.highlightColor,
+        };
+
         const { error } = await supabase
           .from('camera_positions')
           .insert({
             trimble_project_id: projectId,
             name: cameraFormData.name.trim(),
             description: cameraFormData.description.trim() || null,
-            camera_state: camera,
+            camera_state: cameraStateWithColors,
             created_by: userEmail || null
           });
 
@@ -2673,11 +2703,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     }
   };
 
-  // Reset camera form
+  // Reset camera form with random default color
   const resetCameraForm = () => {
+    const randomColor = VIEW_PRESET_COLORS[Math.floor(Math.random() * VIEW_PRESET_COLORS.length)];
     setCameraFormData({
       name: '',
       description: '',
+      colorOthersWhite: false,
+      highlightColor: randomColor,
     });
   };
 
@@ -2748,6 +2781,8 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     setCameraFormData({
       name: position.name,
       description: position.description || '',
+      colorOthersWhite: position.camera_state?.colorOthersWhite ?? false,
+      highlightColor: position.camera_state?.highlightColor ?? VIEW_PRESET_COLORS[0],
     });
     setShowCameraForm(true);
   };
@@ -12066,41 +12101,41 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             }}>
               <div style={{
                 background: 'white',
-                borderRadius: '12px',
+                borderRadius: '10px',
                 width: '90%',
-                maxWidth: '400px',
-                padding: '20px'
+                maxWidth: '340px',
+                padding: '14px'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ margin: 0 }}>
-                    {editingCameraPosition ? 'Muuda kaamera positsiooni' : 'Salvesta praegune vaade'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <h3 style={{ margin: 0, fontSize: '14px' }}>
+                    {editingCameraPosition ? 'Muuda vaadet' : 'Salvesta praegune vaade'}
                   </h3>
-                  <button onClick={() => setShowCameraForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
-                    <FiX size={20} />
+                  <button onClick={() => setShowCameraForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px' }}>
+                    <FiX size={16} />
                   </button>
                 </div>
 
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>
                     Nimi *
                   </label>
                   <input
                     type="text"
                     value={cameraFormData.name}
                     onChange={(e) => setCameraFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Nt: Peavaade, A-telg, Katus..."
+                    placeholder="Nt: Peavaade, A-telg..."
                     style={{
                       width: '100%',
-                      padding: '8px 12px',
+                      padding: '6px 10px',
                       border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '14px'
+                      borderRadius: '5px',
+                      fontSize: '12px'
                     }}
                   />
                 </div>
 
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
+                <div style={{ marginBottom: '10px' }}>
+                  <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', fontWeight: 500 }}>
                     Kirjeldus
                   </label>
                   <textarea
@@ -12110,27 +12145,86 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     rows={2}
                     style={{
                       width: '100%',
-                      padding: '8px 12px',
+                      padding: '6px 10px',
                       border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '14px',
+                      borderRadius: '5px',
+                      fontSize: '12px',
                       resize: 'vertical'
                     }}
                   />
                 </div>
 
+                {/* Color options section */}
+                <div style={{
+                  background: '#f8fafc',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  marginBottom: '10px',
+                  border: '1px solid #e2e8f0'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: '8px'
+                  }}>
+                    <input
+                      type="checkbox"
+                      id="colorOthersWhite"
+                      checked={cameraFormData.colorOthersWhite}
+                      onChange={(e) => setCameraFormData(prev => ({ ...prev, colorOthersWhite: e.target.checked }))}
+                      style={{ accentColor: '#0a3a67', width: '14px', height: '14px' }}
+                    />
+                    <label htmlFor="colorOthersWhite" style={{ fontSize: '11px', cursor: 'pointer' }}>
+                      Värvi vaate avamisel valitud objektid
+                    </label>
+                  </div>
+
+                  {cameraFormData.colorOthersWhite && (
+                    <div>
+                      <label style={{ display: 'block', marginBottom: '4px', fontSize: '10px', color: '#6b7280' }}>
+                        Esiletõstmise värv
+                      </label>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {VIEW_PRESET_COLORS.map((color, idx) => {
+                          const isSelected =
+                            cameraFormData.highlightColor.r === color.r &&
+                            cameraFormData.highlightColor.g === color.g &&
+                            cameraFormData.highlightColor.b === color.b;
+                          return (
+                            <button
+                              key={idx}
+                              onClick={() => setCameraFormData(prev => ({ ...prev, highlightColor: color }))}
+                              style={{
+                                width: '22px',
+                                height: '22px',
+                                borderRadius: '4px',
+                                border: isSelected ? '2px solid #1f2937' : '1px solid #d1d5db',
+                                background: `rgb(${color.r}, ${color.g}, ${color.b})`,
+                                cursor: 'pointer',
+                                padding: 0
+                              }}
+                              title={`RGB(${color.r}, ${color.g}, ${color.b})`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {!editingCameraPosition && (
-                  <p style={{ margin: '0 0 16px', fontSize: '12px', color: '#6b7280', background: '#f3f4f6', padding: '8px', borderRadius: '6px' }}>
-                    <FiCamera size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                    Salvestatakse praegune kaamera positsioon mudelist.
+                  <p style={{ margin: '0 0 10px', fontSize: '10px', color: '#6b7280', background: '#f3f4f6', padding: '6px 8px', borderRadius: '5px' }}>
+                    <FiCamera size={10} style={{ marginRight: '3px', verticalAlign: 'middle' }} />
+                    Salvestatakse praegune kaamera positsioon.
                   </p>
                 )}
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     className="btn-secondary"
                     onClick={() => setShowCameraForm(false)}
-                    style={{ flex: 1 }}
+                    style={{ flex: 1, padding: '6px 10px', fontSize: '12px' }}
                   >
                     Tühista
                   </button>
@@ -12138,9 +12232,9 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     className="btn-primary"
                     onClick={saveCameraPosition}
                     disabled={cameraPositionsSaving}
-                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', padding: '6px 10px', fontSize: '12px' }}
                   >
-                    {cameraPositionsSaving ? <FiRefreshCw size={14} className="spin" /> : <FiSave size={14} />}
+                    {cameraPositionsSaving ? <FiRefreshCw size={12} className="spin" /> : <FiSave size={12} />}
                     {editingCameraPosition ? 'Salvesta' : 'Salvesta vaade'}
                   </button>
                 </div>
@@ -12151,124 +12245,131 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
           {/* Camera positions list */}
           <div style={{
             background: 'white',
-            borderRadius: '8px',
+            borderRadius: '6px',
             border: '1px solid #e5e7eb',
             overflow: 'hidden'
           }}>
             {cameraPositionsLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                <FiRefreshCw size={24} className="spin" />
-                <p>Laadin kaamera positsioone...</p>
+              <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
+                <FiRefreshCw size={18} className="spin" />
+                <p style={{ fontSize: '12px', margin: '8px 0 0' }}>Laadin...</p>
               </div>
             ) : cameraPositions.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                <FiVideo size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                <p>Kaamera positsioone pole veel salvestatud.</p>
-                <p style={{ fontSize: '12px' }}>
-                  Klõpsa "Salvesta praegune vaade" et salvestada esimene positsioon.
+              <div style={{ padding: '24px', textAlign: 'center', color: '#6b7280' }}>
+                <FiVideo size={24} style={{ marginBottom: '6px', opacity: 0.5 }} />
+                <p style={{ fontSize: '12px', margin: '0 0 4px' }}>Vaateid pole veel salvestatud.</p>
+                <p style={{ fontSize: '10px', margin: 0 }}>
+                  Klõpsa "Salvesta praegune vaade".
                 </p>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: '#e5e7eb' }}>
-                {cameraPositions.map(position => (
-                  <div
-                    key={position.id}
-                    style={{
-                      background: 'white',
-                      padding: '12px 16px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '12px'
-                    }}
-                  >
-                    {/* Play button - restore camera */}
-                    <button
-                      onClick={() => restoreCameraPosition(position)}
+                {cameraPositions.map(position => {
+                  const hasColor = position.camera_state?.colorOthersWhite;
+                  const highlightColor = position.camera_state?.highlightColor;
+                  return (
+                    <div
+                      key={position.id}
                       style={{
-                        background: '#8b5cf6',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '36px',
-                        height: '36px',
-                        cursor: 'pointer',
+                        background: 'white',
+                        padding: '8px 10px',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        flexShrink: 0
+                        gap: '8px'
                       }}
-                      title="Mine sellele vaatele"
                     >
-                      <FiVideo size={16} />
-                    </button>
+                      {/* Play button - restore camera */}
+                      <button
+                        onClick={() => restoreCameraPosition(position)}
+                        style={{
+                          background: hasColor && highlightColor
+                            ? `rgb(${highlightColor.r}, ${highlightColor.g}, ${highlightColor.b})`
+                            : '#8b5cf6',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '28px',
+                          height: '28px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          flexShrink: 0
+                        }}
+                        title="Mine sellele vaatele"
+                      >
+                        <FiVideo size={12} />
+                      </button>
 
-                    {/* Name and description */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: '14px' }}>{position.name}</div>
-                      {position.description && (
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
-                          {position.description}
+                      {/* Name and description */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {position.name}
+                          {hasColor && (
+                            <span style={{ fontSize: '9px', color: '#6b7280', fontWeight: 400 }}>(värvimine)</span>
+                          )}
                         </div>
-                      )}
-                      <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-                        {position.created_by && <span>{position.created_by} • </span>}
-                        {new Date(position.created_at).toLocaleDateString('et-EE')}
+                        {position.description && (
+                          <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '1px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {position.description}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: '3px', flexShrink: 0 }}>
+                        <button
+                          onClick={() => updateCameraState(position)}
+                          style={{
+                            background: '#f3f4f6',
+                            border: 'none',
+                            borderRadius: '3px',
+                            padding: '4px',
+                            cursor: 'pointer'
+                          }}
+                          title="Uuenda praeguse vaatega"
+                        >
+                          <FiCamera size={12} />
+                        </button>
+                        <button
+                          onClick={() => openEditCameraForm(position)}
+                          style={{
+                            background: '#f3f4f6',
+                            border: 'none',
+                            borderRadius: '3px',
+                            padding: '4px',
+                            cursor: 'pointer'
+                          }}
+                          title="Muuda vaadet"
+                        >
+                          <FiEdit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => deleteCameraPosition(position.id)}
+                          style={{
+                            background: '#fee2e2',
+                            border: 'none',
+                            borderRadius: '3px',
+                            padding: '4px',
+                            cursor: 'pointer',
+                            color: '#dc2626'
+                          }}
+                          title="Kustuta"
+                        >
+                          <FiTrash2 size={12} />
+                        </button>
                       </div>
                     </div>
-
-                    {/* Action buttons */}
-                    <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                      <button
-                        onClick={() => updateCameraState(position)}
-                        style={{
-                          background: '#f3f4f6',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '6px',
-                          cursor: 'pointer'
-                        }}
-                        title="Uuenda praeguse vaatega"
-                      >
-                        <FiCamera size={14} />
-                      </button>
-                      <button
-                        onClick={() => openEditCameraForm(position)}
-                        style={{
-                          background: '#f3f4f6',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '6px',
-                          cursor: 'pointer'
-                        }}
-                        title="Muuda nime/kirjeldust"
-                      >
-                        <FiEdit2 size={14} />
-                      </button>
-                      <button
-                        onClick={() => deleteCameraPosition(position.id)}
-                        style={{
-                          background: '#fee2e2',
-                          border: 'none',
-                          borderRadius: '4px',
-                          padding: '6px',
-                          cursor: 'pointer',
-                          color: '#dc2626'
-                        }}
-                        title="Kustuta"
-                      >
-                        <FiTrash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
           {/* Summary */}
           {cameraPositions.length > 0 && (
-            <div style={{ marginTop: '16px', fontSize: '12px', color: '#6b7280' }}>
-              Kokku: {cameraPositions.length} salvestatud vaade{cameraPositions.length !== 1 ? 't' : ''}
+            <div style={{ marginTop: '10px', fontSize: '10px', color: '#9ca3af' }}>
+              Kokku: {cameraPositions.length} vaade{cameraPositions.length !== 1 ? 't' : ''}
             </div>
           )}
         </div>
