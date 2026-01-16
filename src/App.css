@@ -11492,7 +11492,7 @@ button.stat-toggle.off:hover {
 /* Group header */
 .org-group-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   padding: 6px 28px 6px 4px;
   cursor: pointer;
@@ -11656,13 +11656,14 @@ button.stat-toggle.off:hover {
   margin-top: 1px;
 }
 
-/* Stats section - always right aligned */
+/* Stats section - always right aligned, same line as name */
 .org-group-stats {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
   margin-left: auto;
+  padding-top: 1px;
 }
 
 .org-group-info {
