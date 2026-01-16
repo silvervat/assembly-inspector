@@ -4533,13 +4533,13 @@ export default function OrganizerScreen({
       };
 
       // ============ GRUPID SHEET ============
-      const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Värv', 'Tase'];
+      const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Tase'];
       const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
 
-      // Helper to convert RGB to hex
-      const rgbToHex = (c: GroupColor | null): string => {
+      // Helper to convert RGB to hex (without #)
+      const rgbToHexRaw = (c: GroupColor | null): string => {
         if (!c) return '';
-        return '#' + ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
+        return ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
       };
 
       // Sort groups by level to maintain hierarchy
@@ -4547,14 +4547,21 @@ export default function OrganizerScreen({
 
       for (let i = 0; i < sortedGroups.length; i++) {
         const group = sortedGroups[i];
-        groupData.push([
-          group.id,
-          group.name,
-          group.parent_id || '',
-          group.description || '',
-          rgbToHex(group.color),
-          group.level
-        ]);
+        const colorHex = rgbToHexRaw(group.color);
+
+        // Create styled cells with background color if group has color
+        const rowStyle = colorHex ? {
+          fill: { fgColor: { rgb: colorHex } }
+        } : undefined;
+
+        const row = [
+          { v: group.id, s: rowStyle },
+          { v: group.name, s: rowStyle },
+          { v: group.parent_id || '', s: rowStyle },
+          { v: group.description || '', s: rowStyle },
+          { v: group.level, s: rowStyle }
+        ];
+        groupData.push(row);
 
         if (i % 50 === 0) {
           const percent = Math.round((i / sortedGroups.length) * 30);
@@ -4569,14 +4576,14 @@ export default function OrganizerScreen({
       }
 
       const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-      wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 10 }, { wch: 6 }];
+      wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 6 }];
       XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
       // ============ ELEMENDID SHEET ============
       setGroupsImportProgress({ phase: 'Töötlen elemente...', current: 0, total: 100, percent: 35 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      const itemHeaders = ['Grupi_ID', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused'];
+      const itemHeaders = ['Grupi_ID', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'Lisatud', 'Lisaja'];
       const itemData: any[][] = [itemHeaders.map(h => ({ v: h, s: headerStyle }))];
 
       let totalItems = 0;
@@ -4593,6 +4600,9 @@ export default function OrganizerScreen({
       for (let i = 0; i < allItemsFlat.length; i++) {
         const { groupId, item } = allItemsFlat[i];
         const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
+        const addedDate = item.added_at
+          ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
+          : '';
 
         itemData.push([
           groupId,
@@ -4602,7 +4612,9 @@ export default function OrganizerScreen({
           item.product_name || '',
           item.cast_unit_weight || '',
           item.cast_unit_position_code || '',
-          item.notes || ''
+          item.notes || '',
+          addedDate,
+          item.added_by || ''
         ]);
 
         if (i % 100 === 0) {
@@ -4618,7 +4630,7 @@ export default function OrganizerScreen({
       }
 
       const wsItems = XLSX.utils.aoa_to_sheet(itemData);
-      wsItems['!cols'] = [{ wch: 38 }, { wch: 24 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }];
+      wsItems['!cols'] = [{ wch: 38 }, { wch: 24 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 18 }, { wch: 25 }];
       XLSX.utils.book_append_sheet(wb, wsItems, 'Elemendid');
 
       // ============ JUHEND SHEET ============
@@ -4633,8 +4645,8 @@ export default function OrganizerScreen({
         ['- Grupi_nimi: Grupi nimi (kohustuslik)'],
         ['- Ülemgrupi_ID: Viide ülemgrupile (tühi = peagrupp)'],
         ['- Kirjeldus: Grupi kirjeldus (valikuline)'],
-        ['- Värv: Hex formaat, nt #3B82F6 (valikuline)'],
         ['- Tase: 0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp'],
+        ['- Grupi värv on näidatud rea taustavärviga'],
         [''],
         ['ELEMENDID leht:'],
         ['- Grupi_ID: Grupi tunnus kuhu element lisada'],
@@ -4645,6 +4657,8 @@ export default function OrganizerScreen({
         ['- Kaal: Elemendi kaal'],
         ['- Positsioon: Positsiooni kood'],
         ['- Märkused: Valikulised märkused'],
+        ['- Lisatud: Millal element gruppi lisati'],
+        ['- Lisaja: Kes elemendi gruppi lisas'],
         [''],
         ['IMPORTIMISE REEGLID:'],
         ['- Grupid luuakse taseme järjekorras (peagrupid enne alamgruppe)'],
@@ -4685,16 +4699,16 @@ export default function OrganizerScreen({
     };
 
     // GRUPID sheet with sample data
-    const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Värv', 'Tase'];
+    const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Tase'];
     const groupData: any[][] = [
       groupHeaders.map(h => ({ v: h, s: headerStyle })),
-      ['grupp-1', 'Näidisgrupp 1', '', 'Esimese grupi kirjeldus', '#3B82F6', 0],
-      ['grupp-2', 'Alamgrupp 1.1', 'grupp-1', 'Alamgrupi kirjeldus', '#22C55E', 1],
-      ['grupp-3', 'Näidisgrupp 2', '', '', '#EF4444', 0]
+      ['grupp-1', 'Näidisgrupp 1', '', 'Esimese grupi kirjeldus', 0],
+      ['grupp-2', 'Alamgrupp 1.1', 'grupp-1', 'Alamgrupi kirjeldus', 1],
+      ['grupp-3', 'Näidisgrupp 2', '', '', 0]
     ];
 
     const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-    wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 10 }, { wch: 6 }];
+    wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 6 }];
     XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
     // ELEMENDID sheet with sample data
@@ -4718,7 +4732,6 @@ export default function OrganizerScreen({
       ['- Grupi_nimi: Grupi nimi (kohustuslik)'],
       ['- Ülemgrupi_ID: Viide ülemgrupile (tühi = peagrupp, viitab teise grupi ID-le)'],
       ['- Kirjeldus: Grupi kirjeldus (valikuline)'],
-      ['- Värv: Hex formaat, nt #3B82F6 (valikuline)'],
       ['- Tase: 0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp (arvutatakse automaatselt)'],
       [''],
       ['ELEMENDID leht:'],
@@ -4735,7 +4748,8 @@ export default function OrganizerScreen({
       ['- Grupid luuakse taseme järjekorras (peagrupid enne alamgruppe)'],
       ['- Kui ülemgrupi ID-d ei leita, luuakse peagrupp'],
       ['- Duplikaatsed GUID-id samasse gruppi ei lisata'],
-      ['- GUID_MS teisendatakse automaatselt GUID_IFC-ks kui GUID_IFC puudub']
+      ['- GUID_MS teisendatakse automaatselt GUID_IFC-ks kui GUID_IFC puudub'],
+      ['- Grupi värvi saab määrata pärast importimist läbi rakenduse']
     ];
 
     const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
@@ -4900,17 +4914,6 @@ export default function OrganizerScreen({
       // Map old IDs to new IDs
       const idMapping = new Map<string, string>();
 
-      // Helper to parse hex color
-      const parseHexColor = (hex: string): GroupColor | null => {
-        if (!hex || !hex.startsWith('#')) return null;
-        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-          r: parseInt(result[1], 16),
-          g: parseInt(result[2], 16),
-          b: parseInt(result[3], 16)
-        } : null;
-      };
-
       // Sort groups by level (or by parent presence)
       const sortedGroupRows = [...groupRows].sort((a: any[], b: any[]) => {
         const aParent = String(a[2] || '').trim();
@@ -4927,7 +4930,7 @@ export default function OrganizerScreen({
         const name = String(row[1] || '').trim();
         const oldParentId = String(row[2] || '').trim();
         const description = String(row[3] || '').trim();
-        const colorHex = String(row[4] || '').trim();
+        // row[4] is now Tase (level) - color is shown as cell background in export, not imported
 
         if (!oldId || !name) continue;
 
@@ -4942,7 +4945,7 @@ export default function OrganizerScreen({
         if (newParentId) {
           const parentRow = sortedGroupRows.find((r: any[]) => idMapping.get(String(r[0] || '').trim()) === newParentId);
           if (parentRow) {
-            const parentLevel = parseInt(String(parentRow[5] || '0')) || 0;
+            const parentLevel = parseInt(String(parentRow[4] || '0')) || 0;
             level = Math.min(parentLevel + 1, 2);
           } else {
             level = 1;
@@ -4967,7 +4970,7 @@ export default function OrganizerScreen({
           custom_fields: [],
           assembly_selection_on: true,
           unique_items: false,
-          color: parseHexColor(colorHex),
+          color: null,
           is_locked: false,
           locked_by: null,
           locked_at: null,
