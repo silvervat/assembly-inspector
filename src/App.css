@@ -11497,7 +11497,7 @@ button.stat-toggle.off:hover {
   border: 1px solid #3b82f6;
   border-radius: 6px;
   pointer-events: none;
-  z-index: 100;
+  z-index: 15;
 }
 
 /* Group header */
