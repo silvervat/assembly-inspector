@@ -5172,24 +5172,29 @@ export default function OrganizerScreen({
           )}
 
           <div className="org-group-name-section">
-            <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
-              {node.name}
-            </span>
-            {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
-            {(() => {
-              const effectiveLockInfo = getGroupLockInfo(node.id);
-              const isEffectivelyLocked = isGroupLocked(node.id);
-              const lockedByParent = isEffectivelyLocked && !node.is_locked;
-              if (!isEffectivelyLocked) return null;
-              return (
-                <span
-                  className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
-                  title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
-                >
-                  <FiLock size={10} />
-                </span>
-              );
-            })()}
+            <div className="org-group-name-row">
+              <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
+                {node.name}
+              </span>
+              {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
+              {(() => {
+                const effectiveLockInfo = getGroupLockInfo(node.id);
+                const isEffectivelyLocked = isGroupLocked(node.id);
+                const lockedByParent = isEffectivelyLocked && !node.is_locked;
+                if (!isEffectivelyLocked) return null;
+                return (
+                  <span
+                    className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
+                    title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+                  >
+                    <FiLock size={10} />
+                  </span>
+                );
+              })()}
+            </div>
+            {node.description && (
+              <span className="org-group-desc">{node.description}</span>
+            )}
           </div>
 
           <div className="org-group-stats">
