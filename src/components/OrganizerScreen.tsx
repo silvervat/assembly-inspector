@@ -5229,20 +5229,22 @@ export default function OrganizerScreen({
               setShowFilterMenu(false);
               const isOpening = groupMenuId !== node.id;
               setGroupMenuId(groupMenuId === node.id ? null : node.id);
-              // Scroll only if menu would be cut off at bottom
+              // Scroll container so menu is fully visible
               if (isOpening) {
                 const btn = e.currentTarget as HTMLElement;
                 setTimeout(() => {
-                  // Find the menu element that just appeared
                   const menu = btn.parentElement?.querySelector('.org-group-menu') as HTMLElement;
                   if (menu) {
-                    const menuRect = menu.getBoundingClientRect();
-                    const viewportHeight = window.innerHeight;
-                    // Check if menu bottom is below viewport
-                    if (menuRect.bottom > viewportHeight) {
-                      // Scroll just enough to show full menu (+ 16px padding)
-                      const scrollAmount = menuRect.bottom - viewportHeight + 16;
-                      window.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                    // Find the scrollable container (.org-content)
+                    const scrollContainer = btn.closest('.org-content') as HTMLElement;
+                    if (scrollContainer) {
+                      const menuRect = menu.getBoundingClientRect();
+                      const containerRect = scrollContainer.getBoundingClientRect();
+                      // Check if menu bottom is below container bottom
+                      if (menuRect.bottom > containerRect.bottom) {
+                        const scrollAmount = menuRect.bottom - containerRect.bottom + 16;
+                        scrollContainer.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+                      }
                     }
                   }
                 }, 50);
@@ -6587,249 +6589,353 @@ export default function OrganizerScreen({
           return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
         };
 
-        // Line selector component
-        const LineSelector = ({ value, onChange }: { value: MarkupLineConfig; onChange: (v: MarkupLineConfig) => void }) => (
-          <select
-            value={value}
-            onChange={(e) => onChange(e.target.value as MarkupLineConfig)}
-            style={{ marginLeft: '8px', padding: '2px 6px', fontSize: '11px', width: '70px' }}
-          >
-            <option value="line1">Rida 1</option>
-            <option value="line2">Rida 2</option>
-            <option value="line3">Rida 3</option>
-          </select>
-        );
-
         // Check if subgroups exist
         const hasSubgroups = groups.some(g => g.parent_id === markupGroupId);
 
+        // Field definitions for drag & drop
+        type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' | string;
+        interface MarkupFieldDef {
+          id: MarkupFieldType;
+          label: string;
+          preview: string;
+          isCustom?: boolean;
+        }
+
+        const availableFields: MarkupFieldDef[] = [
+          { id: 'groupName', label: 'Grupi nimi', preview: markupGroup?.name || 'Grupp' },
+          { id: 'assemblyMark', label: 'Assembly Mark', preview: firstItem?.assembly_mark || 'W-101' },
+          { id: 'weight', label: 'Kaal', preview: `${(parseFloat(firstItem?.cast_unit_weight || '1234.5')).toFixed(1)} kg` },
+          { id: 'productName', label: 'Product Name', preview: firstItem?.product_name || 'BEAM' },
+          ...customFields.map(f => ({
+            id: f.id,
+            label: f.name,
+            preview: firstItem?.custom_properties?.[f.id] || 'Näidis',
+            isCustom: true
+          }))
+        ];
+
+        // Get fields assigned to each line
+        const getFieldsForLine = (line: MarkupLineConfig): MarkupFieldDef[] => {
+          const fields: MarkupFieldDef[] = [];
+          if (markupSettings.includeGroupName && markupSettings.groupNameLine === line) {
+            fields.push(availableFields.find(f => f.id === 'groupName')!);
+          }
+          if (markupSettings.includeAssemblyMark.enabled && markupSettings.includeAssemblyMark.line === line) {
+            fields.push(availableFields.find(f => f.id === 'assemblyMark')!);
+          }
+          if (markupSettings.includeWeight.enabled && markupSettings.includeWeight.line === line) {
+            fields.push(availableFields.find(f => f.id === 'weight')!);
+          }
+          if (markupSettings.includeProductName.enabled && markupSettings.includeProductName.line === line) {
+            fields.push(availableFields.find(f => f.id === 'productName')!);
+          }
+          // Custom fields go to line3
+          if (line === 'line3') {
+            for (const fieldId of markupSettings.includeCustomFields) {
+              const field = availableFields.find(f => f.id === fieldId);
+              if (field) fields.push(field);
+            }
+          }
+          return fields.filter(Boolean);
+        };
+
+        // Get unused fields
+        const getUnusedFields = (): MarkupFieldDef[] => {
+          return availableFields.filter(f => {
+            if (f.id === 'groupName') return !markupSettings.includeGroupName;
+            if (f.id === 'assemblyMark') return !markupSettings.includeAssemblyMark.enabled;
+            if (f.id === 'weight') return !markupSettings.includeWeight.enabled;
+            if (f.id === 'productName') return !markupSettings.includeProductName.enabled;
+            if (f.isCustom) return !markupSettings.includeCustomFields.includes(f.id);
+            return true;
+          });
+        };
+
+        // Toggle field
+        const toggleField = (fieldId: MarkupFieldType, targetLine: MarkupLineConfig = 'line1') => {
+          setMarkupSettings(prev => {
+            if (fieldId === 'groupName') {
+              return { ...prev, includeGroupName: !prev.includeGroupName, groupNameLine: targetLine };
+            }
+            if (fieldId === 'assemblyMark') {
+              return { ...prev, includeAssemblyMark: { enabled: !prev.includeAssemblyMark.enabled, line: targetLine } };
+            }
+            if (fieldId === 'weight') {
+              return { ...prev, includeWeight: { enabled: !prev.includeWeight.enabled, line: targetLine } };
+            }
+            if (fieldId === 'productName') {
+              return { ...prev, includeProductName: { enabled: !prev.includeProductName.enabled, line: targetLine } };
+            }
+            // Custom field
+            const isIncluded = prev.includeCustomFields.includes(fieldId);
+            return {
+              ...prev,
+              includeCustomFields: isIncluded
+                ? prev.includeCustomFields.filter(id => id !== fieldId)
+                : [...prev.includeCustomFields, fieldId]
+            };
+          });
+        };
+
+        // Move field to line
+        const moveFieldToLine = (fieldId: MarkupFieldType, targetLine: MarkupLineConfig) => {
+          setMarkupSettings(prev => {
+            if (fieldId === 'groupName') {
+              return { ...prev, includeGroupName: true, groupNameLine: targetLine };
+            }
+            if (fieldId === 'assemblyMark') {
+              return { ...prev, includeAssemblyMark: { enabled: true, line: targetLine } };
+            }
+            if (fieldId === 'weight') {
+              return { ...prev, includeWeight: { enabled: true, line: targetLine } };
+            }
+            if (fieldId === 'productName') {
+              return { ...prev, includeProductName: { enabled: true, line: targetLine } };
+            }
+            // Custom fields always go to line3
+            if (!prev.includeCustomFields.includes(fieldId)) {
+              return { ...prev, includeCustomFields: [...prev.includeCustomFields, fieldId] };
+            }
+            return prev;
+          });
+        };
+
+        // Drag state
+        const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
+        const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
+
+        // Render field chip
+        const FieldChip = ({ field, onRemove, isDragging }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean }) => (
+          <div
+            className={`markup-field-chip ${isDragging ? 'dragging' : ''}`}
+            draggable
+            onDragStart={(e) => {
+              setDraggedField(field.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragEnd={() => {
+              setDraggedField(null);
+              setDragOverLine(null);
+            }}
+            onTouchStart={() => setDraggedField(field.id)}
+            onTouchEnd={() => {
+              setDraggedField(null);
+              setDragOverLine(null);
+            }}
+          >
+            <span className="chip-label">{field.label}</span>
+            {onRemove && (
+              <button className="chip-remove" onClick={onRemove} title="Eemalda">
+                <FiX size={12} />
+              </button>
+            )}
+          </div>
+        );
+
+        // Render drop zone for a line
+        const LineDropZone = ({ line, label }: { line: MarkupLineConfig; label: string }) => {
+          const fields = getFieldsForLine(line);
+          const isOver = dragOverLine === line;
+
+          return (
+            <div
+              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverLine(line);
+              }}
+              onDragLeave={() => setDragOverLine(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (draggedField) {
+                  moveFieldToLine(draggedField, line);
+                }
+                setDraggedField(null);
+                setDragOverLine(null);
+              }}
+            >
+              <span className="line-label">{label}</span>
+              <div className="line-fields">
+                {fields.length > 0 ? (
+                  fields.map(f => (
+                    <FieldChip
+                      key={f.id}
+                      field={f}
+                      onRemove={() => toggleField(f.id)}
+                      isDragging={draggedField === f.id}
+                    />
+                  ))
+                ) : (
+                  <span className="line-placeholder">Lohista siia</span>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        const unusedFields = getUnusedFields();
+
         return (
           <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
-            <div className="org-modal" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
+            <div className="org-modal markup-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
                 <h2>Lisa markupid</h2>
                 <button onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}><FiX size={18} /></button>
               </div>
+
               <div className="org-modal-body">
-                <p style={{ fontSize: '12px', color: '#666', marginBottom: '12px' }}>
-                  Grupp: <strong>{markupGroup?.name}</strong> ({itemCount} detaili)
-                </p>
-
-                {/* Filter options */}
-                <div style={{ background: '#f0f9ff', padding: '10px', borderRadius: '6px', marginBottom: '12px' }}>
-                  <div className="org-field checkbox" style={{ marginBottom: '6px' }}>
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={markupSettings.onlySelectedInModel}
-                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, onlySelectedInModel: e.target.checked }))}
-                      />
-                      Ainult mudelis valitud ({selectedObjects.length} valitud)
-                    </label>
-                  </div>
-
-                  {hasSubgroups && (
-                    <div className="org-field checkbox">
-                      <label>
-                        <input
-                          type="checkbox"
-                          checked={markupSettings.applyToSubgroups}
-                          onChange={(e) => setMarkupSettings(prev => ({ ...prev, applyToSubgroups: e.target.checked }))}
-                        />
-                        Rakenda ka alamgruppidele
-                      </label>
-                    </div>
+                {/* Group info */}
+                <div className="markup-group-info">
+                  {markupGroup?.color && (
+                    <span
+                      className="markup-color-dot"
+                      style={{ backgroundColor: `rgb(${markupGroup.color.r}, ${markupGroup.color.g}, ${markupGroup.color.b})` }}
+                    />
                   )}
-
-                  <div className="org-field checkbox">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={markupSettings.useGroupColors}
-                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
-                      />
-                      Kasuta grupi värve
-                    </label>
-                  </div>
+                  <span className="markup-group-name">{markupGroup?.name}</span>
+                  <span className="markup-item-count">{itemCount} detaili</span>
                 </div>
 
-                {/* Model properties */}
-                <div style={{ marginBottom: '12px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', display: 'block' }}>
-                    Mudeli omadused:
+                {/* Options row */}
+                <div className="markup-options">
+                  <label className={`markup-option ${markupSettings.onlySelectedInModel ? 'active' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={markupSettings.onlySelectedInModel}
+                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, onlySelectedInModel: e.target.checked }))}
+                    />
+                    <span>Ainult valitud</span>
+                    {selectedObjects.length > 0 && <span className="option-count">{selectedObjects.length}</span>}
                   </label>
 
-                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <label style={{ flex: 1 }}>
+                  {hasSubgroups && (
+                    <label className={`markup-option ${markupSettings.applyToSubgroups ? 'active' : ''}`}>
                       <input
                         type="checkbox"
-                        checked={markupSettings.includeGroupName}
-                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, includeGroupName: e.target.checked }))}
+                        checked={markupSettings.applyToSubgroups}
+                        onChange={(e) => setMarkupSettings(prev => ({ ...prev, applyToSubgroups: e.target.checked }))}
                       />
-                      Grupi nimi
+                      <span>+ Alamgrupid</span>
                     </label>
-                    {markupSettings.includeGroupName && (
-                      <LineSelector
-                        value={markupSettings.groupNameLine}
-                        onChange={(v) => setMarkupSettings(prev => ({ ...prev, groupNameLine: v }))}
-                      />
-                    )}
-                  </div>
+                  )}
 
-                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <label style={{ flex: 1 }}>
-                      <input
-                        type="checkbox"
-                        checked={markupSettings.includeAssemblyMark.enabled}
-                        onChange={(e) => setMarkupSettings(prev => ({
-                          ...prev,
-                          includeAssemblyMark: { ...prev.includeAssemblyMark, enabled: e.target.checked }
-                        }))}
-                      />
-                      Assembly/Cast unit Mark
-                    </label>
-                    {markupSettings.includeAssemblyMark.enabled && (
-                      <LineSelector
-                        value={markupSettings.includeAssemblyMark.line}
-                        onChange={(v) => setMarkupSettings(prev => ({
-                          ...prev,
-                          includeAssemblyMark: { ...prev.includeAssemblyMark, line: v }
-                        }))}
-                      />
-                    )}
-                  </div>
-
-                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <label style={{ flex: 1 }}>
-                      <input
-                        type="checkbox"
-                        checked={markupSettings.includeWeight.enabled}
-                        onChange={(e) => setMarkupSettings(prev => ({
-                          ...prev,
-                          includeWeight: { ...prev.includeWeight, enabled: e.target.checked }
-                        }))}
-                      />
-                      Assembly/Cast unit Weight
-                    </label>
-                    {markupSettings.includeWeight.enabled && (
-                      <LineSelector
-                        value={markupSettings.includeWeight.line}
-                        onChange={(v) => setMarkupSettings(prev => ({
-                          ...prev,
-                          includeWeight: { ...prev.includeWeight, line: v }
-                        }))}
-                      />
-                    )}
-                  </div>
-
-                  <div className="org-field checkbox" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <label style={{ flex: 1 }}>
-                      <input
-                        type="checkbox"
-                        checked={markupSettings.includeProductName.enabled}
-                        onChange={(e) => setMarkupSettings(prev => ({
-                          ...prev,
-                          includeProductName: { ...prev.includeProductName, enabled: e.target.checked }
-                        }))}
-                      />
-                      Product Name
-                    </label>
-                    {markupSettings.includeProductName.enabled && (
-                      <LineSelector
-                        value={markupSettings.includeProductName.line}
-                        onChange={(v) => setMarkupSettings(prev => ({
-                          ...prev,
-                          includeProductName: { ...prev.includeProductName, line: v }
-                        }))}
-                      />
-                    )}
-                  </div>
-
-                  <p style={{ fontSize: '10px', color: '#6b7280', marginTop: '4px' }}>
-                    Kasutab Admin → Tekla property seadeid
-                  </p>
+                  <label className={`markup-option ${markupSettings.useGroupColors ? 'active' : ''}`}>
+                    <input
+                      type="checkbox"
+                      checked={markupSettings.useGroupColors}
+                      onChange={(e) => setMarkupSettings(prev => ({ ...prev, useGroupColors: e.target.checked }))}
+                    />
+                    <span>Grupi värv</span>
+                  </label>
                 </div>
 
-                {/* Custom fields */}
-                {customFields.length > 0 && (
-                  <div style={{ marginBottom: '12px' }}>
-                    <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', marginBottom: '6px', display: 'block' }}>
-                      Lisa väljad:
-                    </label>
-                    <div className="org-markup-fields">
-                      {customFields.map(f => (
-                        <div key={f.id} className="org-field checkbox" style={{ marginBottom: '4px' }}>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={markupSettings.includeCustomFields.includes(f.id)}
-                              onChange={(e) => {
-                                setMarkupSettings(prev => ({
-                                  ...prev,
-                                  includeCustomFields: e.target.checked
-                                    ? [...prev.includeCustomFields, f.id]
-                                    : prev.includeCustomFields.filter(id => id !== f.id)
-                                }));
-                              }}
-                            />
-                            {f.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                {/* Field builder */}
+                <div className="markup-builder">
+                  <div className="markup-builder-header">
+                    <span>Koosta markup</span>
+                    <span className="markup-hint">Lohista väljad ridadesse</span>
                   </div>
-                )}
+
+                  {/* Lines */}
+                  <div className="markup-lines">
+                    <LineDropZone line="line1" label="Rida 1" />
+                    <LineDropZone line="line2" label="Rida 2" />
+                    <LineDropZone line="line3" label="Rida 3" />
+                  </div>
+
+                  {/* Available fields */}
+                  {unusedFields.length > 0 && (
+                    <div
+                      className={`markup-available ${dragOverLine === 'unused' ? 'drag-over' : ''}`}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverLine('unused');
+                      }}
+                      onDragLeave={() => setDragOverLine(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedField) {
+                          toggleField(draggedField);
+                        }
+                        setDraggedField(null);
+                        setDragOverLine(null);
+                      }}
+                    >
+                      <span className="available-label">Saadaval:</span>
+                      <div className="available-fields">
+                        {unusedFields.map(f => (
+                          <div
+                            key={f.id}
+                            className={`markup-field-chip available ${draggedField === f.id ? 'dragging' : ''}`}
+                            draggable
+                            onDragStart={(e) => {
+                              setDraggedField(f.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragEnd={() => {
+                              setDraggedField(null);
+                              setDragOverLine(null);
+                            }}
+                            onClick={() => moveFieldToLine(f.id, 'line1')}
+                          >
+                            <FiPlus size={10} />
+                            <span>{f.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Separator */}
-                <div className="org-field" style={{ marginBottom: '12px' }}>
+                <div className="markup-separator-row">
                   <label>Eraldaja:</label>
-                  <select
-                    value={markupSettings.separator}
-                    onChange={(e) => setMarkupSettings(prev => ({ ...prev, separator: e.target.value as MarkupSettings['separator'] }))}
-                  >
-                    <option value="newline">Uus rida</option>
-                    <option value="comma">Koma (,)</option>
-                    <option value="space">Tühik</option>
-                    <option value="dash">Kriips (-)</option>
-                    <option value="pipe">Püstkriips (|)</option>
-                  </select>
+                  <div className="separator-options">
+                    {[
+                      { value: 'newline', label: '↵', title: 'Uus rida' },
+                      { value: 'space', label: '␣', title: 'Tühik' },
+                      { value: 'comma', label: ',', title: 'Koma' },
+                      { value: 'dash', label: '-', title: 'Kriips' },
+                      { value: 'pipe', label: '|', title: 'Püstkriips' }
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        className={`separator-btn ${markupSettings.separator === opt.value ? 'active' : ''}`}
+                        onClick={() => setMarkupSettings(prev => ({ ...prev, separator: opt.value as MarkupSettings['separator'] }))}
+                        title={opt.title}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Preview */}
-                <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '12px', marginBottom: '12px' }}>
-                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', marginBottom: '8px', display: 'block' }}>
-                    Eelvaade (esimese detaili põhjal):
-                  </label>
-                  <div style={{
-                    fontFamily: 'monospace',
-                    fontSize: '13px',
-                    color: markupSettings.useGroupColors && markupGroup?.color
-                      ? `rgb(${markupGroup.color.r}, ${markupGroup.color.g}, ${markupGroup.color.b})`
-                      : '#1f2937',
-                    whiteSpace: 'pre-wrap',
-                    lineHeight: '1.5',
-                    padding: '8px',
-                    background: '#fff',
-                    borderRadius: '4px',
-                    border: '1px dashed #d1d5db',
-                    minHeight: '40px'
-                  }}>
+                <div className="markup-preview">
+                  <div className="preview-label">Eelvaade</div>
+                  <div
+                    className="preview-content"
+                    style={{
+                      color: markupSettings.useGroupColors && markupGroup?.color
+                        ? `rgb(${markupGroup.color.r}, ${markupGroup.color.g}, ${markupGroup.color.b})`
+                        : '#1f2937'
+                    }}
+                  >
                     {generatePreview()}
                   </div>
                 </div>
 
                 {/* Progress */}
                 {markupProgress && (
-                  <div className="org-batch-progress" style={{ marginTop: '12px' }}>
+                  <div className="markup-progress">
                     <div className="progress-bar">
                       <div className="progress-fill" style={{ width: `${(markupProgress.current / markupProgress.total) * 100}%` }} />
                     </div>
-                    <span>
-                      {markupProgress.action === 'adding' ? 'Loon' : 'Eemaldan'} markupe: {markupProgress.current} / {markupProgress.total}
-                    </span>
+                    <span>{markupProgress.action === 'adding' ? 'Loon' : 'Eemaldan'} markupe: {markupProgress.current} / {markupProgress.total}</span>
                   </div>
                 )}
               </div>
+
               <div className="org-modal-footer">
                 <button className="cancel" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>Tühista</button>
                 <button
