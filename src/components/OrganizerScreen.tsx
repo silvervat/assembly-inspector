@@ -86,6 +86,7 @@ const MARKUP_BATCH_SIZE = 50;  // Markups to create/remove per batch
 
 // Markup settings - which fields to include in markup
 type MarkupLineConfig = 'line1' | 'line2' | 'line3' | 'none';
+type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' | string;
 
 interface MarkupFieldConfig {
   enabled: boolean;
@@ -721,6 +722,8 @@ export default function OrganizerScreen({
     return defaultMarkupSettings;
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
+  const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
+  const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
   // Save markup settings to localStorage when changed
   useEffect(() => {
@@ -5169,24 +5172,29 @@ export default function OrganizerScreen({
           )}
 
           <div className="org-group-name-section">
-            <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
-              {node.name}
-            </span>
-            {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
-            {(() => {
-              const effectiveLockInfo = getGroupLockInfo(node.id);
-              const isEffectivelyLocked = isGroupLocked(node.id);
-              const lockedByParent = isEffectivelyLocked && !node.is_locked;
-              if (!isEffectivelyLocked) return null;
-              return (
-                <span
-                  className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
-                  title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
-                >
-                  <FiLock size={10} />
-                </span>
-              );
-            })()}
+            <div className="org-group-name-row">
+              <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
+                {node.name}
+              </span>
+              {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
+              {(() => {
+                const effectiveLockInfo = getGroupLockInfo(node.id);
+                const isEffectivelyLocked = isGroupLocked(node.id);
+                const lockedByParent = isEffectivelyLocked && !node.is_locked;
+                if (!isEffectivelyLocked) return null;
+                return (
+                  <span
+                    className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
+                    title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+                  >
+                    <FiLock size={10} />
+                  </span>
+                );
+              })()}
+            </div>
+            {node.description && (
+              <span className="org-group-desc">{node.description}</span>
+            )}
           </div>
 
           <div className="org-group-stats">
@@ -6616,7 +6624,6 @@ export default function OrganizerScreen({
         const hasSubgroups = groups.some(g => g.parent_id === markupGroupId);
 
         // Field definitions for drag & drop
-        type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' | string;
         interface MarkupFieldDef {
           id: MarkupFieldType;
           label: string;
@@ -6722,10 +6729,6 @@ export default function OrganizerScreen({
             return prev;
           });
         };
-
-        // Drag state
-        const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
-        const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
         // Render field chip
         const FieldChip = ({ field, onRemove, isDragging }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean }) => (

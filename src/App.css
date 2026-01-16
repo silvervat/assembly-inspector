@@ -11623,11 +11623,18 @@ button.stat-toggle.off:hover {
 /* Group name section - truncates */
 .org-group-name-section {
   display: flex;
-  align-items: center;
-  gap: 4px;
+  flex-direction: column;
+  gap: 0;
   flex: 1;
   min-width: 0;
   overflow: hidden;
+}
+
+.org-group-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 .org-group-name {
@@ -11637,6 +11644,16 @@ button.stat-toggle.off:hover {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.org-group-desc {
+  font-size: 10px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  margin-top: 1px;
 }
 
 /* Stats section - always right aligned */
