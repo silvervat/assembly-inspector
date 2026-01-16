@@ -7922,12 +7922,12 @@ export default function OrganizerScreen({
               </div>
 
               {/* Export/Import Groups Section */}
-              <div className="settings-section" style={{ marginTop: '16px', borderTop: '1px solid var(--modus-border)', paddingTop: '16px' }}>
-                <div style={{ marginBottom: '12px' }}>
-                  <span className="settings-title" style={{ display: 'block', marginBottom: '4px' }}>Gruppide haldus</span>
-                  <span className="settings-desc">Ekspordi või impordi kõik grupid koos elementidega</span>
+              <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <span className="settings-title">Gruppide haldus</span>
+                  <span className="settings-desc">Ekspordi või impordi kõik grupid</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     onClick={() => {
                       setShowSettingsModal(false);
@@ -7940,18 +7940,18 @@ export default function OrganizerScreen({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
-                      padding: '10px 16px',
+                      gap: '4px',
+                      padding: '6px 10px',
                       background: groups.length === 0 ? '#f3f4f6' : '#003F87',
                       color: groups.length === 0 ? '#9ca3af' : 'white',
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '4px',
                       cursor: groups.length === 0 ? 'not-allowed' : 'pointer',
-                      fontSize: '13px',
+                      fontSize: '11px',
                       fontWeight: 500
                     }}
                   >
-                    <FiDownload size={14} /> Ekspordi grupid
+                    <FiDownload size={12} /> Ekspordi
                   </button>
                   <button
                     onClick={() => {
@@ -7964,18 +7964,18 @@ export default function OrganizerScreen({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
-                      padding: '10px 16px',
+                      gap: '4px',
+                      padding: '6px 10px',
                       background: 'white',
                       color: '#374151',
                       border: '1px solid var(--modus-border)',
-                      borderRadius: '6px',
+                      borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: '11px',
                       fontWeight: 500
                     }}
                   >
-                    <FiUpload size={14} /> Impordi grupid
+                    <FiUpload size={12} /> Impordi
                   </button>
                 </div>
               </div>
