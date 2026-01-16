@@ -753,6 +753,24 @@ export default function OrganizerScreen({
   // Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
+  // Groups import/export state
+  const [showGroupsExportImportModal, setShowGroupsExportImportModal] = useState(false);
+  const [groupsExportImportMode, setGroupsExportImportMode] = useState<'export' | 'import' | null>(null);
+  const [groupsImportFile, setGroupsImportFile] = useState<File | null>(null);
+  const [groupsImportPreview, setGroupsImportPreview] = useState<{
+    groupCount: number;
+    itemCount: number;
+    errors: string[];
+    warnings: string[];
+  } | null>(null);
+  const [groupsImportProgress, setGroupsImportProgress] = useState<{
+    phase: string;
+    current: number;
+    total: number;
+    percent: number;
+  } | null>(null);
+  const groupsFileInputRef = useRef<HTMLInputElement>(null);
+
   // Assembly Selection enforcement state
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
@@ -4470,6 +4488,536 @@ export default function OrganizerScreen({
   };
 
   // ============================================
+  // GROUPS EXPORT/IMPORT (ALL GROUPS)
+  // ============================================
+
+  // Interface for exported group data
+  interface ExportedGroup {
+    id: string;
+    name: string;
+    description: string | null;
+    parent_id: string | null;
+    is_private: boolean;
+    allowed_users: string[];
+    display_properties: OrganizerGroup['display_properties'];
+    custom_fields: CustomFieldDefinition[];
+    assembly_selection_on: boolean;
+    unique_items: boolean;
+    color: GroupColor | null;
+    default_permissions: GroupPermissions;
+    user_permissions: Record<string, GroupPermissions>;
+    sort_order: number;
+    level: number;
+    items: Array<{
+      guid_ifc: string;
+      assembly_mark: string | null;
+      product_name: string | null;
+      cast_unit_weight: string | null;
+      cast_unit_position_code: string | null;
+      custom_properties: Record<string, string>;
+      notes: string | null;
+      sort_order: number;
+    }>;
+  }
+
+  interface ExportedGroupsData {
+    version: string;
+    exportedAt: string;
+    exportedBy: string;
+    projectId: string;
+    groups: ExportedGroup[];
+  }
+
+  // Export all groups to JSON file
+  const exportAllGroups = async () => {
+    setGroupsExportImportMode('export');
+    setGroupsImportProgress({ phase: 'Kogun gruppide andmeid...', current: 0, total: groups.length, percent: 0 });
+
+    try {
+      await new Promise(resolve => setTimeout(resolve, 10)); // Allow UI to update
+
+      const exportedGroups: ExportedGroup[] = [];
+      const batchSize = 10; // Process groups in batches
+
+      for (let i = 0; i < groups.length; i += batchSize) {
+        const batch = groups.slice(i, Math.min(i + batchSize, groups.length));
+
+        for (const group of batch) {
+          // Get items for this group
+          const items = groupItems.get(group.id) || [];
+
+          exportedGroups.push({
+            id: group.id,
+            name: group.name,
+            description: group.description,
+            parent_id: group.parent_id,
+            is_private: group.is_private,
+            allowed_users: group.allowed_users || [],
+            display_properties: group.display_properties || [],
+            custom_fields: group.custom_fields || [],
+            assembly_selection_on: group.assembly_selection_on,
+            unique_items: group.unique_items,
+            color: group.color,
+            default_permissions: group.default_permissions || DEFAULT_GROUP_PERMISSIONS,
+            user_permissions: group.user_permissions || {},
+            sort_order: group.sort_order,
+            level: group.level,
+            items: items.map(item => ({
+              guid_ifc: item.guid_ifc,
+              assembly_mark: item.assembly_mark,
+              product_name: item.product_name,
+              cast_unit_weight: item.cast_unit_weight,
+              cast_unit_position_code: item.cast_unit_position_code,
+              custom_properties: item.custom_properties || {},
+              notes: item.notes,
+              sort_order: item.sort_order
+            }))
+          });
+        }
+
+        const percent = Math.round(((i + batch.length) / groups.length) * 100);
+        setGroupsImportProgress({
+          phase: `Töötlen gruppe... (${i + batch.length}/${groups.length})`,
+          current: i + batch.length,
+          total: groups.length,
+          percent
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      const exportData: ExportedGroupsData = {
+        version: '1.0',
+        exportedAt: new Date().toISOString(),
+        exportedBy: tcUserEmail,
+        projectId: projectId,
+        groups: exportedGroups
+      };
+
+      // Calculate total items
+      const totalItems = exportedGroups.reduce((sum, g) => sum + g.items.length, 0);
+
+      // Create and download file
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `grupid_eksport_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setGroupsImportProgress(null);
+      setShowGroupsExportImportModal(false);
+      showToast(`Eksporditud ${exportedGroups.length} gruppi ja ${totalItems} elementi`);
+
+    } catch (err) {
+      console.error('Error exporting groups:', err);
+      showToast('Viga eksportimisel');
+      setGroupsImportProgress(null);
+    }
+  };
+
+  // Download empty template for groups import
+  const downloadGroupsTemplate = () => {
+    const templateData: ExportedGroupsData = {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      exportedBy: tcUserEmail,
+      projectId: projectId,
+      groups: [
+        {
+          id: 'template-group-1',
+          name: 'Näidisgrupp 1',
+          description: 'Grupi kirjeldus (valikuline)',
+          parent_id: null,
+          is_private: false,
+          allowed_users: [],
+          display_properties: [],
+          custom_fields: [
+            {
+              id: 'field-1',
+              name: 'Staatus',
+              type: 'dropdown',
+              required: false,
+              showInList: true,
+              sortOrder: 0,
+              options: {
+                dropdownOptions: ['Ootel', 'Töös', 'Valmis']
+              }
+            }
+          ],
+          assembly_selection_on: true,
+          unique_items: false,
+          color: { r: 59, g: 130, b: 246 },
+          default_permissions: DEFAULT_GROUP_PERMISSIONS,
+          user_permissions: {},
+          sort_order: 0,
+          level: 0,
+          items: [
+            {
+              guid_ifc: '2O2Fr$t4X7Zf8NOew3FLOH',
+              assembly_mark: 'W-101',
+              product_name: 'Wall Panel',
+              cast_unit_weight: '1500.5',
+              cast_unit_position_code: 'A1',
+              custom_properties: { 'field-1': 'Ootel' },
+              notes: 'Märkus (valikuline)',
+              sort_order: 0
+            }
+          ]
+        },
+        {
+          id: 'template-group-2',
+          name: 'Näidis alamgrupp',
+          description: 'See on alamgrupp',
+          parent_id: 'template-group-1',
+          is_private: false,
+          allowed_users: [],
+          display_properties: [],
+          custom_fields: [],
+          assembly_selection_on: true,
+          unique_items: false,
+          color: { r: 34, g: 197, b: 94 },
+          default_permissions: DEFAULT_GROUP_PERMISSIONS,
+          user_permissions: {},
+          sort_order: 0,
+          level: 1,
+          items: []
+        }
+      ]
+    };
+
+    const blob = new Blob([JSON.stringify(templateData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'grupid_mall.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Mall alla laetud');
+  };
+
+  // Validate and preview import file
+  const validateGroupsImportFile = async (file: File) => {
+    setGroupsImportFile(file);
+    setGroupsImportPreview(null);
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text) as ExportedGroupsData;
+
+      const errors: string[] = [];
+      const warnings: string[] = [];
+
+      // Version check
+      if (!data.version) {
+        errors.push('Failis puudub versiooni info');
+      }
+
+      // Groups array check
+      if (!data.groups || !Array.isArray(data.groups)) {
+        errors.push('Failis puudub gruppide massiiv');
+        setGroupsImportPreview({ groupCount: 0, itemCount: 0, errors, warnings });
+        return;
+      }
+
+      // Validate each group
+      let totalItems = 0;
+      const groupIds = new Set<string>();
+
+      for (let i = 0; i < data.groups.length; i++) {
+        const group = data.groups[i];
+
+        if (!group.id) {
+          errors.push(`Grupil #${i + 1} puudub ID`);
+        } else if (groupIds.has(group.id)) {
+          errors.push(`Duplikaat grupi ID: ${group.id}`);
+        } else {
+          groupIds.add(group.id);
+        }
+
+        if (!group.name) {
+          errors.push(`Grupil #${i + 1} puudub nimi`);
+        }
+
+        // Check for parent_id reference validity
+        if (group.parent_id && !groupIds.has(group.parent_id)) {
+          // Parent might come later in the array, check if it exists at all
+          const parentExists = data.groups.some(g => g.id === group.parent_id);
+          if (!parentExists) {
+            errors.push(`Grupp "${group.name}" viitab puuduvale ülemgrupile`);
+          }
+        }
+
+        // Check level consistency
+        if (group.level < 0 || group.level > 2) {
+          warnings.push(`Grupp "${group.name}" tase (${group.level}) parandatakse automaatselt`);
+        }
+
+        // Check for existing group names at root level (warning only)
+        if (!group.parent_id && groups.some(g => g.name === group.name && !g.parent_id)) {
+          warnings.push(`Grupp "${group.name}" on juba olemas (luuakse duplikaat)`);
+        }
+
+        // Validate items
+        if (group.items && Array.isArray(group.items)) {
+          for (const item of group.items) {
+            if (!item.guid_ifc) {
+              errors.push(`Grupi "${group.name}" elemendil puudub GUID_IFC`);
+            } else if (!/^[0-9A-Za-z_$]{22}$/.test(item.guid_ifc)) {
+              warnings.push(`Grupi "${group.name}" elemendil on vigane GUID_IFC formaat`);
+            }
+          }
+          totalItems += group.items.length;
+        }
+      }
+
+      setGroupsImportPreview({
+        groupCount: data.groups.length,
+        itemCount: totalItems,
+        errors,
+        warnings
+      });
+
+    } catch (err) {
+      console.error('Error parsing import file:', err);
+      setGroupsImportPreview({
+        groupCount: 0,
+        itemCount: 0,
+        errors: ['Vigane JSON fail - kontrolli faili formaati'],
+        warnings: []
+      });
+    }
+  };
+
+  // Import groups from JSON file
+  const importAllGroups = async () => {
+    if (!groupsImportFile || !groupsImportPreview || groupsImportPreview.errors.length > 0) {
+      return;
+    }
+
+    setSaving(true);
+    setGroupsExportImportMode('import');
+
+    try {
+      const text = await groupsImportFile.text();
+      const data = JSON.parse(text) as ExportedGroupsData;
+
+      const totalGroups = data.groups.length;
+      const totalItems = data.groups.reduce((sum, g) => sum + (g.items?.length || 0), 0);
+      let processedGroups = 0;
+      let processedItems = 0;
+      let skippedItems = 0;
+
+      // Phase 1: Create groups (sorted by level to ensure parents are created first)
+      setGroupsImportProgress({
+        phase: 'Loon gruppe...',
+        current: 0,
+        total: totalGroups,
+        percent: 0
+      });
+
+      // Map old IDs to new IDs
+      const idMapping = new Map<string, string>();
+
+      // Sort groups by level to ensure parent groups are created first
+      const sortedGroups = [...data.groups].sort((a, b) => (a.level || 0) - (b.level || 0));
+
+      // Process groups in batches
+      const groupBatchSize = 20;
+      for (let i = 0; i < sortedGroups.length; i += groupBatchSize) {
+        const batch = sortedGroups.slice(i, Math.min(i + groupBatchSize, sortedGroups.length));
+
+        for (const importGroup of batch) {
+          const newId = generateUUID();
+          idMapping.set(importGroup.id, newId);
+
+          // Map parent_id to new ID if it exists
+          const newParentId = importGroup.parent_id ? idMapping.get(importGroup.parent_id) : null;
+
+          // Calculate correct level
+          let level = 0;
+          if (newParentId) {
+            const parentGroup = sortedGroups.find(g => idMapping.get(g.id) === newParentId);
+            level = Math.min((parentGroup?.level || 0) + 1, 2);
+          }
+
+          // Get next sort_order for this level
+          const siblingsCount = groups.filter(g =>
+            g.parent_id === newParentId ||
+            (newParentId === null && g.parent_id === null)
+          ).length;
+
+          const groupToInsert = {
+            id: newId,
+            trimble_project_id: projectId,
+            name: importGroup.name,
+            description: importGroup.description || null,
+            parent_id: newParentId,
+            is_private: importGroup.is_private ?? false,
+            allowed_users: importGroup.allowed_users || [],
+            display_properties: importGroup.display_properties || [],
+            custom_fields: importGroup.custom_fields || [],
+            assembly_selection_on: importGroup.assembly_selection_on ?? true,
+            unique_items: importGroup.unique_items ?? false,
+            color: importGroup.color || null,
+            is_locked: false,
+            locked_by: null,
+            locked_at: null,
+            created_by: tcUserEmail,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            updated_by: tcUserEmail,
+            sort_order: siblingsCount + i,
+            level: level,
+            default_permissions: importGroup.default_permissions || DEFAULT_GROUP_PERMISSIONS,
+            user_permissions: importGroup.user_permissions || {}
+          };
+
+          const { error } = await supabase.from('organizer_groups').insert(groupToInsert);
+          if (error) {
+            console.error('Error inserting group:', error);
+            throw new Error(`Viga grupi "${importGroup.name}" loomisel: ${error.message}`);
+          }
+
+          processedGroups++;
+        }
+
+        const percent = Math.round((processedGroups / totalGroups) * 40); // 0-40% for groups
+        setGroupsImportProgress({
+          phase: `Loon gruppe... (${processedGroups}/${totalGroups})`,
+          current: processedGroups,
+          total: totalGroups,
+          percent
+        });
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      // Phase 2: Add items to groups
+      setGroupsImportProgress({
+        phase: 'Lisan elemente...',
+        current: 0,
+        total: totalItems,
+        percent: 40
+      });
+
+      // Collect all GUIDs to validate against database
+      const allGuids = new Set<string>();
+      for (const group of data.groups) {
+        if (group.items) {
+          for (const item of group.items) {
+            if (item.guid_ifc) {
+              allGuids.add(item.guid_ifc.toLowerCase());
+            }
+          }
+        }
+      }
+
+      // Query database for existing GUIDs
+      const { data: existingObjects } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .in('guid_ifc', Array.from(allGuids).slice(0, 1000)); // Limit for performance
+
+      const validGuids = new Set((existingObjects || []).map(o => o.guid_ifc.toLowerCase()));
+
+      // Process items in batches per group
+      const itemBatchSize = BATCH_SIZE;
+      for (const importGroup of data.groups) {
+        if (!importGroup.items || importGroup.items.length === 0) continue;
+
+        const newGroupId = idMapping.get(importGroup.id);
+        if (!newGroupId) continue;
+
+        const itemsToInsert: any[] = [];
+
+        for (const item of importGroup.items) {
+          if (!item.guid_ifc) {
+            skippedItems++;
+            continue;
+          }
+
+          // Check if GUID exists in database (if we have enough data)
+          if (validGuids.size > 0 && !validGuids.has(item.guid_ifc.toLowerCase())) {
+            skippedItems++;
+            continue;
+          }
+
+          itemsToInsert.push({
+            id: generateUUID(),
+            group_id: newGroupId,
+            guid_ifc: item.guid_ifc,
+            assembly_mark: item.assembly_mark || null,
+            product_name: item.product_name || null,
+            cast_unit_weight: item.cast_unit_weight || null,
+            cast_unit_position_code: item.cast_unit_position_code || null,
+            custom_properties: item.custom_properties || {},
+            notes: item.notes || null,
+            sort_order: item.sort_order || 0,
+            added_by: tcUserEmail,
+            added_at: new Date().toISOString()
+          });
+        }
+
+        // Insert items in batches
+        for (let i = 0; i < itemsToInsert.length; i += itemBatchSize) {
+          const batch = itemsToInsert.slice(i, Math.min(i + itemBatchSize, itemsToInsert.length));
+
+          // Mark as local changes to avoid realtime sync issues
+          const guids = batch.map(item => item.guid_ifc);
+          guids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+          setTimeout(() => {
+            guids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+          }, 5000);
+
+          const { error } = await supabase.from('organizer_group_items').insert(batch);
+          if (error) {
+            console.error('Error inserting items:', error);
+            // Continue with next batch instead of throwing
+          }
+
+          processedItems += batch.length;
+
+          const percent = 40 + Math.round((processedItems / totalItems) * 60); // 40-100% for items
+          setGroupsImportProgress({
+            phase: `Lisan elemente... (${processedItems}/${totalItems})`,
+            current: processedItems,
+            total: totalItems,
+            percent
+          });
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+      }
+
+      // Refresh data
+      await refreshData();
+
+      let message = `Imporditud ${processedGroups} gruppi ja ${processedItems} elementi`;
+      if (skippedItems > 0) {
+        message += `, ${skippedItems} elementi vahele jäetud`;
+      }
+
+      showToast(message);
+      setShowGroupsExportImportModal(false);
+      setGroupsImportFile(null);
+      setGroupsImportPreview(null);
+      setGroupsImportProgress(null);
+
+    } catch (err) {
+      console.error('Error importing groups:', err);
+      showToast(err instanceof Error ? err.message : 'Viga importimisel');
+      setGroupsImportProgress(null);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================
   // DRAG & DROP
   // ============================================
 
@@ -7178,9 +7726,307 @@ export default function OrganizerScreen({
                   </div>
                 </label>
               </div>
+
+              {/* Export/Import Groups Section */}
+              <div className="settings-section" style={{ marginTop: '16px', borderTop: '1px solid var(--modus-border)', paddingTop: '16px' }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <span className="settings-title" style={{ display: 'block', marginBottom: '4px' }}>Gruppide haldus</span>
+                  <span className="settings-desc">Ekspordi või impordi kõik grupid koos elementidega</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => {
+                      setShowSettingsModal(false);
+                      setGroupsExportImportMode('export');
+                      setShowGroupsExportImportModal(true);
+                    }}
+                    disabled={groups.length === 0}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '10px 16px',
+                      background: groups.length === 0 ? '#f3f4f6' : '#003F87',
+                      color: groups.length === 0 ? '#9ca3af' : 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: groups.length === 0 ? 'not-allowed' : 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500
+                    }}
+                  >
+                    <FiDownload size={14} /> Ekspordi grupid
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowSettingsModal(false);
+                      setGroupsExportImportMode('import');
+                      setShowGroupsExportImportModal(true);
+                    }}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '10px 16px',
+                      background: 'white',
+                      color: '#374151',
+                      border: '1px solid var(--modus-border)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500
+                    }}
+                  >
+                    <FiUpload size={14} /> Impordi grupid
+                  </button>
+                </div>
+              </div>
             </div>
             <div className="org-modal-footer">
               <button className="save" onClick={() => setShowSettingsModal(false)}>Valmis</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Groups Export/Import Modal */}
+      {showGroupsExportImportModal && (
+        <div className="org-modal-overlay" onClick={() => {
+          if (!saving && !groupsImportProgress) {
+            setShowGroupsExportImportModal(false);
+            setGroupsImportFile(null);
+            setGroupsImportPreview(null);
+            setGroupsExportImportMode(null);
+          }
+        }}>
+          <div className="org-modal" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <div className="org-modal-header">
+              <h2>
+                {groupsExportImportMode === 'export' ? (
+                  <><FiDownload size={16} /> Ekspordi grupid</>
+                ) : (
+                  <><FiUpload size={16} /> Impordi grupid</>
+                )}
+              </h2>
+              <button
+                onClick={() => {
+                  if (!saving && !groupsImportProgress) {
+                    setShowGroupsExportImportModal(false);
+                    setGroupsImportFile(null);
+                    setGroupsImportPreview(null);
+                    setGroupsExportImportMode(null);
+                  }
+                }}
+                disabled={saving || !!groupsImportProgress}
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="org-modal-body">
+              {/* Progress Bar */}
+              {groupsImportProgress && (
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span style={{ fontSize: '13px', color: '#374151' }}>{groupsImportProgress.phase}</span>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>{groupsImportProgress.percent}%</span>
+                  </div>
+                  <div style={{
+                    height: '8px',
+                    background: '#e5e7eb',
+                    borderRadius: '4px',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${groupsImportProgress.percent}%`,
+                      background: '#003F87',
+                      borderRadius: '4px',
+                      transition: 'width 0.2s ease'
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Export Mode */}
+              {groupsExportImportMode === 'export' && !groupsImportProgress && (
+                <div>
+                  <div style={{
+                    background: '#f0f9ff',
+                    border: '1px solid #bfdbfe',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ fontWeight: 500, color: '#1e40af', marginBottom: '8px' }}>
+                      Eksporditakse:
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '20px', color: '#374151', fontSize: '13px' }}>
+                      <li>{groups.length} gruppi</li>
+                      <li>{Array.from(groupItems.values()).reduce((sum, items) => sum + items.length, 0)} elementi</li>
+                      <li>Grupi seaded (värvid, väljad, õigused)</li>
+                      <li>Grupi hierarhia (alamgrupid)</li>
+                    </ul>
+                  </div>
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '0' }}>
+                    Eksporditav JSON fail sisaldab kõiki gruppe koos elementidega.
+                    Seda faili saab kasutada gruppide taastamiseks või teise projekti importimiseks.
+                  </p>
+                </div>
+              )}
+
+              {/* Import Mode */}
+              {groupsExportImportMode === 'import' && !groupsImportProgress && (
+                <div>
+                  {/* Hidden file input */}
+                  <input
+                    ref={groupsFileInputRef}
+                    type="file"
+                    accept=".json"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        validateGroupsImportFile(file);
+                      }
+                    }}
+                  />
+
+                  {/* File selection area */}
+                  <div
+                    onClick={() => groupsFileInputRef.current?.click()}
+                    style={{
+                      border: '2px dashed var(--modus-border)',
+                      borderRadius: '8px',
+                      padding: '24px',
+                      textAlign: 'center',
+                      cursor: 'pointer',
+                      marginBottom: '16px',
+                      background: groupsImportFile ? '#f0fdf4' : '#fafafa'
+                    }}
+                  >
+                    {groupsImportFile ? (
+                      <>
+                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>✓</div>
+                        <div style={{ fontWeight: 500, color: '#166534' }}>{groupsImportFile.name}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                          Kliki uue faili valimiseks
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <FiUpload size={32} color="#9ca3af" />
+                        <div style={{ marginTop: '8px', color: '#374151' }}>
+                          Kliki JSON faili valimiseks
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                          või lohista fail siia
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Preview */}
+                  {groupsImportPreview && (
+                    <div style={{
+                      background: groupsImportPreview.errors.length > 0 ? '#fef2f2' : '#f0fdf4',
+                      border: `1px solid ${groupsImportPreview.errors.length > 0 ? '#fecaca' : '#bbf7d0'}`,
+                      borderRadius: '8px',
+                      padding: '12px',
+                      marginBottom: '16px'
+                    }}>
+                      <div style={{ fontWeight: 500, marginBottom: '8px', color: groupsImportPreview.errors.length > 0 ? '#991b1b' : '#166534' }}>
+                        {groupsImportPreview.errors.length > 0 ? 'Leiti vigu:' : 'Faili sisu:'}
+                      </div>
+
+                      {groupsImportPreview.errors.length > 0 ? (
+                        <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#991b1b' }}>
+                          {groupsImportPreview.errors.slice(0, 5).map((error, i) => (
+                            <li key={i}>{error}</li>
+                          ))}
+                          {groupsImportPreview.errors.length > 5 && (
+                            <li>...ja veel {groupsImportPreview.errors.length - 5} viga</li>
+                          )}
+                        </ul>
+                      ) : (
+                        <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#166534' }}>
+                          <li>{groupsImportPreview.groupCount} gruppi</li>
+                          <li>{groupsImportPreview.itemCount} elementi</li>
+                        </ul>
+                      )}
+
+                      {groupsImportPreview.warnings.length > 0 && (
+                        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #fde68a' }}>
+                          <div style={{ fontWeight: 500, marginBottom: '4px', color: '#92400e', fontSize: '12px' }}>
+                            Hoiatused:
+                          </div>
+                          <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px', color: '#92400e' }}>
+                            {groupsImportPreview.warnings.slice(0, 3).map((warning, i) => (
+                              <li key={i}>{warning}</li>
+                            ))}
+                            {groupsImportPreview.warnings.length > 3 && (
+                              <li>...ja veel {groupsImportPreview.warnings.length - 3} hoiatust</li>
+                            )}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Template download */}
+                  <button
+                    onClick={downloadGroupsTemplate}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      background: 'white',
+                      border: '1px solid var(--modus-border)',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: '#374151'
+                    }}
+                  >
+                    <FiDownload size={14} /> Lae alla näidistemplate
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="org-modal-footer">
+              <button
+                className="cancel"
+                onClick={() => {
+                  setShowGroupsExportImportModal(false);
+                  setGroupsImportFile(null);
+                  setGroupsImportPreview(null);
+                  setGroupsExportImportMode(null);
+                }}
+                disabled={saving || !!groupsImportProgress}
+              >
+                Tühista
+              </button>
+              {groupsExportImportMode === 'export' ? (
+                <button
+                  className="save"
+                  onClick={exportAllGroups}
+                  disabled={groups.length === 0 || !!groupsImportProgress}
+                >
+                  {groupsImportProgress ? 'Ekspordin...' : 'Ekspordi'}
+                </button>
+              ) : (
+                <button
+                  className="save"
+                  onClick={importAllGroups}
+                  disabled={saving || !groupsImportFile || !groupsImportPreview || groupsImportPreview.errors.length > 0}
+                >
+                  {saving ? 'Impordin...' : 'Impordi'}
+                </button>
+              )}
             </div>
           </div>
         </div>
