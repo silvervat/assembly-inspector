@@ -106,6 +106,10 @@ interface MarkupSettings {
   includeProductName: MarkupFieldConfig;
   // Filter options
   onlySelectedInModel: boolean;
+  // Line suffixes - custom text added after each line
+  line1Suffix: string;
+  line2Suffix: string;
+  line3Suffix: string;
 }
 
 // Sorting options
@@ -708,7 +712,10 @@ export default function OrganizerScreen({
     includeAssemblyMark: { enabled: true, line: 'line1' },
     includeWeight: { enabled: false, line: 'line2' },
     includeProductName: { enabled: false, line: 'line2' },
-    onlySelectedInModel: false
+    onlySelectedInModel: false,
+    line1Suffix: '',
+    line2Suffix: '',
+    line3Suffix: ''
   };
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
@@ -3203,9 +3210,21 @@ export default function OrganizerScreen({
     const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
     const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
+    // Get suffix for each line
+    const lineSuffixes: Record<MarkupLineConfig, string> = {
+      'line1': markupSettings.line1Suffix || '',
+      'line2': markupSettings.line2Suffix || '',
+      'line3': markupSettings.line3Suffix || '',
+      'none': ''
+    };
+
     const lineTexts = lines
       .filter(l => l.parts.length > 0)
-      .map(l => l.parts.join(inlineSeparator));
+      .map(l => {
+        const text = l.parts.join(inlineSeparator);
+        const suffix = lineSuffixes[l.line];
+        return suffix ? `${text}${suffix}` : text;
+      });
 
     if (lineTexts.length === 0) {
       // Fallback to assembly mark
@@ -4532,34 +4551,83 @@ export default function OrganizerScreen({
         alignment: { horizontal: 'center', vertical: 'center' }
       };
 
-      // ============ GRUPID SHEET ============
-      const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Tase'];
-      const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
-
       // Helper to convert RGB to hex (without #)
       const rgbToHexRaw = (c: GroupColor | null): string => {
         if (!c) return '';
         return ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
       };
 
-      // Sort groups by level to maintain hierarchy
-      const sortedGroups = [...groups].sort((a, b) => a.level - b.level);
+      // Helper to determine if text should be light or dark based on background
+      const getContrastTextColor = (c: GroupColor | null): string => {
+        if (!c) return '000000';
+        // Calculate luminance
+        const luminance = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+        return luminance > 0.5 ? '000000' : 'FFFFFF';
+      };
+
+      // Build group hierarchy map for name lookup
+      const groupMap = new Map(groups.map(g => [g.id, g]));
+
+      // Get full hierarchy path for a group
+      const getGroupPath = (group: typeof groups[0]): string[] => {
+        const path: string[] = [];
+        let current: typeof groups[0] | undefined = group;
+        while (current) {
+          path.unshift(current.name);
+          current = current.parent_id ? groupMap.get(current.parent_id) : undefined;
+        }
+        return path;
+      };
+
+      // Calculate group statistics (items count and total weight)
+      const getGroupStats = (groupId: string): { count: number; weight: number } => {
+        const items = groupItems.get(groupId) || [];
+        let weight = 0;
+        for (const item of items) {
+          const w = parseFloat(String(item.cast_unit_weight || 0));
+          if (!isNaN(w)) weight += w;
+        }
+        return { count: items.length, weight };
+      };
+
+      // ============ GRUPID SHEET ============
+      const groupHeaders = ['Grupp', 'Kirjeldus', 'Detaile', 'Kaal (t)'];
+      const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
+
+      // Sort groups hierarchically (parents before children, then by sort_order)
+      const sortedGroups = [...groups].sort((a, b) => {
+        const pathA = getGroupPath(a);
+        const pathB = getGroupPath(b);
+        // Compare paths level by level
+        for (let i = 0; i < Math.min(pathA.length, pathB.length); i++) {
+          if (pathA[i] !== pathB[i]) {
+            return pathA[i].localeCompare(pathB[i], 'et');
+          }
+        }
+        return pathA.length - pathB.length;
+      });
 
       for (let i = 0; i < sortedGroups.length; i++) {
         const group = sortedGroups[i];
         const colorHex = rgbToHexRaw(group.color);
+        const textColor = getContrastTextColor(group.color);
+        const stats = getGroupStats(group.id);
 
-        // Create styled cells with background color if group has color
-        const rowStyle = colorHex ? {
-          fill: { fgColor: { rgb: colorHex } }
+        // Create hierarchy display with indentation
+        const indent = '  '.repeat(group.level);
+        const groupName = indent + group.name;
+
+        // Style for group name cell with color
+        const nameStyle = colorHex ? {
+          fill: { fgColor: { rgb: colorHex } },
+          font: { color: { rgb: textColor } }
         } : undefined;
 
         const row = [
-          { v: group.id, s: rowStyle },
-          { v: group.name, s: rowStyle },
-          { v: group.parent_id || '', s: rowStyle },
-          { v: group.description || '', s: rowStyle },
-          { v: group.level, s: rowStyle }
+          { v: groupName, s: nameStyle },
+          group.description || '',
+          stats.count,
+          stats.weight > 0 ? Math.round(stats.weight / 100) / 10 : ''
         ];
         groupData.push(row);
 
@@ -4576,14 +4644,14 @@ export default function OrganizerScreen({
       }
 
       const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-      wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 6 }];
+      wsGroups['!cols'] = [{ wch: 40 }, { wch: 40 }, { wch: 10 }, { wch: 12 }];
       XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
-      // ============ ELEMENDID SHEET ============
-      setGroupsImportProgress({ phase: 'Töötlen elemente...', current: 0, total: 100, percent: 35 });
+      // ============ DETAILID SHEET ============
+      setGroupsImportProgress({ phase: 'Töötlen detaile...', current: 0, total: 100, percent: 35 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      const itemHeaders = ['Grupi_ID', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'Lisatud', 'Lisaja'];
+      const itemHeaders = ['Grupp', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'GUID_IFC', 'GUID_MS', 'Lisatud', 'Lisaja'];
       const itemData: any[][] = [itemHeaders.map(h => ({ v: h, s: headerStyle }))];
 
       let totalItems = 0;
@@ -4592,27 +4660,27 @@ export default function OrganizerScreen({
       for (const group of sortedGroups) {
         const items = groupItems.get(group.id) || [];
         for (const item of items) {
-          allItemsFlat.push({ groupId: group.id, item });
+          allItemsFlat.push({ groupName: group.name, item });
           totalItems++;
         }
       }
 
       for (let i = 0; i < allItemsFlat.length; i++) {
-        const { groupId, item } = allItemsFlat[i];
+        const { groupName, item } = allItemsFlat[i];
         const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
         const addedDate = item.added_at
           ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
           : '';
 
         itemData.push([
-          groupId,
-          item.guid_ifc || '',
-          guidMs,
+          groupName,
           item.assembly_mark || '',
           item.product_name || '',
           item.cast_unit_weight || '',
           item.cast_unit_position_code || '',
           item.notes || '',
+          item.guid_ifc || '',
+          guidMs,
           addedDate,
           item.added_by || ''
         ]);
@@ -4620,7 +4688,7 @@ export default function OrganizerScreen({
         if (i % 100 === 0) {
           const percent = 35 + Math.round((i / allItemsFlat.length) * 55);
           setGroupsImportProgress({
-            phase: `Töötlen elemente... (${i}/${allItemsFlat.length})`,
+            phase: `Töötlen detaile... (${i}/${allItemsFlat.length})`,
             current: i,
             total: allItemsFlat.length,
             percent
@@ -4630,40 +4698,34 @@ export default function OrganizerScreen({
       }
 
       const wsItems = XLSX.utils.aoa_to_sheet(itemData);
-      wsItems['!cols'] = [{ wch: 38 }, { wch: 24 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 18 }, { wch: 25 }];
-      XLSX.utils.book_append_sheet(wb, wsItems, 'Elemendid');
+      wsItems['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 24 }, { wch: 38 }, { wch: 18 }, { wch: 25 }];
+      XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
 
       // ============ JUHEND SHEET ============
       setGroupsImportProgress({ phase: 'Loon faili...', current: 90, total: 100, percent: 92 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
       const guideData = [
-        ['GRUPPIDE IMPORT/EKSPORT JUHEND'],
+        ['GRUPPIDE EKSPORT'],
         [''],
         ['GRUPID leht:'],
-        ['- Grupi_ID: Unikaalne grupi tunnus (impordi puhul genereeritakse uus)'],
-        ['- Grupi_nimi: Grupi nimi (kohustuslik)'],
-        ['- Ülemgrupi_ID: Viide ülemgrupile (tühi = peagrupp)'],
-        ['- Kirjeldus: Grupi kirjeldus (valikuline)'],
-        ['- Tase: 0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp'],
-        ['- Grupi värv on näidatud rea taustavärviga'],
+        ['- Grupp: Grupi nimi (taandega hierarhia näitamiseks)'],
+        ['- Kirjeldus: Grupi kirjeldus'],
+        ['- Detaile: Grupis olevate detailide arv'],
+        ['- Kaal (t): Grupi detailide kogukaal tonnides'],
+        ['- Grupi värv on näidatud grupi nime lahtri taustavärviga'],
         [''],
-        ['ELEMENDID leht:'],
-        ['- Grupi_ID: Grupi tunnus kuhu element lisada'],
-        ['- GUID_IFC: 22-kohaline IFC GUID (kohustuslik)'],
-        ['- GUID_MS: 36-kohaline MS GUID (valikuline, arvutatakse automaatselt)'],
+        ['DETAILID leht:'],
+        ['- Grupp: Grupi nimi kuhu detail kuulub'],
         ['- Mark: Assembly mark'],
         ['- Toode: Toote nimetus'],
-        ['- Kaal: Elemendi kaal'],
+        ['- Kaal: Detaili kaal'],
         ['- Positsioon: Positsiooni kood'],
-        ['- Märkused: Valikulised märkused'],
-        ['- Lisatud: Millal element gruppi lisati'],
-        ['- Lisaja: Kes elemendi gruppi lisas'],
-        [''],
-        ['IMPORTIMISE REEGLID:'],
-        ['- Grupid luuakse taseme järjekorras (peagrupid enne alamgruppe)'],
-        ['- Kui ülemgrupi ID-d ei leita, luuakse peagrupp'],
-        ['- Duplikaatsed GUID-id samasse gruppi ei lisata'],
+        ['- Märkused: Märkused'],
+        ['- GUID_IFC: 22-kohaline IFC GUID'],
+        ['- GUID_MS: 36-kohaline MS GUID'],
+        ['- Lisatud: Millal detail gruppi lisati'],
+        ['- Lisaja: Kes detaili gruppi lisas'],
         [''],
         ['Eksporditud:', new Date().toLocaleString('et-EE')],
         ['Kasutaja:', tcUserEmail]
@@ -4698,65 +4760,82 @@ export default function OrganizerScreen({
       alignment: { horizontal: 'center', vertical: 'center' }
     };
 
-    // GRUPID sheet with sample data
-    const groupHeaders = ['Grupi_ID', 'Grupi_nimi', 'Ülemgrupi_ID', 'Kirjeldus', 'Tase'];
-    const groupData: any[][] = [
-      groupHeaders.map(h => ({ v: h, s: headerStyle })),
-      ['grupp-1', 'Näidisgrupp 1', '', 'Esimese grupi kirjeldus', 0],
-      ['grupp-2', 'Alamgrupp 1.1', 'grupp-1', 'Alamgrupi kirjeldus', 1],
-      ['grupp-3', 'Näidisgrupp 2', '', '', 0]
-    ];
+    // Build group hierarchy map
+    const groupMap = new Map(groups.map(g => [g.id, g]));
+    const getGroupPath = (group: typeof groups[0]): string => {
+      const path: string[] = [];
+      let current: typeof groups[0] | undefined = group;
+      while (current) {
+        path.unshift(current.name);
+        current = current.parent_id ? groupMap.get(current.parent_id) : undefined;
+      }
+      return path.join(' > ');
+    };
+
+    // GRUPID sheet - existing groups with hierarchy info
+    const groupHeaders = ['Grupp', 'Ülemgrupp', 'Kirjeldus'];
+    const groupData: any[][] = [groupHeaders.map(h => ({ v: h, s: headerStyle }))];
+
+    // Sort groups hierarchically
+    const sortedGroups = [...groups].sort((a, b) => {
+      const pathA = getGroupPath(a);
+      const pathB = getGroupPath(b);
+      return pathA.localeCompare(pathB, 'et');
+    });
+
+    for (const group of sortedGroups) {
+      const parent = group.parent_id ? groupMap.get(group.parent_id) : null;
+      groupData.push([
+        group.name,
+        parent ? parent.name : '',
+        group.description || ''
+      ]);
+    }
 
     const wsGroups = XLSX.utils.aoa_to_sheet(groupData);
-    wsGroups['!cols'] = [{ wch: 38 }, { wch: 30 }, { wch: 38 }, { wch: 40 }, { wch: 6 }];
+    wsGroups['!cols'] = [{ wch: 30 }, { wch: 30 }, { wch: 40 }];
     XLSX.utils.book_append_sheet(wb, wsGroups, 'Grupid');
 
-    // ELEMENDID sheet with sample data
-    const itemHeaders = ['Grupi_ID', 'GUID_IFC', 'GUID_MS', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused'];
+    // DETAILID sheet - only group and GUIDs (properties read from model)
+    const itemHeaders = ['Grupp', 'GUID_IFC', 'GUID_MS'];
     const itemData: any[][] = [
       itemHeaders.map(h => ({ v: h, s: headerStyle })),
-      ['grupp-1', '2O2Fr$t4X7Zf8NOew3FLOH', '', 'W-101', 'Seinaelement', '1500.5', 'A1', 'Näidismärkus'],
-      ['grupp-2', '1ABCd$e4F7Gh8IJkl3MNOP', '', 'W-102', 'Seinaelement', '1200.0', 'A2', '']
+      ['', '', '']
     ];
 
     const wsItems = XLSX.utils.aoa_to_sheet(itemData);
-    wsItems['!cols'] = [{ wch: 38 }, { wch: 24 }, { wch: 38 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }];
-    XLSX.utils.book_append_sheet(wb, wsItems, 'Elemendid');
+    wsItems['!cols'] = [{ wch: 30 }, { wch: 24 }, { wch: 38 }];
+    XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
 
     // JUHEND sheet
     const guideData = [
-      ['GRUPPIDE IMPORT/EKSPORT JUHEND'],
+      ['DETAILIDE IMPORT JUHEND'],
       [''],
-      ['GRUPID leht:'],
-      ['- Grupi_ID: Unikaalne grupi tunnus (võib olla ükskõik mis tekst, nt "grupp-1")'],
-      ['- Grupi_nimi: Grupi nimi (kohustuslik)'],
-      ['- Ülemgrupi_ID: Viide ülemgrupile (tühi = peagrupp, viitab teise grupi ID-le)'],
-      ['- Kirjeldus: Grupi kirjeldus (valikuline)'],
-      ['- Tase: 0=peagrupp, 1=alamgrupp, 2=alam-alamgrupp (arvutatakse automaatselt)'],
+      ['GRUPID leht (ainult info):'],
+      ['- Sisaldab olemasolevaid gruppe'],
+      ['- Grupp: Grupi nimi'],
+      ['- Ülemgrupp: Ülemgrupi nimi (tühi = peagrupp)'],
+      ['- Kasuta neid nimesid Detailid lehel'],
       [''],
-      ['ELEMENDID leht:'],
-      ['- Grupi_ID: Grupi tunnus kuhu element lisada (peab vastama Grupid lehe ID-le)'],
-      ['- GUID_IFC: 22-kohaline IFC GUID (kohustuslik)'],
-      ['- GUID_MS: 36-kohaline MS GUID (valikuline - kui on olemas, teisendatakse IFC formaati)'],
-      ['- Mark: Assembly mark (valikuline)'],
-      ['- Toode: Toote nimetus (valikuline)'],
-      ['- Kaal: Elemendi kaal (valikuline)'],
-      ['- Positsioon: Positsiooni kood (valikuline)'],
-      ['- Märkused: Valikulised märkused'],
+      ['DETAILID leht:'],
+      ['- Grupp: Grupi nimi kuhu detail lisada'],
+      ['  * Kui gruppi ei ole olemas, luuakse automaatselt'],
+      ['  * Hierarhia: "Ülemgrupp > Alamgrupp > Alamalamgrupp"'],
+      ['- GUID_IFC: 22-kohaline IFC GUID'],
+      ['- GUID_MS: 36-kohaline MS GUID (teisendatakse automaatselt)'],
       [''],
-      ['IMPORTIMISE REEGLID:'],
-      ['- Grupid luuakse taseme järjekorras (peagrupid enne alamgruppe)'],
-      ['- Kui ülemgrupi ID-d ei leita, luuakse peagrupp'],
-      ['- Duplikaatsed GUID-id samasse gruppi ei lisata'],
-      ['- GUID_MS teisendatakse automaatselt GUID_IFC-ks kui GUID_IFC puudub'],
-      ['- Grupi värvi saab määrata pärast importimist läbi rakenduse']
+      ['NB! Mark, Toode, Kaal jm loetakse mudelist automaatselt.'],
+      [''],
+      ['NÄITED:'],
+      ['Grupp: "Seinad" - lisab peagruppi "Seinad"'],
+      ['Grupp: "Seinad > 1. korrus" - lisab alamgruppi "1. korrus"'],
     ];
 
     const wsGuide = XLSX.utils.aoa_to_sheet(guideData);
-    wsGuide['!cols'] = [{ wch: 80 }];
+    wsGuide['!cols'] = [{ wch: 60 }];
     XLSX.utils.book_append_sheet(wb, wsGuide, 'Juhend');
 
-    XLSX.writeFile(wb, 'grupid_import_mall.xlsx');
+    XLSX.writeFile(wb, 'detailid_import_mall.xlsx');
     showToast('Mall alla laetud');
   };
 
@@ -4772,92 +4851,68 @@ export default function OrganizerScreen({
       const errors: string[] = [];
       const warnings: string[] = [];
 
-      // Check for required sheets
-      if (!workbook.SheetNames.includes('Grupid')) {
-        errors.push('Failis puudub "Grupid" leht');
-      }
-      if (!workbook.SheetNames.includes('Elemendid')) {
-        errors.push('Failis puudub "Elemendid" leht');
-      }
+      // Check for required sheet (accept both Detailid and Elemendid for backwards compat)
+      const detailsSheetName = workbook.SheetNames.includes('Detailid') ? 'Detailid' :
+        workbook.SheetNames.includes('Elemendid') ? 'Elemendid' : null;
 
-      if (errors.length > 0) {
+      if (!detailsSheetName) {
+        errors.push('Failis puudub "Detailid" leht');
         setGroupsImportPreview({ groupCount: 0, itemCount: 0, errors, warnings });
         return;
       }
 
-      // Parse Grupid sheet
-      const groupsSheet = workbook.Sheets['Grupid'];
-      const groupsData = XLSX.utils.sheet_to_json<any>(groupsSheet, { header: 1 });
-
-      // Skip header row
-      const groupRows = groupsData.slice(1).filter((row: any[]) => row && row.length > 0 && row[0]);
-      const groupIds = new Set<string>();
-
-      for (let i = 0; i < groupRows.length; i++) {
-        const row = groupRows[i] as any[];
-        const groupId = String(row[0] || '').trim();
-        const groupName = String(row[1] || '').trim();
-        const parentId = String(row[2] || '').trim();
-
-        if (!groupId) {
-          errors.push(`Grupid rida ${i + 2}: puudub Grupi_ID`);
-        } else if (groupIds.has(groupId)) {
-          errors.push(`Grupid rida ${i + 2}: duplikaat Grupi_ID "${groupId}"`);
-        } else {
-          groupIds.add(groupId);
-        }
-
-        if (!groupName) {
-          errors.push(`Grupid rida ${i + 2}: puudub Grupi_nimi`);
-        }
-
-        if (parentId && !groupIds.has(parentId)) {
-          // Check if parent exists later in the file
-          const parentExists = groupRows.some((r: any[]) => String(r[0] || '').trim() === parentId);
-          if (!parentExists) {
-            errors.push(`Grupid rida ${i + 2}: ülemgruppi "${parentId}" ei leitud`);
-          }
-        }
-      }
-
-      // Parse Elemendid sheet
-      const itemsSheet = workbook.Sheets['Elemendid'];
+      // Parse Detailid sheet
+      const itemsSheet = workbook.Sheets[detailsSheetName];
       const itemsData = XLSX.utils.sheet_to_json<any>(itemsSheet, { header: 1 });
 
-      const itemRows = itemsData.slice(1).filter((row: any[]) => row && row.length > 0 && (row[0] || row[1]));
+      const itemRows = itemsData.slice(1).filter((row: any[]) => row && row.length > 0 && (row[0] || row[1] || row[2]));
       let validItems = 0;
+      const newGroupNames = new Set<string>();
+
+      // Get existing group names for checking
+      const existingGroupNames = new Set(groups.map(g => g.name.toLowerCase()));
 
       for (let i = 0; i < itemRows.length; i++) {
         const row = itemRows[i] as any[];
-        const groupId = String(row[0] || '').trim();
+        const groupPath = String(row[0] || '').trim();
         const guidIfc = String(row[1] || '').trim();
         const guidMs = String(row[2] || '').trim();
 
-        if (!groupId) {
-          warnings.push(`Elemendid rida ${i + 2}: puudub Grupi_ID`);
-          continue;
-        }
-
-        if (!groupIds.has(groupId)) {
-          warnings.push(`Elemendid rida ${i + 2}: gruppi "${groupId}" ei leitud`);
+        if (!groupPath) {
+          warnings.push(`Rida ${i + 2}: puudub grupi nimi`);
           continue;
         }
 
         // Check GUID format
         if (!guidIfc && !guidMs) {
-          errors.push(`Elemendid rida ${i + 2}: puudub GUID_IFC ja GUID_MS`);
+          errors.push(`Rida ${i + 2}: puudub GUID_IFC ja GUID_MS`);
           continue;
         }
 
         if (guidIfc && !/^[0-9A-Za-z_$]{22}$/.test(guidIfc)) {
-          warnings.push(`Elemendid rida ${i + 2}: vigane GUID_IFC formaat`);
+          warnings.push(`Rida ${i + 2}: vigane GUID_IFC formaat`);
+        }
+
+        // Track new groups that will be created
+        const groupParts = groupPath.split('>').map(s => s.trim()).filter(Boolean);
+        for (let j = 0; j < groupParts.length; j++) {
+          const partialPath = groupParts.slice(0, j + 1).join(' > ');
+          const partialPathLower = partialPath.toLowerCase();
+          if (!existingGroupNames.has(partialPathLower)) {
+            newGroupNames.add(partialPath);
+            existingGroupNames.add(partialPathLower); // Avoid counting same group twice
+          }
         }
 
         validItems++;
       }
 
+      if (newGroupNames.size > 0) {
+        warnings.push(`Luuakse ${newGroupNames.size} uut gruppi`);
+      }
+
       setGroupsImportPreview({
-        groupCount: groupRows.length,
+        groupCount: newGroupNames.size,
         itemCount: validItems,
         errors,
         warnings
@@ -4874,7 +4929,7 @@ export default function OrganizerScreen({
     }
   };
 
-  // Import groups from Excel file
+  // Import items from Excel file (groups auto-created if needed)
   const importAllGroups = async () => {
     if (!groupsImportFile || !groupsImportPreview || groupsImportPreview.errors.length > 0) {
       return;
@@ -4887,146 +4942,123 @@ export default function OrganizerScreen({
       const arrayBuffer = await groupsImportFile.arrayBuffer();
       const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
-      // Parse Grupid sheet
-      const groupsSheet = workbook.Sheets['Grupid'];
-      const groupsData = XLSX.utils.sheet_to_json<any>(groupsSheet, { header: 1 });
-      const groupRows = groupsData.slice(1).filter((row: any[]) => row && row.length > 0 && row[0]);
+      // Find Detailid or Elemendid sheet
+      const detailsSheetName = workbook.SheetNames.includes('Detailid') ? 'Detailid' :
+        workbook.SheetNames.includes('Elemendid') ? 'Elemendid' : null;
 
-      // Parse Elemendid sheet
-      const itemsSheet = workbook.Sheets['Elemendid'];
+      if (!detailsSheetName) {
+        throw new Error('Failis puudub "Detailid" leht');
+      }
+
+      const itemsSheet = workbook.Sheets[detailsSheetName];
       const itemsData = XLSX.utils.sheet_to_json<any>(itemsSheet, { header: 1 });
-      const itemRows = itemsData.slice(1).filter((row: any[]) => row && row.length > 0 && (row[0] || row[1]));
+      const itemRows = itemsData.slice(1).filter((row: any[]) => row && row.length > 0 && (row[0] || row[1] || row[2]));
 
-      const totalGroups = groupRows.length;
       const totalItems = itemRows.length;
-      let processedGroups = 0;
       let processedItems = 0;
       let skippedItems = 0;
+      let createdGroups = 0;
 
-      // Phase 1: Create groups
+      // Build existing groups lookup by name (case-insensitive)
+      const existingGroupsByName = new Map<string, typeof groups[0]>();
+      for (const g of groups) {
+        existingGroupsByName.set(g.name.toLowerCase(), g);
+      }
+
+      // Map to track groups created during this import (path -> id)
+      const createdGroupIds = new Map<string, string>();
+
+      // Helper to find or create group by path (e.g., "Seinad > 1. korrus")
+      const findOrCreateGroup = async (groupPath: string): Promise<string | null> => {
+        const parts = groupPath.split('>').map(s => s.trim()).filter(Boolean);
+        if (parts.length === 0) return null;
+
+        let parentId: string | null = null;
+        let currentPath = '';
+
+        for (let i = 0; i < parts.length; i++) {
+          const name = parts[i];
+          currentPath = i === 0 ? name : currentPath + ' > ' + name;
+
+          // Check if already created in this import
+          if (createdGroupIds.has(currentPath.toLowerCase())) {
+            parentId = createdGroupIds.get(currentPath.toLowerCase())!;
+            continue;
+          }
+
+          // Check if exists in database
+          const existing = existingGroupsByName.get(name.toLowerCase());
+          if (existing && (
+            (parentId === null && existing.parent_id === null) ||
+            (parentId !== null && existing.parent_id === parentId)
+          )) {
+            parentId = existing.id;
+            createdGroupIds.set(currentPath.toLowerCase(), existing.id);
+            continue;
+          }
+
+          // Need to create the group
+          const newId = generateUUID();
+          const level = Math.min(i, 2);
+
+          const groupToInsert = {
+            id: newId,
+            trimble_project_id: projectId,
+            name: name,
+            description: null,
+            parent_id: parentId,
+            is_private: false,
+            allowed_users: [],
+            display_properties: [],
+            custom_fields: [],
+            assembly_selection_on: true,
+            unique_items: false,
+            color: null,
+            is_locked: false,
+            locked_by: null,
+            locked_at: null,
+            created_by: tcUserEmail,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            updated_by: tcUserEmail,
+            sort_order: 0,
+            level: level,
+            default_permissions: DEFAULT_GROUP_PERMISSIONS,
+            user_permissions: {}
+          };
+
+          const { error } = await supabase.from('organizer_groups').insert(groupToInsert);
+          if (error) {
+            console.error('Error creating group:', error);
+            throw new Error(`Viga grupi "${name}" loomisel: ${error.message}`);
+          }
+
+          createdGroupIds.set(currentPath.toLowerCase(), newId);
+          existingGroupsByName.set(name.toLowerCase(), groupToInsert as any);
+          parentId = newId;
+          createdGroups++;
+        }
+
+        return parentId;
+      };
+
       setGroupsImportProgress({
-        phase: 'Loon gruppe...',
+        phase: 'Töötlen detaile...',
         current: 0,
-        total: totalGroups,
+        total: totalItems,
         percent: 0
       });
 
-      // Map old IDs to new IDs
-      const idMapping = new Map<string, string>();
-
-      // Sort groups by level (or by parent presence)
-      const sortedGroupRows = [...groupRows].sort((a: any[], b: any[]) => {
-        const aParent = String(a[2] || '').trim();
-        const bParent = String(b[2] || '').trim();
-        if (!aParent && bParent) return -1;
-        if (aParent && !bParent) return 1;
-        return 0;
-      });
-
-      // Process groups
-      for (let i = 0; i < sortedGroupRows.length; i++) {
-        const row = sortedGroupRows[i] as any[];
-        const oldId = String(row[0] || '').trim();
-        const name = String(row[1] || '').trim();
-        const oldParentId = String(row[2] || '').trim();
-        const description = String(row[3] || '').trim();
-        // row[4] is now Tase (level) - color is shown as cell background in export, not imported
-
-        if (!oldId || !name) continue;
-
-        const newId = generateUUID();
-        idMapping.set(oldId, newId);
-
-        // Map parent_id to new ID if it exists
-        const newParentId = oldParentId ? idMapping.get(oldParentId) : null;
-
-        // Calculate level
-        let level = 0;
-        if (newParentId) {
-          const parentRow = sortedGroupRows.find((r: any[]) => idMapping.get(String(r[0] || '').trim()) === newParentId);
-          if (parentRow) {
-            const parentLevel = parseInt(String(parentRow[4] || '0')) || 0;
-            level = Math.min(parentLevel + 1, 2);
-          } else {
-            level = 1;
-          }
-        }
-
-        // Get next sort_order
-        const siblingsCount = groups.filter(g =>
-          g.parent_id === newParentId ||
-          (newParentId === null && g.parent_id === null)
-        ).length + i;
-
-        const groupToInsert = {
-          id: newId,
-          trimble_project_id: projectId,
-          name: name,
-          description: description || null,
-          parent_id: newParentId,
-          is_private: false,
-          allowed_users: [],
-          display_properties: [],
-          custom_fields: [],
-          assembly_selection_on: true,
-          unique_items: false,
-          color: null,
-          is_locked: false,
-          locked_by: null,
-          locked_at: null,
-          created_by: tcUserEmail,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          updated_by: tcUserEmail,
-          sort_order: siblingsCount,
-          level: level,
-          default_permissions: DEFAULT_GROUP_PERMISSIONS,
-          user_permissions: {}
-        };
-
-        const { error } = await supabase.from('organizer_groups').insert(groupToInsert);
-        if (error) {
-          console.error('Error inserting group:', error);
-          throw new Error(`Viga grupi "${name}" loomisel: ${error.message}`);
-        }
-
-        processedGroups++;
-
-        if (i % 10 === 0) {
-          const percent = Math.round((processedGroups / totalGroups) * 40);
-          setGroupsImportProgress({
-            phase: `Loon gruppe... (${processedGroups}/${totalGroups})`,
-            current: processedGroups,
-            total: totalGroups,
-            percent
-          });
-          await new Promise(resolve => setTimeout(resolve, 0));
-        }
-      }
-
-      // Phase 2: Add items to groups
-      setGroupsImportProgress({
-        phase: 'Lisan elemente...',
-        current: 0,
-        total: totalItems,
-        percent: 40
-      });
-
       // Group items by target group
-      const itemsByGroup = new Map<string, any[]>();
+      const itemsByGroup = new Map<string, string[]>();
 
-      for (const row of itemRows) {
-        const oldGroupId = String(row[0] || '').trim();
+      for (let i = 0; i < itemRows.length; i++) {
+        const row = itemRows[i] as any[];
+        const groupPath = String(row[0] || '').trim();
         let guidIfc = String(row[1] || '').trim();
         const guidMs = String(row[2] || '').trim();
-        const mark = String(row[3] || '').trim();
-        const product = String(row[4] || '').trim();
-        const weight = String(row[5] || '').trim();
-        const position = String(row[6] || '').trim();
-        const notes = String(row[7] || '').trim();
 
-        const newGroupId = idMapping.get(oldGroupId);
-        if (!newGroupId) {
+        if (!groupPath) {
           skippedItems++;
           continue;
         }
@@ -5041,34 +5073,58 @@ export default function OrganizerScreen({
           continue;
         }
 
-        if (!itemsByGroup.has(newGroupId)) {
-          itemsByGroup.set(newGroupId, []);
+        // Find or create group
+        const groupId = await findOrCreateGroup(groupPath);
+        if (!groupId) {
+          skippedItems++;
+          continue;
         }
 
-        itemsByGroup.get(newGroupId)!.push({
-          guid_ifc: guidIfc,
-          assembly_mark: mark || null,
-          product_name: product || null,
-          cast_unit_weight: weight || null,
-          cast_unit_position_code: position || null,
-          notes: notes || null
-        });
+        if (!itemsByGroup.has(groupId)) {
+          itemsByGroup.set(groupId, []);
+        }
+        itemsByGroup.get(groupId)!.push(guidIfc);
+
+        if (i % 50 === 0) {
+          const percent = Math.round((i / totalItems) * 50);
+          setGroupsImportProgress({
+            phase: `Töötlen detaile... (${i}/${totalItems})`,
+            current: i,
+            total: totalItems,
+            percent
+          });
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
       }
 
-      // Insert items in batches per group
+      // Phase 2: Insert items (only GUIDs - properties read from model later)
+      setGroupsImportProgress({
+        phase: 'Lisan detaile gruppidesse...',
+        current: 0,
+        total: totalItems,
+        percent: 50
+      });
+
       const itemBatchSize = BATCH_SIZE;
-      for (const [newGroupId, items] of itemsByGroup) {
-        const itemsToInsert: any[] = items.map((item, idx) => ({
+      for (const [groupId, guids] of itemsByGroup) {
+        // Get existing GUIDs in this group to avoid duplicates
+        const existingGuids = new Set(
+          (groupItems.get(groupId) || []).map(i => i.guid_ifc?.toLowerCase()).filter(Boolean)
+        );
+
+        const newGuids = guids.filter(g => !existingGuids.has(g.toLowerCase()));
+
+        const itemsToInsert: any[] = newGuids.map((guidIfc, idx) => ({
           id: generateUUID(),
-          group_id: newGroupId,
-          guid_ifc: item.guid_ifc,
-          assembly_mark: item.assembly_mark,
-          product_name: item.product_name,
-          cast_unit_weight: item.cast_unit_weight,
-          cast_unit_position_code: item.cast_unit_position_code,
+          group_id: groupId,
+          guid_ifc: guidIfc,
+          assembly_mark: null,
+          product_name: null,
+          cast_unit_weight: null,
+          cast_unit_position_code: null,
           custom_properties: {},
-          notes: item.notes,
-          sort_order: idx,
+          notes: null,
+          sort_order: existingGuids.size + idx,
           added_by: tcUserEmail,
           added_at: new Date().toISOString()
         }));
@@ -5078,10 +5134,10 @@ export default function OrganizerScreen({
           const batch = itemsToInsert.slice(i, Math.min(i + itemBatchSize, itemsToInsert.length));
 
           // Mark as local changes
-          const guids = batch.map(item => item.guid_ifc);
-          guids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+          const batchGuids = batch.map(item => item.guid_ifc);
+          batchGuids.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
           setTimeout(() => {
-            guids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+            batchGuids.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
           }, 5000);
 
           const { error } = await supabase.from('organizer_group_items').insert(batch);
@@ -5091,21 +5147,26 @@ export default function OrganizerScreen({
 
           processedItems += batch.length;
 
-          const percent = 40 + Math.round((processedItems / totalItems) * 60);
+          const percent = 50 + Math.round((processedItems / totalItems) * 50);
           setGroupsImportProgress({
-            phase: `Lisan elemente... (${processedItems}/${totalItems})`,
+            phase: `Lisan detaile... (${processedItems}/${totalItems})`,
             current: processedItems,
             total: totalItems,
             percent
           });
           await new Promise(resolve => setTimeout(resolve, 0));
         }
+
+        skippedItems += guids.length - newGuids.length; // Count duplicates as skipped
       }
 
       // Refresh data
       await refreshData();
 
-      let message = `Imporditud ${processedGroups} gruppi ja ${processedItems} elementi`;
+      let message = `Imporditud ${processedItems} detaili`;
+      if (createdGroups > 0) {
+        message += `, loodud ${createdGroups} gruppi`;
+      }
       if (skippedItems > 0) {
         message += `, ${skippedItems} vahele jäetud`;
       }
@@ -5117,7 +5178,7 @@ export default function OrganizerScreen({
       setGroupsImportProgress(null);
 
     } catch (err) {
-      console.error('Error importing groups:', err);
+      console.error('Error importing:', err);
       showToast(err instanceof Error ? err.message : 'Viga importimisel');
       setGroupsImportProgress(null);
     } finally {
@@ -6315,35 +6376,60 @@ export default function OrganizerScreen({
                   })}
                 </div>
 
-                {/* Load more button for virtualization */}
+                {/* Load more buttons for virtualization */}
                 {hasMore && (
-                  <button
-                    className="org-load-more-btn"
-                    disabled={isLoadingMore}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (hasMoreLocal) {
-                        // First, show more already-loaded items
+                  <div className="org-load-more-row">
+                    <button
+                      className="org-load-more-btn"
+                      disabled={isLoadingMore}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (hasMoreLocal) {
+                          // First, show more already-loaded items
+                          setVisibleItemCounts(prev => {
+                            const next = new Map(prev);
+                            next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                            return next;
+                          });
+                        } else if (hasMoreInDb && !isLoadingMore) {
+                          // Need to fetch more from database
+                          const currentLoaded = sortedItems.length;
+                          loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
+                          // Also increase visible count to show new items when they arrive
+                          setVisibleItemCounts(prev => {
+                            const next = new Map(prev);
+                            next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
+                            return next;
+                          });
+                        }
+                      }}
+                    >
+                      {isLoadingMore ? 'Laen...' : `Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, totalItemCount - displayItems.length)} (kokku ${totalItemCount})`}
+                    </button>
+                    <button
+                      className="org-load-more-btn org-show-all-btn"
+                      disabled={isLoadingMore}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Show all items - set visible count to total
                         setVisibleItemCounts(prev => {
                           const next = new Map(prev);
-                          next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                          next.set(node.id, totalItemCount);
                           return next;
                         });
-                      } else if (hasMoreInDb && !isLoadingMore) {
-                        // Need to fetch more from database
-                        const currentLoaded = sortedItems.length;
-                        loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
-                        // Also increase visible count to show new items when they arrive
-                        setVisibleItemCounts(prev => {
-                          const next = new Map(prev);
-                          next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
-                          return next;
-                        });
-                      }
-                    }}
-                  >
-                    {isLoadingMore ? 'Laen...' : `Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, totalItemCount - displayItems.length)} (kokku ${totalItemCount})`}
-                  </button>
+                        // Also load all from DB if needed
+                        if (hasMoreInDb && !isLoadingMore) {
+                          const currentLoaded = sortedItems.length;
+                          const remaining = totalItemCount - currentLoaded;
+                          if (remaining > 0) {
+                            loadGroupItemsPage(node.id, currentLoaded, remaining);
+                          }
+                        }
+                      }}
+                    >
+                      Näita kõike
+                    </button>
+                  </div>
                 )}
                 {/* Loading indicator when fetching items */}
                 {isLoadingMore && filteredItems.length === 0 && (
@@ -7287,9 +7373,21 @@ export default function OrganizerScreen({
           const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
           const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
+          // Get suffix for each line
+          const lineSuffixes: Record<MarkupLineConfig, string> = {
+            'line1': markupSettings.line1Suffix || '',
+            'line2': markupSettings.line2Suffix || '',
+            'line3': markupSettings.line3Suffix || '',
+            'none': ''
+          };
+
           const lineTexts = lines
             .filter(l => l.parts.length > 0)
-            .map(l => l.parts.join(inlineSeparator));
+            .map(l => {
+              const text = l.parts.join(inlineSeparator);
+              const suffix = lineSuffixes[l.line];
+              return suffix ? `${text}${suffix}` : text;
+            });
 
           return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
         };
@@ -7437,38 +7535,52 @@ export default function OrganizerScreen({
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
 
+          // Get and set suffix for this line
+          const suffixKey = `${line}Suffix` as 'line1Suffix' | 'line2Suffix' | 'line3Suffix';
+          const suffix = markupSettings[suffixKey] || '';
+
           return (
-            <div
-              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOverLine(line);
-              }}
-              onDragLeave={() => setDragOverLine(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (draggedField) {
-                  moveFieldToLine(draggedField, line);
-                }
-                setDraggedField(null);
-                setDragOverLine(null);
-              }}
-            >
-              <span className="line-label">{label}</span>
-              <div className="line-fields">
-                {fields.length > 0 ? (
-                  fields.map(f => (
-                    <FieldChip
-                      key={f.id}
-                      field={f}
-                      onRemove={() => toggleField(f.id)}
-                      isDragging={draggedField === f.id}
-                    />
-                  ))
-                ) : (
-                  <span className="line-placeholder">Lohista siia</span>
-                )}
+            <div className="markup-line-row">
+              <div
+                className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverLine(line);
+                }}
+                onDragLeave={() => setDragOverLine(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (draggedField) {
+                    moveFieldToLine(draggedField, line);
+                  }
+                  setDraggedField(null);
+                  setDragOverLine(null);
+                }}
+              >
+                <span className="line-label">{label}</span>
+                <div className="line-fields">
+                  {fields.length > 0 ? (
+                    fields.map(f => (
+                      <FieldChip
+                        key={f.id}
+                        field={f}
+                        onRemove={() => toggleField(f.id)}
+                        isDragging={draggedField === f.id}
+                      />
+                    ))
+                  ) : (
+                    <span className="line-placeholder">Lohista siia</span>
+                  )}
+                </div>
               </div>
+              <input
+                type="text"
+                className="markup-line-suffix"
+                placeholder="+ tekst"
+                value={suffix}
+                onChange={(e) => setMarkupSettings(prev => ({ ...prev, [suffixKey]: e.target.value }))}
+                title="Lisa tekst rea lõppu"
+              />
             </div>
           );
         };
@@ -7854,12 +7966,12 @@ export default function OrganizerScreen({
               </div>
 
               {/* Export/Import Groups Section */}
-              <div className="settings-section" style={{ marginTop: '16px', borderTop: '1px solid var(--modus-border)', paddingTop: '16px' }}>
-                <div style={{ marginBottom: '12px' }}>
-                  <span className="settings-title" style={{ display: 'block', marginBottom: '4px' }}>Gruppide haldus</span>
-                  <span className="settings-desc">Ekspordi või impordi kõik grupid koos elementidega</span>
+              <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <span className="settings-title">Gruppide haldus</span>
+                  <span className="settings-desc">Ekspordi või impordi kõik grupid</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '6px' }}>
                   <button
                     onClick={() => {
                       setShowSettingsModal(false);
@@ -7872,18 +7984,18 @@ export default function OrganizerScreen({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
-                      padding: '10px 16px',
+                      gap: '4px',
+                      padding: '6px 10px',
                       background: groups.length === 0 ? '#f3f4f6' : '#003F87',
                       color: groups.length === 0 ? '#9ca3af' : 'white',
                       border: 'none',
-                      borderRadius: '6px',
+                      borderRadius: '4px',
                       cursor: groups.length === 0 ? 'not-allowed' : 'pointer',
-                      fontSize: '13px',
+                      fontSize: '11px',
                       fontWeight: 500
                     }}
                   >
-                    <FiDownload size={14} /> Ekspordi grupid
+                    <FiDownload size={12} /> Ekspordi
                   </button>
                   <button
                     onClick={() => {
@@ -7896,18 +8008,18 @@ export default function OrganizerScreen({
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
-                      padding: '10px 16px',
+                      gap: '4px',
+                      padding: '6px 10px',
                       background: 'white',
                       color: '#374151',
                       border: '1px solid var(--modus-border)',
-                      borderRadius: '6px',
+                      borderRadius: '4px',
                       cursor: 'pointer',
-                      fontSize: '13px',
+                      fontSize: '11px',
                       fontWeight: 500
                     }}
                   >
-                    <FiUpload size={14} /> Impordi grupid
+                    <FiUpload size={12} /> Impordi
                   </button>
                 </div>
               </div>
