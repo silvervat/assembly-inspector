@@ -98,7 +98,8 @@ interface MarkupSettings {
   groupNameLine: MarkupLineConfig;
   includeCustomFields: string[]; // field IDs to include
   applyToSubgroups: boolean;
-  separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
+  separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe' | 'custom';
+  customSeparator: string; // when separator === 'custom'
   useGroupColors: boolean;
   // New model property fields
   includeAssemblyMark: MarkupFieldConfig;
@@ -106,6 +107,9 @@ interface MarkupSettings {
   includeProductName: MarkupFieldConfig;
   // Filter options
   onlySelectedInModel: boolean;
+  // Custom text for lines
+  linePrefix: { line1: string; line2: string; line3: string };
+  lineSuffix: { line1: string; line2: string; line3: string };
 }
 
 // Sorting options
@@ -704,11 +708,14 @@ export default function OrganizerScreen({
     includeCustomFields: [],
     applyToSubgroups: true,
     separator: 'newline',
+    customSeparator: '',
     useGroupColors: true,
     includeAssemblyMark: { enabled: true, line: 'line1' },
     includeWeight: { enabled: false, line: 'line2' },
     includeProductName: { enabled: false, line: 'line2' },
-    onlySelectedInModel: false
+    onlySelectedInModel: false,
+    linePrefix: { line1: '', line2: '', line3: '' },
+    lineSuffix: { line1: '', line2: '', line3: '' }
   };
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
@@ -3077,13 +3084,14 @@ export default function OrganizerScreen({
   // MARKUPS
   // ============================================
 
-  const getSeparator = (sep: MarkupSettings['separator']): string => {
+  const getSeparator = (sep: MarkupSettings['separator'], customSep?: string): string => {
     switch (sep) {
       case 'newline': return '\n';
       case 'comma': return ', ';
       case 'space': return ' ';
       case 'dash': return ' - ';
       case 'pipe': return ' | ';
+      case 'custom': return customSep || ' ';
       default: return '\n';
     }
   };
@@ -3181,12 +3189,18 @@ export default function OrganizerScreen({
     }
 
     // Build final text
-    const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
-    const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
+    const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator, markupSettings.customSeparator);
+    const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator, markupSettings.customSeparator);
 
     const lineTexts = lines
       .filter(l => l.parts.length > 0)
-      .map(l => l.parts.join(inlineSeparator));
+      .map(l => {
+        const lineKey = l.line as 'line1' | 'line2' | 'line3';
+        const prefix = markupSettings.linePrefix?.[lineKey] || '';
+        const suffix = markupSettings.lineSuffix?.[lineKey] || '';
+        const content = l.parts.join(inlineSeparator);
+        return `${prefix}${content}${suffix}`;
+      });
 
     if (lineTexts.length === 0) {
       // Fallback to assembly mark
@@ -6610,12 +6624,18 @@ export default function OrganizerScreen({
             }
           }
 
-          const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
-          const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
+          const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator, markupSettings.customSeparator);
+          const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator, markupSettings.customSeparator);
 
           const lineTexts = lines
             .filter(l => l.parts.length > 0)
-            .map(l => l.parts.join(inlineSeparator));
+            .map(l => {
+              const lineKey = l.line as 'line1' | 'line2' | 'line3';
+              const prefix = markupSettings.linePrefix?.[lineKey] || '';
+              const suffix = markupSettings.lineSuffix?.[lineKey] || '';
+              const content = l.parts.join(inlineSeparator);
+              return `${prefix}${content}${suffix}`;
+            });
 
           return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
         };
@@ -6758,42 +6778,67 @@ export default function OrganizerScreen({
           </div>
         );
 
-        // Render drop zone for a line
+        // Render drop zone for a line with prefix/suffix inputs
         const LineDropZone = ({ line, label }: { line: MarkupLineConfig; label: string }) => {
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
+          const lineKey = line as 'line1' | 'line2' | 'line3';
 
           return (
-            <div
-              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOverLine(line);
-              }}
-              onDragLeave={() => setDragOverLine(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (draggedField) {
-                  moveFieldToLine(draggedField, line);
-                }
-                setDraggedField(null);
-                setDragOverLine(null);
-              }}
-            >
+            <div className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}>
               <span className="line-label">{label}</span>
-              <div className="line-fields">
-                {fields.length > 0 ? (
-                  fields.map(f => (
-                    <FieldChip
-                      key={f.id}
-                      field={f}
-                      onRemove={() => toggleField(f.id)}
-                      isDragging={draggedField === f.id}
-                    />
-                  ))
-                ) : (
-                  <span className="line-placeholder">Lohista siia</span>
-                )}
+              <div className="line-content">
+                <input
+                  type="text"
+                  className="line-prefix-input"
+                  placeholder="Ees..."
+                  value={markupSettings.linePrefix?.[lineKey] || ''}
+                  onChange={(e) => setMarkupSettings(prev => ({
+                    ...prev,
+                    linePrefix: { ...prev.linePrefix, [lineKey]: e.target.value }
+                  }))}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div
+                  className="line-fields"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverLine(line);
+                  }}
+                  onDragLeave={() => setDragOverLine(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (draggedField) {
+                      moveFieldToLine(draggedField, line);
+                    }
+                    setDraggedField(null);
+                    setDragOverLine(null);
+                  }}
+                >
+                  {fields.length > 0 ? (
+                    fields.map(f => (
+                      <FieldChip
+                        key={f.id}
+                        field={f}
+                        onRemove={() => toggleField(f.id)}
+                        isDragging={draggedField === f.id}
+                      />
+                    ))
+                  ) : (
+                    <span className="line-placeholder">Lohista siia</span>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  className="line-suffix-input"
+                  placeholder="Taga..."
+                  value={markupSettings.lineSuffix?.[lineKey] || ''}
+                  onChange={(e) => setMarkupSettings(prev => ({
+                    ...prev,
+                    lineSuffix: { ...prev.lineSuffix, [lineKey]: e.target.value }
+                  }))}
+                  onClick={(e) => e.stopPropagation()}
+                />
               </div>
             </div>
           );
@@ -6933,6 +6978,19 @@ export default function OrganizerScreen({
                         {opt.label}
                       </button>
                     ))}
+                    <input
+                      type="text"
+                      className={`separator-custom-input ${markupSettings.separator === 'custom' ? 'active' : ''}`}
+                      placeholder="Oma..."
+                      value={markupSettings.customSeparator}
+                      onChange={(e) => setMarkupSettings(prev => ({
+                        ...prev,
+                        separator: 'custom',
+                        customSeparator: e.target.value
+                      }))}
+                      onFocus={() => setMarkupSettings(prev => ({ ...prev, separator: 'custom' }))}
+                      title="Kirjuta oma eraldaja"
+                    />
                   </div>
                 </div>
 

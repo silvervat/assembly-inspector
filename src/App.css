@@ -12443,6 +12443,14 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
+.line-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
 .line-fields {
   display: flex;
   flex-wrap: wrap;
@@ -12450,6 +12458,40 @@ button.stat-toggle.off:hover {
   flex: 1;
   min-height: 26px;
   align-items: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #f9fafb;
+  border: 1px dashed transparent;
+}
+
+.markup-line-zone.drag-over .line-fields {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.line-prefix-input,
+.line-suffix-input {
+  width: 50px;
+  padding: 4px 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 10px;
+  color: #374151;
+  background: white;
+  flex-shrink: 0;
+}
+
+.line-prefix-input:focus,
+.line-suffix-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+}
+
+.line-prefix-input::placeholder,
+.line-suffix-input::placeholder {
+  color: #d1d5db;
+  font-style: italic;
 }
 
 .line-placeholder {
@@ -12595,6 +12637,31 @@ button.stat-toggle.off:hover {
   background: white;
   color: #1f2937;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.separator-custom-input {
+  width: 45px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #6b7280;
+  font-size: 10px;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+}
+
+.separator-custom-input:focus,
+.separator-custom-input.active {
+  outline: none;
+  background: white;
+  border-color: #e5e7eb;
+  color: #1f2937;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.separator-custom-input::placeholder {
+  color: #9ca3af;
 }
 
 /* Preview */
