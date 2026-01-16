@@ -5711,15 +5711,33 @@ export default function OrganizerScreen({
 
     const filteredItems = filterItems(items, node);
 
-    // Check if this group or any children have matching items (for search filtering)
-    const hasMatchingChildren = hasChildren && node.children.some(child => {
-      const childItems = groupItems.get(child.id) || [];
-      const childFiltered = filterItems(childItems, child);
-      return childFiltered.length > 0 || child.children.length > 0;
-    });
+    // Check if this group name matches search query
+    const q = searchQuery.toLowerCase();
+    const groupNameMatches = searchQuery && (
+      node.name.toLowerCase().includes(q) ||
+      (node.description && node.description.toLowerCase().includes(q))
+    );
 
-    // Hide groups with no results during search (unless they have matching children)
-    if (searchQuery && filteredItems.length === 0 && !hasMatchingChildren) {
+    // Check if this group or any children have matching items or names (for search filtering)
+    const checkChildrenMatch = (children: typeof node.children): boolean => {
+      for (const child of children) {
+        // Check if child name matches
+        if (child.name.toLowerCase().includes(q) || (child.description && child.description.toLowerCase().includes(q))) {
+          return true;
+        }
+        // Check if child has matching items
+        const childItems = groupItems.get(child.id) || [];
+        const childFiltered = filterItems(childItems, child);
+        if (childFiltered.length > 0) return true;
+        // Check grandchildren recursively
+        if (child.children.length > 0 && checkChildrenMatch(child.children)) return true;
+      }
+      return false;
+    };
+    const hasMatchingChildren = hasChildren && checkChildrenMatch(node.children);
+
+    // Hide groups with no results during search (unless group name matches or has matching children)
+    if (searchQuery && filteredItems.length === 0 && !groupNameMatches && !hasMatchingChildren) {
       return null;
     }
     const hasSelectedItems = filteredItems.some(item => selectedItemIds.has(item.id));
