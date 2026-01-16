@@ -1721,17 +1721,35 @@ export default function OrganizerScreen({
 
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
-        // If only a single group is colored, only recolor that group (if it's the one being changed)
-        // If all groups are colored, recolor all groups
+        // If only a single group is being colored, check if we should recolor
         if (coloredSingleGroupId) {
-          // Check if the changed group is the colored one or its descendant
-          const subtreeIds = new Set(getGroupSubtreeIds(coloredSingleGroupId));
-          if (subtreeIds.has(groupId)) {
-            setTimeout(() => colorModelByGroups(coloredSingleGroupId), 150);
+          const subtreeCheck = new Set(getGroupSubtreeIds(coloredSingleGroupId));
+          if (!subtreeCheck.has(groupId)) {
+            // Changing a different group's color - don't recolor
+            return;
           }
-          // If changing a different group's color, don't recolor at all
-        } else {
-          setTimeout(() => colorModelByGroups(), 150);
+        }
+
+        // Directly recolor this group's items with the new color (avoids stale closure issue)
+        const items = groupItems.get(groupId) || [];
+        const guids = items.map(item => item.guid_ifc).filter(Boolean) as string[];
+
+        // Also get items from all subgroups if they don't have their own color
+        const subtreeIds = getGroupSubtreeIds(groupId);
+        for (const subId of subtreeIds) {
+          if (subId === groupId) continue;
+          const subGroup = groups.find(g => g.id === subId);
+          // Only include subgroup items if the subgroup doesn't have its own color
+          if (subGroup && !subGroup.color) {
+            const subItems = groupItems.get(subId) || [];
+            for (const item of subItems) {
+              if (item.guid_ifc) guids.push(item.guid_ifc);
+            }
+          }
+        }
+
+        if (guids.length > 0) {
+          colorItemsDirectly(guids, color);
         }
       }
     } catch (e) {
