@@ -11512,7 +11512,7 @@ button.stat-toggle.off:hover {
   border: 1px solid #3b82f6;
   border-radius: 6px;
   pointer-events: none;
-  z-index: 1; /* Just above content but below navigation */
+  z-index: 15; /* Above sticky headers (10,9,8,7) but below menus (100+) */
 }
 
 /* Group header */

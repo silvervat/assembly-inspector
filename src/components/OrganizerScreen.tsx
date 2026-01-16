@@ -7549,11 +7549,11 @@ export default function OrganizerScreen({
           });
         };
 
-        // Render field chip with suffix input
-        const FieldChip = ({ field, onRemove, isDragging, showSuffix = false }: { field: MarkupFieldDef; onRemove?: () => void; isDragging?: boolean; showSuffix?: boolean }) => {
+        // Helper to render inline field chip with suffix
+        const renderFieldChip = (field: MarkupFieldDef, onRemove?: () => void, isDragging?: boolean, showSuffix = false) => {
           const suffix = getFieldSuffix(field.id);
           return (
-            <div className="markup-field-with-suffix">
+            <div key={field.id} className="markup-field-with-suffix">
               <div
                 className={`markup-field-chip ${isDragging ? 'dragging' : ''}`}
                 draggable
@@ -7586,6 +7586,7 @@ export default function OrganizerScreen({
                   value={suffix}
                   onChange={(e) => setFieldSuffix(field.id, e.target.value)}
                   onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
                   title="Lisa tekst välja järele"
                 />
               )}
@@ -7593,13 +7594,14 @@ export default function OrganizerScreen({
           );
         };
 
-        // Render drop zone for a line
-        const LineDropZone = ({ line, label }: { line: MarkupLineConfig; label: string }) => {
+        // Helper to render inline drop zone for a line
+        const renderLineDropZone = (line: MarkupLineConfig, label: string) => {
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
 
           return (
             <div
+              key={line}
               className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -7618,15 +7620,7 @@ export default function OrganizerScreen({
               <span className="line-label">{label}</span>
               <div className="line-fields">
                 {fields.length > 0 ? (
-                  fields.map(f => (
-                    <FieldChip
-                      key={f.id}
-                      field={f}
-                      onRemove={() => toggleField(f.id)}
-                      isDragging={draggedField === f.id}
-                      showSuffix={true}
-                    />
-                  ))
+                  fields.map(f => renderFieldChip(f, () => toggleField(f.id), draggedField === f.id, true))
                 ) : (
                   <span className="line-placeholder">Lohista siia</span>
                 )}
@@ -7700,9 +7694,9 @@ export default function OrganizerScreen({
 
                   {/* Lines */}
                   <div className="markup-lines">
-                    <LineDropZone line="line1" label="Rida 1" />
-                    <LineDropZone line="line2" label="Rida 2" />
-                    <LineDropZone line="line3" label="Rida 3" />
+                    {renderLineDropZone('line1', 'Rida 1')}
+                    {renderLineDropZone('line2', 'Rida 2')}
+                    {renderLineDropZone('line3', 'Rida 3')}
                   </div>
 
                   {/* Available fields */}
