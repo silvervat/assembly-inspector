@@ -21,7 +21,7 @@ import {
 } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
 import {
-  FiPlus, FiSearch, FiChevronDown, FiChevronRight,
+  FiPlus, FiMinus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
@@ -5168,60 +5168,58 @@ export default function OrganizerScreen({
             </span>
           )}
 
-          <div className="org-group-info" title={node.description ? `${node.name}\n${node.description}` : node.name}>
-            <div className="group-name">{node.name}</div>
-            {node.description && <div className="group-desc">{node.description}</div>}
+          <div className="org-group-name-section">
+            <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
+              {node.name}
+            </span>
+            {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
+            {(() => {
+              const effectiveLockInfo = getGroupLockInfo(node.id);
+              const isEffectivelyLocked = isGroupLocked(node.id);
+              const lockedByParent = isEffectivelyLocked && !node.is_locked;
+              if (!isEffectivelyLocked) return null;
+              return (
+                <span
+                  className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
+                  title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+                >
+                  <FiLock size={10} />
+                </span>
+              );
+            })()}
           </div>
 
-          {node.is_private && <FiLock size={11} className="org-lock-icon" title="Privaatne grupp" />}
-
-          {(() => {
-            const effectiveLockInfo = getGroupLockInfo(node.id);
-            const isEffectivelyLocked = isGroupLocked(node.id);
-            const lockedByParent = isEffectivelyLocked && !node.is_locked;
-            if (!isEffectivelyLocked) return null;
-            return (
-              <span
-                className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
-                title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
-              >
-                <FiLock size={11} />
-              </span>
-            );
-          })()}
-
-          <span className="org-group-count">
-            {searchQuery && filteredItems.length !== node.itemCount
-              ? <><span className="search-match">{filteredItems.length}</span>/{node.itemCount} tk</>
-              : <>{node.itemCount} tk</>
-            }
-          </span>
-          <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
-
-          {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
-            <>
-              {newItemsCount > 0 && (
-                <button
-                  className="org-quick-add-btn"
-                  onClick={(e) => { e.stopPropagation(); addSelectedToGroup(node.id); }}
-                  title={`Lisa ${newItemsCount} uut detaili`}
-                >
-                  <FiPlus size={12} />
-                  <span>{newItemsCount}</span>
-                </button>
-              )}
-              {existingItemsCount > 0 && (
-                <button
-                  className="org-quick-add-btn org-quick-remove-btn"
-                  onClick={(e) => { e.stopPropagation(); removeItemsFromGroup(getSelectedItemIdsInGroup(node.id)); }}
-                  title={`Eemalda ${existingItemsCount} detaili`}
-                >
-                  <FiX size={12} />
-                  <span>{existingItemsCount}</span>
-                </button>
-              )}
-            </>
-          )}
+          <div className="org-group-stats">
+            <span className="org-group-count">
+              {searchQuery && filteredItems.length !== node.itemCount
+                ? <><span className="search-match">{filteredItems.length}</span>/{node.itemCount} tk</>
+                : <>{node.itemCount} tk</>
+              }
+            </span>
+            <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
+            {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
+              <>
+                {newItemsCount > 0 && (
+                  <button
+                    className="org-quick-add-btn"
+                    onClick={(e) => { e.stopPropagation(); addSelectedToGroup(node.id); }}
+                    title={`Lisa ${newItemsCount} uut detaili`}
+                  >
+                    <FiPlus size={11} /> {newItemsCount}
+                  </button>
+                )}
+                {existingItemsCount > 0 && (
+                  <button
+                    className="org-quick-add-btn remove"
+                    onClick={(e) => { e.stopPropagation(); removeItemsFromGroup(getSelectedItemIdsInGroup(node.id)); }}
+                    title={`Eemalda ${existingItemsCount} detaili`}
+                  >
+                    <FiMinus size={11} /> {existingItemsCount}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
 
           <button
             className={`org-menu-btn ${groupMenuId === node.id ? 'active' : ''}`}
