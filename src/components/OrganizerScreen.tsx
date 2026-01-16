@@ -5101,7 +5101,7 @@ export default function OrganizerScreen({
       <div key={node.id} className={`org-group-section ${hasSelectedItems ? 'has-selected' : ''} ${isExpanded && depth === 0 ? 'expanded-root' : ''} ${isBeingDragged ? 'dragging' : ''}`}>
         <div
           className={`org-group-header ${isSelected ? 'selected' : ''} ${isDragOver ? 'drag-over' : ''} ${isDragOverAsParent ? 'drag-over-as-parent' : ''} ${hasModelSelectedItems ? 'has-model-selected' : ''} ${groupMenuId === node.id ? 'menu-open' : ''}`}
-          style={{ paddingLeft: `${8 + depth * 10}px` }}
+          style={{ paddingLeft: `${4 + depth * 8}px` }}
           draggable={!isEffectivelyLocked}
           onClick={(e) => handleGroupClick(e, node.id)}
           onDragStart={(e) => {
@@ -5139,14 +5139,6 @@ export default function OrganizerScreen({
             {isExpanded ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
           </button>
 
-          {!isEffectivelyLocked && (
-            <span
-              className="org-group-drag-handle"
-              title="Lohista teise grupi peale, et muuta alamgrupiks"
-            >
-              <FiMove size={11} />
-            </span>
-          )}
 
           {node.color && (
             <span
