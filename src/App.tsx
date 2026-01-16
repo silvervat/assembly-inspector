@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.580';
+export const APP_VERSION = '3.0.582';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -774,8 +774,8 @@ export default function App() {
     </div>
   );
 
-  // Color white progress overlay - centered floating message
-  const ColorWhiteOverlay = () => {
+  // Color white progress overlay - centered floating message (memoized to prevent re-render flicker)
+  const ColorWhiteOverlay = useMemo(() => {
     if (!colorWhiteProgress) return null;
 
     return (
@@ -792,7 +792,7 @@ export default function App() {
         </div>
       </div>
     );
-  };
+  }, [colorWhiteProgress]);
 
   const NavigationOverlay = () => {
     if (!isNavigating && !navigationStatus) return null;
@@ -893,7 +893,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <MainMenu
           user={user}
           userInitials={getUserInitials(tcUser)}
@@ -913,7 +913,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <AdminScreen
           api={api}
           onBackToMenu={handleBackToMenu}
@@ -933,7 +933,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <InspectionPlanScreen
           api={api}
           projectId={projectId}
@@ -954,7 +954,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <InstallationsScreen
           api={api}
           user={user}
@@ -975,7 +975,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <InstallationScheduleScreen
           api={api}
           user={user}
@@ -996,7 +996,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <DeliveryScheduleScreen
           api={api}
           user={user}
@@ -1017,7 +1017,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <ArrivedDeliveriesScreen
           api={api}
           user={user}
@@ -1036,7 +1036,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <OrganizerScreen
           api={api}
           user={user}
@@ -1057,7 +1057,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <IssuesScreen
           api={api}
           user={user}
@@ -1078,7 +1078,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <ToolsScreen
           api={api}
           user={user}
@@ -1097,7 +1097,7 @@ export default function App() {
     return (
       <>
         <NavigationOverlay />
-        <ColorWhiteOverlay />
+        {ColorWhiteOverlay}
         <InspectorScreen
           api={api}
           user={user}
@@ -1120,7 +1120,7 @@ export default function App() {
   return (
     <>
       <NavigationOverlay />
-      <ColorWhiteOverlay />
+      {ColorWhiteOverlay}
       <InspectorScreen
         api={api}
         user={user}

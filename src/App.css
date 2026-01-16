@@ -11426,8 +11426,8 @@ button.stat-toggle.off:hover {
 .org-group-header {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 5px 6px;
+  gap: 3px;
+  padding: 4px 4px;
   cursor: pointer;
   transition: background 0.1s;
   position: sticky;
@@ -11436,6 +11436,7 @@ button.stat-toggle.off:hover {
   background: white;
   border-radius: 6px 6px 0 0;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
 }
 
 .org-group-header:hover {
@@ -11482,26 +11483,6 @@ button.stat-toggle.off:hover {
   opacity: 0.5;
 }
 
-/* Group drag handle */
-.org-group-drag-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  color: #9ca3af;
-  cursor: grab;
-  border-radius: 2px;
-  transition: color 0.15s;
-}
-
-.org-group-drag-handle:hover {
-  color: #6b7280;
-  background: #f3f4f6;
-}
-
-.org-group-drag-handle:active {
-  cursor: grabbing;
-}
 
 .org-collapse-btn {
   padding: 2px;
@@ -11573,20 +11554,19 @@ button.stat-toggle.off:hover {
 }
 
 .org-group-info {
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 60px;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0px;
 }
 
 .org-group-info .group-name {
   font-size: 13px;
   font-weight: 500;
   color: #111827;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  word-break: break-word;
+  line-height: 1.2;
 }
 
 .org-group-info .group-desc {
@@ -11623,8 +11603,10 @@ button.stat-toggle.off:hover {
   font-size: 11px;
   color: #6b7280;
   background: #f3f4f6;
-  padding: 1px 6px;
+  padding: 1px 5px;
   border-radius: 8px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .org-group-count .search-match {
@@ -11636,6 +11618,8 @@ button.stat-toggle.off:hover {
   font-size: 11px;
   color: #9ca3af;
   font-family: 'SF Mono', monospace;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .org-quick-add-btn {
