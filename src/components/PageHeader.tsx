@@ -243,7 +243,6 @@ export default function PageHeader({
                       placeholder="Otsi Cast Unit Mark..."
                       value={searchQuery}
                       onChange={(e) => handleSearchInputChange(e.target.value)}
-                      autoFocus
                     />
                     {searchLoading && <FiLoader size={14} className="quick-search-spinner spin" />}
                     {!searchLoading && searchQuery && (
