@@ -7569,6 +7569,86 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   result={functionResults["getSettings()"]}
                   onClick={() => testFunction("getSettings()", () => (api.viewer as any).getSettings?.())}
                 />
+                <FunctionButton
+                  name="🔢 Loe Cast Unit Mark (valitud)"
+                  result={functionResults["countCastUnitMark"]}
+                  onClick={async () => {
+                    updateFunctionResult("countCastUnitMark", { status: 'pending' });
+                    try {
+                      const selection = await api.viewer.getSelection();
+                      if (!selection || selection.length === 0) {
+                        updateFunctionResult("countCastUnitMark", { status: 'error', error: 'Vali esmalt objektid!' });
+                        return;
+                      }
+
+                      let totalObjects = 0;
+                      let withMark = 0;
+                      let withoutMark = 0;
+                      const foundMarks: string[] = [];
+                      const foundPropertySets = new Set<string>();
+
+                      for (const sel of selection) {
+                        const modelId = sel.modelId;
+                        const runtimeIds = sel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        // Get properties for selected objects
+                        const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds);
+
+                        for (let i = 0; i < runtimeIds.length; i++) {
+                          totalObjects++;
+                          const p = props[i];
+                          if (!p?.properties) continue;
+
+                          let mark = '';
+
+                          // Search for Cast Unit Mark in all property sets
+                          for (const pset of p.properties) {
+                            const setName = pset.name || '';
+                            foundPropertySets.add(setName);
+
+                            for (const prop of pset.properties || []) {
+                              const propName = prop.name || '';
+                              // Check multiple possible property names
+                              if (propName === 'Assembly/Cast unit Mark' ||
+                                  propName === 'Cast_unit_Mark' ||
+                                  propName.toLowerCase().includes('castunitmark') ||
+                                  propName.toLowerCase().includes('assembly') && propName.toLowerCase().includes('mark')) {
+                                mark = String(prop.displayValue ?? prop.value ?? '');
+                                if (mark && mark !== '--') break;
+                              }
+                            }
+                            if (mark && mark !== '--') break;
+                          }
+
+                          if (mark && mark !== '--' && mark !== '') {
+                            withMark++;
+                            if (foundMarks.length < 5) foundMarks.push(mark);
+                          } else {
+                            withoutMark++;
+                          }
+                        }
+                      }
+
+                      let resultStr = `📊 VALITUD: ${totalObjects} objekti\n`;
+                      resultStr += `✅ Cast Unit Mark olemas: ${withMark}\n`;
+                      resultStr += `❌ Cast Unit Mark puudub: ${withoutMark}\n\n`;
+
+                      if (foundMarks.length > 0) {
+                        resultStr += `📝 Näited: ${foundMarks.join(', ')}\n\n`;
+                      }
+
+                      resultStr += `📁 Property set'id:\n${Array.from(foundPropertySets).slice(0, 10).join('\n')}`;
+
+                      updateFunctionResult("countCastUnitMark", {
+                        status: 'success',
+                        result: resultStr
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("countCastUnitMark", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
               </div>
             </div>
 
