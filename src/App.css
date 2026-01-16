@@ -11491,6 +11491,12 @@ button.stat-toggle.off:hover {
   z-index: 1; /* Keep below navigation menus */
 }
 
+/* When menu or color picker is open, raise section z-index so menu appears above other groups */
+.org-group-section.menu-open {
+  position: relative;
+  z-index: 100 !important;
+}
+
 .org-group-section.expanded-root::after {
   content: '';
   position: absolute;
@@ -12467,24 +12473,17 @@ button.stat-toggle.off:hover {
   flex-direction: column;
 }
 
-.markup-line-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.markup-line-row:last-child {
-  border-bottom: none;
-}
-
 .markup-line-zone {
   display: flex;
   align-items: center;
   min-height: 40px;
   padding: 6px 12px;
   transition: all 0.15s ease;
-  flex: 1;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.markup-line-zone:last-child {
+  border-bottom: none;
 }
 
 .markup-line-zone.drag-over {
@@ -12495,26 +12494,34 @@ button.stat-toggle.off:hover {
   background: #fafafa;
 }
 
-.markup-line-suffix {
-  width: 80px;
-  padding: 4px 8px;
+/* Field with suffix container */
+.markup-field-with-suffix {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.markup-field-suffix {
+  width: 60px;
+  padding: 3px 6px;
   font-size: 11px;
-  border: 1px solid #e5e7eb;
+  border: 1px dashed #d1d5db;
   border-radius: 4px;
-  margin-right: 8px;
-  background: #fafafa;
+  background: transparent;
   color: #374151;
 }
 
-.markup-line-suffix:focus {
+.markup-field-suffix:focus {
   outline: none;
   border-color: #3b82f6;
+  border-style: solid;
   background: white;
 }
 
-.markup-line-suffix::placeholder {
+.markup-field-suffix::placeholder {
   color: #9ca3af;
   font-style: italic;
+  font-size: 10px;
 }
 
 .line-label {
@@ -12749,10 +12756,10 @@ button.stat-toggle.off:hover {
     padding: 8px 12px;
   }
 
-  .markup-line-suffix {
-    width: 70px;
-    padding: 6px 8px;
-    font-size: 12px;
+  .markup-field-suffix {
+    width: 50px;
+    padding: 4px 6px;
+    font-size: 11px;
   }
 
   .separator-btn {
