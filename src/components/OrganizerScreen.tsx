@@ -1148,7 +1148,7 @@ export default function OrganizerScreen({
 
       // If no selection, try to get first object from loaded models
       if (!modelId || !runtimeId) {
-        const models = await api.viewer.getModels();
+        const models = await api.viewer.getModels('loaded');
         if (models && models.length > 0) {
           for (const model of models) {
             const modelObjects = await (api.viewer as any).getObjects(model.id, { loaded: true });
@@ -2799,7 +2799,7 @@ export default function OrganizerScreen({
       const objByModel = new Map<string, {guid: string; runtimeId: number; itemId: string}[]>();
       for (const item of items) {
         if (!item.guid_ifc) continue;
-        const found = foundByGuid.get(item.guid_ifc.toLowerCase());
+        const found = foundByGuid.get(item.guid_ifc);
         if (!found) continue;
 
         if (!objByModel.has(found.modelId)) objByModel.set(found.modelId, []);
@@ -3592,10 +3592,102 @@ export default function OrganizerScreen({
         }
       }
 
+      // Step 8: Handle groups with assembly_selection_on === false separately
+      // These groups may contain sub-element GUIDs not in trimble_model_objects table
+      const nonAssemblyGroups = groupsToProcess.filter(g => g.assembly_selection_on === false);
+      let subElementColoredCount = 0;
+
+      if (nonAssemblyGroups.length > 0) {
+        showToast('Värvin alamdetaile...');
+
+        // Collect all GUIDs from non-assembly groups that weren't already found
+        const subElementGuidsToColor: { guid: string; color: GroupColor }[] = [];
+
+        for (const group of nonAssemblyGroups) {
+          // Determine color to use
+          let colorToUse: GroupColor | null | undefined;
+          if (colorMode === 'parents-only' && !targetGroupId) {
+            const rootParent = getRootParent(group.id);
+            colorToUse = rootParent?.color;
+          } else {
+            colorToUse = group.color;
+            if (!colorToUse && group.parent_id) {
+              const parent = groups.find(g => g.id === group.parent_id);
+              colorToUse = parent?.color;
+            }
+          }
+          if (!colorToUse) continue;
+
+          const items = groupItems.get(group.id) || [];
+          for (const item of items) {
+            if (!item.guid_ifc) continue;
+            const guidLower = item.guid_ifc.toLowerCase();
+            // Only process if not already found in assembly-level search
+            if (!foundByLowercase.has(guidLower)) {
+              subElementGuidsToColor.push({ guid: item.guid_ifc, color: colorToUse });
+            }
+          }
+        }
+
+        if (subElementGuidsToColor.length > 0) {
+          // Find these sub-elements in loaded models
+          const subElementGuids = subElementGuidsToColor.map(s => s.guid);
+          const foundSubElements = await findObjectsInLoadedModels(api, subElementGuids);
+
+          // Build color map for found sub-elements
+          const subElementColorMap = new Map<string, GroupColor>();
+          for (const { guid, color } of subElementGuidsToColor) {
+            if (foundSubElements.has(guid)) {
+              subElementColorMap.set(guid.toLowerCase(), color);
+            }
+          }
+
+          // Group by color for efficient API calls
+          const subColorToGuids = new Map<string, { color: GroupColor; guids: string[] }>();
+          for (const [guidLower, color] of subElementColorMap) {
+            const colorKey = `${color.r}-${color.g}-${color.b}`;
+            if (!subColorToGuids.has(colorKey)) {
+              subColorToGuids.set(colorKey, { color, guids: [] });
+            }
+            subColorToGuids.get(colorKey)!.guids.push(guidLower);
+          }
+
+          // Build case-insensitive lookup for found sub-elements
+          const foundSubByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+          for (const [guid, found] of foundSubElements) {
+            foundSubByLowercase.set(guid.toLowerCase(), found);
+          }
+
+          // Color the sub-elements
+          for (const { color, guids } of subColorToGuids.values()) {
+            const byModel: Record<string, number[]> = {};
+            for (const guidLower of guids) {
+              const found = foundSubByLowercase.get(guidLower);
+              if (found) {
+                if (!byModel[found.modelId]) byModel[found.modelId] = [];
+                byModel[found.modelId].push(found.runtimeId);
+              }
+            }
+
+            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+              for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                  { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+                );
+                subElementColoredCount += batch.length;
+              }
+            }
+          }
+        }
+      }
+
       setColorByGroup(true);
       // Track if single group or all groups were colored
       setColoredSingleGroupId(targetGroupId || null);
-      showToast(`✓ Värvitud! Valged=${whiteCount}, Grupeeritud=${coloredCount}`);
+      const subInfo = subElementColoredCount > 0 ? `, Alamdetailid=${subElementColoredCount}` : '';
+      showToast(`✓ Värvitud! Valged=${whiteCount}, Grupeeritud=${coloredCount}${subInfo}`);
     } catch (e) {
       console.error('Error coloring model:', e);
       showToast('Viga värvimisel');
