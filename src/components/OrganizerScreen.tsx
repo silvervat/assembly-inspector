@@ -843,6 +843,8 @@ export default function OrganizerScreen({
   const [managementEditingGroupId, setManagementEditingGroupId] = useState<string | null>(null);
   const [managementEditName, setManagementEditName] = useState('');
   const [managementColorPickerGroupId, setManagementColorPickerGroupId] = useState<string | null>(null);
+  const [returnToGroupsManagement, setReturnToGroupsManagement] = useState(false);
+  const [propertySearchQuery, setPropertySearchQuery] = useState('');
 
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
@@ -1726,6 +1728,12 @@ export default function OrganizerScreen({
       resetGroupForm();
       setShowGroupForm(false);
 
+      // Return to groups management modal if flag is set
+      if (returnToGroupsManagement) {
+        setReturnToGroupsManagement(false);
+        setShowGroupsManagementModal(true);
+      }
+
       if (formParentId) {
         setExpandedGroups(prev => new Set([...prev, formParentId]));
       }
@@ -1841,6 +1849,12 @@ export default function OrganizerScreen({
       resetGroupForm();
       setShowGroupForm(false);
       setEditingGroup(null);
+
+      // Return to groups management modal if flag is set
+      if (returnToGroupsManagement) {
+        setReturnToGroupsManagement(false);
+        setShowGroupsManagementModal(true);
+      }
 
       // Auto-recolor if coloring mode is active
       if (colorByGroup) {
@@ -2110,6 +2124,7 @@ export default function OrganizerScreen({
     setFormCustomFields([]);
     setFormDisplayProperties([]);
     setAvailableModelProperties([]);
+    setPropertySearchQuery('');
     setFormDefaultPermissions({ ...DEFAULT_GROUP_PERMISSIONS });
     setFormUserPermissions({});
     setAddItemsAfterGroupCreate([]);
@@ -2177,6 +2192,106 @@ export default function OrganizerScreen({
     // Load team members if parent uses shared mode
     if (parentGroup && parentGroup.is_private && parentGroup.allowed_users?.length > 0) {
       loadTeamMembers();
+    }
+  };
+
+  // Instantly create a subgroup with auto-generated name
+  const createInstantSubgroup = async (parentId: string) => {
+    const parentGroup = groups.find(g => g.id === parentId);
+    if (!parentGroup) return;
+
+    // Check max depth (level 2 max)
+    const parentLevel = parentGroup.level;
+    if (parentLevel >= 2) {
+      showToast('Maksimaalselt 3 taset on lubatud');
+      return;
+    }
+
+    // Generate auto-name like "Grupp (1)", "Grupp (2)", etc.
+    const siblings = groups.filter(g => g.parent_id === parentId);
+    let nextNum = siblings.length + 1;
+    let newName = `Grupp (${nextNum})`;
+
+    // Ensure name is unique among siblings
+    while (siblings.some(s => s.name === newName)) {
+      nextNum++;
+      newName = `Grupp (${nextNum})`;
+    }
+
+    // Inherit settings from parent
+    const isPrivate = parentGroup.is_private;
+    const allowedUsers = parentGroup.allowed_users || [];
+    const inheritedCustomFields = [...(parentGroup.custom_fields || [])];
+    const inheritedUniqueItems = parentGroup.unique_items !== false;
+
+    // Find root parent for unique_items
+    let root = parentGroup;
+    while (root.parent_id) {
+      const p = groups.find(g => g.id === root.parent_id);
+      if (p) root = p;
+      else break;
+    }
+
+    const newGroupData = {
+      trimble_project_id: projectId,
+      parent_id: parentId,
+      name: newName,
+      description: null,
+      is_private: isPrivate,
+      allowed_users: allowedUsers,
+      display_properties: parentGroup.display_properties || [],
+      custom_fields: inheritedCustomFields,
+      assembly_selection_on: parentGroup.assembly_selection_on !== false,
+      unique_items: inheritedUniqueItems,
+      color: generateGroupColor(groups.length),
+      created_by: tcUserEmail,
+      sort_order: groups.length,
+      level: parentLevel + 1,
+      default_permissions: parentGroup.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS },
+      user_permissions: parentGroup.user_permissions || {}
+    };
+
+    try {
+      const { data: insertedGroup, error } = await supabase.from('organizer_groups').insert(newGroupData).select().single();
+      if (error) throw error;
+
+      // Mark as local change
+      recentLocalChangesRef.current.add(insertedGroup.id);
+      setTimeout(() => recentLocalChangesRef.current.delete(insertedGroup.id), 5000);
+
+      // Optimistic UI update
+      const fullGroup: OrganizerGroup = {
+        ...newGroupData,
+        id: insertedGroup.id,
+        created_at: insertedGroup.created_at || new Date().toISOString(),
+        updated_at: insertedGroup.updated_at || new Date().toISOString(),
+        updated_by: null,
+        is_locked: false,
+        locked_by: null,
+        locked_at: null,
+        default_permissions: newGroupData.default_permissions,
+        user_permissions: newGroupData.user_permissions
+      };
+
+      setGroups(prev => [...prev, fullGroup]);
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        newMap.set(fullGroup.id, []);
+        return newMap;
+      });
+      setGroupTree(() => {
+        const allGroups = [...groups, fullGroup];
+        return buildGroupTree(allGroups, groupItems);
+      });
+
+      // Expand parent to show new subgroup
+      setExpandedGroups(prev => new Set([...prev, parentId]));
+
+      pushUndo({ type: 'create_group', groupId: fullGroup.id });
+      showToast(`Alamgrupp "${newName}" loodud`);
+    } catch (err) {
+      console.error('Failed to create instant subgroup:', err);
+      showToast('Alamgrupi loomine ebaõnnestus');
     }
   };
 
@@ -2455,17 +2570,87 @@ export default function OrganizerScreen({
       const existingItems = groupItems.get(targetGroupId) || [];
       const startIndex = existingItems.length;
 
-      const items = objectsToAdd.map((obj, index) => ({
-        group_id: targetGroupId,
-        guid_ifc: obj.guidIfc,
-        assembly_mark: obj.assemblyMark,
-        product_name: obj.productName || null,
-        cast_unit_weight: obj.castUnitWeight || null,
-        cast_unit_position_code: obj.castUnitPositionCode || null,
-        custom_properties: {},
-        added_by: tcUserEmail,
-        sort_order: startIndex + index
-      }));
+      // If group has assembly_selection_on === false, we need to fetch display property values
+      const displayProps = group.display_properties;
+      const needsDisplayProps = group.assembly_selection_on === false && displayProps && displayProps.length > 0;
+      let objDisplayValues: Map<string, Record<string, string>> = new Map();
+
+      if (needsDisplayProps && api) {
+        // Fetch properties for selected objects from the model
+        try {
+          // Group objects by model
+          const objByModel = new Map<string, {guidIfc: string; runtimeId: number}[]>();
+          for (const obj of objectsToAdd) {
+            if (!obj.guidIfc || !obj.modelId) continue;
+            if (!objByModel.has(obj.modelId)) objByModel.set(obj.modelId, []);
+            objByModel.get(obj.modelId)!.push({ guidIfc: obj.guidIfc, runtimeId: obj.runtimeId || 0 });
+          }
+
+          // Fetch properties for each model
+          for (const [modelId, objs] of objByModel) {
+            const runtimeIds = objs.map(o => o.runtimeId).filter(id => id > 0);
+            if (runtimeIds.length === 0) continue;
+
+            const propsArray = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+            for (let i = 0; i < objs.length; i++) {
+              const obj = objs[i];
+              const props = propsArray?.[i]?.properties;
+              if (!props) continue;
+
+              const values: Record<string, string> = {};
+              // Extract display property values
+              for (const dp of displayProps!) {
+                const setNorm = dp.set.replace(/\s+/g, '').toLowerCase();
+                const propNorm = dp.prop.replace(/\s+/g, '').toLowerCase();
+
+                // Search through property sets
+                for (const propSet of props) {
+                  const psNameNorm = (propSet.name || '').replace(/\s+/g, '').toLowerCase();
+                  if (psNameNorm !== setNorm) continue;
+
+                  const propArr = propSet.properties || [];
+                  for (const p of propArr) {
+                    const pNameNorm = (p.name || '').replace(/\s+/g, '').toLowerCase();
+                    if (pNameNorm === propNorm) {
+                      values[`display_${dp.set}_${dp.prop}`] = String(p.value ?? '');
+                      break;
+                    }
+                  }
+                }
+              }
+
+              if (Object.keys(values).length > 0) {
+                objDisplayValues.set(obj.guidIfc.toLowerCase(), values);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Failed to fetch display properties:', err);
+        }
+      }
+
+      const items = objectsToAdd.map((obj, index) => {
+        const customProps: Record<string, unknown> = {};
+        // Add display property values if available
+        if (obj.guidIfc) {
+          const displayVals = objDisplayValues.get(obj.guidIfc.toLowerCase());
+          if (displayVals) {
+            Object.assign(customProps, displayVals);
+          }
+        }
+        return {
+          group_id: targetGroupId,
+          guid_ifc: obj.guidIfc,
+          assembly_mark: obj.assemblyMark,
+          product_name: obj.productName || null,
+          cast_unit_weight: obj.castUnitWeight || null,
+          cast_unit_position_code: obj.castUnitPositionCode || null,
+          custom_properties: customProps,
+          added_by: tcUserEmail,
+          sort_order: startIndex + index
+        };
+      });
 
       // Delete existing items in this specific group first (single query)
       const guids = items.map(i => i.guid_ifc).filter(Boolean);
@@ -6363,6 +6548,9 @@ export default function OrganizerScreen({
                 '--col-weight-width': `${weightWidth}px`,
               } as React.CSSProperties;
 
+              // Check if this group uses custom display properties (assembly_selection_on === false)
+              const useCustomDisplayProps = node.assembly_selection_on === false && node.display_properties && node.display_properties.length > 0;
+
               return (
               <div className="org-items org-items-dynamic" style={columnStyles}>
                 {/* Item sort header - show when at least 1 item */}
@@ -6375,24 +6563,38 @@ export default function OrganizerScreen({
                       # {itemSortField === 'sort_order' && (itemSortDir === 'asc' ? '↑' : '↓')}
                     </span>
                     <span className="org-header-spacer" /> {/* For drag handle */}
-                    <span className="org-item-mark sortable" onClick={() => {
-                      if (itemSortField === 'assembly_mark') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
-                      else { setItemSortField('assembly_mark'); setItemSortDir('asc'); }
-                    }}>
-                      Mark {itemSortField === 'assembly_mark' && (itemSortDir === 'asc' ? '↑' : '↓')}
-                    </span>
-                    <span className="org-item-product sortable" onClick={() => {
-                      if (itemSortField === 'product_name') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
-                      else { setItemSortField('product_name'); setItemSortDir('asc'); }
-                    }}>
-                      Toode {itemSortField === 'product_name' && (itemSortDir === 'asc' ? '↑' : '↓')}
-                    </span>
-                    <span className="org-item-weight sortable" onClick={() => {
-                      if (itemSortField === 'cast_unit_weight') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
-                      else { setItemSortField('cast_unit_weight'); setItemSortDir('asc'); }
-                    }}>
-                      Kaal {itemSortField === 'cast_unit_weight' && (itemSortDir === 'asc' ? '↑' : '↓')}
-                    </span>
+                    {useCustomDisplayProps ? (
+                      // Show custom display property columns instead of Mark/Toode/Kaal
+                      <>
+                        {node.display_properties!.map((dp: {set: string; prop: string; label: string}, idx: number) => (
+                          <span key={idx} className="org-item-custom-display" style={{ flex: 1, minWidth: '60px' }}>
+                            {dp.label || dp.prop}
+                          </span>
+                        ))}
+                      </>
+                    ) : (
+                      // Standard columns
+                      <>
+                        <span className="org-item-mark sortable" onClick={() => {
+                          if (itemSortField === 'assembly_mark') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                          else { setItemSortField('assembly_mark'); setItemSortDir('asc'); }
+                        }}>
+                          Mark {itemSortField === 'assembly_mark' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                        </span>
+                        <span className="org-item-product sortable" onClick={() => {
+                          if (itemSortField === 'product_name') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                          else { setItemSortField('product_name'); setItemSortDir('asc'); }
+                        }}>
+                          Toode {itemSortField === 'product_name' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                        </span>
+                        <span className="org-item-weight sortable" onClick={() => {
+                          if (itemSortField === 'cast_unit_weight') setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                          else { setItemSortField('cast_unit_weight'); setItemSortDir('asc'); }
+                        }}>
+                          Kaal {itemSortField === 'cast_unit_weight' && (itemSortDir === 'asc' ? '↑' : '↓')}
+                        </span>
+                      </>
+                    )}
                     {customFields.map(field => (
                       <span key={field.id} className="org-item-custom" title={field.name}>
                         {field.name}
@@ -6435,19 +6637,43 @@ export default function OrganizerScreen({
                       >
                         <span className="org-item-index">{item.sort_order + 1}</span>
                         <FiMove size={10} className="org-drag-handle" />
-                        <span
-                          className="org-item-mark"
-                          title={item.assembly_mark || ''}
-                          onDoubleClick={(e) => {
-                            e.stopPropagation();
-                            if (item.assembly_mark) {
-                              navigator.clipboard.writeText(item.assembly_mark);
-                              showToast(`Kopeeritud: ${item.assembly_mark}`);
-                            }
-                          }}
-                        >{item.assembly_mark || 'Tundmatu'}</span>
-                        <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
-                        <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
+                        {useCustomDisplayProps ? (
+                          // Show custom display property values
+                          <>
+                            {node.display_properties!.map((dp: {set: string; prop: string; label: string}, dpIdx: number) => {
+                              // Try to get value from item's custom_properties using display_prop key
+                              const displayKey = `display_${dp.set}_${dp.prop}`;
+                              const value = item.custom_properties?.[displayKey] as string | undefined;
+                              return (
+                                <span
+                                  key={dpIdx}
+                                  className="org-item-custom-display"
+                                  style={{ flex: 1, minWidth: '60px', fontSize: '12px', color: '#374151' }}
+                                  title={value || '—'}
+                                >
+                                  {value || '—'}
+                                </span>
+                              );
+                            })}
+                          </>
+                        ) : (
+                          // Standard columns
+                          <>
+                            <span
+                              className="org-item-mark"
+                              title={item.assembly_mark || ''}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                if (item.assembly_mark) {
+                                  navigator.clipboard.writeText(item.assembly_mark);
+                                  showToast(`Kopeeritud: ${item.assembly_mark}`);
+                                }
+                              }}
+                            >{item.assembly_mark || 'Tundmatu'}</span>
+                            <span className="org-item-product" title={item.product_name || ''}>{item.product_name || ''}</span>
+                            <span className="org-item-weight" title={`${formatWeight(item.cast_unit_weight)} kg`}>{formatWeight(item.cast_unit_weight)}</span>
+                          </>
+                        )}
 
                         {customFields.map(field => {
                           const isEditing = editingItemField?.itemId === item.id && editingItemField?.fieldId === field.id;
@@ -6962,7 +7188,13 @@ export default function OrganizerScreen({
 
       {/* Group form modal */}
       {showGroupForm && (
-        <div className="org-modal-overlay" onClick={() => setShowGroupForm(false)}>
+        <div className="org-modal-overlay" onClick={() => {
+          setShowGroupForm(false);
+          if (returnToGroupsManagement) {
+            setReturnToGroupsManagement(false);
+            setShowGroupsManagementModal(true);
+          }
+        }}>
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
               {editingGroup ? (
@@ -6985,7 +7217,13 @@ export default function OrganizerScreen({
                   )}
                 </div>
               )}
-              <button onClick={() => setShowGroupForm(false)}><FiX size={18} /></button>
+              <button onClick={() => {
+                setShowGroupForm(false);
+                if (returnToGroupsManagement) {
+                  setReturnToGroupsManagement(false);
+                  setShowGroupsManagementModal(true);
+                }
+              }}><FiX size={18} /></button>
             </div>
             <div className="org-modal-body">
               {/* Parent group selector - show when creating subgroup */}
@@ -7356,15 +7594,51 @@ export default function OrganizerScreen({
                         </div>
                       )}
 
+                      {/* Search input for properties */}
+                      <div style={{ marginBottom: '8px' }}>
+                        <input
+                          type="text"
+                          value={propertySearchQuery}
+                          onChange={(e) => setPropertySearchQuery(e.target.value)}
+                          placeholder="Otsi property't..."
+                          style={{
+                            width: '100%',
+                            padding: '8px 10px',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            background: 'white'
+                          }}
+                        />
+                      </div>
+
                       {/* Property list to select from */}
                       <div style={{ maxHeight: '200px', overflow: 'auto', background: 'white', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
                         {(() => {
-                          // Group properties by set
+                          // Filter and group properties by set
+                          const searchLower = propertySearchQuery.toLowerCase();
+                          const filteredProps = propertySearchQuery
+                            ? availableModelProperties.filter(p =>
+                                p.prop.toLowerCase().includes(searchLower) ||
+                                p.set.toLowerCase().includes(searchLower) ||
+                                p.value.toLowerCase().includes(searchLower)
+                              )
+                            : availableModelProperties;
+
                           const grouped = new Map<string, {prop: string; value: string}[]>();
-                          for (const p of availableModelProperties) {
+                          for (const p of filteredProps) {
                             if (!grouped.has(p.set)) grouped.set(p.set, []);
                             grouped.get(p.set)!.push({ prop: p.prop, value: p.value });
                           }
+
+                          if (grouped.size === 0 && propertySearchQuery) {
+                            return (
+                              <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280', fontSize: '12px' }}>
+                                Otsingule "{propertySearchQuery}" vasteid ei leitud
+                              </div>
+                            );
+                          }
+
                           return Array.from(grouped.entries()).map(([setName, props]) => (
                             <div key={setName}>
                               <div style={{ padding: '6px 10px', background: '#f3f4f6', fontWeight: 500, fontSize: '11px', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>
@@ -7483,7 +7757,13 @@ export default function OrganizerScreen({
               )}
             </div>
             <div className="org-modal-footer">
-              <button className="cancel" onClick={() => setShowGroupForm(false)}>Tühista</button>
+              <button className="cancel" onClick={() => {
+                setShowGroupForm(false);
+                if (returnToGroupsManagement) {
+                  setReturnToGroupsManagement(false);
+                  setShowGroupsManagementModal(true);
+                }
+              }}>Tühista</button>
               <button className="save" onClick={editingGroup ? updateGroup : createGroup} disabled={saving || !formName.trim()}>
                 {saving ? 'Salvestan...' : (editingGroup ? 'Salvesta' : 'Loo grupp')}
               </button>
@@ -8498,6 +8778,7 @@ export default function OrganizerScreen({
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--modus-border)', background: '#f9fafb' }}>
                 <button
                   onClick={() => {
+                    setReturnToGroupsManagement(true);
                     setShowGroupsManagementModal(false);
                     resetGroupForm();
                     setEditingGroup(null);
@@ -8697,6 +8978,7 @@ export default function OrganizerScreen({
                                 {/* Edit full settings button */}
                                 <button
                                   onClick={() => {
+                                    setReturnToGroupsManagement(true);
                                     setShowGroupsManagementModal(false);
                                     openEditGroupForm(group);
                                   }}
@@ -8715,13 +8997,10 @@ export default function OrganizerScreen({
                                   <FiSettings size={14} />
                                 </button>
 
-                                {/* Add subgroup button (only for level 0 and 1) */}
+                                {/* Add subgroup button - instant creation (only for level 0 and 1) */}
                                 {level < 2 && (
                                   <button
-                                    onClick={() => {
-                                      setShowGroupsManagementModal(false);
-                                      openAddSubgroupForm(group.id);
-                                    }}
+                                    onClick={() => createInstantSubgroup(group.id)}
                                     style={{
                                       padding: '4px',
                                       background: 'transparent',
