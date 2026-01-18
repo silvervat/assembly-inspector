@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.641';
+export const APP_VERSION = '3.0.642';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -80,17 +80,23 @@ const zoomModel = urlParams.get('model');
 const zoomGuid = urlParams.get('guid');
 const zoomAction = urlParams.get('action') || 'zoom';
 const zoomGroupId = urlParams.get('group');
+const zoomExpiry = urlParams.get('expiry'); // Days until expiry (1, 5, 14, 30)
 
 // If zoom params in URL, store in Supabase and redirect to Trimble Connect
 if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
-  console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction, zoomGroupId });
+  console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction, zoomGroupId, zoomExpiry });
+
+  // Calculate expires_at (default 14 days if not specified)
+  const expiryDays = zoomExpiry ? parseInt(zoomExpiry, 10) : 14;
+  const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000).toISOString();
 
   // Store to Supabase and WAIT for it before redirecting (fixes race condition)
   const insertData: Record<string, string> = {
     project_id: zoomProject,
     model_id: zoomModel,
     guid: zoomGuid,
-    action_type: zoomAction
+    action_type: zoomAction,
+    expires_at: expiresAt
   };
   if (zoomGroupId) {
     insertData.group_id = zoomGroupId;
@@ -105,7 +111,7 @@ if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
     if (error) {
       console.error('🔗 [ZOOM] Failed to store zoom target:', error);
     } else {
-      console.log('🔗 [ZOOM] Zoom target stored successfully');
+      console.log('🔗 [ZOOM] Zoom target stored successfully, expires:', expiresAt);
     }
 
     // Redirect to Trimble Connect AFTER insert completes
@@ -188,6 +194,7 @@ export default function App() {
         // Check for pending zoom targets in Supabase (shared links)
         console.log('🔗 [ZOOM] Checking Supabase for pending zoom targets...');
         try {
+          // First check for valid (non-expired, non-consumed) zoom targets
           const { data: zoomTargets, error: zoomError } = await supabase
             .from('zoom_targets')
             .select('*')
@@ -319,6 +326,26 @@ export default function App() {
             })();
           } else {
             console.log('🔗 [ZOOM] No pending zoom targets found');
+
+            // Check if there are any expired zoom targets for this project
+            const { data: expiredTargets } = await supabase
+              .from('zoom_targets')
+              .select('id, expires_at')
+              .eq('project_id', project.id)
+              .eq('consumed', false)
+              .lt('expires_at', new Date().toISOString())
+              .order('created_at', { ascending: false })
+              .limit(1);
+
+            if (expiredTargets && expiredTargets.length > 0) {
+              console.log('🔗 [ZOOM] Found expired zoom target');
+              setError('Link on aegunud. Palun küsi uus link.');
+              // Mark expired target as consumed
+              await supabase
+                .from('zoom_targets')
+                .update({ consumed: true })
+                .eq('id', expiredTargets[0].id);
+            }
           }
         } catch (e) {
           console.error('🔗 [ZOOM] Error checking zoom targets:', e);

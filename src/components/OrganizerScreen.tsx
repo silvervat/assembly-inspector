@@ -818,6 +818,11 @@ export default function OrganizerScreen({
   // Color picker popup state
   const [colorPickerGroupId, setColorPickerGroupId] = useState<string | null>(null);
 
+  // Link expiry modal state
+  const [showLinkExpiryModal, setShowLinkExpiryModal] = useState(false);
+  const [pendingLinkData, setPendingLinkData] = useState<{groupId: string; guids: string[]; modelId: string} | null>(null);
+  const [selectedExpiry, setSelectedExpiry] = useState<number>(14); // Default 14 days
+
   // Settings modal state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
 
@@ -4723,6 +4728,29 @@ export default function OrganizerScreen({
     // Allow UI to update
     await new Promise(resolve => setTimeout(resolve, 10));
 
+    // Fetch user names for "Lisaja nimi" column
+    const userEmails = [...new Set(allItems.map(({ item }) => item.added_by).filter(Boolean))];
+    const emailToName = new Map<string, string>();
+
+    if (userEmails.length > 0) {
+      try {
+        const { data: users } = await supabase
+          .from('trimble_ex_users')
+          .select('email, name')
+          .in('email', userEmails);
+
+        if (users) {
+          users.forEach(u => {
+            if (u.email && u.name) {
+              emailToName.set(u.email.toLowerCase(), u.name);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Could not fetch user names for export:', e);
+      }
+    }
+
     const wb = XLSX.utils.book_new();
     // Headers: Different for assembly vs non-assembly groups
     const headers = ['#', 'Grupp', 'Grupi värv'];
@@ -4734,7 +4762,7 @@ export default function OrganizerScreen({
       headers.push('Mark', 'Toode', 'Kaal (kg)', 'Positsioon');
     }
     customFields.forEach(f => headers.push(f.name));
-    headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
+    headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja email', 'Lisaja nimi');
 
     // Get timezone name
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -4807,7 +4835,9 @@ export default function OrganizerScreen({
         // Add custom fields
         customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
         // Add GUIDs, then Lisatud columns at the end
-        row.push(item.guid_ifc || '', guidMs, addedDate, item.added_at ? timeZone : '', item.added_by || '');
+        const addedByEmail = item.added_by || '';
+        const addedByName = addedByEmail ? (emailToName.get(addedByEmail.toLowerCase()) || '') : '';
+        row.push(item.guid_ifc || '', guidMs, addedDate, item.added_at ? timeZone : '', addedByEmail, addedByName);
         data.push(row);
       });
 
@@ -4836,7 +4866,8 @@ export default function OrganizerScreen({
       dataColWidths = [{ wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
     }
     const customColWidths = customFields.map(() => ({ wch: 15 }));
-    const guidAndEndColWidths = [{ wch: 24 }, { wch: 38 }, { wch: 16 }, { wch: 20 }, { wch: 25 }];
+    // GUID_IFC, GUID_MS, Lisatud, Ajavöönd, Lisaja email, Lisaja nimi
+    const guidAndEndColWidths = [{ wch: 24 }, { wch: 38 }, { wch: 16 }, { wch: 20 }, { wch: 28 }, { wch: 20 }];
     ws['!cols'] = [...baseColWidths, ...dataColWidths, ...customColWidths, ...guidAndEndColWidths];
 
     // Add autoFilter for all columns
@@ -5004,19 +5035,32 @@ export default function OrganizerScreen({
       return;
     }
 
-    // Generate the link with group color action
+    // Show expiry modal
+    setPendingLinkData({ groupId, guids, modelId });
+    setSelectedExpiry(14); // Reset to default
+    setShowLinkExpiryModal(true);
+    setGroupMenuId(null);
+  };
+
+  // Generate and copy link after expiry selection
+  const confirmCopyLink = async () => {
+    if (!pendingLinkData) return;
+
+    const { groupId, guids, modelId } = pendingLinkData;
     const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
     const guidsParam = guids.join(',');
-    const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(guidsParam)}&action=zoom_green&group=${encodeURIComponent(groupId)}`;
+    const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(guidsParam)}&action=zoom_green&group=${encodeURIComponent(groupId)}&expiry=${selectedExpiry}`;
 
     try {
       await navigator.clipboard.writeText(zoomUrl);
-      showToast(`Link kopeeritud (${guids.length} detaili)`);
+      showToast(`Link kopeeritud (${guids.length} detaili, kehtib ${selectedExpiry} päeva)`);
     } catch (e) {
       console.error('Clipboard error:', e);
       showToast('Viga lingi kopeerimisel');
     }
-    setGroupMenuId(null);
+
+    setShowLinkExpiryModal(false);
+    setPendingLinkData(null);
   };
 
   // ============================================
@@ -9167,6 +9211,64 @@ export default function OrganizerScreen({
         );
       })()}
 
+      {/* Link expiry selection modal */}
+      {showLinkExpiryModal && pendingLinkData && (
+        <div className="org-modal-overlay" onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}>
+          <div className="org-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 360 }}>
+            <div className="org-modal-header">
+              <h2>Lingi kehtivus</h2>
+              <button onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body">
+              <p style={{ marginBottom: 12, fontSize: 13, color: '#666' }}>
+                Vali, kui kaua link kehtib. Pärast aegumist link enam ei tööta.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {[
+                  { days: 1, label: '1 päev' },
+                  { days: 5, label: '5 päeva' },
+                  { days: 14, label: '14 päeva (soovituslik)' },
+                  { days: 30, label: '30 päeva' }
+                ].map(opt => (
+                  <label
+                    key={opt.days}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      background: selectedExpiry === opt.days ? '#e0e7ff' : '#f9fafb',
+                      border: selectedExpiry === opt.days ? '1px solid #6366f1' : '1px solid #e5e7eb'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="linkExpiry"
+                      checked={selectedExpiry === opt.days}
+                      onChange={() => setSelectedExpiry(opt.days)}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: selectedExpiry === opt.days ? 500 : 400 }}>
+                      {opt.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <p style={{ marginTop: 12, fontSize: 11, color: '#9ca3af' }}>
+                {pendingLinkData.guids.length} detaili lingis
+              </p>
+            </div>
+            <div className="org-modal-footer">
+              <button className="cancel" onClick={() => { setShowLinkExpiryModal(false); setPendingLinkData(null); }}>Tühista</button>
+              <button className="save" onClick={confirmCopyLink}>
+                <FiLink size={14} /> Kopeeri link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Import GUID modal */}
       {showImportModal && importGroupId && (() => {
         const importGroup = groups.find(g => g.id === importGroupId);
@@ -9772,10 +9874,10 @@ export default function OrganizerScreen({
                             <div
                               style={{
                                 display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                padding: '8px 16px',
-                                paddingLeft: `${16 + level * 24}px`,
+                                alignItems: 'flex-start',
+                                gap: '6px',
+                                padding: '5px 12px',
+                                paddingLeft: `${12 + level * 16}px`,
                                 borderBottom: '1px solid #f3f4f6',
                                 background: isEditing ? '#f0f9ff' : 'transparent'
                               }}
@@ -9783,14 +9885,15 @@ export default function OrganizerScreen({
                               {/* Color indicator */}
                               <div
                                 style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: '3px',
+                                  width: '12px',
+                                  height: '12px',
+                                  borderRadius: '2px',
                                   background: group.color ? `rgb(${group.color.r}, ${group.color.g}, ${group.color.b})` : '#e5e7eb',
                                   border: '1px solid rgba(0,0,0,0.1)',
                                   cursor: 'pointer',
                                   flexShrink: 0,
-                                  position: 'relative'
+                                  position: 'relative',
+                                  marginTop: '2px'
                                 }}
                                 onClick={() => setManagementColorPickerGroupId(showColorPicker ? null : group.id)}
                                 title="Muuda värvi"
@@ -9860,69 +9963,88 @@ export default function OrganizerScreen({
                                 </div>
                               )}
 
-                              {/* Group name - editable or static */}
-                              {isEditing ? (
-                                <input
-                                  type="text"
-                                  value={managementEditName}
-                                  onChange={(e) => setManagementEditName(e.target.value)}
-                                  onKeyDown={async (e) => {
-                                    if (e.key === 'Enter' && managementEditName.trim()) {
-                                      await supabase.from('organizer_groups').update({ name: managementEditName.trim(), updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                              {/* Group name and description - editable */}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                {isEditing ? (
+                                  <input
+                                    type="text"
+                                    value={managementEditName}
+                                    onChange={(e) => setManagementEditName(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter' && managementEditName.trim()) {
+                                        await supabase.from('organizer_groups').update({ name: managementEditName.trim(), updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        setManagementEditingGroupId(null);
+                                        loadData();
+                                      } else if (e.key === 'Escape') {
+                                        setManagementEditingGroupId(null);
+                                      }
+                                    }}
+                                    onBlur={async () => {
+                                      if (managementEditName.trim() && managementEditName.trim() !== group.name) {
+                                        await supabase.from('organizer_groups').update({ name: managementEditName.trim(), updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        loadData();
+                                      }
                                       setManagementEditingGroupId(null);
-                                      loadData();
-                                    } else if (e.key === 'Escape') {
-                                      setManagementEditingGroupId(null);
-                                    }
-                                  }}
-                                  onBlur={async () => {
-                                    if (managementEditName.trim() && managementEditName.trim() !== group.name) {
-                                      await supabase.from('organizer_groups').update({ name: managementEditName.trim(), updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
-                                      loadData();
-                                    }
-                                    setManagementEditingGroupId(null);
-                                  }}
-                                  autoFocus
-                                  style={{
-                                    flex: 1,
-                                    padding: '4px 8px',
-                                    border: '1px solid #3b82f6',
-                                    borderRadius: '4px',
-                                    fontSize: '13px',
-                                    outline: 'none'
-                                  }}
-                                />
-                              ) : (
-                                <span
-                                  style={{
-                                    flex: 1,
-                                    fontSize: '13px',
-                                    fontWeight: level === 0 ? 500 : 400,
-                                    color: '#374151',
-                                    cursor: 'pointer'
-                                  }}
-                                  onClick={() => {
-                                    setManagementEditingGroupId(group.id);
-                                    setManagementEditName(group.name);
-                                  }}
-                                  title="Kliki nime muutmiseks"
-                                >
-                                  {group.name}
-                                </span>
-                              )}
+                                    }}
+                                    autoFocus
+                                    style={{
+                                      width: '100%',
+                                      padding: '2px 6px',
+                                      border: '1px solid #3b82f6',
+                                      borderRadius: '3px',
+                                      fontSize: '12px',
+                                      outline: 'none'
+                                    }}
+                                  />
+                                ) : (
+                                  <div
+                                    style={{ cursor: 'pointer' }}
+                                    onClick={() => {
+                                      setManagementEditingGroupId(group.id);
+                                      setManagementEditName(group.name);
+                                    }}
+                                    title="Kliki nime muutmiseks"
+                                  >
+                                    <span style={{
+                                      fontSize: '12px',
+                                      fontWeight: level === 0 ? 500 : 400,
+                                      color: '#374151',
+                                      display: 'block',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {group.name}
+                                    </span>
+                                    {group.description && (
+                                      <span style={{
+                                        fontSize: '10px',
+                                        color: '#9ca3af',
+                                        display: 'block',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                        marginTop: '1px'
+                                      }}>
+                                        {group.description}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
 
                               {/* Item count */}
-                              <span style={{ fontSize: '11px', color: '#9ca3af', minWidth: '45px', textAlign: 'right' }}>
+                              <span style={{ fontSize: '10px', color: '#9ca3af', minWidth: '35px', textAlign: 'right', flexShrink: 0 }}>
                                 {itemCount} tk
                               </span>
 
                               {/* Lock indicator */}
                               {group.is_locked && (
-                                <FiLock size={12} style={{ color: '#9ca3af' }} title={`Lukustatud: ${group.locked_by}`} />
+                                <FiLock size={11} style={{ color: '#9ca3af', flexShrink: 0 }} title={`Lukustatud: ${group.locked_by}`} />
                               )}
 
                               {/* Action buttons */}
-                              <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
+                              <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                                 {/* Edit full settings button */}
                                 <button
                                   onClick={() => {
@@ -9931,18 +10053,18 @@ export default function OrganizerScreen({
                                     openEditGroupForm(group);
                                   }}
                                   style={{
-                                    padding: '4px',
+                                    padding: '3px',
                                     background: 'transparent',
                                     border: 'none',
                                     cursor: 'pointer',
-                                    color: '#6b7280',
-                                    borderRadius: '4px'
+                                    color: '#9ca3af',
+                                    borderRadius: '3px'
                                   }}
                                   title="Muuda grupi seadeid"
-                                  onMouseOver={(e) => (e.currentTarget.style.background = '#f3f4f6')}
-                                  onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                                  onMouseOver={(e) => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+                                  onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af'; }}
                                 >
-                                  <FiSettings size={14} />
+                                  <FiSettings size={12} />
                                 </button>
 
                                 {/* Add subgroup button - instant creation (only for level 0 and 1) */}
@@ -9950,18 +10072,18 @@ export default function OrganizerScreen({
                                   <button
                                     onClick={() => createInstantSubgroup(group.id)}
                                     style={{
-                                      padding: '4px',
+                                      padding: '3px',
                                       background: 'transparent',
                                       border: 'none',
                                       cursor: 'pointer',
-                                      color: '#6b7280',
-                                      borderRadius: '4px'
+                                      color: '#9ca3af',
+                                      borderRadius: '3px'
                                     }}
                                     title="Lisa alamgrupp"
-                                    onMouseOver={(e) => (e.currentTarget.style.background = '#f3f4f6')}
-                                    onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                                    onMouseOver={(e) => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+                                    onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#9ca3af'; }}
                                   >
-                                    <FiFolderPlus size={14} />
+                                    <FiFolderPlus size={12} />
                                   </button>
                                 )}
 
@@ -9974,19 +10096,19 @@ export default function OrganizerScreen({
                                     setShowDeleteConfirm(true);
                                   }}
                                   style={{
-                                    padding: '4px',
+                                    padding: '3px',
                                     background: 'transparent',
                                     border: 'none',
                                     cursor: group.is_locked ? 'not-allowed' : 'pointer',
-                                    color: group.is_locked ? '#d1d5db' : '#ef4444',
-                                    borderRadius: '4px'
+                                    color: group.is_locked ? '#d1d5db' : '#d1d5db',
+                                    borderRadius: '3px'
                                   }}
                                   title={group.is_locked ? 'Grupp on lukustatud' : 'Kustuta grupp'}
                                   disabled={group.is_locked}
-                                  onMouseOver={(e) => !group.is_locked && (e.currentTarget.style.background = '#fef2f2')}
-                                  onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                                  onMouseOver={(e) => { if (!group.is_locked) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.color = '#ef4444'; }}}
+                                  onMouseOut={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#d1d5db'; }}
                                 >
-                                  <FiTrash2 size={14} />
+                                  <FiTrash2 size={12} />
                                 </button>
                               </div>
                             </div>
