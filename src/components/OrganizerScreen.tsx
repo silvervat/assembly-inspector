@@ -2496,16 +2496,17 @@ export default function OrganizerScreen({
 
     // Check if this group requires assembly selection
     const selectionRequired = isSelectionEnabled(targetGroupId);
+    const isEnabled = await checkAssemblySelection();
 
-    if (selectionRequired) {
-      // Check current assembly selection status
-      const isEnabled = await checkAssemblySelection();
-      if (!isEnabled) {
-        // Show modal and save pending operation
+    // Group setting must match viewer mode
+    if (selectionRequired !== isEnabled) {
+      if (selectionRequired && !isEnabled) {
+        // Group requires assembly selection but it's OFF - show modal to enable
         setPendingAddGroupId(targetGroupId);
         setShowAssemblyModal(true);
-        return;
       }
+      // If group doesn't require but it's ON, silently skip (button shouldn't be visible anyway)
+      return;
     }
 
     // Proceed with adding
@@ -6336,7 +6337,7 @@ export default function OrganizerScreen({
             {node.assembly_selection_on !== false && (
               <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
             )}
-            {selectedObjects.length > 0 && isSelectionEnabled(node.id) && assemblySelectionEnabled && (
+            {selectedObjects.length > 0 && isSelectionEnabled(node.id) === assemblySelectionEnabled && (
               <>
                 {newItemsCount > 0 && (
                   <button
@@ -6404,7 +6405,7 @@ export default function OrganizerScreen({
                   <FiFolderPlus size={12} /> Lisa alamgrupp
                 </button>
               )}
-              {node.level < 2 && selectedObjects.length > 0 && !isEffectivelyLocked && isSelectionEnabled(node.id) && assemblySelectionEnabled && (
+              {node.level < 2 && selectedObjects.length > 0 && !isEffectivelyLocked && isSelectionEnabled(node.id) === assemblySelectionEnabled && (
                 <button onClick={() => {
                   setAddItemsAfterGroupCreate([...selectedObjects]);
                   openAddSubgroupForm(node.id);
