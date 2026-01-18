@@ -2595,7 +2595,10 @@ export default function OrganizerScreen({
     };
   }, [projectId, tcUserEmail, refreshData, showToast]);
 
-  // Expand group from zoom link (after data is loaded) and apply group coloring
+  // Track if we need to color on link open (set by expandGroupId effect, consumed by groupItems effect)
+  const pendingLinkColoringRef = useRef<string | null>(null);
+
+  // Expand group from zoom link (after data is loaded)
   useEffect(() => {
     if (!expandGroupId || loading || groups.length === 0) return;
 
@@ -2622,15 +2625,30 @@ export default function OrganizerScreen({
       });
       console.log('🔗 Expanded group from link:', expandGroupId, 'path:', [...groupIdsToExpand]);
 
-      // Apply group coloring using the same logic as "Värvi see grupp"
-      // This ensures consistent coloring behavior between menu action and link opening
-      console.log('🔗 Applying group coloring for:', expandGroupId);
-      colorModelByGroups(expandGroupId);
+      // Mark for coloring - will be processed when groupItems is ready
+      pendingLinkColoringRef.current = expandGroupId;
 
       onGroupExpanded?.();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandGroupId, loading, groups, onGroupExpanded]);
+
+  // Apply coloring when pending and groupItems is ready
+  useEffect(() => {
+    if (!pendingLinkColoringRef.current) return;
+    if (groupItems.size === 0) return;
+
+    const groupIdToColor = pendingLinkColoringRef.current;
+    pendingLinkColoringRef.current = null;
+
+    // Verify the group has items loaded
+    const group = groups.find(g => g.id === groupIdToColor);
+    if (!group) return;
+
+    console.log('🔗 Applying group coloring for:', groupIdToColor);
+    colorModelByGroups(groupIdToColor);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupItems, groups]);
 
   // ============================================
   // MODEL SELECTION POLLING
@@ -8845,15 +8863,29 @@ export default function OrganizerScreen({
                 const effectiveLockInfo = getGroupLockInfo(node.id);
                 const isEffectivelyLocked = isGroupLocked(node.id);
                 const lockedByParent = isEffectivelyLocked && !node.is_locked;
-                if (!isEffectivelyLocked) return null;
-                return (
-                  <span
-                    className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
-                    title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
-                  >
-                    <FiLock size={10} />
-                  </span>
-                );
+                if (isEffectivelyLocked) {
+                  return (
+                    <span
+                      className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
+                      title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+                    >
+                      <FiLock size={10} />
+                    </span>
+                  );
+                }
+                // Show "no edit permission" indicator if user can't edit (but group is not locked)
+                const userPerms = getUserPermissions(node.id, tcUserEmail);
+                if (!userPerms.can_edit_group) {
+                  return (
+                    <span
+                      className="org-no-edit-indicator"
+                      title="Sul pole õigust seda gruppi muuta"
+                    >
+                      <FiLock size={9} />
+                    </span>
+                  );
+                }
+                return null;
               })()}
             </div>
             {node.description && (

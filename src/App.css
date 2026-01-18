@@ -11752,6 +11752,18 @@ button.stat-toggle.off:hover {
   opacity: 0.8;
 }
 
+.org-no-edit-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  background: #f3f4f6;
+  padding: 1px 3px;
+  border-radius: 3px;
+  cursor: help;
+  opacity: 0.7;
+}
+
 .org-group-count {
   font-size: 11px;
   color: #6b7280;
