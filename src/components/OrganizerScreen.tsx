@@ -7877,7 +7877,7 @@ export default function OrganizerScreen({
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && deleteGroupData && (
-        <div className="org-modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+        <div className="org-modal-overlay" style={{ zIndex: 1010 }} onClick={() => setShowDeleteConfirm(false)}>
           <div className="org-modal" onClick={e => e.stopPropagation()}>
             <div className="org-modal-header">
               <h2>Kustuta grupp</h2>
