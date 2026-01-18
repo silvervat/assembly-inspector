@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.621';
+export const APP_VERSION = '3.0.622';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -257,6 +257,19 @@ export default function App() {
                   await connected.viewer.setObjectState(
                     { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: validRuntimeIds }] },
                     { color: { r: 255, g: 0, b: 0, a: 255 } }
+                  );
+                } else if (actionType === 'zoom_green') {
+                  // GREEN: Color all model objects grey, then target objects green
+                  console.log('🔗 Coloring model grey and targets green...');
+                  // First color entire model grey
+                  await connected.viewer.setObjectState(
+                    undefined, // all objects
+                    { color: { r: 150, g: 150, b: 150, a: 255 } }
+                  );
+                  // Then color target objects green
+                  await connected.viewer.setObjectState(
+                    { modelObjectIds: [{ modelId: pendingZoom.model_id, objectRuntimeIds: validRuntimeIds }] },
+                    { color: { r: 0, g: 200, b: 0, a: 255 } }
                   );
                 }
 

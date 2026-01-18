@@ -4088,11 +4088,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               </p>
               <div className="function-grid">
                 {/* Helper function for generating zoom links */}
-                {(['zoom', 'zoom_red', 'zoom_isolate'] as const).map((actionType) => {
+                {(['zoom', 'zoom_red', 'zoom_isolate', 'zoom_green'] as const).map((actionType) => {
                   const buttonConfig = {
                     zoom: { name: '🔍 Zoom', key: 'generateZoomLink' },
                     zoom_red: { name: '🔴 Zoom + Punane', key: 'generateZoomLinkRed' },
-                    zoom_isolate: { name: '👁️ Zoom + Isoleeri', key: 'generateZoomLinkIsolate' }
+                    zoom_isolate: { name: '👁️ Zoom + Isoleeri', key: 'generateZoomLinkIsolate' },
+                    zoom_green: { name: '🟢 Zoom + Roheline', key: 'generateZoomLinkGreen' }
                   }[actionType];
 
                   return (
