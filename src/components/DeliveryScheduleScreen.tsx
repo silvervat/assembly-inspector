@@ -444,9 +444,13 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // Newly created vehicle highlight
   const [newlyCreatedVehicleId, setNewlyCreatedVehicleId] = useState<string | null>(null);
 
-  // Multi-select
+  // Multi-select items
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [lastClickedId, setLastClickedId] = useState<string | null>(null);
+
+  // Multi-select dates (CTRL+click)
+  const [selectedDates, setSelectedDates] = useState<Set<string>>(new Set());
+  const [lastSelectedDate, setLastSelectedDate] = useState<string | null>(null);
 
   // Drag and drop
   const [isDragging, setIsDragging] = useState(false);
@@ -5894,6 +5898,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   // SELECT DATE ITEMS IN MODEL
   // ============================================
 
+  // Select items from a single date in model
   const selectDateItemsInModel = async (date: string) => {
     // Get all items for this date
     const dateVehicles = itemsByDateAndVehicle[date] || {};
@@ -5916,6 +5921,73 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
       } catch (e) {
         console.error('Error selecting date items:', e);
       }
+    }
+  };
+
+  // Select items from multiple dates in model (for CTRL+click multi-select)
+  const selectMultipleDatesInModel = async (dates: Set<string>) => {
+    if (dates.size === 0) return;
+
+    // Collect GUIDs from all selected dates
+    const allGuids: string[] = [];
+    dates.forEach(date => {
+      const dateVehicles = itemsByDateAndVehicle[date] || {};
+      const dateItems = Object.values(dateVehicles).flat();
+      dateItems.forEach(item => {
+        const guid = item.guid_ifc || item.guid;
+        if (guid) allGuids.push(guid);
+      });
+    });
+
+    if (allGuids.length === 0) return;
+
+    try {
+      const count = await selectObjectsByGuid(api, allGuids, 'set');
+      if (count > 0) {
+        await api.viewer.setCamera({ selected: true }, { animationTime: 300 });
+      }
+      setMessage(`${count} detaili valitud (${dates.size} päeva)`);
+    } catch (e) {
+      console.error('Error selecting multiple dates:', e);
+    }
+  };
+
+  // Handle date click with CTRL support
+  const handleDateClick = async (date: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+
+    if (event.ctrlKey || event.metaKey) {
+      // CTRL+click: Toggle date in multi-selection
+      setSelectedDates(prev => {
+        const next = new Set(prev);
+        if (next.has(date)) {
+          next.delete(date);
+        } else {
+          next.add(date);
+        }
+        // Select items from all selected dates
+        selectMultipleDatesInModel(next);
+        return next;
+      });
+      setLastSelectedDate(date);
+    } else if (event.shiftKey && lastSelectedDate) {
+      // SHIFT+click: Select range of dates
+      const sortedDates = Object.keys(itemsByDateAndVehicle).sort();
+      const lastIdx = sortedDates.indexOf(lastSelectedDate);
+      const currentIdx = sortedDates.indexOf(date);
+
+      if (lastIdx >= 0 && currentIdx >= 0) {
+        const start = Math.min(lastIdx, currentIdx);
+        const end = Math.max(lastIdx, currentIdx);
+        const rangeDates = new Set(sortedDates.slice(start, end + 1));
+        setSelectedDates(rangeDates);
+        selectMultipleDatesInModel(rangeDates);
+      }
+    } else {
+      // Normal click: Single date selection, clear multi-select
+      setSelectedDates(new Set([date]));
+      setLastSelectedDate(date);
+      selectDateItemsInModel(date);
     }
   };
 
@@ -6073,10 +6145,20 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                     </div>
                   )}
                   <div
-                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem && !isPlaybackActive ? 'has-selected-item' : ''} ${isPlaybackDate ? 'playback-active' : ''}`}
-                    onClick={() => {
-                      setSelectedDate(dateStr);
+                    className={`calendar-day ${!isCurrentMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${selectedDates.has(dateStr) ? 'multi-selected' : ''} ${vehicleCount > 0 ? 'has-items' : ''} ${hasSelectedItem && !isPlaybackActive ? 'has-selected-item' : ''} ${isPlaybackDate ? 'playback-active' : ''}`}
+                    onClick={(e) => {
                       setHoveredDate(null); // Clear tooltip on click
+
+                      // CTRL+click or SHIFT+click: Multi-select dates
+                      if (e.ctrlKey || e.metaKey || e.shiftKey) {
+                        handleDateClick(dateStr, e);
+                        return;
+                      }
+
+                      // Normal click behavior
+                      setSelectedDate(dateStr);
+                      setSelectedDates(new Set([dateStr])); // Clear multi-select, set single
+                      setLastSelectedDate(dateStr);
 
                       // Check if selected objects are NEW (not already in schedule)
                       const existingGuids = new Set(items.map(item => item.guid));
@@ -6299,12 +6381,12 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
 
                 {/* Date section - clickable to select items in model */}
                 <div
-                  className="date-info-section clickable"
+                  className={`date-info-section clickable ${selectedDates.has(date) ? 'multi-selected' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    selectDateItemsInModel(date);
+                    handleDateClick(date, e);
                   }}
-                  title="Märgista mudelis"
+                  title="Märgista mudelis (CTRL+klõps: mitme päeva valik)"
                 >
                   {/* Color indicator: show during colorMode or playback */}
                   {(colorMode === 'date' && dateColors[date]) || (isPlaying && playbackSettings.playbackMode === 'date' && playbackColoredDates.has(date) && playbackDateColors[date]) ? (

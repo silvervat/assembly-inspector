@@ -1514,9 +1514,7 @@ export default function OrganizerScreen({
         const { error } = await supabase
           .from('organizer_group_items')
           .update({
-            custom_properties: updatedProps,
-            updated_at: new Date().toISOString(),
-            updated_by: tcUserEmail
+            custom_properties: updatedProps
           })
           .eq('id', item.id);
 
@@ -5230,11 +5228,35 @@ export default function OrganizerScreen({
     if (!pendingLinkData) return;
 
     const { groupId, guids, modelId } = pendingLinkData;
-    const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
-    const guidsParam = guids.join(',');
-    const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(guidsParam)}&action=zoom_green&group=${encodeURIComponent(groupId)}&expiry=${selectedExpiry}`;
 
     try {
+      // Calculate expiry date
+      const expiresAt = new Date(Date.now() + selectedExpiry * 24 * 60 * 60 * 1000).toISOString();
+
+      // Store zoom target in database (with all GUIDs)
+      const { data: zoomTarget, error: insertError } = await supabase
+        .from('zoom_targets')
+        .insert({
+          project_id: projectId,
+          model_id: modelId,
+          guid: guids.join(','),  // Store all GUIDs as comma-separated
+          action_type: 'zoom_green',
+          group_id: groupId,
+          expires_at: expiresAt
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !zoomTarget) {
+        console.error('Error creating zoom target:', insertError);
+        showToast('Viga lingi loomisel');
+        return;
+      }
+
+      // Create short URL with just the zoom target ID
+      const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
+      const zoomUrl = `${baseUrl}?zoom=${zoomTarget.id}`;
+
       await navigator.clipboard.writeText(zoomUrl);
       showToast(`Link kopeeritud (${guids.length} detaili, kehtib ${selectedExpiry} päeva)`);
     } catch (e) {
