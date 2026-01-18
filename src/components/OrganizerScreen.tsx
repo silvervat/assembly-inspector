@@ -663,6 +663,9 @@ export default function OrganizerScreen({
   const [formAssemblySelectionOn, setFormAssemblySelectionOn] = useState(true);
   const [formUniqueItems, setFormUniqueItems] = useState(true);
   const [formCustomFields, setFormCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [formDisplayProperties, setFormDisplayProperties] = useState<{set: string; prop: string; label: string}[]>([]);
+  const [availableModelProperties, setAvailableModelProperties] = useState<{set: string; prop: string; value: string}[]>([]);
+  const [loadingModelProperties, setLoadingModelProperties] = useState(false);
 
   // Permission settings
   const [formDefaultPermissions, setFormDefaultPermissions] = useState<GroupPermissions>({ ...DEFAULT_GROUP_PERMISSIONS });
@@ -1071,6 +1074,102 @@ export default function OrganizerScreen({
     }
   }, [api, teamMembers.length]);
 
+  // Load available model properties from any selected object
+  const loadModelProperties = useCallback(async () => {
+    if (loadingModelProperties) return;
+    setLoadingModelProperties(true);
+    try {
+      // Get selected objects from viewer
+      const selection = await api.viewer.getSelection();
+      let modelId: string | null = null;
+      let runtimeId: number | null = null;
+
+      if (selection && Array.isArray(selection)) {
+        for (const sel of selection) {
+          const runtimeIds = (sel as any).objectRuntimeIds;
+          if (sel.modelId && runtimeIds && runtimeIds.length > 0) {
+            modelId = sel.modelId;
+            runtimeId = runtimeIds[0];
+            break;
+          }
+        }
+      }
+
+      // If no selection, try to get first object from loaded models
+      if (!modelId || !runtimeId) {
+        const models = await api.viewer.getModels();
+        if (models && models.length > 0) {
+          for (const model of models) {
+            const modelObjects = await (api.viewer as any).getObjects(model.id, { loaded: true });
+            if (modelObjects && modelObjects.length > 0) {
+              // Find first valid runtime ID
+              const findFirstRuntimeId = (obj: any): number | null => {
+                if (obj.runtimeId) return obj.runtimeId;
+                if (obj.children) {
+                  for (const child of obj.children) {
+                    const found = findFirstRuntimeId(child);
+                    if (found) return found;
+                  }
+                }
+                return null;
+              };
+              runtimeId = findFirstRuntimeId(modelObjects[0]);
+              if (runtimeId) {
+                modelId = model.id;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      if (!modelId || !runtimeId) {
+        console.log('No model object found to load properties from');
+        setAvailableModelProperties([]);
+        return;
+      }
+
+      // Get properties of this object
+      const props = await api.viewer.getObjectProperties(modelId, [runtimeId]);
+      if (!props || props.length === 0) {
+        setAvailableModelProperties([]);
+        return;
+      }
+
+      const allProps: {set: string; prop: string; value: string}[] = [];
+      const objProps = props[0];
+      const propertiesList = (objProps as any)?.properties;
+
+      if (propertiesList && Array.isArray(propertiesList)) {
+        for (const pset of propertiesList) {
+          const setName = (pset as any).set || (pset as any).name || 'Unknown';
+          const psetProps = (pset as any).properties;
+          if (!psetProps || !Array.isArray(psetProps)) continue;
+
+          for (const prop of psetProps) {
+            const propName = (prop as any).name || '';
+            const propValue = (prop as any).displayValue ?? (prop as any).value ?? '';
+            if (propName) {
+              allProps.push({
+                set: setName,
+                prop: propName,
+                value: String(propValue)
+              });
+            }
+          }
+        }
+      }
+
+      console.log('✅ Loaded model properties:', allProps.length);
+      setAvailableModelProperties(allProps);
+    } catch (e) {
+      console.error('❌ Error loading model properties:', e);
+      setAvailableModelProperties([]);
+    } finally {
+      setLoadingModelProperties(false);
+    }
+  }, [api, loadingModelProperties]);
+
   // ============================================
   // DATA LOADING
   // ============================================
@@ -1475,6 +1574,12 @@ export default function OrganizerScreen({
       return;
     }
 
+    // Validate display properties when assembly selection is off
+    if (!formAssemblySelectionOn && formDisplayProperties.length === 0) {
+      showToast('Vali vähemalt üks kuvatav veerg');
+      return;
+    }
+
     setSaving(true);
     try {
       let level = 0;
@@ -1514,7 +1619,7 @@ export default function OrganizerScreen({
         description: formDescription.trim() || null,
         is_private: isPrivate,
         allowed_users: allowedUsers,
-        display_properties: [],
+        display_properties: formDisplayProperties,
         custom_fields: finalCustomFields,
         assembly_selection_on: formAssemblySelectionOn,
         unique_items: formParentId ? inheritedUniqueItems : formUniqueItems,
@@ -1606,6 +1711,12 @@ export default function OrganizerScreen({
   const updateGroup = async () => {
     if (!editingGroup || !formName.trim()) return;
 
+    // Validate display properties when assembly selection is off
+    if (!formAssemblySelectionOn && formDisplayProperties.length === 0) {
+      showToast('Vali vähemalt üks kuvatav veerg');
+      return;
+    }
+
     // Determine sharing settings based on mode
     const isPrivate = formSharingMode !== 'project';
     const allowedUsers = formSharingMode === 'shared' ? formAllowedUsers : [];
@@ -1638,6 +1749,7 @@ export default function OrganizerScreen({
           allowed_users: allowedUsers,
           color: formColor,
           custom_fields: editingGroup.custom_fields,
+          display_properties: formDisplayProperties,
           assembly_selection_on: formAssemblySelectionOn,
           unique_items: formUniqueItems,
           default_permissions: formDefaultPermissions,
@@ -1660,6 +1772,7 @@ export default function OrganizerScreen({
         is_private: isPrivate,
         allowed_users: allowedUsers,
         color: formColor,
+        display_properties: formDisplayProperties,
         assembly_selection_on: formAssemblySelectionOn,
         unique_items: formUniqueItems,
         default_permissions: formDefaultPermissions,
@@ -1947,6 +2060,8 @@ export default function OrganizerScreen({
     setFormAssemblySelectionOn(true);
     setFormUniqueItems(true);
     setFormCustomFields([]);
+    setFormDisplayProperties([]);
+    setAvailableModelProperties([]);
     setFormDefaultPermissions({ ...DEFAULT_GROUP_PERMISSIONS });
     setFormUserPermissions({});
     setAddItemsAfterGroupCreate([]);
@@ -1970,6 +2085,7 @@ export default function OrganizerScreen({
     setFormParentId(group.parent_id);
     setFormAssemblySelectionOn(group.assembly_selection_on !== false);
     setFormUniqueItems(group.unique_items !== false);
+    setFormDisplayProperties(group.display_properties || []);
     // Load permissions
     setFormDefaultPermissions(group.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS });
     setFormUserPermissions(group.user_permissions || {});
@@ -1977,6 +2093,10 @@ export default function OrganizerScreen({
     setGroupMenuId(null);
     // Load team members when editing for shared mode
     loadTeamMembers();
+    // Load model properties if assembly selection is off
+    if (group.assembly_selection_on === false) {
+      loadModelProperties();
+    }
   };
 
   const openAddSubgroupForm = (parentId: string) => {
@@ -6009,7 +6129,9 @@ export default function OrganizerScreen({
                 : <>{node.itemCount} tk</>
               }
             </span>
-            <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
+            {node.assembly_selection_on !== false && (
+              <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
+            )}
             {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
               <>
                 {newItemsCount > 0 && (
@@ -7139,8 +7261,145 @@ export default function OrganizerScreen({
                     }
                   </div>
                 </div>
-                <div className={`org-toggle ${formAssemblySelectionOn ? 'active' : ''}`} onClick={() => setFormAssemblySelectionOn(!formAssemblySelectionOn)} />
+                <div className={`org-toggle ${formAssemblySelectionOn ? 'active' : ''}`} onClick={() => {
+                  const newValue = !formAssemblySelectionOn;
+                  setFormAssemblySelectionOn(newValue);
+                  // Load properties when turning off assembly selection
+                  if (!newValue && availableModelProperties.length === 0) {
+                    loadModelProperties();
+                  }
+                }} />
               </div>
+
+              {/* Property picker when Assembly Selection is OFF */}
+              {!formAssemblySelectionOn && (
+                <div className="org-field" style={{ marginTop: '8px', background: '#fef3c7', padding: '12px', borderRadius: '6px' }}>
+                  <label style={{ marginBottom: '8px', display: 'block' }}>
+                    Kuvatavad veerud (vali 1-3) <span style={{ color: '#d97706', fontSize: '11px' }}>*kohustuslik</span>
+                  </label>
+                  <p style={{ fontSize: '11px', color: '#92400e', marginBottom: '10px' }}>
+                    Ilma Assembly Selection'ita vali, milliseid property'sid grupis kuvada.
+                  </p>
+
+                  {loadingModelProperties ? (
+                    <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>
+                      <FiRefreshCw className="spin" size={16} style={{ marginRight: '8px' }} />
+                      Laen mudeli property'sid...
+                    </div>
+                  ) : availableModelProperties.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280', background: '#fff', borderRadius: '4px' }}>
+                      <p style={{ marginBottom: '8px' }}>Property'sid ei leitud.</p>
+                      <button
+                        type="button"
+                        onClick={loadModelProperties}
+                        style={{
+                          padding: '6px 12px',
+                          background: '#003F87',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <FiRefreshCw size={12} style={{ marginRight: '4px' }} />
+                        Lae uuesti
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Selected properties */}
+                      {formDisplayProperties.length > 0 && (
+                        <div style={{ marginBottom: '10px' }}>
+                          <div style={{ fontSize: '11px', color: '#374151', marginBottom: '6px' }}>Valitud ({formDisplayProperties.length}/3):</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {formDisplayProperties.map((dp, idx) => (
+                              <div key={idx} style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 8px',
+                                background: '#003F87',
+                                color: 'white',
+                                borderRadius: '4px',
+                                fontSize: '11px'
+                              }}>
+                                <span>{dp.label || dp.prop}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setFormDisplayProperties(prev => prev.filter((_, i) => i !== idx))}
+                                  style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '0 2px' }}
+                                >
+                                  <FiX size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Property list to select from */}
+                      <div style={{ maxHeight: '200px', overflow: 'auto', background: 'white', borderRadius: '4px', border: '1px solid #e5e7eb' }}>
+                        {(() => {
+                          // Group properties by set
+                          const grouped = new Map<string, {prop: string; value: string}[]>();
+                          for (const p of availableModelProperties) {
+                            if (!grouped.has(p.set)) grouped.set(p.set, []);
+                            grouped.get(p.set)!.push({ prop: p.prop, value: p.value });
+                          }
+                          return Array.from(grouped.entries()).map(([setName, props]) => (
+                            <div key={setName}>
+                              <div style={{ padding: '6px 10px', background: '#f3f4f6', fontWeight: 500, fontSize: '11px', color: '#374151', borderBottom: '1px solid #e5e7eb' }}>
+                                {setName}
+                              </div>
+                              {props.map((p, idx) => {
+                                const isSelected = formDisplayProperties.some(dp => dp.set === setName && dp.prop === p.prop);
+                                const canSelect = formDisplayProperties.length < 3 || isSelected;
+                                return (
+                                  <div
+                                    key={idx}
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        setFormDisplayProperties(prev => prev.filter(dp => !(dp.set === setName && dp.prop === p.prop)));
+                                      } else if (canSelect) {
+                                        setFormDisplayProperties(prev => [...prev, { set: setName, prop: p.prop, label: p.prop }]);
+                                      }
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      padding: '6px 10px',
+                                      borderBottom: '1px solid #f3f4f6',
+                                      cursor: canSelect ? 'pointer' : 'not-allowed',
+                                      background: isSelected ? '#dbeafe' : 'transparent',
+                                      opacity: canSelect ? 1 : 0.5
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => {}}
+                                        disabled={!canSelect}
+                                        style={{ margin: 0 }}
+                                      />
+                                      <span style={{ fontSize: '12px', color: '#374151' }}>{p.prop}</span>
+                                    </div>
+                                    <span style={{ fontSize: '10px', color: '#9ca3af', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {p.value}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {/* Unique items - only for main groups (subgroups inherit) */}
               {!formParentId && (
