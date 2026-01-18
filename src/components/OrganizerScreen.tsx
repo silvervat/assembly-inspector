@@ -5587,6 +5587,14 @@ export default function OrganizerScreen({
         return;
       }
 
+      // Limit to 200 items to prevent crashes
+      const MARKUP_LIMIT = 200;
+      if (itemsWithGroup.length > MARKUP_LIMIT) {
+        showToast(`Liiga palju detaile (${itemsWithGroup.length}). Maksimum on ${MARKUP_LIMIT} markupit korraga.`);
+        setSaving(false);
+        return;
+      }
+
       // Get custom fields from root parent
       const rootParent = getRootParent(markupGroupId);
       const customFields = rootParent?.custom_fields || [];
@@ -11659,30 +11667,11 @@ export default function OrganizerScreen({
           setFocusedLine(lineKey);
         };
 
-        // Handle text input change for template
-        const handleTemplateInputChange = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', value: string) => {
-          setMarkupSettings(prev => ({ ...prev, [lineKey]: value }));
-        };
-
-        // Insert text at cursor position in input
-        const insertAtCursor = (inputRef: HTMLInputElement | null, text: string, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
-          if (!inputRef) return;
-          const start = inputRef.selectionStart || 0;
-          const end = inputRef.selectionEnd || 0;
-          const currentValue = markupSettings[lineKey];
-          const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
-          setMarkupSettings(prev => ({ ...prev, [lineKey]: newValue }));
-          // Set cursor position after inserted text
-          setTimeout(() => {
-            inputRef.selectionStart = inputRef.selectionEnd = start + text.length;
-            inputRef.focus();
-          }, 0);
-        };
-
-        // Render template editor for a line with mixed input
-        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, inputRef: React.RefObject<HTMLInputElement>) => {
+        // Render template editor for a line - chips only, no text input
+        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, _inputRef: React.RefObject<HTMLInputElement>) => {
           const template = markupSettings[lineKey];
-          const segments = parseTemplateToSegments(template);
+          // Only get chip segments (placeholders), ignore any text
+          const chipSegments = parseTemplateToSegments(template).filter(seg => seg.type === 'chip');
 
           return (
             <div
@@ -11692,52 +11681,28 @@ export default function OrganizerScreen({
               onDragOver={handleDragOver}
             >
               <label className="template-label-above">{label}</label>
-              {/* Visual chip display */}
+              {/* Chips only display */}
               <div className={`template-chips-area ${focusedLine === lineKey ? 'focused' : ''}`}>
-                {segments.length === 0 ? (
-                  <span className="template-placeholder">Lohista siia välju või kirjuta tekst...</span>
+                {chipSegments.length === 0 ? (
+                  <span className="template-placeholder">Lohista siia välju...</span>
                 ) : (
-                  segments.map((seg, idx) => (
-                    seg.type === 'chip' ? (
-                      <span key={idx} className="markup-line-chip" draggable>
-                        <span className="chip-label">{seg.label}</span>
-                        <button
-                          type="button"
-                          className="chip-remove"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeChipFromTemplate(lineKey, seg.value);
-                          }}
-                        >
-                          <FiX size={10} />
-                        </button>
-                      </span>
-                    ) : (
-                      <span key={idx} className="markup-line-text">{seg.value}</span>
-                    )
+                  chipSegments.map((seg, idx) => (
+                    <span key={idx} className="markup-line-chip">
+                      <span className="chip-label">{seg.label}</span>
+                      <button
+                        type="button"
+                        className="chip-remove"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeChipFromTemplate(lineKey, seg.value);
+                        }}
+                      >
+                        <FiX size={10} />
+                      </button>
+                    </span>
                   ))
                 )}
               </div>
-              {/* Hidden text input for typing */}
-              <input
-                ref={inputRef}
-                type="text"
-                className="markup-template-input"
-                value={template}
-                onChange={(e) => handleTemplateInputChange(lineKey, e.target.value)}
-                onFocus={() => setFocusedLine(lineKey)}
-                placeholder="Kirjuta tekst ja lisa välju {}"
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const placeholder = e.dataTransfer.getData('text/plain');
-                  if (placeholder && placeholder.startsWith('{') && placeholder.endsWith('}')) {
-                    if (!allTemplateText.includes(placeholder)) {
-                      insertAtCursor(inputRef.current, placeholder, lineKey);
-                    }
-                  }
-                }}
-                onDragOver={handleDragOver}
-              />
             </div>
           );
         };
