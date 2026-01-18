@@ -1955,6 +1955,22 @@ export default function OrganizerScreen({
       } else if (newUrls.length > 0) {
         showToast(`${newUrls.length} fail(i) üles laetud`);
       }
+
+      // Log activity for successful uploads
+      if (newUrls.length > 0) {
+        const itemGroup = groups.find(g => g.id === item.group_id);
+        logActivity({
+          action_type: field.type === 'photo' ? 'add_photo' : 'add_attachment',
+          group_id: item.group_id,
+          group_name: itemGroup?.name || null,
+          item_count: newUrls.length,
+          item_ids: [item.id],
+          item_guids: item.guid_ifc ? [item.guid_ifc] : [],
+          field_id: field.id,
+          field_name: field.name,
+          details: { file_count: newUrls.length }
+        });
+      }
     } catch (e) {
       console.error('File upload error:', e);
       showToast('Faili üleslaadimine ebaõnnestus');
@@ -1963,7 +1979,7 @@ export default function OrganizerScreen({
       setUploadProgress('');
       setUploadProgressData(null);
     }
-  }, [uploadSingleFile, tcUserEmail, showToast, groups, groupItems, buildGroupTree, setCachedData]);
+  }, [uploadSingleFile, tcUserEmail, showToast, groups, groupItems, buildGroupTree, setCachedData, logActivity]);
 
   // Process pending uploads in background (retry on reconnection)
   const processPendingUploads = useCallback(async () => {
@@ -2195,6 +2211,21 @@ export default function OrganizerScreen({
 
       showToast('Pilt kustutatud');
 
+      // Log activity
+      const itemGroup = groups.find(g => g.id === item.group_id);
+      const rootGroup = itemGroup?.parent_id ? groups.find(g => !g.parent_id && (g.id === itemGroup.parent_id || groups.some(ch => ch.id === itemGroup.parent_id && ch.parent_id === g.id))) : itemGroup;
+      const field = (rootGroup?.custom_fields || itemGroup?.custom_fields || []).find(f => f.id === lightboxFieldId);
+      logActivity({
+        action_type: 'remove_photo',
+        group_id: item.group_id,
+        group_name: itemGroup?.name || null,
+        item_count: 1,
+        item_ids: [item.id],
+        item_guids: item.guid_ifc ? [item.guid_ifc] : [],
+        field_id: lightboxFieldId,
+        field_name: field?.name || lightboxFieldId
+      });
+
       // Update lightbox state
       if (newUrls.length === 0) {
         closeLightbox();
@@ -2210,7 +2241,7 @@ export default function OrganizerScreen({
       console.error('Error deleting photo:', e);
       showToast('Pildi kustutamine ebaõnnestus');
     }
-  }, [lightboxPhoto, lightboxItemId, lightboxFieldId, lightboxIndex, groups, groupItems, closeLightbox, refreshData, showToast]);
+  }, [lightboxPhoto, lightboxItemId, lightboxFieldId, lightboxIndex, groups, groupItems, closeLightbox, refreshData, showToast, logActivity]);
 
   // Generate masked URL for sharing (hide Supabase address)
   const getMaskedPhotoUrl = useCallback((url: string) => {
@@ -3371,6 +3402,17 @@ export default function OrganizerScreen({
       if (error) throw error;
 
       showToast('Väli lisatud');
+
+      // Log activity
+      logActivity({
+        action_type: 'add_field',
+        group_id: rootGroup.id,
+        group_name: rootGroup.name,
+        field_id: newField.id,
+        field_name: newField.name,
+        details: { field_type: newField.type, required: newField.required }
+      });
+
       resetFieldForm();
       setShowFieldForm(false);
       await loadData();
@@ -3587,6 +3629,17 @@ export default function OrganizerScreen({
       if (error) throw error;
 
       showToast(isFileField ? 'Väli ja seotud failid kustutatud' : 'Väli kustutatud');
+
+      // Log activity
+      logActivity({
+        action_type: 'remove_field',
+        group_id: rootGroup.id,
+        group_name: rootGroup.name,
+        field_id: fieldId,
+        field_name: fieldToDelete?.name || fieldId,
+        details: { field_type: fieldToDelete?.type, had_files: isFileField }
+      });
+
       await loadData();
       // Refresh editingGroup if we're editing, so the modal shows updated fields
       if (editingGroup && editingGroup.id === rootGroup.id) {
@@ -4264,6 +4317,23 @@ export default function OrganizerScreen({
 
       // Update database in background
       supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', itemId);
+
+      // Log activity (get field name from group's custom_fields)
+      const group = groups.find(g => g.id === item.group_id);
+      const rootGroup = group?.parent_id ? getRootParent(item.group_id) : group;
+      const field = rootGroup?.custom_fields?.find(f => f.id === fieldId);
+      logActivity({
+        action_type: 'update_item',
+        group_id: item.group_id,
+        group_name: group?.name || null,
+        item_count: 1,
+        item_ids: [itemId],
+        item_guids: item.guid_ifc ? [item.guid_ifc] : [],
+        field_id: fieldId,
+        field_name: field?.name || fieldId,
+        old_value: previousValue,
+        new_value: parsedValue
+      });
     } catch (e) {
       console.error('Error updating field:', e);
     }
@@ -11438,6 +11508,11 @@ export default function OrganizerScreen({
                   <option value="create_group">Grupi loomine</option>
                   <option value="delete_group">Grupi kustutamine</option>
                   <option value="update_group">Grupi muutmine</option>
+                  <option value="add_photo">Foto lisamine</option>
+                  <option value="remove_photo">Foto eemaldamine</option>
+                  <option value="add_attachment">Manuse lisamine</option>
+                  <option value="add_field">Lisaveeru lisamine</option>
+                  <option value="remove_field">Lisaveeru kustutamine</option>
                 </select>
                 <input
                   type="date"
@@ -11500,7 +11575,12 @@ export default function OrganizerScreen({
                         update_item: 'muutis detaili',
                         create_group: 'lõi grupi',
                         delete_group: 'kustutas grupi',
-                        update_group: 'muutis gruppi'
+                        update_group: 'muutis gruppi',
+                        add_photo: 'lisas foto',
+                        remove_photo: 'eemaldas foto',
+                        add_attachment: 'lisas manuse',
+                        add_field: 'lisas lisaveeru',
+                        remove_field: 'kustutas lisaveeru'
                       };
                       const actionColors: Record<string, string> = {
                         add_items: '#10b981',
@@ -11508,7 +11588,12 @@ export default function OrganizerScreen({
                         update_item: '#f59e0b',
                         create_group: '#3b82f6',
                         delete_group: '#dc2626',
-                        update_group: '#8b5cf6'
+                        update_group: '#8b5cf6',
+                        add_photo: '#22c55e',
+                        remove_photo: '#f87171',
+                        add_attachment: '#14b8a6',
+                        add_field: '#6366f1',
+                        remove_field: '#f43f5e'
                       };
 
                       const userName = log.user_name || log.user_email.split('@')[0];
