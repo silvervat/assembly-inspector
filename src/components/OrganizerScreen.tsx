@@ -25,7 +25,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiTag, FiUpload, FiSettings
+  FiTag, FiUpload, FiSettings, FiGrid
 } from 'react-icons/fi';
 
 // ============================================
@@ -665,7 +665,8 @@ export default function OrganizerScreen({
   const [formAssemblySelectionOn, setFormAssemblySelectionOn] = useState(true);
   const [formUniqueItems, setFormUniqueItems] = useState(true);
   const [formCustomFields, setFormCustomFields] = useState<CustomFieldDefinition[]>([]);
-  const [formDisplayProperties, setFormDisplayProperties] = useState<{set: string; prop: string; label: string}[]>([]);
+  const [formDisplayProperties, setFormDisplayProperties] = useState<{set: string; prop: string; label: string; decimals?: number}[]>([]);
+  const [displayPropertyMenuIdx, setDisplayPropertyMenuIdx] = useState<number | null>(null);
   const [availableModelProperties, setAvailableModelProperties] = useState<{set: string; prop: string; value: string}[]>([]);
   const [loadingModelProperties, setLoadingModelProperties] = useState(false);
 
@@ -1101,17 +1102,18 @@ export default function OrganizerScreen({
 
   // Close all dropdown menus when clicking outside
   useEffect(() => {
-    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || groupMenuId !== null;
+    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || groupMenuId !== null || displayPropertyMenuIdx !== null;
     if (!anyMenuOpen) return;
     const handleClick = () => {
       setShowSortMenu(false);
       setShowFilterMenu(false);
       setShowColorModeMenu(false);
       setGroupMenuId(null);
+      setDisplayPropertyMenuIdx(null);
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [showSortMenu, showFilterMenu, showColorModeMenu, groupMenuId]);
+  }, [showSortMenu, showFilterMenu, showColorModeMenu, groupMenuId, displayPropertyMenuIdx]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -1438,7 +1440,10 @@ export default function OrganizerScreen({
       } else if (Date.now() - lastRefreshTime > DEBOUNCE_MS) {
         // Another session/device made this change - refresh to get updates
         lastRefreshTime = Date.now();
-        showToast(`📡 ${changeAuthor || 'Keegi'} uuendas andmeid`);
+        // Only show notification if change was made by someone else (not current user)
+        if (changeAuthor && changeAuthor !== tcUserEmail) {
+          showToast(`📡 ${changeAuthor} uuendas andmeid`);
+        }
         refreshData();
       }
     };
@@ -2145,6 +2150,7 @@ export default function OrganizerScreen({
     setFormUniqueItems(true);
     setFormCustomFields([]);
     setFormDisplayProperties([]);
+    setDisplayPropertyMenuIdx(null);
     setAvailableModelProperties([]);
     setPropertySearchQuery('');
     setFormDefaultPermissions({ ...DEFAULT_GROUP_PERMISSIONS });
@@ -6690,6 +6696,7 @@ export default function OrganizerScreen({
               <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
                 {node.name}
               </span>
+              {node.assembly_selection_on === false && <FiGrid size={10} className="org-element-icon" title="Element tasemel" style={{ color: '#6366f1', marginLeft: '4px' }} />}
               {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
               {(() => {
                 const effectiveLockInfo = getGroupLockInfo(node.id);
@@ -7026,18 +7033,26 @@ export default function OrganizerScreen({
                         {useCustomDisplayProps ? (
                           // Show custom display property values
                           <>
-                            {node.display_properties!.map((dp: {set: string; prop: string; label: string}, dpIdx: number) => {
+                            {node.display_properties!.map((dp: {set: string; prop: string; label: string; decimals?: number}, dpIdx: number) => {
                               // Try to get value from item's custom_properties using display_prop key
                               const displayKey = `display_${dp.set}_${dp.prop}`;
-                              const value = item.custom_properties?.[displayKey] as string | undefined;
+                              const rawValue = item.custom_properties?.[displayKey] as string | undefined;
+                              // Apply decimal formatting if decimals is set and value is numeric
+                              let displayValue = rawValue || '—';
+                              if (rawValue && dp.decimals !== undefined) {
+                                const numVal = parseFloat(rawValue);
+                                if (!isNaN(numVal)) {
+                                  displayValue = numVal.toFixed(dp.decimals);
+                                }
+                              }
                               return (
                                 <span
                                   key={dpIdx}
                                   className="org-item-custom-display"
                                   style={{ flex: 1, minWidth: '60px', fontSize: '12px', color: '#374151' }}
-                                  title={value || '—'}
+                                  title={rawValue || '—'}
                                 >
-                                  {value || '—'}
+                                  {displayValue}
                                 </span>
                               );
                             })}
@@ -7964,9 +7979,18 @@ export default function OrganizerScreen({
                                 background: '#003F87',
                                 color: 'white',
                                 borderRadius: '4px',
-                                fontSize: '11px'
+                                fontSize: '11px',
+                                position: 'relative'
                               }}>
-                                <span>{dp.label || dp.prop}</span>
+                                <span>{dp.label || dp.prop}{dp.decimals !== undefined ? ` (${dp.decimals})` : ''}</span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); setDisplayPropertyMenuIdx(displayPropertyMenuIdx === idx ? null : idx); }}
+                                  style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: '0 2px' }}
+                                  title="Seaded"
+                                >
+                                  <FiMoreVertical size={12} />
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => setFormDisplayProperties(prev => prev.filter((_, i) => i !== idx))}
@@ -7974,6 +7998,57 @@ export default function OrganizerScreen({
                                 >
                                   <FiX size={12} />
                                 </button>
+                                {displayPropertyMenuIdx === idx && (
+                                  <div
+                                    style={{
+                                      position: 'absolute',
+                                      top: '100%',
+                                      left: 0,
+                                      marginTop: '4px',
+                                      background: 'white',
+                                      borderRadius: '4px',
+                                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                      zIndex: 100,
+                                      minWidth: '120px'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div style={{ padding: '6px 10px', borderBottom: '1px solid #e5e7eb', fontSize: '10px', color: '#6b7280', fontWeight: 500 }}>
+                                      Komakohad
+                                    </div>
+                                    {[
+                                      { value: undefined, label: 'Kõik' },
+                                      { value: 0, label: '0' },
+                                      { value: 1, label: '1' },
+                                      { value: 2, label: '2' },
+                                      { value: 3, label: '3' }
+                                    ].map((opt) => (
+                                      <button
+                                        key={opt.label}
+                                        type="button"
+                                        onClick={() => {
+                                          setFormDisplayProperties(prev => prev.map((p, i) =>
+                                            i === idx ? { ...p, decimals: opt.value } : p
+                                          ));
+                                          setDisplayPropertyMenuIdx(null);
+                                        }}
+                                        style={{
+                                          display: 'block',
+                                          width: '100%',
+                                          padding: '6px 10px',
+                                          border: 'none',
+                                          background: dp.decimals === opt.value ? '#dbeafe' : 'transparent',
+                                          cursor: 'pointer',
+                                          textAlign: 'left',
+                                          fontSize: '11px',
+                                          color: '#374151'
+                                        }}
+                                      >
+                                        {opt.label}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             ))}
                           </div>
