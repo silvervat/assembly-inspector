@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.639';
+export const APP_VERSION = '3.0.640';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -85,7 +85,7 @@ const zoomGroupId = urlParams.get('group');
 if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
   console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction, zoomGroupId });
 
-  // Store to Supabase (async, but we redirect immediately)
+  // Store to Supabase and WAIT for it before redirecting (fixes race condition)
   const insertData: Record<string, string> = {
     project_id: zoomProject,
     model_id: zoomModel,
@@ -96,21 +96,23 @@ if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
     insertData.group_id = zoomGroupId;
   }
 
-  supabase
-    .from('zoom_targets')
-    .insert(insertData)
-    .then(({ error }) => {
-      if (error) {
-        console.error('🔗 [ZOOM] Failed to store zoom target:', error);
-      } else {
-        console.log('🔗 [ZOOM] Zoom target stored successfully');
-      }
-    });
+  // Use async IIFE to await insert before redirect
+  (async () => {
+    const { error } = await supabase
+      .from('zoom_targets')
+      .insert(insertData);
 
-  // Redirect to Trimble Connect
-  const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomProject}/viewer/3d/?modelId=${zoomModel}`;
-  console.log('🔗 [ZOOM] Redirecting to:', trimbleUrl);
-  window.location.href = trimbleUrl;
+    if (error) {
+      console.error('🔗 [ZOOM] Failed to store zoom target:', error);
+    } else {
+      console.log('🔗 [ZOOM] Zoom target stored successfully');
+    }
+
+    // Redirect to Trimble Connect AFTER insert completes
+    const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomProject}/viewer/3d/?modelId=${zoomModel}`;
+    console.log('🔗 [ZOOM] Redirecting to:', trimbleUrl);
+    window.location.href = trimbleUrl;
+  })();
 }
 
 // Log app load for debugging
