@@ -8366,64 +8366,119 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
                       const bbox = boundingBoxes[0].boundingBox;
 
-                      // Bottom surface center (meters for API)
-                      const centerX = (bbox.min.x + bbox.max.x) / 2;
-                      const centerY = (bbox.min.y + bbox.max.y) / 2;
-                      const bottomZ = bbox.min.z;
+                      // Bottom surface center (mm for lineMarkup API)
+                      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
+                      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
+                      const bottomZ = bbox.min.z * 1000;
 
-                      // 20m radius
-                      const radiusM = 20;
+                      // 20m radius in mm
+                      const radiusMm = 20000;
                       const segments = 72;
-
-                      // Generate circle points array for freelineMarkup {x, y, z}
-                      const points: { x: number; y: number; z: number }[] = [];
-
-                      for (let i = 0; i <= segments; i++) {
-                        const angle = (i / segments) * 2 * Math.PI;
-                        points.push({
-                          x: centerX + radiusM * Math.cos(angle),
-                          y: centerY + radiusM * Math.sin(angle),
-                          z: bottomZ
-                        });
-                      }
 
                       const redColor = { r: 255, g: 0, b: 0, a: 255 };
 
-                      // Use addFreelineMarkups (plural) with correct structure
-                      const markupApi = api.markup as any;
-                      if (markupApi?.addFreelineMarkups) {
-                        const result = await markupApi.addFreelineMarkups([{
-                          color: redColor,
-                          lines: points
-                        }]);
-                        console.log('🔴 FreelineMarkup created:', result);
-                      } else if (markupApi?.addLineMarkups) {
-                        // Fallback: try addLineMarkups
-                        await markupApi.addLineMarkups([{
-                          color: redColor,
-                          lines: points
-                        }]);
-                      } else {
-                        // Fallback: use measurement markups (mm coordinates)
-                        const measurements = [];
-                        for (let i = 0; i < points.length - 1; i++) {
-                          measurements.push({
-                            start: { positionX: points[i].x * 1000, positionY: points[i].y * 1000, positionZ: points[i].z * 1000 },
-                            end: { positionX: points[i+1].x * 1000, positionY: points[i+1].y * 1000, positionZ: points[i+1].z * 1000 },
-                            mainLineStart: { positionX: points[i].x * 1000, positionY: points[i].y * 1000, positionZ: points[i].z * 1000 },
-                            mainLineEnd: { positionX: points[i+1].x * 1000, positionY: points[i+1].y * 1000, positionZ: points[i+1].z * 1000 },
-                            color: redColor
-                          });
-                        }
-                        await api.markup.addMeasurementMarkups(measurements);
+                      // Generate line markups with {start, end, color} structure (mm coordinates)
+                      const lineMarkups: any[] = [];
+
+                      for (let i = 0; i < segments; i++) {
+                        const angle1 = (i / segments) * 2 * Math.PI;
+                        const angle2 = ((i + 1) / segments) * 2 * Math.PI;
+
+                        lineMarkups.push({
+                          start: {
+                            positionX: centerX + radiusMm * Math.cos(angle1),
+                            positionY: centerY + radiusMm * Math.sin(angle1),
+                            positionZ: bottomZ
+                          },
+                          end: {
+                            positionX: centerX + radiusMm * Math.cos(angle2),
+                            positionY: centerY + radiusMm * Math.sin(angle2),
+                            positionZ: bottomZ
+                          },
+                          color: redColor
+                        });
                       }
+
+                      // Use addLineMarkups API
+                      const markupApi = api.markup as any;
+                      const result = await markupApi.addLineMarkups(lineMarkups);
+                      console.log('🔴 LineMarkups created:', result);
 
                       updateFunctionResult("drawCircle20m", {
                         status: 'success',
-                        result: `Ring joonistatud:\n📍 Keskpunkt: X=${(centerX).toFixed(2)}m, Y=${(centerY).toFixed(2)}m\n📏 Z (põhi): ${bottomZ.toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📊 Punkte: ${points.length}`
+                        result: `Ring joonistatud (addLineMarkups):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📐 Segmente: ${segments}`
                       });
                     } catch (e: any) {
                       updateFunctionResult("drawCircle20m", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="⭕ Ring (FreelineMarkup)"
+                  result={functionResults["drawCircleFreeline"]}
+                  onClick={async () => {
+                    updateFunctionResult("drawCircleFreeline", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel[0].objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
+
+                      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                      if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
+                        throw new Error('Bounding box andmeid ei leitud');
+                      }
+
+                      const bbox = boundingBoxes[0].boundingBox;
+
+                      // Bottom surface center (mm)
+                      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
+                      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
+                      const bottomZ = bbox.min.z * 1000;
+
+                      // 20m radius in mm
+                      const radiusMm = 20000;
+                      const segments = 72;
+
+                      const redColor = { r: 255, g: 0, b: 0, a: 255 };
+
+                      // Generate LineMarkup array for FreelineMarkup.lines
+                      const lineSegments: any[] = [];
+
+                      for (let i = 0; i < segments; i++) {
+                        const angle1 = (i / segments) * 2 * Math.PI;
+                        const angle2 = ((i + 1) / segments) * 2 * Math.PI;
+
+                        lineSegments.push({
+                          start: {
+                            positionX: centerX + radiusMm * Math.cos(angle1),
+                            positionY: centerY + radiusMm * Math.sin(angle1),
+                            positionZ: bottomZ
+                          },
+                          end: {
+                            positionX: centerX + radiusMm * Math.cos(angle2),
+                            positionY: centerY + radiusMm * Math.sin(angle2),
+                            positionZ: bottomZ
+                          }
+                        });
+                      }
+
+                      // Use addFreelineMarkups - single markup with multiple line segments
+                      const markupApi = api.markup as any;
+                      const result = await markupApi.addFreelineMarkups([{
+                        color: redColor,
+                        lines: lineSegments
+                      }]);
+                      console.log('🔴 FreelineMarkup created:', result);
+
+                      updateFunctionResult("drawCircleFreeline", {
+                        status: 'success',
+                        result: `Ring joonistatud (addFreelineMarkups):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📐 Segmente: ${segments}\n🎯 Üks FreelineMarkup objekt`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("drawCircleFreeline", { status: 'error', error: e.message });
                     }
                   }}
                 />
