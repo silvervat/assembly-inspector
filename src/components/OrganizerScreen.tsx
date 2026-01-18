@@ -15,6 +15,7 @@ import {
   DEFAULT_PROPERTY_MAPPINGS
 } from '../supabase';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
+import { useOrganizerCache } from '../contexts/OrganizerCacheContext';
 import {
   selectObjectsByGuid,
   findObjectsInLoadedModels
@@ -445,6 +446,7 @@ export default function OrganizerScreen({
   onGroupExpanded
 }: OrganizerScreenProps) {
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
+  const { getCachedData, setCachedData, isCacheValid } = useOrganizerCache(projectId);
 
   // Data
   const [groups, setGroups] = useState<OrganizerGroup[]>([]);
@@ -1419,19 +1421,33 @@ export default function OrganizerScreen({
     }
   }, []);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh: boolean = false) => {
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && isCacheValid()) {
+      const cached = getCachedData();
+      if (cached) {
+        setGroups(cached.groups);
+        setGroupItems(cached.groupItems);
+        setGroupTree(cached.groupTree);
+        setLoading(false);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       const loadedGroups = await loadGroups();
       const loadedItems = await loadAllGroupItems(loadedGroups);
       const tree = buildGroupTree(loadedGroups, loadedItems);
       setGroupTree(tree);
+      // Update cache
+      setCachedData(loadedGroups, loadedItems, tree);
     } catch (e) {
       console.error('Error loading data:', e);
     } finally {
       setLoading(false);
     }
-  }, [loadGroups, loadAllGroupItems]);
+  }, [loadGroups, loadAllGroupItems, getCachedData, setCachedData, isCacheValid]);
 
   // Silent refresh - updates data without showing loading state (no UI flash)
   const refreshData = useCallback(async () => {
@@ -1440,10 +1456,12 @@ export default function OrganizerScreen({
       const loadedItems = await loadAllGroupItems(loadedGroups);
       const tree = buildGroupTree(loadedGroups, loadedItems);
       setGroupTree(tree);
+      // Update cache
+      setCachedData(loadedGroups, loadedItems, tree);
     } catch (e) {
       console.error('Error refreshing data:', e);
     }
-  }, [loadGroups, loadAllGroupItems]);
+  }, [loadGroups, loadAllGroupItems, setCachedData]);
 
   useEffect(() => {
     loadData();
@@ -7553,7 +7571,7 @@ export default function OrganizerScreen({
             )}
             {selectedObjects.length > 0 && isSelectionEnabled(node.id) === assemblySelectionEnabled && (
               <>
-                {newItemsCount > 0 && (
+                {newItemsCount > 0 && !isGroupLocked(node.id) && (
                   <button
                     className="org-quick-add-btn"
                     onClick={(e) => { e.stopPropagation(); addSelectedToGroup(node.id); }}
@@ -7564,11 +7582,19 @@ export default function OrganizerScreen({
                 )}
                 {existingItemsCount > 0 && (
                   <button
-                    className="org-quick-add-btn remove"
-                    onClick={(e) => { e.stopPropagation(); removeItemsFromGroup(getSelectedItemIdsInGroup(node.id)); }}
-                    title={`Eemalda ${existingItemsCount} detaili`}
+                    className={`org-quick-add-btn remove${isGroupLocked(node.id) ? ' locked' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (isGroupLocked(node.id)) {
+                        const lockInfo = getGroupLockInfo(node.id);
+                        showToast(`🔒 Siia gruppi ei saa detaile lisada/eemaldada - grupp on lukustatud${lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''}`);
+                      } else {
+                        removeItemsFromGroup(getSelectedItemIdsInGroup(node.id));
+                      }
+                    }}
+                    title={isGroupLocked(node.id) ? '🔒 Grupp on lukustatud' : `Eemalda ${existingItemsCount} detaili`}
                   >
-                    <FiMinus size={11} /> {existingItemsCount}
+                    {isGroupLocked(node.id) ? <FiLock size={11} /> : <FiMinus size={11} />} {existingItemsCount}
                   </button>
                 )}
               </>
