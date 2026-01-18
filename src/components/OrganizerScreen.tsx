@@ -3202,7 +3202,12 @@ export default function OrganizerScreen({
       }, 5000);
 
       if (guids.length > 0) {
-        await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', guids);
+        // Batch delete to avoid URL too long error (400 Bad Request)
+        for (let i = 0; i < guids.length; i += BATCH_SIZE) {
+          const batch = guids.slice(i, i + BATCH_SIZE);
+          const { error } = await supabase.from('organizer_group_items').delete().eq('group_id', targetGroupId).in('guid_ifc', batch);
+          if (error) throw error;
+        }
       }
 
       // Insert items and get back the inserted records with IDs
@@ -4980,7 +4985,12 @@ export default function OrganizerScreen({
       }, 5000);
 
       if (guids.length > 0) {
-        await supabase.from('organizer_group_items').delete().eq('group_id', importGroupId).in('guid_ifc', guids);
+        // Batch delete to avoid URL too long error (400 Bad Request)
+        for (let i = 0; i < guids.length; i += BATCH_SIZE) {
+          const batch = guids.slice(i, i + BATCH_SIZE);
+          const { error } = await supabase.from('organizer_group_items').delete().eq('group_id', importGroupId).in('guid_ifc', batch);
+          if (error) throw error;
+        }
       }
 
       // Insert items
