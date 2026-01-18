@@ -1373,16 +1373,33 @@ export default function OrganizerScreen({
         return new Map();
       }
 
-      const { data, error } = await supabase
-        .from('organizer_group_items')
-        .select('*')
-        .in('group_id', groupIds)
-        .order('sort_order');
+      // Supabase has a default limit of 1000 rows - paginate to get all items
+      const PAGE_SIZE = 1000;
+      let allData: OrganizerGroupItem[] = [];
+      let offset = 0;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('organizer_group_items')
+          .select('*')
+          .in('group_id', groupIds)
+          .order('sort_order')
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          offset += PAGE_SIZE;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
 
       const itemsMap = new Map<string, OrganizerGroupItem[]>();
-      for (const item of data || []) {
+      for (const item of allData) {
         if (!itemsMap.has(item.group_id)) {
           itemsMap.set(item.group_id, []);
         }
