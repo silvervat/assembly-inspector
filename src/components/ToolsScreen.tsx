@@ -6,7 +6,7 @@ import { TrimbleExUser, supabase } from '../supabase';
 import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
-import { findObjectsInLoadedModels } from '../utils/navigationHelper';
+import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
 
 // Constants
 const MAX_MARKUPS_PER_BATCH = 200;
@@ -205,7 +205,7 @@ export default function ToolsScreen({
     }
   }, [expandedSection, loadMarkerData]);
 
-  // Color model by category
+  // Color model by category - like Organizer does it
   const colorByCategory = useCallback(async (categoryId: string) => {
     const category = markerCategories.find(c => c.id === categoryId);
     if (!category || category.guids.length === 0) {
@@ -214,54 +214,127 @@ export default function ToolsScreen({
     }
 
     setColoringCategory(categoryId);
-    setBatchProgress({ message: 'Otsin objekte mudelist...', percent: 0 });
+    setBatchProgress({ message: 'Loen andmebaasist...', percent: 0 });
 
     try {
       const color = markerColors[categoryId] || category.defaultColor;
+      const BATCH_SIZE = 5000;
 
-      // Step 1: Find objects in loaded models
-      setBatchProgress({ message: 'Otsin objekte mudelist...', percent: 10 });
-      const foundObjects = await findObjectsInLoadedModels(api, category.guids);
+      // Step 1: Fetch ALL objects from trimble_model_objects (like Organizer does)
+      const allGuids: string[] = [];
+      let offset = 0;
+      const PAGE_SIZE = 5000;
 
-      if (foundObjects.size === 0) {
+      while (true) {
+        const { data, error } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc')
+          .eq('trimble_project_id', _projectId)
+          .not('guid_ifc', 'is', null)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          showToast('Viga andmebaasi lugemisel', 'error');
+          setBatchProgress(null);
+          setColoringCategory(null);
+          return;
+        }
+
+        if (!data || data.length === 0) break;
+
+        for (const obj of data) {
+          if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+        }
+        offset += data.length;
+        setBatchProgress({ message: `Loen andmebaasist... ${allGuids.length}`, percent: 5 });
+        if (data.length < PAGE_SIZE) break;
+      }
+
+      console.log(`Total GUIDs fetched: ${allGuids.length}`);
+
+      // Step 2: Find ALL objects in loaded models
+      setBatchProgress({ message: 'Otsin objekte mudelist...', percent: 15 });
+      const allFoundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+      if (allFoundObjects.size === 0) {
         setBatchProgress(null);
         showToast('Objekte ei leitud laetud mudelitest', 'error');
         setColoringCategory(null);
         return;
       }
 
-      // Step 2: Color all objects white first
-      setBatchProgress({ message: 'Värvin kõik valgeks...', percent: 30 });
-      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+      console.log(`Found ${allFoundObjects.size} objects in models`);
 
-      // Step 3: Group objects by model
-      const byModel: Record<string, number[]> = {};
-      for (const [, found] of foundObjects) {
-        if (!byModel[found.modelId]) byModel[found.modelId] = [];
-        byModel[found.modelId].push(found.runtimeId);
+      // Build case-insensitive lookup
+      const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+      for (const [guid, found] of allFoundObjects) {
+        foundByLowercase.set(guid.toLowerCase(), found);
       }
 
-      // Step 4: Color category items with selected color in batches
-      setBatchProgress({ message: `Värvin ${category.label}...`, percent: 50 });
-      const BATCH_SIZE = 5000;
-      let processed = 0;
-      const total = foundObjects.size;
+      // Step 3: Build set of category GUIDs (lowercase for comparison)
+      const categoryGuidsLower = new Set(category.guids.map(g => g.toLowerCase()));
 
-      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+      // Step 4: Color non-category items WHITE
+      setBatchProgress({ message: 'Värvin ülejäänud valgeks...', percent: 30 });
+      const whiteByModel: Record<string, number[]> = {};
+
+      for (const [guidLower, found] of foundByLowercase) {
+        if (!categoryGuidsLower.has(guidLower)) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      let whiteCount = 0;
+      const totalWhite = Object.values(whiteByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: 255, g: 255, b: 255, a: 255 } }
+          );
+          whiteCount += batch.length;
+          const percent = 30 + Math.round((whiteCount / totalWhite) * 30);
+          setBatchProgress({ message: `Värvin valgeks... ${whiteCount}/${totalWhite}`, percent });
+        }
+      }
+
+      // Step 5: Color category items with selected color
+      setBatchProgress({ message: `Värvin ${category.label}...`, percent: 65 });
+      const colorByModel: Record<string, number[]> = {};
+
+      for (const [guidLower, found] of foundByLowercase) {
+        if (categoryGuidsLower.has(guidLower)) {
+          if (!colorByModel[found.modelId]) colorByModel[found.modelId] = [];
+          colorByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      let coloredCount = 0;
+      const totalToColor = Object.values(colorByModel).reduce((sum, arr) => sum + arr.length, 0);
+
+      for (const [modelId, runtimeIds] of Object.entries(colorByModel)) {
         for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
           const batch = runtimeIds.slice(i, i + BATCH_SIZE);
           await api.viewer.setObjectState(
             { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
             { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
           );
-          processed += batch.length;
-          const percent = 50 + Math.round((processed / total) * 50);
-          setBatchProgress({ message: `Värvin ${category.label}...`, percent });
+          coloredCount += batch.length;
+          const percent = 65 + Math.round((coloredCount / totalToColor) * 30);
+          setBatchProgress({ message: `Värvin ${category.label}... ${coloredCount}/${totalToColor}`, percent });
         }
       }
 
+      // Step 6: Select the category items in the model
+      setBatchProgress({ message: 'Valin objektid...', percent: 98 });
+      await selectObjectsByGuid(api, category.guids);
+
       setBatchProgress(null);
-      showToast(`${foundObjects.size} objekti värvitud`, 'success');
+      showToast(`${totalToColor} objekti värvitud ja valitud`, 'success');
 
     } catch (e) {
       console.error('Error coloring category:', e);
@@ -270,7 +343,7 @@ export default function ToolsScreen({
     } finally {
       setColoringCategory(null);
     }
-  }, [api, markerCategories, markerColors, showToast]);
+  }, [api, _projectId, markerCategories, markerColors, showToast]);
 
   // Handle color change for a category
   const handleMarkerColorChange = (categoryId: string, hexColor: string) => {
