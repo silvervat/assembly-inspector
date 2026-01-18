@@ -28,7 +28,7 @@ import {
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiTag, FiUpload, FiSettings, FiGrid, FiLink,
-  FiCamera, FiPaperclip, FiImage, FiCheck, FiClock
+  FiCamera, FiPaperclip, FiImage, FiCheck, FiClock, FiInfo
 } from 'react-icons/fi';
 
 // ============================================
@@ -922,6 +922,37 @@ export default function OrganizerScreen({
   const [activityLogPage, setActivityLogPage] = useState(0);
   const activityLogPageSize = 100;
 
+  // Group info modal
+  const [showGroupInfoModal, setShowGroupInfoModal] = useState(false);
+  const [groupInfoGroupId, setGroupInfoGroupId] = useState<string | null>(null);
+  const [groupInfoActivities, setGroupInfoActivities] = useState<Array<{
+    id: string;
+    user_email: string;
+    user_name: string | null;
+    action_type: string;
+    group_id: string | null;
+    group_name: string | null;
+    item_count: number;
+    item_ids: string[] | null;
+    item_guids: string[] | null;
+    field_name: string | null;
+    old_value: any;
+    new_value: any;
+    details: any;
+    created_at: string;
+  }>>([]);
+  const [groupInfoActivitiesLoading, setGroupInfoActivitiesLoading] = useState(false);
+  const [groupInfoFiles, setGroupInfoFiles] = useState<Array<{
+    url: string;
+    fieldName: string;
+    itemMark: string;
+    addedBy: string | null;
+    addedAt: string | null;
+    type: 'photo' | 'attachment';
+  }>>([]);
+  const [groupInfoLightboxPhotos, setGroupInfoLightboxPhotos] = useState<string[]>([]);
+  const [groupInfoLightboxIndex, setGroupInfoLightboxIndex] = useState(0);
+
   // Required fields modal (when adding items to group with required custom fields)
   const [showRequiredFieldsModal, setShowRequiredFieldsModal] = useState(false);
   const [requiredFieldValues, setRequiredFieldValues] = useState<Record<string, string>>({});
@@ -1368,6 +1399,109 @@ export default function OrganizerScreen({
       showToast('Viga detailide valimisel');
     }
   }, [api, showToast]);
+
+  // Load group info (activities and files for a specific group)
+  const loadGroupInfo = useCallback(async (groupId: string) => {
+    setGroupInfoActivitiesLoading(true);
+    try {
+      // Load activities for this group
+      const { data: activities, error: activitiesError } = await supabase
+        .from('organizer_activity_log')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('group_id', groupId)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (activitiesError) throw activitiesError;
+      setGroupInfoActivities(activities || []);
+
+      // Load files from items in this group
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        const rootGroup = getRootParent(groupId) || group;
+        const customFields = rootGroup.custom_fields || [];
+        const fileFields = customFields.filter(f => f.type === 'photo' || f.type === 'attachment');
+
+        if (fileFields.length > 0) {
+          // Get all items in this group and subgroups
+          const groupIds = [groupId];
+          const addSubgroups = (gId: string) => {
+            const children = groups.filter(g => g.parent_id === gId);
+            for (const child of children) {
+              groupIds.push(child.id);
+              addSubgroups(child.id);
+            }
+          };
+          addSubgroups(groupId);
+
+          const allItems: OrganizerGroupItem[] = [];
+          for (const gId of groupIds) {
+            const items = groupItems.get(gId) || [];
+            allItems.push(...items);
+          }
+
+          // Extract files from items
+          const files: Array<{
+            url: string;
+            fieldName: string;
+            itemMark: string;
+            addedBy: string | null;
+            addedAt: string | null;
+            type: 'photo' | 'attachment';
+          }> = [];
+
+          for (const item of allItems) {
+            for (const field of fileFields) {
+              const value = item.custom_properties?.[field.id];
+              if (value) {
+                if (Array.isArray(value)) {
+                  for (const fileData of value) {
+                    if (typeof fileData === 'object' && fileData.url) {
+                      files.push({
+                        url: fileData.url,
+                        fieldName: field.name,
+                        itemMark: item.assembly_mark || item.product_name || 'Tundmatu',
+                        addedBy: fileData.addedBy || null,
+                        addedAt: fileData.addedAt || null,
+                        type: field.type === 'photo' ? 'photo' : 'attachment'
+                      });
+                    }
+                  }
+                } else if (typeof value === 'string' && value.startsWith('http')) {
+                  files.push({
+                    url: value,
+                    fieldName: field.name,
+                    itemMark: item.assembly_mark || item.product_name || 'Tundmatu',
+                    addedBy: null,
+                    addedAt: null,
+                    type: field.type === 'photo' ? 'photo' : 'attachment'
+                  });
+                }
+              }
+            }
+          }
+
+          setGroupInfoFiles(files);
+        } else {
+          setGroupInfoFiles([]);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading group info:', e);
+      showToast('Viga grupi info laadimisel');
+    } finally {
+      setGroupInfoActivitiesLoading(false);
+    }
+  }, [projectId, groups, groupItems, showToast]);
+
+  // Open group info modal
+  const openGroupInfoModal = useCallback((groupId: string) => {
+    setGroupInfoGroupId(groupId);
+    setShowGroupInfoModal(true);
+    setGroupMenuId(null);
+    loadGroupInfo(groupId);
+  }, [loadGroupInfo]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -8668,15 +8802,23 @@ export default function OrganizerScreen({
 
           {node.color && (
             <span
-              className="org-color-dot-wrapper"
-              onClick={(e) => { e.stopPropagation(); setColorPickerGroupId(colorPickerGroupId === node.id ? null : node.id); }}
+              className={`org-color-dot-wrapper${isEffectivelyLocked ? ' locked' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isEffectivelyLocked) {
+                  const lockInfo = getGroupLockInfo(node.id);
+                  showToast(`🔒 Grupi värvi ei saa muuta - grupp on lukustatud${lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''}`);
+                  return;
+                }
+                setColorPickerGroupId(colorPickerGroupId === node.id ? null : node.id);
+              }}
             >
               <span
                 className="org-color-dot"
-                style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: 'pointer' }}
-                title="Klõpsa värvi muutmiseks"
+                style={{ backgroundColor: `rgb(${node.color.r}, ${node.color.g}, ${node.color.b})`, cursor: isEffectivelyLocked ? 'not-allowed' : 'pointer', opacity: isEffectivelyLocked ? 0.6 : 1 }}
+                title={isEffectivelyLocked ? '🔒 Grupp on lukustatud - värvi muutmine keelatud' : 'Klõpsa värvi muutmiseks'}
               />
-              {colorPickerGroupId === node.id && (
+              {colorPickerGroupId === node.id && !isEffectivelyLocked && (
                 <div className="org-color-picker-popup" onClick={(e) => e.stopPropagation()}>
                   {PRESET_COLORS.map((c, i) => (
                     <button
@@ -8891,6 +9033,9 @@ export default function OrganizerScreen({
                   </button>
                 );
               })()}
+              <button onClick={() => openGroupInfoModal(node.id)}>
+                <FiInfo size={12} /> Grupi info
+              </button>
               <button className="delete" onClick={() => openDeleteConfirm(node)}>
                 <FiTrash2 size={12} /> Kustuta
               </button>
@@ -12176,6 +12321,348 @@ export default function OrganizerScreen({
         </div>
       )}
 
+      {/* Group Info Modal */}
+      {showGroupInfoModal && groupInfoGroupId && (() => {
+        const group = groups.find(g => g.id === groupInfoGroupId);
+        if (!group) return null;
+
+        const rootGroup = getRootParent(groupInfoGroupId) || group;
+        const customFields = rootGroup.custom_fields || [];
+        const photoFields = customFields.filter(f => f.type === 'photo');
+        const attachmentFields = customFields.filter(f => f.type === 'attachment');
+        const photos = groupInfoFiles.filter(f => f.type === 'photo');
+        const attachments = groupInfoFiles.filter(f => f.type === 'attachment');
+
+        // Permission helpers
+        const getPermissionLabel = (perm: boolean) => perm ? '✓' : '—';
+        const permLabels = {
+          can_add: 'Lisa detaile',
+          can_delete_own: 'Kustuta omi',
+          can_delete_all: 'Kustuta kõiki',
+          can_edit_group: 'Muuda gruppi',
+          can_manage_fields: 'Halda välju'
+        };
+
+        return (
+          <div className="org-modal-overlay" onClick={() => setShowGroupInfoModal(false)}>
+            <div
+              className="org-modal group-info-modal"
+              style={{ maxWidth: '700px', width: '95%', maxHeight: '90vh' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="org-modal-header">
+                <h2><FiInfo size={16} /> Grupi info: {group.name}</h2>
+                <button onClick={() => setShowGroupInfoModal(false)}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body" style={{ padding: '0', display: 'flex', flexDirection: 'column', gap: '0', maxHeight: 'calc(90vh - 120px)', overflowY: 'auto' }}>
+                {/* Basic Info Section */}
+                <div className="group-info-section">
+                  <h3><FiInfo size={14} /> Üldinfo</h3>
+                  <div className="group-info-grid">
+                    <div className="group-info-item">
+                      <span className="info-label">Looja</span>
+                      <span className="info-value">{group.created_by}</span>
+                    </div>
+                    <div className="group-info-item">
+                      <span className="info-label">Loodud</span>
+                      <span className="info-value">{new Date(group.created_at).toLocaleString('et-EE')}</span>
+                    </div>
+                    <div className="group-info-item">
+                      <span className="info-label">Viimati muudetud</span>
+                      <span className="info-value">{new Date(group.updated_at).toLocaleString('et-EE')}</span>
+                    </div>
+                    {group.updated_by && (
+                      <div className="group-info-item">
+                        <span className="info-label">Muutja</span>
+                        <span className="info-value">{group.updated_by}</span>
+                      </div>
+                    )}
+                    {group.is_locked && (
+                      <>
+                        <div className="group-info-item">
+                          <span className="info-label">Lukustaja</span>
+                          <span className="info-value">{group.locked_by || 'Tundmatu'}</span>
+                        </div>
+                        <div className="group-info-item">
+                          <span className="info-label">Lukustatud</span>
+                          <span className="info-value">{group.locked_at ? new Date(group.locked_at).toLocaleString('et-EE') : '-'}</span>
+                        </div>
+                      </>
+                    )}
+                    {group.description && (
+                      <div className="group-info-item full-width">
+                        <span className="info-label">Kirjeldus</span>
+                        <span className="info-value">{group.description}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Permissions Section */}
+                <div className="group-info-section">
+                  <h3><FiLock size={14} /> Õigused</h3>
+                  <div className="group-info-permissions">
+                    <div className="permissions-mode">
+                      <span className="info-label">Jagamise režiim:</span>
+                      <span className="info-value">
+                        {group.is_private ? 'Privaatne' :
+                         Object.keys(group.user_permissions || {}).length > 0 ? 'Valitud kasutajad' : 'Kogu projekt'}
+                      </span>
+                    </div>
+                    {!group.is_private && (
+                      <div className="permissions-table">
+                        <div className="permissions-header">
+                          <span>Kasutaja / Õigus</span>
+                          {Object.keys(permLabels).map(key => (
+                            <span key={key} title={permLabels[key as keyof typeof permLabels]}>{permLabels[key as keyof typeof permLabels].split(' ')[0]}</span>
+                          ))}
+                        </div>
+                        {/* Default permissions */}
+                        <div className="permissions-row">
+                          <span className="perm-user">Vaikimisi (kõik)</span>
+                          <span>{getPermissionLabel(group.default_permissions?.can_add)}</span>
+                          <span>{getPermissionLabel(group.default_permissions?.can_delete_own)}</span>
+                          <span>{getPermissionLabel(group.default_permissions?.can_delete_all)}</span>
+                          <span>{getPermissionLabel(group.default_permissions?.can_edit_group)}</span>
+                          <span>{getPermissionLabel(group.default_permissions?.can_manage_fields)}</span>
+                        </div>
+                        {/* User-specific permissions */}
+                        {Object.entries(group.user_permissions || {}).map(([email, perms]) => (
+                          <div key={email} className="permissions-row">
+                            <span className="perm-user" title={email}>{email.split('@')[0]}</span>
+                            <span>{getPermissionLabel(perms.can_add)}</span>
+                            <span>{getPermissionLabel(perms.can_delete_own)}</span>
+                            <span>{getPermissionLabel(perms.can_delete_all)}</span>
+                            <span>{getPermissionLabel(perms.can_edit_group)}</span>
+                            <span>{getPermissionLabel(perms.can_manage_fields)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {group.is_private && (
+                      <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
+                        Ainult grupi looja näeb seda gruppi.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Photos Gallery */}
+                {photoFields.length > 0 && (
+                  <div className="group-info-section">
+                    <h3><FiCamera size={14} /> Fotod ({photos.length})</h3>
+                    {photos.length > 0 ? (
+                      <div className="group-info-gallery">
+                        {photos.map((photo, idx) => (
+                          <div
+                            key={idx}
+                            className="gallery-item"
+                            onClick={() => {
+                              setGroupInfoLightboxPhotos(photos.map(p => p.url));
+                              setGroupInfoLightboxIndex(idx);
+                            }}
+                          >
+                            <img src={photo.url} alt={photo.itemMark} />
+                            <div className="gallery-item-info">
+                              <span className="item-mark">{photo.itemMark}</span>
+                              <span className="field-name">{photo.fieldName}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
+                        Fotosid pole veel lisatud.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Attachments */}
+                {attachmentFields.length > 0 && (
+                  <div className="group-info-section">
+                    <h3><FiPaperclip size={14} /> Manused ({attachments.length})</h3>
+                    {attachments.length > 0 ? (
+                      <div className="group-info-attachments">
+                        {attachments.map((att, idx) => (
+                          <a
+                            key={idx}
+                            href={att.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="attachment-item"
+                          >
+                            <FiPaperclip size={12} />
+                            <span className="att-mark">{att.itemMark}</span>
+                            <span className="att-field">{att.fieldName}</span>
+                          </a>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
+                        Manuseid pole veel lisatud.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Recent Activities */}
+                <div className="group-info-section">
+                  <h3><FiClock size={14} /> Viimased tegevused</h3>
+                  {groupInfoActivitiesLoading ? (
+                    <div style={{ padding: '16px', textAlign: 'center', color: '#6b7280' }}>Laadin...</div>
+                  ) : groupInfoActivities.length > 0 ? (
+                    <div className="group-info-activities">
+                      {groupInfoActivities.map((log) => {
+                        const actionLabels: Record<string, string> = {
+                          add_items: 'lisas detaile',
+                          remove_items: 'eemaldas detaile',
+                          update_item: 'muutis detaili',
+                          create_group: 'lõi grupi',
+                          delete_group: 'kustutas grupi',
+                          update_group: 'muutis gruppi',
+                          add_photo: 'lisas foto',
+                          remove_photo: 'eemaldas foto',
+                          add_attachment: 'lisas manuse',
+                          add_field: 'lisas lisaveeru',
+                          remove_field: 'kustutas lisaveeru'
+                        };
+                        const actionColors: Record<string, string> = {
+                          add_items: '#10b981',
+                          remove_items: '#ef4444',
+                          update_item: '#f59e0b',
+                          create_group: '#3b82f6',
+                          delete_group: '#dc2626',
+                          update_group: '#8b5cf6',
+                          add_photo: '#22c55e',
+                          remove_photo: '#f87171',
+                          add_attachment: '#14b8a6',
+                          add_field: '#6366f1',
+                          remove_field: '#f43f5e'
+                        };
+                        const userName = log.user_name || log.user_email.split('@')[0];
+                        const actionLabel = actionLabels[log.action_type] || log.action_type;
+                        const actionColor = actionColors[log.action_type] || '#6b7280';
+                        const date = new Date(log.created_at);
+
+                        return (
+                          <div key={log.id} className="activity-item">
+                            <span className="activity-dot" style={{ background: actionColor }} />
+                            <span className="activity-user" title={log.user_email}>{userName}</span>
+                            <span className="activity-action">{actionLabel}</span>
+                            {log.item_count > 1 && (
+                              <span className="activity-count" style={{ background: actionColor }}>
+                                {log.item_count}
+                              </span>
+                            )}
+                            {log.field_name && (
+                              <span className="activity-field">({log.field_name})</span>
+                            )}
+                            <span className="activity-time">
+                              {date.toLocaleDateString('et-EE')} {date.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '12px', color: '#6b7280', padding: '8px 0' }}>
+                      Tegevusi ei leitud.
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => setShowGroupInfoModal(false)}>Sulge</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Group Info Photo Lightbox */}
+      {groupInfoLightboxPhotos.length > 0 && (
+        <div
+          className="org-modal-overlay"
+          style={{ background: 'rgba(0,0,0,0.9)', zIndex: 10001 }}
+          onClick={() => { setGroupInfoLightboxPhotos([]); setGroupInfoLightboxIndex(0); }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '20px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={groupInfoLightboxPhotos[groupInfoLightboxIndex]}
+              alt="Foto"
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                borderRadius: '4px'
+              }}
+            />
+            <button
+              onClick={() => { setGroupInfoLightboxPhotos([]); setGroupInfoLightboxIndex(0); }}
+              style={{
+                marginTop: '16px',
+                padding: '8px 24px',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Sulge
+            </button>
+            {groupInfoLightboxPhotos.length > 1 && (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+                <button
+                  onClick={() => {
+                    const newIndex = groupInfoLightboxIndex === 0 ? groupInfoLightboxPhotos.length - 1 : groupInfoLightboxIndex - 1;
+                    setGroupInfoLightboxIndex(newIndex);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ← Eelmine
+                </button>
+                <span style={{ color: 'white', alignSelf: 'center' }}>
+                  {groupInfoLightboxIndex + 1} / {groupInfoLightboxPhotos.length}
+                </span>
+                <button
+                  onClick={() => {
+                    const newIndex = groupInfoLightboxIndex === groupInfoLightboxPhotos.length - 1 ? 0 : groupInfoLightboxIndex + 1;
+                    setGroupInfoLightboxIndex(newIndex);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Järgmine →
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="org-modal-overlay" onClick={() => setShowSettingsModal(false)}>
@@ -13066,13 +13553,21 @@ export default function OrganizerScreen({
                                   borderRadius: '2px',
                                   background: group.color ? `rgb(${group.color.r}, ${group.color.g}, ${group.color.b})` : '#e5e7eb',
                                   border: '1px solid rgba(0,0,0,0.1)',
-                                  cursor: 'pointer',
+                                  cursor: isGroupLocked(group.id) ? 'not-allowed' : 'pointer',
+                                  opacity: isGroupLocked(group.id) ? 0.5 : 1,
                                   flexShrink: 0,
                                   position: 'relative',
                                   marginTop: '2px'
                                 }}
-                                onClick={() => setManagementColorPickerGroupId(showColorPicker ? null : group.id)}
-                                title="Muuda värvi"
+                                onClick={() => {
+                                  if (isGroupLocked(group.id)) {
+                                    const lockInfo = getGroupLockInfo(group.id);
+                                    showToast(`🔒 Grupi värvi ei saa muuta - grupp on lukustatud${lockInfo?.locked_by ? ` (${lockInfo.locked_by})` : ''}`);
+                                    return;
+                                  }
+                                  setManagementColorPickerGroupId(showColorPicker ? null : group.id);
+                                }}
+                                title={isGroupLocked(group.id) ? '🔒 Grupp on lukustatud - värvi muutmine keelatud' : 'Muuda värvi'}
                               />
 
                               {/* Color picker dropdown */}
