@@ -80,17 +80,18 @@ export default function CranePlannerScreen({
   // Event listener ref for position picking
   const pickingListenerRef = useRef<((e: any) => void) | null>(null);
 
-  // Preview markups for real-time visualization
-  const [previewMarkupIds, setPreviewMarkupIds] = useState<number[]>([]);
+  // Preview markups for real-time visualization - use ref to avoid stale closure
+  const previewMarkupIdsRef = useRef<number[]>([]);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Update preview when config changes
   const updatePreview = useCallback(async () => {
     if (!selectedCraneModel || !pickedPosition) return;
 
-    // Clear existing preview
-    if (previewMarkupIds.length > 0) {
-      await removeCraneMarkups(api, previewMarkupIds);
+    // Clear existing preview using ref (always has current value)
+    if (previewMarkupIdsRef.current.length > 0) {
+      await removeCraneMarkups(api, previewMarkupIdsRef.current);
+      previewMarkupIdsRef.current = [];
     }
 
     // Create preview crane data - use 'as any' to avoid strict null checks for preview only
@@ -128,7 +129,7 @@ export default function CranePlannerScreen({
       )?.chart_data;
 
       const markupIds = await drawCraneToModel(api, previewCrane, selectedCraneModel, chartData);
-      setPreviewMarkupIds(markupIds);
+      previewMarkupIdsRef.current = markupIds;
     } catch (error) {
       console.error('Error updating preview:', error);
     }
@@ -162,9 +163,9 @@ export default function CranePlannerScreen({
       if (pickingListenerRef.current) {
         (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
       }
-      // Clear preview markups on unmount
-      if (previewMarkupIds.length > 0) {
-        removeCraneMarkups(api, previewMarkupIds);
+      // Clear preview markups on unmount using ref
+      if (previewMarkupIdsRef.current.length > 0) {
+        removeCraneMarkups(api, previewMarkupIdsRef.current);
       }
     };
   }, [api]);
@@ -235,10 +236,10 @@ export default function CranePlannerScreen({
     resetForm();
     setIsPickingPosition(false);
 
-    // Clear preview markups
-    if (previewMarkupIds.length > 0) {
-      await removeCraneMarkups(api, previewMarkupIds);
-      setPreviewMarkupIds([]);
+    // Clear preview markups using ref
+    if (previewMarkupIdsRef.current.length > 0) {
+      await removeCraneMarkups(api, previewMarkupIdsRef.current);
+      previewMarkupIdsRef.current = [];
     }
 
     // Remove picking listener
@@ -246,7 +247,7 @@ export default function CranePlannerScreen({
       (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
       pickingListenerRef.current = null;
     }
-  }, [resetForm, api, previewMarkupIds]);
+  }, [resetForm, api]);
 
   // Start picking position from model - use getSelection approach like AdminScreen
   const startPickingPosition = useCallback(async () => {
@@ -374,9 +375,9 @@ export default function CranePlannerScreen({
     }
 
     // Clear preview markups before saving (will be replaced with saved crane markups)
-    if (previewMarkupIds.length > 0) {
-      await removeCraneMarkups(api, previewMarkupIds);
-      setPreviewMarkupIds([]);
+    if (previewMarkupIdsRef.current.length > 0) {
+      await removeCraneMarkups(api, previewMarkupIdsRef.current);
+      previewMarkupIdsRef.current = [];
     }
 
     const craneData: Partial<ProjectCrane> = {
