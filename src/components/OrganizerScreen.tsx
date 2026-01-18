@@ -10658,12 +10658,12 @@ export default function OrganizerScreen({
               }}
             />
             {/* Action buttons */}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {/* Download button */}
               <button
                 onClick={downloadPhoto}
                 style={{
-                  padding: '8px 16px',
+                  padding: '5px 10px',
                   background: 'rgba(59, 130, 246, 0.8)',
                   color: 'white',
                   border: 'none',
@@ -10671,18 +10671,19 @@ export default function OrganizerScreen({
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '4px',
+                  fontSize: '12px'
                 }}
                 title="Laadi alla"
               >
-                <FiDownload size={14} />
+                <FiDownload size={12} />
                 Laadi alla
               </button>
               {/* Copy URL button */}
               <button
                 onClick={copyPhotoUrl}
                 style={{
-                  padding: '8px 16px',
+                  padding: '5px 10px',
                   background: 'rgba(107, 114, 128, 0.8)',
                   color: 'white',
                   border: 'none',
@@ -10690,11 +10691,12 @@ export default function OrganizerScreen({
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '4px',
+                  fontSize: '12px'
                 }}
                 title="Kopeeri link"
               >
-                <FiCopy size={14} />
+                <FiCopy size={12} />
                 Kopeeri link
               </button>
               {/* Delete button - only show if we have item and field info */}
@@ -10702,7 +10704,7 @@ export default function OrganizerScreen({
                 <button
                   onClick={deletePhotoFromLightbox}
                   style={{
-                    padding: '8px 16px',
+                    padding: '5px 10px',
                     background: 'rgba(239, 68, 68, 0.8)',
                     color: 'white',
                     border: 'none',
@@ -10710,11 +10712,12 @@ export default function OrganizerScreen({
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    gap: '4px',
+                    fontSize: '12px'
                   }}
                   title="Kustuta"
                 >
-                  <FiTrash2 size={14} />
+                  <FiTrash2 size={12} />
                   Kustuta
                 </button>
               )}
