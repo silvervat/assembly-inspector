@@ -108,6 +108,10 @@ interface MarkupSettings {
   includeProductName: MarkupFieldConfig;
   // Filter options
   onlySelectedInModel: boolean;
+  // Free text for each line
+  line1FreeText: string;
+  line2FreeText: string;
+  line3FreeText: string;
 }
 
 // Sorting options
@@ -711,7 +715,10 @@ export default function OrganizerScreen({
     includeAssemblyMark: { enabled: true, line: 'line1', suffix: '' },
     includeWeight: { enabled: false, line: 'line2', suffix: '' },
     includeProductName: { enabled: false, line: 'line2', suffix: '' },
-    onlySelectedInModel: false
+    onlySelectedInModel: false,
+    line1FreeText: '',
+    line2FreeText: '',
+    line3FreeText: ''
   };
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
@@ -779,6 +786,12 @@ export default function OrganizerScreen({
   const [assemblySelectionEnabled, setAssemblySelectionEnabled] = useState(true);
   const [showAssemblyModal, setShowAssemblyModal] = useState(false);
   const [pendingAddGroupId, setPendingAddGroupId] = useState<string | null>(null);
+
+  // Groups Management modal
+  const [showGroupsManagementModal, setShowGroupsManagementModal] = useState(false);
+  const [managementEditingGroupId, setManagementEditingGroupId] = useState<string | null>(null);
+  const [managementEditName, setManagementEditName] = useState('');
+  const [managementColorPickerGroupId, setManagementColorPickerGroupId] = useState<string | null>(null);
 
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
@@ -1969,9 +1982,34 @@ export default function OrganizerScreen({
   const openAddSubgroupForm = (parentId: string) => {
     resetGroupForm();
     setFormParentId(parentId);
+
+    // Inherit settings from parent group
+    const parentGroup = groups.find(g => g.id === parentId);
+    if (parentGroup) {
+      // Inherit sharing/privacy settings
+      if (!parentGroup.is_private) {
+        setFormSharingMode('project');
+      } else if (parentGroup.allowed_users && parentGroup.allowed_users.length > 0) {
+        setFormSharingMode('shared');
+        setFormAllowedUsers([...parentGroup.allowed_users]);
+      } else {
+        setFormSharingMode('private');
+      }
+      // Inherit permissions
+      setFormDefaultPermissions(parentGroup.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS });
+      setFormUserPermissions(parentGroup.user_permissions || {});
+      // Inherit assembly selection and unique items settings
+      setFormAssemblySelectionOn(parentGroup.assembly_selection_on !== false);
+      setFormUniqueItems(parentGroup.unique_items !== false);
+    }
+
     setEditingGroup(null);
     setShowGroupForm(true);
     setGroupMenuId(null);
+    // Load team members if parent uses shared mode
+    if (parentGroup && parentGroup.is_private && parentGroup.allowed_users?.length > 0) {
+      loadTeamMembers();
+    }
   };
 
   // ============================================
@@ -3222,6 +3260,17 @@ export default function OrganizerScreen({
           addToLine('line3', `${field.name}: ${formatFieldValue(val, field)}`);
         }
       }
+    }
+
+    // Add free text to each line
+    if (markupSettings.line1FreeText) {
+      addToLine('line1', markupSettings.line1FreeText);
+    }
+    if (markupSettings.line2FreeText) {
+      addToLine('line2', markupSettings.line2FreeText);
+    }
+    if (markupSettings.line3FreeText) {
+      addToLine('line3', markupSettings.line3FreeText);
     }
 
     // Build final text
@@ -7421,6 +7470,17 @@ export default function OrganizerScreen({
             }
           }
 
+          // Add free text to each line
+          if (markupSettings.line1FreeText) {
+            addToLine('line1', markupSettings.line1FreeText);
+          }
+          if (markupSettings.line2FreeText) {
+            addToLine('line2', markupSettings.line2FreeText);
+          }
+          if (markupSettings.line3FreeText) {
+            addToLine('line3', markupSettings.line3FreeText);
+          }
+
           const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
           const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
@@ -7614,15 +7674,33 @@ export default function OrganizerScreen({
           );
         };
 
+        // Helper to get/set free text for a line
+        const getLineFreeText = (line: MarkupLineConfig): string => {
+          if (line === 'line1') return markupSettings.line1FreeText || '';
+          if (line === 'line2') return markupSettings.line2FreeText || '';
+          if (line === 'line3') return markupSettings.line3FreeText || '';
+          return '';
+        };
+
+        const setLineFreeText = (line: MarkupLineConfig, text: string) => {
+          setMarkupSettings(prev => {
+            if (line === 'line1') return { ...prev, line1FreeText: text };
+            if (line === 'line2') return { ...prev, line2FreeText: text };
+            if (line === 'line3') return { ...prev, line3FreeText: text };
+            return prev;
+          });
+        };
+
         // Helper to render inline drop zone for a line
         const renderLineDropZone = (line: MarkupLineConfig, label: string) => {
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
+          const freeText = getLineFreeText(line);
 
           return (
             <div
               key={line}
-              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
+              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 && !freeText ? 'empty' : ''}`}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragOverLine(line);
@@ -7645,6 +7723,15 @@ export default function OrganizerScreen({
                   <span className="line-placeholder">Lohista siia</span>
                 )}
               </div>
+              <input
+                type="text"
+                className="markup-line-free-text"
+                placeholder="Vaba tekst..."
+                value={freeText}
+                onChange={(e) => setLineFreeText(line, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
             </div>
           );
         };
@@ -8029,10 +8116,41 @@ export default function OrganizerScreen({
                 </label>
               </div>
 
-              {/* Export/Import Groups Section */}
+              {/* Groups Management Section */}
               <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
                 <div style={{ marginBottom: '8px' }}>
                   <span className="settings-title">Gruppide haldus</span>
+                  <span className="settings-desc">Lisa, muuda ja kustuta gruppe</span>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowSettingsModal(false);
+                    setShowGroupsManagementModal(true);
+                  }}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    padding: '8px 12px',
+                    background: '#003F87',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  <FiList size={14} /> Halda gruppe
+                </button>
+              </div>
+
+              {/* Export/Import Groups Section */}
+              <div className="settings-section" style={{ marginTop: '12px', borderTop: '1px solid var(--modus-border)', paddingTop: '12px' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <span className="settings-title">Eksport / Import</span>
                   <span className="settings-desc">Ekspordi või impordi kõik grupid</span>
                 </div>
                 <div style={{ display: 'flex', gap: '6px' }}>
@@ -8329,6 +8447,317 @@ export default function OrganizerScreen({
                   {saving ? 'Impordin...' : 'Impordi'}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Groups Management Modal */}
+      {showGroupsManagementModal && (
+        <div className="org-modal-overlay" onClick={() => {
+          setShowGroupsManagementModal(false);
+          setManagementEditingGroupId(null);
+          setManagementColorPickerGroupId(null);
+        }}>
+          <div className="org-modal" style={{ maxWidth: '600px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+            <div className="org-modal-header">
+              <h2><FiList size={16} /> Gruppide haldus</h2>
+              <button onClick={() => {
+                setShowGroupsManagementModal(false);
+                setManagementEditingGroupId(null);
+                setManagementColorPickerGroupId(null);
+              }}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {/* Add new group button */}
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--modus-border)', background: '#f9fafb' }}>
+                <button
+                  onClick={() => {
+                    setShowGroupsManagementModal(false);
+                    resetGroupForm();
+                    setEditingGroup(null);
+                    setShowGroupForm(true);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 14px',
+                    background: '#003F87',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 500
+                  }}
+                >
+                  <FiPlus size={14} /> Lisa uus grupp
+                </button>
+              </div>
+
+              {/* Groups list */}
+              <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+                {groups.length === 0 ? (
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: '#6b7280' }}>
+                    <p style={{ marginBottom: '8px' }}>Gruppe pole veel loodud</p>
+                    <p style={{ fontSize: '12px' }}>Kliki "Lisa uus grupp" et alustada</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    {/* Render groups recursively with hierarchy */}
+                    {(() => {
+                      const renderGroupRow = (group: OrganizerGroup, level: number = 0): React.ReactNode => {
+                        const children = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.sort_order - b.sort_order);
+                        const itemCount = groupItems.get(group.id)?.length || 0;
+                        const isEditing = managementEditingGroupId === group.id;
+                        const showColorPicker = managementColorPickerGroupId === group.id;
+
+                        return (
+                          <div key={group.id}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                padding: '8px 16px',
+                                paddingLeft: `${16 + level * 24}px`,
+                                borderBottom: '1px solid #f3f4f6',
+                                background: isEditing ? '#f0f9ff' : 'transparent'
+                              }}
+                            >
+                              {/* Color indicator */}
+                              <div
+                                style={{
+                                  width: '16px',
+                                  height: '16px',
+                                  borderRadius: '3px',
+                                  background: group.color ? `rgb(${group.color.r}, ${group.color.g}, ${group.color.b})` : '#e5e7eb',
+                                  border: '1px solid rgba(0,0,0,0.1)',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  position: 'relative'
+                                }}
+                                onClick={() => setManagementColorPickerGroupId(showColorPicker ? null : group.id)}
+                                title="Muuda värvi"
+                              />
+
+                              {/* Color picker dropdown */}
+                              {showColorPicker && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    marginLeft: '24px',
+                                    marginTop: '180px',
+                                    background: 'white',
+                                    border: '1px solid #e5e7eb',
+                                    borderRadius: '8px',
+                                    padding: '8px',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                    zIndex: 1002,
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(6, 1fr)',
+                                    gap: '4px'
+                                  }}
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  {/* No color option */}
+                                  <div
+                                    style={{
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '4px',
+                                      background: '#f3f4f6',
+                                      border: '1px dashed #9ca3af',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '12px',
+                                      color: '#9ca3af'
+                                    }}
+                                    onClick={async () => {
+                                      await supabase.from('organizer_groups').update({ color: null, updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                      setManagementColorPickerGroupId(null);
+                                      loadData();
+                                    }}
+                                    title="Eemalda värv"
+                                  >
+                                    <FiX size={12} />
+                                  </div>
+                                  {PRESET_COLORS.map((c, i) => (
+                                    <div
+                                      key={i}
+                                      style={{
+                                        width: '24px',
+                                        height: '24px',
+                                        borderRadius: '4px',
+                                        background: `rgb(${c.r}, ${c.g}, ${c.b})`,
+                                        border: group.color && group.color.r === c.r && group.color.g === c.g && group.color.b === c.b ? '2px solid #000' : '1px solid rgba(0,0,0,0.1)',
+                                        cursor: 'pointer'
+                                      }}
+                                      onClick={async () => {
+                                        await supabase.from('organizer_groups').update({ color: c, updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        setManagementColorPickerGroupId(null);
+                                        loadData();
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+
+                              {/* Group name - editable or static */}
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={managementEditName}
+                                  onChange={(e) => setManagementEditName(e.target.value)}
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter' && managementEditName.trim()) {
+                                      await supabase.from('organizer_groups').update({ name: managementEditName.trim(), updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                      setManagementEditingGroupId(null);
+                                      loadData();
+                                    } else if (e.key === 'Escape') {
+                                      setManagementEditingGroupId(null);
+                                    }
+                                  }}
+                                  onBlur={async () => {
+                                    if (managementEditName.trim() && managementEditName.trim() !== group.name) {
+                                      await supabase.from('organizer_groups').update({ name: managementEditName.trim(), updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                      loadData();
+                                    }
+                                    setManagementEditingGroupId(null);
+                                  }}
+                                  autoFocus
+                                  style={{
+                                    flex: 1,
+                                    padding: '4px 8px',
+                                    border: '1px solid #3b82f6',
+                                    borderRadius: '4px',
+                                    fontSize: '13px',
+                                    outline: 'none'
+                                  }}
+                                />
+                              ) : (
+                                <span
+                                  style={{
+                                    flex: 1,
+                                    fontSize: '13px',
+                                    fontWeight: level === 0 ? 500 : 400,
+                                    color: '#374151',
+                                    cursor: 'pointer'
+                                  }}
+                                  onClick={() => {
+                                    setManagementEditingGroupId(group.id);
+                                    setManagementEditName(group.name);
+                                  }}
+                                  title="Kliki nime muutmiseks"
+                                >
+                                  {group.name}
+                                </span>
+                              )}
+
+                              {/* Item count */}
+                              <span style={{ fontSize: '11px', color: '#9ca3af', minWidth: '45px', textAlign: 'right' }}>
+                                {itemCount} tk
+                              </span>
+
+                              {/* Lock indicator */}
+                              {group.is_locked && (
+                                <FiLock size={12} style={{ color: '#9ca3af' }} title={`Lukustatud: ${group.locked_by}`} />
+                              )}
+
+                              {/* Action buttons */}
+                              <div style={{ display: 'flex', gap: '4px', marginLeft: '4px' }}>
+                                {/* Edit full settings button */}
+                                <button
+                                  onClick={() => {
+                                    setShowGroupsManagementModal(false);
+                                    openEditGroupForm(group);
+                                  }}
+                                  style={{
+                                    padding: '4px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    color: '#6b7280',
+                                    borderRadius: '4px'
+                                  }}
+                                  title="Muuda grupi seadeid"
+                                  onMouseOver={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                  <FiSettings size={14} />
+                                </button>
+
+                                {/* Add subgroup button (only for level 0 and 1) */}
+                                {level < 2 && (
+                                  <button
+                                    onClick={() => {
+                                      setShowGroupsManagementModal(false);
+                                      openAddSubgroupForm(group.id);
+                                    }}
+                                    style={{
+                                      padding: '4px',
+                                      background: 'transparent',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      color: '#6b7280',
+                                      borderRadius: '4px'
+                                    }}
+                                    title="Lisa alamgrupp"
+                                    onMouseOver={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                                    onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                                  >
+                                    <FiFolderPlus size={14} />
+                                  </button>
+                                )}
+
+                                {/* Delete button */}
+                                <button
+                                  onClick={() => {
+                                    const childCount = groups.filter(g => g.parent_id === group.id).length;
+                                    const totalItemCount = itemCount;
+                                    setDeleteGroupData({ group, childCount, itemCount: totalItemCount });
+                                    setShowDeleteConfirm(true);
+                                  }}
+                                  style={{
+                                    padding: '4px',
+                                    background: 'transparent',
+                                    border: 'none',
+                                    cursor: group.is_locked ? 'not-allowed' : 'pointer',
+                                    color: group.is_locked ? '#d1d5db' : '#ef4444',
+                                    borderRadius: '4px'
+                                  }}
+                                  title={group.is_locked ? 'Grupp on lukustatud' : 'Kustuta grupp'}
+                                  disabled={group.is_locked}
+                                  onMouseOver={(e) => !group.is_locked && (e.currentTarget.style.background = '#fef2f2')}
+                                  onMouseOut={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                  <FiTrash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            {/* Render children */}
+                            {children.map(child => renderGroupRow(child, level + 1))}
+                          </div>
+                        );
+                      };
+
+                      // Get root groups and render them
+                      const rootGroups = groups.filter(g => !g.parent_id).sort((a, b) => a.sort_order - b.sort_order);
+                      return rootGroups.map(g => renderGroupRow(g, 0));
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="org-modal-footer">
+              <button className="save" onClick={() => {
+                setShowGroupsManagementModal(false);
+                setManagementEditingGroupId(null);
+                setManagementColorPickerGroupId(null);
+              }}>Valmis</button>
             </div>
           </div>
         </div>
