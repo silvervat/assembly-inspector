@@ -899,6 +899,7 @@ export default function OrganizerScreen({
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxItemId, setLightboxItemId] = useState<string | null>(null);
   const [lightboxFieldId, setLightboxFieldId] = useState<string | null>(null);
+  const lightboxTouchStartX = useRef<number | null>(null);
 
   // Photo/attachment upload state
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
@@ -10631,7 +10632,29 @@ export default function OrganizerScreen({
                 maxWidth: '90vw',
                 maxHeight: '75vh',
                 objectFit: 'contain',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                touchAction: 'pan-y'
+              }}
+              onTouchStart={(e) => {
+                lightboxTouchStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (lightboxTouchStartX.current === null || lightboxPhotos.length <= 1) return;
+                const touchEndX = e.changedTouches[0].clientX;
+                const diff = lightboxTouchStartX.current - touchEndX;
+                const threshold = 50;
+                if (diff > threshold) {
+                  // Swipe left - next photo
+                  const newIndex = lightboxIndex === lightboxPhotos.length - 1 ? 0 : lightboxIndex + 1;
+                  setLightboxIndex(newIndex);
+                  setLightboxPhoto(lightboxPhotos[newIndex]);
+                } else if (diff < -threshold) {
+                  // Swipe right - previous photo
+                  const newIndex = lightboxIndex === 0 ? lightboxPhotos.length - 1 : lightboxIndex - 1;
+                  setLightboxIndex(newIndex);
+                  setLightboxPhoto(lightboxPhotos[newIndex]);
+                }
+                lightboxTouchStartX.current = null;
               }}
             />
             {/* Action buttons */}
