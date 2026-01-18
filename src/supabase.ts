@@ -1129,7 +1129,7 @@ export interface GroupColor {
 }
 
 // Custom field types
-export type CustomFieldType = 'text' | 'number' | 'currency' | 'date' | 'tags' | 'dropdown';
+export type CustomFieldType = 'text' | 'number' | 'currency' | 'date' | 'tags' | 'dropdown' | 'photo' | 'attachment';
 
 // Custom field definition for groups
 export interface CustomFieldDefinition {
@@ -1146,6 +1146,9 @@ export interface CustomFieldDefinition {
     dropdownOptions?: string[];     // For dropdown: available options
     tagOptions?: string[];          // For tags: predefined tags (optional)
     defaultValue?: string | number; // Default value for new items
+    maxFiles?: number;              // For photo/attachment: max number of files (default 5)
+    maxFileSize?: number;           // For photo/attachment: max file size in MB (default 10)
+    acceptedFormats?: string[];     // For attachment: accepted file extensions
   };
 }
 
