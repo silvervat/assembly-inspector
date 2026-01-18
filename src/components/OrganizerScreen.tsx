@@ -1148,7 +1148,7 @@ export default function OrganizerScreen({
 
       // If no selection, try to get first object from loaded models
       if (!modelId || !runtimeId) {
-        const models = await api.viewer.getModels();
+        const models = await api.viewer.getModels('loaded');
         if (models && models.length > 0) {
           for (const model of models) {
             const modelObjects = await (api.viewer as any).getObjects(model.id, { loaded: true });
@@ -2799,7 +2799,7 @@ export default function OrganizerScreen({
       const objByModel = new Map<string, {guid: string; runtimeId: number; itemId: string}[]>();
       for (const item of items) {
         if (!item.guid_ifc) continue;
-        const found = foundByGuid.get(item.guid_ifc.toLowerCase());
+        const found = foundByGuid.get(item.guid_ifc);
         if (!found) continue;
 
         if (!objByModel.has(found.modelId)) objByModel.set(found.modelId, []);
