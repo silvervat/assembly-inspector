@@ -20,12 +20,14 @@ import {
   findObjectsInLoadedModels
 } from '../utils/navigationHelper';
 import * as XLSX from 'xlsx-js-style';
+import { compressImage, isImageFile } from '../utils/imageUtils';
 import {
   FiPlus, FiMinus, FiSearch, FiChevronDown, FiChevronRight,
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiTag, FiUpload, FiSettings, FiGrid, FiLink
+  FiTag, FiUpload, FiSettings, FiGrid, FiLink,
+  FiCamera, FiPaperclip
 } from 'react-icons/fi';
 
 // ============================================
@@ -78,7 +80,9 @@ const FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
   currency: 'Valuuta (€)',
   date: 'Kuupäev',
   tags: 'Sildid',
-  dropdown: 'Valik'
+  dropdown: 'Valik',
+  photo: 'Foto',
+  attachment: 'Manus'
 };
 
 // Performance constants
@@ -853,6 +857,8 @@ export default function OrganizerScreen({
   const [showGroupsManagementModal, setShowGroupsManagementModal] = useState(false);
   const [managementEditingGroupId, setManagementEditingGroupId] = useState<string | null>(null);
   const [managementEditName, setManagementEditName] = useState('');
+  const [managementEditingDescGroupId, setManagementEditingDescGroupId] = useState<string | null>(null);
+  const [managementEditDesc, setManagementEditDesc] = useState('');
   const [managementColorPickerGroupId, setManagementColorPickerGroupId] = useState<string | null>(null);
   const [returnToGroupsManagement, setReturnToGroupsManagement] = useState(false);
   const [propertySearchQuery, setPropertySearchQuery] = useState('');
@@ -864,6 +870,15 @@ export default function OrganizerScreen({
   // Required fields modal (when adding items to group with required custom fields)
   const [showRequiredFieldsModal, setShowRequiredFieldsModal] = useState(false);
   const [requiredFieldValues, setRequiredFieldValues] = useState<Record<string, string>>({});
+
+  // Photo lightbox
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  // Photo/attachment upload state
+  const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
 
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
@@ -1386,6 +1401,145 @@ export default function OrganizerScreen({
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // ============================================
+  // PHOTO/ATTACHMENT UPLOAD FUNCTIONS
+  // ============================================
+
+  // Generate unique filename for uploads
+  const generateUploadFilename = useCallback((originalName: string, itemId: string, fieldId: string) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const ext = originalName.split('.').pop() || 'jpg';
+    return `${projectId}/${itemId}/${fieldId}/${timestamp}.${ext}`;
+  }, [projectId]);
+
+  // Upload photo to Supabase Storage
+  const uploadPhoto = useCallback(async (file: File, itemId: string, fieldId: string): Promise<string | null> => {
+    try {
+      // Compress image
+      const compressedFile = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.8 });
+
+      const filename = generateUploadFilename(file.name, itemId, fieldId);
+
+      const { error: uploadError } = await supabase.storage
+        .from('organizer-attachments')
+        .upload(filename, compressedFile);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('organizer-attachments')
+        .getPublicUrl(filename);
+
+      return urlData.publicUrl;
+    } catch (e) {
+      console.error('Photo upload error:', e);
+      return null;
+    }
+  }, [generateUploadFilename]);
+
+  // Upload attachment (non-image) to Supabase Storage
+  const uploadAttachment = useCallback(async (file: File, itemId: string, fieldId: string): Promise<string | null> => {
+    try {
+      const filename = generateUploadFilename(file.name, itemId, fieldId);
+
+      const { error: uploadError } = await supabase.storage
+        .from('organizer-attachments')
+        .upload(filename, file);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('organizer-attachments')
+        .getPublicUrl(filename);
+
+      return urlData.publicUrl;
+    } catch (e) {
+      console.error('Attachment upload error:', e);
+      return null;
+    }
+  }, [generateUploadFilename]);
+
+  // Handle photo/attachment field upload for an item
+  const handleFieldFileUpload = useCallback(async (
+    files: FileList | File[],
+    item: OrganizerGroupItem,
+    field: CustomFieldDefinition
+  ) => {
+    if (files.length === 0) return;
+
+    setUploadingFieldId(field.id);
+    setUploadProgress('Laadimine...');
+
+    try {
+      const maxFiles = field.options?.maxFiles || 5;
+      const currentUrls = item.custom_properties?.[field.id]?.split(',').filter(Boolean) || [];
+      const filesToUpload = Array.from(files).slice(0, maxFiles - currentUrls.length);
+
+      if (filesToUpload.length === 0) {
+        showToast(`Maksimaalselt ${maxFiles} faili lubatud`);
+        setUploadingFieldId(null);
+        setUploadProgress('');
+        return;
+      }
+
+      const newUrls: string[] = [];
+
+      for (let i = 0; i < filesToUpload.length; i++) {
+        const file = filesToUpload[i];
+        setUploadProgress(`${i + 1}/${filesToUpload.length}...`);
+
+        let url: string | null;
+        if (field.type === 'photo' && isImageFile(file)) {
+          url = await uploadPhoto(file, item.id, field.id);
+        } else {
+          url = await uploadAttachment(file, item.id, field.id);
+        }
+
+        if (url) {
+          newUrls.push(url);
+        }
+      }
+
+      if (newUrls.length > 0) {
+        const allUrls = [...currentUrls, ...newUrls].join(',');
+        const updatedProps = { ...item.custom_properties, [field.id]: allUrls };
+
+        const { error } = await supabase
+          .from('organizer_group_items')
+          .update({
+            custom_properties: updatedProps,
+            updated_at: new Date().toISOString(),
+            updated_by: tcUserEmail
+          })
+          .eq('id', item.id);
+
+        if (error) throw error;
+
+        showToast(`${newUrls.length} fail(i) üles laetud`);
+        refreshData();
+      }
+    } catch (e) {
+      console.error('File upload error:', e);
+      showToast('Faili üleslaadimine ebaõnnestus');
+    } finally {
+      setUploadingFieldId(null);
+      setUploadProgress('');
+    }
+  }, [uploadPhoto, uploadAttachment, tcUserEmail, refreshData, showToast]);
+
+  // Open lightbox with photo
+  const openLightbox = useCallback((url: string, allUrls: string[]) => {
+    setLightboxPhotos(allUrls);
+    setLightboxIndex(allUrls.indexOf(url));
+    setLightboxPhoto(url);
+  }, []);
 
   // ============================================
   // REALTIME COLLABORATION
@@ -7510,6 +7664,177 @@ export default function OrganizerScreen({
                             );
                           }
 
+                          // Special rendering for photo fields
+                          if (field.type === 'photo') {
+                            const photoUrls = val ? String(val).split(',').filter(Boolean) : [];
+                            const isUploading = uploadingFieldId === field.id;
+                            return (
+                              <div
+                                key={field.id}
+                                className="org-item-photo-field"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  minWidth: '80px',
+                                  flex: 1
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {/* Photo thumbnails */}
+                                {photoUrls.slice(0, 3).map((url, idx) => (
+                                  <div
+                                    key={idx}
+                                    style={{
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '3px',
+                                      overflow: 'hidden',
+                                      cursor: 'pointer',
+                                      border: '1px solid #e5e7eb',
+                                      flexShrink: 0
+                                    }}
+                                    onClick={() => openLightbox(url, photoUrls)}
+                                    title="Kliki suurendamiseks"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt=""
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                  </div>
+                                ))}
+                                {photoUrls.length > 3 && (
+                                  <span
+                                    style={{ fontSize: '10px', color: '#6b7280', cursor: 'pointer' }}
+                                    onClick={() => openLightbox(photoUrls[3], photoUrls)}
+                                  >
+                                    +{photoUrls.length - 3}
+                                  </span>
+                                )}
+                                {/* Upload button */}
+                                <label
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '3px',
+                                    background: '#f3f4f6',
+                                    border: '1px dashed #d1d5db',
+                                    cursor: isUploading ? 'wait' : 'pointer',
+                                    color: '#6b7280',
+                                    flexShrink: 0
+                                  }}
+                                  title={isUploading ? uploadProgress : 'Lisa foto'}
+                                >
+                                  {isUploading ? (
+                                    <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
+                                  ) : (
+                                    <FiCamera size={12} />
+                                  )}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => {
+                                      if (e.target.files) {
+                                        handleFieldFileUpload(e.target.files, item, field);
+                                        e.target.value = '';
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            );
+                          }
+
+                          // Special rendering for attachment fields
+                          if (field.type === 'attachment') {
+                            const fileUrls = val ? String(val).split(',').filter(Boolean) : [];
+                            const isUploading = uploadingFieldId === field.id;
+                            return (
+                              <div
+                                key={field.id}
+                                className="org-item-attachment-field"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  minWidth: '80px',
+                                  flex: 1
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {/* File count/link */}
+                                {fileUrls.length > 0 && (
+                                  <span
+                                    style={{
+                                      fontSize: '11px',
+                                      color: '#3b82f6',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '2px'
+                                    }}
+                                    onClick={() => {
+                                      // Open first file or show list
+                                      if (fileUrls.length === 1) {
+                                        window.open(fileUrls[0], '_blank');
+                                      } else {
+                                        // For multiple files, open the first one
+                                        window.open(fileUrls[0], '_blank');
+                                      }
+                                    }}
+                                    title={fileUrls.map(u => u.split('/').pop()).join(', ')}
+                                  >
+                                    <FiPaperclip size={10} />
+                                    {fileUrls.length}
+                                  </span>
+                                )}
+                                {/* Upload button */}
+                                <label
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '3px',
+                                    background: '#f3f4f6',
+                                    border: '1px dashed #d1d5db',
+                                    cursor: isUploading ? 'wait' : 'pointer',
+                                    color: '#6b7280',
+                                    flexShrink: 0
+                                  }}
+                                  title={isUploading ? uploadProgress : 'Lisa manus'}
+                                >
+                                  {isUploading ? (
+                                    <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
+                                  ) : (
+                                    <FiPaperclip size={12} />
+                                  )}
+                                  <input
+                                    type="file"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => {
+                                      if (e.target.files) {
+                                        handleFieldFileUpload(e.target.files, item, field);
+                                        e.target.value = '';
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            );
+                          }
+
                           // Check if text field has long content
                           const textValue = String(val || '');
                           const isLongText = field.type === 'text' && textValue.length > 30;
@@ -9875,11 +10200,103 @@ export default function OrganizerScreen({
         </div>
       )}
 
+      {/* Photo Lightbox */}
+      {lightboxPhoto && (
+        <div
+          className="org-modal-overlay"
+          style={{ background: 'rgba(0,0,0,0.9)', zIndex: 10000 }}
+          onClick={() => setLightboxPhoto(null)}
+        >
+          <div
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={lightboxPhoto}
+              alt="Foto"
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                objectFit: 'contain',
+                borderRadius: '8px'
+              }}
+            />
+            {/* Navigation buttons */}
+            {lightboxPhotos.length > 1 && (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+                <button
+                  onClick={() => {
+                    const newIndex = lightboxIndex === 0 ? lightboxPhotos.length - 1 : lightboxIndex - 1;
+                    setLightboxIndex(newIndex);
+                    setLightboxPhoto(lightboxPhotos[newIndex]);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ← Eelmine
+                </button>
+                <span style={{ color: 'white', alignSelf: 'center' }}>
+                  {lightboxIndex + 1} / {lightboxPhotos.length}
+                </span>
+                <button
+                  onClick={() => {
+                    const newIndex = lightboxIndex === lightboxPhotos.length - 1 ? 0 : lightboxIndex + 1;
+                    setLightboxIndex(newIndex);
+                    setLightboxPhoto(lightboxPhotos[newIndex]);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Järgmine →
+                </button>
+              </div>
+            )}
+            {/* Close button */}
+            <button
+              onClick={() => setLightboxPhoto(null)}
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: '0',
+                padding: '8px',
+                background: 'transparent',
+                color: 'white',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '24px'
+              }}
+            >
+              <FiX size={24} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Groups Management Modal */}
       {showGroupsManagementModal && (
         <div className="org-modal-overlay" onClick={() => {
           setShowGroupsManagementModal(false);
           setManagementEditingGroupId(null);
+          setManagementEditingDescGroupId(null);
           setManagementColorPickerGroupId(null);
         }}>
           <div className="org-modal" style={{ maxWidth: '600px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
@@ -9888,6 +10305,7 @@ export default function OrganizerScreen({
               <button onClick={() => {
                 setShowGroupsManagementModal(false);
                 setManagementEditingGroupId(null);
+                setManagementEditingDescGroupId(null);
                 setManagementColorPickerGroupId(null);
               }}><FiX size={18} /></button>
             </div>
@@ -9935,6 +10353,7 @@ export default function OrganizerScreen({
                         const children = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.sort_order - b.sort_order);
                         const itemCount = groupItems.get(group.id)?.length || 0;
                         const isEditing = managementEditingGroupId === group.id;
+                        const isEditingDesc = managementEditingDescGroupId === group.id;
                         const showColorPicker = managementColorPickerGroupId === group.id;
 
                         return (
@@ -10033,6 +10452,7 @@ export default function OrganizerScreen({
 
                               {/* Group name and description - editable */}
                               <div style={{ flex: 1, minWidth: 0 }}>
+                                {/* Name - editable */}
                                 {isEditing ? (
                                   <input
                                     type="text"
@@ -10065,39 +10485,83 @@ export default function OrganizerScreen({
                                     }}
                                   />
                                 ) : (
-                                  <div
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => {
-                                      setManagementEditingGroupId(group.id);
-                                      setManagementEditName(group.name);
-                                    }}
-                                    title="Kliki nime muutmiseks"
-                                  >
-                                    <span style={{
+                                  <span
+                                    style={{
                                       fontSize: '12px',
                                       fontWeight: level === 0 ? 500 : 400,
                                       color: '#374151',
                                       display: 'block',
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}>
-                                      {group.name}
-                                    </span>
-                                    {group.description && (
-                                      <span style={{
-                                        fontSize: '10px',
-                                        color: '#9ca3af',
-                                        display: 'block',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        marginTop: '1px'
-                                      }}>
-                                        {group.description}
-                                      </span>
-                                    )}
-                                  </div>
+                                      whiteSpace: 'nowrap',
+                                      cursor: 'pointer'
+                                    }}
+                                    onClick={() => {
+                                      setManagementEditingGroupId(group.id);
+                                      setManagementEditName(group.name);
+                                    }}
+                                    title="Kliki nime muutmiseks"
+                                  >
+                                    {group.name}
+                                  </span>
+                                )}
+
+                                {/* Description - editable */}
+                                {isEditingDesc ? (
+                                  <input
+                                    type="text"
+                                    value={managementEditDesc}
+                                    onChange={(e) => setManagementEditDesc(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        await supabase.from('organizer_groups').update({ description: managementEditDesc.trim() || null, updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        setManagementEditingDescGroupId(null);
+                                        loadData();
+                                      } else if (e.key === 'Escape') {
+                                        setManagementEditingDescGroupId(null);
+                                      }
+                                    }}
+                                    onBlur={async () => {
+                                      const newDesc = managementEditDesc.trim() || null;
+                                      if (newDesc !== (group.description || null)) {
+                                        await supabase.from('organizer_groups').update({ description: newDesc, updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        loadData();
+                                      }
+                                      setManagementEditingDescGroupId(null);
+                                    }}
+                                    autoFocus
+                                    placeholder="Lisa kirjeldus..."
+                                    style={{
+                                      width: '100%',
+                                      padding: '1px 6px',
+                                      border: '1px solid #3b82f6',
+                                      borderRadius: '3px',
+                                      fontSize: '10px',
+                                      outline: 'none',
+                                      marginTop: '2px'
+                                    }}
+                                  />
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      color: group.description ? '#9ca3af' : '#d1d5db',
+                                      display: 'block',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      marginTop: '1px',
+                                      cursor: 'pointer',
+                                      fontStyle: group.description ? 'normal' : 'italic'
+                                    }}
+                                    onClick={() => {
+                                      setManagementEditingDescGroupId(group.id);
+                                      setManagementEditDesc(group.description || '');
+                                    }}
+                                    title="Kliki kirjelduse muutmiseks"
+                                  >
+                                    {group.description || 'Lisa kirjeldus...'}
+                                  </span>
                                 )}
                               </div>
 

@@ -576,7 +576,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       let allItems: ScheduleItem[] = [];
 
       if (versionId) {
-        // Load items with this version_id
+        // Load ONLY items with this version_id (no legacy items - they belong to legacy mode)
         const { data: versionItems, error: err1 } = await supabase
           .from('installation_schedule')
           .select('*')
@@ -586,31 +586,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
           .order('sort_order', { ascending: true });
 
         if (err1) throw err1;
-
-        // Also load legacy items without version_id
-        const { data: legacyItems, error: err2 } = await supabase
-          .from('installation_schedule')
-          .select('*')
-          .eq('project_id', projectId)
-          .is('version_id', null)
-          .order('scheduled_date', { ascending: true })
-          .order('sort_order', { ascending: true });
-
-        if (err2) throw err2;
-
-        // Combine and sort
-        allItems = [...(versionItems || []), ...(legacyItems || [])];
-        allItems.sort((a, b) => {
-          const dateCompare = a.scheduled_date.localeCompare(b.scheduled_date);
-          if (dateCompare !== 0) return dateCompare;
-          return (a.sort_order || 0) - (b.sort_order || 0);
-        });
+        allItems = versionItems || [];
       } else {
-        // No version - load ALL items (legacy mode)
+        // No version - load items WITHOUT version_id (legacy mode only)
         const { data, error } = await supabase
           .from('installation_schedule')
           .select('*')
           .eq('project_id', projectId)
+          .is('version_id', null)
           .order('scheduled_date', { ascending: true })
           .order('sort_order', { ascending: true });
 
@@ -1607,7 +1590,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .join(', ') || 'tühjendatud';
 
       setMessage(`${count} detaili ressursid: ${methodLabels}`);
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error updating batch methods:', e);
       setMessage('Viga ressursside muutmisel');
@@ -1780,7 +1763,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       setMessage(`${newItems.length} detaili lisatud`);
-      loadSchedule();
+      loadSchedule(activeVersionId);
 
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
     } catch (e: any) {
@@ -1877,7 +1860,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       setMessage(`${newItems.length} detaili lisatud kuupäevale ${formatDateEstonian(date)}`);
-      loadSchedule();
+      loadSchedule(activeVersionId);
 
       // Clear selection
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -1908,7 +1891,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       if (error) throw error;
       setDatePickerItemId(null);
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving item:', e);
       setMessage('Viga detaili liigutamisel');
@@ -1942,7 +1925,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .update({ sort_order: item.sort_order, updated_by: tcUserEmail })
         .eq('id', swapItem.id);
 
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error reordering:', e);
     }
@@ -1984,7 +1967,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       await loadComments(); // Refresh comments
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error deleting item:', e);
       setMessage('Viga kustutamisel');
@@ -2000,7 +1983,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         .eq('id', itemId);
 
       if (error) throw error;
-      loadSchedule();
+      loadSchedule(activeVersionId);
       setListItemContextMenu(null);
     } catch (e) {
       console.error('Error updating install method count:', e);
@@ -2081,7 +2064,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setSelectedItemIds(new Set());
       setMessage(`${count} detaili kustutatud`);
       await loadComments(); // Refresh comments
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error deleting items:', e);
       setMessage('Viga kustutamisel');
@@ -2140,7 +2123,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setDateMenuId(null);
       setMessage(`${dateItems.length} detaili kustutatud kuupäevalt ${formatDateShort(date)}`);
       await loadComments();
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error deleting date items:', e);
       setMessage('Viga kustutamisel');
@@ -2226,7 +2209,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       setMessage(`${itemsToRemove.length} detaili eemaldatud kuupäevalt`);
       setDateMenuId(null);
       await loadComments();
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error removing items from date:', e);
       setMessage('Viga eemaldamisel');
@@ -2331,7 +2314,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       setMessage(`✓ ${updatedCount} assembly marki uuendatud`);
-      await loadSchedule();
+      await loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error refreshing assembly marks:', e);
       setMessage('Viga assembly markide uuendamisel');
@@ -4622,7 +4605,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       setSelectedItemIds(new Set());
       setDatePickerItemId(null);
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving items:', e);
       setMessage('Viga detailide liigutamisel');
@@ -4655,7 +4638,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       setDateContextMenu(null);
       setMessage(`${itemsOnDate.length} detaili liigutatud kuupäevale ${formatDateShort(targetDate)}`);
-      loadSchedule();
+      loadSchedule(activeVersionId);
     } catch (e) {
       console.error('Error moving items:', e);
       setMessage('Viga detailide liigutamisel');
@@ -4852,7 +4835,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e) {
       console.error('Error saving to database:', e);
       // Reload to sync with database on error
-      loadSchedule();
+      loadSchedule(activeVersionId);
     }
   };
 
@@ -6015,7 +5998,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       }
 
       // Reload schedule
-      await loadSchedule();
+      await loadSchedule(activeVersionId);
 
       setImportResult({
         success: successCount,

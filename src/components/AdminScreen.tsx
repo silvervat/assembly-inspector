@@ -8813,6 +8813,87 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   result={functionResults["Show All + Reset Colors"]}
                   onClick={() => testFunction("Show All + Reset Colors", () => api.viewer.setObjectState(undefined, { color: "reset", visible: "reset" }))}
                 />
+                <FunctionButton
+                  name="🎨 Grupeeri värvi järgi"
+                  result={functionResults["groupByColor"]}
+                  onClick={() => testFunction("groupByColor", async () => {
+                    // Get all loaded models
+                    const models = await api.viewer.getModels('loaded');
+                    if (!models || models.length === 0) throw new Error('Ühtegi mudelit pole laaditud');
+
+                    const colorGroups = new Map<string, { color: { r: number; g: number; b: number; a: number } | null; count: number; modelObjects: { modelId: string; runtimeIds: number[] }[] }>();
+                    let totalObjects = 0;
+
+                    // Get object states for each model
+                    for (const model of models) {
+                      try {
+                        // Get all object states
+                        const states = await (api.viewer as any).getObjectState(model.id);
+                        if (!states) continue;
+
+                        // states is typically an array or object with object runtime IDs and their states
+                        if (Array.isArray(states)) {
+                          for (const state of states) {
+                            totalObjects++;
+                            const color = state.color;
+                            const colorKey = color ? `${color.r},${color.g},${color.b},${color.a || 255}` : 'default';
+
+                            if (!colorGroups.has(colorKey)) {
+                              colorGroups.set(colorKey, { color: color || null, count: 0, modelObjects: [] });
+                            }
+                            const group = colorGroups.get(colorKey)!;
+                            group.count++;
+
+                            // Add to model objects for selection
+                            let modelEntry = group.modelObjects.find(mo => mo.modelId === model.id);
+                            if (!modelEntry) {
+                              modelEntry = { modelId: model.id, runtimeIds: [] };
+                              group.modelObjects.push(modelEntry);
+                            }
+                            if (state.objectRuntimeId) {
+                              modelEntry.runtimeIds.push(state.objectRuntimeId);
+                            }
+                          }
+                        }
+                      } catch (e) {
+                        console.warn(`Could not get states for model ${model.id}:`, e);
+                      }
+                    }
+
+                    // If no object states found, try alternative approach
+                    if (colorGroups.size === 0) {
+                      // Get object count from model info
+                      for (const model of models) {
+                        if ((model as any).objectCount) {
+                          totalObjects += (model as any).objectCount;
+                        }
+                      }
+                      return {
+                        message: 'Värviinfo pole saadaval (API ei toeta getObjectState)',
+                        totalModels: models.length,
+                        totalObjects: totalObjects || 'teadmata',
+                        hint: 'Kasuta värvi määramiseks setObjectState ja seejärel vaata tulemust visuaalselt'
+                      };
+                    }
+
+                    // Sort by count descending
+                    const sortedGroups = Array.from(colorGroups.entries())
+                      .sort((a, b) => b[1].count - a[1].count)
+                      .map(([key, data]) => ({
+                        color: key === 'default' ? 'Vaikimisi (värv pole määratud)' : key,
+                        rgb: data.color,
+                        count: data.count,
+                        percent: ((data.count / totalObjects) * 100).toFixed(1) + '%'
+                      }));
+
+                    return {
+                      totalObjects,
+                      colorGroupCount: colorGroups.size,
+                      groups: sortedGroups.slice(0, 20), // Show top 20
+                      truncated: sortedGroups.length > 20 ? `... ja veel ${sortedGroups.length - 20} värvi` : undefined
+                    };
+                  })}
+                />
               </div>
             </div>
 
