@@ -900,10 +900,39 @@ export default function OrganizerScreen({
   const [lightboxItemId, setLightboxItemId] = useState<string | null>(null);
   const [lightboxFieldId, setLightboxFieldId] = useState<string | null>(null);
   const lightboxTouchStartX = useRef<number | null>(null);
+  // Lightbox metadata - who added, when, file size
+  const [lightboxMeta, setLightboxMeta] = useState<{
+    addedBy: string | null;
+    addedAt: string | null;
+    dimensions: { width: number; height: number } | null;
+    fileSize: number | null;
+  } | null>(null);
 
   // Photo/attachment upload state
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string>('');
+  const [uploadProgressData, setUploadProgressData] = useState<{
+    current: number;
+    total: number;
+    percent: number;
+    itemId: string;
+    fieldId: string;
+  } | null>(null);
+
+  // Background upload queue for offline/retry support
+  interface PendingUpload {
+    id: string;
+    file: File;
+    itemId: string;
+    fieldId: string;
+    fieldType: 'photo' | 'attachment';
+    retries: number;
+    status: 'pending' | 'uploading' | 'failed';
+    addedAt: Date;
+  }
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const uploadQueueProcessingRef = useRef(false);
+  const MAX_UPLOAD_RETRIES = 3;
 
   // Mobile photo picker modal
   const [showPhotoPickerModal, setShowPhotoPickerModal] = useState(false);
@@ -1532,6 +1561,34 @@ export default function OrganizerScreen({
     }
   }, [generateUploadFilename]);
 
+  // Single file upload with retry logic
+  const uploadSingleFile = useCallback(async (
+    file: File,
+    itemId: string,
+    fieldId: string,
+    fieldType: 'photo' | 'attachment',
+    retries = 0
+  ): Promise<string | null> => {
+    try {
+      let url: string | null;
+      if (fieldType === 'photo' && isImageFile(file)) {
+        url = await uploadPhoto(file, itemId, fieldId);
+      } else {
+        url = await uploadAttachment(file, itemId, fieldId);
+      }
+      return url;
+    } catch (e) {
+      console.error(`Upload error (attempt ${retries + 1}):`, e);
+      if (retries < MAX_UPLOAD_RETRIES) {
+        // Exponential backoff: 2s, 4s, 8s
+        const delay = Math.pow(2, retries + 1) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return uploadSingleFile(file, itemId, fieldId, fieldType, retries + 1);
+      }
+      return null;
+    }
+  }, [uploadPhoto, uploadAttachment]);
+
   // Handle photo/attachment field upload for an item
   const handleFieldFileUpload = useCallback(async (
     files: FileList | File[],
@@ -1567,26 +1624,44 @@ export default function OrganizerScreen({
         showToast(`Maksimaalselt ${maxFiles} faili lubatud`);
         setUploadingFieldId(null);
         setUploadProgress('');
+        setUploadProgressData(null);
         return;
       }
 
+      // Initialize progress tracking
+      setUploadProgressData({
+        current: 0,
+        total: filesToUpload.length,
+        percent: 0,
+        itemId: item.id,
+        fieldId: field.id
+      });
+
       const newUrls: string[] = [];
+      const failedFiles: File[] = [];
 
       for (let i = 0; i < filesToUpload.length; i++) {
         const file = filesToUpload[i];
+        const percent = Math.round(((i) / filesToUpload.length) * 100);
         setUploadProgress(`${i + 1}/${filesToUpload.length}...`);
+        setUploadProgressData(prev => prev ? {
+          ...prev,
+          current: i + 1,
+          percent
+        } : null);
 
-        let url: string | null;
-        if (field.type === 'photo' && isImageFile(file)) {
-          url = await uploadPhoto(file, item.id, field.id);
-        } else {
-          url = await uploadAttachment(file, item.id, field.id);
-        }
+        const fieldType = field.type === 'photo' ? 'photo' : 'attachment';
+        const url = await uploadSingleFile(file, item.id, field.id, fieldType);
 
         if (url) {
           newUrls.push(url);
+        } else {
+          failedFiles.push(file);
         }
       }
+
+      // Update progress to 100% when done
+      setUploadProgressData(prev => prev ? { ...prev, percent: 100 } : null);
 
       if (newUrls.length > 0) {
         const allUrls = [...currentUrls, ...newUrls].join(',');
@@ -1601,8 +1676,25 @@ export default function OrganizerScreen({
 
         if (error) throw error;
 
-        showToast(`${newUrls.length} fail(i) üles laetud`);
         refreshData();
+      }
+
+      // Handle failed uploads - add to pending queue for background retry
+      if (failedFiles.length > 0) {
+        const pendingItems = failedFiles.map(file => ({
+          id: `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          file,
+          itemId: item.id,
+          fieldId: field.id,
+          fieldType: field.type === 'photo' ? 'photo' as const : 'attachment' as const,
+          retries: MAX_UPLOAD_RETRIES,
+          status: 'failed' as const,
+          addedAt: new Date()
+        }));
+        setPendingUploads(prev => [...prev, ...pendingItems]);
+        showToast(`${newUrls.length} faili laetud, ${failedFiles.length} ootel`);
+      } else if (newUrls.length > 0) {
+        showToast(`${newUrls.length} fail(i) üles laetud`);
       }
     } catch (e) {
       console.error('File upload error:', e);
@@ -1610,8 +1702,116 @@ export default function OrganizerScreen({
     } finally {
       setUploadingFieldId(null);
       setUploadProgress('');
+      setUploadProgressData(null);
     }
-  }, [uploadPhoto, uploadAttachment, tcUserEmail, refreshData, showToast, groups]);
+  }, [uploadSingleFile, tcUserEmail, refreshData, showToast, groups]);
+
+  // Process pending uploads in background (retry on reconnection)
+  const processPendingUploads = useCallback(async () => {
+    if (uploadQueueProcessingRef.current || pendingUploads.length === 0) return;
+
+    uploadQueueProcessingRef.current = true;
+
+    try {
+      for (const pending of pendingUploads) {
+        if (pending.status !== 'failed') continue;
+
+        // Mark as uploading
+        setPendingUploads(prev =>
+          prev.map(p => p.id === pending.id ? { ...p, status: 'uploading' as const } : p)
+        );
+
+        const url = await uploadSingleFile(
+          pending.file,
+          pending.itemId,
+          pending.fieldId,
+          pending.fieldType
+        );
+
+        if (url) {
+          // Success - update item and remove from queue
+          const item = Array.from(groupItems.values()).flat().find(i => i.id === pending.itemId);
+          if (item) {
+            const currentUrls = item.custom_properties?.[pending.fieldId]?.split(',').filter(Boolean) || [];
+            const allUrls = [...currentUrls, url].join(',');
+            const updatedProps = { ...item.custom_properties, [pending.fieldId]: allUrls };
+
+            await supabase
+              .from('organizer_group_items')
+              .update({ custom_properties: updatedProps })
+              .eq('id', pending.itemId);
+          }
+
+          setPendingUploads(prev => prev.filter(p => p.id !== pending.id));
+          showToast('Taustal laeti fail üles');
+          refreshData();
+        } else {
+          // Failed - mark as failed
+          setPendingUploads(prev =>
+            prev.map(p => p.id === pending.id ? { ...p, status: 'failed' as const } : p)
+          );
+        }
+      }
+    } finally {
+      uploadQueueProcessingRef.current = false;
+    }
+  }, [pendingUploads, uploadSingleFile, groupItems, showToast, refreshData]);
+
+  // Retry failed uploads when network comes back online
+  useEffect(() => {
+    const handleOnline = () => {
+      if (pendingUploads.some(p => p.status === 'failed')) {
+        showToast('Ühendus taastatud, proovin uuesti...');
+        processPendingUploads();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [pendingUploads, processPendingUploads, showToast]);
+
+  // Periodically retry failed uploads (every 30 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (navigator.onLine && pendingUploads.some(p => p.status === 'failed')) {
+        processPendingUploads();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [pendingUploads, processPendingUploads]);
+
+  // Fetch image metadata (dimensions and file size)
+  const fetchImageMeta = useCallback(async (url: string): Promise<{
+    dimensions: { width: number; height: number } | null;
+    fileSize: number | null;
+  }> => {
+    try {
+      // Fetch file size from HEAD request
+      let fileSize: number | null = null;
+      try {
+        const response = await fetch(url, { method: 'HEAD' });
+        const contentLength = response.headers.get('content-length');
+        if (contentLength) {
+          fileSize = parseInt(contentLength, 10);
+        }
+      } catch {
+        // HEAD request might fail, try getting it from full fetch later
+      }
+
+      // Get image dimensions
+      const dimensions = await new Promise<{ width: number; height: number } | null>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+
+      return { dimensions, fileSize };
+    } catch {
+      return { dimensions: null, fileSize: null };
+    }
+  }, []);
 
   // Open lightbox with photo
   const openLightbox = useCallback((url: string, allUrls: string[], itemId?: string, fieldId?: string) => {
@@ -1620,7 +1820,39 @@ export default function OrganizerScreen({
     setLightboxPhoto(url);
     setLightboxItemId(itemId || null);
     setLightboxFieldId(fieldId || null);
-  }, []);
+    setLightboxMeta(null); // Reset while loading
+
+    // Get item metadata (who added, when)
+    if (itemId) {
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+      if (item) {
+        // Fetch image dimensions and size
+        fetchImageMeta(url).then(({ dimensions, fileSize }) => {
+          setLightboxMeta({
+            addedBy: item.added_by || null,
+            addedAt: item.added_at || null,
+            dimensions,
+            fileSize
+          });
+        });
+      }
+    }
+  }, [groupItems, fetchImageMeta]);
+
+  // Update lightbox metadata when navigating between photos
+  useEffect(() => {
+    if (lightboxPhoto && lightboxItemId) {
+      fetchImageMeta(lightboxPhoto).then(({ dimensions, fileSize }) => {
+        const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+        setLightboxMeta({
+          addedBy: item?.added_by || null,
+          addedAt: item?.added_at || null,
+          dimensions,
+          fileSize
+        });
+      });
+    }
+  }, [lightboxPhoto, lightboxItemId, groupItems, fetchImageMeta]);
 
   // Close lightbox
   const closeLightbox = useCallback(() => {
@@ -1629,6 +1861,7 @@ export default function OrganizerScreen({
     setLightboxIndex(0);
     setLightboxItemId(null);
     setLightboxFieldId(null);
+    setLightboxMeta(null);
   }, []);
 
   // Delete photo from lightbox
@@ -2971,10 +3204,86 @@ export default function OrganizerScreen({
       return;
     }
 
-    if (!confirm('Kas oled kindel, et soovid selle välja kustutada?')) return;
+    // Find the field definition to check if it's a photo/attachment field
+    const fieldToDelete = (rootGroup.custom_fields || []).find(f => f.id === fieldId);
+    const isFileField = fieldToDelete && (fieldToDelete.type === 'photo' || fieldToDelete.type === 'attachment');
+
+    const confirmMessage = isFileField
+      ? 'Kas oled kindel, et soovid selle välja kustutada? See kustutab ka kõik selle väljaga seotud failid.'
+      : 'Kas oled kindel, et soovid selle välja kustutada?';
+
+    if (!confirm(confirmMessage)) return;
 
     setSaving(true);
     try {
+      // If it's a file field, delete all related files from storage
+      if (isFileField) {
+        // Collect all group IDs (root + subgroups)
+        const collectGroupIds = (parentId: string): string[] => {
+          const ids = [parentId];
+          const children = groups.filter(g => g.parent_id === parentId);
+          for (const child of children) {
+            ids.push(...collectGroupIds(child.id));
+          }
+          return ids;
+        };
+        const allGroupIds = collectGroupIds(rootGroup.id);
+
+        // Collect all file URLs from items in these groups
+        const fileUrlsToDelete: string[] = [];
+        for (const gId of allGroupIds) {
+          const items = groupItems.get(gId) || [];
+          for (const item of items) {
+            const urls = item.custom_properties?.[fieldId]?.split(',').filter(Boolean) || [];
+            fileUrlsToDelete.push(...urls);
+          }
+        }
+
+        // Delete files from storage
+        if (fileUrlsToDelete.length > 0) {
+          const storagePaths: string[] = [];
+          for (const url of fileUrlsToDelete) {
+            try {
+              const urlObj = new URL(url);
+              const pathParts = urlObj.pathname.split('/');
+              const bucketIndex = pathParts.indexOf('organizer-attachments');
+              if (bucketIndex !== -1) {
+                const storagePath = pathParts.slice(bucketIndex + 1).join('/');
+                if (storagePath) {
+                  storagePaths.push(storagePath);
+                }
+              }
+            } catch {
+              // Skip invalid URLs
+            }
+          }
+
+          if (storagePaths.length > 0) {
+            // Delete in batches of 100
+            for (let i = 0; i < storagePaths.length; i += 100) {
+              const batch = storagePaths.slice(i, i + 100);
+              await supabase.storage.from('organizer-attachments').remove(batch);
+            }
+          }
+
+          // Clear the field data from all items
+          for (const gId of allGroupIds) {
+            const items = groupItems.get(gId) || [];
+            const itemsWithFieldData = items.filter(i => i.custom_properties?.[fieldId]);
+
+            for (const item of itemsWithFieldData) {
+              const updatedProps = { ...item.custom_properties };
+              delete updatedProps[fieldId];
+
+              await supabase
+                .from('organizer_group_items')
+                .update({ custom_properties: updatedProps })
+                .eq('id', item.id);
+            }
+          }
+        }
+      }
+
       const updatedFields = (rootGroup.custom_fields || []).filter(f => f.id !== fieldId);
 
       const { error } = await supabase
@@ -2984,7 +3293,7 @@ export default function OrganizerScreen({
 
       if (error) throw error;
 
-      showToast('Väli kustutatud');
+      showToast(isFileField ? 'Väli ja seotud failid kustutatud' : 'Väli kustutatud');
       await loadData();
       // Refresh editingGroup if we're editing, so the modal shows updated fields
       if (editingGroup && editingGroup.id === rootGroup.id) {
@@ -6247,7 +6556,28 @@ export default function OrganizerScreen({
       setGroupsImportProgress({ phase: 'Töötlen detaile...', current: 0, total: 100, percent: 35 });
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      const itemHeaders = ['Grupp', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'GUID_IFC', 'GUID_MS', 'Lisatud', 'Lisaja'];
+      // Collect all unique custom fields from all groups
+      const allCustomFields = new Map<string, CustomFieldDefinition>();
+      for (const group of sortedGroups) {
+        // Get root group for custom fields
+        let rootGroup = group;
+        while (rootGroup.parent_id) {
+          const parent = groupMap.get(rootGroup.parent_id);
+          if (parent) rootGroup = parent;
+          else break;
+        }
+        for (const field of (rootGroup.custom_fields || [])) {
+          if (!allCustomFields.has(field.id)) {
+            allCustomFields.set(field.id, field);
+          }
+        }
+      }
+      const customFieldsList = Array.from(allCustomFields.values());
+
+      // Build headers: base columns + custom fields
+      const baseHeaders = ['Grupp', 'Mark', 'Toode', 'Kaal', 'Positsioon', 'Märkused', 'GUID_IFC', 'GUID_MS', 'Lisatud', 'Lisaja'];
+      const customFieldHeaders = customFieldsList.map(f => f.name);
+      const itemHeaders = [...baseHeaders, ...customFieldHeaders];
       const itemData: any[][] = [itemHeaders.map(h => ({ v: h, s: headerStyle }))];
 
       let totalItems = 0;
@@ -6256,19 +6586,25 @@ export default function OrganizerScreen({
       for (const group of sortedGroups) {
         const items = groupItems.get(group.id) || [];
         for (const item of items) {
-          allItemsFlat.push({ groupName: group.name, item });
+          allItemsFlat.push({ groupName: group.name, item, group });
           totalItems++;
         }
       }
 
+      // Link style for hyperlinks (blue, underlined)
+      const linkStyle = {
+        font: { color: { rgb: '0563C1' }, underline: true }
+      };
+
       for (let i = 0; i < allItemsFlat.length; i++) {
-        const { groupName, item } = allItemsFlat[i];
+        const { groupName, item, group } = allItemsFlat[i];
         const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
         const addedDate = item.added_at
           ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
           : '';
 
-        itemData.push([
+        // Base row data
+        const baseRow = [
           groupName,
           item.assembly_mark || '',
           item.product_name || '',
@@ -6279,7 +6615,61 @@ export default function OrganizerScreen({
           guidMs,
           addedDate,
           item.added_by || ''
-        ]);
+        ];
+
+        // Get root group for finding field definitions
+        let rootGroup = group;
+        while (rootGroup.parent_id) {
+          const parent = groupMap.get(rootGroup.parent_id);
+          if (parent) rootGroup = parent;
+          else break;
+        }
+        const groupFields = new Map<string, CustomFieldDefinition>((rootGroup.custom_fields || []).map((f: CustomFieldDefinition) => [f.id, f]));
+
+        // Add custom field values
+        const customFieldValues = customFieldsList.map(field => {
+          const value = item.custom_properties?.[field.id];
+          if (!value) return '';
+
+          // For photo/attachment fields, create comma-separated links
+          const fieldDef: CustomFieldDefinition = groupFields.get(field.id) || field;
+          if (fieldDef.type === 'photo' || fieldDef.type === 'attachment') {
+            const urls = String(value).split(',').filter(Boolean);
+            if (urls.length === 0) return '';
+            if (urls.length === 1) {
+              // Single link - create hyperlink cell
+              return { v: urls[0].split('/').pop() || 'Link', l: { Target: urls[0] }, s: linkStyle };
+            }
+            // Multiple links - join with line break, each as text with URL
+            return urls.map((url, idx) => `${idx + 1}: ${url}`).join('\n');
+          }
+
+          // For tags fields (arrays)
+          if (Array.isArray(value)) {
+            return value.join(', ');
+          }
+
+          // Format based on field type
+          if (fieldDef.type === 'currency') {
+            const num = parseFloat(String(value));
+            return isNaN(num) ? value : `${num.toFixed(2)} €`;
+          }
+          if (fieldDef.type === 'number') {
+            const num = parseFloat(String(value));
+            const decimals = fieldDef.options?.decimals ?? 0;
+            return isNaN(num) ? value : num.toFixed(decimals);
+          }
+          if (fieldDef.type === 'date' && value) {
+            const d = new Date(value);
+            if (!isNaN(d.getTime())) {
+              return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear()}`;
+            }
+          }
+
+          return String(value);
+        });
+
+        itemData.push([...baseRow, ...customFieldValues]);
 
         if (i % 100 === 0) {
           const percent = 35 + Math.round((i / allItemsFlat.length) * 55);
@@ -6294,7 +6684,12 @@ export default function OrganizerScreen({
       }
 
       const wsItems = XLSX.utils.aoa_to_sheet(itemData);
-      wsItems['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 24 }, { wch: 38 }, { wch: 18 }, { wch: 25 }];
+      // Column widths: base columns + 20 width for each custom field
+      const baseColWidths = [{ wch: 25 }, { wch: 15 }, { wch: 25 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 24 }, { wch: 38 }, { wch: 18 }, { wch: 25 }];
+      const customColWidths = customFieldsList.map(f =>
+        f.type === 'photo' || f.type === 'attachment' ? { wch: 40 } : { wch: 20 }
+      );
+      wsItems['!cols'] = [...baseColWidths, ...customColWidths];
       XLSX.utils.book_append_sheet(wb, wsItems, 'Detailid');
 
       // ============ JUHEND SHEET ============
@@ -6322,6 +6717,24 @@ export default function OrganizerScreen({
         ['- GUID_MS: 36-kohaline MS GUID'],
         ['- Lisatud: Millal detail gruppi lisati'],
         ['- Lisaja: Kes detaili gruppi lisas'],
+        ...(customFieldsList.length > 0 ? [
+          [''],
+          ['LISAVÄLJAD:'],
+          ...customFieldsList.map(f => {
+            let typeDesc = '';
+            switch (f.type) {
+              case 'photo': typeDesc = ' (fotod - lingid failidele)'; break;
+              case 'attachment': typeDesc = ' (manused - lingid failidele)'; break;
+              case 'currency': typeDesc = ' (valuuta)'; break;
+              case 'number': typeDesc = ' (number)'; break;
+              case 'date': typeDesc = ' (kuupäev)'; break;
+              case 'tags': typeDesc = ' (sildid)'; break;
+              case 'dropdown': typeDesc = ' (valik)'; break;
+              default: typeDesc = ' (tekst)';
+            }
+            return [`- ${f.name}${typeDesc}`];
+          })
+        ] : []),
         [''],
         ['Eksporditud:', new Date().toLocaleString('et-EE')],
         ['Kasutaja:', tcUserEmail]
@@ -8047,6 +8460,7 @@ export default function OrganizerScreen({
                           if (field.type === 'photo') {
                             const photoUrls = val ? String(val).split(',').filter(Boolean) : [];
                             const isUploading = uploadingFieldId === field.id;
+                            const currentProgress = uploadProgressData?.itemId === item.id && uploadProgressData?.fieldId === field.id ? uploadProgressData : null;
                             const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                             return (
                               <div
@@ -8057,11 +8471,106 @@ export default function OrganizerScreen({
                                   alignItems: 'center',
                                   gap: '4px',
                                   minWidth: '80px',
-                                  flex: 1
+                                  flex: 1,
+                                  position: 'relative'
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {/* Photo thumbnails */}
+                                {/* Upload button FIRST - on mobile opens picker modal, on desktop uses file input */}
+                                {isMobile ? (
+                                  <button
+                                    type="button"
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '3px',
+                                      background: isUploading ? '#dbeafe' : '#f3f4f6',
+                                      border: '1px dashed #d1d5db',
+                                      cursor: isUploading ? 'wait' : 'pointer',
+                                      color: isUploading ? '#3b82f6' : '#6b7280',
+                                      flexShrink: 0,
+                                      position: 'relative',
+                                      overflow: 'hidden'
+                                    }}
+                                    title={isUploading ? uploadProgress : 'Lisa foto'}
+                                    disabled={isUploading}
+                                    onClick={() => openPhotoPicker(item, field)}
+                                  >
+                                    {isUploading && currentProgress ? (
+                                      <>
+                                        {/* Progress fill */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          bottom: 0,
+                                          left: 0,
+                                          width: '100%',
+                                          height: `${currentProgress.percent}%`,
+                                          background: '#3b82f6',
+                                          opacity: 0.3,
+                                          transition: 'height 0.2s ease'
+                                        }} />
+                                        <span style={{ fontSize: '8px', zIndex: 1 }}>{currentProgress.current}/{currentProgress.total}</span>
+                                      </>
+                                    ) : (
+                                      <FiCamera size={12} />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <label
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '3px',
+                                      background: isUploading ? '#dbeafe' : '#f3f4f6',
+                                      border: '1px dashed #d1d5db',
+                                      cursor: isUploading ? 'wait' : 'pointer',
+                                      color: isUploading ? '#3b82f6' : '#6b7280',
+                                      flexShrink: 0,
+                                      position: 'relative',
+                                      overflow: 'hidden'
+                                    }}
+                                    title={isUploading ? uploadProgress : 'Lisa foto'}
+                                  >
+                                    {isUploading && currentProgress ? (
+                                      <>
+                                        {/* Progress fill */}
+                                        <div style={{
+                                          position: 'absolute',
+                                          bottom: 0,
+                                          left: 0,
+                                          width: '100%',
+                                          height: `${currentProgress.percent}%`,
+                                          background: '#3b82f6',
+                                          opacity: 0.3,
+                                          transition: 'height 0.2s ease'
+                                        }} />
+                                        <span style={{ fontSize: '8px', zIndex: 1 }}>{currentProgress.current}/{currentProgress.total}</span>
+                                      </>
+                                    ) : (
+                                      <FiCamera size={12} />
+                                    )}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      style={{ display: 'none' }}
+                                      disabled={isUploading}
+                                      onChange={(e) => {
+                                        if (e.target.files) {
+                                          handleFieldFileUpload(e.target.files, item, field);
+                                          e.target.value = '';
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                                {/* Photo thumbnails AFTER camera button */}
                                 {photoUrls.slice(0, 3).map((url, idx) => (
                                   <div
                                     key={idx}
@@ -8091,70 +8600,6 @@ export default function OrganizerScreen({
                                   >
                                     +{photoUrls.length - 3}
                                   </span>
-                                )}
-                                {/* Upload button - on mobile opens picker modal, on desktop uses file input */}
-                                {isMobile ? (
-                                  <button
-                                    type="button"
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      width: '24px',
-                                      height: '24px',
-                                      borderRadius: '3px',
-                                      background: '#f3f4f6',
-                                      border: '1px dashed #d1d5db',
-                                      cursor: isUploading ? 'wait' : 'pointer',
-                                      color: '#6b7280',
-                                      flexShrink: 0
-                                    }}
-                                    title={isUploading ? uploadProgress : 'Lisa foto'}
-                                    disabled={isUploading}
-                                    onClick={() => openPhotoPicker(item, field)}
-                                  >
-                                    {isUploading ? (
-                                      <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
-                                    ) : (
-                                      <FiCamera size={12} />
-                                    )}
-                                  </button>
-                                ) : (
-                                  <label
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      width: '24px',
-                                      height: '24px',
-                                      borderRadius: '3px',
-                                      background: '#f3f4f6',
-                                      border: '1px dashed #d1d5db',
-                                      cursor: isUploading ? 'wait' : 'pointer',
-                                      color: '#6b7280',
-                                      flexShrink: 0
-                                    }}
-                                    title={isUploading ? uploadProgress : 'Lisa foto'}
-                                  >
-                                    {isUploading ? (
-                                      <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
-                                    ) : (
-                                      <FiCamera size={12} />
-                                    )}
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      multiple
-                                      style={{ display: 'none' }}
-                                      disabled={isUploading}
-                                      onChange={(e) => {
-                                        if (e.target.files) {
-                                          handleFieldFileUpload(e.target.files, item, field);
-                                          e.target.value = '';
-                                        }
-                                      }}
-                                    />
-                                  </label>
                                 )}
                               </div>
                             );
@@ -10625,6 +11070,39 @@ export default function OrganizerScreen({
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Photo metadata - compact display at top */}
+            {lightboxMeta && (
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                marginBottom: '8px',
+                fontSize: '11px',
+                color: 'rgba(255,255,255,0.7)',
+                flexWrap: 'wrap',
+                justifyContent: 'center'
+              }}>
+                {lightboxMeta.addedBy && (
+                  <span title="Lisaja">{lightboxMeta.addedBy.split('@')[0]}</span>
+                )}
+                {lightboxMeta.addedAt && (
+                  <span title="Lisatud">
+                    {new Date(lightboxMeta.addedAt).toLocaleDateString('et-EE')}
+                  </span>
+                )}
+                {lightboxMeta.dimensions && (
+                  <span title="Mõõtmed">
+                    {lightboxMeta.dimensions.width}x{lightboxMeta.dimensions.height}px
+                  </span>
+                )}
+                {lightboxMeta.fileSize && (
+                  <span title="Faili suurus">
+                    {lightboxMeta.fileSize < 1024 * 1024
+                      ? `${Math.round(lightboxMeta.fileSize / 1024)} KB`
+                      : `${(lightboxMeta.fileSize / (1024 * 1024)).toFixed(1)} MB`}
+                  </span>
+                )}
+              </div>
+            )}
             <img
               src={lightboxPhoto}
               alt="Foto"
