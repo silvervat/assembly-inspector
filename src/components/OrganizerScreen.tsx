@@ -27,7 +27,7 @@ import {
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiTag, FiUpload, FiSettings, FiGrid, FiLink,
-  FiCamera, FiPaperclip
+  FiCamera, FiPaperclip, FiImage, FiCheck
 } from 'react-icons/fi';
 
 // ============================================
@@ -124,7 +124,7 @@ interface MarkupSettings {
 
 // Sorting options
 type SortField = 'sort_order' | 'name' | 'itemCount' | 'totalWeight' | 'created_at';
-type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
+type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order' | `custom:${string}`;
 type SortDirection = 'asc' | 'desc';
 
 // Undo action types
@@ -342,24 +342,44 @@ function sortItems(items: OrganizerGroupItem[], field: ItemSortField, dir: SortD
     let aVal: string | number = '';
     let bVal: string | number = '';
 
-    switch (field) {
-      case 'assembly_mark':
-        aVal = (a.assembly_mark || '').toLowerCase();
-        bVal = (b.assembly_mark || '').toLowerCase();
-        break;
-      case 'product_name':
-        aVal = (a.product_name || '').toLowerCase();
-        bVal = (b.product_name || '').toLowerCase();
-        break;
-      case 'cast_unit_weight':
-        aVal = parseFloat(a.cast_unit_weight || '0') || 0;
-        bVal = parseFloat(b.cast_unit_weight || '0') || 0;
-        break;
-      case 'sort_order':
-      default:
-        aVal = a.sort_order;
-        bVal = b.sort_order;
-        break;
+    // Handle custom field sorting
+    if (field.startsWith('custom:')) {
+      const customFieldId = field.substring(7); // Remove 'custom:' prefix
+      const aCustom = a.custom_properties?.[customFieldId];
+      const bCustom = b.custom_properties?.[customFieldId];
+
+      // Try to parse as numbers, otherwise compare as strings
+      const aNum = parseFloat(String(aCustom || ''));
+      const bNum = parseFloat(String(bCustom || ''));
+
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        aVal = aNum;
+        bVal = bNum;
+      } else {
+        // For arrays (tags), join them for comparison
+        aVal = (Array.isArray(aCustom) ? aCustom.join(',') : String(aCustom || '')).toLowerCase();
+        bVal = (Array.isArray(bCustom) ? bCustom.join(',') : String(bCustom || '')).toLowerCase();
+      }
+    } else {
+      switch (field) {
+        case 'assembly_mark':
+          aVal = (a.assembly_mark || '').toLowerCase();
+          bVal = (b.assembly_mark || '').toLowerCase();
+          break;
+        case 'product_name':
+          aVal = (a.product_name || '').toLowerCase();
+          bVal = (b.product_name || '').toLowerCase();
+          break;
+        case 'cast_unit_weight':
+          aVal = parseFloat(a.cast_unit_weight || '0') || 0;
+          bVal = parseFloat(b.cast_unit_weight || '0') || 0;
+          break;
+        case 'sort_order':
+        default:
+          aVal = a.sort_order;
+          bVal = b.sort_order;
+          break;
+      }
     }
 
     if (aVal < bVal) return dir === 'asc' ? -1 : 1;
@@ -875,10 +895,20 @@ export default function OrganizerScreen({
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
   const [lightboxPhotos, setLightboxPhotos] = useState<string[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxItemId, setLightboxItemId] = useState<string | null>(null);
+  const [lightboxFieldId, setLightboxFieldId] = useState<string | null>(null);
 
   // Photo/attachment upload state
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string>('');
+
+  // Mobile photo picker modal
+  const [showPhotoPickerModal, setShowPhotoPickerModal] = useState(false);
+  const [photoPickerItem, setPhotoPickerItem] = useState<OrganizerGroupItem | null>(null);
+  const [photoPickerField, setPhotoPickerField] = useState<CustomFieldDefinition | null>(null);
+  const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
@@ -1474,6 +1504,21 @@ export default function OrganizerScreen({
   ) => {
     if (files.length === 0) return;
 
+    // Check if group is locked
+    const itemGroup = groups.find(g => g.id === item.group_id);
+    const checkLocked = (groupId: string): boolean => {
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return false;
+      if (group.is_locked) return true;
+      if (group.parent_id) return checkLocked(group.parent_id);
+      return false;
+    };
+    if (checkLocked(item.group_id)) {
+      const lockedGroup = groups.find(g => g.is_locked && (g.id === item.group_id || g.id === itemGroup?.parent_id));
+      showToast(`🔒 Grupp on lukustatud (${lockedGroup?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     setUploadingFieldId(field.id);
     setUploadProgress('Laadimine...');
 
@@ -1530,14 +1575,207 @@ export default function OrganizerScreen({
       setUploadingFieldId(null);
       setUploadProgress('');
     }
-  }, [uploadPhoto, uploadAttachment, tcUserEmail, refreshData, showToast]);
+  }, [uploadPhoto, uploadAttachment, tcUserEmail, refreshData, showToast, groups]);
 
   // Open lightbox with photo
-  const openLightbox = useCallback((url: string, allUrls: string[]) => {
+  const openLightbox = useCallback((url: string, allUrls: string[], itemId?: string, fieldId?: string) => {
     setLightboxPhotos(allUrls);
     setLightboxIndex(allUrls.indexOf(url));
     setLightboxPhoto(url);
+    setLightboxItemId(itemId || null);
+    setLightboxFieldId(fieldId || null);
   }, []);
+
+  // Close lightbox
+  const closeLightbox = useCallback(() => {
+    setLightboxPhoto(null);
+    setLightboxPhotos([]);
+    setLightboxIndex(0);
+    setLightboxItemId(null);
+    setLightboxFieldId(null);
+  }, []);
+
+  // Delete photo from lightbox
+  const deletePhotoFromLightbox = useCallback(async () => {
+    if (!lightboxPhoto || !lightboxItemId || !lightboxFieldId) return;
+
+    // Find the item first to check lock status
+    const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+    if (!item) return;
+
+    // Check if group is locked
+    const checkLocked = (groupId: string): boolean => {
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return false;
+      if (group.is_locked) return true;
+      if (group.parent_id) return checkLocked(group.parent_id);
+      return false;
+    };
+    if (checkLocked(item.group_id)) {
+      const itemGroup = groups.find(g => g.id === item.group_id);
+      const lockedGroup = groups.find(g => g.is_locked && (g.id === item.group_id || g.id === itemGroup?.parent_id));
+      showToast(`🔒 Grupp on lukustatud (${lockedGroup?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
+    const confirmed = window.confirm('Kas oled kindel, et soovid selle pildi kustutada?');
+    if (!confirmed) return;
+
+    try {
+
+      // Get current URLs and remove the one being deleted
+      const currentUrls = item.custom_properties?.[lightboxFieldId]?.split(',').filter(Boolean) || [];
+      const newUrls = currentUrls.filter((url: string) => url !== lightboxPhoto);
+
+      // Extract storage path from URL and delete from storage
+      const urlObj = new URL(lightboxPhoto);
+      const pathParts = urlObj.pathname.split('/');
+      const bucketIndex = pathParts.indexOf('organizer-attachments');
+      if (bucketIndex !== -1) {
+        const storagePath = pathParts.slice(bucketIndex + 1).join('/');
+        if (storagePath) {
+          await supabase.storage.from('organizer-attachments').remove([storagePath]);
+        }
+      }
+
+      // Update database
+      const updatedProps = { ...item.custom_properties, [lightboxFieldId]: newUrls.join(',') };
+      await supabase.from('organizer_group_items').update({ custom_properties: updatedProps }).eq('id', lightboxItemId);
+
+      showToast('Pilt kustutatud');
+
+      // Update lightbox state
+      if (newUrls.length === 0) {
+        closeLightbox();
+      } else {
+        const newIndex = Math.min(lightboxIndex, newUrls.length - 1);
+        setLightboxPhotos(newUrls);
+        setLightboxIndex(newIndex);
+        setLightboxPhoto(newUrls[newIndex]);
+      }
+
+      refreshData();
+    } catch (e) {
+      console.error('Error deleting photo:', e);
+      showToast('Pildi kustutamine ebaõnnestus');
+    }
+  }, [lightboxPhoto, lightboxItemId, lightboxFieldId, lightboxIndex, groups, groupItems, closeLightbox, refreshData, showToast]);
+
+  // Generate masked URL for sharing (hide Supabase address)
+  const getMaskedPhotoUrl = useCallback((url: string) => {
+    // Create a proxy-style URL that hides the actual Supabase storage URL
+    // We'll use a base64 encoded path for the masked URL
+    try {
+      const urlObj = new URL(url);
+      const pathParts = urlObj.pathname.split('/');
+      const bucketIndex = pathParts.indexOf('organizer-attachments');
+      if (bucketIndex !== -1) {
+        const storagePath = pathParts.slice(bucketIndex + 1).join('/');
+        // Create a shortened masked URL
+        const filename = storagePath.split('/').pop() || 'photo';
+        return `${window.location.origin}/photo/${btoa(storagePath).substring(0, 20)}/${filename}`;
+      }
+    } catch {
+      // Fallback to a generic masked URL
+    }
+    return `${window.location.origin}/photo/${Date.now()}`;
+  }, []);
+
+  // Copy photo URL to clipboard
+  const copyPhotoUrl = useCallback(async () => {
+    if (!lightboxPhoto) return;
+
+    try {
+      const maskedUrl = getMaskedPhotoUrl(lightboxPhoto);
+      await navigator.clipboard.writeText(maskedUrl);
+      showToast('URL kopeeritud lõikelauale');
+    } catch {
+      showToast('URL-i kopeerimine ebaõnnestus');
+    }
+  }, [lightboxPhoto, getMaskedPhotoUrl, showToast]);
+
+  // Download photo
+  const downloadPhoto = useCallback(async () => {
+    if (!lightboxPhoto) return;
+
+    try {
+      const response = await fetch(lightboxPhoto);
+      const blob = await response.blob();
+      const filename = lightboxPhoto.split('/').pop() || 'photo.jpg';
+
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(link.href);
+    } catch {
+      // Fallback: open in new tab
+      window.open(lightboxPhoto, '_blank');
+    }
+  }, [lightboxPhoto]);
+
+  // Open photo picker modal for mobile
+  const openPhotoPicker = useCallback((item: OrganizerGroupItem, field: CustomFieldDefinition) => {
+    setPhotoPickerItem(item);
+    setPhotoPickerField(field);
+    setPendingPhotos([]);
+    setShowPhotoPickerModal(true);
+  }, []);
+
+  // Handle photos selected from camera or gallery
+  const handlePhotosSelected = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const newPhotos: { file: File; preview: string }[] = [];
+    Array.from(files).forEach(file => {
+      if (isImageFile(file)) {
+        const preview = URL.createObjectURL(file);
+        newPhotos.push({ file, preview });
+      }
+    });
+
+    setPendingPhotos(prev => [...prev, ...newPhotos]);
+  }, []);
+
+  // Remove pending photo from preview
+  const removePendingPhoto = useCallback((index: number) => {
+    setPendingPhotos(prev => {
+      const photo = prev[index];
+      if (photo) {
+        URL.revokeObjectURL(photo.preview);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  // Confirm and upload pending photos
+  const confirmAndUploadPhotos = useCallback(async () => {
+    if (!photoPickerItem || !photoPickerField || pendingPhotos.length === 0) return;
+
+    setShowPhotoPickerModal(false);
+
+    // Convert pending photos to FileList-like structure and use existing upload function
+    const files = pendingPhotos.map(p => p.file);
+    await handleFieldFileUpload(files, photoPickerItem, photoPickerField);
+
+    // Cleanup previews
+    pendingPhotos.forEach(p => URL.revokeObjectURL(p.preview));
+    setPendingPhotos([]);
+    setPhotoPickerItem(null);
+    setPhotoPickerField(null);
+  }, [photoPickerItem, photoPickerField, pendingPhotos, handleFieldFileUpload]);
+
+  // Close photo picker modal
+  const closePhotoPicker = useCallback(() => {
+    // Cleanup preview URLs
+    pendingPhotos.forEach(p => URL.revokeObjectURL(p.preview));
+    setPendingPhotos([]);
+    setPhotoPickerItem(null);
+    setPhotoPickerField(null);
+    setShowPhotoPickerModal(false);
+  }, [pendingPhotos]);
 
   // ============================================
   // REALTIME COLLABORATION
@@ -2539,6 +2777,13 @@ export default function OrganizerScreen({
     const rootGroup = getRootParent(firstSelectedGroupId);
     if (!rootGroup) return;
 
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     setSaving(true);
     try {
       const newField: CustomFieldDefinition = {
@@ -2586,6 +2831,13 @@ export default function OrganizerScreen({
     // Always update field in root parent group
     const rootGroup = getRootParent(firstSelectedGroupId);
     if (!rootGroup) return;
+
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -2676,6 +2928,13 @@ export default function OrganizerScreen({
     const rootGroup = getRootParent(groupId);
     if (!rootGroup) return;
 
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     if (!confirm('Kas oled kindel, et soovid selle välja kustutada?')) return;
 
     setSaving(true);
@@ -2707,6 +2966,13 @@ export default function OrganizerScreen({
   const moveCustomField = async (fieldId: string, groupId: string, direction: 'up' | 'down') => {
     const rootGroup = getRootParent(groupId);
     if (!rootGroup) return;
+
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
 
     const fields = [...(rootGroup.custom_fields || [])];
     const currentIndex = fields.findIndex(f => f.id === fieldId);
@@ -3287,6 +3553,13 @@ export default function OrganizerScreen({
     const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
     if (!item) return;
 
+    // Check if group is locked
+    if (isGroupLocked(item.group_id)) {
+      const lockInfo = getGroupLockInfo(item.group_id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     // Save previous value for undo
     const previousValue = item.custom_properties?.[fieldId];
     pushUndo({ type: 'update_item_field', itemId, fieldId, previousValue });
@@ -3335,6 +3608,20 @@ export default function OrganizerScreen({
     const hasValues = Object.values(bulkFieldValues).some(v => v !== '');
     if (!hasValues) {
       showToast('Sisesta vähemalt üks väärtus');
+      return;
+    }
+
+    // Check if any selected items are in locked groups
+    const lockedGroupIds = new Set<string>();
+    for (const itemId of selectedItemIds) {
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+      if (item && isGroupLocked(item.group_id)) {
+        lockedGroupIds.add(item.group_id);
+      }
+    }
+    if (lockedGroupIds.size > 0) {
+      const lockInfo = getGroupLockInfo([...lockedGroupIds][0]);
+      showToast(`🔒 ${lockedGroupIds.size > 1 ? 'Mõned valitud detailid on' : 'Grupp on'} lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
       return;
     }
 
@@ -7500,11 +7787,27 @@ export default function OrganizerScreen({
                         </span>
                       </>
                     )}
-                    {customFields.map(field => (
-                      <span key={field.id} className="org-item-custom" title={field.name}>
-                        {field.name}
-                      </span>
-                    ))}
+                    {customFields.map(field => {
+                      const customSortField = `custom:${field.id}` as ItemSortField;
+                      const isActiveSort = itemSortField === customSortField;
+                      return (
+                        <span
+                          key={field.id}
+                          className="org-item-custom sortable"
+                          title={`Sorteeri: ${field.name}`}
+                          onClick={() => {
+                            if (isActiveSort) {
+                              setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setItemSortField(customSortField);
+                              setItemSortDir('asc');
+                            }
+                          }}
+                        >
+                          {field.name} {isActiveSort && (itemSortDir === 'asc' ? '↑' : '↓')}
+                        </span>
+                      );
+                    })}
                     {itemSortField !== 'sort_order' && (
                       <button
                         className="org-save-order-btn"
@@ -7690,6 +7993,7 @@ export default function OrganizerScreen({
                           if (field.type === 'photo') {
                             const photoUrls = val ? String(val).split(',').filter(Boolean) : [];
                             const isUploading = uploadingFieldId === field.id;
+                            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
                             return (
                               <div
                                 key={field.id}
@@ -7716,7 +8020,7 @@ export default function OrganizerScreen({
                                       border: '1px solid #e5e7eb',
                                       flexShrink: 0
                                     }}
-                                    onClick={() => openLightbox(url, photoUrls)}
+                                    onClick={() => openLightbox(url, photoUrls, item.id, field.id)}
                                     title="Kliki suurendamiseks"
                                   >
                                     <img
@@ -7729,48 +8033,75 @@ export default function OrganizerScreen({
                                 {photoUrls.length > 3 && (
                                   <span
                                     style={{ fontSize: '10px', color: '#6b7280', cursor: 'pointer' }}
-                                    onClick={() => openLightbox(photoUrls[3], photoUrls)}
+                                    onClick={() => openLightbox(photoUrls[3], photoUrls, item.id, field.id)}
                                   >
                                     +{photoUrls.length - 3}
                                   </span>
                                 )}
-                                {/* Upload button */}
-                                <label
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    width: '24px',
-                                    height: '24px',
-                                    borderRadius: '3px',
-                                    background: '#f3f4f6',
-                                    border: '1px dashed #d1d5db',
-                                    cursor: isUploading ? 'wait' : 'pointer',
-                                    color: '#6b7280',
-                                    flexShrink: 0
-                                  }}
-                                  title={isUploading ? uploadProgress : 'Lisa foto'}
-                                >
-                                  {isUploading ? (
-                                    <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
-                                  ) : (
-                                    <FiCamera size={12} />
-                                  )}
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    multiple
-                                    style={{ display: 'none' }}
-                                    disabled={isUploading}
-                                    onChange={(e) => {
-                                      if (e.target.files) {
-                                        handleFieldFileUpload(e.target.files, item, field);
-                                        e.target.value = '';
-                                      }
+                                {/* Upload button - on mobile opens picker modal, on desktop uses file input */}
+                                {isMobile ? (
+                                  <button
+                                    type="button"
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '3px',
+                                      background: '#f3f4f6',
+                                      border: '1px dashed #d1d5db',
+                                      cursor: isUploading ? 'wait' : 'pointer',
+                                      color: '#6b7280',
+                                      flexShrink: 0
                                     }}
-                                  />
-                                </label>
+                                    title={isUploading ? uploadProgress : 'Lisa foto'}
+                                    disabled={isUploading}
+                                    onClick={() => openPhotoPicker(item, field)}
+                                  >
+                                    {isUploading ? (
+                                      <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
+                                    ) : (
+                                      <FiCamera size={12} />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <label
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      width: '24px',
+                                      height: '24px',
+                                      borderRadius: '3px',
+                                      background: '#f3f4f6',
+                                      border: '1px dashed #d1d5db',
+                                      cursor: isUploading ? 'wait' : 'pointer',
+                                      color: '#6b7280',
+                                      flexShrink: 0
+                                    }}
+                                    title={isUploading ? uploadProgress : 'Lisa foto'}
+                                  >
+                                    {isUploading ? (
+                                      <span style={{ fontSize: '8px' }}>{uploadProgress}</span>
+                                    ) : (
+                                      <FiCamera size={12} />
+                                    )}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      multiple
+                                      style={{ display: 'none' }}
+                                      disabled={isUploading}
+                                      onChange={(e) => {
+                                        if (e.target.files) {
+                                          handleFieldFileUpload(e.target.files, item, field);
+                                          e.target.value = '';
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                )}
                               </div>
                             );
                           }
@@ -10227,7 +10558,7 @@ export default function OrganizerScreen({
         <div
           className="org-modal-overlay"
           style={{ background: 'rgba(0,0,0,0.9)', zIndex: 10000 }}
-          onClick={() => setLightboxPhoto(null)}
+          onClick={closeLightbox}
         >
           <div
             style={{
@@ -10245,11 +10576,73 @@ export default function OrganizerScreen({
               alt="Foto"
               style={{
                 maxWidth: '90vw',
-                maxHeight: '85vh',
+                maxHeight: '75vh',
                 objectFit: 'contain',
                 borderRadius: '8px'
               }}
             />
+            {/* Action buttons */}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {/* Download button */}
+              <button
+                onClick={downloadPhoto}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(59, 130, 246, 0.8)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                title="Laadi alla"
+              >
+                <FiDownload size={14} />
+                Laadi alla
+              </button>
+              {/* Copy URL button */}
+              <button
+                onClick={copyPhotoUrl}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(107, 114, 128, 0.8)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                title="Kopeeri link"
+              >
+                <FiCopy size={14} />
+                Kopeeri link
+              </button>
+              {/* Delete button - only show if we have item and field info */}
+              {lightboxItemId && lightboxFieldId && (
+                <button
+                  onClick={deletePhotoFromLightbox}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(239, 68, 68, 0.8)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Kustuta"
+                >
+                  <FiTrash2 size={14} />
+                  Kustuta
+                </button>
+              )}
+            </div>
             {/* Navigation buttons */}
             {lightboxPhotos.length > 1 && (
               <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
@@ -10294,7 +10687,7 @@ export default function OrganizerScreen({
             )}
             {/* Close button */}
             <button
-              onClick={() => setLightboxPhoto(null)}
+              onClick={closeLightbox}
               style={{
                 position: 'absolute',
                 top: '-40px',
@@ -10309,6 +10702,230 @@ export default function OrganizerScreen({
             >
               <FiX size={24} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Photo Picker Modal */}
+      {showPhotoPickerModal && (
+        <div
+          className="org-modal-overlay"
+          style={{ background: 'rgba(0,0,0,0.7)', zIndex: 10001 }}
+          onClick={closePhotoPicker}
+        >
+          <div
+            className="org-modal"
+            style={{
+              maxWidth: '400px',
+              width: '90%',
+              padding: '0',
+              overflow: 'hidden'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '16px',
+                borderBottom: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Lisa fotosid</h3>
+              <button
+                onClick={closePhotoPicker}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  color: '#6b7280'
+                }}
+              >
+                <FiX size={20} />
+              </button>
+            </div>
+
+            {/* Photo source options */}
+            <div style={{ padding: '16px', display: 'flex', gap: '12px' }}>
+              {/* Camera option */}
+              <label
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '20px 12px',
+                  background: '#f3f4f6',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: '2px solid transparent',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FiCamera size={32} color="#3b82f6" />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: '#374151' }}>Pildista</span>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    handlePhotosSelected(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+
+              {/* Gallery option */}
+              <label
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '20px 12px',
+                  background: '#f3f4f6',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  border: '2px solid transparent',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <FiImage size={32} color="#10b981" />
+                <span style={{ fontSize: '14px', fontWeight: 500, color: '#374151' }}>Galerii</span>
+                <input
+                  ref={galleryInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    handlePhotosSelected(e.target.files);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+
+            {/* Pending photos preview */}
+            {pendingPhotos.length > 0 && (
+              <div style={{ padding: '0 16px 16px' }}>
+                <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px' }}>
+                  Valitud fotod ({pendingPhotos.length}):
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))',
+                    gap: '8px',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    padding: '4px'
+                  }}
+                >
+                  {pendingPhotos.map((photo, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'relative',
+                        aspectRatio: '1',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid #e5e7eb'
+                      }}
+                    >
+                      <img
+                        src={photo.preview}
+                        alt={`Foto ${idx + 1}`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                      <button
+                        onClick={() => removePendingPhoto(idx)}
+                        style={{
+                          position: 'absolute',
+                          top: '2px',
+                          right: '2px',
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          background: 'rgba(239, 68, 68, 0.9)',
+                          color: 'white',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Eemalda"
+                      >
+                        <FiX size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer with confirm button */}
+            {pendingPhotos.length > 0 && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderTop: '1px solid #e5e7eb',
+                  display: 'flex',
+                  gap: '8px'
+                }}
+              >
+                <button
+                  onClick={closePhotoPicker}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    background: '#f3f4f6',
+                    color: '#374151',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500
+                  }}
+                >
+                  Tühista
+                </button>
+                <button
+                  onClick={confirmAndUploadPhotos}
+                  style={{
+                    flex: 1,
+                    padding: '10px 16px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <FiCheck size={16} />
+                  Lisa ({pendingPhotos.length})
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
