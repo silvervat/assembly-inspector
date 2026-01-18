@@ -80,11 +80,91 @@ export default function CranePlannerScreen({
   // Event listener ref for position picking
   const pickingListenerRef = useRef<((e: any) => void) | null>(null);
 
+  // Preview markups for real-time visualization
+  const [previewMarkupIds, setPreviewMarkupIds] = useState<number[]>([]);
+  const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Update preview when config changes
+  const updatePreview = useCallback(async () => {
+    if (!selectedCraneModel || !pickedPosition) return;
+
+    // Clear existing preview
+    if (previewMarkupIds.length > 0) {
+      await removeCraneMarkups(api, previewMarkupIds);
+    }
+
+    // Create preview crane data - use 'as any' to avoid strict null checks for preview only
+    const previewCrane = {
+      id: 'preview',
+      trimble_project_id: projectId,
+      crane_model_id: selectedCraneModelId,
+      counterweight_config_id: selectedCounterweightId || undefined,
+      position_x: config.position_x,
+      position_y: config.position_y,
+      position_z: config.position_z,
+      rotation_deg: config.rotation_deg,
+      boom_length_m: config.boom_length_m,
+      boom_angle_deg: config.boom_angle_deg,
+      hook_weight_kg: config.hook_weight_kg,
+      lifting_block_kg: config.lifting_block_kg,
+      safety_factor: config.safety_factor,
+      position_label: config.position_label || undefined,
+      radius_step_m: config.radius_step_m,
+      show_radius_rings: config.show_radius_rings,
+      show_capacity_labels: config.show_capacity_labels,
+      crane_color: config.crane_color,
+      radius_color: config.radius_color,
+      notes: config.notes || undefined,
+      markup_ids: [],
+      created_by_email: userEmail,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as ProjectCrane;
+
+    try {
+      const chartData = loadCharts.find(lc =>
+        lc.counterweight_config_id === selectedCounterweightId &&
+        lc.boom_length_m === config.boom_length_m
+      )?.chart_data;
+
+      const markupIds = await drawCraneToModel(api, previewCrane, selectedCraneModel, chartData);
+      setPreviewMarkupIds(markupIds);
+    } catch (error) {
+      console.error('Error updating preview:', error);
+    }
+  }, [api, selectedCraneModel, pickedPosition, projectId, selectedCraneModelId, selectedCounterweightId, config, loadCharts, userEmail]);
+
+  // Debounced preview update
+  const schedulePreviewUpdate = useCallback(() => {
+    if (previewTimeoutRef.current) {
+      clearTimeout(previewTimeoutRef.current);
+    }
+    previewTimeoutRef.current = setTimeout(() => {
+      updatePreview();
+    }, 100); // 100ms debounce
+  }, [updatePreview]);
+
+  // Update preview when config changes (movement, rotation, etc.)
+  useEffect(() => {
+    if (pickedPosition && selectedCraneModel) {
+      schedulePreviewUpdate();
+    }
+    return () => {
+      if (previewTimeoutRef.current) {
+        clearTimeout(previewTimeoutRef.current);
+      }
+    };
+  }, [config.position_x, config.position_y, config.position_z, config.rotation_deg, config.boom_length_m, config.show_radius_rings, config.radius_step_m, pickedPosition, selectedCraneModel, schedulePreviewUpdate]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pickingListenerRef.current) {
         (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
+      }
+      // Clear preview markups on unmount
+      if (previewMarkupIds.length > 0) {
+        removeCraneMarkups(api, previewMarkupIds);
       }
     };
   }, [api]);
@@ -149,18 +229,24 @@ export default function CranePlannerScreen({
   }, []);
 
   // Cancel placing/editing
-  const cancelPlacing = useCallback(() => {
+  const cancelPlacing = useCallback(async () => {
     setIsPlacing(false);
     setEditingCraneId(null);
     resetForm();
     setIsPickingPosition(false);
+
+    // Clear preview markups
+    if (previewMarkupIds.length > 0) {
+      await removeCraneMarkups(api, previewMarkupIds);
+      setPreviewMarkupIds([]);
+    }
 
     // Remove picking listener
     if (pickingListenerRef.current) {
       (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
       pickingListenerRef.current = null;
     }
-  }, [resetForm, api]);
+  }, [resetForm, api, previewMarkupIds]);
 
   // Start picking position from model - use getSelection approach like AdminScreen
   const startPickingPosition = useCallback(async () => {
@@ -285,6 +371,12 @@ export default function CranePlannerScreen({
     if (!pickedPosition) {
       alert('Palun vali positsioon mudelist!');
       return;
+    }
+
+    // Clear preview markups before saving (will be replaced with saved crane markups)
+    if (previewMarkupIds.length > 0) {
+      await removeCraneMarkups(api, previewMarkupIds);
+      setPreviewMarkupIds([]);
     }
 
     const craneData: Partial<ProjectCrane> = {

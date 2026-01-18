@@ -1,6 +1,12 @@
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { ProjectCrane, CraneModel, CraneRGBAColor, LoadChartDataPoint } from '../../../../supabase';
 
+// Line segment type for FreelineMarkup
+interface LineSegment {
+  start: { positionX: number; positionY: number; positionZ: number };
+  end: { positionX: number; positionY: number; positionZ: number };
+}
+
 /**
  * Draw a complete crane visualization in the model
  */
@@ -136,6 +142,39 @@ export async function drawCraneToModel(
 }
 
 /**
+ * Generate circle line segments with {start, end} pairs
+ */
+function generateCircleSegments(
+  centerX: number,
+  centerY: number,
+  centerZ: number,
+  radiusMm: number,
+  segments: number
+): LineSegment[] {
+  const lineSegments: LineSegment[] = [];
+
+  for (let i = 0; i < segments; i++) {
+    const angle1 = (i / segments) * 2 * Math.PI;
+    const angle2 = ((i + 1) / segments) * 2 * Math.PI;
+
+    lineSegments.push({
+      start: {
+        positionX: centerX + radiusMm * Math.cos(angle1),
+        positionY: centerY + radiusMm * Math.sin(angle1),
+        positionZ: centerZ
+      },
+      end: {
+        positionX: centerX + radiusMm * Math.cos(angle2),
+        positionY: centerY + radiusMm * Math.sin(angle2),
+        positionZ: centerZ
+      }
+    });
+  }
+
+  return lineSegments;
+}
+
+/**
  * Draw a small marker (tiny circle) at a point
  */
 async function drawSmallMarker(
@@ -147,23 +186,16 @@ async function drawSmallMarker(
 ): Promise<number[]> {
   const markupIds: number[] = [];
   const markupApi = api.markup as any;
-  const markerRadius = 200; // 200mm marker
-  const segments = 8;
+  const markerRadius = 500; // 500mm marker for visibility
+  const segments = 16;
 
   try {
-    const circlePoints: { positionX: number; positionY: number; positionZ: number }[] = [];
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * 2 * Math.PI;
-      circlePoints.push({
-        positionX: x + markerRadius * Math.cos(angle),
-        positionY: y + markerRadius * Math.sin(angle),
-        positionZ: z
-      });
-    }
+    // Generate circle with {start, end} line segments
+    const lineSegments = generateCircleSegments(x, y, z, markerRadius, segments);
 
     const markerMarkup = await markupApi.addFreelineMarkups?.([{
       color,
-      lines: circlePoints
+      lines: lineSegments
     }]);
     if (markerMarkup?.[0]?.id) markupIds.push(markerMarkup[0].id);
   } catch (error) {
@@ -193,13 +225,14 @@ async function drawCraneBase(
   const halfLength = lengthMm / 2;
 
   // Calculate corner points (rotated)
-  const corners = [
+  const cornerOffsets = [
     { x: -halfWidth, y: -halfLength },
     { x: halfWidth, y: -halfLength },
     { x: halfWidth, y: halfLength },
-    { x: -halfWidth, y: halfLength },
-    { x: -halfWidth, y: -halfLength } // Close the rectangle
-  ].map(corner => {
+    { x: -halfWidth, y: halfLength }
+  ];
+
+  const corners = cornerOffsets.map(corner => {
     const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
     const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
     return {
@@ -209,11 +242,21 @@ async function drawCraneBase(
     };
   });
 
+  // Create line segments connecting corners
+  const lineSegments: LineSegment[] = [];
+  for (let i = 0; i < corners.length; i++) {
+    const nextI = (i + 1) % corners.length;
+    lineSegments.push({
+      start: corners[i],
+      end: corners[nextI]
+    });
+  }
+
   try {
-    // Draw as freeline
+    // Draw as freeline with proper {start, end} segments
     const freeline = await markupApi.addFreelineMarkups?.([{
       color,
-      lines: corners
+      lines: lineSegments
     }]);
     if (freeline?.[0]?.id) markupIds.push(freeline[0].id);
   } catch (error) {
@@ -298,21 +341,13 @@ async function drawRadiusRings(
     for (let r = stepMeters; r <= maxRadiusMeters; r += stepMeters) {
       const radiusMm = r * 1000;
 
-      // Generate circle points
-      const circlePoints: { positionX: number; positionY: number; positionZ: number }[] = [];
-      for (let i = 0; i <= segments; i++) {
-        const angle = (i / segments) * 2 * Math.PI;
-        circlePoints.push({
-          positionX: centerX + radiusMm * Math.cos(angle),
-          positionY: centerY + radiusMm * Math.sin(angle),
-          positionZ: centerZ
-        });
-      }
+      // Generate circle with {start, end} line segments
+      const lineSegments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, segments);
 
       // Draw ring as freeline
       const ringMarkup = await markupApi.addFreelineMarkups?.([{
         color,
-        lines: circlePoints
+        lines: lineSegments
       }]);
       if (ringMarkup?.[0]?.id) markupIds.push(ringMarkup[0].id);
 
@@ -402,21 +437,13 @@ export async function drawCircle(
   const radiusMm = radiusMeters * 1000;
 
   try {
-    // Generate circle points
-    const circlePoints: { positionX: number; positionY: number; positionZ: number }[] = [];
-    for (let i = 0; i <= segments; i++) {
-      const angle = (i / segments) * 2 * Math.PI;
-      circlePoints.push({
-        positionX: centerX + radiusMm * Math.cos(angle),
-        positionY: centerY + radiusMm * Math.sin(angle),
-        positionZ: centerZ
-      });
-    }
+    // Generate circle with {start, end} line segments
+    const lineSegments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, segments);
 
     // Draw circle as freeline
     const circleMarkup = await markupApi.addFreelineMarkups?.([{
       color,
-      lines: circlePoints
+      lines: lineSegments
     }]);
     if (circleMarkup?.[0]?.id) markupIds.push(circleMarkup[0].id);
 
