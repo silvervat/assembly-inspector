@@ -8428,6 +8428,73 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="⭕ Ring 500mm joontega"
+                  result={functionResults["drawCircle500mmLines"]}
+                  onClick={async () => {
+                    updateFunctionResult("drawCircle500mmLines", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel[0].objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
+
+                      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                      if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
+                        throw new Error('Bounding box andmeid ei leitud');
+                      }
+
+                      const bbox = boundingBoxes[0].boundingBox;
+
+                      // Bottom surface center (mm for measurement markups)
+                      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
+                      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
+                      const bottomZ = bbox.min.z * 1000;
+
+                      // 20m radius in mm, 500mm segment length
+                      const radiusMm = 20000;
+                      const segmentLength = 500; // mm
+
+                      // Calculate number of segments: circumference / segment_length
+                      const circumference = 2 * Math.PI * radiusMm;
+                      const numSegments = Math.ceil(circumference / segmentLength);
+
+                      // Generate measurement markup lines (500mm each)
+                      const measurements = [];
+                      const redColor = { r: 255, g: 0, b: 0, a: 255 };
+
+                      for (let i = 0; i < numSegments; i++) {
+                        const angle1 = (i / numSegments) * 2 * Math.PI;
+                        const angle2 = ((i + 1) / numSegments) * 2 * Math.PI;
+
+                        const x1 = centerX + radiusMm * Math.cos(angle1);
+                        const y1 = centerY + radiusMm * Math.sin(angle1);
+                        const x2 = centerX + radiusMm * Math.cos(angle2);
+                        const y2 = centerY + radiusMm * Math.sin(angle2);
+
+                        measurements.push({
+                          start: { positionX: x1, positionY: y1, positionZ: bottomZ },
+                          end: { positionX: x2, positionY: y2, positionZ: bottomZ },
+                          mainLineStart: { positionX: x1, positionY: y1, positionZ: bottomZ },
+                          mainLineEnd: { positionX: x2, positionY: y2, positionZ: bottomZ },
+                          color: redColor
+                        });
+                      }
+
+                      await api.markup.addMeasurementMarkups(measurements);
+
+                      const actualSegmentLength = circumference / numSegments;
+                      updateFunctionResult("drawCircle500mmLines", {
+                        status: 'success',
+                        result: `Ring joonistatud (measurement):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n📐 Segmente: ${numSegments} tk\n📏 Segmendi pikkus: ~${actualSegmentLength.toFixed(0)} mm`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("drawCircle500mmLines", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🗑️ Eemalda mõõtjooned"
                   result={functionResults["removeMeasurements"]}
                   onClick={async () => {
