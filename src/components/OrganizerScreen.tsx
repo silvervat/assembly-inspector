@@ -847,6 +847,10 @@ export default function OrganizerScreen({
   const [returnToGroupsManagement, setReturnToGroupsManagement] = useState(false);
   const [propertySearchQuery, setPropertySearchQuery] = useState('');
 
+  // Fields Management modal
+  const [showFieldsManagementModal, setShowFieldsManagementModal] = useState(false);
+  const [fieldsManagementGroupId, setFieldsManagementGroupId] = useState<string | null>(null);
+
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
     try {
@@ -6779,12 +6783,12 @@ export default function OrganizerScreen({
                 <FiCopy size={12} /> Klooni grupp
               </button>
               {isEffectivelyLocked ? (
-                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa välju lisada">
-                  <FiLock size={12} /> Lisa väli
+                <button disabled style={{ opacity: 0.5, cursor: 'not-allowed' }} title="Lukustatud gruppi ei saa välju muuta">
+                  <FiLock size={12} /> Lisa väljad
                 </button>
               ) : (
-                <button onClick={() => { setSelectedGroupIds(new Set([node.id])); setShowFieldForm(true); setGroupMenuId(null); }}>
-                  <FiList size={12} /> Lisa väli
+                <button onClick={() => { setFieldsManagementGroupId(node.id); setShowFieldsManagementModal(true); setGroupMenuId(null); }}>
+                  <FiList size={12} /> Lisa väljad
                 </button>
               )}
               <button onClick={() => { setGroupMenuId(null); colorModelByGroups(node.id); }}>
@@ -8189,6 +8193,80 @@ export default function OrganizerScreen({
           </div>
         </div>
       )}
+
+      {/* Fields management modal */}
+      {showFieldsManagementModal && fieldsManagementGroupId && (() => {
+        const group = groups.find(g => g.id === fieldsManagementGroupId);
+        if (!group) return null;
+        const rootParent = getRootParent(group.id);
+        const effectiveGroup = rootParent || group;
+        const customFields = effectiveGroup.custom_fields || [];
+
+        return (
+          <div className="org-modal-overlay" onClick={() => setShowFieldsManagementModal(false)}>
+            <div className="org-modal" onClick={e => e.stopPropagation()}>
+              <div className="org-modal-header">
+                <h2>Halda välju: {group.name}</h2>
+                <button onClick={() => setShowFieldsManagementModal(false)}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body">
+                {rootParent && rootParent.id !== group.id && (
+                  <p className="org-note" style={{ marginBottom: 12, fontSize: 12, color: '#888' }}>
+                    Väljad päritakse grupist: <strong>{rootParent.name}</strong>
+                  </p>
+                )}
+                <div className="custom-fields-list">
+                  {customFields.length === 0 ? (
+                    <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
+                  ) : (
+                    customFields.map(f => (
+                      <div key={f.id} className="custom-field-item">
+                        <span className="field-name">{f.name}</span>
+                        <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
+                        {f.required && <span className="field-required" title="Kohustuslik">*</span>}
+                        <div className="field-actions">
+                          <button
+                            className="field-edit-btn"
+                            onClick={() => {
+                              setSelectedGroupIds(new Set([effectiveGroup.id]));
+                              startEditingField(f);
+                              setShowFieldsManagementModal(false);
+                            }}
+                            title="Muuda"
+                          >
+                            <FiEdit2 size={12} />
+                          </button>
+                          <button
+                            className="field-delete-btn"
+                            onClick={() => deleteCustomField(f.id, effectiveGroup.id)}
+                            title="Kustuta"
+                          >
+                            <FiTrash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => setShowFieldsManagementModal(false)}>Sulge</button>
+                <button
+                  className="save"
+                  onClick={() => {
+                    setSelectedGroupIds(new Set([effectiveGroup.id]));
+                    resetFieldForm();
+                    setShowFieldForm(true);
+                    setShowFieldsManagementModal(false);
+                  }}
+                >
+                  <FiPlus size={14} /> Lisa väli
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Bulk edit modal */}
       {showBulkEdit && selectedGroup && (() => {
