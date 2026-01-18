@@ -7305,6 +7305,666 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="📏 Alamdetailid V2"
+                  result={functionResults["childMeasureV2"]}
+                  onClick={async () => {
+                    updateFunctionResult("childMeasureV2", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get hierarchy children
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                      if (!children || children.length === 0) {
+                        throw new Error('Alamdetaile pole (leaf node)');
+                      }
+
+                      const childIds = children.map((c: any) => c.id);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                      const results: string[] = [];
+                      const measurements: any[] = [];
+                      const colors = [
+                        { r: 255, g: 0, b: 0, a: 255 },    // Red
+                        { r: 0, g: 255, b: 0, a: 255 },    // Green
+                        { r: 0, g: 0, b: 255, a: 255 },    // Blue
+                        { r: 255, g: 165, b: 0, a: 255 },  // Orange
+                        { r: 128, g: 0, b: 128, a: 255 },  // Purple
+                        { r: 0, g: 128, b: 128, a: 255 },  // Teal
+                      ];
+
+                      for (let i = 0; i < bboxes.length; i++) {
+                        const bbox = bboxes[i];
+                        if (!bbox?.boundingBox) continue;
+                        const b = bbox.boundingBox;
+                        const color = colors[i % colors.length];
+
+                        const width = Math.abs(b.max.x - b.min.x) * 1000;
+                        const depth = Math.abs(b.max.y - b.min.y) * 1000;
+                        const height = Math.abs(b.max.z - b.min.z) * 1000;
+                        const diagSpace = Math.sqrt(width*width + depth*depth + height*height);
+
+                        // Find longest dimension
+                        const dims = [
+                          { name: 'X', value: width },
+                          { name: 'Y', value: depth },
+                          { name: 'Z', value: height },
+                          { name: 'Diag', value: diagSpace }
+                        ].sort((a, b) => b.value - a.value);
+
+                        const minMm = { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 };
+                        const maxMm = { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 };
+                        const centerMm = {
+                          x: (minMm.x + maxMm.x) / 2,
+                          y: (minMm.y + maxMm.y) / 2,
+                          z: (minMm.z + maxMm.z) / 2
+                        };
+
+                        // Draw longest dimension line
+                        let start, end;
+                        if (dims[0].name === 'X') {
+                          start = { positionX: minMm.x, positionY: centerMm.y, positionZ: centerMm.z };
+                          end = { positionX: maxMm.x, positionY: centerMm.y, positionZ: centerMm.z };
+                        } else if (dims[0].name === 'Y') {
+                          start = { positionX: centerMm.x, positionY: minMm.y, positionZ: centerMm.z };
+                          end = { positionX: centerMm.x, positionY: maxMm.y, positionZ: centerMm.z };
+                        } else if (dims[0].name === 'Z') {
+                          start = { positionX: centerMm.x, positionY: centerMm.y, positionZ: minMm.z };
+                          end = { positionX: centerMm.x, positionY: centerMm.y, positionZ: maxMm.z };
+                        } else {
+                          start = { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z };
+                          end = { positionX: maxMm.x, positionY: maxMm.y, positionZ: maxMm.z };
+                        }
+
+                        measurements.push({
+                          start, end,
+                          mainLineStart: start,
+                          mainLineEnd: end,
+                          color
+                        });
+
+                        const name = children[i]?.name || `Alam ${i + 1}`;
+                        results.push(
+                          `${i + 1}. ${name}\n` +
+                          `   Pikim: ${dims[0].name} = ${dims[0].value.toFixed(0)} mm\n` +
+                          `   X: ${width.toFixed(0)}, Y: ${depth.toFixed(0)}, Z: ${height.toFixed(0)} mm`
+                        );
+                      }
+
+                      if (measurements.length > 0) {
+                        await api.markup.addMeasurementMarkups(measurements);
+                      }
+
+                      updateFunctionResult("childMeasureV2", {
+                        status: 'success',
+                        result: `${bboxes.length} alamdetaili mõõdetud:\n\n${results.join('\n\n')}`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("childMeasureV2", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="↔️ Alamdet. vahekaugused"
+                  result={functionResults["childDistances"]}
+                  onClick={async () => {
+                    updateFunctionResult("childDistances", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                      if (!children || children.length < 2) {
+                        throw new Error('Vaja vähemalt 2 alamdetaili');
+                      }
+
+                      const childIds = children.map((c: any) => c.id);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                      // Calculate centers
+                      const centers: { name: string; x: number; y: number; z: number }[] = [];
+                      for (let i = 0; i < bboxes.length; i++) {
+                        const bbox = bboxes[i];
+                        if (!bbox?.boundingBox) continue;
+                        const b = bbox.boundingBox;
+                        centers.push({
+                          name: children[i]?.name || `Alam ${i + 1}`,
+                          x: (b.min.x + b.max.x) / 2 * 1000,
+                          y: (b.min.y + b.max.y) / 2 * 1000,
+                          z: (b.min.z + b.max.z) / 2 * 1000
+                        });
+                      }
+
+                      const measurements: any[] = [];
+                      const results: string[] = [];
+
+                      // Calculate distances between consecutive elements
+                      for (let i = 0; i < centers.length - 1; i++) {
+                        const c1 = centers[i];
+                        const c2 = centers[i + 1];
+                        const dist = Math.sqrt(
+                          Math.pow(c2.x - c1.x, 2) +
+                          Math.pow(c2.y - c1.y, 2) +
+                          Math.pow(c2.z - c1.z, 2)
+                        );
+
+                        const start = { positionX: c1.x, positionY: c1.y, positionZ: c1.z };
+                        const end = { positionX: c2.x, positionY: c2.y, positionZ: c2.z };
+
+                        measurements.push({
+                          start, end,
+                          mainLineStart: start,
+                          mainLineEnd: end,
+                          color: { r: 255, g: 128, b: 0, a: 255 } // Orange
+                        });
+
+                        results.push(`${c1.name} → ${c2.name}: ${dist.toFixed(0)} mm`);
+                      }
+
+                      // Also calculate first to last
+                      if (centers.length > 2) {
+                        const first = centers[0];
+                        const last = centers[centers.length - 1];
+                        const totalDist = Math.sqrt(
+                          Math.pow(last.x - first.x, 2) +
+                          Math.pow(last.y - first.y, 2) +
+                          Math.pow(last.z - first.z, 2)
+                        );
+
+                        const start = { positionX: first.x, positionY: first.y, positionZ: first.z };
+                        const end = { positionX: last.x, positionY: last.y, positionZ: last.z };
+
+                        measurements.push({
+                          start, end,
+                          mainLineStart: start,
+                          mainLineEnd: end,
+                          color: { r: 255, g: 0, b: 255, a: 255 } // Magenta
+                        });
+
+                        results.push(`\n🟣 Esimene → Viimane: ${totalDist.toFixed(0)} mm`);
+                      }
+
+                      if (measurements.length > 0) {
+                        await api.markup.addMeasurementMarkups(measurements);
+                      }
+
+                      updateFunctionResult("childDistances", {
+                        status: 'success',
+                        result: `Keskpunktide vahekaugused:\n\n${results.join('\n')}`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("childDistances", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📐 Alamdet. servavahed"
+                  result={functionResults["childGaps"]}
+                  onClick={async () => {
+                    updateFunctionResult("childGaps", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                      if (!children || children.length < 2) {
+                        throw new Error('Vaja vähemalt 2 alamdetaili');
+                      }
+
+                      const childIds = children.map((c: any) => c.id);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                      // Get bounding boxes with names
+                      const boxes: { name: string; min: any; max: any; center: any }[] = [];
+                      for (let i = 0; i < bboxes.length; i++) {
+                        const bbox = bboxes[i];
+                        if (!bbox?.boundingBox) continue;
+                        const b = bbox.boundingBox;
+                        boxes.push({
+                          name: children[i]?.name || `Alam ${i + 1}`,
+                          min: { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 },
+                          max: { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 },
+                          center: {
+                            x: (b.min.x + b.max.x) / 2 * 1000,
+                            y: (b.min.y + b.max.y) / 2 * 1000,
+                            z: (b.min.z + b.max.z) / 2 * 1000
+                          }
+                        });
+                      }
+
+                      const measurements: any[] = [];
+                      const results: string[] = [];
+
+                      // Calculate gaps between consecutive elements along primary axis
+                      for (let i = 0; i < boxes.length - 1; i++) {
+                        const b1 = boxes[i];
+                        const b2 = boxes[i + 1];
+
+                        // Calculate gaps in each axis
+                        const gapX = b2.min.x - b1.max.x;
+                        const gapY = b2.min.y - b1.max.y;
+                        const gapZ = b2.min.z - b1.max.z;
+
+                        // Find the actual gap (positive value means there's space)
+                        const gaps = [
+                          { axis: 'X', gap: gapX, start: { x: b1.max.x, y: b1.center.y, z: b1.center.z }, end: { x: b2.min.x, y: b2.center.y, z: b2.center.z } },
+                          { axis: 'X-', gap: b1.min.x - b2.max.x, start: { x: b2.max.x, y: b2.center.y, z: b2.center.z }, end: { x: b1.min.x, y: b1.center.y, z: b1.center.z } },
+                          { axis: 'Y', gap: gapY, start: { x: b1.center.x, y: b1.max.y, z: b1.center.z }, end: { x: b2.center.x, y: b2.min.y, z: b2.center.z } },
+                          { axis: 'Y-', gap: b1.min.y - b2.max.y, start: { x: b2.center.x, y: b2.max.y, z: b2.center.z }, end: { x: b1.center.x, y: b1.min.y, z: b1.center.z } },
+                          { axis: 'Z', gap: gapZ, start: { x: b1.center.x, y: b1.center.y, z: b1.max.z }, end: { x: b2.center.x, y: b2.center.y, z: b2.min.z } },
+                          { axis: 'Z-', gap: b1.min.z - b2.max.z, start: { x: b2.center.x, y: b2.center.y, z: b2.max.z }, end: { x: b1.center.x, y: b1.center.y, z: b1.min.z } },
+                        ].filter(g => g.gap > 1); // Only positive gaps > 1mm
+
+                        if (gaps.length > 0) {
+                          // Take the largest gap
+                          const mainGap = gaps.sort((a, b) => b.gap - a.gap)[0];
+
+                          const start = { positionX: mainGap.start.x, positionY: mainGap.start.y, positionZ: mainGap.start.z };
+                          const end = { positionX: mainGap.end.x, positionY: mainGap.end.y, positionZ: mainGap.end.z };
+
+                          measurements.push({
+                            start, end,
+                            mainLineStart: start,
+                            mainLineEnd: end,
+                            color: { r: 0, g: 200, b: 200, a: 255 } // Cyan
+                          });
+
+                          results.push(`${b1.name} ↔ ${b2.name}: ${mainGap.gap.toFixed(0)} mm (${mainGap.axis.replace('-', '')} telg)`);
+                        } else {
+                          // Check for overlap
+                          const overlapX = Math.min(b1.max.x, b2.max.x) - Math.max(b1.min.x, b2.min.x);
+                          const overlapY = Math.min(b1.max.y, b2.max.y) - Math.max(b1.min.y, b2.min.y);
+                          const overlapZ = Math.min(b1.max.z, b2.max.z) - Math.max(b1.min.z, b2.min.z);
+
+                          if (overlapX > 0 && overlapY > 0 && overlapZ > 0) {
+                            results.push(`${b1.name} ↔ ${b2.name}: KATTUVAD`);
+                          } else {
+                            results.push(`${b1.name} ↔ ${b2.name}: puutuvad`);
+                          }
+                        }
+                      }
+
+                      if (measurements.length > 0) {
+                        await api.markup.addMeasurementMarkups(measurements);
+                      }
+
+                      updateFunctionResult("childGaps", {
+                        status: 'success',
+                        result: `Servade vahed:\n\n${results.join('\n')}\n\n(Tsüaan jooned = vahed)`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("childGaps", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="📊 Kogu assembly mõõdud"
+                  result={functionResults["fullAssemblyMeasure"]}
+                  onClick={async () => {
+                    updateFunctionResult("fullAssemblyMeasure", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get parent bbox
+                      const parentBboxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
+                      const pb = parentBboxes[0]?.boundingBox;
+
+                      // Get children
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                      const childCount = children?.length || 0;
+
+                      let childBounds = null;
+                      if (children && children.length > 0) {
+                        const childIds = children.map((c: any) => c.id);
+                        const childBboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                        let minX = Infinity, minY = Infinity, minZ = Infinity;
+                        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+                        for (const bbox of childBboxes) {
+                          if (!bbox?.boundingBox) continue;
+                          const b = bbox.boundingBox;
+                          minX = Math.min(minX, b.min.x);
+                          minY = Math.min(minY, b.min.y);
+                          minZ = Math.min(minZ, b.min.z);
+                          maxX = Math.max(maxX, b.max.x);
+                          maxY = Math.max(maxY, b.max.y);
+                          maxZ = Math.max(maxZ, b.max.z);
+                        }
+
+                        if (minX !== Infinity) {
+                          childBounds = {
+                            width: (maxX - minX) * 1000,
+                            depth: (maxY - minY) * 1000,
+                            height: (maxZ - minZ) * 1000,
+                            diag: Math.sqrt(
+                              Math.pow((maxX - minX) * 1000, 2) +
+                              Math.pow((maxY - minY) * 1000, 2) +
+                              Math.pow((maxZ - minZ) * 1000, 2)
+                            )
+                          };
+                        }
+                      }
+
+                      let result = `🏗️ ASSEMBLY KOONDMÕÕDUD\n${'═'.repeat(30)}\n\n`;
+
+                      if (pb) {
+                        const width = Math.abs(pb.max.x - pb.min.x) * 1000;
+                        const depth = Math.abs(pb.max.y - pb.min.y) * 1000;
+                        const height = Math.abs(pb.max.z - pb.min.z) * 1000;
+                        const diag = Math.sqrt(width*width + depth*depth + height*height);
+
+                        const dims = [
+                          { name: 'X (laius)', value: width },
+                          { name: 'Y (sügavus)', value: depth },
+                          { name: 'Z (kõrgus)', value: height },
+                          { name: 'Ruumidiag', value: diag }
+                        ].sort((a, b) => b.value - a.value);
+
+                        result += `📦 PARENT BBOX:\n`;
+                        result += `   X: ${width.toFixed(0)} mm\n`;
+                        result += `   Y: ${depth.toFixed(0)} mm\n`;
+                        result += `   Z: ${height.toFixed(0)} mm\n`;
+                        result += `   Diag: ${diag.toFixed(0)} mm\n`;
+                        result += `   ➤ PIKIM: ${dims[0].name} = ${dims[0].value.toFixed(0)} mm\n\n`;
+
+                        // Draw parent dimensions
+                        const minMm = { x: pb.min.x * 1000, y: pb.min.y * 1000, z: pb.min.z * 1000 };
+                        const maxMm = { x: pb.max.x * 1000, y: pb.max.y * 1000, z: pb.max.z * 1000 };
+
+                        await api.markup.addMeasurementMarkups([
+                          // X - Red
+                          {
+                            start: { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            end: { positionX: maxMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            mainLineStart: { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            mainLineEnd: { positionX: maxMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            color: { r: 255, g: 0, b: 0, a: 255 }
+                          },
+                          // Y - Green
+                          {
+                            start: { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            end: { positionX: minMm.x, positionY: maxMm.y, positionZ: minMm.z },
+                            mainLineStart: { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            mainLineEnd: { positionX: minMm.x, positionY: maxMm.y, positionZ: minMm.z },
+                            color: { r: 0, g: 255, b: 0, a: 255 }
+                          },
+                          // Z - Blue
+                          {
+                            start: { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            end: { positionX: minMm.x, positionY: minMm.y, positionZ: maxMm.z },
+                            mainLineStart: { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z },
+                            mainLineEnd: { positionX: minMm.x, positionY: minMm.y, positionZ: maxMm.z },
+                            color: { r: 0, g: 0, b: 255, a: 255 }
+                          }
+                        ]);
+                      }
+
+                      result += `👶 ALAMDETAILID: ${childCount} tk\n`;
+
+                      if (childBounds) {
+                        const dims = [
+                          { name: 'X', value: childBounds.width },
+                          { name: 'Y', value: childBounds.depth },
+                          { name: 'Z', value: childBounds.height },
+                          { name: 'Diag', value: childBounds.diag }
+                        ].sort((a, b) => b.value - a.value);
+
+                        result += `\n📐 ALAMDETAILIDEST ARVUTATUD:\n`;
+                        result += `   X: ${childBounds.width.toFixed(0)} mm\n`;
+                        result += `   Y: ${childBounds.depth.toFixed(0)} mm\n`;
+                        result += `   Z: ${childBounds.height.toFixed(0)} mm\n`;
+                        result += `   Diag: ${childBounds.diag.toFixed(0)} mm\n`;
+                        result += `   ➤ PIKIM: ${dims[0].name} = ${dims[0].value.toFixed(0)} mm`;
+                      }
+
+                      updateFunctionResult("fullAssemblyMeasure", {
+                        status: 'success',
+                        result
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("fullAssemblyMeasure", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
+                  name="🔷 Geomeetria servad"
+                  result={functionResults["geometryEdges"]}
+                  onClick={async () => {
+                    updateFunctionResult("geometryEdges", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get children for detailed analysis
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+
+                      if (!children || children.length === 0) {
+                        // No children - analyze single object bbox
+                        const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
+                        if (!bboxes[0]?.boundingBox) throw new Error('Bounding box puudub');
+
+                        const b = bboxes[0].boundingBox;
+                        const edges = {
+                          'Serv X (alumine ees)': Math.abs(b.max.x - b.min.x) * 1000,
+                          'Serv Y (alumine külg)': Math.abs(b.max.y - b.min.y) * 1000,
+                          'Serv Z (püstine)': Math.abs(b.max.z - b.min.z) * 1000,
+                          'Diag alumine': Math.sqrt(Math.pow((b.max.x - b.min.x)*1000, 2) + Math.pow((b.max.y - b.min.y)*1000, 2)),
+                          'Diag ees': Math.sqrt(Math.pow((b.max.x - b.min.x)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2)),
+                          'Diag külg': Math.sqrt(Math.pow((b.max.y - b.min.y)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2)),
+                          'Ruumi diagonaal': Math.sqrt(Math.pow((b.max.x - b.min.x)*1000, 2) + Math.pow((b.max.y - b.min.y)*1000, 2) + Math.pow((b.max.z - b.min.z)*1000, 2))
+                        };
+
+                        const sorted = Object.entries(edges).sort((a, b) => b[1] - a[1]);
+                        let result = '🔷 SERVADE PIKKUSED (BBox)\n' + '═'.repeat(30) + '\n\n';
+                        sorted.forEach(([name, val]) => {
+                          result += `${name}: ${val.toFixed(0)} mm\n`;
+                        });
+
+                        // Draw all 12 edges of bounding box
+                        const minMm = { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 };
+                        const maxMm = { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 };
+
+                        const edgeLines = [
+                          // Bottom face (4 edges)
+                          { s: { x: minMm.x, y: minMm.y, z: minMm.z }, e: { x: maxMm.x, y: minMm.y, z: minMm.z }, c: { r: 255, g: 0, b: 0, a: 255 } },
+                          { s: { x: maxMm.x, y: minMm.y, z: minMm.z }, e: { x: maxMm.x, y: maxMm.y, z: minMm.z }, c: { r: 0, g: 255, b: 0, a: 255 } },
+                          { s: { x: maxMm.x, y: maxMm.y, z: minMm.z }, e: { x: minMm.x, y: maxMm.y, z: minMm.z }, c: { r: 255, g: 0, b: 0, a: 255 } },
+                          { s: { x: minMm.x, y: maxMm.y, z: minMm.z }, e: { x: minMm.x, y: minMm.y, z: minMm.z }, c: { r: 0, g: 255, b: 0, a: 255 } },
+                          // Top face (4 edges)
+                          { s: { x: minMm.x, y: minMm.y, z: maxMm.z }, e: { x: maxMm.x, y: minMm.y, z: maxMm.z }, c: { r: 255, g: 100, b: 100, a: 255 } },
+                          { s: { x: maxMm.x, y: minMm.y, z: maxMm.z }, e: { x: maxMm.x, y: maxMm.y, z: maxMm.z }, c: { r: 100, g: 255, b: 100, a: 255 } },
+                          { s: { x: maxMm.x, y: maxMm.y, z: maxMm.z }, e: { x: minMm.x, y: maxMm.y, z: maxMm.z }, c: { r: 255, g: 100, b: 100, a: 255 } },
+                          { s: { x: minMm.x, y: maxMm.y, z: maxMm.z }, e: { x: minMm.x, y: minMm.y, z: maxMm.z }, c: { r: 100, g: 255, b: 100, a: 255 } },
+                          // Vertical edges (4 edges)
+                          { s: { x: minMm.x, y: minMm.y, z: minMm.z }, e: { x: minMm.x, y: minMm.y, z: maxMm.z }, c: { r: 0, g: 0, b: 255, a: 255 } },
+                          { s: { x: maxMm.x, y: minMm.y, z: minMm.z }, e: { x: maxMm.x, y: minMm.y, z: maxMm.z }, c: { r: 0, g: 0, b: 255, a: 255 } },
+                          { s: { x: maxMm.x, y: maxMm.y, z: minMm.z }, e: { x: maxMm.x, y: maxMm.y, z: maxMm.z }, c: { r: 0, g: 0, b: 255, a: 255 } },
+                          { s: { x: minMm.x, y: maxMm.y, z: minMm.z }, e: { x: minMm.x, y: maxMm.y, z: maxMm.z }, c: { r: 0, g: 0, b: 255, a: 255 } },
+                        ];
+
+                        const measurements = edgeLines.map(edge => ({
+                          start: { positionX: edge.s.x, positionY: edge.s.y, positionZ: edge.s.z },
+                          end: { positionX: edge.e.x, positionY: edge.e.y, positionZ: edge.e.z },
+                          mainLineStart: { positionX: edge.s.x, positionY: edge.s.y, positionZ: edge.s.z },
+                          mainLineEnd: { positionX: edge.e.x, positionY: edge.e.y, positionZ: edge.e.z },
+                          color: edge.c
+                        }));
+
+                        await api.markup.addMeasurementMarkups(measurements);
+
+                        updateFunctionResult("geometryEdges", { status: 'success', result });
+                        return;
+                      }
+
+                      // Multiple children - analyze each and find unique vertices/edges
+                      const childIds = children.map((c: any) => c.id);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                      // Collect all corners from all children
+                      const allCorners: { x: number; y: number; z: number; childIdx: number }[] = [];
+
+                      for (let i = 0; i < bboxes.length; i++) {
+                        const bbox = bboxes[i];
+                        if (!bbox?.boundingBox) continue;
+                        const b = bbox.boundingBox;
+                        const corners = [
+                          { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000, childIdx: i },
+                          { x: b.max.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000, childIdx: i },
+                          { x: b.min.x * 1000, y: b.max.y * 1000, z: b.min.z * 1000, childIdx: i },
+                          { x: b.max.x * 1000, y: b.max.y * 1000, z: b.min.z * 1000, childIdx: i },
+                          { x: b.min.x * 1000, y: b.min.y * 1000, z: b.max.z * 1000, childIdx: i },
+                          { x: b.max.x * 1000, y: b.min.y * 1000, z: b.max.z * 1000, childIdx: i },
+                          { x: b.min.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000, childIdx: i },
+                          { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000, childIdx: i },
+                        ];
+                        allCorners.push(...corners);
+                      }
+
+                      // Find extreme points (outermost corners)
+                      const extremes = {
+                        minX: allCorners.reduce((min, c) => c.x < min.x ? c : min, allCorners[0]),
+                        maxX: allCorners.reduce((max, c) => c.x > max.x ? c : max, allCorners[0]),
+                        minY: allCorners.reduce((min, c) => c.y < min.y ? c : min, allCorners[0]),
+                        maxY: allCorners.reduce((max, c) => c.y > max.y ? c : max, allCorners[0]),
+                        minZ: allCorners.reduce((min, c) => c.z < min.z ? c : min, allCorners[0]),
+                        maxZ: allCorners.reduce((max, c) => c.z > max.z ? c : max, allCorners[0]),
+                      };
+
+                      // Calculate external dimensions
+                      const extWidth = extremes.maxX.x - extremes.minX.x;
+                      const extDepth = extremes.maxY.y - extremes.minY.y;
+                      const extHeight = extremes.maxZ.z - extremes.minZ.z;
+
+                      let result = `🔷 GEOMEETRIA ANALÜÜS\n${'═'.repeat(30)}\n\n`;
+                      result += `Alamdetaile: ${children.length} tk\n`;
+                      result += `Nurki kokku: ${allCorners.length} tk\n\n`;
+                      result += `📐 VÄLISMÕÕDUD:\n`;
+                      result += `   X (laius): ${extWidth.toFixed(0)} mm\n`;
+                      result += `   Y (sügavus): ${extDepth.toFixed(0)} mm\n`;
+                      result += `   Z (kõrgus): ${extHeight.toFixed(0)} mm\n`;
+
+                      // Calculate unique edge lengths between children
+                      const childEdges: { from: number; to: number; dist: number }[] = [];
+                      for (let i = 0; i < bboxes.length; i++) {
+                        for (let j = i + 1; j < bboxes.length; j++) {
+                          if (!bboxes[i]?.boundingBox || !bboxes[j]?.boundingBox) continue;
+                          const b1 = bboxes[i].boundingBox;
+                          const b2 = bboxes[j].boundingBox;
+
+                          const c1 = {
+                            x: (b1.min.x + b1.max.x) / 2 * 1000,
+                            y: (b1.min.y + b1.max.y) / 2 * 1000,
+                            z: (b1.min.z + b1.max.z) / 2 * 1000
+                          };
+                          const c2 = {
+                            x: (b2.min.x + b2.max.x) / 2 * 1000,
+                            y: (b2.min.y + b2.max.y) / 2 * 1000,
+                            z: (b2.min.z + b2.max.z) / 2 * 1000
+                          };
+
+                          const dist = Math.sqrt(
+                            Math.pow(c2.x - c1.x, 2) +
+                            Math.pow(c2.y - c1.y, 2) +
+                            Math.pow(c2.z - c1.z, 2)
+                          );
+                          childEdges.push({ from: i, to: j, dist });
+                        }
+                      }
+
+                      // Sort and show top connections
+                      childEdges.sort((a, b) => b.dist - a.dist);
+
+                      if (childEdges.length > 0) {
+                        result += `\n📏 ALAMDETAILIDE VAHED:\n`;
+                        const topEdges = childEdges.slice(0, Math.min(5, childEdges.length));
+                        topEdges.forEach((edge, idx) => {
+                          const n1 = children[edge.from]?.name || `#${edge.from + 1}`;
+                          const n2 = children[edge.to]?.name || `#${edge.to + 1}`;
+                          result += `   ${idx + 1}. ${n1} ↔ ${n2}: ${edge.dist.toFixed(0)} mm\n`;
+                        });
+
+                        // Draw the longest edges
+                        const measurements = topEdges.slice(0, 3).map((edge, idx) => {
+                          const b1 = bboxes[edge.from].boundingBox;
+                          const b2 = bboxes[edge.to].boundingBox;
+                          const c1 = {
+                            x: (b1.min.x + b1.max.x) / 2 * 1000,
+                            y: (b1.min.y + b1.max.y) / 2 * 1000,
+                            z: (b1.min.z + b1.max.z) / 2 * 1000
+                          };
+                          const c2 = {
+                            x: (b2.min.x + b2.max.x) / 2 * 1000,
+                            y: (b2.min.y + b2.max.y) / 2 * 1000,
+                            z: (b2.min.z + b2.max.z) / 2 * 1000
+                          };
+                          const colors = [
+                            { r: 255, g: 0, b: 128, a: 255 },
+                            { r: 128, g: 255, b: 0, a: 255 },
+                            { r: 0, g: 128, b: 255, a: 255 }
+                          ];
+                          return {
+                            start: { positionX: c1.x, positionY: c1.y, positionZ: c1.z },
+                            end: { positionX: c2.x, positionY: c2.y, positionZ: c2.z },
+                            mainLineStart: { positionX: c1.x, positionY: c1.y, positionZ: c1.z },
+                            mainLineEnd: { positionX: c2.x, positionY: c2.y, positionZ: c2.z },
+                            color: colors[idx % 3]
+                          };
+                        });
+
+                        if (measurements.length > 0) {
+                          await api.markup.addMeasurementMarkups(measurements);
+                        }
+                      }
+
+                      // Detect potential cuts by checking for non-rectangular shapes
+                      const totalBboxVolume = bboxes.reduce((sum, bbox) => {
+                        if (!bbox?.boundingBox) return sum;
+                        const b = bbox.boundingBox;
+                        return sum + (b.max.x - b.min.x) * (b.max.y - b.min.y) * (b.max.z - b.min.z);
+                      }, 0);
+
+                      const outerVolume = (extWidth/1000) * (extDepth/1000) * (extHeight/1000);
+                      const fillRatio = totalBboxVolume / outerVolume;
+
+                      result += `\n🔲 KUJU ANALÜÜS:\n`;
+                      result += `   Täituvus: ${(fillRatio * 100).toFixed(1)}%\n`;
+                      if (fillRatio < 0.5) {
+                        result += `   ⚠️ Palju tühja ruumi - võimalik L-kuju, U-kuju või sisselõiked\n`;
+                      } else if (fillRatio < 0.8) {
+                        result += `   📐 Osaliselt täidetud - võimalik kaldu või lõigetega\n`;
+                      } else {
+                        result += `   ✅ Kompaktne ristkülik\n`;
+                      }
+
+                      updateFunctionResult("geometryEdges", { status: 'success', result });
+                    } catch (e: any) {
+                      updateFunctionResult("geometryEdges", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🗑️ Eemalda mõõtjooned"
                   result={functionResults["removeMeasurements"]}
                   onClick={async () => {
