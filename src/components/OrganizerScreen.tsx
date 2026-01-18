@@ -4753,10 +4753,19 @@ export default function OrganizerScreen({
         ];
         // Add data columns based on group type
         if (isNonAssemblyGroup && displayProps.length > 0) {
-          // Use display_properties values from custom_properties
-          displayProps.forEach(dp => {
+          // Use display_properties values from custom_properties with decimal formatting
+          displayProps.forEach((dp: {set: string; prop: string; label: string; decimals?: number}) => {
             const key = `display_${dp.set}_${dp.prop}`;
-            row.push(item.custom_properties?.[key] || '');
+            const rawValue = item.custom_properties?.[key] || '';
+            // Apply decimal formatting if set
+            if (rawValue && dp.decimals !== undefined) {
+              const numVal = parseFloat(rawValue);
+              if (!isNaN(numVal)) {
+                row.push(numVal.toFixed(dp.decimals));
+                return;
+              }
+            }
+            row.push(rawValue);
           });
         } else {
           // Standard assembly columns
@@ -4868,10 +4877,19 @@ export default function OrganizerScreen({
       ];
       // Add data columns based on group type
       if (isNonAssemblyGroup && displayProps.length > 0) {
-        // Use display_properties values from custom_properties
-        displayProps.forEach(dp => {
+        // Use display_properties values from custom_properties with decimal formatting
+        displayProps.forEach((dp: {set: string; prop: string; label: string; decimals?: number}) => {
           const key = `display_${dp.set}_${dp.prop}`;
-          row.push(item.custom_properties?.[key] || '');
+          const rawValue = item.custom_properties?.[key] || '';
+          // Apply decimal formatting if set
+          if (rawValue && dp.decimals !== undefined) {
+            const numVal = parseFloat(rawValue);
+            if (!isNaN(numVal)) {
+              row.push(numVal.toFixed(dp.decimals));
+              return;
+            }
+          }
+          row.push(rawValue);
         });
       } else {
         // Standard assembly columns
@@ -4983,30 +5001,58 @@ export default function OrganizerScreen({
     const isNonAssemblyGroup = group.assembly_selection_on === false;
     const displayProps = group.display_properties || [];
 
+    // Get existing items in this group for sample data (up to 4)
+    const existingItems = groupItems.get(groupId) || [];
+    const sampleItems = existingItems.slice(0, 4);
+
     const wb = XLSX.utils.book_new();
 
     // Headers: GUID columns + Subgroup + Custom fields
     const headers = ['GUID_IFC', 'GUID_MS', 'Alamgrupp', 'Alamgrupi_kirjeldus'];
     customFields.forEach(f => headers.push(f.name.replace(/\s+/g, '_')));
 
-    // Add example row
-    const exampleRow = [
-      '2O2Fr$t4X7Zf8NOew3FLOH', // IFC GUID example
-      '85ca28da-b297-4bdc-87df-fac7573fb32d', // MS GUID example
-      'Alamgrupi nimi (valikuline)',
-      'Alamgrupi kirjeldus (valikuline)'
-    ];
-    customFields.forEach(f => {
-      if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
-        exampleRow.push(f.options.dropdownOptions[0] || '');
-      } else if (f.type === 'tags') {
-        exampleRow.push('tag1, tag2');
-      } else {
-        exampleRow.push('');
-      }
-    });
+    const data: string[][] = [headers];
 
-    const data = [headers, exampleRow];
+    // Add sample data from existing items (if any)
+    if (sampleItems.length > 0) {
+      sampleItems.forEach(item => {
+        const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
+        const row = [
+          item.guid_ifc || '',
+          guidMs,
+          '', // Alamgrupp - empty for existing items
+          ''  // Alamgrupi_kirjeldus - empty for existing items
+        ];
+        // Add custom field values
+        customFields.forEach(f => {
+          const value = item.custom_properties?.[f.id];
+          if (f.type === 'tags' && Array.isArray(value)) {
+            row.push(value.join(', '));
+          } else {
+            row.push(String(value || ''));
+          }
+        });
+        data.push(row);
+      });
+    } else {
+      // No items - add example row
+      const exampleRow = [
+        '2O2Fr$t4X7Zf8NOew3FLOH', // IFC GUID example
+        '85ca28da-b297-4bdc-87df-fac7573fb32d', // MS GUID example
+        'Alamgrupi nimi (valikuline)',
+        'Alamgrupi kirjeldus (valikuline)'
+      ];
+      customFields.forEach(f => {
+        if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
+          exampleRow.push(f.options.dropdownOptions[0] || '');
+        } else if (f.type === 'tags') {
+          exampleRow.push('tag1, tag2');
+        } else {
+          exampleRow.push('');
+        }
+      });
+      data.push(exampleRow);
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(data);
 
@@ -5027,24 +5073,50 @@ export default function OrganizerScreen({
       ['2. GUID_MS konverteeritakse automaatselt GUID_IFC formaati'],
       ['3. Alamgrupp veerg loob uue alamgrupi kui seda pole veel olemas'],
       ['4. Alamgrupi_kirjeldus on valikuline'],
-      ['5. Lisaveerud täidetakse vastavate väärtustega'],
+      ['5. Lisaväljad (custom fields) täidetakse vastavate väärtustega'],
       [''],
       ['GUID FORMAADID:'],
       ['- GUID_IFC: 22 tähemärki (nt: 2O2Fr$t4X7Zf8NOew3FLOH)'],
       ['- GUID_MS: UUID formaat (nt: 85ca28da-b297-4bdc-87df-fac7573fb32d)']
     ];
 
+    // Add info about sample data
+    if (sampleItems.length > 0) {
+      instructionsData.push(['']);
+      instructionsData.push([`NÄIDISANDMED: Template sisaldab ${sampleItems.length} esimest detaili grupist`]);
+      instructionsData.push(['- Näidisread näitavad olemasolevate detailide andmeid']);
+      instructionsData.push(['- Võid muuta lisaväljase väärtusi ja importida uuesti']);
+    }
+
+    // Add custom fields info
+    if (customFields.length > 0) {
+      instructionsData.push(['']);
+      instructionsData.push(['LISAVÄLJAD GRUPIS:']);
+      customFields.forEach(f => {
+        let fieldInfo = `- ${f.name} (${f.type})`;
+        if (f.required) fieldInfo += ' [KOHUSTUSLIK]';
+        if (f.type === 'dropdown' && f.options?.dropdownOptions?.length) {
+          fieldInfo += `: ${f.options.dropdownOptions.join(', ')}`;
+        }
+        instructionsData.push([fieldInfo]);
+      });
+    }
+
     // Add group-specific instructions
     if (isNonAssemblyGroup && displayProps.length > 0) {
       instructionsData.push(['']);
       instructionsData.push(['MÄRKUS: See on alamdetailide grupp (Assembly Selection väljas)']);
       instructionsData.push(['- GUID-e otsitakse otse mudelist (mitte trimble_model_objects tabelist)']);
-      instructionsData.push(['- Kuvatavad veerud loetakse mudelist: ' + displayProps.map(dp => dp.label || `${dp.set}.${dp.prop}`).join(', ')]);
+      instructionsData.push(['- Kuvatavad veerud loetakse mudelist: ' + displayProps.map((dp: any) => dp.label || `${dp.set}.${dp.prop}`).join(', ')]);
     }
 
     instructionsData.push(['']);
     instructionsData.push(['NÄPUNÄITED:']);
-    instructionsData.push(['- Kustuta näidisrida enne importimist']);
+    if (sampleItems.length > 0) {
+      instructionsData.push(['- Näidisread on juba olemasolevad detailid - muuda lisaväljasid ja impordi']);
+    } else {
+      instructionsData.push(['- Kustuta näidisrida enne importimist']);
+    }
     instructionsData.push(['- Dropdown väärtused peavad vastama täpselt seadistatud valikutele']);
     instructionsData.push(['- Tags veerus eraldage väärtused komaga']);
 

@@ -14757,7 +14757,7 @@ document.body.appendChild(div);`;
                   }}
                 >
                   <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    ⚠️ Probleemid
+                    ⚠️ Mittevastavused
                     <span style={{
                       background: partDbData.issues.length > 0 ? '#eab308' : '#d1d5db',
                       color: 'white',
@@ -14881,7 +14881,7 @@ document.body.appendChild(div);`;
                 )}
                 {partDbExpandedSections.has('issues') && partDbData.issues.length === 0 && (
                   <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-                    Probleeme pole registreeritud
+                    Mittevastavusi pole registreeritud
                   </div>
                 )}
               </div>
