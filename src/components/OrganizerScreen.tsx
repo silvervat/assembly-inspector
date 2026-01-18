@@ -86,7 +86,6 @@ const MARKUP_BATCH_SIZE = 50;  // Markups to create/remove per batch
 
 // Markup settings - which fields to include in markup
 type MarkupLineConfig = 'line1' | 'line2' | 'line3' | 'none';
-type MarkupFieldType = 'groupName' | 'assemblyMark' | 'weight' | 'productName' | string;
 
 interface MarkupFieldConfig {
   enabled: boolean;
@@ -95,23 +94,26 @@ interface MarkupFieldConfig {
 }
 
 interface MarkupSettings {
-  includeGroupName: boolean;
-  groupNameLine: MarkupLineConfig;
-  groupNameSuffix: string; // Text to add after group name
-  includeCustomFields: string[]; // field IDs to include
+  // Template strings for each line - use {fieldId} for placeholders
+  // e.g., "Element: {assemblyMark} kaalub {weight} kg"
+  line1Template: string;
+  line2Template: string;
+  line3Template: string;
   applyToSubgroups: boolean;
   separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
-  // New model property fields
-  includeAssemblyMark: MarkupFieldConfig;
-  includeWeight: MarkupFieldConfig;
-  includeProductName: MarkupFieldConfig;
-  // Filter options
   onlySelectedInModel: boolean;
-  // Free text for each line
-  line1FreeText: string;
-  line2FreeText: string;
-  line3FreeText: string;
+  // Legacy fields for backwards compatibility (will be migrated)
+  includeGroupName?: boolean;
+  groupNameLine?: MarkupLineConfig;
+  groupNameSuffix?: string;
+  includeCustomFields?: string[];
+  includeAssemblyMark?: MarkupFieldConfig;
+  includeWeight?: MarkupFieldConfig;
+  includeProductName?: MarkupFieldConfig;
+  line1FreeText?: string;
+  line2FreeText?: string;
+  line3FreeText?: string;
 }
 
 // Sorting options
@@ -708,26 +710,74 @@ export default function OrganizerScreen({
   const [showMarkupModal, setShowMarkupModal] = useState(false);
   const [markupGroupId, setMarkupGroupId] = useState<string | null>(null);
   const defaultMarkupSettings: MarkupSettings = {
-    includeGroupName: true,
-    groupNameLine: 'line1',
-    groupNameSuffix: '',
-    includeCustomFields: [],
+    line1Template: '{groupName} {assemblyMark}',
+    line2Template: '',
+    line3Template: '',
     applyToSubgroups: true,
     separator: 'newline',
     useGroupColors: true,
-    includeAssemblyMark: { enabled: true, line: 'line1', suffix: '' },
-    includeWeight: { enabled: false, line: 'line2', suffix: '' },
-    includeProductName: { enabled: false, line: 'line2', suffix: '' },
-    onlySelectedInModel: false,
-    line1FreeText: '',
-    line2FreeText: '',
-    line3FreeText: ''
+    onlySelectedInModel: false
   };
+
+  // Migrate old settings to new template format
+  const migrateMarkupSettings = (old: any): MarkupSettings => {
+    // If already has new format, return as is
+    if (old.line1Template !== undefined) {
+      return { ...defaultMarkupSettings, ...old };
+    }
+
+    // Build templates from old format
+    const line1Parts: string[] = [];
+    const line2Parts: string[] = [];
+    const line3Parts: string[] = [];
+
+    if (old.includeGroupName && old.groupNameLine === 'line1') {
+      line1Parts.push(`{groupName}${old.groupNameSuffix || ''}`);
+    } else if (old.includeGroupName && old.groupNameLine === 'line2') {
+      line2Parts.push(`{groupName}${old.groupNameSuffix || ''}`);
+    } else if (old.includeGroupName && old.groupNameLine === 'line3') {
+      line3Parts.push(`{groupName}${old.groupNameSuffix || ''}`);
+    }
+
+    if (old.includeAssemblyMark?.enabled && old.includeAssemblyMark.line === 'line1') {
+      line1Parts.push(`{assemblyMark}${old.includeAssemblyMark.suffix || ''}`);
+    } else if (old.includeAssemblyMark?.enabled && old.includeAssemblyMark.line === 'line2') {
+      line2Parts.push(`{assemblyMark}${old.includeAssemblyMark.suffix || ''}`);
+    }
+
+    if (old.includeWeight?.enabled && old.includeWeight.line === 'line2') {
+      line2Parts.push(`{weight}${old.includeWeight.suffix || ''}`);
+    } else if (old.includeWeight?.enabled && old.includeWeight.line === 'line1') {
+      line1Parts.push(`{weight}${old.includeWeight.suffix || ''}`);
+    }
+
+    if (old.includeProductName?.enabled && old.includeProductName.line === 'line2') {
+      line2Parts.push(`{productName}${old.includeProductName.suffix || ''}`);
+    } else if (old.includeProductName?.enabled && old.includeProductName.line === 'line1') {
+      line1Parts.push(`{productName}${old.includeProductName.suffix || ''}`);
+    }
+
+    // Add free text
+    if (old.line1FreeText) line1Parts.push(old.line1FreeText);
+    if (old.line2FreeText) line2Parts.push(old.line2FreeText);
+    if (old.line3FreeText) line3Parts.push(old.line3FreeText);
+
+    return {
+      line1Template: line1Parts.join(' '),
+      line2Template: line2Parts.join(' '),
+      line3Template: line3Parts.join(' '),
+      applyToSubgroups: old.applyToSubgroups ?? true,
+      separator: old.separator || 'newline',
+      useGroupColors: old.useGroupColors ?? true,
+      onlySelectedInModel: old.onlySelectedInModel ?? false
+    };
+  };
+
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
       const saved = localStorage.getItem('organizer_markup_settings');
       if (saved) {
-        return { ...defaultMarkupSettings, ...JSON.parse(saved) };
+        return migrateMarkupSettings(JSON.parse(saved));
       }
     } catch (e) {
       console.warn('Failed to load markup settings from localStorage:', e);
@@ -736,8 +786,6 @@ export default function OrganizerScreen({
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
   const [hasMarkups, setHasMarkups] = useState(false);
-  const [draggedField, setDraggedField] = useState<MarkupFieldType | null>(null);
-  const [dragOverLine, setDragOverLine] = useState<MarkupLineConfig | 'unused' | null>(null);
 
   // Save markup settings to localStorage when changed
   useEffect(() => {
@@ -3318,94 +3366,63 @@ export default function OrganizerScreen({
     return null;
   };
 
-  // Build markup text from settings and item data
+  // Build markup text from template settings and item data
   const buildMarkupText = (
     item: OrganizerGroupItem,
     itemGroup: OrganizerGroup,
     customFields: CustomFieldDefinition[],
     modelProps?: { assemblyMark?: string; weight?: string; productName?: string }
   ): string => {
-    const lines: { line: MarkupLineConfig; parts: string[] }[] = [
-      { line: 'line1', parts: [] },
-      { line: 'line2', parts: [] },
-      { line: 'line3', parts: [] }
-    ];
+    // Helper to replace placeholders in template
+    const processTemplate = (template: string): string => {
+      if (!template) return '';
 
-    const addToLine = (line: MarkupLineConfig, value: string, suffix: string = '') => {
-      if (line === 'none' || !value) return;
-      const lineObj = lines.find(l => l.line === line);
-      if (lineObj) {
-        // Add value with its suffix
-        lineObj.parts.push(suffix ? `${value}${suffix}` : value);
+      let result = template;
+
+      // Replace {groupName}
+      result = result.replace(/\{groupName\}/g, itemGroup.name || '');
+
+      // Replace {assemblyMark}
+      const assemblyMark = modelProps?.assemblyMark || item.assembly_mark || '';
+      const displayMark = assemblyMark.startsWith('Object_') ? '' : assemblyMark;
+      result = result.replace(/\{assemblyMark\}/g, displayMark);
+
+      // Replace {weight} - format as X.X kg
+      const weight = modelProps?.weight || item.cast_unit_weight || '';
+      const numWeight = parseFloat(weight);
+      const formattedWeight = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
+      result = result.replace(/\{weight\}/g, formattedWeight);
+
+      // Replace {productName}
+      const productName = modelProps?.productName || item.product_name || '';
+      result = result.replace(/\{productName\}/g, productName);
+
+      // Replace custom fields {customField_XXXX}
+      for (const field of customFields) {
+        const regex = new RegExp(`\\{customField_${field.id}\\}`, 'g');
+        const val = item.custom_properties?.[field.id];
+        const displayVal = val !== undefined && val !== null && val !== '' ? formatFieldValue(val, field) : '';
+        result = result.replace(regex, displayVal);
       }
+
+      // Clean up multiple spaces and trim
+      result = result.replace(/\s+/g, ' ').trim();
+
+      return result;
     };
 
-    // Group name with its suffix
-    if (markupSettings.includeGroupName) {
-      addToLine(markupSettings.groupNameLine, itemGroup.name, markupSettings.groupNameSuffix || '');
-    }
+    const line1 = processTemplate(markupSettings.line1Template);
+    const line2 = processTemplate(markupSettings.line2Template);
+    const line3 = processTemplate(markupSettings.line3Template);
 
-    // Assembly mark from model or item with its suffix
-    if (markupSettings.includeAssemblyMark.enabled) {
-      const mark = modelProps?.assemblyMark || item.assembly_mark;
-      if (mark && !mark.startsWith('Object_')) {
-        addToLine(markupSettings.includeAssemblyMark.line, mark, markupSettings.includeAssemblyMark.suffix || '');
-      }
-    }
-
-    // Weight from model or item with its suffix
-    if (markupSettings.includeWeight.enabled) {
-      const weight = modelProps?.weight || item.cast_unit_weight;
-      if (weight) {
-        const numWeight = parseFloat(weight);
-        const formatted = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
-        addToLine(markupSettings.includeWeight.line, formatted, markupSettings.includeWeight.suffix || '');
-      }
-    }
-
-    // Product name from model or item with its suffix
-    if (markupSettings.includeProductName.enabled) {
-      const productName = modelProps?.productName || item.product_name;
-      if (productName) {
-        addToLine(markupSettings.includeProductName.line, productName, markupSettings.includeProductName.suffix || '');
-      }
-    }
-
-    // Custom fields (always on their own lines after main content)
-    for (const fieldId of markupSettings.includeCustomFields) {
-      const field = customFields.find(f => f.id === fieldId);
-      if (field) {
-        const val = item.custom_properties?.[fieldId];
-        if (val !== undefined && val !== null && val !== '') {
-          addToLine('line3', `${field.name}: ${formatFieldValue(val, field)}`);
-        }
-      }
-    }
-
-    // Add free text to each line
-    if (markupSettings.line1FreeText) {
-      addToLine('line1', markupSettings.line1FreeText);
-    }
-    if (markupSettings.line2FreeText) {
-      addToLine('line2', markupSettings.line2FreeText);
-    }
-    if (markupSettings.line3FreeText) {
-      addToLine('line3', markupSettings.line3FreeText);
-    }
-
-    // Build final text
-    const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
-    const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
-
-    const lineTexts = lines
-      .filter(l => l.parts.length > 0)
-      .map(l => l.parts.join(inlineSeparator));
+    const lineTexts = [line1, line2, line3].filter(l => l.length > 0);
 
     if (lineTexts.length === 0) {
       // Fallback to assembly mark
       return item.assembly_mark || 'Tundmatu';
     }
 
+    const lineSeparator = getSeparator(markupSettings.separator);
     return lineTexts.join(lineSeparator);
   };
 
@@ -3475,10 +3492,11 @@ export default function OrganizerScreen({
         objectsByModel.get(found.modelId)!.push({ runtimeId: found.runtimeId, guidIfc: item.guid_ifc });
       }
 
-      // Fetch properties from model if weight or product name is needed
-      const needModelProps = markupSettings.includeWeight.enabled ||
-                            markupSettings.includeProductName.enabled ||
-                            markupSettings.includeAssemblyMark.enabled;
+      // Fetch properties from model if templates contain weight, productName, or assemblyMark placeholders
+      const allTemplates = [markupSettings.line1Template, markupSettings.line2Template, markupSettings.line3Template].join(' ');
+      const needModelProps = allTemplates.includes('{weight}') ||
+                            allTemplates.includes('{productName}') ||
+                            allTemplates.includes('{assemblyMark}');
       const guidToProps = new Map<string, { assemblyMark?: string; weight?: string; productName?: string }>();
 
       if (needModelProps) {
@@ -7649,7 +7667,6 @@ export default function OrganizerScreen({
             items.push(...gItems);
           }
 
-          // Filter by selected objects if enabled
           if (markupSettings.onlySelectedInModel && selectedObjects.length > 0) {
             const selectedGuidsLower = new Set(
               selectedObjects.map(obj => obj.guidIfc?.toLowerCase()).filter(Boolean)
@@ -7680,322 +7697,98 @@ export default function OrganizerScreen({
 
         const firstItem = getFirstItem();
 
-        // Generate preview text
-        const generatePreview = (): string => {
-          if (!firstItem || !markupGroup) return 'Eelvaade pole saadaval';
-
-          const lines: { line: MarkupLineConfig; parts: string[] }[] = [
-            { line: 'line1', parts: [] },
-            { line: 'line2', parts: [] },
-            { line: 'line3', parts: [] }
-          ];
-
-          const addToLine = (line: MarkupLineConfig, value: string, suffix: string = '') => {
-            if (line === 'none' || !value) return;
-            const lineObj = lines.find(l => l.line === line);
-            if (lineObj) {
-              lineObj.parts.push(suffix ? `${value}${suffix}` : value);
-            }
-          };
-
-          if (markupSettings.includeGroupName) {
-            addToLine(markupSettings.groupNameLine, markupGroup.name, markupSettings.groupNameSuffix || '');
-          }
-
-          if (markupSettings.includeAssemblyMark.enabled) {
-            const mark = firstItem.assembly_mark || 'W-101';
-            if (!mark.startsWith('Object_')) {
-              addToLine(markupSettings.includeAssemblyMark.line, mark, markupSettings.includeAssemblyMark.suffix || '');
-            }
-          }
-
-          if (markupSettings.includeWeight.enabled) {
-            const weight = firstItem.cast_unit_weight || '1234.5';
-            const numWeight = parseFloat(weight);
-            const formatted = !isNaN(numWeight) ? `${numWeight.toFixed(1)} kg` : weight;
-            addToLine(markupSettings.includeWeight.line, formatted, markupSettings.includeWeight.suffix || '');
-          }
-
-          if (markupSettings.includeProductName.enabled) {
-            const productName = firstItem.product_name || 'BEAM';
-            addToLine(markupSettings.includeProductName.line, productName, markupSettings.includeProductName.suffix || '');
-          }
-
-          for (const fieldId of markupSettings.includeCustomFields) {
-            const field = customFields.find(f => f.id === fieldId);
-            if (field) {
-              const val = firstItem.custom_properties?.[fieldId] || 'Näidis';
-              addToLine('line3', `${field.name}: ${val}`);
-            }
-          }
-
-          // Add free text to each line
-          if (markupSettings.line1FreeText) {
-            addToLine('line1', markupSettings.line1FreeText);
-          }
-          if (markupSettings.line2FreeText) {
-            addToLine('line2', markupSettings.line2FreeText);
-          }
-          if (markupSettings.line3FreeText) {
-            addToLine('line3', markupSettings.line3FreeText);
-          }
-
-          const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
-          const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
-
-          const lineTexts = lines
-            .filter(l => l.parts.length > 0)
-            .map(l => l.parts.join(inlineSeparator));
-
-          return lineTexts.length > 0 ? lineTexts.join(lineSeparator) : 'Vali vähemalt üks väli';
-        };
-
         // Check if subgroups exist
         const hasSubgroups = groups.some(g => g.parent_id === markupGroupId);
 
-        // Field definitions for drag & drop
-        interface MarkupFieldDef {
-          id: MarkupFieldType;
-          label: string;
-          preview: string;
-          isCustom?: boolean;
-        }
-
-        const availableFields: MarkupFieldDef[] = [
-          { id: 'groupName', label: 'Grupi nimi', preview: markupGroup?.name || 'Grupp' },
-          { id: 'assemblyMark', label: 'Assembly Mark', preview: firstItem?.assembly_mark || 'W-101' },
-          { id: 'weight', label: 'Kaal', preview: `${(parseFloat(firstItem?.cast_unit_weight || '1234.5')).toFixed(1)} kg` },
-          { id: 'productName', label: 'Product Name', preview: firstItem?.product_name || 'BEAM' },
+        // Available fields for insertion
+        const availableFields = [
+          { id: 'groupName', label: 'Grupi nimi', placeholder: '{groupName}', preview: markupGroup?.name || 'Grupp' },
+          { id: 'assemblyMark', label: 'Assembly Mark', placeholder: '{assemblyMark}', preview: firstItem?.assembly_mark?.startsWith('Object_') ? 'W-101' : (firstItem?.assembly_mark || 'W-101') },
+          { id: 'weight', label: 'Kaal', placeholder: '{weight}', preview: `${(parseFloat(firstItem?.cast_unit_weight || '1234.5')).toFixed(1)} kg` },
+          { id: 'productName', label: 'Product Name', placeholder: '{productName}', preview: firstItem?.product_name || 'BEAM' },
           ...customFields.map(f => ({
-            id: f.id,
+            id: `customField_${f.id}`,
             label: f.name,
-            preview: firstItem?.custom_properties?.[f.id] || 'Näidis',
-            isCustom: true
+            placeholder: `{customField_${f.id}}`,
+            preview: firstItem?.custom_properties?.[f.id] || 'Näidis'
           }))
         ];
 
-        // Get fields assigned to each line
-        const getFieldsForLine = (line: MarkupLineConfig): MarkupFieldDef[] => {
-          const fields: MarkupFieldDef[] = [];
-          if (markupSettings.includeGroupName && markupSettings.groupNameLine === line) {
-            fields.push(availableFields.find(f => f.id === 'groupName')!);
-          }
-          if (markupSettings.includeAssemblyMark.enabled && markupSettings.includeAssemblyMark.line === line) {
-            fields.push(availableFields.find(f => f.id === 'assemblyMark')!);
-          }
-          if (markupSettings.includeWeight.enabled && markupSettings.includeWeight.line === line) {
-            fields.push(availableFields.find(f => f.id === 'weight')!);
-          }
-          if (markupSettings.includeProductName.enabled && markupSettings.includeProductName.line === line) {
-            fields.push(availableFields.find(f => f.id === 'productName')!);
-          }
-          // Custom fields go to line3
-          if (line === 'line3') {
-            for (const fieldId of markupSettings.includeCustomFields) {
-              const field = availableFields.find(f => f.id === fieldId);
-              if (field) fields.push(field);
-            }
-          }
-          return fields.filter(Boolean);
-        };
-
-        // Get unused fields
-        const getUnusedFields = (): MarkupFieldDef[] => {
-          return availableFields.filter(f => {
-            if (f.id === 'groupName') return !markupSettings.includeGroupName;
-            if (f.id === 'assemblyMark') return !markupSettings.includeAssemblyMark.enabled;
-            if (f.id === 'weight') return !markupSettings.includeWeight.enabled;
-            if (f.id === 'productName') return !markupSettings.includeProductName.enabled;
-            if (f.isCustom) return !markupSettings.includeCustomFields.includes(f.id);
-            return true;
-          });
-        };
-
-        // Toggle field
-        const toggleField = (fieldId: MarkupFieldType, targetLine: MarkupLineConfig = 'line1') => {
-          setMarkupSettings(prev => {
-            if (fieldId === 'groupName') {
-              return { ...prev, includeGroupName: !prev.includeGroupName, groupNameLine: targetLine };
-            }
-            if (fieldId === 'assemblyMark') {
-              return { ...prev, includeAssemblyMark: { ...prev.includeAssemblyMark, enabled: !prev.includeAssemblyMark.enabled, line: targetLine } };
-            }
-            if (fieldId === 'weight') {
-              return { ...prev, includeWeight: { ...prev.includeWeight, enabled: !prev.includeWeight.enabled, line: targetLine } };
-            }
-            if (fieldId === 'productName') {
-              return { ...prev, includeProductName: { ...prev.includeProductName, enabled: !prev.includeProductName.enabled, line: targetLine } };
-            }
-            // Custom field
-            const isIncluded = prev.includeCustomFields.includes(fieldId);
-            return {
+        // Insert field placeholder at cursor position in the active input
+        const insertFieldToTemplate = (fieldPlaceholder: string, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+          const input = document.getElementById(`markup-${lineKey}`) as HTMLInputElement;
+          if (input) {
+            const start = input.selectionStart || 0;
+            const end = input.selectionEnd || 0;
+            const currentValue = markupSettings[lineKey];
+            const newValue = currentValue.substring(0, start) + fieldPlaceholder + currentValue.substring(end);
+            setMarkupSettings(prev => ({ ...prev, [lineKey]: newValue }));
+            // Restore cursor position after the inserted text
+            setTimeout(() => {
+              input.focus();
+              input.setSelectionRange(start + fieldPlaceholder.length, start + fieldPlaceholder.length);
+            }, 0);
+          } else {
+            // If no input focused, append to the template
+            setMarkupSettings(prev => ({
               ...prev,
-              includeCustomFields: isIncluded
-                ? prev.includeCustomFields.filter(id => id !== fieldId)
-                : [...prev.includeCustomFields, fieldId]
-            };
-          });
+              [lineKey]: prev[lineKey] + (prev[lineKey] ? ' ' : '') + fieldPlaceholder
+            }));
+          }
         };
 
-        // Move field to line
-        const moveFieldToLine = (fieldId: MarkupFieldType, targetLine: MarkupLineConfig) => {
-          setMarkupSettings(prev => {
-            if (fieldId === 'groupName') {
-              return { ...prev, includeGroupName: true, groupNameLine: targetLine };
+        // Track which line input is focused
+        const [focusedLine, setFocusedLine] = useState<'line1Template' | 'line2Template' | 'line3Template'>('line1Template');
+
+        // Generate preview from templates
+        const generatePreview = (): string => {
+          if (!markupGroup) return 'Eelvaade pole saadaval';
+
+          const processTemplate = (template: string): string => {
+            if (!template) return '';
+            let result = template;
+            result = result.replace(/\{groupName\}/g, markupGroup.name || '');
+            const mark = firstItem?.assembly_mark || 'W-101';
+            result = result.replace(/\{assemblyMark\}/g, mark.startsWith('Object_') ? 'W-101' : mark);
+            const weight = firstItem?.cast_unit_weight || '1234.5';
+            result = result.replace(/\{weight\}/g, `${parseFloat(weight).toFixed(1)} kg`);
+            result = result.replace(/\{productName\}/g, firstItem?.product_name || 'BEAM');
+            for (const field of customFields) {
+              const regex = new RegExp(`\\{customField_${field.id}\\}`, 'g');
+              result = result.replace(regex, firstItem?.custom_properties?.[field.id] || 'Näidis');
             }
-            if (fieldId === 'assemblyMark') {
-              return { ...prev, includeAssemblyMark: { ...prev.includeAssemblyMark, enabled: true, line: targetLine } };
-            }
-            if (fieldId === 'weight') {
-              return { ...prev, includeWeight: { ...prev.includeWeight, enabled: true, line: targetLine } };
-            }
-            if (fieldId === 'productName') {
-              return { ...prev, includeProductName: { ...prev.includeProductName, enabled: true, line: targetLine } };
-            }
-            // Custom fields always go to line3
-            if (!prev.includeCustomFields.includes(fieldId)) {
-              return { ...prev, includeCustomFields: [...prev.includeCustomFields, fieldId] };
-            }
-            return prev;
-          });
+            return result.replace(/\s+/g, ' ').trim();
+          };
+
+          const lines = [
+            processTemplate(markupSettings.line1Template),
+            processTemplate(markupSettings.line2Template),
+            processTemplate(markupSettings.line3Template)
+          ].filter(l => l.length > 0);
+
+          return lines.length > 0 ? lines.join(getSeparator(markupSettings.separator)) : 'Kirjuta tekst ja lisa veerge';
         };
 
-        // Get suffix for a field
-        const getFieldSuffix = (fieldId: MarkupFieldType): string => {
-          if (fieldId === 'groupName') return markupSettings.groupNameSuffix || '';
-          if (fieldId === 'assemblyMark') return markupSettings.includeAssemblyMark.suffix || '';
-          if (fieldId === 'weight') return markupSettings.includeWeight.suffix || '';
-          if (fieldId === 'productName') return markupSettings.includeProductName.suffix || '';
-          return '';
-        };
-
-        // Set suffix for a field
-        const setFieldSuffix = (fieldId: MarkupFieldType, suffix: string) => {
-          setMarkupSettings(prev => {
-            if (fieldId === 'groupName') {
-              return { ...prev, groupNameSuffix: suffix };
-            }
-            if (fieldId === 'assemblyMark') {
-              return { ...prev, includeAssemblyMark: { ...prev.includeAssemblyMark, suffix } };
-            }
-            if (fieldId === 'weight') {
-              return { ...prev, includeWeight: { ...prev.includeWeight, suffix } };
-            }
-            if (fieldId === 'productName') {
-              return { ...prev, includeProductName: { ...prev.includeProductName, suffix } };
-            }
-            return prev;
-          });
-        };
-
-        // Helper to render inline field chip with suffix
-        const renderFieldChip = (field: MarkupFieldDef, onRemove?: () => void, isDragging?: boolean, showSuffix = false) => {
-          const suffix = getFieldSuffix(field.id);
+        // Render template editor for a line
+        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string) => {
+          const template = markupSettings[lineKey];
           return (
-            <div key={field.id} className="markup-field-with-suffix">
-              <div
-                className={`markup-field-chip ${isDragging ? 'dragging' : ''}`}
-                draggable
-                onDragStart={(e) => {
-                  setDraggedField(field.id);
-                  e.dataTransfer.effectAllowed = 'move';
-                }}
-                onDragEnd={() => {
-                  setDraggedField(null);
-                  setDragOverLine(null);
-                }}
-                onTouchStart={() => setDraggedField(field.id)}
-                onTouchEnd={() => {
-                  setDraggedField(null);
-                  setDragOverLine(null);
-                }}
-              >
-                <span className="chip-label">{field.label}</span>
-                {onRemove && (
-                  <button className="chip-remove" onClick={onRemove} title="Eemalda">
-                    <FiX size={12} />
-                  </button>
-                )}
-              </div>
-              {showSuffix && !field.isCustom && (
+            <div className="markup-template-line">
+              <label className="template-label">{label}</label>
+              <div className="template-input-wrapper">
                 <input
+                  id={`markup-${lineKey}`}
                   type="text"
-                  className="markup-field-suffix"
-                  placeholder="+ tekst"
-                  value={suffix}
-                  onChange={(e) => setFieldSuffix(field.id, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                  title="Lisa tekst välja järele"
+                  className="template-input"
+                  value={template}
+                  onChange={(e) => setMarkupSettings(prev => ({ ...prev, [lineKey]: e.target.value }))}
+                  onFocus={() => setFocusedLine(lineKey)}
+                  placeholder="Kirjuta teksti ja kliki väljadel, et neid lisada..."
                 />
-              )}
-            </div>
-          );
-        };
-
-        // Helper to get/set free text for a line
-        const getLineFreeText = (line: MarkupLineConfig): string => {
-          if (line === 'line1') return markupSettings.line1FreeText || '';
-          if (line === 'line2') return markupSettings.line2FreeText || '';
-          if (line === 'line3') return markupSettings.line3FreeText || '';
-          return '';
-        };
-
-        const setLineFreeText = (line: MarkupLineConfig, text: string) => {
-          setMarkupSettings(prev => {
-            if (line === 'line1') return { ...prev, line1FreeText: text };
-            if (line === 'line2') return { ...prev, line2FreeText: text };
-            if (line === 'line3') return { ...prev, line3FreeText: text };
-            return prev;
-          });
-        };
-
-        // Helper to render inline drop zone for a line
-        const renderLineDropZone = (line: MarkupLineConfig, label: string) => {
-          const fields = getFieldsForLine(line);
-          const isOver = dragOverLine === line;
-          const freeText = getLineFreeText(line);
-
-          return (
-            <div
-              key={line}
-              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 && !freeText ? 'empty' : ''}`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragOverLine(line);
-              }}
-              onDragLeave={() => setDragOverLine(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (draggedField) {
-                  moveFieldToLine(draggedField, line);
-                }
-                setDraggedField(null);
-                setDragOverLine(null);
-              }}
-            >
-              <span className="line-label">{label}</span>
-              <div className="line-fields">
-                {fields.length > 0 ? (
-                  fields.map(f => renderFieldChip(f, () => toggleField(f.id), draggedField === f.id, true))
-                ) : (
-                  <span className="line-placeholder">Lohista siia</span>
-                )}
               </div>
-              <input
-                type="text"
-                className="markup-line-free-text"
-                placeholder="Vaba tekst..."
-                value={freeText}
-                onChange={(e) => setLineFreeText(line, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
-                onKeyDown={(e) => e.stopPropagation()}
-              />
             </div>
           );
         };
-
-        const unusedFields = getUnusedFields();
 
         return (
           <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
@@ -8051,62 +7844,35 @@ export default function OrganizerScreen({
                   </label>
                 </div>
 
-                {/* Field builder */}
+                {/* Template builder */}
                 <div className="markup-builder">
                   <div className="markup-builder-header">
                     <span>Koosta markup</span>
-                    <span className="markup-hint">Lohista väljad ridadesse</span>
+                    <span className="markup-hint">Kirjuta teksti ja kliki väljadel, et need lisada</span>
                   </div>
 
-                  {/* Lines */}
-                  <div className="markup-lines">
-                    {renderLineDropZone('line1', 'Rida 1')}
-                    {renderLineDropZone('line2', 'Rida 2')}
-                    {renderLineDropZone('line3', 'Rida 3')}
+                  {/* Available fields as clickable chips */}
+                  <div className="markup-available-fields">
+                    {availableFields.map(f => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        className="markup-insert-chip"
+                        onClick={() => insertFieldToTemplate(f.placeholder, focusedLine)}
+                        title={`Lisa: ${f.preview}`}
+                      >
+                        <FiPlus size={10} />
+                        <span>{f.label}</span>
+                      </button>
+                    ))}
                   </div>
 
-                  {/* Available fields */}
-                  {unusedFields.length > 0 && (
-                    <div
-                      className={`markup-available ${dragOverLine === 'unused' ? 'drag-over' : ''}`}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        setDragOverLine('unused');
-                      }}
-                      onDragLeave={() => setDragOverLine(null)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        if (draggedField) {
-                          toggleField(draggedField);
-                        }
-                        setDraggedField(null);
-                        setDragOverLine(null);
-                      }}
-                    >
-                      <span className="available-label">Saadaval:</span>
-                      <div className="available-fields">
-                        {unusedFields.map(f => (
-                          <div
-                            key={f.id}
-                            className={`markup-field-chip available ${draggedField === f.id ? 'dragging' : ''}`}
-                            draggable
-                            onDragStart={(e) => {
-                              setDraggedField(f.id);
-                              e.dataTransfer.effectAllowed = 'move';
-                            }}
-                            onDragEnd={() => {
-                              setDraggedField(null);
-                              setDragOverLine(null);
-                            }}
-                            onClick={() => moveFieldToLine(f.id, 'line1')}
-                          >
-                            <FiPlus size={10} />
-                            <span>{f.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                  {/* Template editors for each line */}
+                  <div className="markup-templates">
+                    {renderTemplateEditor('line1Template', 'Rida 1')}
+                    {renderTemplateEditor('line2Template', 'Rida 2')}
+                    {renderTemplateEditor('line3Template', 'Rida 3')}
+                  </div>
                 </div>
 
                 {/* Separator */}
