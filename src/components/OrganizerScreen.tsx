@@ -124,7 +124,7 @@ interface MarkupSettings {
 
 // Sorting options
 type SortField = 'sort_order' | 'name' | 'itemCount' | 'totalWeight' | 'created_at';
-type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order';
+type ItemSortField = 'assembly_mark' | 'product_name' | 'cast_unit_weight' | 'sort_order' | `custom:${string}`;
 type SortDirection = 'asc' | 'desc';
 
 // Undo action types
@@ -342,24 +342,44 @@ function sortItems(items: OrganizerGroupItem[], field: ItemSortField, dir: SortD
     let aVal: string | number = '';
     let bVal: string | number = '';
 
-    switch (field) {
-      case 'assembly_mark':
-        aVal = (a.assembly_mark || '').toLowerCase();
-        bVal = (b.assembly_mark || '').toLowerCase();
-        break;
-      case 'product_name':
-        aVal = (a.product_name || '').toLowerCase();
-        bVal = (b.product_name || '').toLowerCase();
-        break;
-      case 'cast_unit_weight':
-        aVal = parseFloat(a.cast_unit_weight || '0') || 0;
-        bVal = parseFloat(b.cast_unit_weight || '0') || 0;
-        break;
-      case 'sort_order':
-      default:
-        aVal = a.sort_order;
-        bVal = b.sort_order;
-        break;
+    // Handle custom field sorting
+    if (field.startsWith('custom:')) {
+      const customFieldId = field.substring(7); // Remove 'custom:' prefix
+      const aCustom = a.custom_properties?.[customFieldId];
+      const bCustom = b.custom_properties?.[customFieldId];
+
+      // Try to parse as numbers, otherwise compare as strings
+      const aNum = parseFloat(String(aCustom || ''));
+      const bNum = parseFloat(String(bCustom || ''));
+
+      if (!isNaN(aNum) && !isNaN(bNum)) {
+        aVal = aNum;
+        bVal = bNum;
+      } else {
+        // For arrays (tags), join them for comparison
+        aVal = (Array.isArray(aCustom) ? aCustom.join(',') : String(aCustom || '')).toLowerCase();
+        bVal = (Array.isArray(bCustom) ? bCustom.join(',') : String(bCustom || '')).toLowerCase();
+      }
+    } else {
+      switch (field) {
+        case 'assembly_mark':
+          aVal = (a.assembly_mark || '').toLowerCase();
+          bVal = (b.assembly_mark || '').toLowerCase();
+          break;
+        case 'product_name':
+          aVal = (a.product_name || '').toLowerCase();
+          bVal = (b.product_name || '').toLowerCase();
+          break;
+        case 'cast_unit_weight':
+          aVal = parseFloat(a.cast_unit_weight || '0') || 0;
+          bVal = parseFloat(b.cast_unit_weight || '0') || 0;
+          break;
+        case 'sort_order':
+        default:
+          aVal = a.sort_order;
+          bVal = b.sort_order;
+          break;
+      }
     }
 
     if (aVal < bVal) return dir === 'asc' ? -1 : 1;
@@ -1484,6 +1504,21 @@ export default function OrganizerScreen({
   ) => {
     if (files.length === 0) return;
 
+    // Check if group is locked
+    const itemGroup = groups.find(g => g.id === item.group_id);
+    const checkLocked = (groupId: string): boolean => {
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return false;
+      if (group.is_locked) return true;
+      if (group.parent_id) return checkLocked(group.parent_id);
+      return false;
+    };
+    if (checkLocked(item.group_id)) {
+      const lockedGroup = groups.find(g => g.is_locked && (g.id === item.group_id || g.id === itemGroup?.parent_id));
+      showToast(`🔒 Grupp on lukustatud (${lockedGroup?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     setUploadingFieldId(field.id);
     setUploadProgress('Laadimine...');
 
@@ -1540,7 +1575,7 @@ export default function OrganizerScreen({
       setUploadingFieldId(null);
       setUploadProgress('');
     }
-  }, [uploadPhoto, uploadAttachment, tcUserEmail, refreshData, showToast]);
+  }, [uploadPhoto, uploadAttachment, tcUserEmail, refreshData, showToast, groups]);
 
   // Open lightbox with photo
   const openLightbox = useCallback((url: string, allUrls: string[], itemId?: string, fieldId?: string) => {
@@ -1564,14 +1599,29 @@ export default function OrganizerScreen({
   const deletePhotoFromLightbox = useCallback(async () => {
     if (!lightboxPhoto || !lightboxItemId || !lightboxFieldId) return;
 
+    // Find the item first to check lock status
+    const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+    if (!item) return;
+
+    // Check if group is locked
+    const checkLocked = (groupId: string): boolean => {
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return false;
+      if (group.is_locked) return true;
+      if (group.parent_id) return checkLocked(group.parent_id);
+      return false;
+    };
+    if (checkLocked(item.group_id)) {
+      const itemGroup = groups.find(g => g.id === item.group_id);
+      const lockedGroup = groups.find(g => g.is_locked && (g.id === item.group_id || g.id === itemGroup?.parent_id));
+      showToast(`🔒 Grupp on lukustatud (${lockedGroup?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     const confirmed = window.confirm('Kas oled kindel, et soovid selle pildi kustutada?');
     if (!confirmed) return;
 
     try {
-      // Find the item
-      const allItems = groups.flatMap(g => g.items || []);
-      const item = allItems.find(i => i?.id === lightboxItemId);
-      if (!item) return;
 
       // Get current URLs and remove the one being deleted
       const currentUrls = item.custom_properties?.[lightboxFieldId]?.split(',').filter(Boolean) || [];
@@ -1609,7 +1659,7 @@ export default function OrganizerScreen({
       console.error('Error deleting photo:', e);
       showToast('Pildi kustutamine ebaõnnestus');
     }
-  }, [lightboxPhoto, lightboxItemId, lightboxFieldId, lightboxIndex, groups, closeLightbox, refreshData, showToast]);
+  }, [lightboxPhoto, lightboxItemId, lightboxFieldId, lightboxIndex, groups, groupItems, closeLightbox, refreshData, showToast]);
 
   // Generate masked URL for sharing (hide Supabase address)
   const getMaskedPhotoUrl = useCallback((url: string) => {
@@ -2727,6 +2777,13 @@ export default function OrganizerScreen({
     const rootGroup = getRootParent(firstSelectedGroupId);
     if (!rootGroup) return;
 
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     setSaving(true);
     try {
       const newField: CustomFieldDefinition = {
@@ -2774,6 +2831,13 @@ export default function OrganizerScreen({
     // Always update field in root parent group
     const rootGroup = getRootParent(firstSelectedGroupId);
     if (!rootGroup) return;
+
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -2864,6 +2928,13 @@ export default function OrganizerScreen({
     const rootGroup = getRootParent(groupId);
     if (!rootGroup) return;
 
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     if (!confirm('Kas oled kindel, et soovid selle välja kustutada?')) return;
 
     setSaving(true);
@@ -2895,6 +2966,13 @@ export default function OrganizerScreen({
   const moveCustomField = async (fieldId: string, groupId: string, direction: 'up' | 'down') => {
     const rootGroup = getRootParent(groupId);
     if (!rootGroup) return;
+
+    // Check if group is locked
+    if (isGroupLocked(rootGroup.id)) {
+      const lockInfo = getGroupLockInfo(rootGroup.id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
 
     const fields = [...(rootGroup.custom_fields || [])];
     const currentIndex = fields.findIndex(f => f.id === fieldId);
@@ -3475,6 +3553,13 @@ export default function OrganizerScreen({
     const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
     if (!item) return;
 
+    // Check if group is locked
+    if (isGroupLocked(item.group_id)) {
+      const lockInfo = getGroupLockInfo(item.group_id);
+      showToast(`🔒 Grupp on lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
+      return;
+    }
+
     // Save previous value for undo
     const previousValue = item.custom_properties?.[fieldId];
     pushUndo({ type: 'update_item_field', itemId, fieldId, previousValue });
@@ -3523,6 +3608,20 @@ export default function OrganizerScreen({
     const hasValues = Object.values(bulkFieldValues).some(v => v !== '');
     if (!hasValues) {
       showToast('Sisesta vähemalt üks väärtus');
+      return;
+    }
+
+    // Check if any selected items are in locked groups
+    const lockedGroupIds = new Set<string>();
+    for (const itemId of selectedItemIds) {
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+      if (item && isGroupLocked(item.group_id)) {
+        lockedGroupIds.add(item.group_id);
+      }
+    }
+    if (lockedGroupIds.size > 0) {
+      const lockInfo = getGroupLockInfo([...lockedGroupIds][0]);
+      showToast(`🔒 ${lockedGroupIds.size > 1 ? 'Mõned valitud detailid on' : 'Grupp on'} lukustatud (${lockInfo?.locked_by || 'tundmatu'})`);
       return;
     }
 
@@ -7688,11 +7787,27 @@ export default function OrganizerScreen({
                         </span>
                       </>
                     )}
-                    {customFields.map(field => (
-                      <span key={field.id} className="org-item-custom" title={field.name}>
-                        {field.name}
-                      </span>
-                    ))}
+                    {customFields.map(field => {
+                      const customSortField = `custom:${field.id}` as ItemSortField;
+                      const isActiveSort = itemSortField === customSortField;
+                      return (
+                        <span
+                          key={field.id}
+                          className="org-item-custom sortable"
+                          title={`Sorteeri: ${field.name}`}
+                          onClick={() => {
+                            if (isActiveSort) {
+                              setItemSortDir(itemSortDir === 'asc' ? 'desc' : 'asc');
+                            } else {
+                              setItemSortField(customSortField);
+                              setItemSortDir('asc');
+                            }
+                          }}
+                        >
+                          {field.name} {isActiveSort && (itemSortDir === 'asc' ? '↑' : '↓')}
+                        </span>
+                      );
+                    })}
                     {itemSortField !== 'sort_order' && (
                       <button
                         className="org-save-order-btn"
