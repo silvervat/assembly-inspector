@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.635';
+export const APP_VERSION = '3.0.637';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -79,20 +79,26 @@ const zoomProject = urlParams.get('project');
 const zoomModel = urlParams.get('model');
 const zoomGuid = urlParams.get('guid');
 const zoomAction = urlParams.get('action') || 'zoom';
+const zoomGroupId = urlParams.get('group');
 
 // If zoom params in URL, store in Supabase and redirect to Trimble Connect
 if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
-  console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction });
+  console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction, zoomGroupId });
 
   // Store to Supabase (async, but we redirect immediately)
+  const insertData: Record<string, string> = {
+    project_id: zoomProject,
+    model_id: zoomModel,
+    guid: zoomGuid,
+    action_type: zoomAction
+  };
+  if (zoomGroupId) {
+    insertData.group_id = zoomGroupId;
+  }
+
   supabase
     .from('zoom_targets')
-    .insert({
-      project_id: zoomProject,
-      model_id: zoomModel,
-      guid: zoomGuid,
-      action_type: zoomAction
-    })
+    .insert(insertData)
     .then(({ error }) => {
       if (error) {
         console.error('🔗 [ZOOM] Failed to store zoom target:', error);
@@ -130,6 +136,9 @@ export default function App() {
 
   // Cache for color white function (guid lowercase -> { modelId, runtimeId })
   const colorWhiteCacheRef = useRef<Map<string, { modelId: string; runtimeId: number }>>(new Map());
+
+  // Pending group to expand in Organizer (from zoom link)
+  const [pendingExpandGroupId, setPendingExpandGroupId] = useState<string | null>(null);
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
@@ -196,8 +205,14 @@ export default function App() {
               model: pendingZoom.model_id,
               guid: pendingZoom.guid,
               assemblyMark: pendingZoom.assembly_mark,
+              groupId: pendingZoom.group_id,
               actionType
             });
+
+            // If group_id is set, save it for Organizer to expand
+            if (pendingZoom.group_id) {
+              setPendingExpandGroupId(pendingZoom.group_id);
+            }
 
             // Mark as consumed immediately to avoid re-triggering
             await supabase
@@ -1059,6 +1074,8 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          expandGroupId={pendingExpandGroupId}
+          onGroupExpanded={() => setPendingExpandGroupId(null)}
         />
         <VersionFooter />
       </>
