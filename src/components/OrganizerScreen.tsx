@@ -6336,7 +6336,7 @@ export default function OrganizerScreen({
             {node.assembly_selection_on !== false && (
               <span className="org-group-weight">{(node.totalWeight / 1000).toFixed(1)} t</span>
             )}
-            {selectedObjects.length > 0 && isSelectionEnabled(node.id) && (
+            {selectedObjects.length > 0 && isSelectionEnabled(node.id) && assemblySelectionEnabled && (
               <>
                 {newItemsCount > 0 && (
                   <button
@@ -6404,7 +6404,7 @@ export default function OrganizerScreen({
                   <FiFolderPlus size={12} /> Lisa alamgrupp
                 </button>
               )}
-              {node.level < 2 && selectedObjects.length > 0 && !isEffectivelyLocked && (
+              {node.level < 2 && selectedObjects.length > 0 && !isEffectivelyLocked && isSelectionEnabled(node.id) && assemblySelectionEnabled && (
                 <button onClick={() => {
                   setAddItemsAfterGroupCreate([...selectedObjects]);
                   openAddSubgroupForm(node.id);
