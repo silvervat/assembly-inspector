@@ -11805,7 +11805,8 @@ button.stat-toggle.off:hover {
 
 .org-menu-btn {
   position: absolute;
-  top: 4px;
+  top: 50%;
+  transform: translateY(-50%);
   right: 4px;
   padding: 4px;
   border: none;
@@ -12556,6 +12557,33 @@ button.stat-toggle.off:hover {
 }
 
 .markup-field-suffix::placeholder {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 10px;
+}
+
+/* Free text input per line */
+.markup-line-free-text {
+  flex: 1;
+  min-width: 80px;
+  max-width: 140px;
+  padding: 4px 8px;
+  font-size: 11px;
+  border: 1px dashed #d1d5db;
+  border-radius: 4px;
+  background: transparent;
+  color: #374151;
+  margin-left: auto;
+}
+
+.markup-line-free-text:focus {
+  outline: none;
+  border-color: #3b82f6;
+  border-style: solid;
+  background: white;
+}
+
+.markup-line-free-text::placeholder {
   color: #9ca3af;
   font-style: italic;
   font-size: 10px;

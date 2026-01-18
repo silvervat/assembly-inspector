@@ -108,6 +108,10 @@ interface MarkupSettings {
   includeProductName: MarkupFieldConfig;
   // Filter options
   onlySelectedInModel: boolean;
+  // Free text for each line
+  line1FreeText: string;
+  line2FreeText: string;
+  line3FreeText: string;
 }
 
 // Sorting options
@@ -711,7 +715,10 @@ export default function OrganizerScreen({
     includeAssemblyMark: { enabled: true, line: 'line1', suffix: '' },
     includeWeight: { enabled: false, line: 'line2', suffix: '' },
     includeProductName: { enabled: false, line: 'line2', suffix: '' },
-    onlySelectedInModel: false
+    onlySelectedInModel: false,
+    line1FreeText: '',
+    line2FreeText: '',
+    line3FreeText: ''
   };
   const [markupSettings, setMarkupSettings] = useState<MarkupSettings>(() => {
     try {
@@ -1975,9 +1982,34 @@ export default function OrganizerScreen({
   const openAddSubgroupForm = (parentId: string) => {
     resetGroupForm();
     setFormParentId(parentId);
+
+    // Inherit settings from parent group
+    const parentGroup = groups.find(g => g.id === parentId);
+    if (parentGroup) {
+      // Inherit sharing/privacy settings
+      if (!parentGroup.is_private) {
+        setFormSharingMode('project');
+      } else if (parentGroup.allowed_users && parentGroup.allowed_users.length > 0) {
+        setFormSharingMode('shared');
+        setFormAllowedUsers([...parentGroup.allowed_users]);
+      } else {
+        setFormSharingMode('private');
+      }
+      // Inherit permissions
+      setFormDefaultPermissions(parentGroup.default_permissions || { ...DEFAULT_GROUP_PERMISSIONS });
+      setFormUserPermissions(parentGroup.user_permissions || {});
+      // Inherit assembly selection and unique items settings
+      setFormAssemblySelectionOn(parentGroup.assembly_selection_on !== false);
+      setFormUniqueItems(parentGroup.unique_items !== false);
+    }
+
     setEditingGroup(null);
     setShowGroupForm(true);
     setGroupMenuId(null);
+    // Load team members if parent uses shared mode
+    if (parentGroup && parentGroup.is_private && parentGroup.allowed_users?.length > 0) {
+      loadTeamMembers();
+    }
   };
 
   // ============================================
@@ -3228,6 +3260,17 @@ export default function OrganizerScreen({
           addToLine('line3', `${field.name}: ${formatFieldValue(val, field)}`);
         }
       }
+    }
+
+    // Add free text to each line
+    if (markupSettings.line1FreeText) {
+      addToLine('line1', markupSettings.line1FreeText);
+    }
+    if (markupSettings.line2FreeText) {
+      addToLine('line2', markupSettings.line2FreeText);
+    }
+    if (markupSettings.line3FreeText) {
+      addToLine('line3', markupSettings.line3FreeText);
     }
 
     // Build final text
@@ -7427,6 +7470,17 @@ export default function OrganizerScreen({
             }
           }
 
+          // Add free text to each line
+          if (markupSettings.line1FreeText) {
+            addToLine('line1', markupSettings.line1FreeText);
+          }
+          if (markupSettings.line2FreeText) {
+            addToLine('line2', markupSettings.line2FreeText);
+          }
+          if (markupSettings.line3FreeText) {
+            addToLine('line3', markupSettings.line3FreeText);
+          }
+
           const lineSeparator = markupSettings.separator === 'newline' ? '\n' : getSeparator(markupSettings.separator);
           const inlineSeparator = markupSettings.separator === 'newline' ? ' ' : getSeparator(markupSettings.separator);
 
@@ -7620,15 +7674,33 @@ export default function OrganizerScreen({
           );
         };
 
+        // Helper to get/set free text for a line
+        const getLineFreeText = (line: MarkupLineConfig): string => {
+          if (line === 'line1') return markupSettings.line1FreeText || '';
+          if (line === 'line2') return markupSettings.line2FreeText || '';
+          if (line === 'line3') return markupSettings.line3FreeText || '';
+          return '';
+        };
+
+        const setLineFreeText = (line: MarkupLineConfig, text: string) => {
+          setMarkupSettings(prev => {
+            if (line === 'line1') return { ...prev, line1FreeText: text };
+            if (line === 'line2') return { ...prev, line2FreeText: text };
+            if (line === 'line3') return { ...prev, line3FreeText: text };
+            return prev;
+          });
+        };
+
         // Helper to render inline drop zone for a line
         const renderLineDropZone = (line: MarkupLineConfig, label: string) => {
           const fields = getFieldsForLine(line);
           const isOver = dragOverLine === line;
+          const freeText = getLineFreeText(line);
 
           return (
             <div
               key={line}
-              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 ? 'empty' : ''}`}
+              className={`markup-line-zone ${isOver ? 'drag-over' : ''} ${fields.length === 0 && !freeText ? 'empty' : ''}`}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragOverLine(line);
@@ -7651,6 +7723,15 @@ export default function OrganizerScreen({
                   <span className="line-placeholder">Lohista siia</span>
                 )}
               </div>
+              <input
+                type="text"
+                className="markup-line-free-text"
+                placeholder="Vaba tekst..."
+                value={freeText}
+                onChange={(e) => setLineFreeText(line, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              />
             </div>
           );
         };
