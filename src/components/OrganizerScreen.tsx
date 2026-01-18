@@ -28,7 +28,7 @@ import {
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiTag, FiUpload, FiSettings, FiGrid, FiLink,
-  FiCamera, FiPaperclip, FiImage, FiCheck
+  FiCamera, FiPaperclip, FiImage, FiCheck, FiClock
 } from 'react-icons/fi';
 
 // ============================================
@@ -890,6 +890,36 @@ export default function OrganizerScreen({
   const [showFieldsManagementModal, setShowFieldsManagementModal] = useState(false);
   const [fieldsManagementGroupId, setFieldsManagementGroupId] = useState<string | null>(null);
 
+  // Activity log modal
+  const [showActivityLogModal, setShowActivityLogModal] = useState(false);
+  const [activityLogs, setActivityLogs] = useState<Array<{
+    id: string;
+    user_email: string;
+    user_name: string | null;
+    action_type: string;
+    group_id: string | null;
+    group_name: string | null;
+    item_count: number;
+    item_ids: string[] | null;
+    item_guids: string[] | null;
+    field_name: string | null;
+    old_value: any;
+    new_value: any;
+    details: any;
+    created_at: string;
+    can_restore: boolean;
+  }>>([]);
+  const [activityLogsLoading, setActivityLogsLoading] = useState(false);
+  const [activityLogFilter, setActivityLogFilter] = useState<{
+    user: string;
+    action: string;
+    dateFrom: string;
+    dateTo: string;
+    search: string;
+  }>({ user: '', action: '', dateFrom: '', dateTo: '', search: '' });
+  const [activityLogPage, setActivityLogPage] = useState(0);
+  const activityLogPageSize = 100;
+
   // Required fields modal (when adding items to group with required custom fields)
   const [showRequiredFieldsModal, setShowRequiredFieldsModal] = useState(false);
   const [requiredFieldValues, setRequiredFieldValues] = useState<Record<string, string>>({});
@@ -1204,6 +1234,133 @@ export default function OrganizerScreen({
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, [showSortMenu, showFilterMenu, showColorModeMenu, showColorMarkMenu, groupMenuId, displayPropertyMenuIdx]);
+
+  // ============================================
+  // ACTIVITY LOGGING
+  // ============================================
+
+  // Log activity to database
+  const logActivity = useCallback(async (params: {
+    action_type: string;
+    group_id?: string | null;
+    group_name?: string | null;
+    item_count?: number;
+    item_ids?: string[];
+    item_guids?: string[];
+    field_id?: string;
+    field_name?: string;
+    old_value?: any;
+    new_value?: any;
+    details?: any;
+  }) => {
+    try {
+      // Fetch user name
+      let userName: string | null = null;
+      try {
+        const { data } = await supabase
+          .from('trimble_ex_users')
+          .select('name')
+          .eq('email', tcUserEmail)
+          .single();
+        userName = data?.name || null;
+      } catch { /* ignore */ }
+
+      await supabase.from('organizer_activity_log').insert({
+        project_id: projectId,
+        user_email: tcUserEmail,
+        user_name: userName,
+        action_type: params.action_type,
+        group_id: params.group_id || null,
+        group_name: params.group_name || null,
+        item_count: params.item_count || 1,
+        item_ids: params.item_ids || null,
+        item_guids: params.item_guids || null,
+        field_id: params.field_id || null,
+        field_name: params.field_name || null,
+        old_value: params.old_value || null,
+        new_value: params.new_value || null,
+        details: params.details || null
+      });
+    } catch (e) {
+      console.warn('Failed to log activity:', e);
+    }
+  }, [projectId, tcUserEmail]);
+
+  // Load activity logs with filters and pagination
+  const loadActivityLogs = useCallback(async (page: number = 0, append: boolean = false) => {
+    setActivityLogsLoading(true);
+    try {
+      let query = supabase
+        .from('organizer_activity_log')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .range(page * activityLogPageSize, (page + 1) * activityLogPageSize - 1);
+
+      // Apply filters
+      if (activityLogFilter.user) {
+        query = query.ilike('user_email', `%${activityLogFilter.user}%`);
+      }
+      if (activityLogFilter.action) {
+        query = query.eq('action_type', activityLogFilter.action);
+      }
+      if (activityLogFilter.dateFrom) {
+        query = query.gte('created_at', activityLogFilter.dateFrom);
+      }
+      if (activityLogFilter.dateTo) {
+        query = query.lte('created_at', activityLogFilter.dateTo + 'T23:59:59');
+      }
+      if (activityLogFilter.search) {
+        query = query.or(`group_name.ilike.%${activityLogFilter.search}%,field_name.ilike.%${activityLogFilter.search}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (append) {
+        setActivityLogs(prev => [...prev, ...(data || [])]);
+      } else {
+        setActivityLogs(data || []);
+      }
+      setActivityLogPage(page);
+    } catch (e) {
+      console.error('Error loading activity logs:', e);
+      showToast('Viga tegevuste laadimisel');
+    } finally {
+      setActivityLogsLoading(false);
+    }
+  }, [projectId, activityLogFilter, activityLogPageSize, showToast]);
+
+  // Select items in model from activity log
+  const selectItemsFromActivity = useCallback(async (guids: string[]) => {
+    if (!guids || guids.length === 0) return;
+
+    try {
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+      if (foundObjects.size === 0) {
+        showToast('Detaile ei leitud mudelist');
+        return;
+      }
+
+      // Build selection array
+      const selection: Array<{ modelId: string; objectRuntimeIds: number[] }> = [];
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        selection.push({ modelId, objectRuntimeIds: runtimeIds });
+      }
+
+      await api.viewer.setSelection({ modelObjectIds: selection }, 'set');
+      showToast(`${foundObjects.size} detaili valitud`);
+    } catch (e) {
+      console.error('Error selecting items:', e);
+      showToast('Viga detailide valimisel');
+    }
+  }, [api, showToast]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -1759,7 +1916,26 @@ export default function OrganizerScreen({
 
         if (error) throw error;
 
-        refreshData();
+        // Update local state directly instead of refreshData() to avoid flickering
+        setGroupItems(prev => {
+          const newMap = new Map(prev);
+          const groupItems = newMap.get(item.group_id) || [];
+          const updatedGroupItems = groupItems.map(gi =>
+            gi.id === item.id ? { ...gi, custom_properties: updatedProps } : gi
+          );
+          newMap.set(item.group_id, updatedGroupItems);
+          return newMap;
+        });
+
+        // Also update cache
+        const updatedItemsMap = new Map(groupItems);
+        const currentGroupItems = updatedItemsMap.get(item.group_id) || [];
+        updatedItemsMap.set(item.group_id, currentGroupItems.map(gi =>
+          gi.id === item.id ? { ...gi, custom_properties: updatedProps } : gi
+        ));
+        const newTree = buildGroupTree(groups, updatedItemsMap);
+        setGroupTree(newTree);
+        setCachedData(groups, updatedItemsMap, newTree);
       }
 
       // Handle failed uploads - add to pending queue for background retry
@@ -1787,7 +1963,7 @@ export default function OrganizerScreen({
       setUploadProgress('');
       setUploadProgressData(null);
     }
-  }, [uploadSingleFile, tcUserEmail, refreshData, showToast, groups]);
+  }, [uploadSingleFile, tcUserEmail, showToast, groups, groupItems, buildGroupTree, setCachedData]);
 
   // Process pending uploads in background (retry on reconnection)
   const processPendingUploads = useCallback(async () => {
@@ -2543,6 +2719,11 @@ export default function OrganizerScreen({
       const itemsToAdd = [...addItemsAfterGroupCreate];
 
       showToast('Grupp loodud');
+      logActivity({
+        action_type: 'create_group',
+        group_id: fullGroup.id,
+        group_name: fullGroup.name
+      });
       resetGroupForm();
       setShowGroupForm(false);
 
@@ -2931,6 +3112,12 @@ export default function OrganizerScreen({
       if (error) throw error;
 
       showToast('Grupp ja sisu kustutatud');
+      logActivity({
+        action_type: 'delete_group',
+        group_id: group.id,
+        group_name: group.name,
+        item_count: itemsToSave.length
+      });
       if (selectedGroupIds.has(group.id)) {
         setSelectedGroupIds(prev => {
           const newSet = new Set(prev);
@@ -3715,6 +3902,16 @@ export default function OrganizerScreen({
       showToast(message);
       setExpandedGroups(prev => new Set([...prev, targetGroupId]));
 
+      // Log activity
+      logActivity({
+        action_type: 'add_items',
+        group_id: targetGroupId,
+        group_name: group.name,
+        item_count: items.length,
+        item_ids: insertedItems.map(i => i.id),
+        item_guids: guids.filter(Boolean) as string[]
+      });
+
       // Get the group's color (including parent's color if group doesn't have one)
       const groupColor = group.color || (group.parent_id ? groups.find(g => g.id === group.parent_id)?.color : null);
       const addedGuids = objectsToAdd.map(obj => obj.guidIfc).filter(Boolean);
@@ -3966,6 +4163,18 @@ export default function OrganizerScreen({
 
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
+
+      // Log activity
+      const firstGroupId = Array.from(affectedGroups)[0];
+      const firstGroup = groups.find(g => g.id === firstGroupId);
+      logActivity({
+        action_type: 'remove_items',
+        group_id: firstGroupId || null,
+        group_name: firstGroup?.name || null,
+        item_count: itemIds.length,
+        item_ids: itemIds,
+        item_guids: guidsToRemove
+      });
 
       // Clear model selection (the items shown on quick-remove button)
       setSelectedObjects(prev => prev.filter(obj => !guidsToRemove.includes(obj.guidIfc?.toLowerCase() || '')));
@@ -9171,6 +9380,13 @@ export default function OrganizerScreen({
         <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
           <FiPlus size={14} /> Uus grupp
         </button>
+        <button
+          className="org-add-btn"
+          style={{ background: '#6366f1' }}
+          onClick={() => { loadActivityLogs(0); setShowActivityLogModal(true); }}
+        >
+          <FiClock size={14} /> Viimased tegevused
+        </button>
         <div className="org-color-controls">
           <div className="org-color-dropdown-wrapper">
             <button
@@ -11180,6 +11396,220 @@ export default function OrganizerScreen({
           </div>
         );
       })()}
+
+      {/* Activity Log Modal */}
+      {showActivityLogModal && (
+        <div className="org-modal-overlay" onClick={() => setShowActivityLogModal(false)}>
+          <div
+            className="org-modal"
+            style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="org-modal-header">
+              <h2><FiClock size={16} /> Viimased tegevused</h2>
+              <button onClick={() => setShowActivityLogModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body" style={{ padding: '0' }}>
+              {/* Filters */}
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                padding: '12px',
+                borderBottom: '1px solid #e5e7eb',
+                background: '#f9fafb'
+              }}>
+                <input
+                  type="text"
+                  placeholder="Otsi kasutaja..."
+                  value={activityLogFilter.user}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, user: e.target.value }))}
+                  style={{ flex: '1', minWidth: '120px', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                />
+                <select
+                  value={activityLogFilter.action}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, action: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                >
+                  <option value="">Kõik tegevused</option>
+                  <option value="add_items">Detailide lisamine</option>
+                  <option value="remove_items">Detailide eemaldamine</option>
+                  <option value="update_item">Detaili muutmine</option>
+                  <option value="create_group">Grupi loomine</option>
+                  <option value="delete_group">Grupi kustutamine</option>
+                  <option value="update_group">Grupi muutmine</option>
+                </select>
+                <input
+                  type="date"
+                  value={activityLogFilter.dateFrom}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, dateFrom: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                />
+                <input
+                  type="date"
+                  value={activityLogFilter.dateTo}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, dateTo: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                />
+                <button
+                  onClick={() => loadActivityLogs(0)}
+                  disabled={activityLogsLoading}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  <FiSearch size={12} /> Otsi
+                </button>
+                <button
+                  onClick={() => {
+                    setActivityLogFilter({ user: '', action: '', dateFrom: '', dateTo: '', search: '' });
+                    loadActivityLogs(0);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  <FiX size={12} /> Puhasta
+                </button>
+              </div>
+
+              {/* Activity list */}
+              <div style={{ maxHeight: 'calc(90vh - 200px)', overflowY: 'auto', padding: '8px' }}>
+                {activityLogsLoading && activityLogs.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Laadin...</div>
+                ) : activityLogs.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Tegevusi ei leitud</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {activityLogs.map((log) => {
+                      const actionLabels: Record<string, string> = {
+                        add_items: 'lisas gruppi',
+                        remove_items: 'eemaldas grupist',
+                        update_item: 'muutis detaili',
+                        create_group: 'lõi grupi',
+                        delete_group: 'kustutas grupi',
+                        update_group: 'muutis gruppi'
+                      };
+                      const actionColors: Record<string, string> = {
+                        add_items: '#10b981',
+                        remove_items: '#ef4444',
+                        update_item: '#f59e0b',
+                        create_group: '#3b82f6',
+                        delete_group: '#dc2626',
+                        update_group: '#8b5cf6'
+                      };
+
+                      const userName = log.user_name || log.user_email.split('@')[0];
+                      const actionLabel = actionLabels[log.action_type] || log.action_type;
+                      const actionColor = actionColors[log.action_type] || '#6b7280';
+                      const date = new Date(log.created_at);
+                      const dateStr = date.toLocaleDateString('et-EE');
+                      const timeStr = date.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <div
+                          key={log.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 12px',
+                            background: '#f9fafb',
+                            borderRadius: '6px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: actionColor,
+                              flexShrink: 0
+                            }}
+                          />
+                          <span style={{ fontWeight: 500, color: '#111827' }} title={log.user_email}>
+                            {userName}
+                          </span>
+                          <span style={{ color: '#6b7280' }}>{actionLabel}</span>
+                          {log.group_name && (
+                            <span style={{ fontWeight: 500, color: '#374151' }}>
+                              {log.group_name}
+                            </span>
+                          )}
+                          {log.item_count > 1 && (
+                            <span
+                              style={{
+                                background: actionColor,
+                                color: 'white',
+                                padding: '2px 6px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                cursor: log.item_guids?.length ? 'pointer' : 'default',
+                                textDecoration: log.item_guids?.length ? 'underline' : 'none'
+                              }}
+                              onClick={() => log.item_guids?.length && selectItemsFromActivity(log.item_guids)}
+                              title={log.item_guids?.length ? 'Klõpsa detailide valimiseks mudelis' : ''}
+                            >
+                              {log.item_count} detaili
+                            </span>
+                          )}
+                          {log.field_name && (
+                            <span style={{ color: '#6b7280' }}>
+                              (väli: {log.field_name})
+                            </span>
+                          )}
+                          <span style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                            {dateStr} {timeStr}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Load more */}
+                {activityLogs.length > 0 && activityLogs.length >= activityLogPageSize && (
+                  <div style={{ padding: '16px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => loadActivityLogs(activityLogPage + 1, true)}
+                      disabled={activityLogsLoading}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#e5e7eb',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      {activityLogsLoading ? 'Laadin...' : 'Laadi veel'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="org-modal-footer">
+              <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                {activityLogs.length} tegevust
+              </span>
+              <button className="cancel" onClick={() => setShowActivityLogModal(false)}>Sulge</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (
