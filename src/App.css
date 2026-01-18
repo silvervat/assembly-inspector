@@ -13270,32 +13270,63 @@ button.stat-toggle.off:hover {
   color: #6b7280;
 }
 
-/* Template input for free text */
+/* Template input - hidden, chips-only UI now */
 .markup-template-input {
-  width: 100%;
+  display: none;
+}
+
+/* Editable template area */
+.template-chips-area.editable {
+  min-height: 32px;
   padding: 6px 10px;
   border: 1px solid #e5e7eb;
   border-radius: 4px;
-  font-size: 12px;
-  margin-top: 6px;
-  background: #fafafa;
-}
-
-.markup-template-input:focus {
-  outline: none;
-  border-color: #3b82f6;
   background: white;
+  cursor: text;
+  outline: none;
+  font-size: 13px;
+  line-height: 1.6;
 }
 
-.markup-template-input::placeholder {
+.template-chips-area.editable:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.template-chips-area.editable:empty::before {
+  content: attr(data-placeholder);
   color: #9ca3af;
   font-style: italic;
+  pointer-events: none;
+}
+
+/* Chips inside editable area */
+.template-chips-area.editable .markup-line-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  margin: 0 2px;
+  background: #003F87;
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+  user-select: none;
+}
+
+.template-chips-area.editable .markup-line-chip .chip-label {
+  pointer-events: none;
 }
 
 /* Active template line */
 .markup-template-line-chip-editor.active {
   border-color: #3b82f6;
   background: #f0f9ff;
+}
+
+.markup-template-line-chip-editor.active .template-chips-area.editable {
+  border-color: #3b82f6;
 }
 
 /* All fields used message */

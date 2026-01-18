@@ -5587,6 +5587,14 @@ export default function OrganizerScreen({
         return;
       }
 
+      // Limit to 200 items to prevent crashes
+      const MARKUP_LIMIT = 200;
+      if (itemsWithGroup.length > MARKUP_LIMIT) {
+        showToast(`Liiga palju detaile (${itemsWithGroup.length}). Maksimum on ${MARKUP_LIMIT} markupit korraga.`);
+        setSaving(false);
+        return;
+      }
+
       // Get custom fields from root parent
       const rootParent = getRootParent(markupGroupId);
       const customFields = rootParent?.custom_fields || [];
@@ -11611,34 +11619,11 @@ export default function OrganizerScreen({
           return segments;
         };
 
-        // Remove a chip from template
-        const removeChipFromTemplate = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', placeholder: string) => {
-          setMarkupSettings(prev => ({
-            ...prev,
-            [lineKey]: prev[lineKey].replace(placeholder, '').replace(/\s+/g, ' ').trim()
-          }));
-        };
-
         // Handle drag start for available field chips
         const handleDragStart = (e: React.DragEvent, field: typeof allFields[0]) => {
           e.dataTransfer.setData('text/plain', field.placeholder);
           e.dataTransfer.setData('application/x-markup-field', JSON.stringify(field));
           e.dataTransfer.effectAllowed = 'copy';
-        };
-
-        // Handle drop on template editor
-        const handleDrop = (e: React.DragEvent, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
-          e.preventDefault();
-          const placeholder = e.dataTransfer.getData('text/plain');
-          if (placeholder && placeholder.startsWith('{') && placeholder.endsWith('}')) {
-            // Check if this field is already used
-            if (!allTemplateText.includes(placeholder)) {
-              setMarkupSettings(prev => ({
-                ...prev,
-                [lineKey]: prev[lineKey] ? prev[lineKey] + placeholder : placeholder
-              }));
-            }
-          }
         };
 
         // Handle drag over
@@ -11659,84 +11644,110 @@ export default function OrganizerScreen({
           setFocusedLine(lineKey);
         };
 
-        // Handle text input change for template
-        const handleTemplateInputChange = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', value: string) => {
-          setMarkupSettings(prev => ({ ...prev, [lineKey]: value }));
+        // Parse contenteditable HTML back to template string
+        const parseContentToTemplate = (element: HTMLElement): string => {
+          let result = '';
+          element.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE) {
+              result += node.textContent || '';
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+              const el = node as HTMLElement;
+              if (el.dataset.placeholder) {
+                result += el.dataset.placeholder;
+              } else if (el.tagName === 'BR') {
+                // Ignore line breaks
+              } else {
+                result += el.textContent || '';
+              }
+            }
+          });
+          return result;
         };
 
-        // Insert text at cursor position in input
-        const insertAtCursor = (inputRef: HTMLInputElement | null, text: string, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
-          if (!inputRef) return;
-          const start = inputRef.selectionStart || 0;
-          const end = inputRef.selectionEnd || 0;
-          const currentValue = markupSettings[lineKey];
-          const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
-          setMarkupSettings(prev => ({ ...prev, [lineKey]: newValue }));
-          // Set cursor position after inserted text
-          setTimeout(() => {
-            inputRef.selectionStart = inputRef.selectionEnd = start + text.length;
-            inputRef.focus();
-          }, 0);
+        // Handle contenteditable input
+        const handleContentInput = (e: React.FormEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+          const element = e.currentTarget;
+          const newTemplate = parseContentToTemplate(element);
+          setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
         };
 
-        // Render template editor for a line with mixed input
-        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, inputRef: React.RefObject<HTMLInputElement>) => {
-          const template = markupSettings[lineKey];
+        // Handle drop on contenteditable
+        const handleContentDrop = (e: React.DragEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+          e.preventDefault();
+          const placeholder = e.dataTransfer.getData('text/plain');
+          if (placeholder && placeholder.startsWith('{') && placeholder.endsWith('}')) {
+            if (!allTemplateText.includes(placeholder)) {
+              const field = allFields.find(f => f.placeholder === placeholder);
+              const label = field?.label || placeholder.slice(1, -1);
+
+              // Insert chip at drop position
+              const selection = window.getSelection();
+              if (selection && selection.rangeCount > 0) {
+                const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+                if (range) {
+                  // Create chip element
+                  const chip = document.createElement('span');
+                  chip.className = 'markup-line-chip';
+                  chip.contentEditable = 'false';
+                  chip.dataset.placeholder = placeholder;
+                  chip.innerHTML = `<span class="chip-label">${label}</span>`;
+
+                  range.insertNode(chip);
+
+                  // Move cursor after chip
+                  range.setStartAfter(chip);
+                  range.collapse(true);
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+
+                  // Parse and update template
+                  const element = e.currentTarget;
+                  const newTemplate = parseContentToTemplate(element);
+                  setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
+                }
+              }
+            }
+          }
+        };
+
+        // Render chip HTML for contenteditable
+        const renderChipHtml = (placeholder: string, label: string): string => {
+          return `<span class="markup-line-chip" contenteditable="false" data-placeholder="${placeholder}"><span class="chip-label">${label}</span></span>`;
+        };
+
+        // Convert template to HTML for contenteditable
+        const templateToHtml = (template: string): string => {
+          if (!template) return '';
           const segments = parseTemplateToSegments(template);
+          return segments.map(seg => {
+            if (seg.type === 'chip') {
+              return renderChipHtml(seg.value, seg.label || seg.value.slice(1, -1));
+            }
+            return seg.value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          }).join('');
+        };
+
+        // Render template editor for a line - contenteditable with chips
+        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, _inputRef: React.RefObject<HTMLInputElement>) => {
+          const template = markupSettings[lineKey];
+          const htmlContent = templateToHtml(template);
 
           return (
             <div
               className={`markup-template-line-chip-editor ${focusedLine === lineKey ? 'active' : ''}`}
               onClick={() => setFocusedLine(lineKey)}
-              onDrop={(e) => handleDrop(e, lineKey)}
-              onDragOver={handleDragOver}
             >
               <label className="template-label-above">{label}</label>
-              {/* Visual chip display */}
-              <div className={`template-chips-area ${focusedLine === lineKey ? 'focused' : ''}`}>
-                {segments.length === 0 ? (
-                  <span className="template-placeholder">Lohista siia välju või kirjuta tekst...</span>
-                ) : (
-                  segments.map((seg, idx) => (
-                    seg.type === 'chip' ? (
-                      <span key={idx} className="markup-line-chip" draggable>
-                        <span className="chip-label">{seg.label}</span>
-                        <button
-                          type="button"
-                          className="chip-remove"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeChipFromTemplate(lineKey, seg.value);
-                          }}
-                        >
-                          <FiX size={10} />
-                        </button>
-                      </span>
-                    ) : (
-                      <span key={idx} className="markup-line-text">{seg.value}</span>
-                    )
-                  ))
-                )}
-              </div>
-              {/* Hidden text input for typing */}
-              <input
-                ref={inputRef}
-                type="text"
-                className="markup-template-input"
-                value={template}
-                onChange={(e) => handleTemplateInputChange(lineKey, e.target.value)}
+              <div
+                className={`template-chips-area editable ${focusedLine === lineKey ? 'focused' : ''}`}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => handleContentInput(e, lineKey)}
                 onFocus={() => setFocusedLine(lineKey)}
-                placeholder="Kirjuta tekst ja lisa välju {}"
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const placeholder = e.dataTransfer.getData('text/plain');
-                  if (placeholder && placeholder.startsWith('{') && placeholder.endsWith('}')) {
-                    if (!allTemplateText.includes(placeholder)) {
-                      insertAtCursor(inputRef.current, placeholder, lineKey);
-                    }
-                  }
-                }}
+                onDrop={(e) => handleContentDrop(e, lineKey)}
                 onDragOver={handleDragOver}
+                dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
+                data-placeholder="Lohista siia välju või kirjuta tekst..."
               />
             </div>
           );
