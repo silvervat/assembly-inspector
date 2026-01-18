@@ -2461,7 +2461,7 @@ export default function OrganizerScreen({
     };
   }, [projectId, tcUserEmail, refreshData, showToast]);
 
-  // Expand group from zoom link (after data is loaded)
+  // Expand group from zoom link (after data is loaded) and apply group coloring
   useEffect(() => {
     if (!expandGroupId || loading || groups.length === 0) return;
 
@@ -2487,8 +2487,15 @@ export default function OrganizerScreen({
         return next;
       });
       console.log('🔗 Expanded group from link:', expandGroupId, 'path:', [...groupIdsToExpand]);
+
+      // Apply group coloring using the same logic as "Värvi see grupp"
+      // This ensures consistent coloring behavior between menu action and link opening
+      console.log('🔗 Applying group coloring for:', expandGroupId);
+      colorModelByGroups(expandGroupId);
+
       onGroupExpanded?.();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandGroupId, loading, groups, onGroupExpanded]);
 
   // ============================================
