@@ -732,10 +732,14 @@ export default function OrganizerScreen({
   const [visibleItemCounts, setVisibleItemCounts] = useState<Map<string, number>>(new Map());
 
   // Lazy loading - track which groups have loaded items and their total counts
-  const [groupItemCounts] = useState<Map<string, { count: number; totalWeight: number }>>(new Map());
+  const [groupItemCounts, setGroupItemCounts] = useState<Map<string, { count: number; totalWeight: number }>>(new Map());
   const [loadedGroupIds, setLoadedGroupIds] = useState<Set<string>>(new Set());
   const [loadingGroupIds, setLoadingGroupIds] = useState<Set<string>>(new Set());
   const [groupHasMore, setGroupHasMore] = useState<Map<string, boolean>>(new Map());
+
+  // GUID lookup for fast existence checks (guid_ifc lowercase -> group_id)
+  // This is loaded initially and allows selection detection without loading full item data
+  const [guidLookup, setGuidLookup] = useState<Map<string, string>>(new Map());
 
   // Batch insert progress
   const [batchProgress, setBatchProgress] = useState<{current: number; total: number} | null>(null);
@@ -1041,25 +1045,22 @@ export default function OrganizerScreen({
   const recentLocalChangesRef = useRef<Set<string>>(new Set()); // Track GUIDs changed by THIS session
 
   // Computed: Selected GUIDs that are already in groups (for highlighting)
+  // Uses guidLookup for fast detection (works even when full items aren't loaded)
   const selectedGuidsInGroups = useMemo(() => {
-    const selectedGuids = new Set(
-      selectedObjects.map(obj => obj.guidIfc?.toLowerCase()).filter(Boolean)
-    );
+    const result = new Map<string, string>();
 
-    // Map from GUID to group ID for items that are selected in the model
-    const guidToGroupId = new Map<string, string>();
-
-    for (const [groupId, items] of groupItems) {
-      for (const item of items) {
-        const guidLower = item.guid_ifc?.toLowerCase();
-        if (guidLower && selectedGuids.has(guidLower)) {
-          guidToGroupId.set(guidLower, groupId);
+    for (const obj of selectedObjects) {
+      const guidLower = obj.guidIfc?.toLowerCase();
+      if (guidLower) {
+        const groupId = guidLookup.get(guidLower);
+        if (groupId) {
+          result.set(guidLower, groupId);
         }
       }
     }
 
-    return guidToGroupId;
-  }, [selectedObjects, groupItems]);
+    return result;
+  }, [selectedObjects, guidLookup]);
 
   // Auto-expand groups that contain selected items from model (but not when clicked via group header)
   useEffect(() => {
@@ -1699,15 +1700,144 @@ export default function OrganizerScreen({
     }
   }, []);
 
-  const loadAllGroupItems = useCallback(async (groupList: OrganizerGroup[]) => {
+  // Initial items to load per group (for fast UI)
+  const INITIAL_ITEMS_PER_GROUP = 30;
+
+  // Load GUID lookup (lightweight - for selection detection)
+  const loadGuidLookup = useCallback(async (groupIds: string[]) => {
+    if (groupIds.length === 0) {
+      setGuidLookup(new Map());
+      setGroupItemCounts(new Map());
+      return { lookup: new Map<string, string>(), counts: new Map<string, { count: number; totalWeight: number }>() };
+    }
+
     try {
-      const groupIds = groupList.map(g => g.id);
-      if (groupIds.length === 0) {
-        setGroupItems(new Map());
-        return new Map();
+      // Load only guid_ifc and group_id - much faster than full items
+      const PAGE_SIZE = 5000;
+      const lookup = new Map<string, string>();
+      const counts = new Map<string, { count: number; totalWeight: number }>();
+
+      // Initialize counts
+      for (const gId of groupIds) {
+        counts.set(gId, { count: 0, totalWeight: 0 });
       }
 
-      // Supabase has a default limit of 1000 rows - paginate to get all items
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('organizer_group_items')
+          .select('guid_ifc, group_id, cast_unit_weight')
+          .in('group_id', groupIds)
+          .range(offset, offset + PAGE_SIZE - 1);
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          for (const item of data) {
+            if (item.guid_ifc) {
+              lookup.set(item.guid_ifc.toLowerCase(), item.group_id);
+            }
+            // Update counts
+            const countData = counts.get(item.group_id);
+            if (countData) {
+              countData.count++;
+              countData.totalWeight += parseFloat(item.cast_unit_weight || '0') || 0;
+            }
+          }
+          offset += data.length;
+          hasMore = data.length === PAGE_SIZE;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      setGuidLookup(lookup);
+      setGroupItemCounts(counts);
+      return { lookup, counts };
+    } catch (e) {
+      console.error('Error loading GUID lookup:', e);
+      return { lookup: new Map(), counts: new Map() };
+    }
+  }, []);
+
+  // Load initial items for all groups (first N items each)
+  const loadInitialItems = useCallback(async (groupIds: string[]) => {
+    if (groupIds.length === 0) {
+      setGroupItems(new Map());
+      return new Map();
+    }
+
+    try {
+      const itemsMap = new Map<string, OrganizerGroupItem[]>();
+      const hasMoreMap = new Map<string, boolean>();
+
+      // Initialize empty arrays for all groups
+      for (const gId of groupIds) {
+        itemsMap.set(gId, []);
+      }
+
+      // Load first N items per group using LIMIT OFFSET per group
+      // Use a single query with window function or multiple small queries
+      // For simplicity, let's load in batches
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < groupIds.length; i += BATCH_SIZE) {
+        const batchGroupIds = groupIds.slice(i, i + BATCH_SIZE);
+
+        // Load first INITIAL_ITEMS_PER_GROUP + 1 items to detect if there are more
+        const { data, error } = await supabase
+          .from('organizer_group_items')
+          .select('*')
+          .in('group_id', batchGroupIds)
+          .order('sort_order')
+          .limit((INITIAL_ITEMS_PER_GROUP + 1) * batchGroupIds.length);
+
+        if (error) throw error;
+
+        if (data) {
+          // Distribute items to their groups
+          const tempMap = new Map<string, OrganizerGroupItem[]>();
+          for (const gId of batchGroupIds) {
+            tempMap.set(gId, []);
+          }
+
+          for (const item of data) {
+            const arr = tempMap.get(item.group_id);
+            if (arr && arr.length <= INITIAL_ITEMS_PER_GROUP) {
+              arr.push(item);
+            }
+          }
+
+          // Check if any group has more items
+          for (const [gId, items] of tempMap) {
+            itemsMap.set(gId, items.slice(0, INITIAL_ITEMS_PER_GROUP));
+            // If we got more than INITIAL_ITEMS_PER_GROUP, there are more items
+            hasMoreMap.set(gId, items.length > INITIAL_ITEMS_PER_GROUP);
+          }
+        }
+      }
+
+      setGroupItems(itemsMap);
+      setLoadedGroupIds(new Set(groupIds));
+      setGroupHasMore(hasMoreMap);
+
+      return itemsMap;
+    } catch (e) {
+      console.error('Error loading initial items:', e);
+      return new Map();
+    }
+  }, []);
+
+  // Load all items for a specific group (when needed for selection, export, etc.)
+  const loadFullGroupItems = useCallback(async (groupId: string) => {
+    setLoadingGroupIds(prev => {
+      const next = new Set(prev);
+      next.add(groupId);
+      return next;
+    });
+
+    try {
       const PAGE_SIZE = 1000;
       let allData: OrganizerGroupItem[] = [];
       let offset = 0;
@@ -1717,7 +1847,7 @@ export default function OrganizerScreen({
         const { data, error } = await supabase
           .from('organizer_group_items')
           .select('*')
-          .in('group_id', groupIds)
+          .eq('group_id', groupId)
           .order('sort_order')
           .range(offset, offset + PAGE_SIZE - 1);
 
@@ -1725,33 +1855,65 @@ export default function OrganizerScreen({
 
         if (data && data.length > 0) {
           allData = [...allData, ...data];
-          offset += PAGE_SIZE;
+          offset += data.length;
           hasMore = data.length === PAGE_SIZE;
         } else {
           hasMore = false;
         }
       }
 
-      const itemsMap = new Map<string, OrganizerGroupItem[]>();
-      for (const item of allData) {
-        if (!itemsMap.has(item.group_id)) {
-          itemsMap.set(item.group_id, []);
-        }
-        itemsMap.get(item.group_id)!.push(item);
-      }
+      setGroupItems(prev => {
+        const next = new Map(prev);
+        next.set(groupId, allData);
+        return next;
+      });
 
-      setGroupItems(itemsMap);
+      setGroupHasMore(prev => {
+        const next = new Map(prev);
+        next.set(groupId, false);
+        return next;
+      });
 
-      // Mark all groups as loaded
-      setLoadedGroupIds(new Set(groupIds));
-      setGroupHasMore(new Map()); // All loaded, no more items
-
-      return itemsMap;
+      return allData;
     } catch (e) {
-      console.error('Error loading group items:', e);
-      return new Map();
+      console.error('Error loading full group items:', e);
+      return [];
+    } finally {
+      setLoadingGroupIds(prev => {
+        const next = new Set(prev);
+        next.delete(groupId);
+        return next;
+      });
     }
   }, []);
+
+  // Export loadFullGroupItems for potential use in menu actions
+  void loadFullGroupItems;
+
+  const loadAllGroupItems = useCallback(async (groupList: OrganizerGroup[]): Promise<{
+    items: Map<string, OrganizerGroupItem[]>;
+    counts: Map<string, { count: number; totalWeight: number }>;
+  }> => {
+    try {
+      const groupIds = groupList.map(g => g.id);
+      if (groupIds.length === 0) {
+        setGroupItems(new Map());
+        setGuidLookup(new Map());
+        return { items: new Map(), counts: new Map() };
+      }
+
+      // Step 1: Load GUID lookup and counts (lightweight, for selection detection)
+      const { counts } = await loadGuidLookup(groupIds);
+
+      // Step 2: Load initial items per group (for display)
+      const itemsMap = await loadInitialItems(groupIds);
+
+      return { items: itemsMap, counts };
+    } catch (e) {
+      console.error('Error loading group items:', e);
+      return { items: new Map(), counts: new Map() };
+    }
+  }, [loadGuidLookup, loadInitialItems]);
 
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
     // Check cache first (unless force refresh)
@@ -1769,8 +1931,8 @@ export default function OrganizerScreen({
     setLoading(true);
     try {
       const loadedGroups = await loadGroups();
-      const loadedItems = await loadAllGroupItems(loadedGroups);
-      const tree = buildGroupTree(loadedGroups, loadedItems);
+      const { items: loadedItems, counts } = await loadAllGroupItems(loadedGroups);
+      const tree = buildGroupTree(loadedGroups, loadedItems, counts);
       setGroupTree(tree);
       // Update cache
       setCachedData(loadedGroups, loadedItems, tree);
@@ -1785,8 +1947,8 @@ export default function OrganizerScreen({
   const refreshData = useCallback(async () => {
     try {
       const loadedGroups = await loadGroups();
-      const loadedItems = await loadAllGroupItems(loadedGroups);
-      const tree = buildGroupTree(loadedGroups, loadedItems);
+      const { items: loadedItems, counts } = await loadAllGroupItems(loadedGroups);
+      const tree = buildGroupTree(loadedGroups, loadedItems, counts);
       setGroupTree(tree);
       // Update cache
       setCachedData(loadedGroups, loadedItems, tree);
@@ -2595,7 +2757,10 @@ export default function OrganizerScreen({
     };
   }, [projectId, tcUserEmail, refreshData, showToast]);
 
-  // Expand group from zoom link (after data is loaded) and apply group coloring
+  // Track if we need to color on link open (set by expandGroupId effect, consumed by groupItems effect)
+  const pendingLinkColoringRef = useRef<string | null>(null);
+
+  // Expand group from zoom link (after data is loaded)
   useEffect(() => {
     if (!expandGroupId || loading || groups.length === 0) return;
 
@@ -2622,15 +2787,30 @@ export default function OrganizerScreen({
       });
       console.log('🔗 Expanded group from link:', expandGroupId, 'path:', [...groupIdsToExpand]);
 
-      // Apply group coloring using the same logic as "Värvi see grupp"
-      // This ensures consistent coloring behavior between menu action and link opening
-      console.log('🔗 Applying group coloring for:', expandGroupId);
-      colorModelByGroups(expandGroupId);
+      // Mark for coloring - will be processed when groupItems is ready
+      pendingLinkColoringRef.current = expandGroupId;
 
       onGroupExpanded?.();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandGroupId, loading, groups, onGroupExpanded]);
+
+  // Apply coloring when pending and groupItems is ready
+  useEffect(() => {
+    if (!pendingLinkColoringRef.current) return;
+    if (groupItems.size === 0) return;
+
+    const groupIdToColor = pendingLinkColoringRef.current;
+    pendingLinkColoringRef.current = null;
+
+    // Verify the group has items loaded
+    const group = groups.find(g => g.id === groupIdToColor);
+    if (!group) return;
+
+    console.log('🔗 Applying group coloring for:', groupIdToColor);
+    colorModelByGroups(groupIdToColor);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupItems, groups]);
 
   // ============================================
   // MODEL SELECTION POLLING
@@ -8845,15 +9025,29 @@ export default function OrganizerScreen({
                 const effectiveLockInfo = getGroupLockInfo(node.id);
                 const isEffectivelyLocked = isGroupLocked(node.id);
                 const lockedByParent = isEffectivelyLocked && !node.is_locked;
-                if (!isEffectivelyLocked) return null;
-                return (
-                  <span
-                    className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
-                    title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
-                  >
-                    <FiLock size={10} />
-                  </span>
-                );
+                if (isEffectivelyLocked) {
+                  return (
+                    <span
+                      className={`org-locked-indicator${lockedByParent ? ' inherited' : ''}`}
+                      title={`🔒 ${lockedByParent ? 'Lukustatud ülemgrupi poolt' : 'Lukustatud'}\n👤 ${effectiveLockInfo?.locked_by || 'Tundmatu'}\n📅 ${effectiveLockInfo?.locked_at ? new Date(effectiveLockInfo.locked_at).toLocaleString('et-EE') : ''}`}
+                    >
+                      <FiLock size={10} />
+                    </span>
+                  );
+                }
+                // Show "no edit permission" indicator if user can't edit (but group is not locked)
+                const userPerms = getUserPermissions(node.id, tcUserEmail);
+                if (!userPerms.can_edit_group) {
+                  return (
+                    <span
+                      className="org-no-edit-indicator"
+                      title="Sul pole õigust seda gruppi muuta"
+                    >
+                      <FiLock size={9} />
+                    </span>
+                  );
+                }
+                return null;
               })()}
             </div>
             {node.description && (

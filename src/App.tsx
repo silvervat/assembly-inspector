@@ -17,7 +17,8 @@ import {
   getPendingNavigation,
   fetchInspectionForNavigation,
   navigateToInspection,
-  findObjectsInLoadedModels
+  findObjectsInLoadedModels,
+  colorModelByGroupLink
 } from './utils/navigationHelper';
 import { initOfflineQueue } from './utils/offlineQueue';
 import './App.css';
@@ -25,7 +26,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.666';
+export const APP_VERSION = '3.0.669';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -321,8 +322,10 @@ export default function App() {
                 } else if (actionType === 'zoom_green') {
                   // GREEN: Color logic depends on whether group_id is present
                   if (pendingZoom.group_id) {
-                    // Group link: Skip coloring here - OrganizerScreen will handle it with colorModelByGroups
-                    console.log('🔗 Group link detected, coloring will be handled by OrganizerScreen');
+                    // Group link: Color model immediately with group color
+                    console.log('🔗 Group link detected, coloring model immediately...');
+                    const colorResult = await colorModelByGroupLink(connected, project.id, pendingZoom.group_id);
+                    console.log('🔗 Coloring result:', colorResult);
                   } else {
                     // Non-group link: Use legacy grey+green coloring
                     console.log('🔗 Coloring model grey and targets green...');

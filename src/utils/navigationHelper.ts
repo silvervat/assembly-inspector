@@ -542,3 +542,171 @@ export async function hideObjectsByGuid(
 
   return found.size;
 }
+
+/**
+ * Color model by group link - used when opening a group link
+ * Colors the target group items with the group's color and everything else white
+ */
+export async function colorModelByGroupLink(
+  api: WorkspaceAPI.WorkspaceAPI,
+  projectId: string,
+  groupId: string
+): Promise<{ success: boolean; itemsColored: number }> {
+  try {
+    console.log('🎨 [colorModelByGroupLink] Starting for group:', groupId);
+
+    // Step 1: Load the group and its color
+    const { data: group, error: groupError } = await supabase
+      .from('organizer_groups')
+      .select('id, color, parent_id')
+      .eq('id', groupId)
+      .single();
+
+    if (groupError || !group) {
+      console.log('🎨 Group not found:', groupError);
+      return { success: false, itemsColored: 0 };
+    }
+
+    const groupColor = group.color;
+    if (!groupColor) {
+      console.log('🎨 Group has no color, skipping coloring');
+      return { success: false, itemsColored: 0 };
+    }
+
+    // Step 2: Get all group IDs in subtree (group + children + grandchildren)
+    const groupIds = [groupId];
+
+    // Load children
+    const { data: allGroups } = await supabase
+      .from('organizer_groups')
+      .select('id, parent_id')
+      .eq('trimble_project_id', projectId);
+
+    if (allGroups) {
+      const addChildren = (parentId: string) => {
+        const children = allGroups.filter(g => g.parent_id === parentId);
+        for (const child of children) {
+          groupIds.push(child.id);
+          addChildren(child.id);
+        }
+      };
+      addChildren(groupId);
+    }
+
+    console.log('🎨 Group IDs to color:', groupIds.length);
+
+    // Step 3: Load GUIDs for the target group items
+    const { data: groupItemsData, error: itemsError } = await supabase
+      .from('organizer_group_items')
+      .select('guid_ifc')
+      .in('group_id', groupIds)
+      .not('guid_ifc', 'is', null);
+
+    if (itemsError) {
+      console.log('🎨 Error loading group items:', itemsError);
+      return { success: false, itemsColored: 0 };
+    }
+
+    const groupGuids = new Set(
+      (groupItemsData || [])
+        .map(item => item.guid_ifc?.toLowerCase())
+        .filter(Boolean)
+    );
+
+    console.log('🎨 Group GUIDs:', groupGuids.size);
+
+    // Step 4: Load ALL model object GUIDs from database for this project
+    const PAGE_SIZE = 5000;
+    const allGuids: string[] = [];
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .not('guid_ifc', 'is', null)
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) {
+        console.error('🎨 Supabase error:', error);
+        break;
+      }
+
+      if (!data || data.length === 0) break;
+
+      for (const obj of data) {
+        if (obj.guid_ifc) allGuids.push(obj.guid_ifc);
+      }
+      offset += data.length;
+      if (data.length < PAGE_SIZE) break;
+    }
+
+    console.log('🎨 Total model GUIDs:', allGuids.length);
+
+    // Step 5: Find runtime IDs for all objects
+    const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+    console.log('🎨 Found objects in model:', foundObjects.size);
+
+    if (foundObjects.size === 0) {
+      return { success: false, itemsColored: 0 };
+    }
+
+    // Build lowercase lookup
+    const foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+    for (const [guid, found] of foundObjects) {
+      foundByLowercase.set(guid.toLowerCase(), found);
+    }
+
+    // Step 6: Separate into white (non-group) and colored (group) objects
+    const whiteByModel: Record<string, number[]> = {};
+    const coloredByModel: Record<string, number[]> = {};
+
+    for (const [guidLower, found] of foundByLowercase) {
+      if (groupGuids.has(guidLower)) {
+        // Part of target group - color with group color
+        if (!coloredByModel[found.modelId]) coloredByModel[found.modelId] = [];
+        coloredByModel[found.modelId].push(found.runtimeId);
+      } else {
+        // Not in group - color white
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
+      }
+    }
+
+    // Step 7: Apply white color to non-group objects
+    const white = { r: 255, g: 255, b: 255, a: 255 };
+    const BATCH_SIZE = 500;
+
+    for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+      for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+        const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+          { color: white }
+        );
+      }
+    }
+
+    // Step 8: Apply group color to group objects
+    const color = { r: groupColor.r, g: groupColor.g, b: groupColor.b, a: 255 };
+    let coloredCount = 0;
+
+    for (const [modelId, runtimeIds] of Object.entries(coloredByModel)) {
+      coloredCount += runtimeIds.length;
+      for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+        const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+          { color }
+        );
+      }
+    }
+
+    console.log('🎨 Coloring complete! Group items:', coloredCount, 'White items:', Object.values(whiteByModel).flat().length);
+    return { success: true, itemsColored: coloredCount };
+  } catch (e) {
+    console.error('🎨 Error in colorModelByGroupLink:', e);
+    return { success: false, itemsColored: 0 };
+  }
+}
