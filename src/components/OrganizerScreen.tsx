@@ -9451,11 +9451,12 @@ export default function OrganizerScreen({
           <FiPlus size={14} /> Uus grupp
         </button>
         <button
-          className="org-add-btn"
-          style={{ background: '#6366f1' }}
+          className="org-icon-btn"
+          style={{ background: '#1e3a5f', color: '#e0e7ff', fontSize: '11px', padding: '5px 10px', gap: '4px' }}
           onClick={() => { loadActivityLogs(0); setShowActivityLogModal(true); }}
+          title="Viimased tegevused"
         >
-          <FiClock size={14} /> Viimased tegevused
+          <FiClock size={12} /> Tegevused
         </button>
         <div className="org-color-controls">
           <div className="org-color-dropdown-wrapper">
@@ -11608,57 +11609,75 @@ export default function OrganizerScreen({
                           key={log.id}
                           style={{
                             display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            padding: '8px 12px',
+                            flexDirection: 'column',
+                            gap: '2px',
+                            padding: '6px 10px',
                             background: '#f9fafb',
-                            borderRadius: '6px',
-                            fontSize: '12px'
+                            borderRadius: '4px',
+                            fontSize: '11px'
                           }}
                         >
-                          <span
-                            style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              background: actionColor,
-                              flexShrink: 0
-                            }}
-                          />
-                          <span style={{ fontWeight: 500, color: '#111827' }} title={log.user_email}>
-                            {userName}
-                          </span>
-                          <span style={{ color: '#6b7280' }}>{actionLabel}</span>
-                          {log.group_name && (
-                            <span style={{ fontWeight: 500, color: '#374151' }}>
-                              {log.group_name}
-                            </span>
-                          )}
-                          {log.item_count > 1 && (
+                          {/* First row: user name + time */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <span
                               style={{
+                                width: '5px',
+                                height: '5px',
+                                borderRadius: '50%',
                                 background: actionColor,
-                                color: 'white',
-                                padding: '2px 6px',
-                                borderRadius: '10px',
-                                fontSize: '11px',
-                                cursor: log.item_guids?.length ? 'pointer' : 'default',
-                                textDecoration: log.item_guids?.length ? 'underline' : 'none'
+                                flexShrink: 0
                               }}
-                              onClick={() => log.item_guids?.length && selectItemsFromActivity(log.item_guids)}
-                              title={log.item_guids?.length ? 'Klõpsa detailide valimiseks mudelis' : ''}
-                            >
-                              {log.item_count} detaili
+                            />
+                            <span style={{ fontWeight: 500, color: '#111827' }} title={log.user_email}>
+                              {userName}
                             </span>
-                          )}
-                          {log.field_name && (
-                            <span style={{ color: '#6b7280' }}>
-                              (väli: {log.field_name})
+                            <span style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: '10px', whiteSpace: 'nowrap' }}>
+                              {dateStr} {timeStr}
                             </span>
-                          )}
-                          <span style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                            {dateStr} {timeStr}
-                          </span>
+                          </div>
+                          {/* Second row: action + group + count */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', paddingLeft: '11px', color: '#6b7280' }}>
+                            <span>{actionLabel}</span>
+                            {log.group_name && (
+                              <span style={{ fontWeight: 500, color: '#374151' }}>
+                                {log.group_name}
+                              </span>
+                            )}
+                            {log.item_count >= 1 && log.item_guids?.length ? (
+                              <span
+                                style={{
+                                  background: actionColor,
+                                  color: 'white',
+                                  padding: '1px 5px',
+                                  borderRadius: '8px',
+                                  fontSize: '10px',
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline'
+                                }}
+                                onClick={() => selectItemsFromActivity(log.item_guids!)}
+                                title="Klõpsa detailide valimiseks mudelis"
+                              >
+                                {log.item_count} {log.item_count === 1 ? 'detail' : 'detaili'}
+                              </span>
+                            ) : log.item_count > 1 ? (
+                              <span
+                                style={{
+                                  background: '#e5e7eb',
+                                  color: '#374151',
+                                  padding: '1px 5px',
+                                  borderRadius: '8px',
+                                  fontSize: '10px'
+                                }}
+                              >
+                                {log.item_count} detaili
+                              </span>
+                            ) : null}
+                            {log.field_name && (
+                              <span style={{ color: '#9ca3af', fontSize: '10px' }}>
+                                ({log.field_name})
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
