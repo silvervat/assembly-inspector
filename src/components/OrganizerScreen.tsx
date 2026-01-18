@@ -25,7 +25,7 @@ import {
   FiEdit2, FiTrash2, FiX, FiDroplet, FiCopy,
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
-  FiTag, FiUpload, FiSettings, FiGrid
+  FiTag, FiUpload, FiSettings, FiGrid, FiLink
 } from 'react-icons/fi';
 
 // ============================================
@@ -44,6 +44,8 @@ interface OrganizerScreenProps {
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  expandGroupId?: string | null;
+  onGroupExpanded?: () => void;
 }
 
 interface SelectedObject {
@@ -414,7 +416,9 @@ export default function OrganizerScreen({
   tcUserEmail,
   onBackToMenu,
   onNavigate,
-  onColorModelWhite
+  onColorModelWhite,
+  expandGroupId,
+  onGroupExpanded
 }: OrganizerScreenProps) {
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -1472,6 +1476,36 @@ export default function OrganizerScreen({
       supabase.removeChannel(channel);
     };
   }, [projectId, tcUserEmail, refreshData, showToast]);
+
+  // Expand group from zoom link (after data is loaded)
+  useEffect(() => {
+    if (!expandGroupId || loading || groups.length === 0) return;
+
+    // Find the group and all its parent groups to expand the path
+    const groupIdsToExpand = new Set<string>();
+
+    const findParentPath = (groupId: string) => {
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        groupIdsToExpand.add(group.id);
+        if (group.parent_id) {
+          findParentPath(group.parent_id);
+        }
+      }
+    };
+
+    findParentPath(expandGroupId);
+
+    if (groupIdsToExpand.size > 0) {
+      setExpandedGroups(prev => {
+        const next = new Set(prev);
+        groupIdsToExpand.forEach(id => next.add(id));
+        return next;
+      });
+      console.log('🔗 Expanded group from link:', expandGroupId, 'path:', [...groupIdsToExpand]);
+      onGroupExpanded?.();
+    }
+  }, [expandGroupId, loading, groups, onGroupExpanded]);
 
   // ============================================
   // MODEL SELECTION POLLING
@@ -4868,6 +4902,75 @@ export default function OrganizerScreen({
     setGroupMenuId(null);
   };
 
+  // Copy group link to clipboard (for sharing - opens model, colors, selects and zooms to items)
+  const copyGroupLink = async (groupId: string) => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return;
+
+    // Collect all items from this group and subgroups
+    const allItems = collectAllGroupItems(groupId);
+    if (allItems.length === 0) {
+      showToast('Grupis pole detaile');
+      setGroupMenuId(null);
+      return;
+    }
+
+    // Get all unique GUIDs from items
+    const guids = allItems
+      .map(({ item }) => item.guid_ifc)
+      .filter((g): g is string => !!g);
+
+    if (guids.length === 0) {
+      showToast('Detailidel puuduvad GUID-id');
+      setGroupMenuId(null);
+      return;
+    }
+
+    // Get modelId from the first item that has one, or try to find from loaded models
+    let modelId = '';
+    if (api) {
+      try {
+        const models = await api.viewer.getModels('loaded');
+        if (models && models.length > 0) {
+          // Find which model contains our GUIDs
+          for (const model of models) {
+            const runtimeIds = await api.viewer.convertToObjectRuntimeIds(model.id, [guids[0]]);
+            if (runtimeIds && runtimeIds.some(id => id !== null)) {
+              modelId = model.id;
+              break;
+            }
+          }
+          // Fallback to first loaded model if not found
+          if (!modelId) {
+            modelId = models[0].id;
+          }
+        }
+      } catch (e) {
+        console.error('Error getting model ID:', e);
+      }
+    }
+
+    if (!modelId) {
+      showToast('Mudelit ei leitud');
+      setGroupMenuId(null);
+      return;
+    }
+
+    // Generate the link with group color action
+    const baseUrl = 'https://silvervat.github.io/assembly-inspector/';
+    const guidsParam = guids.join(',');
+    const zoomUrl = `${baseUrl}?project=${encodeURIComponent(projectId)}&model=${encodeURIComponent(modelId)}&guid=${encodeURIComponent(guidsParam)}&action=zoom_green&group=${encodeURIComponent(groupId)}`;
+
+    try {
+      await navigator.clipboard.writeText(zoomUrl);
+      showToast(`Link kopeeritud (${guids.length} detaili)`);
+    } catch (e) {
+      console.error('Clipboard error:', e);
+      showToast('Viga lingi kopeerimisel');
+    }
+    setGroupMenuId(null);
+  };
+
   // ============================================
   // EXCEL IMPORT
   // ============================================
@@ -6841,6 +6944,9 @@ export default function OrganizerScreen({
               </button>
               <button onClick={() => copyGroupDataToClipboard(node.id)}>
                 <FiCopy size={12} /> Kopeeri andmed
+              </button>
+              <button onClick={() => copyGroupLink(node.id)}>
+                <FiLink size={12} /> Kopeeri link
               </button>
               <button onClick={() => exportGroupToExcel(node.id)}>
                 <FiDownload size={12} /> Ekspordi Excel
