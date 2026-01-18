@@ -730,14 +730,12 @@ export default function OrganizerScreen({
   const [itemSortField, setItemSortField] = useState<ItemSortField>('sort_order');
   const [itemSortDir, setItemSortDir] = useState<SortDirection>('asc');
 
-  // Virtualization - track visible items per group
+  // Virtualization - track visible items per group (for UI performance)
   const [visibleItemCounts, setVisibleItemCounts] = useState<Map<string, number>>(new Map());
 
-  // Lazy loading - track which groups have loaded items and their total counts
+  // Item counts per group (for GUID lookup and weight calculations)
   const [groupItemCounts, setGroupItemCounts] = useState<Map<string, { count: number; totalWeight: number }>>(new Map());
-  const [loadedGroupIds, setLoadedGroupIds] = useState<Set<string>>(new Set());
-  const [loadingGroupIds, setLoadingGroupIds] = useState<Set<string>>(new Set());
-  const [groupHasMore, setGroupHasMore] = useState<Map<string, boolean>>(new Map());
+  void groupItemCounts; // Used by loadGuidLookup for total weight calculations
 
   // GUID lookup for fast existence checks (guid_ifc lowercase -> group_id)
   // This is loaded initially and allows selection detection without loading full item data
@@ -1658,55 +1656,6 @@ export default function OrganizerScreen({
     }
   }, [projectId, tcUserEmail]);
 
-  // Load items for a specific group with pagination
-  const loadGroupItemsPage = useCallback(async (groupId: string, offset: number = 0, limit: number = VIRTUAL_PAGE_SIZE) => {
-    try {
-      setLoadingGroupIds(prev => new Set(prev).add(groupId));
-
-      const { data, error, count } = await supabase
-        .from('organizer_group_items')
-        .select('*', { count: 'exact' })
-        .eq('group_id', groupId)
-        .order('sort_order')
-        .range(offset, offset + limit - 1);
-
-      if (error) throw error;
-
-      const totalCount = count || 0;
-      const hasMore = offset + limit < totalCount;
-
-      setGroupItems(prev => {
-        const newMap = new Map(prev);
-        if (offset === 0) {
-          // First page - replace
-          newMap.set(groupId, data || []);
-        } else {
-          // Subsequent pages - append
-          const existing = newMap.get(groupId) || [];
-          newMap.set(groupId, [...existing, ...(data || [])]);
-        }
-        return newMap;
-      });
-
-      setGroupHasMore(prev => new Map(prev).set(groupId, hasMore));
-      setLoadedGroupIds(prev => new Set(prev).add(groupId));
-
-      return { items: data || [], hasMore, totalCount };
-    } catch (e) {
-      console.error('Error loading group items page:', e);
-      return { items: [], hasMore: false, totalCount: 0 };
-    } finally {
-      setLoadingGroupIds(prev => {
-        const next = new Set(prev);
-        next.delete(groupId);
-        return next;
-      });
-    }
-  }, []);
-
-  // Initial items to load per group (for fast UI)
-  const INITIAL_ITEMS_PER_GROUP = 30;
-
   // Load GUID lookup (lightweight - for selection detection)
   const loadGuidLookup = useCallback(async (groupIds: string[]) => {
     if (groupIds.length === 0) {
@@ -1766,8 +1715,8 @@ export default function OrganizerScreen({
     }
   }, []);
 
-  // Load initial items for all groups (first N items each)
-  const loadInitialItems = useCallback(async (groupIds: string[]) => {
+  // Load ALL items for all groups at once (no lazy loading)
+  const loadAllItems = useCallback(async (groupIds: string[]) => {
     if (groupIds.length === 0) {
       setGroupItems(new Map());
       return new Map();
@@ -1775,75 +1724,14 @@ export default function OrganizerScreen({
 
     try {
       const itemsMap = new Map<string, OrganizerGroupItem[]>();
-      const hasMoreMap = new Map<string, boolean>();
 
       // Initialize empty arrays for all groups
       for (const gId of groupIds) {
         itemsMap.set(gId, []);
       }
 
-      // Load first N items per group using LIMIT OFFSET per group
-      // Use a single query with window function or multiple small queries
-      // For simplicity, let's load in batches
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < groupIds.length; i += BATCH_SIZE) {
-        const batchGroupIds = groupIds.slice(i, i + BATCH_SIZE);
-
-        // Load first INITIAL_ITEMS_PER_GROUP + 1 items to detect if there are more
-        const { data, error } = await supabase
-          .from('organizer_group_items')
-          .select('*')
-          .in('group_id', batchGroupIds)
-          .order('sort_order')
-          .limit((INITIAL_ITEMS_PER_GROUP + 1) * batchGroupIds.length);
-
-        if (error) throw error;
-
-        if (data) {
-          // Distribute items to their groups
-          const tempMap = new Map<string, OrganizerGroupItem[]>();
-          for (const gId of batchGroupIds) {
-            tempMap.set(gId, []);
-          }
-
-          for (const item of data) {
-            const arr = tempMap.get(item.group_id);
-            if (arr && arr.length <= INITIAL_ITEMS_PER_GROUP) {
-              arr.push(item);
-            }
-          }
-
-          // Check if any group has more items
-          for (const [gId, items] of tempMap) {
-            itemsMap.set(gId, items.slice(0, INITIAL_ITEMS_PER_GROUP));
-            // If we got more than INITIAL_ITEMS_PER_GROUP, there are more items
-            hasMoreMap.set(gId, items.length > INITIAL_ITEMS_PER_GROUP);
-          }
-        }
-      }
-
-      setGroupItems(itemsMap);
-      setLoadedGroupIds(new Set(groupIds));
-      setGroupHasMore(hasMoreMap);
-
-      return itemsMap;
-    } catch (e) {
-      console.error('Error loading initial items:', e);
-      return new Map();
-    }
-  }, []);
-
-  // Load all items for a specific group (when needed for selection, export, etc.)
-  const loadFullGroupItems = useCallback(async (groupId: string) => {
-    setLoadingGroupIds(prev => {
-      const next = new Set(prev);
-      next.add(groupId);
-      return next;
-    });
-
-    try {
-      const PAGE_SIZE = 1000;
-      let allData: OrganizerGroupItem[] = [];
+      // Load ALL items with pagination
+      const PAGE_SIZE = 5000;
       let offset = 0;
       let hasMore = true;
 
@@ -1851,14 +1739,20 @@ export default function OrganizerScreen({
         const { data, error } = await supabase
           .from('organizer_group_items')
           .select('*')
-          .eq('group_id', groupId)
+          .in('group_id', groupIds)
           .order('sort_order')
           .range(offset, offset + PAGE_SIZE - 1);
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          allData = [...allData, ...data];
+          // Distribute items to their groups
+          for (const item of data) {
+            const arr = itemsMap.get(item.group_id);
+            if (arr) {
+              arr.push(item);
+            }
+          }
           offset += data.length;
           hasMore = data.length === PAGE_SIZE;
         } else {
@@ -1866,34 +1760,16 @@ export default function OrganizerScreen({
         }
       }
 
-      setGroupItems(prev => {
-        const next = new Map(prev);
-        next.set(groupId, allData);
-        return next;
-      });
+      setGroupItems(itemsMap);
 
-      setGroupHasMore(prev => {
-        const next = new Map(prev);
-        next.set(groupId, false);
-        return next;
-      });
-
-      return allData;
+      return itemsMap;
     } catch (e) {
-      console.error('Error loading full group items:', e);
-      return [];
-    } finally {
-      setLoadingGroupIds(prev => {
-        const next = new Set(prev);
-        next.delete(groupId);
-        return next;
-      });
+      console.error('Error loading all items:', e);
+      return new Map();
     }
   }, []);
 
-  // Export loadFullGroupItems for potential use in menu actions
-  void loadFullGroupItems;
-
+  // Load all items for all groups (for full data access)
   const loadAllGroupItems = useCallback(async (groupList: OrganizerGroup[]): Promise<{
     items: Map<string, OrganizerGroupItem[]>;
     counts: Map<string, { count: number; totalWeight: number }>;
@@ -1906,18 +1782,18 @@ export default function OrganizerScreen({
         return { items: new Map(), counts: new Map() };
       }
 
-      // Step 1: Load GUID lookup and counts (lightweight, for selection detection)
+      // Step 1: Load GUID lookup and counts (for selection detection)
       const { counts } = await loadGuidLookup(groupIds);
 
-      // Step 2: Load initial items per group (for display)
-      const itemsMap = await loadInitialItems(groupIds);
+      // Step 2: Load ALL items for all groups (no lazy loading)
+      const itemsMap = await loadAllItems(groupIds);
 
       return { items: itemsMap, counts };
     } catch (e) {
       console.error('Error loading group items:', e);
       return { items: new Map(), counts: new Map() };
     }
-  }, [loadGuidLookup, loadInitialItems]);
+  }, [loadGuidLookup, loadAllItems]);
 
   const loadData = useCallback(async (forceRefresh: boolean = false) => {
     // Check cache first (unless force refresh)
@@ -6602,13 +6478,8 @@ export default function OrganizerScreen({
 
   const toggleGroupExpand = (e: React.MouseEvent, groupId: string) => {
     e.stopPropagation();
-    const isCurrentlyExpanded = expandedGroups.has(groupId);
 
-    // If expanding and items not yet loaded, trigger lazy load
-    if (!isCurrentlyExpanded && !loadedGroupIds.has(groupId) && !loadingGroupIds.has(groupId)) {
-      loadGroupItemsPage(groupId, 0, VIRTUAL_PAGE_SIZE);
-    }
-
+    // All items are loaded at startup, just toggle expand state
     setExpandedGroups(prev => {
       const next = new Set(prev);
       if (next.has(groupId)) next.delete(groupId);
@@ -9305,7 +9176,7 @@ export default function OrganizerScreen({
               </div>
             )}
 
-            {(filteredItems.length > 0 || loadingGroupIds.has(node.id)) && (() => {
+            {filteredItems.length > 0 && (() => {
               // Sort items
               const sortedItems = sortItems(filteredItems, itemSortField, itemSortDir);
 
@@ -9313,14 +9184,8 @@ export default function OrganizerScreen({
               const visibleCount = visibleItemCounts.get(node.id) || VIRTUAL_PAGE_SIZE;
               const displayItems = sortedItems.slice(0, visibleCount);
 
-              // Check both local and DB pagination
+              // Check if there are more items to show (all items already loaded)
               const hasMoreLocal = sortedItems.length > visibleCount;
-              const hasMoreInDb = groupHasMore.get(node.id) || false;
-              const hasMore = hasMoreLocal || hasMoreInDb;
-              const isLoadingMore = loadingGroupIds.has(node.id);
-
-              // Get total count from preloaded counts or loaded items
-              const totalItemCount = groupItemCounts.get(node.id)?.count || sortedItems.length;
 
               // Calculate dynamic column widths based on content
               const CHAR_WIDTH = 6; // approx pixels per character
@@ -9880,66 +9745,39 @@ export default function OrganizerScreen({
                   })}
                 </div>
 
-                {/* Load more buttons for virtualization */}
-                {hasMore && (
+                {/* Load more buttons for virtualization (all data already loaded, just show more) */}
+                {hasMoreLocal && (
                   <div className="org-load-more-row">
                     <button
                       className="org-load-more-btn"
-                      disabled={isLoadingMore}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (hasMoreLocal) {
-                          // First, show more already-loaded items
-                          setVisibleItemCounts(prev => {
-                            const next = new Map(prev);
-                            next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
-                            return next;
-                          });
-                        } else if (hasMoreInDb && !isLoadingMore) {
-                          // Need to fetch more from database
-                          const currentLoaded = sortedItems.length;
-                          loadGroupItemsPage(node.id, currentLoaded, VIRTUAL_PAGE_SIZE);
-                          // Also increase visible count to show new items when they arrive
-                          setVisibleItemCounts(prev => {
-                            const next = new Map(prev);
-                            next.set(node.id, currentLoaded + VIRTUAL_PAGE_SIZE);
-                            return next;
-                          });
-                        }
+                        // Show more already-loaded items
+                        setVisibleItemCounts(prev => {
+                          const next = new Map(prev);
+                          next.set(node.id, visibleCount + VIRTUAL_PAGE_SIZE);
+                          return next;
+                        });
                       }}
                     >
-                      {isLoadingMore ? 'Laen...' : `Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, totalItemCount - displayItems.length)} (kokku ${totalItemCount})`}
+                      {`Näita veel ${Math.min(VIRTUAL_PAGE_SIZE, sortedItems.length - displayItems.length)} (kokku ${sortedItems.length})`}
                     </button>
                     <button
                       className="org-load-more-btn org-show-all-btn"
-                      disabled={isLoadingMore}
                       onClick={(e) => {
                         e.stopPropagation();
-                        // Show all items - set visible count to total
+                        // Show all items
                         setVisibleItemCounts(prev => {
                           const next = new Map(prev);
-                          next.set(node.id, totalItemCount);
+                          next.set(node.id, sortedItems.length);
                           return next;
                         });
-                        // Also load all from DB if needed
-                        if (hasMoreInDb && !isLoadingMore) {
-                          const currentLoaded = sortedItems.length;
-                          const remaining = totalItemCount - currentLoaded;
-                          if (remaining > 0) {
-                            loadGroupItemsPage(node.id, currentLoaded, remaining);
-                          }
-                        }
                       }}
                     >
                       Näita kõike
                     </button>
                   </div>
                 )}
-                {/* Loading indicator when fetching items */}
-                {isLoadingMore && filteredItems.length === 0 && (
-                  <div className="org-items-loading">Laen detaile...</div>
-                )}
-
                 {/* Sums for numeric fields */}
                 {numericFields.length > 0 && (
                   <div className="org-items-footer">
