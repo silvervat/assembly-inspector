@@ -7184,6 +7184,127 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="📏 Pikk mõõt V2"
+                  result={functionResults["measurementV2"]}
+                  onClick={async () => {
+                    updateFunctionResult("measurementV2", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const results: string[] = [];
+                      let objectCount = 0;
+
+                      for (const modelSel of sel) {
+                        const modelId = modelSel.modelId;
+                        const runtimeIds = modelSel.objectRuntimeIds || [];
+                        if (runtimeIds.length === 0) continue;
+
+                        const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+
+                        for (const bbox of boundingBoxes) {
+                          if (!bbox?.boundingBox) continue;
+                          objectCount++;
+                          const b = bbox.boundingBox;
+
+                          // Convert to mm
+                          const width = Math.abs(b.max.x - b.min.x) * 1000;
+                          const depth = Math.abs(b.max.y - b.min.y) * 1000;
+                          const height = Math.abs(b.max.z - b.min.z) * 1000;
+
+                          // Calculate all possible diagonals
+                          const diagXY = Math.sqrt(width * width + depth * depth);  // Floor plane
+                          const diagXZ = Math.sqrt(width * width + height * height); // Front plane
+                          const diagYZ = Math.sqrt(depth * depth + height * height); // Side plane
+                          const diagSpace = Math.sqrt(width * width + depth * depth + height * height); // 3D space diagonal
+
+                          // Find the longest measurement
+                          const measurements = [
+                            { name: 'Laius (X)', value: width },
+                            { name: 'Sügavus (Y)', value: depth },
+                            { name: 'Kõrgus (Z)', value: height },
+                            { name: 'Diag XY (põrand)', value: diagXY },
+                            { name: 'Diag XZ (ees)', value: diagXZ },
+                            { name: 'Diag YZ (külg)', value: diagYZ },
+                            { name: 'Ruumidiagonaal', value: diagSpace }
+                          ];
+
+                          const sorted = [...measurements].sort((a, b) => b.value - a.value);
+                          const longest = sorted[0];
+                          const secondLongest = sorted[1];
+
+                          // Draw the longest diagonal as a measurement line
+                          const minMm = { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 };
+                          const maxMm = { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 };
+
+                          let start: { positionX: number, positionY: number, positionZ: number };
+                          let end: { positionX: number, positionY: number, positionZ: number };
+                          let color = { r: 255, g: 0, b: 255, a: 255 }; // Magenta for longest
+
+                          if (longest.name === 'Laius (X)') {
+                            start = { positionX: minMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: (minMm.z + maxMm.z) / 2 };
+                            end = { positionX: maxMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: (minMm.z + maxMm.z) / 2 };
+                            color = { r: 255, g: 0, b: 0, a: 255 }; // Red
+                          } else if (longest.name === 'Sügavus (Y)') {
+                            start = { positionX: (minMm.x + maxMm.x) / 2, positionY: minMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
+                            end = { positionX: (minMm.x + maxMm.x) / 2, positionY: maxMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
+                            color = { r: 0, g: 255, b: 0, a: 255 }; // Green
+                          } else if (longest.name === 'Kõrgus (Z)') {
+                            start = { positionX: (minMm.x + maxMm.x) / 2, positionY: (minMm.y + maxMm.y) / 2, positionZ: minMm.z };
+                            end = { positionX: (minMm.x + maxMm.x) / 2, positionY: (minMm.y + maxMm.y) / 2, positionZ: maxMm.z };
+                            color = { r: 0, g: 0, b: 255, a: 255 }; // Blue
+                          } else if (longest.name === 'Diag XY (põrand)') {
+                            start = { positionX: minMm.x, positionY: minMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
+                            end = { positionX: maxMm.x, positionY: maxMm.y, positionZ: (minMm.z + maxMm.z) / 2 };
+                            color = { r: 0, g: 200, b: 200, a: 255 }; // Cyan
+                          } else if (longest.name === 'Diag XZ (ees)') {
+                            start = { positionX: minMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: minMm.z };
+                            end = { positionX: maxMm.x, positionY: (minMm.y + maxMm.y) / 2, positionZ: maxMm.z };
+                            color = { r: 255, g: 200, b: 0, a: 255 }; // Yellow
+                          } else if (longest.name === 'Diag YZ (külg)') {
+                            start = { positionX: (minMm.x + maxMm.x) / 2, positionY: minMm.y, positionZ: minMm.z };
+                            end = { positionX: (minMm.x + maxMm.x) / 2, positionY: maxMm.y, positionZ: maxMm.z };
+                            color = { r: 255, g: 100, b: 150, a: 255 }; // Pink
+                          } else {
+                            // Space diagonal
+                            start = { positionX: minMm.x, positionY: minMm.y, positionZ: minMm.z };
+                            end = { positionX: maxMm.x, positionY: maxMm.y, positionZ: maxMm.z };
+                            color = { r: 150, g: 0, b: 255, a: 255 }; // Purple
+                          }
+
+                          await api.markup.addMeasurementMarkups([{
+                            start,
+                            end,
+                            mainLineStart: start,
+                            mainLineEnd: end,
+                            color
+                          }]);
+
+                          results.push(
+                            `Obj ${objectCount}:\n` +
+                            `  📏 PIKIM: ${longest.name} = ${longest.value.toFixed(0)} mm\n` +
+                            `  📐 2. koht: ${secondLongest.name} = ${secondLongest.value.toFixed(0)} mm\n` +
+                            `  ─────────────\n` +
+                            `  X: ${width.toFixed(0)} mm\n` +
+                            `  Y: ${depth.toFixed(0)} mm\n` +
+                            `  Z: ${height.toFixed(0)} mm\n` +
+                            `  Ruumidiag: ${diagSpace.toFixed(0)} mm`
+                          );
+                        }
+                      }
+
+                      if (results.length === 0) throw new Error('Bounding box pole saadaval');
+
+                      updateFunctionResult("measurementV2", {
+                        status: 'success',
+                        result: results.join('\n\n')
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("measurementV2", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🗑️ Eemalda mõõtjooned"
                   result={functionResults["removeMeasurements"]}
                   onClick={async () => {
