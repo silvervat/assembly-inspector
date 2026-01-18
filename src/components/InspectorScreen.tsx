@@ -121,7 +121,9 @@ export default function InspectorScreen({
       arrived_deliveries: 'Saabunud tarned',
       organizer: 'Organiseerija',
       issues: 'Probleemid',
-      tools: 'Tööriistad'
+      tools: 'Tööriistad',
+      crane_planner: 'Kraanide Planeerimine',
+      crane_library: 'Kraanide Andmebaas'
     };
     return titles[mode] || mode;
   };
@@ -1007,7 +1009,7 @@ export default function InspectorScreen({
         topview_url: topviewUrl,
         project_id: projectId,
         // inspection_type is for legacy modes only; inspection_type mode uses plan-based tracking
-        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues' || inspectionMode === 'tools')
+        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues' || inspectionMode === 'tools' || inspectionMode === 'crane_planner' || inspectionMode === 'crane_library')
           ? undefined
           : inspectionMode,
         // Additional Tekla fields

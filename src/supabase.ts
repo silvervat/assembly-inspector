@@ -1648,3 +1648,225 @@ export interface SheetsSyncLog {
   triggered_by: string | null;
 }
 
+// ============================================
+// CRANE PLANNING SYSTEM TYPES (v4.0.0)
+// ============================================
+
+// RGBA color for crane visualization
+export interface CraneRGBAColor {
+  r: number;  // 0-255
+  g: number;  // 0-255
+  b: number;  // 0-255
+  a: number;  // 0-255
+}
+
+// Crane type enumeration
+export type CraneType = 'mobile' | 'tower' | 'crawler';
+
+// Cab position enumeration
+export type CabPosition = 'front' | 'rear' | 'left' | 'right';
+
+// Crane model (crane database)
+export interface CraneModel {
+  id: string;
+  created_at: string;
+  updated_at: string;
+
+  // Basic info
+  manufacturer: string;
+  model: string;
+  crane_type: CraneType;
+
+  // Technical specs
+  max_capacity_kg: number;
+  max_height_m: number;
+  max_radius_m: number;
+  min_radius_m: number;
+  base_width_m: number;
+  base_length_m: number;
+
+  // Visual settings
+  cab_position: CabPosition;
+  default_boom_length_m: number;
+  default_crane_color: CraneRGBAColor;
+  default_radius_color: CraneRGBAColor;
+
+  // Files
+  image_url?: string;
+  thumbnail_url?: string;  // Auto-generated
+  manual_pdf_url?: string;
+  load_chart_pdf_url?: string;
+
+  // Metadata
+  notes?: string;
+  is_active: boolean;
+  organization_id?: string;
+  created_by_email?: string;
+
+  // Joined data
+  counterweights?: CounterweightConfig[];
+  documents?: CraneDocument[];
+  documents_count?: number;
+}
+
+// Counterweight configuration
+export interface CounterweightConfig {
+  id: string;
+  crane_model_id: string;
+  name: string;
+  weight_kg: number;
+  description?: string;
+  sort_order: number;
+  created_at: string;
+}
+
+// Load chart data point
+export interface LoadChartDataPoint {
+  radius_m: number;
+  capacity_kg: number;
+}
+
+// Load chart (lifting capacity table)
+export interface LoadChart {
+  id: string;
+  crane_model_id: string;
+  counterweight_config_id: string;
+  boom_length_m: number;
+  boom_angle_deg?: number;
+  chart_data: LoadChartDataPoint[];
+  notes?: string;
+  created_at: string;
+}
+
+// Crane document types
+export type CraneDocumentType = 'manual' | 'load_chart' | 'certificate' | 'specification';
+
+// Crane document
+export interface CraneDocument {
+  id: string;
+  crane_model_id: string;
+  document_type: CraneDocumentType;
+  file_name: string;
+  file_path: string;
+  file_url: string;
+  file_size_bytes?: number;
+  mime_type?: string;
+  title: string;
+  description?: string;
+  version?: string;
+  language: string;
+  uploaded_at: string;
+  uploaded_by_email: string;
+  sort_order: number;
+}
+
+// Project crane (placed crane in project)
+export interface ProjectCrane {
+  id: string;
+  created_at: string;
+  updated_at: string;
+
+  // Relations
+  trimble_project_id: string;
+  crane_model_id: string;
+  counterweight_config_id?: string;
+
+  // Position (in METERS, Trimble coordinates)
+  position_x: number;
+  position_y: number;
+  position_z: number;
+
+  // Orientation
+  rotation_deg: number;
+
+  // Configuration
+  boom_length_m: number;
+  boom_angle_deg: number;
+
+  // Load settings (in kilograms)
+  hook_weight_kg: number;
+  lifting_block_kg: number;
+  safety_factor: number;
+
+  // Visual settings
+  crane_color: CraneRGBAColor;
+  radius_color: CraneRGBAColor;
+  show_radius_rings: boolean;
+  radius_step_m: number;
+  show_capacity_labels: boolean;
+
+  // Labels
+  position_label?: string;
+  notes?: string;
+
+  // Trimble markup IDs (references to created markups)
+  markup_ids: number[];
+
+  // Audit
+  created_by_email: string;
+  updated_by_email?: string;
+
+  // Joined data
+  crane_model?: CraneModel;
+  counterweight_config?: CounterweightConfig;
+}
+
+// Crane radius ring (cache table)
+export interface CraneRadiusRing {
+  id: string;
+  project_crane_id: string;
+  radius_m: number;
+  max_capacity_kg?: number;
+  markup_id?: number;
+  created_at: string;
+}
+
+// 3D Point for crane positioning
+export interface CranePoint3D {
+  x: number;
+  y: number;
+  z: number;
+}
+
+// Crane visualization data
+export interface CraneVisualizationData {
+  craneMarkupIds: number[];
+  radiusMarkupIds: number[];
+  labelMarkupIds: number[];
+}
+
+// Load calculation result
+export interface LoadCalculationResult {
+  radius_m: number;
+  max_capacity_kg: number;
+  available_capacity_kg: number;
+  is_safe: boolean;
+}
+
+// Default crane colors
+export const DEFAULT_CRANE_COLOR: CraneRGBAColor = { r: 255, g: 165, b: 0, a: 255 };  // Orange
+export const DEFAULT_RADIUS_COLOR: CraneRGBAColor = { r: 255, g: 0, b: 0, a: 128 };   // Semi-transparent red
+
+// Crane document type labels
+export const CRANE_DOCUMENT_TYPE_LABELS: Record<CraneDocumentType, string> = {
+  manual: 'Kasutusjuhend',
+  load_chart: 'Tõstegraafikud',
+  certificate: 'Sertifikaat',
+  specification: 'Tehnilised andmed'
+};
+
+// Crane type labels
+export const CRANE_TYPE_LABELS: Record<CraneType, string> = {
+  mobile: 'Mobiilne',
+  tower: 'Tornkraana',
+  crawler: 'Roomikkraana'
+};
+
+// Cab position labels
+export const CAB_POSITION_LABELS: Record<CabPosition, string> = {
+  front: 'Ees',
+  rear: 'Taga',
+  left: 'Vasakul',
+  right: 'Paremal'
+};
+

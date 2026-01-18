@@ -12,6 +12,8 @@ import ArrivedDeliveriesScreen from './components/ArrivedDeliveriesScreen';
 import IssuesScreen from './components/IssuesScreen';
 import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
+import CranePlannerScreen from './components/CranePlannerScreen';
+import CraneLibraryScreen from './components/CraneLibraryScreen';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -26,7 +28,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.685';
+export const APP_VERSION = '3.0.686';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1190,6 +1192,41 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Kraanide planeerimine ekraan
+  if (currentMode === 'crane_planner') {
+    return (
+      <>
+        <NavigationOverlay />
+        {ColorWhiteOverlay}
+        <CranePlannerScreen
+          api={api}
+          projectId={projectId}
+          userEmail={tcUser?.email || user.email}
+          user={user}
+          onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Kraanide andmebaas ekraan
+  if (currentMode === 'crane_library') {
+    return (
+      <>
+        <NavigationOverlay />
+        {ColorWhiteOverlay}
+        <CraneLibraryScreen
+          userEmail={tcUser?.email || user.email}
+          user={user}
+          onBackToMenu={handleBackToMenu}
         />
         <VersionFooter />
       </>
