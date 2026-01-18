@@ -11803,6 +11803,15 @@ button.stat-toggle.off:hover {
   background: #dc2626;
 }
 
+.org-quick-add-btn.remove.locked {
+  background: #3b82f6;
+  cursor: help;
+}
+
+.org-quick-add-btn.remove.locked:hover {
+  background: #2563eb;
+}
+
 .org-menu-btn {
   position: absolute;
   top: 50%;
