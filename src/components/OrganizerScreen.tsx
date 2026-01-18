@@ -28,7 +28,7 @@ import {
   FiRefreshCw, FiDownload, FiLock, FiUnlock, FiMoreVertical, FiMove,
   FiList, FiChevronsDown, FiChevronsUp, FiFolderPlus,
   FiTag, FiUpload, FiSettings, FiGrid, FiLink,
-  FiCamera, FiPaperclip, FiImage, FiCheck
+  FiCamera, FiPaperclip, FiImage, FiCheck, FiClock
 } from 'react-icons/fi';
 
 // ============================================
@@ -644,6 +644,7 @@ export default function OrganizerScreen({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showColorModeMenu, setShowColorModeMenu] = useState(false);
+  const [showColorMarkMenu, setShowColorMarkMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
   const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
@@ -889,9 +890,40 @@ export default function OrganizerScreen({
   const [showFieldsManagementModal, setShowFieldsManagementModal] = useState(false);
   const [fieldsManagementGroupId, setFieldsManagementGroupId] = useState<string | null>(null);
 
+  // Activity log modal
+  const [showActivityLogModal, setShowActivityLogModal] = useState(false);
+  const [activityLogs, setActivityLogs] = useState<Array<{
+    id: string;
+    user_email: string;
+    user_name: string | null;
+    action_type: string;
+    group_id: string | null;
+    group_name: string | null;
+    item_count: number;
+    item_ids: string[] | null;
+    item_guids: string[] | null;
+    field_name: string | null;
+    old_value: any;
+    new_value: any;
+    details: any;
+    created_at: string;
+    can_restore: boolean;
+  }>>([]);
+  const [activityLogsLoading, setActivityLogsLoading] = useState(false);
+  const [activityLogFilter, setActivityLogFilter] = useState<{
+    user: string;
+    action: string;
+    dateFrom: string;
+    dateTo: string;
+    search: string;
+  }>({ user: '', action: '', dateFrom: '', dateTo: '', search: '' });
+  const [activityLogPage, setActivityLogPage] = useState(0);
+  const activityLogPageSize = 100;
+
   // Required fields modal (when adding items to group with required custom fields)
   const [showRequiredFieldsModal, setShowRequiredFieldsModal] = useState(false);
   const [requiredFieldValues, setRequiredFieldValues] = useState<Record<string, string>>({});
+  const [requiredFieldUploading, setRequiredFieldUploading] = useState<string | null>(null);
 
   // Photo lightbox
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
@@ -903,6 +935,7 @@ export default function OrganizerScreen({
   // Lightbox metadata - who added, when, file size
   const [lightboxMeta, setLightboxMeta] = useState<{
     addedBy: string | null;
+    addedByName: string | null;
     addedAt: string | null;
     dimensions: { width: number; height: number } | null;
     fileSize: number | null;
@@ -1188,18 +1221,146 @@ export default function OrganizerScreen({
 
   // Close all dropdown menus when clicking outside
   useEffect(() => {
-    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || groupMenuId !== null || displayPropertyMenuIdx !== null;
+    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || showColorMarkMenu || groupMenuId !== null || displayPropertyMenuIdx !== null;
     if (!anyMenuOpen) return;
     const handleClick = () => {
       setShowSortMenu(false);
       setShowFilterMenu(false);
       setShowColorModeMenu(false);
+      setShowColorMarkMenu(false);
       setGroupMenuId(null);
       setDisplayPropertyMenuIdx(null);
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [showSortMenu, showFilterMenu, showColorModeMenu, groupMenuId, displayPropertyMenuIdx]);
+  }, [showSortMenu, showFilterMenu, showColorModeMenu, showColorMarkMenu, groupMenuId, displayPropertyMenuIdx]);
+
+  // ============================================
+  // ACTIVITY LOGGING
+  // ============================================
+
+  // Log activity to database
+  const logActivity = useCallback(async (params: {
+    action_type: string;
+    group_id?: string | null;
+    group_name?: string | null;
+    item_count?: number;
+    item_ids?: string[];
+    item_guids?: string[];
+    field_id?: string;
+    field_name?: string;
+    old_value?: any;
+    new_value?: any;
+    details?: any;
+  }) => {
+    try {
+      // Fetch user name
+      let userName: string | null = null;
+      try {
+        const { data } = await supabase
+          .from('trimble_ex_users')
+          .select('name')
+          .eq('email', tcUserEmail)
+          .single();
+        userName = data?.name || null;
+      } catch { /* ignore */ }
+
+      await supabase.from('organizer_activity_log').insert({
+        project_id: projectId,
+        user_email: tcUserEmail,
+        user_name: userName,
+        action_type: params.action_type,
+        group_id: params.group_id || null,
+        group_name: params.group_name || null,
+        item_count: params.item_count || 1,
+        item_ids: params.item_ids || null,
+        item_guids: params.item_guids || null,
+        field_id: params.field_id || null,
+        field_name: params.field_name || null,
+        old_value: params.old_value || null,
+        new_value: params.new_value || null,
+        details: params.details || null
+      });
+    } catch (e) {
+      console.warn('Failed to log activity:', e);
+    }
+  }, [projectId, tcUserEmail]);
+
+  // Load activity logs with filters and pagination
+  const loadActivityLogs = useCallback(async (page: number = 0, append: boolean = false) => {
+    setActivityLogsLoading(true);
+    try {
+      let query = supabase
+        .from('organizer_activity_log')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .range(page * activityLogPageSize, (page + 1) * activityLogPageSize - 1);
+
+      // Apply filters
+      if (activityLogFilter.user) {
+        query = query.ilike('user_email', `%${activityLogFilter.user}%`);
+      }
+      if (activityLogFilter.action) {
+        query = query.eq('action_type', activityLogFilter.action);
+      }
+      if (activityLogFilter.dateFrom) {
+        query = query.gte('created_at', activityLogFilter.dateFrom);
+      }
+      if (activityLogFilter.dateTo) {
+        query = query.lte('created_at', activityLogFilter.dateTo + 'T23:59:59');
+      }
+      if (activityLogFilter.search) {
+        query = query.or(`group_name.ilike.%${activityLogFilter.search}%,field_name.ilike.%${activityLogFilter.search}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      if (append) {
+        setActivityLogs(prev => [...prev, ...(data || [])]);
+      } else {
+        setActivityLogs(data || []);
+      }
+      setActivityLogPage(page);
+    } catch (e) {
+      console.error('Error loading activity logs:', e);
+      showToast('Viga tegevuste laadimisel');
+    } finally {
+      setActivityLogsLoading(false);
+    }
+  }, [projectId, activityLogFilter, activityLogPageSize, showToast]);
+
+  // Select items in model from activity log
+  const selectItemsFromActivity = useCallback(async (guids: string[]) => {
+    if (!guids || guids.length === 0) return;
+
+    try {
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+      if (foundObjects.size === 0) {
+        showToast('Detaile ei leitud mudelist');
+        return;
+      }
+
+      // Build selection array
+      const selection: Array<{ modelId: string; objectRuntimeIds: number[] }> = [];
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        selection.push({ modelId, objectRuntimeIds: runtimeIds });
+      }
+
+      await api.viewer.setSelection({ modelObjectIds: selection }, 'set');
+      showToast(`${foundObjects.size} detaili valitud`);
+    } catch (e) {
+      console.error('Error selecting items:', e);
+      showToast('Viga detailide valimisel');
+    }
+  }, [api, showToast]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -1561,6 +1722,85 @@ export default function OrganizerScreen({
     }
   }, [generateUploadFilename]);
 
+  // Upload photo for required fields modal (uses "shared" as itemId since items don't exist yet)
+  const uploadRequiredFieldPhoto = useCallback(async (file: File, fieldId: string): Promise<string | null> => {
+    try {
+      const compressedFile = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.8 });
+      const filename = generateUploadFilename(file.name, 'shared', fieldId);
+
+      const { error: uploadError } = await supabase.storage
+        .from('organizer-attachments')
+        .upload(filename, compressedFile);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('organizer-attachments')
+        .getPublicUrl(filename);
+
+      return urlData.publicUrl;
+    } catch (e) {
+      console.error('Required field photo upload error:', e);
+      return null;
+    }
+  }, [generateUploadFilename]);
+
+  // Handle required field photo upload
+  const handleRequiredFieldPhotoUpload = useCallback(async (files: FileList | File[], fieldId: string) => {
+    if (files.length === 0) return;
+
+    setRequiredFieldUploading(fieldId);
+    try {
+      const existingUrls = requiredFieldValues[fieldId]?.split(',').filter(Boolean) || [];
+      const newUrls: string[] = [];
+
+      for (const file of Array.from(files)) {
+        if (!isImageFile(file)) continue;
+        const url = await uploadRequiredFieldPhoto(file, fieldId);
+        if (url) newUrls.push(url);
+      }
+
+      if (newUrls.length > 0) {
+        const allUrls = [...existingUrls, ...newUrls].join(',');
+        setRequiredFieldValues(prev => ({ ...prev, [fieldId]: allUrls }));
+      }
+    } catch (e) {
+      console.error('Error uploading required field photos:', e);
+      showToast('Pildi üleslaadimine ebaõnnestus');
+    } finally {
+      setRequiredFieldUploading(null);
+    }
+  }, [requiredFieldValues, uploadRequiredFieldPhoto, showToast]);
+
+  // Handle paste for required field photos
+  const handleRequiredFieldPaste = useCallback((e: React.ClipboardEvent, fieldId: string) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    if (files.length > 0) {
+      e.preventDefault();
+      handleRequiredFieldPhotoUpload(files, fieldId);
+    }
+  }, [handleRequiredFieldPhotoUpload]);
+
+  // Remove photo from required field
+  const removeRequiredFieldPhoto = useCallback((fieldId: string, urlToRemove: string) => {
+    const currentUrls = requiredFieldValues[fieldId]?.split(',').filter(Boolean) || [];
+    const newUrls = currentUrls.filter(url => url !== urlToRemove);
+    setRequiredFieldValues(prev => ({ ...prev, [fieldId]: newUrls.join(',') }));
+  }, [requiredFieldValues]);
+
   // Single file upload with retry logic
   const uploadSingleFile = useCallback(async (
     file: File,
@@ -1676,7 +1916,26 @@ export default function OrganizerScreen({
 
         if (error) throw error;
 
-        refreshData();
+        // Update local state directly instead of refreshData() to avoid flickering
+        setGroupItems(prev => {
+          const newMap = new Map(prev);
+          const groupItems = newMap.get(item.group_id) || [];
+          const updatedGroupItems = groupItems.map(gi =>
+            gi.id === item.id ? { ...gi, custom_properties: updatedProps } : gi
+          );
+          newMap.set(item.group_id, updatedGroupItems);
+          return newMap;
+        });
+
+        // Also update cache
+        const updatedItemsMap = new Map(groupItems);
+        const currentGroupItems = updatedItemsMap.get(item.group_id) || [];
+        updatedItemsMap.set(item.group_id, currentGroupItems.map(gi =>
+          gi.id === item.id ? { ...gi, custom_properties: updatedProps } : gi
+        ));
+        const newTree = buildGroupTree(groups, updatedItemsMap);
+        setGroupTree(newTree);
+        setCachedData(groups, updatedItemsMap, newTree);
       }
 
       // Handle failed uploads - add to pending queue for background retry
@@ -1704,7 +1963,7 @@ export default function OrganizerScreen({
       setUploadProgress('');
       setUploadProgressData(null);
     }
-  }, [uploadSingleFile, tcUserEmail, refreshData, showToast, groups]);
+  }, [uploadSingleFile, tcUserEmail, showToast, groups, groupItems, buildGroupTree, setCachedData]);
 
   // Process pending uploads in background (retry on reconnection)
   const processPendingUploads = useCallback(async () => {
@@ -1781,6 +2040,21 @@ export default function OrganizerScreen({
     return () => clearInterval(interval);
   }, [pendingUploads, processPendingUploads]);
 
+  // Fetch user name from email
+  const fetchUserName = useCallback(async (email: string): Promise<string | null> => {
+    if (!email) return null;
+    try {
+      const { data } = await supabase
+        .from('trimble_ex_users')
+        .select('name')
+        .eq('email', email)
+        .single();
+      return data?.name || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Fetch image metadata (dimensions and file size)
   const fetchImageMeta = useCallback(async (url: string): Promise<{
     dimensions: { width: number; height: number } | null;
@@ -1826,10 +2100,14 @@ export default function OrganizerScreen({
     if (itemId) {
       const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
       if (item) {
-        // Fetch image dimensions and size
-        fetchImageMeta(url).then(({ dimensions, fileSize }) => {
+        // Fetch image dimensions, size, and user name in parallel
+        Promise.all([
+          fetchImageMeta(url),
+          item.added_by ? fetchUserName(item.added_by) : Promise.resolve(null)
+        ]).then(([{ dimensions, fileSize }, addedByName]) => {
           setLightboxMeta({
             addedBy: item.added_by || null,
+            addedByName,
             addedAt: item.added_at || null,
             dimensions,
             fileSize
@@ -1837,22 +2115,26 @@ export default function OrganizerScreen({
         });
       }
     }
-  }, [groupItems, fetchImageMeta]);
+  }, [groupItems, fetchImageMeta, fetchUserName]);
 
   // Update lightbox metadata when navigating between photos
   useEffect(() => {
     if (lightboxPhoto && lightboxItemId) {
-      fetchImageMeta(lightboxPhoto).then(({ dimensions, fileSize }) => {
-        const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+      Promise.all([
+        fetchImageMeta(lightboxPhoto),
+        item?.added_by ? fetchUserName(item.added_by) : Promise.resolve(null)
+      ]).then(([{ dimensions, fileSize }, addedByName]) => {
         setLightboxMeta({
           addedBy: item?.added_by || null,
+          addedByName,
           addedAt: item?.added_at || null,
           dimensions,
           fileSize
         });
       });
     }
-  }, [lightboxPhoto, lightboxItemId, groupItems, fetchImageMeta]);
+  }, [lightboxPhoto, lightboxItemId, groupItems, fetchImageMeta, fetchUserName]);
 
   // Close lightbox
   const closeLightbox = useCallback(() => {
@@ -2437,6 +2719,11 @@ export default function OrganizerScreen({
       const itemsToAdd = [...addItemsAfterGroupCreate];
 
       showToast('Grupp loodud');
+      logActivity({
+        action_type: 'create_group',
+        group_id: fullGroup.id,
+        group_name: fullGroup.name
+      });
       resetGroupForm();
       setShowGroupForm(false);
 
@@ -2825,6 +3112,12 @@ export default function OrganizerScreen({
       if (error) throw error;
 
       showToast('Grupp ja sisu kustutatud');
+      logActivity({
+        action_type: 'delete_group',
+        group_id: group.id,
+        group_name: group.name,
+        item_count: itemsToSave.length
+      });
       if (selectedGroupIds.has(group.id)) {
         setSelectedGroupIds(prev => {
           const newSet = new Set(prev);
@@ -3592,20 +3885,32 @@ export default function OrganizerScreen({
         return newMap;
       });
 
-      // Rebuild tree locally
-      setGroupTree(() => {
-        const updatedItems = new Map(groupItems);
-        const existing = updatedItems.get(targetGroupId) || [];
-        const filtered = existing.filter(e => !guids.includes(e.guid_ifc));
-        updatedItems.set(targetGroupId, [...filtered, ...insertedItems]);
-        return buildGroupTree(groups, updatedItems);
-      });
+      // Rebuild tree locally and update cache
+      const updatedItemsMap = new Map(groupItems);
+      const existingInMap = updatedItemsMap.get(targetGroupId) || [];
+      const filteredInMap = existingInMap.filter(e => !guids.includes(e.guid_ifc));
+      updatedItemsMap.set(targetGroupId, [...filteredInMap, ...insertedItems]);
+      const newTree = buildGroupTree(groups, updatedItemsMap);
+      setGroupTree(newTree);
+
+      // Update cache so items persist after navigation
+      setCachedData(groups, updatedItemsMap, newTree);
 
       const message = skippedCount > 0
         ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
         : `${items.length} detaili lisatud`;
       showToast(message);
       setExpandedGroups(prev => new Set([...prev, targetGroupId]));
+
+      // Log activity
+      logActivity({
+        action_type: 'add_items',
+        group_id: targetGroupId,
+        group_name: group.name,
+        item_count: items.length,
+        item_ids: insertedItems.map(i => i.id),
+        item_guids: guids.filter(Boolean) as string[]
+      });
 
       // Get the group's color (including parent's color if group doesn't have one)
       const groupColor = group.color || (group.parent_id ? groups.find(g => g.id === group.parent_id)?.color : null);
@@ -3858,6 +4163,18 @@ export default function OrganizerScreen({
 
       showToast(`${itemIds.length} detaili eemaldatud`);
       setSelectedItemIds(new Set());
+
+      // Log activity
+      const firstGroupId = Array.from(affectedGroups)[0];
+      const firstGroup = groups.find(g => g.id === firstGroupId);
+      logActivity({
+        action_type: 'remove_items',
+        group_id: firstGroupId || null,
+        group_name: firstGroup?.name || null,
+        item_count: itemIds.length,
+        item_ids: itemIds,
+        item_guids: guidsToRemove
+      });
 
       // Clear model selection (the items shown on quick-remove button)
       setSelectedObjects(prev => prev.filter(obj => !guidsToRemove.includes(obj.guidIfc?.toLowerCase() || '')));
@@ -4984,6 +5301,178 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error removing markups:', e);
       showToast('Viga markupite eemaldamisel');
+    } finally {
+      setSaving(false);
+      setMarkupProgress(null);
+    }
+  };
+
+  // ============================================
+  // BULK SELECTION COLOR/MARKUP FUNCTIONS
+  // ============================================
+
+  // Color only selected items in model (for bulk selection bar)
+  const colorSelectedItemsInModel = async () => {
+    if (selectedItemIds.size === 0 || !selectedGroup) return;
+
+    setSaving(true);
+    setShowColorMarkMenu(false);
+    try {
+      // Get GUIDs for selected items
+      const allItems = Array.from(groupItems.values()).flat();
+      const selectedItems = allItems.filter(item => selectedItemIds.has(item.id));
+      const guids = selectedItems.map(item => item.guid_ifc).filter(Boolean) as string[];
+
+      if (guids.length === 0) {
+        showToast('Valitud detailidel pole GUID-e');
+        return;
+      }
+
+      // Get group color (or parent's color)
+      const groupColor = selectedGroup.color ||
+        (selectedGroup.parent_id ? groups.find(g => g.id === selectedGroup.parent_id)?.color : null) ||
+        { r: 59, g: 130, b: 246 }; // Default blue if no color
+
+      // First, reset all colors to white
+      showToast(`Värvin ${guids.length} valitud detaili...`);
+
+      // Find all objects in model and color them white first
+      const allModelGuids = Array.from(groupItems.values()).flat().map(i => i.guid_ifc).filter(Boolean) as string[];
+      const allFoundObjects = await findObjectsInLoadedModels(api, allModelGuids);
+
+      // Color all white
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [, found] of allFoundObjects) {
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
+      }
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: 255, g: 255, b: 255, a: 255 } }
+        );
+      }
+
+      // Then color selected items
+      await colorItemsDirectly(guids, groupColor);
+      showToast(`✓ ${guids.length} detaili värvitud`);
+    } catch (e) {
+      console.error('Error coloring selected items:', e);
+      showToast('Viga värvimise');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Add markups to selected items (for bulk selection bar)
+  const addMarkupsToSelectedItems = async () => {
+    if (selectedItemIds.size === 0 || !selectedGroup) return;
+
+    setSaving(true);
+    setShowColorMarkMenu(false);
+    try {
+      // Get selected items
+      const allItems = Array.from(groupItems.values()).flat();
+      const selectedItems = allItems.filter(item => selectedItemIds.has(item.id));
+
+      if (selectedItems.length === 0) {
+        showToast('Valitud detaile ei leitud');
+        return;
+      }
+
+      showToast(`Loon markupeid ${selectedItems.length} detailile...`);
+
+      // Get root parent for custom fields
+      const rootParent = getRootParent(selectedGroup.id);
+      const customFields = rootParent?.custom_fields || [];
+
+      // Find objects in model
+      const guids = selectedItems.map(i => i.guid_ifc).filter(Boolean) as string[];
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      if (foundObjects.size === 0) {
+        showToast('Detaile ei leitud mudelist');
+        setSaving(false);
+        return;
+      }
+
+      // Build markups
+      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: string }> = [];
+
+      for (const item of selectedItems) {
+        if (!item.guid_ifc) continue;
+        const found = foundObjects.get(item.guid_ifc) || foundObjects.get(item.guid_ifc.toLowerCase());
+        if (!found) continue;
+
+        try {
+          const bboxes = await api.viewer.getObjectBoundingBoxes(found.modelId, [found.runtimeId]);
+          if (bboxes && bboxes.length > 0) {
+            const box = bboxes[0].boundingBox;
+            const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+            const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+            const centerZ = box.max.z * 1000;
+
+            const text = buildMarkupText(item, selectedGroup, customFields, undefined);
+            const pos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
+
+            let colorHex: string | undefined;
+            if (markupSettings.useGroupColors && selectedGroup.color) {
+              const { r, g, b } = selectedGroup.color;
+              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+
+            markupsToCreate.push({ text, start: pos, end: pos, color: colorHex });
+          }
+        } catch (e) {
+          console.warn('Could not get bounding box for', item.guid_ifc, e);
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        showToast('Markupe ei saanud luua');
+        setSaving(false);
+        return;
+      }
+
+      // Create markups in batches
+      setMarkupProgress({ current: 0, total: markupsToCreate.length, action: 'adding' });
+      const createdIds: number[] = [];
+
+      for (let i = 0; i < markupsToCreate.length; i += MARKUP_BATCH_SIZE) {
+        const batch = markupsToCreate.slice(i, i + MARKUP_BATCH_SIZE);
+        const batchData = batch.map(m => ({ text: m.text, start: m.start, end: m.end }));
+
+        try {
+          const result = await (api.markup as any)?.createMarkups?.(batchData);
+          if (Array.isArray(result)) {
+            result.forEach((r: any) => {
+              if (r?.id != null) createdIds.push(r.id);
+            });
+          }
+
+          // Apply colors
+          for (let j = 0; j < batch.length; j++) {
+            if (batch[j].color && createdIds[i + j] != null) {
+              try {
+                await (api.markup as any)?.editMarkup?.(createdIds[i + j], { color: batch[j].color });
+              } catch (e) {
+                console.warn('Could not set markup color', e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error creating markups batch:', e);
+        }
+
+        setMarkupProgress({ current: Math.min(i + MARKUP_BATCH_SIZE, markupsToCreate.length), total: markupsToCreate.length, action: 'adding' });
+      }
+
+      setMarkupProgress(null);
+      setHasMarkups(true);
+      showToast(`✓ ${createdIds.length} markupit loodud`);
+    } catch (e) {
+      console.error('Error adding markups to selected items:', e);
+      showToast('Viga markupite loomisel');
     } finally {
       setSaving(false);
       setMarkupProgress(null);
@@ -8891,6 +9380,13 @@ export default function OrganizerScreen({
         <button className="org-add-btn" onClick={() => { resetGroupForm(); setEditingGroup(null); setShowGroupForm(true); }}>
           <FiPlus size={14} /> Uus grupp
         </button>
+        <button
+          className="org-add-btn"
+          style={{ background: '#6366f1' }}
+          onClick={() => { loadActivityLogs(0); setShowActivityLogModal(true); }}
+        >
+          <FiClock size={14} /> Viimased tegevused
+        </button>
         <div className="org-color-controls">
           <div className="org-color-dropdown-wrapper">
             <button
@@ -9050,6 +9546,97 @@ export default function OrganizerScreen({
             <span className="bulk-count">{selectedItemIds.size} valitud</span>
             <div className="bulk-actions-left">
               <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
+              {/* Värvi - Markeeri dropdown */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowColorMarkMenu(prev => !prev)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <FiDroplet size={12} /> Värvi - Markeeri <FiChevronDown size={10} />
+                </button>
+                {showColorMarkMenu && (
+                  <div
+                    className="org-dropdown-menu"
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      zIndex: 100,
+                      background: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      minWidth: '220px',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <button
+                      onClick={colorSelectedItemsInModel}
+                      disabled={saving}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        textAlign: 'left'
+                      }}
+                      className="org-dropdown-item"
+                    >
+                      <FiDroplet size={14} />
+                      Värvi mudelis ainult valitud detailid
+                    </button>
+                    <button
+                      onClick={addMarkupsToSelectedItems}
+                      disabled={saving}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        textAlign: 'left'
+                      }}
+                      className="org-dropdown-item"
+                    >
+                      <FiTag size={14} />
+                      Lisa markupid valitud detailidele
+                    </button>
+                    {hasMarkups && (
+                      <button
+                        onClick={() => { setShowColorMarkMenu(false); removeAllMarkups(); }}
+                        disabled={saving}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          textAlign: 'left',
+                          color: '#dc2626',
+                          borderTop: '1px solid #e5e7eb'
+                        }}
+                        className="org-dropdown-item"
+                      >
+                        <FiTrash2 size={14} />
+                        Eemalda markupid
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> Tühista</button>
             </div>
             <div className="bulk-actions-right">
@@ -10057,6 +10644,131 @@ export default function OrganizerScreen({
                         onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
                       />
                     )}
+                    {field.type === 'photo' && (() => {
+                      const photoUrls = requiredFieldValues[field.id]?.split(',').filter(Boolean) || [];
+                      const isUploading = requiredFieldUploading === field.id;
+                      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                      return (
+                        <div
+                          style={{
+                            border: '2px dashed #d1d5db',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            background: isUploading ? '#f0f9ff' : '#fafafa',
+                            transition: 'all 0.2s'
+                          }}
+                          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.background = '#eff6ff'; }}
+                          onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.background = '#fafafa'; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.currentTarget.style.borderColor = '#d1d5db';
+                            e.currentTarget.style.background = '#fafafa';
+                            if (e.dataTransfer.files) {
+                              handleRequiredFieldPhotoUpload(e.dataTransfer.files, field.id);
+                            }
+                          }}
+                          onPaste={(e) => handleRequiredFieldPaste(e, field.id)}
+                          tabIndex={0}
+                        >
+                          {/* Upload buttons */}
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: photoUrls.length > 0 ? '12px' : 0 }}>
+                            {isMobile ? (
+                              <>
+                                {/* Mobile: Camera button */}
+                                <label style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                                  background: '#3b82f6', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+                                }}>
+                                  <FiCamera size={16} />
+                                  Pildista
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => { if (e.target.files) { handleRequiredFieldPhotoUpload(e.target.files, field.id); e.target.value = ''; } }}
+                                  />
+                                </label>
+                                {/* Mobile: Gallery button */}
+                                <label style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                                  background: '#10b981', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+                                }}>
+                                  <FiImage size={16} />
+                                  Galerii
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => { if (e.target.files) { handleRequiredFieldPhotoUpload(e.target.files, field.id); e.target.value = ''; } }}
+                                  />
+                                </label>
+                              </>
+                            ) : (
+                              <>
+                                {/* Desktop: Browse button */}
+                                <label style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                                  background: '#3b82f6', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+                                }}>
+                                  <FiUpload size={16} />
+                                  Sirvi faile
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => { if (e.target.files) { handleRequiredFieldPhotoUpload(e.target.files, field.id); e.target.value = ''; } }}
+                                  />
+                                </label>
+                                <span style={{ color: '#6b7280', fontSize: '12px', alignSelf: 'center' }}>
+                                  või lohista pildid siia • Ctrl+V kleebi
+                                </span>
+                              </>
+                            )}
+                            {isUploading && <span style={{ color: '#3b82f6', fontSize: '12px', alignSelf: 'center' }}>Laadin...</span>}
+                          </div>
+
+                          {/* Photo thumbnails */}
+                          {photoUrls.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {photoUrls.map((url, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    position: 'relative',
+                                    width: '60px', height: '60px',
+                                    borderRadius: '6px', overflow: 'hidden',
+                                    border: '1px solid #e5e7eb'
+                                  }}
+                                >
+                                  <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeRequiredFieldPhoto(field.id, url)}
+                                    style={{
+                                      position: 'absolute', top: '2px', right: '2px',
+                                      width: '18px', height: '18px', borderRadius: '50%',
+                                      background: 'rgba(0,0,0,0.6)', color: 'white',
+                                      border: 'none', cursor: 'pointer', fontSize: '12px',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                    }}
+                                    title="Eemalda"
+                                  >×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -10685,6 +11397,220 @@ export default function OrganizerScreen({
         );
       })()}
 
+      {/* Activity Log Modal */}
+      {showActivityLogModal && (
+        <div className="org-modal-overlay" onClick={() => setShowActivityLogModal(false)}>
+          <div
+            className="org-modal"
+            style={{ maxWidth: '900px', width: '95%', maxHeight: '90vh' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="org-modal-header">
+              <h2><FiClock size={16} /> Viimased tegevused</h2>
+              <button onClick={() => setShowActivityLogModal(false)}><FiX size={18} /></button>
+            </div>
+            <div className="org-modal-body" style={{ padding: '0' }}>
+              {/* Filters */}
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '8px',
+                padding: '12px',
+                borderBottom: '1px solid #e5e7eb',
+                background: '#f9fafb'
+              }}>
+                <input
+                  type="text"
+                  placeholder="Otsi kasutaja..."
+                  value={activityLogFilter.user}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, user: e.target.value }))}
+                  style={{ flex: '1', minWidth: '120px', padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                />
+                <select
+                  value={activityLogFilter.action}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, action: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                >
+                  <option value="">Kõik tegevused</option>
+                  <option value="add_items">Detailide lisamine</option>
+                  <option value="remove_items">Detailide eemaldamine</option>
+                  <option value="update_item">Detaili muutmine</option>
+                  <option value="create_group">Grupi loomine</option>
+                  <option value="delete_group">Grupi kustutamine</option>
+                  <option value="update_group">Grupi muutmine</option>
+                </select>
+                <input
+                  type="date"
+                  value={activityLogFilter.dateFrom}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, dateFrom: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                />
+                <input
+                  type="date"
+                  value={activityLogFilter.dateTo}
+                  onChange={(e) => setActivityLogFilter(prev => ({ ...prev, dateTo: e.target.value }))}
+                  style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                />
+                <button
+                  onClick={() => loadActivityLogs(0)}
+                  disabled={activityLogsLoading}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  <FiSearch size={12} /> Otsi
+                </button>
+                <button
+                  onClick={() => {
+                    setActivityLogFilter({ user: '', action: '', dateFrom: '', dateTo: '', search: '' });
+                    loadActivityLogs(0);
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    background: '#6b7280',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '12px'
+                  }}
+                >
+                  <FiX size={12} /> Puhasta
+                </button>
+              </div>
+
+              {/* Activity list */}
+              <div style={{ maxHeight: 'calc(90vh - 200px)', overflowY: 'auto', padding: '8px' }}>
+                {activityLogsLoading && activityLogs.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Laadin...</div>
+                ) : activityLogs.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>Tegevusi ei leitud</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {activityLogs.map((log) => {
+                      const actionLabels: Record<string, string> = {
+                        add_items: 'lisas gruppi',
+                        remove_items: 'eemaldas grupist',
+                        update_item: 'muutis detaili',
+                        create_group: 'lõi grupi',
+                        delete_group: 'kustutas grupi',
+                        update_group: 'muutis gruppi'
+                      };
+                      const actionColors: Record<string, string> = {
+                        add_items: '#10b981',
+                        remove_items: '#ef4444',
+                        update_item: '#f59e0b',
+                        create_group: '#3b82f6',
+                        delete_group: '#dc2626',
+                        update_group: '#8b5cf6'
+                      };
+
+                      const userName = log.user_name || log.user_email.split('@')[0];
+                      const actionLabel = actionLabels[log.action_type] || log.action_type;
+                      const actionColor = actionColors[log.action_type] || '#6b7280';
+                      const date = new Date(log.created_at);
+                      const dateStr = date.toLocaleDateString('et-EE');
+                      const timeStr = date.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <div
+                          key={log.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '8px 12px',
+                            background: '#f9fafb',
+                            borderRadius: '6px',
+                            fontSize: '12px'
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: '6px',
+                              height: '6px',
+                              borderRadius: '50%',
+                              background: actionColor,
+                              flexShrink: 0
+                            }}
+                          />
+                          <span style={{ fontWeight: 500, color: '#111827' }} title={log.user_email}>
+                            {userName}
+                          </span>
+                          <span style={{ color: '#6b7280' }}>{actionLabel}</span>
+                          {log.group_name && (
+                            <span style={{ fontWeight: 500, color: '#374151' }}>
+                              {log.group_name}
+                            </span>
+                          )}
+                          {log.item_count > 1 && (
+                            <span
+                              style={{
+                                background: actionColor,
+                                color: 'white',
+                                padding: '2px 6px',
+                                borderRadius: '10px',
+                                fontSize: '11px',
+                                cursor: log.item_guids?.length ? 'pointer' : 'default',
+                                textDecoration: log.item_guids?.length ? 'underline' : 'none'
+                              }}
+                              onClick={() => log.item_guids?.length && selectItemsFromActivity(log.item_guids)}
+                              title={log.item_guids?.length ? 'Klõpsa detailide valimiseks mudelis' : ''}
+                            >
+                              {log.item_count} detaili
+                            </span>
+                          )}
+                          {log.field_name && (
+                            <span style={{ color: '#6b7280' }}>
+                              (väli: {log.field_name})
+                            </span>
+                          )}
+                          <span style={{ marginLeft: 'auto', color: '#9ca3af', fontSize: '11px', whiteSpace: 'nowrap' }}>
+                            {dateStr} {timeStr}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Load more */}
+                {activityLogs.length > 0 && activityLogs.length >= activityLogPageSize && (
+                  <div style={{ padding: '16px', textAlign: 'center' }}>
+                    <button
+                      onClick={() => loadActivityLogs(activityLogPage + 1, true)}
+                      disabled={activityLogsLoading}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#e5e7eb',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      {activityLogsLoading ? 'Laadin...' : 'Laadi veel'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="org-modal-footer">
+              <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                {activityLogs.length} tegevust
+              </span>
+              <button className="cancel" onClick={() => setShowActivityLogModal(false)}>Sulge</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Settings Modal */}
       {showSettingsModal && (
         <div className="org-modal-overlay" onClick={() => setShowSettingsModal(false)}>
@@ -11082,7 +12008,9 @@ export default function OrganizerScreen({
                 justifyContent: 'center'
               }}>
                 {lightboxMeta.addedBy && (
-                  <span title="Lisaja">{lightboxMeta.addedBy.split('@')[0]}</span>
+                  <span title={lightboxMeta.addedBy}>
+                    {lightboxMeta.addedByName || lightboxMeta.addedBy.split('@')[0]}
+                  </span>
                 )}
                 {lightboxMeta.addedAt && (
                   <span title="Lisatud">
