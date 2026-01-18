@@ -786,6 +786,7 @@ export default function OrganizerScreen({
   });
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
   const [hasMarkups, setHasMarkups] = useState(false);
+  const [focusedLine, setFocusedLine] = useState<'line1Template' | 'line2Template' | 'line3Template'>('line1Template');
 
   // Save markup settings to localStorage when changed
   useEffect(() => {
@@ -8016,9 +8017,6 @@ export default function OrganizerScreen({
             }));
           }
         };
-
-        // Track which line input is focused
-        const [focusedLine, setFocusedLine] = useState<'line1Template' | 'line2Template' | 'line3Template'>('line1Template');
 
         // Generate preview from templates
         const generatePreview = (): string => {
