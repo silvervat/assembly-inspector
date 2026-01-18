@@ -72,6 +72,11 @@ export default function CranePlannerScreen({
     notes: ''
   });
 
+  // Movement and rotation step settings
+  const [moveStep, setMoveStep] = useState(0.5); // meters
+  const [rotateStep, setRotateStep] = useState(15); // degrees
+  const [heightStep, setHeightStep] = useState(0.5); // meters
+
   // Selected crane model data
   const selectedCraneModel = craneModels.find(c => c.id === selectedCraneModelId);
   const { counterweights } = useCounterweights(selectedCraneModelId);
@@ -83,46 +88,53 @@ export default function CranePlannerScreen({
   // Preview markups for real-time visualization - use ref to avoid stale closure
   const previewMarkupIdsRef = useRef<number[]>([]);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUpdatingPreviewRef = useRef(false); // Lock to prevent concurrent updates
 
   // Update preview when config changes
   const updatePreview = useCallback(async () => {
     if (!selectedCraneModel || !pickedPosition) return;
 
-    // Clear existing preview using ref (always has current value)
-    if (previewMarkupIdsRef.current.length > 0) {
-      await removeCraneMarkups(api, previewMarkupIdsRef.current);
-      previewMarkupIdsRef.current = [];
-    }
-
-    // Create preview crane data - use 'as any' to avoid strict null checks for preview only
-    const previewCrane = {
-      id: 'preview',
-      trimble_project_id: projectId,
-      crane_model_id: selectedCraneModelId,
-      counterweight_config_id: selectedCounterweightId || undefined,
-      position_x: config.position_x,
-      position_y: config.position_y,
-      position_z: config.position_z,
-      rotation_deg: config.rotation_deg,
-      boom_length_m: config.boom_length_m,
-      boom_angle_deg: config.boom_angle_deg,
-      hook_weight_kg: config.hook_weight_kg,
-      lifting_block_kg: config.lifting_block_kg,
-      safety_factor: config.safety_factor,
-      position_label: config.position_label || undefined,
-      radius_step_m: config.radius_step_m,
-      show_radius_rings: config.show_radius_rings,
-      show_capacity_labels: config.show_capacity_labels,
-      crane_color: config.crane_color,
-      radius_color: config.radius_color,
-      notes: config.notes || undefined,
-      markup_ids: [],
-      created_by_email: userEmail,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    } as ProjectCrane;
+    // Prevent concurrent updates - skip if already updating
+    if (isUpdatingPreviewRef.current) return;
+    isUpdatingPreviewRef.current = true;
 
     try {
+      // Clear existing preview using ref (always has current value)
+      const idsToRemove = [...previewMarkupIdsRef.current];
+      previewMarkupIdsRef.current = []; // Clear immediately to prevent duplicate removal
+
+      if (idsToRemove.length > 0) {
+        await removeCraneMarkups(api, idsToRemove);
+      }
+
+      // Create preview crane data
+      const previewCrane = {
+        id: 'preview',
+        trimble_project_id: projectId,
+        crane_model_id: selectedCraneModelId,
+        counterweight_config_id: selectedCounterweightId || undefined,
+        position_x: config.position_x,
+        position_y: config.position_y,
+        position_z: config.position_z,
+        rotation_deg: config.rotation_deg,
+        boom_length_m: config.boom_length_m,
+        boom_angle_deg: config.boom_angle_deg,
+        hook_weight_kg: config.hook_weight_kg,
+        lifting_block_kg: config.lifting_block_kg,
+        safety_factor: config.safety_factor,
+        position_label: config.position_label || undefined,
+        radius_step_m: config.radius_step_m,
+        show_radius_rings: config.show_radius_rings,
+        show_capacity_labels: config.show_capacity_labels,
+        crane_color: config.crane_color,
+        radius_color: config.radius_color,
+        notes: config.notes || undefined,
+        markup_ids: [],
+        created_by_email: userEmail,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as ProjectCrane;
+
       const chartData = loadCharts.find(lc =>
         lc.counterweight_config_id === selectedCounterweightId &&
         lc.boom_length_m === config.boom_length_m
@@ -132,6 +144,8 @@ export default function CranePlannerScreen({
       previewMarkupIdsRef.current = markupIds;
     } catch (error) {
       console.error('Error updating preview:', error);
+    } finally {
+      isUpdatingPreviewRef.current = false;
     }
   }, [api, selectedCraneModel, pickedPosition, projectId, selectedCraneModelId, selectedCounterweightId, config, loadCharts, userEmail]);
 
@@ -705,42 +719,115 @@ export default function CranePlannerScreen({
               {/* Movement Controls */}
               {pickedPosition && (
                 <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                    <span style={{ fontWeight: 500, fontSize: '14px' }}>Liiguta (500mm samm)</span>
-                    <span style={{ fontWeight: 500, fontSize: '14px' }}>Pööra (15° samm)</span>
+                  {/* Step Settings Row */}
+                  <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '13px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>Liigutamise samm:</span>
+                      <select
+                        value={moveStep}
+                        onChange={e => setMoveStep(parseFloat(e.target.value))}
+                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                      >
+                        <option value="0.1">0.1m</option>
+                        <option value="0.25">0.25m</option>
+                        <option value="0.5">0.5m</option>
+                        <option value="1">1m</option>
+                        <option value="2">2m</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <span>Pööramise samm:</span>
+                      <select
+                        value={rotateStep}
+                        onChange={e => setRotateStep(parseFloat(e.target.value))}
+                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                      >
+                        <option value="5">5°</option>
+                        <option value="10">10°</option>
+                        <option value="15">15°</option>
+                        <option value="30">30°</option>
+                        <option value="45">45°</option>
+                        <option value="90">90°</option>
+                      </select>
+                    </div>
                   </div>
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     {/* Movement */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
-                      <div />
-                      <button onClick={() => moveCrane(0, 0.5, 0)} style={btnStyle}><FiArrowUp /></button>
-                      <div />
-                      <button onClick={() => moveCrane(-0.5, 0, 0)} style={btnStyle}><FiArrowLeft /></button>
-                      <div style={{ textAlign: 'center', fontSize: '11px', color: '#6b7280', padding: '4px' }}>
-                        {config.position_x.toFixed(2)}m<br />{config.position_y.toFixed(2)}m
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '8px', textAlign: 'center' }}>
+                        Liiguta ({moveStep}m samm)
                       </div>
-                      <button onClick={() => moveCrane(0.5, 0, 0)} style={btnStyle}><FiArrowRight /></button>
-                      <div />
-                      <button onClick={() => moveCrane(0, -0.5, 0)} style={btnStyle}><FiArrowDown /></button>
-                      <div />
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
+                        <div />
+                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle}><FiArrowUp /></button>
+                        <div />
+                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle}><FiArrowLeft /></button>
+                        <div style={{ textAlign: 'center', fontSize: '11px', color: '#6b7280', padding: '4px' }}>
+                          {config.position_x.toFixed(2)}m<br />{config.position_y.toFixed(2)}m
+                        </div>
+                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle}><FiArrowRight /></button>
+                        <div />
+                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle}><FiArrowDown /></button>
+                        <div />
+                      </div>
                     </div>
                     {/* Rotation */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <button onClick={() => rotateCrane(15)} style={{ ...btnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                        <FiRotateCw /> +15°
-                      </button>
-                      <div style={{ textAlign: 'center', fontWeight: 600, padding: '8px' }}>{config.rotation_deg}°</div>
-                      <button onClick={() => rotateCrane(-15)} style={{ ...btnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                        <FiRotateCw style={{ transform: 'scaleX(-1)' }} /> -15°
-                      </button>
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '8px', textAlign: 'center' }}>
+                        Pööra ({rotateStep}° samm)
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <button onClick={() => rotateCrane(rotateStep)} style={{ ...btnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <FiRotateCw /> +{rotateStep}°
+                        </button>
+                        <div style={{ textAlign: 'center', fontWeight: 600, padding: '8px' }}>{config.rotation_deg}°</div>
+                        <button onClick={() => rotateCrane(-rotateStep)} style={{ ...btnStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <FiRotateCw style={{ transform: 'scaleX(-1)' }} /> -{rotateStep}°
+                        </button>
+                      </div>
                     </div>
                   </div>
+
                   {/* Height */}
-                  <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px' }}>Kõrgus:</span>
-                    <button onClick={() => moveCrane(0, 0, -1)} style={btnStyle}>-1m</button>
-                    <span style={{ fontWeight: 600, minWidth: '60px', textAlign: 'center' }}>{config.position_z.toFixed(2)}m</span>
-                    <button onClick={() => moveCrane(0, 0, 1)} style={btnStyle}>+1m</button>
+                  <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 500 }}>Kõrgus:</span>
+                      <select
+                        value={heightStep}
+                        onChange={e => setHeightStep(parseFloat(e.target.value))}
+                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                      >
+                        <option value="0.1">0.1m samm</option>
+                        <option value="0.25">0.25m samm</option>
+                        <option value="0.5">0.5m samm</option>
+                        <option value="1">1m samm</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button onClick={() => moveCrane(0, 0, -heightStep)} style={btnStyle}>-{heightStep}m</button>
+                      <input
+                        type="number"
+                        value={config.position_z}
+                        onChange={e => {
+                          const newZ = parseFloat(e.target.value) || 0;
+                          const dz = newZ - config.position_z;
+                          moveCrane(0, 0, dz);
+                        }}
+                        style={{
+                          width: '80px',
+                          padding: '8px',
+                          textAlign: 'center',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          fontWeight: 600
+                        }}
+                        step={heightStep}
+                      />
+                      <span style={{ fontSize: '13px' }}>m</span>
+                      <button onClick={() => moveCrane(0, 0, heightStep)} style={btnStyle}>+{heightStep}m</button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -812,25 +899,92 @@ export default function CranePlannerScreen({
                       placeholder="POS-1, KRAANA-A..."
                     />
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={config.show_radius_rings}
-                        onChange={e => setConfig(prev => ({ ...prev, show_radius_rings: e.target.checked }))}
-                      />
-                      Näita raadiusi
-                    </label>
+                  {/* Radius Ring Settings */}
+                  <div style={{ gridColumn: 'span 2', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px' }}>
+                    <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '12px' }}>Raadiuse ringide seaded</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={config.show_radius_rings}
+                            onChange={e => setConfig(prev => ({ ...prev, show_radius_rings: e.target.checked }))}
+                          />
+                          Näita raadiusi
+                        </label>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={config.show_capacity_labels}
+                            onChange={e => setConfig(prev => ({ ...prev, show_capacity_labels: e.target.checked }))}
+                          />
+                          Näita tõstevõimeid
+                        </label>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px' }}>Ringi värv:</span>
+                        <input
+                          type="color"
+                          value={`#${config.radius_color.r.toString(16).padStart(2, '0')}${config.radius_color.g.toString(16).padStart(2, '0')}${config.radius_color.b.toString(16).padStart(2, '0')}`}
+                          onChange={e => {
+                            const hex = e.target.value;
+                            const r = parseInt(hex.slice(1, 3), 16);
+                            const g = parseInt(hex.slice(3, 5), 16);
+                            const b = parseInt(hex.slice(5, 7), 16);
+                            setConfig(prev => ({ ...prev, radius_color: { ...prev.radius_color, r, g, b } }));
+                          }}
+                          style={{ width: '40px', height: '32px', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontSize: '13px' }}>Läbipaistvus:</span>
+                        <input
+                          type="range"
+                          min="50"
+                          max="255"
+                          value={config.radius_color.a}
+                          onChange={e => setConfig(prev => ({
+                            ...prev,
+                            radius_color: { ...prev.radius_color, a: parseInt(e.target.value) }
+                          }))}
+                          style={{ flex: 1 }}
+                        />
+                        <span style={{ fontSize: '12px', minWidth: '35px' }}>{Math.round((config.radius_color.a / 255) * 100)}%</span>
+                      </div>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={config.show_capacity_labels}
-                        onChange={e => setConfig(prev => ({ ...prev, show_capacity_labels: e.target.checked }))}
-                      />
-                      Näita tõstevõimeid
-                    </label>
+                  {/* Crane Color Settings */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px' }}>Kraana värv:</span>
+                    <input
+                      type="color"
+                      value={`#${config.crane_color.r.toString(16).padStart(2, '0')}${config.crane_color.g.toString(16).padStart(2, '0')}${config.crane_color.b.toString(16).padStart(2, '0')}`}
+                      onChange={e => {
+                        const hex = e.target.value;
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        setConfig(prev => ({ ...prev, crane_color: { ...prev.crane_color, r, g, b } }));
+                      }}
+                      style={{ width: '40px', height: '32px', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px' }}>Kraana läbipaistvus:</span>
+                    <input
+                      type="range"
+                      min="50"
+                      max="255"
+                      value={config.crane_color.a}
+                      onChange={e => setConfig(prev => ({
+                        ...prev,
+                        crane_color: { ...prev.crane_color, a: parseInt(e.target.value) }
+                      }))}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ fontSize: '12px', minWidth: '35px' }}>{Math.round((config.crane_color.a / 255) * 100)}%</span>
                   </div>
                 </div>
               )}

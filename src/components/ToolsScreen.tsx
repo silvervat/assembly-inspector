@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
@@ -1096,6 +1096,31 @@ export default function ToolsScreen({
       )}
 
       <div className="tools-content">
+        {/* Crane Planning Button */}
+        <div className="tools-section">
+          <button
+            onClick={() => onNavigate?.('crane_planner')}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              padding: '16px',
+              backgroundColor: '#fff7ed',
+              border: '1px solid #fdba74',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              textAlign: 'left'
+            }}
+          >
+            <FiTarget size={24} style={{ color: '#f97316' }} />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '16px', color: '#c2410c' }}>Kraanide Planeerimine</div>
+              <div style={{ fontSize: '13px', color: '#ea580c' }}>Paiguta ja halda kraanasid mudelis</div>
+            </div>
+          </button>
+        </div>
+
         {/* Bolt Export Section - Collapsible */}
         <div className="tools-section">
           <div

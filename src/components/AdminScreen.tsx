@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle } from 'react-icons/fi';
+import { FiSearch, FiCopy, FiDownload, FiRefreshCw, FiZap, FiCheck, FiX, FiLoader, FiDatabase, FiTrash2, FiUpload, FiExternalLink, FiUsers, FiEdit2, FiPlus, FiSave, FiCamera, FiVideo, FiTruck, FiAlertTriangle, FiBox } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser } from '../supabase';
 import { clearMappingsCache } from '../contexts/PropertyMappingsContext';
@@ -3998,6 +3998,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           >
             <FiVideo size={18} />
             <span>Kaamera positsioonid</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => onNavigate?.('crane_library')}
+            style={{ background: '#f97316', color: 'white' }}
+          >
+            <FiBox size={18} />
+            <span>Kraanide Andmebaas</span>
           </button>
 
           <button
