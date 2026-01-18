@@ -404,22 +404,6 @@ export default function MainMenu({
               </span>
             </button>
 
-            {/* Kraanide planeerimine - crane planning */}
-            <button
-              className="menu-item enabled"
-              onClick={() => onSelectMode('crane_planner')}
-            >
-              <span className="menu-item-icon" style={{ color: '#f97316' }}>
-                <FiTool size={20} />
-              </span>
-              <div className="menu-item-content">
-                <span className="menu-item-title">Kraanide Planeerimine</span>
-                <span className="menu-item-desc">Paiguta ja halda kraanasid mudelis</span>
-              </div>
-              <span className="menu-item-arrow">
-                <FiChevronRight size={18} />
-              </span>
-            </button>
           </>
         )}
 
@@ -452,21 +436,6 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Administratsioon</span>
                 <span className="menu-item-desc">Admin tööriistad</span>
-              </div>
-              <span className="menu-item-arrow">
-                <FiChevronRight size={18} />
-              </span>
-            </button>
-            <button
-              className="menu-item admin-menu-item enabled"
-              onClick={() => onSelectMode('crane_library')}
-            >
-              <span className="menu-item-icon" style={{ color: '#f97316' }}>
-                <FiBox size={20} />
-              </span>
-              <div className="menu-item-content">
-                <span className="menu-item-title">Kraanide Andmebaas</span>
-                <span className="menu-item-desc">Halda kraanide tüüpe ja tõstegraafikuid</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
