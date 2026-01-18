@@ -851,6 +851,10 @@ export default function OrganizerScreen({
   const [showFieldsManagementModal, setShowFieldsManagementModal] = useState(false);
   const [fieldsManagementGroupId, setFieldsManagementGroupId] = useState<string | null>(null);
 
+  // Required fields modal (when adding items to group with required custom fields)
+  const [showRequiredFieldsModal, setShowRequiredFieldsModal] = useState(false);
+  const [requiredFieldValues, setRequiredFieldValues] = useState<Record<string, string>>({});
+
   // User settings (stored in localStorage)
   const [autoExpandOnSelection, setAutoExpandOnSelection] = useState<boolean>(() => {
     try {
@@ -2526,11 +2530,21 @@ export default function OrganizerScreen({
       return;
     }
 
+    // Check if group has required custom fields
+    const requiredFields = getRequiredFields(targetGroupId);
+    if (requiredFields.length > 0) {
+      // Show modal to fill required fields
+      setPendingAddGroupId(targetGroupId);
+      setRequiredFieldValues({}); // Reset values
+      setShowRequiredFieldsModal(true);
+      return;
+    }
+
     // Proceed with adding
     await addSelectedToGroupInternal(targetGroupId);
   };
 
-  const addSelectedToGroupInternal = async (targetGroupId: string) => {
+  const addSelectedToGroupInternal = async (targetGroupId: string, customFieldValues?: Record<string, string>) => {
     if (selectedObjects.length === 0) return;
 
     const group = groups.find(g => g.id === targetGroupId);
@@ -2657,6 +2671,10 @@ export default function OrganizerScreen({
           if (displayVals) {
             Object.assign(customProps, displayVals);
           }
+        }
+        // Add custom field values (from required fields modal)
+        if (customFieldValues) {
+          Object.assign(customProps, customFieldValues);
         }
         return {
           group_id: targetGroupId,
@@ -6412,6 +6430,15 @@ export default function OrganizerScreen({
     return group?.assembly_selection_on !== false;
   }, [groups]);
 
+  // Get required custom fields for a group (from root parent if subgroup)
+  const getRequiredFields = useCallback((groupId: string): CustomFieldDefinition[] => {
+    const group = groups.find(g => g.id === groupId);
+    if (!group) return [];
+    const rootParent = getRootParent(groupId);
+    const customFields = rootParent?.custom_fields || group.custom_fields || [];
+    return customFields.filter(f => f.required);
+  }, [groups, getRootParent]);
+
   // ============================================
   // HELPER: Check if unique items required for group
   // ============================================
@@ -8261,6 +8288,107 @@ export default function OrganizerScreen({
                   }}
                 >
                   <FiPlus size={14} /> Lisa väli
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Required fields modal (when adding items to group with required fields) */}
+      {showRequiredFieldsModal && pendingAddGroupId && (() => {
+        const group = groups.find(g => g.id === pendingAddGroupId);
+        if (!group) return null;
+        const requiredFields = getRequiredFields(pendingAddGroupId);
+        if (requiredFields.length === 0) return null;
+
+        const allFieldsFilled = requiredFields.every(f => {
+          const val = requiredFieldValues[f.id];
+          return val !== undefined && val !== '';
+        });
+
+        return (
+          <div className="org-modal-overlay" onClick={() => { setShowRequiredFieldsModal(false); setPendingAddGroupId(null); }}>
+            <div className="org-modal" onClick={e => e.stopPropagation()}>
+              <div className="org-modal-header">
+                <h2>Täida kohustuslikud väljad</h2>
+                <button onClick={() => { setShowRequiredFieldsModal(false); setPendingAddGroupId(null); }}><FiX size={18} /></button>
+              </div>
+              <div className="org-modal-body">
+                <p style={{ marginBottom: 16, fontSize: 13, color: '#666' }}>
+                  Grupil <strong>{group.name}</strong> on kohustuslikud väljad. Täida need enne {selectedObjects.length} detaili lisamist.
+                </p>
+                {requiredFields.map(field => (
+                  <div key={field.id} className="org-field">
+                    <label>{field.name} *</label>
+                    {field.type === 'text' && (
+                      <input
+                        type="text"
+                        value={requiredFieldValues[field.id] || ''}
+                        onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      />
+                    )}
+                    {field.type === 'number' && (
+                      <input
+                        type="number"
+                        step={field.options?.decimals ? Math.pow(10, -field.options.decimals) : 1}
+                        value={requiredFieldValues[field.id] || ''}
+                        onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      />
+                    )}
+                    {field.type === 'dropdown' && (
+                      <select
+                        value={requiredFieldValues[field.id] || ''}
+                        onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      >
+                        <option value="">Vali...</option>
+                        {(field.options?.dropdownOptions || []).map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    )}
+                    {field.type === 'date' && (
+                      <input
+                        type="date"
+                        value={requiredFieldValues[field.id] || ''}
+                        onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      />
+                    )}
+                    {field.type === 'currency' && (
+                      <div className="currency-input">
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={requiredFieldValues[field.id] || ''}
+                          onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+                        />
+                        <span className="currency-symbol">€</span>
+                      </div>
+                    )}
+                    {field.type === 'tags' && (
+                      <input
+                        type="text"
+                        placeholder="märksõnad, komaga eraldatud"
+                        value={requiredFieldValues[field.id] || ''}
+                        onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="org-modal-footer">
+                <button className="cancel" onClick={() => { setShowRequiredFieldsModal(false); setPendingAddGroupId(null); }}>Tühista</button>
+                <button
+                  className="save"
+                  disabled={!allFieldsFilled || saving}
+                  onClick={async () => {
+                    setShowRequiredFieldsModal(false);
+                    await addSelectedToGroupInternal(pendingAddGroupId, requiredFieldValues);
+                    setPendingAddGroupId(null);
+                    setRequiredFieldValues({});
+                  }}
+                >
+                  {saving ? 'Lisan...' : `Lisa ${selectedObjects.length} detaili`}
                 </button>
               </div>
             </div>
