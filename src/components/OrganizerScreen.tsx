@@ -1788,21 +1788,31 @@ export default function OrganizerScreen({
 
       // Add items after group creation if any were selected
       if (itemsToAdd.length > 0) {
-        // Use the newly created group id to add items
-        // Small delay to ensure state is updated
-        setTimeout(async () => {
-          try {
-            // Temporarily set selected objects for the add function
-            const prevSelectedObjects = selectedObjects;
-            setSelectedObjects(itemsToAdd);
-            await addSelectedToGroupInternal(fullGroup.id);
-            setSelectedObjects(prevSelectedObjects);
-            showToast(`${itemsToAdd.length} detaili lisatud gruppi`);
-          } catch (e) {
-            console.error('Error adding items to new group:', e);
-            showToast('Viga detailide lisamisel');
-          }
-        }, 100);
+        // Check if the new group has required custom fields
+        const requiredFields = (formCustomFields || []).filter(f => f.required);
+
+        if (requiredFields.length > 0) {
+          // Show required fields modal for the new group
+          setPendingAddGroupId(fullGroup.id);
+          setAddItemsAfterGroupCreate(itemsToAdd); // Keep items for later
+          setRequiredFieldValues({});
+          setShowRequiredFieldsModal(true);
+          // The modal will call addSelectedToGroupInternal with the values
+        } else {
+          // No required fields, add immediately
+          setTimeout(async () => {
+            try {
+              const prevSelectedObjects = selectedObjects;
+              setSelectedObjects(itemsToAdd);
+              await addSelectedToGroupInternal(fullGroup.id);
+              setSelectedObjects(prevSelectedObjects);
+              showToast(`${itemsToAdd.length} detaili lisatud gruppi`);
+            } catch (e) {
+              console.error('Error adding items to new group:', e);
+              showToast('Viga detailide lisamisel');
+            }
+          }, 100);
+        }
       }
     } catch (e) {
       console.error('Error creating group:', e);
@@ -2834,15 +2844,24 @@ export default function OrganizerScreen({
 
   // Effect to handle pending add operation when assembly selection is re-enabled
   useEffect(() => {
-    if (assemblySelectionEnabled && pendingAddGroupId && !showAssemblyModal) {
+    if (assemblySelectionEnabled && pendingAddGroupId && !showAssemblyModal && !showRequiredFieldsModal) {
       const groupId = pendingAddGroupId;
+      // Don't clear pendingAddGroupId here - addSelectedToGroup will handle it or required fields modal will use it
+      // Check for required fields before adding
+      const requiredFields = getRequiredFields(groupId);
+      if (requiredFields.length > 0) {
+        // Show required fields modal
+        setRequiredFieldValues({});
+        setShowRequiredFieldsModal(true);
+        return;
+      }
+      // No required fields, proceed with add
       setPendingAddGroupId(null);
-      // Small delay to ensure UI is updated
       setTimeout(() => {
         addSelectedToGroupInternal(groupId);
       }, 100);
     }
-  }, [assemblySelectionEnabled, pendingAddGroupId, showAssemblyModal]);
+  }, [assemblySelectionEnabled, pendingAddGroupId, showAssemblyModal, showRequiredFieldsModal]);
 
   // Refresh item display properties from model when group display_properties change
   const refreshGroupItemDisplayProperties = async (groupId: string, displayProps: {set: string; prop: string; label: string}[]) => {
@@ -4215,6 +4234,15 @@ export default function OrganizerScreen({
       return;
     }
 
+    // Check if group has required custom fields
+    const requiredFields = getRequiredFields(importGroupId);
+    if (requiredFields.length > 0) {
+      const fieldNames = requiredFields.map(f => f.name).join(', ');
+      showToast(`Grupil on kohustuslikud väljad (${fieldNames}). Kasuta tavalist lisamist mudelist.`);
+      setShowImportModal(false);
+      return;
+    }
+
     // Parse input - split by newlines, commas, semicolons, tabs, or spaces
     const rawValues = importText
       .split(/[\n,;\t]+/)
@@ -5208,6 +5236,49 @@ export default function OrganizerScreen({
       const isNonAssemblyGroup = parentGroup.assembly_selection_on === false;
       const displayProps = parentGroup.display_properties || [];
 
+      // Check for required fields validation
+      const requiredFields = customFields.filter(f => f.required);
+      if (requiredFields.length > 0) {
+        // Check if required field columns exist in Excel and have values
+        let missingColumns: string[] = [];
+        let rowsWithMissingValues = 0;
+
+        for (const field of requiredFields) {
+          const colName = field.name.replace(/\s+/g, '_');
+          // Check if any row has this column
+          const columnExists = rows.some(row =>
+            row[colName] !== undefined || row[field.name] !== undefined || row[field.name.toLowerCase()] !== undefined
+          );
+          if (!columnExists) {
+            missingColumns.push(field.name);
+          }
+        }
+
+        if (missingColumns.length > 0) {
+          showToast(`Kohustuslikud veerud puuduvad: ${missingColumns.join(', ')}`);
+          setSaving(false);
+          return;
+        }
+
+        // Count rows missing required values
+        for (const row of rows) {
+          for (const field of requiredFields) {
+            const colName = field.name.replace(/\s+/g, '_');
+            const value = row[colName] || row[field.name] || row[field.name.toLowerCase()];
+            if (value === undefined || value === '') {
+              rowsWithMissingValues++;
+              break;
+            }
+          }
+        }
+
+        if (rowsWithMissingValues > 0) {
+          const fieldNames = requiredFields.map(f => f.name).join(', ');
+          showToast(`Hoiatus: ${rowsWithMissingValues} rida puuduvate kohustuslike väärtustega (${fieldNames})`);
+          // Continue with import - just a warning
+        }
+      }
+
       // Step 1: Collect all GUIDs and convert MS to IFC
       const guidToRow = new Map<string, Record<string, string>>();
 
@@ -6106,12 +6177,24 @@ export default function OrganizerScreen({
       // Refresh data
       await refreshData();
 
+      // Check if any target groups have required fields
+      let groupsWithRequiredFields = 0;
+      for (const [groupId] of itemsByGroup) {
+        const requiredFields = getRequiredFields(groupId);
+        if (requiredFields.length > 0) {
+          groupsWithRequiredFields++;
+        }
+      }
+
       let message = `Imporditud ${processedItems} detaili`;
       if (createdGroups > 0) {
         message += `, loodud ${createdGroups} gruppi`;
       }
       if (skippedItems > 0) {
         message += `, ${skippedItems} vahele jäetud`;
+      }
+      if (groupsWithRequiredFields > 0) {
+        message += ` (${groupsWithRequiredFields} grupil kohustuslikud väljad täitmata)`;
       }
 
       showToast(message);
@@ -8587,21 +8670,48 @@ export default function OrganizerScreen({
         const requiredFields = getRequiredFields(pendingAddGroupId);
         if (requiredFields.length === 0) return null;
 
+        // Use items from group creation if available, otherwise selected objects
+        const itemsToAdd = addItemsAfterGroupCreate.length > 0 ? addItemsAfterGroupCreate : selectedObjects;
+        const itemCount = itemsToAdd.length;
+
         const allFieldsFilled = requiredFields.every(f => {
           const val = requiredFieldValues[f.id];
           return val !== undefined && val !== '';
         });
 
+        const handleCancel = () => {
+          setShowRequiredFieldsModal(false);
+          setPendingAddGroupId(null);
+          setAddItemsAfterGroupCreate([]); // Clear pending items from group creation
+        };
+
+        const handleSave = async () => {
+          setShowRequiredFieldsModal(false);
+          // Temporarily set selectedObjects if items came from group creation
+          if (addItemsAfterGroupCreate.length > 0) {
+            const prevSelectedObjects = selectedObjects;
+            setSelectedObjects(addItemsAfterGroupCreate);
+            await addSelectedToGroupInternal(pendingAddGroupId, requiredFieldValues);
+            setSelectedObjects(prevSelectedObjects);
+            showToast(`${addItemsAfterGroupCreate.length} detaili lisatud gruppi`);
+            setAddItemsAfterGroupCreate([]);
+          } else {
+            await addSelectedToGroupInternal(pendingAddGroupId, requiredFieldValues);
+          }
+          setPendingAddGroupId(null);
+          setRequiredFieldValues({});
+        };
+
         return (
-          <div className="org-modal-overlay" onClick={() => { setShowRequiredFieldsModal(false); setPendingAddGroupId(null); }}>
+          <div className="org-modal-overlay" onClick={handleCancel}>
             <div className="org-modal" onClick={e => e.stopPropagation()}>
               <div className="org-modal-header">
                 <h2>Täida kohustuslikud väljad</h2>
-                <button onClick={() => { setShowRequiredFieldsModal(false); setPendingAddGroupId(null); }}><FiX size={18} /></button>
+                <button onClick={handleCancel}><FiX size={18} /></button>
               </div>
               <div className="org-modal-body">
                 <p style={{ marginBottom: 16, fontSize: 13, color: '#666' }}>
-                  Grupil <strong>{group.name}</strong> on kohustuslikud väljad. Täida need enne {selectedObjects.length} detaili lisamist.
+                  Grupil <strong>{group.name}</strong> on kohustuslikud väljad. Täida need enne {itemCount} detaili lisamist.
                 </p>
                 {requiredFields.map(field => (
                   <div key={field.id} className="org-field">
@@ -8662,18 +8772,13 @@ export default function OrganizerScreen({
                 ))}
               </div>
               <div className="org-modal-footer">
-                <button className="cancel" onClick={() => { setShowRequiredFieldsModal(false); setPendingAddGroupId(null); }}>Tühista</button>
+                <button className="cancel" onClick={handleCancel}>Tühista</button>
                 <button
                   className="save"
                   disabled={!allFieldsFilled || saving}
-                  onClick={async () => {
-                    setShowRequiredFieldsModal(false);
-                    await addSelectedToGroupInternal(pendingAddGroupId, requiredFieldValues);
-                    setPendingAddGroupId(null);
-                    setRequiredFieldValues({});
-                  }}
+                  onClick={handleSave}
                 >
-                  {saving ? 'Lisan...' : `Lisa ${selectedObjects.length} detaili`}
+                  {saving ? 'Lisan...' : `Lisa ${itemCount} detaili`}
                 </button>
               </div>
             </div>
