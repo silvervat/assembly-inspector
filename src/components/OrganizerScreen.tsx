@@ -941,6 +941,11 @@ export default function OrganizerScreen({
     fileSize: number | null;
   } | null>(null);
 
+  // Activity log lightbox (read-only photo viewer)
+  const [activityLightboxPhotos, setActivityLightboxPhotos] = useState<string[]>([]);
+  const [activityLightboxIndex, setActivityLightboxIndex] = useState(0);
+  const activityLightboxTouchStartX = useRef<number | null>(null);
+
   // Photo/attachment upload state
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string>('');
@@ -1968,7 +1973,7 @@ export default function OrganizerScreen({
           item_guids: item.guid_ifc ? [item.guid_ifc] : [],
           field_id: field.id,
           field_name: field.name,
-          details: { file_count: newUrls.length }
+          details: { file_count: newUrls.length, urls: newUrls }
         });
       }
     } catch (e) {
@@ -11678,6 +11683,41 @@ export default function OrganizerScreen({
                               </span>
                             )}
                           </div>
+                          {/* Third row: photo thumbnails or info value */}
+                          {(log.action_type === 'add_photo' && log.details?.urls?.length > 0) && (
+                            <div style={{ display: 'flex', gap: '4px', paddingLeft: '11px', marginTop: '4px', flexWrap: 'wrap' }}>
+                              {(log.details.urls as string[]).slice(0, 4).map((url: string, idx: number) => (
+                                <img
+                                  key={idx}
+                                  src={url}
+                                  alt={`Foto ${idx + 1}`}
+                                  style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    objectFit: 'cover',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    border: '1px solid #d1d5db'
+                                  }}
+                                  onClick={() => {
+                                    setActivityLightboxPhotos(log.details.urls as string[]);
+                                    setActivityLightboxIndex(idx);
+                                  }}
+                                />
+                              ))}
+                              {log.details.urls.length > 4 && (
+                                <span style={{ fontSize: '10px', color: '#6b7280', alignSelf: 'center' }}>
+                                  +{log.details.urls.length - 4}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {log.action_type === 'update_item' && log.new_value && (
+                            <div style={{ paddingLeft: '11px', marginTop: '2px', fontSize: '10px', color: '#374151' }}>
+                              <span style={{ color: '#9ca3af' }}>→ </span>
+                              {String(log.new_value).length > 100 ? String(log.new_value).substring(0, 100) + '...' : String(log.new_value)}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -11711,6 +11751,109 @@ export default function OrganizerScreen({
               </span>
               <button className="cancel" onClick={() => setShowActivityLogModal(false)}>Sulge</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Log Photo Lightbox */}
+      {activityLightboxPhotos.length > 0 && (
+        <div
+          className="org-modal-overlay"
+          style={{ background: 'rgba(0,0,0,0.9)', zIndex: 10001 }}
+          onClick={() => { setActivityLightboxPhotos([]); setActivityLightboxIndex(0); }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '20px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={activityLightboxPhotos[activityLightboxIndex]}
+              alt="Foto"
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                borderRadius: '4px',
+                touchAction: 'pan-y'
+              }}
+              onTouchStart={(e) => {
+                activityLightboxTouchStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (activityLightboxTouchStartX.current === null || activityLightboxPhotos.length <= 1) return;
+                const touchEndX = e.changedTouches[0].clientX;
+                const diff = activityLightboxTouchStartX.current - touchEndX;
+                const threshold = 50;
+                if (diff > threshold) {
+                  const newIndex = activityLightboxIndex === activityLightboxPhotos.length - 1 ? 0 : activityLightboxIndex + 1;
+                  setActivityLightboxIndex(newIndex);
+                } else if (diff < -threshold) {
+                  const newIndex = activityLightboxIndex === 0 ? activityLightboxPhotos.length - 1 : activityLightboxIndex - 1;
+                  setActivityLightboxIndex(newIndex);
+                }
+                activityLightboxTouchStartX.current = null;
+              }}
+            />
+            {/* Close button */}
+            <button
+              onClick={() => { setActivityLightboxPhotos([]); setActivityLightboxIndex(0); }}
+              style={{
+                marginTop: '16px',
+                padding: '8px 24px',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Sulge
+            </button>
+            {/* Navigation */}
+            {activityLightboxPhotos.length > 1 && (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+                <button
+                  onClick={() => {
+                    const newIndex = activityLightboxIndex === 0 ? activityLightboxPhotos.length - 1 : activityLightboxIndex - 1;
+                    setActivityLightboxIndex(newIndex);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ← Eelmine
+                </button>
+                <span style={{ color: 'white', alignSelf: 'center' }}>
+                  {activityLightboxIndex + 1} / {activityLightboxPhotos.length}
+                </span>
+                <button
+                  onClick={() => {
+                    const newIndex = activityLightboxIndex === activityLightboxPhotos.length - 1 ? 0 : activityLightboxIndex + 1;
+                    setActivityLightboxIndex(newIndex);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Järgmine →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
