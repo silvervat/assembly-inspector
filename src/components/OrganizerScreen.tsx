@@ -853,6 +853,8 @@ export default function OrganizerScreen({
   const [showGroupsManagementModal, setShowGroupsManagementModal] = useState(false);
   const [managementEditingGroupId, setManagementEditingGroupId] = useState<string | null>(null);
   const [managementEditName, setManagementEditName] = useState('');
+  const [managementEditingDescGroupId, setManagementEditingDescGroupId] = useState<string | null>(null);
+  const [managementEditDesc, setManagementEditDesc] = useState('');
   const [managementColorPickerGroupId, setManagementColorPickerGroupId] = useState<string | null>(null);
   const [returnToGroupsManagement, setReturnToGroupsManagement] = useState(false);
   const [propertySearchQuery, setPropertySearchQuery] = useState('');
@@ -9880,6 +9882,7 @@ export default function OrganizerScreen({
         <div className="org-modal-overlay" onClick={() => {
           setShowGroupsManagementModal(false);
           setManagementEditingGroupId(null);
+          setManagementEditingDescGroupId(null);
           setManagementColorPickerGroupId(null);
         }}>
           <div className="org-modal" style={{ maxWidth: '600px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
@@ -9888,6 +9891,7 @@ export default function OrganizerScreen({
               <button onClick={() => {
                 setShowGroupsManagementModal(false);
                 setManagementEditingGroupId(null);
+                setManagementEditingDescGroupId(null);
                 setManagementColorPickerGroupId(null);
               }}><FiX size={18} /></button>
             </div>
@@ -9935,6 +9939,7 @@ export default function OrganizerScreen({
                         const children = groups.filter(g => g.parent_id === group.id).sort((a, b) => a.sort_order - b.sort_order);
                         const itemCount = groupItems.get(group.id)?.length || 0;
                         const isEditing = managementEditingGroupId === group.id;
+                        const isEditingDesc = managementEditingDescGroupId === group.id;
                         const showColorPicker = managementColorPickerGroupId === group.id;
 
                         return (
@@ -10033,6 +10038,7 @@ export default function OrganizerScreen({
 
                               {/* Group name and description - editable */}
                               <div style={{ flex: 1, minWidth: 0 }}>
+                                {/* Name - editable */}
                                 {isEditing ? (
                                   <input
                                     type="text"
@@ -10065,39 +10071,83 @@ export default function OrganizerScreen({
                                     }}
                                   />
                                 ) : (
-                                  <div
-                                    style={{ cursor: 'pointer' }}
-                                    onClick={() => {
-                                      setManagementEditingGroupId(group.id);
-                                      setManagementEditName(group.name);
-                                    }}
-                                    title="Kliki nime muutmiseks"
-                                  >
-                                    <span style={{
+                                  <span
+                                    style={{
                                       fontSize: '12px',
                                       fontWeight: level === 0 ? 500 : 400,
                                       color: '#374151',
                                       display: 'block',
                                       overflow: 'hidden',
                                       textOverflow: 'ellipsis',
-                                      whiteSpace: 'nowrap'
-                                    }}>
-                                      {group.name}
-                                    </span>
-                                    {group.description && (
-                                      <span style={{
-                                        fontSize: '10px',
-                                        color: '#9ca3af',
-                                        display: 'block',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        whiteSpace: 'nowrap',
-                                        marginTop: '1px'
-                                      }}>
-                                        {group.description}
-                                      </span>
-                                    )}
-                                  </div>
+                                      whiteSpace: 'nowrap',
+                                      cursor: 'pointer'
+                                    }}
+                                    onClick={() => {
+                                      setManagementEditingGroupId(group.id);
+                                      setManagementEditName(group.name);
+                                    }}
+                                    title="Kliki nime muutmiseks"
+                                  >
+                                    {group.name}
+                                  </span>
+                                )}
+
+                                {/* Description - editable */}
+                                {isEditingDesc ? (
+                                  <input
+                                    type="text"
+                                    value={managementEditDesc}
+                                    onChange={(e) => setManagementEditDesc(e.target.value)}
+                                    onKeyDown={async (e) => {
+                                      if (e.key === 'Enter') {
+                                        await supabase.from('organizer_groups').update({ description: managementEditDesc.trim() || null, updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        setManagementEditingDescGroupId(null);
+                                        loadData();
+                                      } else if (e.key === 'Escape') {
+                                        setManagementEditingDescGroupId(null);
+                                      }
+                                    }}
+                                    onBlur={async () => {
+                                      const newDesc = managementEditDesc.trim() || null;
+                                      if (newDesc !== (group.description || null)) {
+                                        await supabase.from('organizer_groups').update({ description: newDesc, updated_at: new Date().toISOString(), updated_by: tcUserEmail }).eq('id', group.id);
+                                        loadData();
+                                      }
+                                      setManagementEditingDescGroupId(null);
+                                    }}
+                                    autoFocus
+                                    placeholder="Lisa kirjeldus..."
+                                    style={{
+                                      width: '100%',
+                                      padding: '1px 6px',
+                                      border: '1px solid #3b82f6',
+                                      borderRadius: '3px',
+                                      fontSize: '10px',
+                                      outline: 'none',
+                                      marginTop: '2px'
+                                    }}
+                                  />
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: '10px',
+                                      color: group.description ? '#9ca3af' : '#d1d5db',
+                                      display: 'block',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      marginTop: '1px',
+                                      cursor: 'pointer',
+                                      fontStyle: group.description ? 'normal' : 'italic'
+                                    }}
+                                    onClick={() => {
+                                      setManagementEditingDescGroupId(group.id);
+                                      setManagementEditDesc(group.description || '');
+                                    }}
+                                    title="Kliki kirjelduse muutmiseks"
+                                  >
+                                    {group.description || 'Lisa kirjeldus...'}
+                                  </span>
                                 )}
                               </div>
 
