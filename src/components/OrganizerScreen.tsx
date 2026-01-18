@@ -4620,6 +4620,10 @@ export default function OrganizerScreen({
     const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
+    // Check if this is a non-assembly group (uses display_properties instead of standard columns)
+    const isNonAssemblyGroup = group.assembly_selection_on === false;
+    const displayProps = group.display_properties || [];
+
     // Show progress for large exports (>100 items)
     const showProgress = allItems.length > 100;
     if (showProgress) {
@@ -4630,8 +4634,15 @@ export default function OrganizerScreen({
     await new Promise(resolve => setTimeout(resolve, 10));
 
     const wb = XLSX.utils.book_new();
-    // Headers: GUIDs moved to right side before Lisatud columns
-    const headers = ['#', 'Grupp', 'Grupi värv', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Headers: Different for assembly vs non-assembly groups
+    const headers = ['#', 'Grupp', 'Grupi värv'];
+    if (isNonAssemblyGroup && displayProps.length > 0) {
+      // Use display_properties as columns
+      displayProps.forEach(dp => headers.push(dp.label || `${dp.set}.${dp.prop}`));
+    } else {
+      // Standard assembly columns
+      headers.push('Mark', 'Toode', 'Kaal (kg)', 'Positsioon');
+    }
     customFields.forEach(f => headers.push(f.name));
     headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -4676,12 +4687,24 @@ export default function OrganizerScreen({
         const row: any[] = [
           idx + 1,
           groupName,
-          colorCell,
-          item.assembly_mark || '',
-          item.product_name || '',
-          formatWeight(item.cast_unit_weight),
-          item.cast_unit_position_code || ''
+          colorCell
         ];
+        // Add data columns based on group type
+        if (isNonAssemblyGroup && displayProps.length > 0) {
+          // Use display_properties values from custom_properties
+          displayProps.forEach(dp => {
+            const key = `display_${dp.set}_${dp.prop}`;
+            row.push(item.custom_properties?.[key] || '');
+          });
+        } else {
+          // Standard assembly columns
+          row.push(
+            item.assembly_mark || '',
+            item.product_name || '',
+            formatWeight(item.cast_unit_weight),
+            item.cast_unit_position_code || ''
+          );
+        }
         // Add custom fields
         customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
         // Add GUIDs, then Lisatud columns at the end
@@ -4703,11 +4726,19 @@ export default function OrganizerScreen({
 
     const ws = XLSX.utils.aoa_to_sheet(data);
 
-    // Column widths: adjusted for new order (includes Grupi värv column)
-    const baseColWidths = [{ wch: 5 }, { wch: 20 }, { wch: 8 }, { wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    // Column widths: adjusted based on group type
+    const baseColWidths = [{ wch: 5 }, { wch: 20 }, { wch: 8 }]; // #, Grupp, Grupi värv
+    let dataColWidths: { wch: number }[];
+    if (isNonAssemblyGroup && displayProps.length > 0) {
+      // Display properties columns
+      dataColWidths = displayProps.map(() => ({ wch: 18 }));
+    } else {
+      // Standard assembly columns: Mark, Toode, Kaal, Positsioon
+      dataColWidths = [{ wch: 15 }, { wch: 25 }, { wch: 12 }, { wch: 12 }];
+    }
     const customColWidths = customFields.map(() => ({ wch: 15 }));
     const guidAndEndColWidths = [{ wch: 24 }, { wch: 38 }, { wch: 16 }, { wch: 20 }, { wch: 25 }];
-    ws['!cols'] = [...baseColWidths, ...customColWidths, ...guidAndEndColWidths];
+    ws['!cols'] = [...baseColWidths, ...dataColWidths, ...customColWidths, ...guidAndEndColWidths];
 
     // Add autoFilter for all columns
     const lastCol = String.fromCharCode(65 + headers.length - 1); // A + number of columns
@@ -4733,8 +4764,19 @@ export default function OrganizerScreen({
     const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
-    // Build headers: GUIDs moved to right side before Lisatud columns (includes Grupi värv)
-    const headers = ['#', 'Grupp', 'Grupi värv', 'Mark', 'Toode', 'Kaal (kg)', 'Positsioon'];
+    // Check if this is a non-assembly group (uses display_properties instead of standard columns)
+    const isNonAssemblyGroup = group.assembly_selection_on === false;
+    const displayProps = group.display_properties || [];
+
+    // Build headers: Different for assembly vs non-assembly groups
+    const headers = ['#', 'Grupp', 'Grupi värv'];
+    if (isNonAssemblyGroup && displayProps.length > 0) {
+      // Use display_properties as columns
+      displayProps.forEach(dp => headers.push(dp.label || `${dp.set}.${dp.prop}`));
+    } else {
+      // Standard assembly columns
+      headers.push('Mark', 'Toode', 'Kaal (kg)', 'Positsioon');
+    }
     customFields.forEach(f => headers.push(f.name));
     headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
@@ -4760,12 +4802,24 @@ export default function OrganizerScreen({
       const row: string[] = [
         String(idx + 1),
         groupName,
-        rgbToHex(groupColor),
-        item.assembly_mark || '',
-        item.product_name || '',
-        formatWeight(item.cast_unit_weight),
-        item.cast_unit_position_code || ''
+        rgbToHex(groupColor)
       ];
+      // Add data columns based on group type
+      if (isNonAssemblyGroup && displayProps.length > 0) {
+        // Use display_properties values from custom_properties
+        displayProps.forEach(dp => {
+          const key = `display_${dp.set}_${dp.prop}`;
+          row.push(item.custom_properties?.[key] || '');
+        });
+      } else {
+        // Standard assembly columns
+        row.push(
+          item.assembly_mark || '',
+          item.product_name || '',
+          formatWeight(item.cast_unit_weight),
+          item.cast_unit_position_code || ''
+        );
+      }
       // Add custom fields
       customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
       // Add GUIDs, then Lisatud columns at the end
@@ -4795,6 +4849,8 @@ export default function OrganizerScreen({
     if (!group) return;
 
     const customFields = group.custom_fields || [];
+    const isNonAssemblyGroup = group.assembly_selection_on === false;
+    const displayProps = group.display_properties || [];
 
     const wb = XLSX.utils.book_new();
 
@@ -4844,13 +4900,22 @@ export default function OrganizerScreen({
       [''],
       ['GUID FORMAADID:'],
       ['- GUID_IFC: 22 tähemärki (nt: 2O2Fr$t4X7Zf8NOew3FLOH)'],
-      ['- GUID_MS: UUID formaat (nt: 85ca28da-b297-4bdc-87df-fac7573fb32d)'],
-      [''],
-      ['NÄPUNÄITED:'],
-      ['- Kustuta näidisrida enne importimist'],
-      ['- Dropdown väärtused peavad vastama täpselt seadistatud valikutele'],
-      ['- Tags veerus eraldage väärtused komaga']
+      ['- GUID_MS: UUID formaat (nt: 85ca28da-b297-4bdc-87df-fac7573fb32d)']
     ];
+
+    // Add group-specific instructions
+    if (isNonAssemblyGroup && displayProps.length > 0) {
+      instructionsData.push(['']);
+      instructionsData.push(['MÄRKUS: See on alamdetailide grupp (Assembly Selection väljas)']);
+      instructionsData.push(['- GUID-e otsitakse otse mudelist (mitte trimble_model_objects tabelist)']);
+      instructionsData.push(['- Kuvatavad veerud loetakse mudelist: ' + displayProps.map(dp => dp.label || `${dp.set}.${dp.prop}`).join(', ')]);
+    }
+
+    instructionsData.push(['']);
+    instructionsData.push(['NÄPUNÄITED:']);
+    instructionsData.push(['- Kustuta näidisrida enne importimist']);
+    instructionsData.push(['- Dropdown väärtused peavad vastama täpselt seadistatud valikutele']);
+    instructionsData.push(['- Tags veerus eraldage väärtused komaga']);
 
     const wsInstructions = XLSX.utils.aoa_to_sheet(instructionsData);
     wsInstructions['!cols'] = [{ wch: 60 }];
@@ -4935,6 +5000,8 @@ export default function OrganizerScreen({
       }
 
       const customFields = parentGroup.custom_fields || [];
+      const isNonAssemblyGroup = parentGroup.assembly_selection_on === false;
+      const displayProps = parentGroup.display_properties || [];
 
       // Step 1: Collect all GUIDs and convert MS to IFC
       const guidToRow = new Map<string, Record<string, string>>();
@@ -4959,21 +5026,95 @@ export default function OrganizerScreen({
         return;
       }
 
-      // Step 2: Look up GUIDs in database
+      // Step 2: Look up GUIDs - different approach for assembly vs non-assembly groups
       const guidsToSearch = Array.from(guidToRow.keys());
-      const { data: foundObjects, error: searchError } = await supabase
-        .from('trimble_model_objects')
-        .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
-        .eq('trimble_project_id', projectId)
-        .filter('guid_ifc', 'in', `(${guidsToSearch.map(g => `"${g}"`).join(',')})`);
+      let foundByGuid: Map<string, { guid_ifc: string; assembly_mark?: string; product_name?: string; cast_unit_weight?: number; display_values?: Record<string, string> }>;
 
-      if (searchError) throw searchError;
+      if (isNonAssemblyGroup) {
+        // For non-assembly groups: find GUIDs directly in loaded models
+        showToast('Otsin objekte mudelist...');
+        const foundInModel = await findObjectsInLoadedModels(api, guidsToSearch);
+        foundByGuid = new Map();
 
-      // Create lookup by lowercase GUID
-      const foundByGuid = new Map<string, typeof foundObjects[0]>();
-      for (const obj of foundObjects || []) {
-        if (obj.guid_ifc) {
-          foundByGuid.set(obj.guid_ifc.toLowerCase(), obj);
+        if (foundInModel.size > 0 && displayProps.length > 0) {
+          // Fetch display property values from the model
+          showToast('Laen property väärtusi mudelist...');
+
+          // Group by model for efficient API calls
+          const objByModel = new Map<string, { guid: string; runtimeId: number }[]>();
+          for (const [guid, found] of foundInModel) {
+            if (!objByModel.has(found.modelId)) objByModel.set(found.modelId, []);
+            objByModel.get(found.modelId)!.push({ guid, runtimeId: found.runtimeId });
+          }
+
+          // Fetch properties for each model
+          for (const [modelId, objs] of objByModel) {
+            const runtimeIds = objs.map(o => o.runtimeId);
+            try {
+              const propsArray = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+              for (let i = 0; i < objs.length; i++) {
+                const obj = objs[i];
+                const props = propsArray?.[i]?.properties;
+                const displayValues: Record<string, string> = {};
+
+                if (props) {
+                  // Extract display property values
+                  for (const dp of displayProps) {
+                    const setNorm = dp.set.replace(/\s+/g, '').toLowerCase();
+                    const propNorm = dp.prop.replace(/\s+/g, '').toLowerCase();
+
+                    for (const propSet of props) {
+                      const psNameNorm = (propSet.name || '').replace(/\s+/g, '').toLowerCase();
+                      if (psNameNorm !== setNorm) continue;
+
+                      const propArr = propSet.properties || [];
+                      for (const p of propArr) {
+                        const pNameNorm = (p.name || '').replace(/\s+/g, '').toLowerCase();
+                        if (pNameNorm === propNorm) {
+                          displayValues[`display_${dp.set}_${dp.prop}`] = String(p.value ?? '');
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+
+                foundByGuid.set(obj.guid.toLowerCase(), {
+                  guid_ifc: obj.guid,
+                  display_values: displayValues
+                });
+              }
+            } catch (err) {
+              console.warn('Failed to fetch properties from model:', err);
+              // Still add found GUIDs even without properties
+              for (const obj of objs) {
+                foundByGuid.set(obj.guid.toLowerCase(), { guid_ifc: obj.guid });
+              }
+            }
+          }
+        } else {
+          // No display props, just record found GUIDs
+          for (const [guid] of foundInModel) {
+            foundByGuid.set(guid.toLowerCase(), { guid_ifc: guid });
+          }
+        }
+      } else {
+        // For assembly groups: look up in database
+        const { data: foundObjects, error: searchError } = await supabase
+          .from('trimble_model_objects')
+          .select('guid_ifc, assembly_mark, product_name, cast_unit_weight')
+          .eq('trimble_project_id', projectId)
+          .filter('guid_ifc', 'in', `(${guidsToSearch.map(g => `"${g}"`).join(',')})`);
+
+        if (searchError) throw searchError;
+
+        // Create lookup by lowercase GUID
+        foundByGuid = new Map();
+        for (const obj of foundObjects || []) {
+          if (obj.guid_ifc) {
+            foundByGuid.set(obj.guid_ifc.toLowerCase(), obj);
+          }
         }
       }
 
@@ -5046,7 +5187,7 @@ export default function OrganizerScreen({
           if (subgroupId) targetGroupId = subgroupId;
         }
 
-        // Build custom properties
+        // Build custom properties from Excel row
         const customProperties: Record<string, string> = {};
         for (const field of customFields) {
           const colName = field.name.replace(/\s+/g, '_');
@@ -5056,11 +5197,16 @@ export default function OrganizerScreen({
           }
         }
 
+        // For non-assembly groups, add display_values to custom_properties
+        if (isNonAssemblyGroup && foundObj.display_values) {
+          Object.assign(customProperties, foundObj.display_values);
+        }
+
         const item = {
           group_id: targetGroupId,
           guid_ifc: foundObj.guid_ifc,
-          assembly_mark: foundObj.assembly_mark,
-          product_name: foundObj.product_name,
+          assembly_mark: foundObj.assembly_mark || null,
+          product_name: foundObj.product_name || null,
           cast_unit_weight: foundObj.cast_unit_weight || null,
           custom_properties: customProperties,
           added_by: tcUserEmail,
@@ -5111,7 +5257,11 @@ export default function OrganizerScreen({
       const notFoundCount = guidToRow.size - (totalAdded + totalSkipped);
       let message = `${totalAdded} elementi imporditud`;
       if (totalSkipped > 0) message += `, ${totalSkipped} juba olemas`;
-      if (notFoundCount > 0) message += `, ${notFoundCount} ei leitud andmebaasist`;
+      if (notFoundCount > 0) {
+        message += isNonAssemblyGroup
+          ? `, ${notFoundCount} ei leitud mudelist`
+          : `, ${notFoundCount} ei leitud andmebaasist`;
+      }
       if (newSubgroupNames.size > 0) message += `, ${newSubgroupNames.size} alamgruppi loodud`;
 
       showToast(message);
