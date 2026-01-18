@@ -10,6 +10,7 @@ import {
   colorObjectsByGuid,
   selectObjectsByGuid
 } from '../utils/navigationHelper';
+import { compressImage, isImageFile } from '../utils/imageUtils';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import * as XLSX from 'xlsx-js-style';
 import {
@@ -19,7 +20,7 @@ import {
   FiSettings, FiChevronUp, FiMoreVertical, FiCopy, FiUpload,
   FiTruck, FiPackage, FiLayers, FiClock, FiMessageSquare, FiDroplet,
   FiEye, FiEyeOff, FiZoomIn, FiAlertTriangle, FiExternalLink, FiTag,
-  FiCamera
+  FiCamera, FiImage
 } from 'react-icons/fi';
 import './DeliveryScheduleScreen.css';
 
@@ -652,6 +653,8 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
   const [itemEditStatus, setItemEditStatus] = useState<string>('planned');
   const [itemEditUnloadMethods, setItemEditUnloadMethods] = useState<UnloadMethods>({});
   const [itemEditNotes, setItemEditNotes] = useState<string>('');
+  const [itemEditPhotoUrl, setItemEditPhotoUrl] = useState<string>('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Arrived vehicle detail modal state (for viewing arrival confirmations)
   const [showArrivedVehicleModal, setShowArrivedVehicleModal] = useState(false);
@@ -980,7 +983,79 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     setItemEditStatus(item.status);
     setItemEditUnloadMethods(item.unload_methods || {});
     setItemEditNotes(item.notes || '');
+    setItemEditPhotoUrl(item.photo_url || '');
     setShowItemEditModal(true);
+  };
+
+  // Generate unique filename for photo upload
+  const generatePhotoFilename = (originalName: string, itemId: string) => {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    const ext = originalName.split('.').pop()?.toLowerCase() || 'jpg';
+    return `delivery-items/${projectId}/${itemId}/${timestamp}-${random}.${ext}`;
+  };
+
+  // Upload single photo to Supabase
+  const uploadDeliveryItemPhoto = async (file: File, itemId: string): Promise<string | null> => {
+    try {
+      const compressedFile = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.8 });
+      const filename = generatePhotoFilename(file.name, itemId);
+
+      const { error: uploadError } = await supabase.storage
+        .from('organizer-attachments')
+        .upload(filename, compressedFile);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('organizer-attachments')
+        .getPublicUrl(filename);
+
+      return urlData.publicUrl;
+    } catch (e) {
+      console.error('Photo upload error:', e);
+      return null;
+    }
+  };
+
+  // Remove existing photo
+  const removeExistingPhoto = (urlToRemove: string) => {
+    const urls = itemEditPhotoUrl.split(',').filter(Boolean);
+    const newUrls = urls.filter(url => url !== urlToRemove);
+    setItemEditPhotoUrl(newUrls.join(','));
+  };
+
+  // Handle direct file input change (desktop)
+  const handleDirectFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !editingItem) return;
+
+    setUploadingPhoto(true);
+    try {
+      const existingUrls = itemEditPhotoUrl.split(',').filter(Boolean);
+      const newUrls: string[] = [];
+
+      for (const file of Array.from(files)) {
+        if (isImageFile(file)) {
+          const url = await uploadDeliveryItemPhoto(file, editingItem.id);
+          if (url) newUrls.push(url);
+        }
+      }
+
+      if (newUrls.length > 0) {
+        const allUrls = [...existingUrls, ...newUrls].join(',');
+        setItemEditPhotoUrl(allUrls);
+      }
+    } catch (e) {
+      console.error('Error uploading photos:', e);
+      setMessage('Viga fotode üleslaadimisel');
+    } finally {
+      setUploadingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   // Save item edit
@@ -1001,6 +1076,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         status: itemEditStatus,
         unload_methods: Object.keys(methods).length > 0 ? methods : null,
         notes: itemEditNotes || null,
+        photo_url: itemEditPhotoUrl || null,
         updated_by: tcUserEmail,
         updated_at: new Date().toISOString()
       };
@@ -10636,6 +10712,141 @@ ${importText.split('\n').slice(0, 5).join('\n')}
                   rows={2}
                   placeholder="Lisa märkused..."
                 />
+              </div>
+
+              {/* Photo upload section */}
+              <div className="form-section">
+                <h4><FiCamera style={{ marginRight: 4 }} />Pilt (Foto)</h4>
+
+                {/* Existing photos */}
+                {itemEditPhotoUrl && itemEditPhotoUrl.split(',').filter(Boolean).length > 0 && (
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))',
+                    gap: '8px',
+                    marginBottom: '12px'
+                  }}>
+                    {itemEditPhotoUrl.split(',').filter(Boolean).map((url, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          position: 'relative',
+                          aspectRatio: '1',
+                          borderRadius: '6px',
+                          overflow: 'hidden',
+                          border: '1px solid #e5e7eb'
+                        }}
+                      >
+                        <img
+                          src={url}
+                          alt={`Foto ${idx + 1}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => window.open(url, '_blank')}
+                        />
+                        <button
+                          onClick={() => removeExistingPhoto(url)}
+                          style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            width: '20px',
+                            height: '20px',
+                            borderRadius: '50%',
+                            background: 'rgba(239, 68, 68, 0.9)',
+                            color: 'white',
+                            border: 'none',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0
+                          }}
+                          title="Eemalda foto"
+                        >
+                          <FiX size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload buttons */}
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {/* Mobile: Camera button */}
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      background: '#3b82f6',
+                      color: 'white',
+                      borderRadius: '6px',
+                      cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      opacity: uploadingPhoto ? 0.6 : 1
+                    }}
+                  >
+                    <FiCamera size={16} />
+                    <span>Pildista</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={handleDirectFileUpload}
+                      disabled={uploadingPhoto}
+                    />
+                  </label>
+
+                  {/* Gallery button */}
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      background: '#10b981',
+                      color: 'white',
+                      borderRadius: '6px',
+                      cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      opacity: uploadingPhoto ? 0.6 : 1
+                    }}
+                  >
+                    <FiImage size={16} />
+                    <span>Galerii</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      style={{ display: 'none' }}
+                      onChange={handleDirectFileUpload}
+                      disabled={uploadingPhoto}
+                    />
+                  </label>
+
+                  {uploadingPhoto && (
+                    <span style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      color: '#6b7280',
+                      fontSize: '13px'
+                    }}>
+                      <FiRefreshCw size={14} className="spin" />
+                      Laadin üles...
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="item-info-section">
