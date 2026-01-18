@@ -71,7 +71,6 @@ export default function ToolsScreen({
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
   const [scanLoading, setScanLoading] = useState(false);
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
-  const [circleLoading, setCircleLoading] = useState(false);
 
   // Accordion state - which section is expanded
   const [expandedSection, setExpandedSection] = useState<'export' | 'markup' | 'marker' | null>('export');
@@ -560,85 +559,6 @@ export default function ToolsScreen({
       showToast(e.message || 'Viga markupite eemaldamisel', 'error');
     } finally {
       setRemoveLoading(false);
-    }
-  };
-
-  // Draw a circle at the bottom center of selected detail
-  const handleDrawCircleAtDetail = async () => {
-    setCircleLoading(true);
-    try {
-      const selected = await api.viewer.getSelection();
-      if (!selected || selected.length === 0) {
-        showToast('Vali mudelist üks detail!', 'error');
-        setCircleLoading(false);
-        return;
-      }
-
-      // Get the first selected object
-      const modelId = selected[0].modelId;
-      const runtimeIds = selected[0].objectRuntimeIds || [];
-
-      if (runtimeIds.length === 0) {
-        showToast('Valitud objektil puudub info', 'error');
-        setCircleLoading(false);
-        return;
-      }
-
-      // Get bounding box of the first selected object
-      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
-
-      if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
-        showToast('Bounding box andmeid ei leitud', 'error');
-        setCircleLoading(false);
-        return;
-      }
-
-      const bbox = boundingBoxes[0].boundingBox;
-
-      // Calculate bottom surface center (coordinates in meters, convert to mm)
-      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
-      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
-      const bottomZ = bbox.min.z * 1000; // Bottom surface Z coordinate
-
-      // 20 meter radius in millimeters
-      const radiusMm = 20000;
-
-      // Number of segments to approximate circle (more = smoother)
-      const segments = 72; // 5 degrees per segment
-
-      // Generate circle line segments
-      const measurements: any[] = [];
-      const redColor = { r: 255, g: 0, b: 0, a: 255 };
-
-      for (let i = 0; i < segments; i++) {
-        const angle1 = (i / segments) * 2 * Math.PI;
-        const angle2 = ((i + 1) / segments) * 2 * Math.PI;
-
-        const x1 = centerX + radiusMm * Math.cos(angle1);
-        const y1 = centerY + radiusMm * Math.sin(angle1);
-        const x2 = centerX + radiusMm * Math.cos(angle2);
-        const y2 = centerY + radiusMm * Math.sin(angle2);
-
-        measurements.push({
-          start: { positionX: x1, positionY: y1, positionZ: bottomZ },
-          end: { positionX: x2, positionY: y2, positionZ: bottomZ },
-          mainLineStart: { positionX: x1, positionY: y1, positionZ: bottomZ },
-          mainLineEnd: { positionX: x2, positionY: y2, positionZ: bottomZ },
-          color: redColor
-        });
-      }
-
-      // Create the circle markup
-      await api.markup.addMeasurementMarkups(measurements);
-
-      console.log(`🔴 Circle drawn at: X=${centerX.toFixed(0)}, Y=${centerY.toFixed(0)}, Z=${bottomZ.toFixed(0)} with radius ${radiusMm}mm`);
-      showToast(`Ring joonistatud (r=20m, Z=${(bottomZ/1000).toFixed(2)}m)`, 'success');
-
-    } catch (e: any) {
-      console.error('Circle drawing error:', e);
-      showToast(e.message || 'Viga ringi joonistamisel', 'error');
-    } finally {
-      setCircleLoading(false);
     }
   };
 
@@ -1461,26 +1381,6 @@ export default function ToolsScreen({
                     <FiTrash2 size={14} />
                   )}
                   <span>Eemalda</span>
-                </button>
-              </div>
-
-              {/* Circle drawing section */}
-              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-                <p className="tools-section-desc" style={{ marginBottom: '12px' }}>
-                  Joonista 20m raadiusega punane ring valitud detaili alumise tasapinna keskpunkti.
-                </p>
-                <button
-                  className="tools-btn tools-btn-compact"
-                  onClick={handleDrawCircleAtDetail}
-                  disabled={circleLoading}
-                  style={{ width: '100%', background: '#fee2e2', borderColor: '#ef4444' }}
-                >
-                  {circleLoading ? (
-                    <FiLoader className="spinning" size={14} />
-                  ) : (
-                    <span style={{ fontSize: '16px' }}>⭕</span>
-                  )}
-                  <span style={{ color: '#dc2626' }}>Joonista ring (r=20m)</span>
                 </button>
               </div>
             </>
