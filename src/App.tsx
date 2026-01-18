@@ -25,7 +25,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.646';
+export const APP_VERSION = '3.0.647';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -75,6 +75,7 @@ if (!isShareMode) {
 
 // Check if this is a zoom link redirect (from shared link)
 const urlParams = new URLSearchParams(window.location.search);
+const zoomId = urlParams.get('zoom'); // New short format: ?zoom=<uuid>
 const zoomProject = urlParams.get('project');
 const zoomModel = urlParams.get('model');
 const zoomGuid = urlParams.get('guid');
@@ -82,9 +83,44 @@ const zoomAction = urlParams.get('action') || 'zoom';
 const zoomGroupId = urlParams.get('group');
 const zoomExpiry = urlParams.get('expiry'); // Days until expiry (1, 5, 14, 30)
 
-// If zoom params in URL, store in Supabase and redirect to Trimble Connect
-if (zoomProject && zoomModel && zoomGuid && !isPopupMode) {
-  console.log('🔗 [ZOOM] Storing zoom target and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction, zoomGroupId, zoomExpiry });
+// NEW: Handle short zoom URL format (?zoom=<id>)
+if (zoomId && !isPopupMode) {
+  console.log('🔗 [ZOOM] Short zoom link detected, looking up target:', zoomId);
+
+  (async () => {
+    // Look up the zoom target from database
+    const { data: zoomTarget, error } = await supabase
+      .from('zoom_targets')
+      .select('*')
+      .eq('id', zoomId)
+      .single();
+
+    if (error || !zoomTarget) {
+      console.error('🔗 [ZOOM] Zoom target not found:', error);
+      alert('Link ei ole kehtiv või on aegunud');
+      return;
+    }
+
+    // Check if expired
+    if (new Date(zoomTarget.expires_at) < new Date()) {
+      console.log('🔗 [ZOOM] Zoom target expired');
+      alert('See link on aegunud');
+      // Mark as consumed
+      await supabase.from('zoom_targets').update({ consumed: true }).eq('id', zoomId);
+      return;
+    }
+
+    console.log('🔗 [ZOOM] Zoom target found, redirecting to Trimble Connect');
+
+    // Redirect to Trimble Connect
+    const trimbleUrl = `https://web.connect.trimble.com/projects/${zoomTarget.project_id}/viewer/3d/?modelId=${zoomTarget.model_id}`;
+    window.location.href = trimbleUrl;
+  })();
+}
+
+// LEGACY: If old-style zoom params in URL, store in Supabase and redirect to Trimble Connect
+if (zoomProject && zoomModel && zoomGuid && !isPopupMode && !zoomId) {
+  console.log('🔗 [ZOOM] Legacy zoom link, storing and redirecting...', { zoomProject, zoomModel, zoomGuid, zoomAction, zoomGroupId, zoomExpiry });
 
   // Calculate expires_at (default 14 days if not specified)
   const expiryDays = zoomExpiry ? parseInt(zoomExpiry, 10) : 14;
