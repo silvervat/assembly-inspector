@@ -1514,9 +1514,7 @@ export default function OrganizerScreen({
         const { error } = await supabase
           .from('organizer_group_items')
           .update({
-            custom_properties: updatedProps,
-            updated_at: new Date().toISOString(),
-            updated_by: tcUserEmail
+            custom_properties: updatedProps
           })
           .eq('id', item.id);
 

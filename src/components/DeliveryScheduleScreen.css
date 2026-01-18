@@ -636,6 +636,21 @@
   outline-offset: -2px;
 }
 
+/* Multi-selected dates (CTRL+click) */
+.calendar-day.multi-selected {
+  background: #fef9c3 !important;
+  border: 2px solid #eab308 !important;
+  border-radius: 6px;
+}
+
+.calendar-day.multi-selected:hover {
+  background: #fef08a !important;
+}
+
+.calendar-day.multi-selected.today {
+  background: linear-gradient(135deg, var(--modus-primary, #0063a3) 50%, #fef9c3 50%) !important;
+}
+
 .calendar-day.has-items {
   font-weight: 600;
 }
@@ -1293,6 +1308,19 @@
 
 .date-info-section.clickable:hover .date-primary {
   text-decoration: underline;
+}
+
+/* Multi-selected date in list view (CTRL+click) */
+.date-info-section.multi-selected {
+  background: #fef9c3 !important;
+  border: 2px solid #eab308;
+  border-radius: 6px;
+  padding: 6px 10px !important;
+  margin: -6px -10px !important;
+}
+
+.date-info-section.multi-selected:hover {
+  background: #fef08a !important;
 }
 
 /* Vehicles section - two rows */
