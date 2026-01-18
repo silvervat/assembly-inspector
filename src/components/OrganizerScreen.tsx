@@ -1861,6 +1861,19 @@ export default function OrganizerScreen({
       if (colorByGroup) {
         setTimeout(() => colorModelByGroups(), 150);
       }
+
+      // If display_properties changed for a group without assembly selection, refresh item data from model
+      if (!formAssemblySelectionOn && formDisplayProperties.length > 0) {
+        const oldDisplayProps = editingGroup.display_properties || [];
+        const displayPropsChanged = JSON.stringify(oldDisplayProps) !== JSON.stringify(formDisplayProperties);
+
+        if (displayPropsChanged) {
+          // Delay to ensure UI is updated first
+          setTimeout(() => {
+            refreshGroupItemDisplayProperties(editingGroup.id, formDisplayProperties);
+          }, 200);
+        }
+      }
     } catch (e) {
       console.error('Error updating group:', e);
       showToast('Viga grupi uuendamisel');
@@ -2768,6 +2781,104 @@ export default function OrganizerScreen({
       }, 100);
     }
   }, [assemblySelectionEnabled, pendingAddGroupId, showAssemblyModal]);
+
+  // Refresh item display properties from model when group display_properties change
+  const refreshGroupItemDisplayProperties = async (groupId: string, displayProps: {set: string; prop: string; label: string}[]) => {
+    if (!api || !displayProps || displayProps.length === 0) return;
+
+    const items = groupItems.get(groupId) || [];
+    if (items.length === 0) return;
+
+    showToast('Laen veergude andmeid mudelist...');
+
+    try {
+      // Find objects in loaded models
+      const foundByGuid = await findObjectsInLoadedModels(api, items.map(i => i.guid_ifc).filter(Boolean) as string[]);
+
+      // Group by model
+      const objByModel = new Map<string, {guid: string; runtimeId: number; itemId: string}[]>();
+      for (const item of items) {
+        if (!item.guid_ifc) continue;
+        const found = foundByGuid.get(item.guid_ifc.toLowerCase());
+        if (!found) continue;
+
+        if (!objByModel.has(found.modelId)) objByModel.set(found.modelId, []);
+        objByModel.get(found.modelId)!.push({ guid: item.guid_ifc, runtimeId: found.runtimeId, itemId: item.id });
+      }
+
+      // Fetch properties and update items
+      const updates: {id: string; props: Record<string, string>}[] = [];
+
+      for (const [modelId, objs] of objByModel) {
+        const runtimeIds = objs.map(o => o.runtimeId);
+        if (runtimeIds.length === 0) continue;
+
+        const propsArray = await (api.viewer as any).getObjectProperties(modelId, runtimeIds, { includeHidden: true });
+
+        for (let i = 0; i < objs.length; i++) {
+          const obj = objs[i];
+          const props = propsArray?.[i]?.properties;
+          if (!props) continue;
+
+          const values: Record<string, string> = {};
+
+          // Extract display property values
+          for (const dp of displayProps) {
+            const setNorm = dp.set.replace(/\s+/g, '').toLowerCase();
+            const propNorm = dp.prop.replace(/\s+/g, '').toLowerCase();
+
+            // Search through property sets
+            for (const propSet of props) {
+              const psNameNorm = (propSet.name || '').replace(/\s+/g, '').toLowerCase();
+              if (psNameNorm !== setNorm) continue;
+
+              const propArr = propSet.properties || [];
+              for (const p of propArr) {
+                const pNameNorm = (p.name || '').replace(/\s+/g, '').toLowerCase();
+                if (pNameNorm === propNorm) {
+                  values[`display_${dp.set}_${dp.prop}`] = String(p.value ?? '');
+                  break;
+                }
+              }
+            }
+          }
+
+          if (Object.keys(values).length > 0) {
+            updates.push({ id: obj.itemId, props: values });
+          }
+        }
+      }
+
+      // Batch update database
+      if (updates.length > 0) {
+        for (const upd of updates) {
+          // Get existing item
+          const existingItem = items.find(i => i.id === upd.id);
+          const existingProps = (existingItem?.custom_properties || {}) as Record<string, unknown>;
+
+          // Clear old display_ properties and add new ones
+          const newProps: Record<string, unknown> = {};
+          for (const [key, val] of Object.entries(existingProps)) {
+            if (!key.startsWith('display_')) {
+              newProps[key] = val;
+            }
+          }
+          Object.assign(newProps, upd.props);
+
+          await supabase.from('organizer_group_items').update({ custom_properties: newProps }).eq('id', upd.id);
+        }
+
+        // Reload data to show updated values
+        await loadData();
+        showToast(`${updates.length} detaili andmed uuendatud`);
+      } else {
+        showToast('Veergude andmeid ei leitud mudelist');
+      }
+    } catch (err) {
+      console.error('Error refreshing display properties:', err);
+      showToast('Viga andmete lugemisel mudelist');
+    }
+  };
 
   const removeItemsFromGroup = async (itemIds: string[]) => {
     if (itemIds.length === 0) return;
