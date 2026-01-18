@@ -110,6 +110,8 @@ interface MarkupSettings {
   separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
   onlySelectedInModel: boolean;
+  // Leader markup height in cm (0-1000, default 10)
+  leaderHeight: number;
   // Legacy fields for backwards compatibility (will be migrated)
   includeGroupName?: boolean;
   groupNameLine?: MarkupLineConfig;
@@ -754,7 +756,8 @@ export default function OrganizerScreen({
     applyToSubgroups: true,
     separator: 'newline',
     useGroupColors: true,
-    onlySelectedInModel: false
+    onlySelectedInModel: false,
+    leaderHeight: 10
   };
 
   // Migrate old settings to new template format
@@ -807,7 +810,8 @@ export default function OrganizerScreen({
       applyToSubgroups: old.applyToSubgroups ?? true,
       separator: old.separator || 'newline',
       useGroupColors: old.useGroupColors ?? true,
-      onlySelectedInModel: old.onlySelectedInModel ?? false
+      onlySelectedInModel: old.onlySelectedInModel ?? false,
+      leaderHeight: old.leaderHeight ?? 10
     };
   };
 
@@ -5274,6 +5278,58 @@ export default function OrganizerScreen({
         foundByLowercase.set(guid.toLowerCase(), found);
       }
 
+      // Step 2.5: Reset colors of previously colored non-assembly group if switching to a different group
+      // This handles the case where a group with assembly_selection_on === false was colored,
+      // and now we're coloring a group with assembly_selection_on === true
+      if (targetGroupId && coloredSingleGroupId && targetGroupId !== coloredSingleGroupId) {
+        const previousGroup = groups.find(g => g.id === coloredSingleGroupId);
+        if (previousGroup && previousGroup.assembly_selection_on === false) {
+          showToast('Lähtestan eelmise grupi värve...');
+
+          // Get all GUIDs from the previous non-assembly group and its children
+          const prevSubtreeIds = getGroupSubtreeIds(coloredSingleGroupId);
+          const prevGuidsToReset: string[] = [];
+
+          for (const subId of prevSubtreeIds) {
+            const subGroup = groups.find(g => g.id === subId);
+            if (subGroup && subGroup.assembly_selection_on === false) {
+              const items = groupItems.get(subId) || [];
+              for (const item of items) {
+                if (item.guid_ifc) {
+                  prevGuidsToReset.push(item.guid_ifc);
+                }
+              }
+            }
+          }
+
+          if (prevGuidsToReset.length > 0) {
+            // Find these items in the model (they may be sub-elements not in trimble_model_objects)
+            const prevFoundObjects = await findObjectsInLoadedModels(api, prevGuidsToReset);
+
+            if (prevFoundObjects.size > 0) {
+              const BATCH_SIZE = 5000;
+              const prevByModel: Record<string, number[]> = {};
+              for (const [, found] of prevFoundObjects) {
+                if (!prevByModel[found.modelId]) prevByModel[found.modelId] = [];
+                prevByModel[found.modelId].push(found.runtimeId);
+              }
+
+              // Reset to white
+              for (const [modelId, runtimeIds] of Object.entries(prevByModel)) {
+                for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                  const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                  await api.viewer.setObjectState(
+                    { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                    { color: { r: 255, g: 255, b: 255, a: 255 } }
+                  );
+                }
+              }
+              console.log(`Reset ${prevFoundObjects.size} items from previous non-assembly group`);
+            }
+          }
+        }
+      }
+
       // Step 3: Determine which groups to process
       let groupsToProcess: OrganizerGroup[];
       if (targetGroupId) {
@@ -5743,14 +5799,18 @@ export default function OrganizerScreen({
             // Calculate center point (convert meters to mm)
             const centerX = ((box.min.x + box.max.x) / 2) * 1000;
             const centerY = ((box.min.y + box.max.y) / 2) * 1000;
-            const centerZ = box.max.z * 1000; // Top of object
+            const centerZ = ((box.min.z + box.max.z) / 2) * 1000; // Center of object
 
             // Get model properties for this item
             const modelProps = guidToProps.get(item.guid_ifc.toLowerCase());
 
             // Build markup text using line configuration
             const text = buildMarkupText(item, itemGroup, customFields, modelProps);
-            const pos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
+
+            // Leader markup: start at object center, end at leaderHeight cm above
+            const leaderHeightMm = (markupSettings.leaderHeight || 10) * 10; // Convert cm to mm
+            const startPos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
+            const endPos = { positionX: centerX, positionY: centerY, positionZ: centerZ + leaderHeightMm };
 
             // Get color if using group colors
             let colorHex: string | undefined;
@@ -5759,7 +5819,7 @@ export default function OrganizerScreen({
               colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
             }
 
-            markupsToCreate.push({ text, start: pos, end: pos, color: colorHex });
+            markupsToCreate.push({ text, start: startPos, end: endPos, color: colorHex });
           }
         } catch (e) {
           console.warn('Could not get bounding box for', item.guid_ifc, e);
@@ -11618,7 +11678,7 @@ export default function OrganizerScreen({
         const hasSubgroups = groups.some(g => g.parent_id === markupGroupId);
 
         // Available fields for insertion
-        const availableFields = [
+        const allFields = [
           { id: 'groupName', label: 'Grupi nimi', placeholder: '{groupName}', preview: markupGroup?.name || 'Grupp' },
           { id: 'assemblyMark', label: 'Assembly Mark', placeholder: '{assemblyMark}', preview: firstItem?.assembly_mark?.startsWith('Object_') ? 'W-101' : (firstItem?.assembly_mark || 'W-101') },
           { id: 'weight', label: 'Kaal', placeholder: '{weight}', preview: `${(parseFloat(firstItem?.cast_unit_weight || '1234.5')).toFixed(1)} kg` },
@@ -11630,6 +11690,18 @@ export default function OrganizerScreen({
             preview: firstItem?.custom_properties?.[f.id] || 'Näidis'
           }))
         ];
+
+        // Track which fields are used across all templates
+        const allTemplateText = markupSettings.line1Template + markupSettings.line2Template + markupSettings.line3Template;
+        const usedFieldIds = new Set<string>();
+        allFields.forEach(f => {
+          if (allTemplateText.includes(f.placeholder)) {
+            usedFieldIds.add(f.id);
+          }
+        });
+
+        // Available fields (not yet used)
+        const availableFields = allFields.filter(f => !usedFieldIds.has(f.id));
 
         // Generate preview from templates
         const generatePreview = (): string => {
@@ -11679,7 +11751,7 @@ export default function OrganizerScreen({
             // Add the chip
             const placeholder = match[0];
             const fieldId = match[1];
-            const field = availableFields.find(f => f.placeholder === placeholder);
+            const field = allFields.find(f => f.placeholder === placeholder);
             segments.push({
               type: 'chip',
               value: placeholder,
@@ -11706,30 +11778,87 @@ export default function OrganizerScreen({
           }));
         };
 
+        // Handle drag start for available field chips
+        const handleDragStart = (e: React.DragEvent, field: typeof allFields[0]) => {
+          e.dataTransfer.setData('text/plain', field.placeholder);
+          e.dataTransfer.setData('application/x-markup-field', JSON.stringify(field));
+          e.dataTransfer.effectAllowed = 'copy';
+        };
+
+        // Handle drop on template editor
+        const handleDrop = (e: React.DragEvent, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+          e.preventDefault();
+          const placeholder = e.dataTransfer.getData('text/plain');
+          if (placeholder && placeholder.startsWith('{') && placeholder.endsWith('}')) {
+            // Check if this field is already used
+            if (!allTemplateText.includes(placeholder)) {
+              setMarkupSettings(prev => ({
+                ...prev,
+                [lineKey]: prev[lineKey] ? prev[lineKey] + placeholder : placeholder
+              }));
+            }
+          }
+        };
+
+        // Handle drag over
+        const handleDragOver = (e: React.DragEvent) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        };
+
         // Add field to line when clicking available chips
         const addFieldToLine = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', placeholder: string) => {
-          setMarkupSettings(prev => ({
-            ...prev,
-            [lineKey]: prev[lineKey] ? prev[lineKey] + ' ' + placeholder : placeholder
-          }));
+          // Only add if not already used anywhere
+          if (!allTemplateText.includes(placeholder)) {
+            setMarkupSettings(prev => ({
+              ...prev,
+              [lineKey]: prev[lineKey] ? prev[lineKey] + placeholder : placeholder
+            }));
+          }
           setFocusedLine(lineKey);
         };
 
-        // Render template editor for a line with chips
-        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string) => {
+        // Handle text input change for template
+        const handleTemplateInputChange = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', value: string) => {
+          setMarkupSettings(prev => ({ ...prev, [lineKey]: value }));
+        };
+
+        // Insert text at cursor position in input
+        const insertAtCursor = (inputRef: HTMLInputElement | null, text: string, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+          if (!inputRef) return;
+          const start = inputRef.selectionStart || 0;
+          const end = inputRef.selectionEnd || 0;
+          const currentValue = markupSettings[lineKey];
+          const newValue = currentValue.substring(0, start) + text + currentValue.substring(end);
+          setMarkupSettings(prev => ({ ...prev, [lineKey]: newValue }));
+          // Set cursor position after inserted text
+          setTimeout(() => {
+            inputRef.selectionStart = inputRef.selectionEnd = start + text.length;
+            inputRef.focus();
+          }, 0);
+        };
+
+        // Render template editor for a line with mixed input
+        const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, inputRef: React.RefObject<HTMLInputElement>) => {
           const template = markupSettings[lineKey];
           const segments = parseTemplateToSegments(template);
 
           return (
-            <div className="markup-template-line-chip-editor" onClick={() => setFocusedLine(lineKey)}>
+            <div
+              className={`markup-template-line-chip-editor ${focusedLine === lineKey ? 'active' : ''}`}
+              onClick={() => setFocusedLine(lineKey)}
+              onDrop={(e) => handleDrop(e, lineKey)}
+              onDragOver={handleDragOver}
+            >
               <label className="template-label-above">{label}</label>
+              {/* Visual chip display */}
               <div className={`template-chips-area ${focusedLine === lineKey ? 'focused' : ''}`}>
                 {segments.length === 0 ? (
-                  <span className="template-placeholder">Kliki ülal väljadel, et neid lisada...</span>
+                  <span className="template-placeholder">Lohista siia välju või kirjuta tekst...</span>
                 ) : (
                   segments.map((seg, idx) => (
                     seg.type === 'chip' ? (
-                      <span key={idx} className="markup-line-chip">
+                      <span key={idx} className="markup-line-chip" draggable>
                         <span className="chip-label">{seg.label}</span>
                         <button
                           type="button"
@@ -11748,9 +11877,34 @@ export default function OrganizerScreen({
                   ))
                 )}
               </div>
+              {/* Hidden text input for typing */}
+              <input
+                ref={inputRef}
+                type="text"
+                className="markup-template-input"
+                value={template}
+                onChange={(e) => handleTemplateInputChange(lineKey, e.target.value)}
+                onFocus={() => setFocusedLine(lineKey)}
+                placeholder="Kirjuta tekst ja lisa välju {}"
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const placeholder = e.dataTransfer.getData('text/plain');
+                  if (placeholder && placeholder.startsWith('{') && placeholder.endsWith('}')) {
+                    if (!allTemplateText.includes(placeholder)) {
+                      insertAtCursor(inputRef.current, placeholder, lineKey);
+                    }
+                  }
+                }}
+                onDragOver={handleDragOver}
+              />
             </div>
           );
         };
+
+        // Refs for inputs
+        const line1InputRef = useRef<HTMLInputElement>(null);
+        const line2InputRef = useRef<HTMLInputElement>(null);
+        const line3InputRef = useRef<HTMLInputElement>(null);
 
         return (
           <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
@@ -11810,53 +11964,81 @@ export default function OrganizerScreen({
                 <div className="markup-builder">
                   <div className="markup-builder-header">
                     <span>Koosta markup</span>
-                    <span className="markup-hint">Kliki väljadel, et need lisada</span>
+                    <span className="markup-hint">Lohista välju või kliki, et lisada</span>
                   </div>
 
-                  {/* Available fields as clickable chips */}
+                  {/* Available fields as draggable chips */}
                   <div className="markup-available-fields">
-                    {availableFields.map(f => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        className="markup-insert-chip"
-                        onClick={() => addFieldToLine(focusedLine, f.placeholder)}
-                        title={`Lisa: ${f.preview}`}
-                      >
-                        <FiPlus size={10} />
-                        <span>{f.label}</span>
-                      </button>
-                    ))}
+                    {availableFields.length > 0 ? (
+                      availableFields.map(f => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          className="markup-insert-chip"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, f)}
+                          onClick={() => addFieldToLine(focusedLine, f.placeholder)}
+                          title={`Lisa: ${f.preview}`}
+                        >
+                          <FiPlus size={10} />
+                          <span>{f.label}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <span className="markup-all-fields-used">Kõik väljad kasutatud</span>
+                    )}
                   </div>
 
                   {/* Template editors for each line */}
                   <div className="markup-templates">
-                    {renderTemplateEditor('line1Template', 'Rida 1')}
-                    {renderTemplateEditor('line2Template', 'Rida 2')}
-                    {renderTemplateEditor('line3Template', 'Rida 3')}
+                    {renderTemplateEditor('line1Template', 'Rida 1', line1InputRef)}
+                    {renderTemplateEditor('line2Template', 'Rida 2', line2InputRef)}
+                    {renderTemplateEditor('line3Template', 'Rida 3', line3InputRef)}
                   </div>
                 </div>
 
-                {/* Separator */}
-                <div className="markup-separator-row">
-                  <label>Eraldaja:</label>
-                  <div className="separator-options">
-                    {[
-                      { value: 'newline', label: '↵', title: 'Uus rida' },
-                      { value: 'space', label: '␣', title: 'Tühik' },
-                      { value: 'comma', label: ',', title: 'Koma' },
-                      { value: 'dash', label: '-', title: 'Kriips' },
-                      { value: 'pipe', label: '|', title: 'Püstkriips' }
-                    ].map(opt => (
-                      <button
-                        key={opt.value}
-                        className={`separator-btn ${markupSettings.separator === opt.value ? 'active' : ''}`}
-                        onClick={() => setMarkupSettings(prev => ({ ...prev, separator: opt.value as MarkupSettings['separator'] }))}
-                        title={opt.title}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                {/* Separator and height row */}
+                <div className="markup-settings-row">
+                  <div className="markup-separator-row">
+                    <label>Eraldaja:</label>
+                    <div className="separator-options">
+                      {[
+                        { value: 'newline', label: '↵', title: 'Uus rida' },
+                        { value: 'space', label: '␣', title: 'Tühik' },
+                        { value: 'comma', label: ',', title: 'Koma' },
+                        { value: 'dash', label: '-', title: 'Kriips' },
+                        { value: 'pipe', label: '|', title: 'Püstkriips' }
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          className={`separator-btn ${markupSettings.separator === opt.value ? 'active' : ''}`}
+                          onClick={() => setMarkupSettings(prev => ({ ...prev, separator: opt.value as MarkupSettings['separator'] }))}
+                          title={opt.title}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Leader height input */}
+                  <div className="markup-height-row">
+                    <label>Kõrgus:</label>
+                    <div className="height-input-wrapper">
+                      <input
+                        type="number"
+                        className="markup-height-input"
+                        value={markupSettings.leaderHeight}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          const clamped = Math.max(0, Math.min(1000, val));
+                          setMarkupSettings(prev => ({ ...prev, leaderHeight: clamped }));
+                        }}
+                        min={0}
+                        max={1000}
+                      />
+                      <span className="height-unit">cm</span>
+                    </div>
                   </div>
                 </div>
 
