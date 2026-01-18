@@ -215,8 +215,8 @@ const RESOURCE_TYPES = [
 ] as const;
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite }: AdminScreenProps) {
-  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
-  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
+  // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'partDatabase'
+  const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin' | 'partDatabase'>('main');
 
   const [isLoading, setIsLoading] = useState(false);
   const [selectedObjects, setSelectedObjects] = useState<ObjectData[]>([]);
@@ -400,6 +400,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Data export state
   const [dataExportLoading, setDataExportLoading] = useState(false);
   const [dataExportStatus, setDataExportStatus] = useState('');
+
+  // Part Database state
+  const [partDbSearchQuery, setPartDbSearchQuery] = useState('');
+  const [partDbLoading, setPartDbLoading] = useState(false);
+  const [partDbSelectedGuid, setPartDbSelectedGuid] = useState<string | null>(null);
+  const [partDbSelectedMark, setPartDbSelectedMark] = useState<string | null>(null);
+  const [partDbExpandedSections, setPartDbExpandedSections] = useState<Set<string>>(new Set(['delivery', 'arrivals', 'installation', 'organizer', 'inspections', 'issues']));
+  const [partDbData, setPartDbData] = useState<{
+    deliveryItems: any[];
+    arrivalItems: any[];
+    installationItems: any[];
+    organizerItems: any[];
+    inspections: any[];
+    issues: any[];
+  } | null>(null);
 
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
@@ -2138,6 +2153,206 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     );
   }, [projectId]);
 
+  // Load part database data by GUID
+  const loadPartDatabaseByGuid = useCallback(async (guidIfc: string, assemblyMark?: string) => {
+    if (!projectId || !guidIfc) return;
+    setPartDbLoading(true);
+    setPartDbSelectedGuid(guidIfc);
+    setPartDbSelectedMark(assemblyMark || null);
+
+    try {
+      const guidLower = guidIfc.toLowerCase();
+
+      // Fetch all data in parallel
+      const [
+        deliveryResult,
+        arrivalResult,
+        installationResult,
+        organizerResult,
+        inspectionsResult,
+        issuesResult
+      ] = await Promise.all([
+        // Delivery items
+        supabase
+          .from('trimble_delivery_items')
+          .select(`
+            *,
+            vehicle:trimble_delivery_vehicles(
+              id, name, license_plate, scheduled_date,
+              factory:trimble_delivery_factories(id, name, color)
+            )
+          `)
+          .eq('trimble_project_id', projectId)
+          .ilike('guid', guidLower),
+
+        // Arrival confirmations
+        supabase
+          .from('arrival_item_confirmations')
+          .select(`
+            *,
+            vehicle:arrived_vehicles(
+              id, license_plate, arrival_date, arrival_time, unload_method, unload_location,
+              photos:arrival_photos(id, photo_url, photo_type, uploaded_at)
+            )
+          `)
+          .eq('trimble_project_id', projectId)
+          .ilike('guid_ifc', guidLower),
+
+        // Installation schedule items
+        supabase
+          .from('installation_schedule_items')
+          .select('*')
+          .eq('trimble_project_id', projectId)
+          .ilike('guid', guidLower),
+
+        // Organizer group items
+        supabase
+          .from('organizer_group_items')
+          .select(`
+            *,
+            group:organizer_groups(id, name, color, description)
+          `)
+          .eq('trimble_project_id', projectId)
+          .ilike('guid_ifc', guidLower),
+
+        // Inspections
+        supabase
+          .from('inspections')
+          .select('*')
+          .eq('project_id', projectId)
+          .ilike('guid_ifc', guidLower),
+
+        // Issues (through issue_objects)
+        supabase
+          .from('issue_objects')
+          .select(`
+            *,
+            issue:issues(
+              *,
+              comments:issue_comments(*),
+              attachments:issue_attachments(*)
+            )
+          `)
+          .eq('trimble_project_id', projectId)
+          .ilike('guid_ifc', guidLower)
+      ]);
+
+      setPartDbData({
+        deliveryItems: deliveryResult.data || [],
+        arrivalItems: arrivalResult.data || [],
+        installationItems: installationResult.data || [],
+        organizerItems: organizerResult.data || [],
+        inspections: inspectionsResult.data || [],
+        issues: issuesResult.data || []
+      });
+
+    } catch (e: any) {
+      console.error('Error loading part database:', e);
+      setMessage(`Viga andmete laadimisel: ${e.message}`);
+    } finally {
+      setPartDbLoading(false);
+    }
+  }, [projectId]);
+
+  // Load part database from current model selection
+  const loadPartDatabaseFromSelection = useCallback(async () => {
+    if (!api) return;
+
+    try {
+      const selection = await api.viewer.getSelection();
+      if (!selection || selection.length === 0) {
+        setPartDbData(null);
+        setPartDbSelectedGuid(null);
+        setPartDbSelectedMark(null);
+        return;
+      }
+
+      // Get first selected object's GUID
+      const firstSel = selection[0];
+      if (!firstSel.objectRuntimeIds || firstSel.objectRuntimeIds.length === 0) return;
+
+      const runtimeId = firstSel.objectRuntimeIds[0];
+      const guids = await api.viewer.convertToObjectIds(firstSel.modelId, [runtimeId]);
+
+      if (guids && guids[0]) {
+        // Try to get assembly mark from properties
+        let assemblyMark = '';
+        try {
+          const props = await api.viewer.getObjectProperties(firstSel.modelId, [runtimeId]);
+          if (props && props[0]) {
+            const propsData = props[0];
+            // Look for Cast_unit_Mark in Tekla Assembly set
+            const sets = (propsData as any).propertySets || (propsData as any).properties || [];
+            for (const set of sets) {
+              const setName = set.name || set.setName || '';
+              const properties = set.properties || {};
+              if (setName.toLowerCase().includes('tekla') || setName.toLowerCase().includes('assembly')) {
+                for (const [key, val] of Object.entries(properties)) {
+                  if (key.toLowerCase().includes('mark')) {
+                    assemblyMark = String(val);
+                    break;
+                  }
+                }
+              }
+              if (assemblyMark) break;
+            }
+          }
+        } catch (e) {
+          console.warn('Could not get assembly mark:', e);
+        }
+
+        loadPartDatabaseByGuid(guids[0], assemblyMark);
+      }
+    } catch (e: any) {
+      console.error('Error loading from selection:', e);
+    }
+  }, [api, loadPartDatabaseByGuid]);
+
+  // Search for parts by assembly mark
+  const searchPartDatabase = useCallback(async () => {
+    if (!projectId || !partDbSearchQuery.trim()) return;
+    setPartDbLoading(true);
+
+    try {
+      const searchTerm = `%${partDbSearchQuery.trim()}%`;
+
+      // Search in trimble_model_objects for matching assembly marks
+      const { data } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, assembly_mark')
+        .eq('trimble_project_id', projectId)
+        .ilike('assembly_mark', searchTerm)
+        .limit(1);
+
+      if (data && data.length > 0) {
+        loadPartDatabaseByGuid(data[0].guid_ifc, data[0].assembly_mark);
+      } else {
+        setMessage('Detaili ei leitud');
+        setPartDbData(null);
+        setPartDbSelectedGuid(null);
+        setPartDbSelectedMark(null);
+      }
+    } catch (e: any) {
+      console.error('Error searching:', e);
+      setMessage(`Viga otsingul: ${e.message}`);
+    } finally {
+      setPartDbLoading(false);
+    }
+  }, [projectId, partDbSearchQuery, loadPartDatabaseByGuid]);
+
+  // Toggle part database section
+  const togglePartDbSection = (section: string) => {
+    setPartDbExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
   // Load delivery schedule admin stats
   const loadDeliveryAdminStats = useCallback(async () => {
     if (!projectId) return;
@@ -3813,6 +4028,19 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           >
             <FiTruck size={18} />
             <span>Tarnegraafikud</span>
+          </button>
+
+          <button
+            className="admin-tool-btn"
+            onClick={() => {
+              setAdminView('partDatabase');
+              // Load from selection if available
+              loadPartDatabaseFromSelection();
+            }}
+            style={{ background: '#8b5cf6', color: 'white' }}
+          >
+            <FiDatabase size={18} />
+            <span>Detaili andmebaas</span>
           </button>
         </div>
 
@@ -14024,6 +14252,642 @@ document.body.appendChild(div);`;
             <FiRefreshCw size={14} className={deliveryAdminLoading ? 'spin' : ''} />
             Värskenda statistikat
           </button>
+        </div>
+      )}
+
+      {/* Part Database View */}
+      {adminView === 'partDatabase' && (
+        <div className="admin-content" style={{ padding: '16px' }}>
+          <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FiDatabase size={20} />
+            Detaili andmebaas
+          </h3>
+
+          {/* Search / Selection info */}
+          <div style={{ marginBottom: '20px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: '200px' }}>
+              <input
+                type="text"
+                value={partDbSearchQuery}
+                onChange={(e) => setPartDbSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && searchPartDatabase()}
+                placeholder="Otsi margi järgi..."
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '13px'
+                }}
+              />
+              <button
+                onClick={searchPartDatabase}
+                disabled={partDbLoading}
+                style={{
+                  padding: '8px 16px',
+                  background: '#003F87',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <FiSearch size={14} />
+                Otsi
+              </button>
+            </div>
+            <button
+              onClick={loadPartDatabaseFromSelection}
+              disabled={partDbLoading}
+              style={{
+                padding: '8px 16px',
+                background: '#059669',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <FiZap size={14} />
+              Lae mudeli valikust
+            </button>
+          </div>
+
+          {/* Selected part info */}
+          {partDbSelectedGuid && (
+            <div style={{
+              marginBottom: '20px',
+              padding: '12px 16px',
+              background: '#f0f9ff',
+              borderRadius: '8px',
+              border: '1px solid #bae6fd'
+            }}>
+              <div style={{ fontWeight: 600, fontSize: '14px', color: '#0369a1' }}>
+                {partDbSelectedMark || 'Tundmatu mark'}
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px', fontFamily: 'monospace' }}>
+                GUID: {partDbSelectedGuid}
+              </div>
+            </div>
+          )}
+
+          {/* Loading */}
+          {partDbLoading && (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <FiRefreshCw className="spin" size={32} style={{ color: '#6366f1' }} />
+              <p style={{ marginTop: '12px', color: '#64748b' }}>Laadin andmeid...</p>
+            </div>
+          )}
+
+          {/* No data message */}
+          {!partDbLoading && !partDbData && !partDbSelectedGuid && (
+            <div style={{ textAlign: 'center', padding: '60px 20px', color: '#64748b' }}>
+              <FiDatabase size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
+              <p style={{ fontSize: '14px' }}>Vali mudelist detail või otsi margi järgi</p>
+              <p style={{ fontSize: '12px', marginTop: '8px' }}>
+                Näed kõiki andmeid mis on selle detaili kohta andmebaasis
+              </p>
+            </div>
+          )}
+
+          {/* Data sections */}
+          {!partDbLoading && partDbData && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+              {/* Delivery Schedule Section */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => togglePartDbSection('delivery')}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: partDbExpandedSections.has('delivery') ? '#fef3c7' : '#fefce8',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    🚚 Tarnegraafik
+                    <span style={{
+                      background: partDbData.deliveryItems.length > 0 ? '#f59e0b' : '#d1d5db',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {partDbData.deliveryItems.length}
+                    </span>
+                  </span>
+                  {partDbExpandedSections.has('delivery') ? '▼' : '▶'}
+                </button>
+                {partDbExpandedSections.has('delivery') && partDbData.deliveryItems.length > 0 && (
+                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                    {partDbData.deliveryItems.map((item: any, idx: number) => (
+                      <div key={idx} style={{
+                        padding: '10px',
+                        background: '#f9fafb',
+                        borderRadius: '6px',
+                        marginBottom: idx < partDbData.deliveryItems.length - 1 ? '8px' : 0
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontWeight: 600 }}>{item.vehicle?.name || 'Tundmatu veok'}</span>
+                          <span style={{
+                            background: item.vehicle?.factory?.color ? `rgb(${item.vehicle.factory.color.r},${item.vehicle.factory.color.g},${item.vehicle.factory.color.b})` : '#6b7280',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px'
+                          }}>
+                            {item.vehicle?.factory?.name || 'Tundmatu tehas'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          <div>📅 Planeeritud: <strong>{item.vehicle?.scheduled_date || '-'}</strong></div>
+                          <div>🚛 Numbrimärk: {item.vehicle?.license_plate || '-'}</div>
+                          <div>📝 Märkused: {item.notes || '-'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {partDbExpandedSections.has('delivery') && partDbData.deliveryItems.length === 0 && (
+                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    Tarnegraafikus pole seda detaili
+                  </div>
+                )}
+              </div>
+
+              {/* Arrivals Section */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => togglePartDbSection('arrivals')}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: partDbExpandedSections.has('arrivals') ? '#d1fae5' : '#ecfdf5',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    📦 Saabumised
+                    <span style={{
+                      background: partDbData.arrivalItems.length > 0 ? '#10b981' : '#d1d5db',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {partDbData.arrivalItems.length}
+                    </span>
+                  </span>
+                  {partDbExpandedSections.has('arrivals') ? '▼' : '▶'}
+                </button>
+                {partDbExpandedSections.has('arrivals') && partDbData.arrivalItems.length > 0 && (
+                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                    {partDbData.arrivalItems.map((item: any, idx: number) => (
+                      <div key={idx} style={{
+                        padding: '10px',
+                        background: '#f9fafb',
+                        borderRadius: '6px',
+                        marginBottom: idx < partDbData.arrivalItems.length - 1 ? '8px' : 0
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontWeight: 600 }}>
+                            {item.vehicle?.license_plate || 'Tundmatu veok'}
+                          </span>
+                          <span style={{
+                            background: item.status === 'ok' ? '#10b981' : item.status === 'damaged' ? '#ef4444' : '#6b7280',
+                            color: 'white',
+                            padding: '2px 8px',
+                            borderRadius: '4px',
+                            fontSize: '11px'
+                          }}>
+                            {item.status === 'ok' ? '✓ OK' : item.status === 'damaged' ? '⚠️ Kahjustatud' : item.status}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          <div>📅 Saabus: <strong>{item.vehicle?.arrival_date} {item.vehicle?.arrival_time}</strong></div>
+                          <div>📍 Mahalaadimine: {item.vehicle?.unload_location || '-'}</div>
+                          <div>🔧 Meetod: {item.vehicle?.unload_method || '-'}</div>
+                          {item.notes && <div>📝 Märkused: {item.notes}</div>}
+                        </div>
+                        {/* Arrival photos */}
+                        {item.vehicle?.photos && item.vehicle.photos.length > 0 && (
+                          <div style={{ marginTop: '10px' }}>
+                            <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>📷 Pildid:</div>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              {item.vehicle.photos.map((photo: any, pIdx: number) => (
+                                <a
+                                  key={pIdx}
+                                  href={photo.photo_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'block',
+                                    width: '60px',
+                                    height: '60px',
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    border: '2px solid #e5e7eb'
+                                  }}
+                                >
+                                  <img
+                                    src={photo.photo_url}
+                                    alt={`Foto ${pIdx + 1}`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {partDbExpandedSections.has('arrivals') && partDbData.arrivalItems.length === 0 && (
+                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    Saabumisi pole registreeritud
+                  </div>
+                )}
+              </div>
+
+              {/* Installation Schedule Section */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => togglePartDbSection('installation')}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: partDbExpandedSections.has('installation') ? '#dbeafe' : '#eff6ff',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    🔧 Paigaldusgraafik
+                    <span style={{
+                      background: partDbData.installationItems.length > 0 ? '#3b82f6' : '#d1d5db',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {partDbData.installationItems.length}
+                    </span>
+                  </span>
+                  {partDbExpandedSections.has('installation') ? '▼' : '▶'}
+                </button>
+                {partDbExpandedSections.has('installation') && partDbData.installationItems.length > 0 && (
+                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                    {partDbData.installationItems.map((item: any, idx: number) => (
+                      <div key={idx} style={{
+                        padding: '10px',
+                        background: '#f9fafb',
+                        borderRadius: '6px',
+                        marginBottom: idx < partDbData.installationItems.length - 1 ? '8px' : 0
+                      }}>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          <div>📅 Planeeritud: <strong>{item.scheduled_date || '-'}</strong></div>
+                          <div>👷 Meeskond: {item.team || '-'}</div>
+                          <div>📝 Märkused: {item.notes || '-'}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {partDbExpandedSections.has('installation') && partDbData.installationItems.length === 0 && (
+                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    Paigaldusgraafikus pole seda detaili
+                  </div>
+                )}
+              </div>
+
+              {/* Organizer Section */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => togglePartDbSection('organizer')}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: partDbExpandedSections.has('organizer') ? '#fae8ff' : '#fdf4ff',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    📂 Organiseerija grupid
+                    <span style={{
+                      background: partDbData.organizerItems.length > 0 ? '#a855f7' : '#d1d5db',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {partDbData.organizerItems.length}
+                    </span>
+                  </span>
+                  {partDbExpandedSections.has('organizer') ? '▼' : '▶'}
+                </button>
+                {partDbExpandedSections.has('organizer') && partDbData.organizerItems.length > 0 && (
+                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                    {partDbData.organizerItems.map((item: any, idx: number) => (
+                      <div key={idx} style={{
+                        padding: '10px',
+                        background: '#f9fafb',
+                        borderRadius: '6px',
+                        marginBottom: idx < partDbData.organizerItems.length - 1 ? '8px' : 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px'
+                      }}>
+                        <div
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '3px',
+                            background: item.group?.color
+                              ? `rgb(${item.group.color.r},${item.group.color.g},${item.group.color.b})`
+                              : '#6b7280',
+                            flexShrink: 0
+                          }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{item.group?.name || 'Tundmatu grupp'}</div>
+                          {item.group?.description && (
+                            <div style={{ fontSize: '11px', color: '#6b7280' }}>{item.group.description}</div>
+                          )}
+                          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
+                            Lisatud: {item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') : '-'}
+                            {item.added_by && ` • ${item.added_by}`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {partDbExpandedSections.has('organizer') && partDbData.organizerItems.length === 0 && (
+                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    Üheski grupis pole
+                  </div>
+                )}
+              </div>
+
+              {/* Inspections Section */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => togglePartDbSection('inspections')}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: partDbExpandedSections.has('inspections') ? '#fee2e2' : '#fef2f2',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    ✅ Inspektsioonid
+                    <span style={{
+                      background: partDbData.inspections.length > 0 ? '#ef4444' : '#d1d5db',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {partDbData.inspections.length}
+                    </span>
+                  </span>
+                  {partDbExpandedSections.has('inspections') ? '▼' : '▶'}
+                </button>
+                {partDbExpandedSections.has('inspections') && partDbData.inspections.length > 0 && (
+                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                    {partDbData.inspections.map((item: any, idx: number) => (
+                      <div key={idx} style={{
+                        padding: '10px',
+                        background: '#f9fafb',
+                        borderRadius: '6px',
+                        marginBottom: idx < partDbData.inspections.length - 1 ? '8px' : 0
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span style={{ fontWeight: 600 }}>{item.inspection_type || 'Inspektsioon'}</span>
+                          <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                            {item.inspected_at ? new Date(item.inspected_at).toLocaleDateString('et-EE') : '-'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          <div>👤 Inspektor: {item.inspector_name || item.user_email || '-'}</div>
+                          {item.notes && <div>📝 Märkused: {item.notes}</div>}
+                        </div>
+                        {/* Inspection photos */}
+                        {(item.photo_urls || item.user_photos) && (
+                          <div style={{ marginTop: '10px' }}>
+                            <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>📷 Pildid:</div>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              {(item.photo_urls || item.user_photos || []).map((url: string, pIdx: number) => (
+                                <a
+                                  key={pIdx}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'block',
+                                    width: '60px',
+                                    height: '60px',
+                                    borderRadius: '6px',
+                                    overflow: 'hidden',
+                                    border: '2px solid #e5e7eb'
+                                  }}
+                                >
+                                  <img
+                                    src={url}
+                                    alt={`Foto ${pIdx + 1}`}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                  />
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {partDbExpandedSections.has('inspections') && partDbData.inspections.length === 0 && (
+                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    Inspektsioone pole
+                  </div>
+                )}
+              </div>
+
+              {/* Issues Section */}
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+                <button
+                  onClick={() => togglePartDbSection('issues')}
+                  style={{
+                    width: '100%',
+                    padding: '12px 16px',
+                    background: partDbExpandedSections.has('issues') ? '#fef9c3' : '#fefce8',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    ⚠️ Probleemid
+                    <span style={{
+                      background: partDbData.issues.length > 0 ? '#eab308' : '#d1d5db',
+                      color: 'white',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {partDbData.issues.length}
+                    </span>
+                  </span>
+                  {partDbExpandedSections.has('issues') ? '▼' : '▶'}
+                </button>
+                {partDbExpandedSections.has('issues') && partDbData.issues.length > 0 && (
+                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                    {partDbData.issues.map((issueObj: any, idx: number) => {
+                      const issue = issueObj.issue;
+                      if (!issue) return null;
+                      return (
+                        <div key={idx} style={{
+                          padding: '10px',
+                          background: '#f9fafb',
+                          borderRadius: '6px',
+                          marginBottom: idx < partDbData.issues.length - 1 ? '8px' : 0
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <span style={{ fontWeight: 600 }}>{issue.title || 'Probleem'}</span>
+                            <span style={{
+                              background: issue.status === 'open' ? '#ef4444' : issue.status === 'in_progress' ? '#f59e0b' : '#10b981',
+                              color: 'white',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px'
+                            }}>
+                              {issue.status === 'open' ? 'Avatud' : issue.status === 'in_progress' ? 'Töös' : 'Lahendatud'}
+                            </span>
+                          </div>
+                          {issue.description && (
+                            <div style={{ fontSize: '12px', color: '#374151', marginBottom: '6px' }}>
+                              {issue.description}
+                            </div>
+                          )}
+                          <div style={{ fontSize: '11px', color: '#9ca3af' }}>
+                            {issue.created_at ? new Date(issue.created_at).toLocaleDateString('et-EE') : '-'}
+                            {issue.created_by && ` • ${issue.created_by}`}
+                          </div>
+
+                          {/* Comments */}
+                          {issue.comments && issue.comments.length > 0 && (
+                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e5e7eb' }}>
+                              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>💬 Kommentaarid ({issue.comments.length}):</div>
+                              {issue.comments.slice(0, 3).map((comment: any, cIdx: number) => (
+                                <div key={cIdx} style={{
+                                  background: '#f0f9ff',
+                                  padding: '6px 10px',
+                                  borderRadius: '4px',
+                                  marginBottom: '4px',
+                                  fontSize: '12px'
+                                }}>
+                                  <span style={{ fontWeight: 500 }}>{comment.created_by}</span>: {comment.content}
+                                </div>
+                              ))}
+                              {issue.comments.length > 3 && (
+                                <div style={{ fontSize: '11px', color: '#6b7280' }}>
+                                  ...ja veel {issue.comments.length - 3} kommentaari
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Attachments */}
+                          {issue.attachments && issue.attachments.length > 0 && (
+                            <div style={{ marginTop: '10px' }}>
+                              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>📎 Manused:</div>
+                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                {issue.attachments.map((att: any, aIdx: number) => (
+                                  <a
+                                    key={aIdx}
+                                    href={att.file_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      display: 'block',
+                                      width: '60px',
+                                      height: '60px',
+                                      borderRadius: '6px',
+                                      overflow: 'hidden',
+                                      border: '2px solid #e5e7eb'
+                                    }}
+                                  >
+                                    {att.file_type?.startsWith('image/') ? (
+                                      <img
+                                        src={att.file_url}
+                                        alt={att.file_name}
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      />
+                                    ) : (
+                                      <div style={{
+                                        width: '100%',
+                                        height: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        background: '#f3f4f6',
+                                        fontSize: '10px',
+                                        color: '#6b7280',
+                                        textAlign: 'center',
+                                        padding: '4px'
+                                      }}>
+                                        📄 {att.file_name?.substring(0, 8)}...
+                                      </div>
+                                    )}
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {partDbExpandedSections.has('issues') && partDbData.issues.length === 0 && (
+                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                    Probleeme pole registreeritud
+                  </div>
+                )}
+              </div>
+
+            </div>
+          )}
         </div>
       )}
     </div>
