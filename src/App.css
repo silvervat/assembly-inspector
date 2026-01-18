@@ -12562,7 +12562,94 @@ button.stat-toggle.off:hover {
   font-size: 10px;
 }
 
-/* Free text input per line */
+/* Template editor styles */
+.markup-available-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+
+.markup-insert-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  background: #003F87;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.markup-insert-chip:hover {
+  background: #002a5c;
+  transform: translateY(-1px);
+}
+
+.markup-templates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.markup-template-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.markup-template-line:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.template-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  min-width: 45px;
+  flex-shrink: 0;
+}
+
+.template-input-wrapper {
+  flex: 1;
+}
+
+.template-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Roboto Mono', monospace;
+  color: #374151;
+  background: #fafafa;
+}
+
+.template-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  background: white;
+}
+
+.template-input::placeholder {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 11px;
+}
+
+/* Legacy free text input - keeping for backwards compatibility */
 .markup-line-free-text {
   flex: 1;
   min-width: 80px;
