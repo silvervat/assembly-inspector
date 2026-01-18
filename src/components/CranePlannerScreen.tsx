@@ -162,58 +162,100 @@ export default function CranePlannerScreen({
     }
   }, [resetForm, api]);
 
-  // Start picking position from model
+  // Start picking position from model - use getSelection approach like AdminScreen
   const startPickingPosition = useCallback(async () => {
-    setIsPickingPosition(true);
+    try {
+      // First check if there's already a selection
+      const sel = await api.viewer.getSelection();
 
-    // Clear current selection
-    await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      if (sel && sel.length > 0) {
+        const modelId = sel[0].modelId;
+        const runtimeIds = sel[0].objectRuntimeIds || [];
 
-    // Remove existing listener if any
-    if (pickingListenerRef.current) {
-      (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
-    }
+        if (runtimeIds.length > 0) {
+          // Get bounding boxes - note: returns array, coordinates in meters
+          const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
 
-    // Add new listener
-    const handleSelection = async (event: any) => {
-      if (!event?.data?.selection?.modelObjectIds) return;
+          if (boundingBoxes && boundingBoxes.length > 0 && boundingBoxes[0]?.boundingBox) {
+            const bbox = boundingBoxes[0].boundingBox;
 
-      const selection = event.data.selection.modelObjectIds;
-      if (selection.length === 0 || !selection[0].objectRuntimeIds?.length) return;
+            // Center of bounding box (already in meters from API)
+            const centerX = (bbox.min.x + bbox.max.x) / 2;
+            const centerY = (bbox.min.y + bbox.max.y) / 2;
+            const bottomZ = bbox.min.z; // Use bottom of object
 
-      const modelId = selection[0].modelId;
-      const runtimeId = selection[0].objectRuntimeIds[0];
+            setPickedPosition({ x: centerX, y: centerY, z: bottomZ });
+            setConfig(prev => ({
+              ...prev,
+              position_x: centerX,
+              position_y: centerY,
+              position_z: bottomZ
+            }));
 
-      try {
-        // Get object bounding box to find position
-        const boundingBox = await (api.viewer as any).getObjectBoundingBox(modelId, [runtimeId]);
-        if (boundingBox) {
-          // Use center of bounding box, convert from mm to m
-          const centerX = ((boundingBox.min.x + boundingBox.max.x) / 2) / 1000;
-          const centerY = ((boundingBox.min.y + boundingBox.max.y) / 2) / 1000;
-          const centerZ = boundingBox.min.z / 1000; // Use bottom of object
-
-          setPickedPosition({ x: centerX, y: centerY, z: centerZ });
-          setConfig(prev => ({
-            ...prev,
-            position_x: centerX,
-            position_y: centerY,
-            position_z: centerZ
-          }));
-
-          setIsPickingPosition(false);
-
-          // Remove listener after picking
-          (api.viewer as any).removeEventListener?.('onSelectionChanged', handleSelection);
-          pickingListenerRef.current = null;
+            setIsPickingPosition(false);
+            return;
+          }
         }
-      } catch (error) {
-        console.error('Error getting object position:', error);
       }
-    };
 
-    pickingListenerRef.current = handleSelection;
-    (api.viewer as any).addEventListener?.('onSelectionChanged', handleSelection);
+      // No selection - show picking mode
+      setIsPickingPosition(true);
+
+      // Clear current selection
+      await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+
+      // Remove existing listener if any
+      if (pickingListenerRef.current) {
+        (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
+      }
+
+      // Add new listener for when user selects an object
+      const handleSelection = async (event: any) => {
+        if (!event?.data?.selection?.modelObjectIds) return;
+
+        const selection = event.data.selection.modelObjectIds;
+        if (selection.length === 0 || !selection[0].objectRuntimeIds?.length) return;
+
+        const modelId = selection[0].modelId;
+        const runtimeId = selection[0].objectRuntimeIds[0];
+
+        try {
+          // Get bounding boxes - returns array, coordinates in meters
+          const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeId]);
+
+          if (boundingBoxes && boundingBoxes.length > 0 && boundingBoxes[0]?.boundingBox) {
+            const bbox = boundingBoxes[0].boundingBox;
+
+            // Center of bounding box (already in meters)
+            const centerX = (bbox.min.x + bbox.max.x) / 2;
+            const centerY = (bbox.min.y + bbox.max.y) / 2;
+            const bottomZ = bbox.min.z; // Use bottom of object
+
+            setPickedPosition({ x: centerX, y: centerY, z: bottomZ });
+            setConfig(prev => ({
+              ...prev,
+              position_x: centerX,
+              position_y: centerY,
+              position_z: bottomZ
+            }));
+
+            setIsPickingPosition(false);
+
+            // Remove listener after picking
+            (api.viewer as any).removeEventListener?.('onSelectionChanged', handleSelection);
+            pickingListenerRef.current = null;
+          }
+        } catch (error) {
+          console.error('Error getting object position:', error);
+        }
+      };
+
+      pickingListenerRef.current = handleSelection;
+      (api.viewer as any).addEventListener?.('onSelectionChanged', handleSelection);
+    } catch (error) {
+      console.error('Error in startPickingPosition:', error);
+      setIsPickingPosition(false);
+    }
   }, [api]);
 
   // Cancel picking
