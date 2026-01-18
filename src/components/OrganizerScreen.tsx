@@ -687,6 +687,8 @@ export default function OrganizerScreen({
 
   // Bulk edit state
   const [bulkFieldValues, setBulkFieldValues] = useState<Record<string, string>>({});
+  const [bulkUploadFiles, setBulkUploadFiles] = useState<Record<string, File[]>>({});
+  const [bulkUploadProgress, setBulkUploadProgress] = useState<{current: number; total: number; fieldName: string} | null>(null);
 
   // Delete confirmation
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -940,6 +942,11 @@ export default function OrganizerScreen({
     dimensions: { width: number; height: number } | null;
     fileSize: number | null;
   } | null>(null);
+
+  // Activity log lightbox (read-only photo viewer)
+  const [activityLightboxPhotos, setActivityLightboxPhotos] = useState<string[]>([]);
+  const [activityLightboxIndex, setActivityLightboxIndex] = useState(0);
+  const activityLightboxTouchStartX = useRef<number | null>(null);
 
   // Photo/attachment upload state
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
@@ -1968,7 +1975,7 @@ export default function OrganizerScreen({
           item_guids: item.guid_ifc ? [item.guid_ifc] : [],
           field_id: field.id,
           field_name: field.name,
-          details: { file_count: newUrls.length }
+          details: { file_count: newUrls.length, urls: newUrls }
         });
       }
     } catch (e) {
@@ -4343,8 +4350,9 @@ export default function OrganizerScreen({
     if (selectedItemIds.size === 0) return;
 
     const hasValues = Object.values(bulkFieldValues).some(v => v !== '');
-    if (!hasValues) {
-      showToast('Sisesta vähemalt üks väärtus');
+    const hasFiles = Object.values(bulkUploadFiles).some(files => files && files.length > 0);
+    if (!hasValues && !hasFiles) {
+      showToast('Sisesta vähemalt üks väärtus või vali failid');
       return;
     }
 
@@ -4371,74 +4379,156 @@ export default function OrganizerScreen({
       return false;
     }).length;
 
-    if (existingCount > 0) {
+    if (existingCount > 0 && hasValues) {
       if (!confirm(`${existingCount} detailil on juba väärtused. Kas kirjutad üle?`)) return;
     }
 
-    // Optimistic update - update local state immediately
+    setSaving(true);
     const updatedItemIds = Array.from(selectedItemIds);
     const valuesToUpdate = { ...bulkFieldValues };
 
-    setGroupItems(prev => {
-      const newMap = new Map(prev);
-      for (const [groupId, items] of newMap) {
-        const updatedItems = items.map(item => {
-          if (updatedItemIds.includes(item.id)) {
-            const updatedProps = { ...(item.custom_properties || {}) };
-            for (const [fieldId, val] of Object.entries(valuesToUpdate)) {
-              if (val !== '') updatedProps[fieldId] = val;
-            }
-            return { ...item, custom_properties: updatedProps };
-          }
-          return item;
-        });
-        newMap.set(groupId, updatedItems);
-      }
-      return newMap;
-    });
+    try {
+      // Handle file uploads first if any
+      const uploadedUrls: Record<string, Record<string, string[]>> = {}; // itemId -> fieldId -> urls
 
-    // Close modal and show toast immediately
-    setShowBulkEdit(false);
-    setBulkFieldValues({});
-    showToast(`${selectedItemIds.size} detaili uuendatud`);
+      for (const [fieldId, files] of Object.entries(bulkUploadFiles)) {
+        if (!files || files.length === 0) continue;
 
-    // Database update in background (no await blocking UI)
-    (async () => {
-      try {
-        // Prepare all updates and collect GUIDs for realtime tracking
-        const updates: { id: string; custom_properties: Record<string, any> }[] = [];
-        const guidsToUpdate: string[] = [];
+        // Get field name for progress display
+        const rootParent = selectedGroup ? getRootParent(selectedGroup.id) : null;
+        const field = (rootParent?.custom_fields || selectedGroup?.custom_fields || []).find(f => f.id === fieldId);
+        const fieldName = field?.name || fieldId;
+
+        // Upload files to each selected item
+        let progress = 0;
+        const total = updatedItemIds.length;
+
         for (const itemId of updatedItemIds) {
+          setBulkUploadProgress({ current: progress, total, fieldName });
+
           const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
-          if (item) {
-            const updatedProps = { ...(item.custom_properties || {}) };
-            for (const [fieldId, val] of Object.entries(valuesToUpdate)) {
-              if (val !== '') updatedProps[fieldId] = val;
+          if (!item) continue;
+
+          const itemUrls: string[] = [];
+
+          // Upload each file
+          for (const file of files) {
+            const timestamp = Date.now();
+            const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+            const filePath = `${projectId}/${item.group_id}/${itemId}/${timestamp}_${safeName}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from('organizer-attachments')
+              .upload(filePath, file, { cacheControl: '31536000', upsert: false });
+
+            if (!uploadError) {
+              const { data: urlData } = supabase.storage
+                .from('organizer-attachments')
+                .getPublicUrl(filePath);
+              if (urlData?.publicUrl) {
+                itemUrls.push(urlData.publicUrl);
+              }
             }
-            updates.push({ id: itemId, custom_properties: updatedProps });
-            if (item.guid_ifc) guidsToUpdate.push(item.guid_ifc);
           }
-        }
 
-        // Mark these GUIDs as local changes (for realtime sync to skip)
-        guidsToUpdate.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
-        setTimeout(() => {
-          guidsToUpdate.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
-        }, 5000);
+          if (itemUrls.length > 0) {
+            if (!uploadedUrls[itemId]) uploadedUrls[itemId] = {};
+            uploadedUrls[itemId][fieldId] = itemUrls;
+          }
 
-        // Execute updates in parallel batches
-        const BATCH_SIZE = 10;
-        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
-          const batch = updates.slice(i, i + BATCH_SIZE);
-          await Promise.all(batch.map(u =>
-            supabase.from('organizer_group_items').update({ custom_properties: u.custom_properties }).eq('id', u.id)
-          ));
+          progress++;
         }
-      } catch (e) {
-        console.error('Error bulk updating in background:', e);
-        showToast('Viga salvestamisel - värskenda lehte');
       }
-    })();
+
+      setBulkUploadProgress(null);
+
+      // Update local state
+      setGroupItems(prev => {
+        const newMap = new Map(prev);
+        for (const [groupId, items] of newMap) {
+          const updatedItems = items.map(item => {
+            if (updatedItemIds.includes(item.id)) {
+              const updatedProps = { ...(item.custom_properties || {}) };
+              // Apply text values
+              for (const [fieldId, val] of Object.entries(valuesToUpdate)) {
+                if (val !== '') updatedProps[fieldId] = val;
+              }
+              // Apply uploaded file URLs (append to existing)
+              if (uploadedUrls[item.id]) {
+                for (const [fieldId, urls] of Object.entries(uploadedUrls[item.id])) {
+                  const existingUrls = updatedProps[fieldId] ? updatedProps[fieldId].split(',').filter(Boolean) : [];
+                  updatedProps[fieldId] = [...existingUrls, ...urls].join(',');
+                }
+              }
+              return { ...item, custom_properties: updatedProps };
+            }
+            return item;
+          });
+          newMap.set(groupId, updatedItems);
+        }
+        return newMap;
+      });
+
+      // Close modal and show toast
+      setShowBulkEdit(false);
+      setBulkFieldValues({});
+      setBulkUploadFiles({});
+
+      const uploadCount = Object.values(bulkUploadFiles).reduce((sum, files) => sum + (files?.length || 0), 0);
+      if (uploadCount > 0) {
+        showToast(`${selectedItemIds.size} detaili uuendatud, ${uploadCount} faili laetud üles`);
+      } else {
+        showToast(`${selectedItemIds.size} detaili uuendatud`);
+      }
+
+      // Database update in background
+      (async () => {
+        try {
+          const updates: { id: string; custom_properties: Record<string, any> }[] = [];
+          const guidsToUpdate: string[] = [];
+
+          for (const itemId of updatedItemIds) {
+            const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
+            if (item) {
+              const updatedProps = { ...(item.custom_properties || {}) };
+              for (const [fieldId, val] of Object.entries(valuesToUpdate)) {
+                if (val !== '') updatedProps[fieldId] = val;
+              }
+              if (uploadedUrls[itemId]) {
+                for (const [fieldId, urls] of Object.entries(uploadedUrls[itemId])) {
+                  const existingUrls = item.custom_properties?.[fieldId] ? item.custom_properties[fieldId].split(',').filter(Boolean) : [];
+                  updatedProps[fieldId] = [...existingUrls, ...urls].join(',');
+                }
+              }
+              updates.push({ id: itemId, custom_properties: updatedProps });
+              if (item.guid_ifc) guidsToUpdate.push(item.guid_ifc);
+            }
+          }
+
+          guidsToUpdate.forEach(g => recentLocalChangesRef.current.add(g.toLowerCase()));
+          setTimeout(() => {
+            guidsToUpdate.forEach(g => recentLocalChangesRef.current.delete(g.toLowerCase()));
+          }, 5000);
+
+          const BATCH_SIZE = 10;
+          for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+            const batch = updates.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(u =>
+              supabase.from('organizer_group_items').update({ custom_properties: u.custom_properties }).eq('id', u.id)
+            ));
+          }
+        } catch (e) {
+          console.error('Error bulk updating in background:', e);
+          showToast('Viga salvestamisel - värskenda lehte');
+        }
+      })();
+    } catch (e) {
+      console.error('Error in bulk update:', e);
+      showToast('Viga failide üleslaadimisel');
+      setBulkUploadProgress(null);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const moveItemsToGroup = async (itemIds: string[], targetGroupId: string) => {
@@ -9452,7 +9542,7 @@ export default function OrganizerScreen({
         </button>
         <button
           className="org-icon-btn"
-          style={{ background: '#1e3a5f', color: '#e0e7ff', fontSize: '11px', padding: '5px 10px', gap: '4px' }}
+          style={{ background: '#1e3a5f', color: '#e0e7ff', fontSize: '11px', padding: '5px 10px', gap: '4px', width: 'auto', height: 'auto' }}
           onClick={() => { loadActivityLogs(0); setShowActivityLogModal(true); }}
           title="Viimased tegevused"
         >
@@ -9630,15 +9720,15 @@ export default function OrganizerScreen({
                     className="org-dropdown-menu"
                     style={{
                       position: 'absolute',
-                      top: '100%',
+                      bottom: '100%',
                       left: 0,
-                      zIndex: 100,
+                      zIndex: 1000,
                       background: 'white',
                       border: '1px solid #e5e7eb',
                       borderRadius: '6px',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                       minWidth: '220px',
-                      marginTop: '4px'
+                      marginBottom: '4px'
                     }}
                   >
                     <button
@@ -10874,22 +10964,111 @@ export default function OrganizerScreen({
               {effectiveCustomFields.map(f => (
                 <div key={f.id} className="org-field">
                   <label>{f.name} <span className="field-type-hint">({FIELD_TYPE_LABELS[f.type]})</span></label>
-                  <input
-                    type={f.type === 'date' ? 'date' : f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
-                    value={bulkFieldValues[f.id] || ''}
-                    onChange={(e) => setBulkFieldValues(prev => ({ ...prev, [f.id]: e.target.value }))}
-                    placeholder={f.type === 'date' ? '' : 'Jäta tühjaks, et mitte muuta'}
-                  />
+                  {(f.type === 'photo' || f.type === 'attachment') ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <label
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '8px 12px',
+                            background: '#f3f4f6',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '13px'
+                          }}
+                        >
+                          <FiUpload size={14} />
+                          {f.type === 'photo' ? 'Vali fotod' : 'Vali failid'}
+                          <input
+                            type="file"
+                            multiple
+                            accept={f.type === 'photo' ? 'image/*' : '*'}
+                            style={{ display: 'none' }}
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setBulkUploadFiles(prev => ({ ...prev, [f.id]: files }));
+                            }}
+                          />
+                        </label>
+                        {bulkUploadFiles[f.id]?.length > 0 && (
+                          <span style={{ fontSize: '12px', color: '#059669' }}>
+                            {bulkUploadFiles[f.id].length} faili valitud
+                          </span>
+                        )}
+                      </div>
+                      {bulkUploadFiles[f.id]?.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {bulkUploadFiles[f.id].slice(0, 5).map((file, idx) => (
+                            <span
+                              key={idx}
+                              style={{
+                                padding: '2px 6px',
+                                background: '#e5e7eb',
+                                borderRadius: '4px',
+                                fontSize: '11px'
+                              }}
+                            >
+                              {file.name.length > 20 ? file.name.substring(0, 17) + '...' : file.name}
+                            </span>
+                          ))}
+                          {bulkUploadFiles[f.id].length > 5 && (
+                            <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                              +{bulkUploadFiles[f.id].length - 5}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <p style={{ fontSize: '11px', color: '#6b7280', margin: 0 }}>
+                        Failid lisatakse kõigile {selectedItemIds.size} detailile
+                      </p>
+                    </div>
+                  ) : (
+                    <input
+                      type={f.type === 'date' ? 'date' : f.type === 'number' || f.type === 'currency' ? 'number' : 'text'}
+                      value={bulkFieldValues[f.id] || ''}
+                      onChange={(e) => setBulkFieldValues(prev => ({ ...prev, [f.id]: e.target.value }))}
+                      placeholder={f.type === 'date' ? '' : 'Jäta tühjaks, et mitte muuta'}
+                    />
+                  )}
                 </div>
               ))}
               {effectiveCustomFields.length === 0 && (
                 <p className="org-empty-hint">Sellel grupil pole lisavälju. Lisa esmalt väli grupi menüüst.</p>
               )}
+              {bulkUploadProgress && (
+                <div style={{ marginTop: '12px', padding: '12px', background: '#f0fdf4', borderRadius: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', color: '#059669' }}>
+                      Laadin üles: {bulkUploadProgress.fieldName}
+                    </span>
+                  </div>
+                  <div style={{ height: '6px', background: '#d1fae5', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        background: '#059669',
+                        width: `${(bulkUploadProgress.current / bulkUploadProgress.total) * 100}%`,
+                        transition: 'width 0.2s'
+                      }}
+                    />
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                    {bulkUploadProgress.current} / {bulkUploadProgress.total}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="org-modal-footer">
-              <button className="cancel" onClick={() => setShowBulkEdit(false)}>Tühista</button>
-              <button className="save" onClick={bulkUpdateItems} disabled={saving || effectiveCustomFields.length === 0}>
-                {saving ? 'Salvestan...' : 'Uuenda kõik'}
+              <button className="cancel" onClick={() => { setShowBulkEdit(false); setBulkUploadFiles({}); }}>Tühista</button>
+              <button
+                className="save"
+                onClick={bulkUpdateItems}
+                disabled={saving || bulkUploadProgress !== null || effectiveCustomFields.length === 0}
+              >
+                {saving ? 'Salvestan...' : bulkUploadProgress ? 'Laadin...' : 'Uuenda kõik'}
               </button>
             </div>
           </div>
@@ -11678,6 +11857,41 @@ export default function OrganizerScreen({
                               </span>
                             )}
                           </div>
+                          {/* Third row: photo thumbnails or info value */}
+                          {(log.action_type === 'add_photo' && log.details?.urls?.length > 0) && (
+                            <div style={{ display: 'flex', gap: '4px', paddingLeft: '11px', marginTop: '4px', flexWrap: 'wrap' }}>
+                              {(log.details.urls as string[]).slice(0, 4).map((url: string, idx: number) => (
+                                <img
+                                  key={idx}
+                                  src={url}
+                                  alt={`Foto ${idx + 1}`}
+                                  style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    objectFit: 'cover',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    border: '1px solid #d1d5db'
+                                  }}
+                                  onClick={() => {
+                                    setActivityLightboxPhotos(log.details.urls as string[]);
+                                    setActivityLightboxIndex(idx);
+                                  }}
+                                />
+                              ))}
+                              {log.details.urls.length > 4 && (
+                                <span style={{ fontSize: '10px', color: '#6b7280', alignSelf: 'center' }}>
+                                  +{log.details.urls.length - 4}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {log.action_type === 'update_item' && log.new_value && (
+                            <div style={{ paddingLeft: '11px', marginTop: '2px', fontSize: '10px', color: '#374151' }}>
+                              <span style={{ color: '#9ca3af' }}>→ </span>
+                              {String(log.new_value).length > 100 ? String(log.new_value).substring(0, 100) + '...' : String(log.new_value)}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -11711,6 +11925,109 @@ export default function OrganizerScreen({
               </span>
               <button className="cancel" onClick={() => setShowActivityLogModal(false)}>Sulge</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity Log Photo Lightbox */}
+      {activityLightboxPhotos.length > 0 && (
+        <div
+          className="org-modal-overlay"
+          style={{ background: 'rgba(0,0,0,0.9)', zIndex: 10001 }}
+          onClick={() => { setActivityLightboxPhotos([]); setActivityLightboxIndex(0); }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              padding: '20px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={activityLightboxPhotos[activityLightboxIndex]}
+              alt="Foto"
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                borderRadius: '4px',
+                touchAction: 'pan-y'
+              }}
+              onTouchStart={(e) => {
+                activityLightboxTouchStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (activityLightboxTouchStartX.current === null || activityLightboxPhotos.length <= 1) return;
+                const touchEndX = e.changedTouches[0].clientX;
+                const diff = activityLightboxTouchStartX.current - touchEndX;
+                const threshold = 50;
+                if (diff > threshold) {
+                  const newIndex = activityLightboxIndex === activityLightboxPhotos.length - 1 ? 0 : activityLightboxIndex + 1;
+                  setActivityLightboxIndex(newIndex);
+                } else if (diff < -threshold) {
+                  const newIndex = activityLightboxIndex === 0 ? activityLightboxPhotos.length - 1 : activityLightboxIndex - 1;
+                  setActivityLightboxIndex(newIndex);
+                }
+                activityLightboxTouchStartX.current = null;
+              }}
+            />
+            {/* Close button */}
+            <button
+              onClick={() => { setActivityLightboxPhotos([]); setActivityLightboxIndex(0); }}
+              style={{
+                marginTop: '16px',
+                padding: '8px 24px',
+                background: 'rgba(255,255,255,0.2)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Sulge
+            </button>
+            {/* Navigation */}
+            {activityLightboxPhotos.length > 1 && (
+              <div style={{ display: 'flex', gap: '16px', marginTop: '12px' }}>
+                <button
+                  onClick={() => {
+                    const newIndex = activityLightboxIndex === 0 ? activityLightboxPhotos.length - 1 : activityLightboxIndex - 1;
+                    setActivityLightboxIndex(newIndex);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ← Eelmine
+                </button>
+                <span style={{ color: 'white', alignSelf: 'center' }}>
+                  {activityLightboxIndex + 1} / {activityLightboxPhotos.length}
+                </span>
+                <button
+                  onClick={() => {
+                    const newIndex = activityLightboxIndex === activityLightboxPhotos.length - 1 ? 0 : activityLightboxIndex + 1;
+                    setActivityLightboxIndex(newIndex);
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.2)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Järgmine →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
