@@ -8347,6 +8347,87 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="⭕ Joonista ring (r=20m)"
+                  result={functionResults["drawCircle20m"]}
+                  onClick={async () => {
+                    updateFunctionResult("drawCircle20m", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel[0].objectRuntimeIds || [];
+                      if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
+
+                      const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                      if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
+                        throw new Error('Bounding box andmeid ei leitud');
+                      }
+
+                      const bbox = boundingBoxes[0].boundingBox;
+
+                      // Bottom surface center (mm)
+                      const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
+                      const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
+                      const bottomZ = bbox.min.z * 1000;
+
+                      // 20m radius in mm
+                      const radiusMm = 20000;
+                      const segments = 72;
+
+                      // Generate circle line segments for freelineMarkup
+                      const lines: { start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
+
+                      for (let i = 0; i < segments; i++) {
+                        const angle1 = (i / segments) * 2 * Math.PI;
+                        const angle2 = ((i + 1) / segments) * 2 * Math.PI;
+
+                        lines.push({
+                          start: {
+                            positionX: centerX + radiusMm * Math.cos(angle1),
+                            positionY: centerY + radiusMm * Math.sin(angle1),
+                            positionZ: bottomZ
+                          },
+                          end: {
+                            positionX: centerX + radiusMm * Math.cos(angle2),
+                            positionY: centerY + radiusMm * Math.sin(angle2),
+                            positionZ: bottomZ
+                          }
+                        });
+                      }
+
+                      // Try to create freelineMarkup
+                      const redColor = { r: 255, g: 0, b: 0, a: 255 };
+
+                      // Try addFreelineMarkup API
+                      const markupApi = api.markup as any;
+                      if (markupApi?.addFreelineMarkup) {
+                        await markupApi.addFreelineMarkup({ lines, color: redColor });
+                      } else if (markupApi?.addLineMarkup) {
+                        // Fallback: try addLineMarkup
+                        await markupApi.addLineMarkup({ lines, color: redColor });
+                      } else {
+                        // Fallback: use measurement markups
+                        const measurements = lines.map(line => ({
+                          start: line.start,
+                          end: line.end,
+                          mainLineStart: line.start,
+                          mainLineEnd: line.end,
+                          color: redColor
+                        }));
+                        await api.markup.addMeasurementMarkups(measurements);
+                      }
+
+                      updateFunctionResult("drawCircle20m", {
+                        status: 'success',
+                        result: `Ring joonistatud:\n📍 Keskpunkt: X=${centerX.toFixed(0)}, Y=${centerY.toFixed(0)}\n📏 Z (põhi): ${bottomZ.toFixed(0)} mm (${(bottomZ/1000).toFixed(2)} m)\n⭕ Raadius: 20m\n🔴 Värv: punane`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("drawCircle20m", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🗑️ Eemalda mõõtjooned"
                   result={functionResults["removeMeasurements"]}
                   onClick={async () => {
