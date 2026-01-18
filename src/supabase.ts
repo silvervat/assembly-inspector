@@ -764,6 +764,7 @@ export interface DeliveryItem {
   status: DeliveryItemStatus;
   unload_methods?: UnloadMethods;    // Detaili-taseme mahalaadimise meetodid
   notes?: string;
+  photo_url?: string;                 // Photo URL(s), comma-separated for multiple
   created_at: string;
   created_by: string;
   updated_at: string;
