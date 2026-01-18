@@ -644,6 +644,7 @@ export default function OrganizerScreen({
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
   const [showColorModeMenu, setShowColorModeMenu] = useState(false);
+  const [showColorMarkMenu, setShowColorMarkMenu] = useState(false);
   const [showGroupForm, setShowGroupForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<OrganizerGroup | null>(null);
   const [groupMenuId, setGroupMenuId] = useState<string | null>(null);
@@ -892,6 +893,7 @@ export default function OrganizerScreen({
   // Required fields modal (when adding items to group with required custom fields)
   const [showRequiredFieldsModal, setShowRequiredFieldsModal] = useState(false);
   const [requiredFieldValues, setRequiredFieldValues] = useState<Record<string, string>>({});
+  const [requiredFieldUploading, setRequiredFieldUploading] = useState<string | null>(null);
 
   // Photo lightbox
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
@@ -903,6 +905,7 @@ export default function OrganizerScreen({
   // Lightbox metadata - who added, when, file size
   const [lightboxMeta, setLightboxMeta] = useState<{
     addedBy: string | null;
+    addedByName: string | null;
     addedAt: string | null;
     dimensions: { width: number; height: number } | null;
     fileSize: number | null;
@@ -1188,18 +1191,19 @@ export default function OrganizerScreen({
 
   // Close all dropdown menus when clicking outside
   useEffect(() => {
-    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || groupMenuId !== null || displayPropertyMenuIdx !== null;
+    const anyMenuOpen = showSortMenu || showFilterMenu || showColorModeMenu || showColorMarkMenu || groupMenuId !== null || displayPropertyMenuIdx !== null;
     if (!anyMenuOpen) return;
     const handleClick = () => {
       setShowSortMenu(false);
       setShowFilterMenu(false);
       setShowColorModeMenu(false);
+      setShowColorMarkMenu(false);
       setGroupMenuId(null);
       setDisplayPropertyMenuIdx(null);
     };
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
-  }, [showSortMenu, showFilterMenu, showColorModeMenu, groupMenuId, displayPropertyMenuIdx]);
+  }, [showSortMenu, showFilterMenu, showColorModeMenu, showColorMarkMenu, groupMenuId, displayPropertyMenuIdx]);
 
   // ============================================
   // TEAM MEMBERS LOADING
@@ -1561,6 +1565,85 @@ export default function OrganizerScreen({
     }
   }, [generateUploadFilename]);
 
+  // Upload photo for required fields modal (uses "shared" as itemId since items don't exist yet)
+  const uploadRequiredFieldPhoto = useCallback(async (file: File, fieldId: string): Promise<string | null> => {
+    try {
+      const compressedFile = await compressImage(file, { maxWidth: 1920, maxHeight: 1920, quality: 0.8 });
+      const filename = generateUploadFilename(file.name, 'shared', fieldId);
+
+      const { error: uploadError } = await supabase.storage
+        .from('organizer-attachments')
+        .upload(filename, compressedFile);
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        return null;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('organizer-attachments')
+        .getPublicUrl(filename);
+
+      return urlData.publicUrl;
+    } catch (e) {
+      console.error('Required field photo upload error:', e);
+      return null;
+    }
+  }, [generateUploadFilename]);
+
+  // Handle required field photo upload
+  const handleRequiredFieldPhotoUpload = useCallback(async (files: FileList | File[], fieldId: string) => {
+    if (files.length === 0) return;
+
+    setRequiredFieldUploading(fieldId);
+    try {
+      const existingUrls = requiredFieldValues[fieldId]?.split(',').filter(Boolean) || [];
+      const newUrls: string[] = [];
+
+      for (const file of Array.from(files)) {
+        if (!isImageFile(file)) continue;
+        const url = await uploadRequiredFieldPhoto(file, fieldId);
+        if (url) newUrls.push(url);
+      }
+
+      if (newUrls.length > 0) {
+        const allUrls = [...existingUrls, ...newUrls].join(',');
+        setRequiredFieldValues(prev => ({ ...prev, [fieldId]: allUrls }));
+      }
+    } catch (e) {
+      console.error('Error uploading required field photos:', e);
+      showToast('Pildi üleslaadimine ebaõnnestus');
+    } finally {
+      setRequiredFieldUploading(null);
+    }
+  }, [requiredFieldValues, uploadRequiredFieldPhoto, showToast]);
+
+  // Handle paste for required field photos
+  const handleRequiredFieldPaste = useCallback((e: React.ClipboardEvent, fieldId: string) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    if (files.length > 0) {
+      e.preventDefault();
+      handleRequiredFieldPhotoUpload(files, fieldId);
+    }
+  }, [handleRequiredFieldPhotoUpload]);
+
+  // Remove photo from required field
+  const removeRequiredFieldPhoto = useCallback((fieldId: string, urlToRemove: string) => {
+    const currentUrls = requiredFieldValues[fieldId]?.split(',').filter(Boolean) || [];
+    const newUrls = currentUrls.filter(url => url !== urlToRemove);
+    setRequiredFieldValues(prev => ({ ...prev, [fieldId]: newUrls.join(',') }));
+  }, [requiredFieldValues]);
+
   // Single file upload with retry logic
   const uploadSingleFile = useCallback(async (
     file: File,
@@ -1781,6 +1864,21 @@ export default function OrganizerScreen({
     return () => clearInterval(interval);
   }, [pendingUploads, processPendingUploads]);
 
+  // Fetch user name from email
+  const fetchUserName = useCallback(async (email: string): Promise<string | null> => {
+    if (!email) return null;
+    try {
+      const { data } = await supabase
+        .from('trimble_ex_users')
+        .select('name')
+        .eq('email', email)
+        .single();
+      return data?.name || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   // Fetch image metadata (dimensions and file size)
   const fetchImageMeta = useCallback(async (url: string): Promise<{
     dimensions: { width: number; height: number } | null;
@@ -1826,10 +1924,14 @@ export default function OrganizerScreen({
     if (itemId) {
       const item = Array.from(groupItems.values()).flat().find(i => i.id === itemId);
       if (item) {
-        // Fetch image dimensions and size
-        fetchImageMeta(url).then(({ dimensions, fileSize }) => {
+        // Fetch image dimensions, size, and user name in parallel
+        Promise.all([
+          fetchImageMeta(url),
+          item.added_by ? fetchUserName(item.added_by) : Promise.resolve(null)
+        ]).then(([{ dimensions, fileSize }, addedByName]) => {
           setLightboxMeta({
             addedBy: item.added_by || null,
+            addedByName,
             addedAt: item.added_at || null,
             dimensions,
             fileSize
@@ -1837,22 +1939,26 @@ export default function OrganizerScreen({
         });
       }
     }
-  }, [groupItems, fetchImageMeta]);
+  }, [groupItems, fetchImageMeta, fetchUserName]);
 
   // Update lightbox metadata when navigating between photos
   useEffect(() => {
     if (lightboxPhoto && lightboxItemId) {
-      fetchImageMeta(lightboxPhoto).then(({ dimensions, fileSize }) => {
-        const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+      const item = Array.from(groupItems.values()).flat().find(i => i.id === lightboxItemId);
+      Promise.all([
+        fetchImageMeta(lightboxPhoto),
+        item?.added_by ? fetchUserName(item.added_by) : Promise.resolve(null)
+      ]).then(([{ dimensions, fileSize }, addedByName]) => {
         setLightboxMeta({
           addedBy: item?.added_by || null,
+          addedByName,
           addedAt: item?.added_at || null,
           dimensions,
           fileSize
         });
       });
     }
-  }, [lightboxPhoto, lightboxItemId, groupItems, fetchImageMeta]);
+  }, [lightboxPhoto, lightboxItemId, groupItems, fetchImageMeta, fetchUserName]);
 
   // Close lightbox
   const closeLightbox = useCallback(() => {
@@ -3592,14 +3698,16 @@ export default function OrganizerScreen({
         return newMap;
       });
 
-      // Rebuild tree locally
-      setGroupTree(() => {
-        const updatedItems = new Map(groupItems);
-        const existing = updatedItems.get(targetGroupId) || [];
-        const filtered = existing.filter(e => !guids.includes(e.guid_ifc));
-        updatedItems.set(targetGroupId, [...filtered, ...insertedItems]);
-        return buildGroupTree(groups, updatedItems);
-      });
+      // Rebuild tree locally and update cache
+      const updatedItemsMap = new Map(groupItems);
+      const existingInMap = updatedItemsMap.get(targetGroupId) || [];
+      const filteredInMap = existingInMap.filter(e => !guids.includes(e.guid_ifc));
+      updatedItemsMap.set(targetGroupId, [...filteredInMap, ...insertedItems]);
+      const newTree = buildGroupTree(groups, updatedItemsMap);
+      setGroupTree(newTree);
+
+      // Update cache so items persist after navigation
+      setCachedData(groups, updatedItemsMap, newTree);
 
       const message = skippedCount > 0
         ? `${items.length} detaili lisatud (${skippedCount} jäeti vahele - juba olemas)`
@@ -4984,6 +5092,178 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error removing markups:', e);
       showToast('Viga markupite eemaldamisel');
+    } finally {
+      setSaving(false);
+      setMarkupProgress(null);
+    }
+  };
+
+  // ============================================
+  // BULK SELECTION COLOR/MARKUP FUNCTIONS
+  // ============================================
+
+  // Color only selected items in model (for bulk selection bar)
+  const colorSelectedItemsInModel = async () => {
+    if (selectedItemIds.size === 0 || !selectedGroup) return;
+
+    setSaving(true);
+    setShowColorMarkMenu(false);
+    try {
+      // Get GUIDs for selected items
+      const allItems = Array.from(groupItems.values()).flat();
+      const selectedItems = allItems.filter(item => selectedItemIds.has(item.id));
+      const guids = selectedItems.map(item => item.guid_ifc).filter(Boolean) as string[];
+
+      if (guids.length === 0) {
+        showToast('Valitud detailidel pole GUID-e');
+        return;
+      }
+
+      // Get group color (or parent's color)
+      const groupColor = selectedGroup.color ||
+        (selectedGroup.parent_id ? groups.find(g => g.id === selectedGroup.parent_id)?.color : null) ||
+        { r: 59, g: 130, b: 246 }; // Default blue if no color
+
+      // First, reset all colors to white
+      showToast(`Värvin ${guids.length} valitud detaili...`);
+
+      // Find all objects in model and color them white first
+      const allModelGuids = Array.from(groupItems.values()).flat().map(i => i.guid_ifc).filter(Boolean) as string[];
+      const allFoundObjects = await findObjectsInLoadedModels(api, allModelGuids);
+
+      // Color all white
+      const whiteByModel: Record<string, number[]> = {};
+      for (const [, found] of allFoundObjects) {
+        if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+        whiteByModel[found.modelId].push(found.runtimeId);
+      }
+      for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+        await api.viewer.setObjectState(
+          { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+          { color: { r: 255, g: 255, b: 255, a: 255 } }
+        );
+      }
+
+      // Then color selected items
+      await colorItemsDirectly(guids, groupColor);
+      showToast(`✓ ${guids.length} detaili värvitud`);
+    } catch (e) {
+      console.error('Error coloring selected items:', e);
+      showToast('Viga värvimise');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Add markups to selected items (for bulk selection bar)
+  const addMarkupsToSelectedItems = async () => {
+    if (selectedItemIds.size === 0 || !selectedGroup) return;
+
+    setSaving(true);
+    setShowColorMarkMenu(false);
+    try {
+      // Get selected items
+      const allItems = Array.from(groupItems.values()).flat();
+      const selectedItems = allItems.filter(item => selectedItemIds.has(item.id));
+
+      if (selectedItems.length === 0) {
+        showToast('Valitud detaile ei leitud');
+        return;
+      }
+
+      showToast(`Loon markupeid ${selectedItems.length} detailile...`);
+
+      // Get root parent for custom fields
+      const rootParent = getRootParent(selectedGroup.id);
+      const customFields = rootParent?.custom_fields || [];
+
+      // Find objects in model
+      const guids = selectedItems.map(i => i.guid_ifc).filter(Boolean) as string[];
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      if (foundObjects.size === 0) {
+        showToast('Detaile ei leitud mudelist');
+        setSaving(false);
+        return;
+      }
+
+      // Build markups
+      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: string }> = [];
+
+      for (const item of selectedItems) {
+        if (!item.guid_ifc) continue;
+        const found = foundObjects.get(item.guid_ifc) || foundObjects.get(item.guid_ifc.toLowerCase());
+        if (!found) continue;
+
+        try {
+          const bboxes = await api.viewer.getObjectBoundingBoxes(found.modelId, [found.runtimeId]);
+          if (bboxes && bboxes.length > 0) {
+            const box = bboxes[0].boundingBox;
+            const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+            const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+            const centerZ = box.max.z * 1000;
+
+            const text = buildMarkupText(item, selectedGroup, customFields, undefined);
+            const pos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
+
+            let colorHex: string | undefined;
+            if (markupSettings.useGroupColors && selectedGroup.color) {
+              const { r, g, b } = selectedGroup.color;
+              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+
+            markupsToCreate.push({ text, start: pos, end: pos, color: colorHex });
+          }
+        } catch (e) {
+          console.warn('Could not get bounding box for', item.guid_ifc, e);
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        showToast('Markupe ei saanud luua');
+        setSaving(false);
+        return;
+      }
+
+      // Create markups in batches
+      setMarkupProgress({ current: 0, total: markupsToCreate.length, action: 'adding' });
+      const createdIds: number[] = [];
+
+      for (let i = 0; i < markupsToCreate.length; i += MARKUP_BATCH_SIZE) {
+        const batch = markupsToCreate.slice(i, i + MARKUP_BATCH_SIZE);
+        const batchData = batch.map(m => ({ text: m.text, start: m.start, end: m.end }));
+
+        try {
+          const result = await (api.markup as any)?.createMarkups?.(batchData);
+          if (Array.isArray(result)) {
+            result.forEach((r: any) => {
+              if (r?.id != null) createdIds.push(r.id);
+            });
+          }
+
+          // Apply colors
+          for (let j = 0; j < batch.length; j++) {
+            if (batch[j].color && createdIds[i + j] != null) {
+              try {
+                await (api.markup as any)?.editMarkup?.(createdIds[i + j], { color: batch[j].color });
+              } catch (e) {
+                console.warn('Could not set markup color', e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error creating markups batch:', e);
+        }
+
+        setMarkupProgress({ current: Math.min(i + MARKUP_BATCH_SIZE, markupsToCreate.length), total: markupsToCreate.length, action: 'adding' });
+      }
+
+      setMarkupProgress(null);
+      setHasMarkups(true);
+      showToast(`✓ ${createdIds.length} markupit loodud`);
+    } catch (e) {
+      console.error('Error adding markups to selected items:', e);
+      showToast('Viga markupite loomisel');
     } finally {
       setSaving(false);
       setMarkupProgress(null);
@@ -9050,6 +9330,97 @@ export default function OrganizerScreen({
             <span className="bulk-count">{selectedItemIds.size} valitud</span>
             <div className="bulk-actions-left">
               <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
+              {/* Värvi - Markeeri dropdown */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowColorMarkMenu(prev => !prev)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <FiDroplet size={12} /> Värvi - Markeeri <FiChevronDown size={10} />
+                </button>
+                {showColorMarkMenu && (
+                  <div
+                    className="org-dropdown-menu"
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      zIndex: 100,
+                      background: 'white',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      minWidth: '220px',
+                      marginTop: '4px'
+                    }}
+                  >
+                    <button
+                      onClick={colorSelectedItemsInModel}
+                      disabled={saving}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        textAlign: 'left'
+                      }}
+                      className="org-dropdown-item"
+                    >
+                      <FiDroplet size={14} />
+                      Värvi mudelis ainult valitud detailid
+                    </button>
+                    <button
+                      onClick={addMarkupsToSelectedItems}
+                      disabled={saving}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        textAlign: 'left'
+                      }}
+                      className="org-dropdown-item"
+                    >
+                      <FiTag size={14} />
+                      Lisa markupid valitud detailidele
+                    </button>
+                    {hasMarkups && (
+                      <button
+                        onClick={() => { setShowColorMarkMenu(false); removeAllMarkups(); }}
+                        disabled={saving}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '10px 12px',
+                          border: 'none',
+                          background: 'none',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          textAlign: 'left',
+                          color: '#dc2626',
+                          borderTop: '1px solid #e5e7eb'
+                        }}
+                        className="org-dropdown-item"
+                      >
+                        <FiTrash2 size={14} />
+                        Eemalda markupid
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               <button className="cancel" onClick={() => setSelectedItemIds(new Set())}><FiX size={12} /> Tühista</button>
             </div>
             <div className="bulk-actions-right">
@@ -10057,6 +10428,131 @@ export default function OrganizerScreen({
                         onChange={(e) => setRequiredFieldValues(prev => ({ ...prev, [field.id]: e.target.value }))}
                       />
                     )}
+                    {field.type === 'photo' && (() => {
+                      const photoUrls = requiredFieldValues[field.id]?.split(',').filter(Boolean) || [];
+                      const isUploading = requiredFieldUploading === field.id;
+                      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+                      return (
+                        <div
+                          style={{
+                            border: '2px dashed #d1d5db',
+                            borderRadius: '8px',
+                            padding: '16px',
+                            background: isUploading ? '#f0f9ff' : '#fafafa',
+                            transition: 'all 0.2s'
+                          }}
+                          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.background = '#eff6ff'; }}
+                          onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor = '#d1d5db'; e.currentTarget.style.background = '#fafafa'; }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.currentTarget.style.borderColor = '#d1d5db';
+                            e.currentTarget.style.background = '#fafafa';
+                            if (e.dataTransfer.files) {
+                              handleRequiredFieldPhotoUpload(e.dataTransfer.files, field.id);
+                            }
+                          }}
+                          onPaste={(e) => handleRequiredFieldPaste(e, field.id)}
+                          tabIndex={0}
+                        >
+                          {/* Upload buttons */}
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: photoUrls.length > 0 ? '12px' : 0 }}>
+                            {isMobile ? (
+                              <>
+                                {/* Mobile: Camera button */}
+                                <label style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                                  background: '#3b82f6', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+                                }}>
+                                  <FiCamera size={16} />
+                                  Pildista
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => { if (e.target.files) { handleRequiredFieldPhotoUpload(e.target.files, field.id); e.target.value = ''; } }}
+                                  />
+                                </label>
+                                {/* Mobile: Gallery button */}
+                                <label style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                                  background: '#10b981', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+                                }}>
+                                  <FiImage size={16} />
+                                  Galerii
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => { if (e.target.files) { handleRequiredFieldPhotoUpload(e.target.files, field.id); e.target.value = ''; } }}
+                                  />
+                                </label>
+                              </>
+                            ) : (
+                              <>
+                                {/* Desktop: Browse button */}
+                                <label style={{
+                                  display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                                  background: '#3b82f6', color: 'white', borderRadius: '6px', cursor: 'pointer', fontSize: '13px'
+                                }}>
+                                  <FiUpload size={16} />
+                                  Sirvi faile
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    style={{ display: 'none' }}
+                                    disabled={isUploading}
+                                    onChange={(e) => { if (e.target.files) { handleRequiredFieldPhotoUpload(e.target.files, field.id); e.target.value = ''; } }}
+                                  />
+                                </label>
+                                <span style={{ color: '#6b7280', fontSize: '12px', alignSelf: 'center' }}>
+                                  või lohista pildid siia • Ctrl+V kleebi
+                                </span>
+                              </>
+                            )}
+                            {isUploading && <span style={{ color: '#3b82f6', fontSize: '12px', alignSelf: 'center' }}>Laadin...</span>}
+                          </div>
+
+                          {/* Photo thumbnails */}
+                          {photoUrls.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {photoUrls.map((url, idx) => (
+                                <div
+                                  key={idx}
+                                  style={{
+                                    position: 'relative',
+                                    width: '60px', height: '60px',
+                                    borderRadius: '6px', overflow: 'hidden',
+                                    border: '1px solid #e5e7eb'
+                                  }}
+                                >
+                                  <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeRequiredFieldPhoto(field.id, url)}
+                                    style={{
+                                      position: 'absolute', top: '2px', right: '2px',
+                                      width: '18px', height: '18px', borderRadius: '50%',
+                                      background: 'rgba(0,0,0,0.6)', color: 'white',
+                                      border: 'none', cursor: 'pointer', fontSize: '12px',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                    }}
+                                    title="Eemalda"
+                                  >×</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
@@ -11082,7 +11578,9 @@ export default function OrganizerScreen({
                 justifyContent: 'center'
               }}>
                 {lightboxMeta.addedBy && (
-                  <span title="Lisaja">{lightboxMeta.addedBy.split('@')[0]}</span>
+                  <span title={lightboxMeta.addedBy}>
+                    {lightboxMeta.addedByName || lightboxMeta.addedBy.split('@')[0]}
+                  </span>
                 )}
                 {lightboxMeta.addedAt && (
                   <span title="Lisatud">
