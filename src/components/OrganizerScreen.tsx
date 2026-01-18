@@ -1045,6 +1045,9 @@ export default function OrganizerScreen({
   const groupClickSelectionRef = useRef(false); // Track if selection came from group click
   const groupsRef = useRef<OrganizerGroup[]>([]); // For Realtime callback access
   const recentLocalChangesRef = useRef<Set<string>>(new Set()); // Track GUIDs changed by THIS session
+  const line1InputRef = useRef<HTMLInputElement>(null); // Markup template input refs
+  const line2InputRef = useRef<HTMLInputElement>(null);
+  const line3InputRef = useRef<HTMLInputElement>(null);
 
   // Computed: Selected GUIDs that are already in groups (for highlighting)
   // Uses guidLookup for fast detection (works even when full items aren't loaded)
@@ -11738,11 +11741,6 @@ export default function OrganizerScreen({
             </div>
           );
         };
-
-        // Refs for inputs
-        const line1InputRef = useRef<HTMLInputElement>(null);
-        const line2InputRef = useRef<HTMLInputElement>(null);
-        const line3InputRef = useRef<HTMLInputElement>(null);
 
         return (
           <div className="org-modal-overlay" onClick={() => { setShowMarkupModal(false); setMarkupGroupId(null); }}>
