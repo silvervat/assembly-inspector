@@ -140,18 +140,18 @@ export default function ToolsScreen({
         return;
       }
 
-      // Build sets for quick lookup
-      const deliveryGuids = new Set<string>();
-      const arrivedGuids = new Set<string>();
-      const installedGuids = new Set<string>();
+      // Build maps: lowercase -> original GUID (for case-insensitive comparison but preserve original for API)
+      const deliveryGuidMap = new Map<string, string>(); // lowercase -> original
+      const arrivedGuidMap = new Map<string, string>();
+      const installedGuidMap = new Map<string, string>();
 
-      // Process delivery items
+      // Process delivery items - keep original GUID format for API calls
       for (const item of (deliveryItems || [])) {
         if (item.guid_ifc) {
           const guidLower = item.guid_ifc.toLowerCase();
-          deliveryGuids.add(guidLower);
+          deliveryGuidMap.set(guidLower, item.guid_ifc);
           if (item.status === 'delivered') {
-            arrivedGuids.add(guidLower);
+            arrivedGuidMap.set(guidLower, item.guid_ifc);
           }
         }
       }
@@ -159,35 +159,35 @@ export default function ToolsScreen({
       // Process installation items
       for (const item of (installedItems || [])) {
         if (item.guid_ifc && item.status === 'completed') {
-          installedGuids.add(item.guid_ifc.toLowerCase());
+          installedGuidMap.set(item.guid_ifc.toLowerCase(), item.guid_ifc);
         }
       }
 
       // Calculate derived categories
-      const arrivedNotInstalledGuids = new Set<string>();
-      const notArrivedGuids = new Set<string>();
+      const arrivedNotInstalledGuids: string[] = [];
+      const notArrivedGuids: string[] = [];
 
-      // Arrived but not installed: in arrivedGuids but not in installedGuids
-      for (const guid of arrivedGuids) {
-        if (!installedGuids.has(guid)) {
-          arrivedNotInstalledGuids.add(guid);
+      // Arrived but not installed: in arrivedGuidMap but not in installedGuidMap
+      for (const [guidLower, originalGuid] of arrivedGuidMap) {
+        if (!installedGuidMap.has(guidLower)) {
+          arrivedNotInstalledGuids.push(originalGuid);
         }
       }
 
-      // In delivery schedule but not arrived: in deliveryGuids but not in arrivedGuids
-      for (const guid of deliveryGuids) {
-        if (!arrivedGuids.has(guid)) {
-          notArrivedGuids.add(guid);
+      // In delivery schedule but not arrived: in deliveryGuidMap but not in arrivedGuidMap
+      for (const [guidLower, originalGuid] of deliveryGuidMap) {
+        if (!arrivedGuidMap.has(guidLower)) {
+          notArrivedGuids.push(originalGuid);
         }
       }
 
-      // Update marker categories with data
+      // Update marker categories with data - use original GUIDs
       setMarkerCategories([
-        { id: 'in_delivery', label: 'Tarnegraafikus', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: Array.from(deliveryGuids), count: deliveryGuids.size },
-        { id: 'arrived', label: 'Saabunud', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: Array.from(arrivedGuids), count: arrivedGuids.size },
-        { id: 'installed', label: 'Paigaldatud', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: Array.from(installedGuids), count: installedGuids.size },
-        { id: 'arrived_not_installed', label: 'Saabunud paigaldamata', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: Array.from(arrivedNotInstalledGuids), count: arrivedNotInstalledGuids.size },
-        { id: 'not_arrived', label: 'Tarnegraafikus saabumata', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: Array.from(notArrivedGuids), count: notArrivedGuids.size },
+        { id: 'in_delivery', label: 'Tarnegraafikus', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: Array.from(deliveryGuidMap.values()), count: deliveryGuidMap.size },
+        { id: 'arrived', label: 'Saabunud', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: Array.from(arrivedGuidMap.values()), count: arrivedGuidMap.size },
+        { id: 'installed', label: 'Paigaldatud', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: Array.from(installedGuidMap.values()), count: installedGuidMap.size },
+        { id: 'arrived_not_installed', label: 'Saabunud paigaldamata', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: arrivedNotInstalledGuids, count: arrivedNotInstalledGuids.length },
+        { id: 'not_arrived', label: 'Tarnegraafikus saabumata', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: notArrivedGuids, count: notArrivedGuids.length },
       ]);
 
     } catch (e) {
