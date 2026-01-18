@@ -4835,12 +4835,22 @@ export default function OrganizerScreen({
     const allItems = collectAllGroupItems(groupId);
     const customFields = group.custom_fields || [];
 
+    // Show progress for large operations
+    const showProgress = allItems.length > 500;
+    if (showProgress) {
+      showToast(`Valmiatan andmeid (${allItems.length} rida)...`);
+    }
+
+    // Allow UI to update
+    await new Promise(resolve => setTimeout(resolve, 10));
+
     // Check if this is a non-assembly group (uses display_properties instead of standard columns)
     const isNonAssemblyGroup = group.assembly_selection_on === false;
     const displayProps = group.display_properties || [];
 
     // Build headers: Different for assembly vs non-assembly groups
-    const headers = ['#', 'Grupp', 'Grupi värv'];
+    // Removed: Grupi värv, GUID columns, Lisatud info
+    const headers = ['#', 'Grupp'];
     if (isNonAssemblyGroup && displayProps.length > 0) {
       // Use display_properties as columns
       displayProps.forEach(dp => headers.push(dp.label || `${dp.set}.${dp.prop}`));
@@ -4849,63 +4859,55 @@ export default function OrganizerScreen({
       headers.push('Mark', 'Toode', 'Kaal (kg)', 'Positsioon');
     }
     customFields.forEach(f => headers.push(f.name));
-    headers.push('GUID_IFC', 'GUID_MS', 'Lisatud', 'Ajavöönd', 'Lisaja');
 
-    // Get timezone name
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    // Helper to convert RGB to hex
-    const rgbToHex = (c: GroupColor | null): string => {
-      if (!c) return '';
-      return '#' + ((1 << 24) + (c.r << 16) + (c.g << 8) + c.b).toString(16).slice(1).toUpperCase();
-    };
-
-    // Build rows
+    // Build rows in batches for large datasets
     const rows: string[][] = [headers];
-    allItems.forEach(({ item, groupName, groupColor }, idx) => {
-      const addedDate = item.added_at
-        ? new Date(item.added_at).toLocaleDateString('et-EE') + ' ' + new Date(item.added_at).toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit' })
-        : '';
+    const batchSize = 1000;
 
-      // Calculate GUID_MS from GUID_IFC
-      const guidMs = item.guid_ifc ? ifcToMsGuid(item.guid_ifc) : '';
+    for (let i = 0; i < allItems.length; i += batchSize) {
+      const batch = allItems.slice(i, Math.min(i + batchSize, allItems.length));
 
-      const row: string[] = [
-        String(idx + 1),
-        groupName,
-        rgbToHex(groupColor)
-      ];
-      // Add data columns based on group type
-      if (isNonAssemblyGroup && displayProps.length > 0) {
-        // Use display_properties values from custom_properties with decimal formatting
-        displayProps.forEach((dp: {set: string; prop: string; label: string; decimals?: number}) => {
-          const key = `display_${dp.set}_${dp.prop}`;
-          const rawValue = item.custom_properties?.[key] || '';
-          // Apply decimal formatting if set
-          if (rawValue && dp.decimals !== undefined) {
-            const numVal = parseFloat(rawValue);
-            if (!isNaN(numVal)) {
-              row.push(numVal.toFixed(dp.decimals));
-              return;
+      batch.forEach(({ item, groupName }, batchIdx) => {
+        const idx = i + batchIdx;
+        const row: string[] = [
+          String(idx + 1),
+          groupName
+        ];
+        // Add data columns based on group type
+        if (isNonAssemblyGroup && displayProps.length > 0) {
+          // Use display_properties values from custom_properties with decimal formatting
+          displayProps.forEach((dp: {set: string; prop: string; label: string; decimals?: number}) => {
+            const key = `display_${dp.set}_${dp.prop}`;
+            const rawValue = item.custom_properties?.[key] || '';
+            // Apply decimal formatting if set
+            if (rawValue && dp.decimals !== undefined) {
+              const numVal = parseFloat(rawValue);
+              if (!isNaN(numVal)) {
+                row.push(numVal.toFixed(dp.decimals));
+                return;
+              }
             }
-          }
-          row.push(rawValue);
-        });
-      } else {
-        // Standard assembly columns
-        row.push(
-          item.assembly_mark || '',
-          item.product_name || '',
-          formatWeight(item.cast_unit_weight),
-          item.cast_unit_position_code || ''
-        );
+            row.push(rawValue);
+          });
+        } else {
+          // Standard assembly columns
+          row.push(
+            item.assembly_mark || '',
+            item.product_name || '',
+            formatWeight(item.cast_unit_weight),
+            item.cast_unit_position_code || ''
+          );
+        }
+        // Add custom fields only (no GUID, no added info)
+        customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
+        rows.push(row);
+      });
+
+      // Allow UI to breathe for large operations
+      if (showProgress && i + batchSize < allItems.length) {
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-      // Add custom fields
-      customFields.forEach(f => row.push(formatFieldValue(item.custom_properties?.[f.id], f)));
-      // Add GUIDs, then Lisatud columns at the end
-      row.push(item.guid_ifc || '', guidMs, addedDate, item.added_at ? timeZone : '', item.added_by || '');
-      rows.push(row);
-    });
+    }
 
     // Convert to tab-separated string
     const tsvContent = rows.map(row => row.join('\t')).join('\n');
@@ -6871,7 +6873,7 @@ export default function OrganizerScreen({
               <span className="org-group-name" title={node.description ? `${node.name}\n${node.description}` : node.name}>
                 {node.name}
               </span>
-              {node.assembly_selection_on === false && <FiGrid size={10} className="org-element-icon" title="Element tasemel" style={{ color: '#6366f1', marginLeft: '4px' }} />}
+              {node.assembly_selection_on === false && <FiGrid size={10} className="org-element-icon" title="Assembly selection välja lülitatud selles grupis" style={{ color: '#6366f1', marginLeft: '4px' }} />}
               {node.is_private && <FiLock size={10} className="org-lock-icon" title="Privaatne grupp" />}
               {(() => {
                 const effectiveLockInfo = getGroupLockInfo(node.id);
@@ -8495,33 +8497,63 @@ export default function OrganizerScreen({
                     Väljad päritakse grupist: <strong>{rootParent.name}</strong>
                   </p>
                 )}
-                <div className="custom-fields-list">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {customFields.length === 0 ? (
                     <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
                   ) : (
                     customFields.map(f => (
-                      <div key={f.id} className="custom-field-item">
-                        <span className="field-name">{f.name}</span>
-                        <span className="field-type">{FIELD_TYPE_LABELS[f.type]}</span>
-                        {f.required && <span className="field-required" title="Kohustuslik">*</span>}
-                        <div className="field-actions">
+                      <div
+                        key={f.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 12px',
+                          background: '#f9fafb',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        <span style={{ fontWeight: 500, fontSize: '13px' }}>
+                          {f.name}
+                          {f.required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
+                        </span>
+                        <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: '4px' }}>
+                          {FIELD_TYPE_LABELS[f.type]}
+                        </span>
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
                           <button
-                            className="field-edit-btn"
                             onClick={() => {
                               setSelectedGroupIds(new Set([effectiveGroup.id]));
                               startEditingField(f);
                               setShowFieldsManagementModal(false);
                             }}
                             title="Muuda"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: '#6b7280',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
                           >
-                            <FiEdit2 size={12} />
+                            <FiEdit2 size={14} />
                           </button>
                           <button
-                            className="field-delete-btn"
                             onClick={() => deleteCustomField(f.id, effectiveGroup.id)}
                             title="Kustuta"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              color: '#ef4444',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
                           >
-                            <FiTrash2 size={12} />
+                            <FiTrash2 size={14} />
                           </button>
                         </div>
                       </div>
