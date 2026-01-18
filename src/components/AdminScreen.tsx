@@ -8352,30 +8352,45 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   onClick={async () => {
                     updateFunctionResult("drawCircle20m", { status: 'pending' });
                     try {
+                      console.log('═══════════════════════════════════════════════════════════');
+                      console.log('🔴 addLineMarkups TEST - START');
+                      console.log('═══════════════════════════════════════════════════════════');
+
                       const sel = await api.viewer.getSelection();
+                      console.log('📋 Selection:', JSON.stringify(sel, null, 2));
                       if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel[0].objectRuntimeIds || [];
+                      console.log('📦 ModelId:', modelId);
+                      console.log('📦 RuntimeIds:', runtimeIds);
                       if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
 
                       const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                      console.log('📐 BoundingBoxes (raw):', JSON.stringify(boundingBoxes, null, 2));
                       if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
                         throw new Error('Bounding box andmeid ei leitud');
                       }
 
                       const bbox = boundingBoxes[0].boundingBox;
+                      console.log('📐 BBox min (meters):', bbox.min);
+                      console.log('📐 BBox max (meters):', bbox.max);
 
                       // Bottom surface center (mm for lineMarkup API)
                       const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
                       const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
                       const bottomZ = bbox.min.z * 1000;
 
+                      console.log('📍 Center (mm): X=' + centerX.toFixed(2) + ', Y=' + centerY.toFixed(2) + ', Z=' + bottomZ.toFixed(2));
+
                       // 20m radius in mm
                       const radiusMm = 20000;
                       const segments = 72;
 
                       const redColor = { r: 255, g: 0, b: 0, a: 255 };
+                      console.log('🎨 Color:', redColor);
+                      console.log('⭕ Radius (mm):', radiusMm);
+                      console.log('📐 Segments:', segments);
 
                       // Generate line markups with {start, end, color} structure (mm coordinates)
                       const lineMarkups: any[] = [];
@@ -8399,16 +8414,31 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         });
                       }
 
-                      // Use addLineMarkups API
+                      console.log('📤 REQUEST STRUCTURE (first 3 items):');
+                      console.log(JSON.stringify(lineMarkups.slice(0, 3), null, 2));
+                      console.log('... (total ' + lineMarkups.length + ' items)');
+
+                      // Check what methods are available on markup API
                       const markupApi = api.markup as any;
+                      console.log('🔧 Available markup methods:', Object.keys(markupApi || {}).filter(k => typeof markupApi[k] === 'function'));
+                      console.log('🔧 addLineMarkups exists:', typeof markupApi?.addLineMarkups);
+
+                      console.log('📤 Calling api.markup.addLineMarkups()...');
                       const result = await markupApi.addLineMarkups(lineMarkups);
-                      console.log('🔴 LineMarkups created:', result);
+
+                      console.log('📥 RESPONSE:');
+                      console.log(JSON.stringify(result, null, 2));
+                      console.log('═══════════════════════════════════════════════════════════');
+                      console.log('🔴 addLineMarkups TEST - END');
+                      console.log('═══════════════════════════════════════════════════════════');
 
                       updateFunctionResult("drawCircle20m", {
                         status: 'success',
-                        result: `Ring joonistatud (addLineMarkups):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📐 Segmente: ${segments}`
+                        result: `Ring joonistatud (addLineMarkups):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📐 Segmente: ${segments}\n\n✅ Vaata konsooli täieliku logi jaoks!`
                       });
                     } catch (e: any) {
+                      console.error('❌ addLineMarkups ERROR:', e);
+                      console.error('❌ Error stack:', e.stack);
                       updateFunctionResult("drawCircle20m", { status: 'error', error: e.message });
                     }
                   }}
@@ -8419,30 +8449,45 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   onClick={async () => {
                     updateFunctionResult("drawCircleFreeline", { status: 'pending' });
                     try {
+                      console.log('═══════════════════════════════════════════════════════════');
+                      console.log('🟣 addFreelineMarkups TEST - START');
+                      console.log('═══════════════════════════════════════════════════════════');
+
                       const sel = await api.viewer.getSelection();
+                      console.log('📋 Selection:', JSON.stringify(sel, null, 2));
                       if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel[0].objectRuntimeIds || [];
+                      console.log('📦 ModelId:', modelId);
+                      console.log('📦 RuntimeIds:', runtimeIds);
                       if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
 
                       const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                      console.log('📐 BoundingBoxes (raw):', JSON.stringify(boundingBoxes, null, 2));
                       if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
                         throw new Error('Bounding box andmeid ei leitud');
                       }
 
                       const bbox = boundingBoxes[0].boundingBox;
+                      console.log('📐 BBox min (meters):', bbox.min);
+                      console.log('📐 BBox max (meters):', bbox.max);
 
                       // Bottom surface center (mm)
                       const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
                       const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
                       const bottomZ = bbox.min.z * 1000;
 
+                      console.log('📍 Center (mm): X=' + centerX.toFixed(2) + ', Y=' + centerY.toFixed(2) + ', Z=' + bottomZ.toFixed(2));
+
                       // 20m radius in mm
                       const radiusMm = 20000;
                       const segments = 72;
 
                       const redColor = { r: 255, g: 0, b: 0, a: 255 };
+                      console.log('🎨 Color:', redColor);
+                      console.log('⭕ Radius (mm):', radiusMm);
+                      console.log('📐 Segments:', segments);
 
                       // Generate LineMarkup array for FreelineMarkup.lines
                       const lineSegments: any[] = [];
@@ -8465,19 +8510,44 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         });
                       }
 
-                      // Use addFreelineMarkups - single markup with multiple line segments
-                      const markupApi = api.markup as any;
-                      const result = await markupApi.addFreelineMarkups([{
+                      // Build the full request
+                      const freelineRequest = [{
                         color: redColor,
                         lines: lineSegments
-                      }]);
-                      console.log('🔴 FreelineMarkup created:', result);
+                      }];
+
+                      console.log('📤 REQUEST STRUCTURE:');
+                      console.log('{');
+                      console.log('  color:', JSON.stringify(redColor));
+                      console.log('  lines: [');
+                      console.log('    ' + JSON.stringify(lineSegments[0]) + ',');
+                      console.log('    ' + JSON.stringify(lineSegments[1]) + ',');
+                      console.log('    ' + JSON.stringify(lineSegments[2]) + ',');
+                      console.log('    ... (' + lineSegments.length + ' segments total)');
+                      console.log('  ]');
+                      console.log('}');
+
+                      // Check what methods are available on markup API
+                      const markupApi = api.markup as any;
+                      console.log('🔧 Available markup methods:', Object.keys(markupApi || {}).filter(k => typeof markupApi[k] === 'function'));
+                      console.log('🔧 addFreelineMarkups exists:', typeof markupApi?.addFreelineMarkups);
+
+                      console.log('📤 Calling api.markup.addFreelineMarkups()...');
+                      const result = await markupApi.addFreelineMarkups(freelineRequest);
+
+                      console.log('📥 RESPONSE:');
+                      console.log(JSON.stringify(result, null, 2));
+                      console.log('═══════════════════════════════════════════════════════════');
+                      console.log('🟣 addFreelineMarkups TEST - END');
+                      console.log('═══════════════════════════════════════════════════════════');
 
                       updateFunctionResult("drawCircleFreeline", {
                         status: 'success',
-                        result: `Ring joonistatud (addFreelineMarkups):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📐 Segmente: ${segments}\n🎯 Üks FreelineMarkup objekt`
+                        result: `Ring joonistatud (addFreelineMarkups):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n🔴 Värv: punane\n📐 Segmente: ${segments}\n🎯 Üks FreelineMarkup objekt\n\n✅ Vaata konsooli täieliku logi jaoks!`
                       });
                     } catch (e: any) {
+                      console.error('❌ addFreelineMarkups ERROR:', e);
+                      console.error('❌ Error stack:', e.stack);
                       updateFunctionResult("drawCircleFreeline", { status: 'error', error: e.message });
                     }
                   }}
@@ -8488,24 +8558,36 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   onClick={async () => {
                     updateFunctionResult("drawCircle500mmLines", { status: 'pending' });
                     try {
+                      console.log('═══════════════════════════════════════════════════════════');
+                      console.log('🟠 addMeasurementMarkups TEST - START');
+                      console.log('═══════════════════════════════════════════════════════════');
+
                       const sel = await api.viewer.getSelection();
+                      console.log('📋 Selection:', JSON.stringify(sel, null, 2));
                       if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
 
                       const modelId = sel[0].modelId;
                       const runtimeIds = sel[0].objectRuntimeIds || [];
+                      console.log('📦 ModelId:', modelId);
+                      console.log('📦 RuntimeIds:', runtimeIds);
                       if (runtimeIds.length === 0) throw new Error('Valitud objektil puudub info');
 
                       const boundingBoxes = await api.viewer.getObjectBoundingBoxes(modelId, [runtimeIds[0]]);
+                      console.log('📐 BoundingBoxes (raw):', JSON.stringify(boundingBoxes, null, 2));
                       if (!boundingBoxes || boundingBoxes.length === 0 || !boundingBoxes[0]?.boundingBox) {
                         throw new Error('Bounding box andmeid ei leitud');
                       }
 
                       const bbox = boundingBoxes[0].boundingBox;
+                      console.log('📐 BBox min (meters):', bbox.min);
+                      console.log('📐 BBox max (meters):', bbox.max);
 
                       // Bottom surface center (mm for measurement markups)
                       const centerX = ((bbox.min.x + bbox.max.x) / 2) * 1000;
                       const centerY = ((bbox.min.y + bbox.max.y) / 2) * 1000;
                       const bottomZ = bbox.min.z * 1000;
+
+                      console.log('📍 Center (mm): X=' + centerX.toFixed(2) + ', Y=' + centerY.toFixed(2) + ', Z=' + bottomZ.toFixed(2));
 
                       // 20m radius in mm, 500mm segment length
                       const radiusMm = 20000;
@@ -8515,9 +8597,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                       const circumference = 2 * Math.PI * radiusMm;
                       const numSegments = Math.ceil(circumference / segmentLength);
 
-                      // Generate measurement markup lines (500mm each)
-                      const measurements = [];
                       const redColor = { r: 255, g: 0, b: 0, a: 255 };
+                      console.log('🎨 Color:', redColor);
+                      console.log('⭕ Radius (mm):', radiusMm);
+                      console.log('📏 Segment length (mm):', segmentLength);
+                      console.log('📐 Calculated segments:', numSegments);
+
+                      // Generate measurement markup lines (500mm each)
+                      const measurements: any[] = [];
 
                       for (let i = 0; i < numSegments; i++) {
                         const angle1 = (i / numSegments) * 2 * Math.PI;
@@ -8537,14 +8624,27 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         });
                       }
 
-                      await api.markup.addMeasurementMarkups(measurements);
+                      console.log('📤 REQUEST STRUCTURE (first item):');
+                      console.log(JSON.stringify(measurements[0], null, 2));
+                      console.log('... (total ' + measurements.length + ' measurements)');
+
+                      console.log('📤 Calling api.markup.addMeasurementMarkups()...');
+                      const result = await api.markup.addMeasurementMarkups(measurements);
+
+                      console.log('📥 RESPONSE:');
+                      console.log(JSON.stringify(result, null, 2));
+                      console.log('═══════════════════════════════════════════════════════════');
+                      console.log('🟠 addMeasurementMarkups TEST - END');
+                      console.log('═══════════════════════════════════════════════════════════');
 
                       const actualSegmentLength = circumference / numSegments;
                       updateFunctionResult("drawCircle500mmLines", {
                         status: 'success',
-                        result: `Ring joonistatud (measurement):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n📐 Segmente: ${numSegments} tk\n📏 Segmendi pikkus: ~${actualSegmentLength.toFixed(0)} mm`
+                        result: `Ring joonistatud (measurement):\n📍 Keskpunkt: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m\n📏 Z (põhi): ${(bottomZ/1000).toFixed(2)} m\n⭕ Raadius: 20m\n📐 Segmente: ${numSegments} tk\n📏 Segmendi pikkus: ~${actualSegmentLength.toFixed(0)} mm\n\n✅ Vaata konsooli täieliku logi jaoks!`
                       });
                     } catch (e: any) {
+                      console.error('❌ addMeasurementMarkups ERROR:', e);
+                      console.error('❌ Error stack:', e.stack);
                       updateFunctionResult("drawCircle500mmLines", { status: 'error', error: e.message });
                     }
                   }}
