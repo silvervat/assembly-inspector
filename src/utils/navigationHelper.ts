@@ -558,7 +558,7 @@ export async function colorModelByGroupLink(
     // Step 1: Load the group and its color
     const { data: group, error: groupError } = await supabase
       .from('organizer_groups')
-      .select('id, color, parent_id')
+      .select('id, color, parent_id, assembly_selection_on')
       .eq('id', groupId)
       .single();
 
@@ -574,12 +574,17 @@ export async function colorModelByGroupLink(
     }
 
     // Step 2: Get all group IDs in subtree (group + children + grandchildren)
+    // Also track which groups have assembly_selection_on === false (non-assembly groups)
     const groupIds = [groupId];
+    const nonAssemblyGroupIds = new Set<string>();
+    if (group.assembly_selection_on === false) {
+      nonAssemblyGroupIds.add(groupId);
+    }
 
     // Load children
     const { data: allGroups } = await supabase
       .from('organizer_groups')
-      .select('id, parent_id')
+      .select('id, parent_id, assembly_selection_on')
       .eq('trimble_project_id', projectId);
 
     if (allGroups) {
@@ -587,18 +592,23 @@ export async function colorModelByGroupLink(
         const children = allGroups.filter(g => g.parent_id === parentId);
         for (const child of children) {
           groupIds.push(child.id);
+          if (child.assembly_selection_on === false) {
+            nonAssemblyGroupIds.add(child.id);
+          }
           addChildren(child.id);
         }
       };
       addChildren(groupId);
     }
 
+    console.log('🎨 Non-assembly groups in subtree:', nonAssemblyGroupIds.size);
+
     console.log('🎨 Group IDs to color:', groupIds.length);
 
-    // Step 3: Load GUIDs for the target group items
+    // Step 3: Load GUIDs for the target group items (with group_id for non-assembly handling)
     const { data: groupItemsData, error: itemsError } = await supabase
       .from('organizer_group_items')
-      .select('guid_ifc')
+      .select('guid_ifc, group_id')
       .in('group_id', groupIds)
       .not('guid_ifc', 'is', null);
 
@@ -612,6 +622,11 @@ export async function colorModelByGroupLink(
         .map(item => item.guid_ifc?.toLowerCase())
         .filter(Boolean)
     );
+
+    // Track non-assembly group items separately for sub-element coloring
+    const nonAssemblyItems = (groupItemsData || [])
+      .filter(item => item.guid_ifc && nonAssemblyGroupIds.has(item.group_id))
+      .map(item => item.guid_ifc!);
 
     console.log('🎨 Group GUIDs:', groupGuids.size);
 
@@ -700,6 +715,44 @@ export async function colorModelByGroupLink(
           { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
           { color }
         );
+      }
+    }
+
+    // Step 9: Handle non-assembly groups (sub-element GUIDs not in trimble_model_objects)
+    // These items have GUIDs that are NOT in the assembly-level database, so we need to search for them directly
+    if (nonAssemblyItems.length > 0) {
+      console.log('🎨 Processing non-assembly items:', nonAssemblyItems.length);
+
+      // Find sub-element GUIDs that weren't found in the assembly-level search
+      const subElementGuids = nonAssemblyItems.filter(guid => !foundByLowercase.has(guid.toLowerCase()));
+      console.log('🎨 Sub-element GUIDs to search:', subElementGuids.length);
+
+      if (subElementGuids.length > 0) {
+        // Search for these sub-elements directly in the model
+        const foundSubElements = await findObjectsInLoadedModels(api, subElementGuids);
+        console.log('🎨 Found sub-elements in model:', foundSubElements.size);
+
+        if (foundSubElements.size > 0) {
+          // Color sub-elements with group color
+          const subByModel: Record<string, number[]> = {};
+          for (const [, found] of foundSubElements) {
+            if (!subByModel[found.modelId]) subByModel[found.modelId] = [];
+            subByModel[found.modelId].push(found.runtimeId);
+          }
+
+          for (const [modelId, runtimeIds] of Object.entries(subByModel)) {
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color }
+              );
+            }
+          }
+
+          coloredCount += foundSubElements.size;
+          console.log('🎨 Sub-elements colored:', foundSubElements.size);
+        }
       }
     }
 
