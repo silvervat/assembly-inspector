@@ -5371,6 +5371,160 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               </div>
             </div>
 
+            {/* LEADER MARKUPS section - markups with 30cm vertical line */}
+            <div className="function-section">
+              <h4>📍 Detailide markupid (joonega)</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Vali mudelist detailid ja lisa markupid 30cm vertikaalse joonega. Joon algab detaili keskelt, teksti saab lohistada.
+              </p>
+              <div className="function-grid">
+                <FunctionButton
+                  name="🏷️ Lisa joonega markupid"
+                  result={functionResults["addLeaderMarkups"]}
+                  onClick={async () => {
+                    updateFunctionResult("addLeaderMarkups", { status: 'pending' });
+                    try {
+                      // Get ALL selected objects
+                      const selected = await api.viewer.getSelection();
+                      if (!selected || selected.length === 0) {
+                        updateFunctionResult("addLeaderMarkups", {
+                          status: 'error',
+                          error: 'Vali mudelist detailid!'
+                        });
+                        return;
+                      }
+
+                      // Collect all runtime IDs
+                      const allRuntimeIds: number[] = [];
+                      let modelId = '';
+                      for (const sel of selected) {
+                        if (!modelId) modelId = sel.modelId;
+                        if (sel.objectRuntimeIds) {
+                          allRuntimeIds.push(...sel.objectRuntimeIds);
+                        }
+                      }
+
+                      if (!modelId || allRuntimeIds.length === 0) {
+                        updateFunctionResult("addLeaderMarkups", {
+                          status: 'error',
+                          error: 'Valitud objektidel puudub info'
+                        });
+                        return;
+                      }
+
+                      console.log(`📍 Adding leader markups for ${allRuntimeIds.length} selected objects...`);
+
+                      // Get properties and bounding boxes for all selected objects
+                      const properties: any[] = await api.viewer.getObjectProperties(modelId, allRuntimeIds);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
+
+                      const markupsToCreate: any[] = [];
+                      const LEADER_HEIGHT_MM = 300; // 30cm = 300mm vertical line
+
+                      for (let i = 0; i < allRuntimeIds.length; i++) {
+                        const props = properties[i];
+                        const bbox = bboxes[i];
+
+                        // Get assembly mark from properties
+                        let assemblyMark = '';
+                        if (props?.properties && Array.isArray(props.properties)) {
+                          for (const pset of props.properties) {
+                            if (pset.name === 'Tekla Assembly') {
+                              for (const p of pset.properties || []) {
+                                if (p.name === 'Assembly/Cast unit Mark') {
+                                  assemblyMark = String(p.value || '');
+                                  break;
+                                }
+                              }
+                            }
+                            if (assemblyMark) break;
+                          }
+                        }
+
+                        // Skip if no assembly mark found
+                        if (!assemblyMark) {
+                          console.log(`📍 Object ${i}: no assembly mark found, skipping`);
+                          continue;
+                        }
+
+                        // Get center position from bounding box
+                        if (bbox?.boundingBox) {
+                          const box = bbox.boundingBox;
+                          const centerX = ((box.min.x + box.max.x) / 2) * 1000; // Convert to mm
+                          const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+                          const centerZ = ((box.min.z + box.max.z) / 2) * 1000;
+
+                          // Start at object center, end 30cm above
+                          const startPos = {
+                            positionX: centerX,
+                            positionY: centerY,
+                            positionZ: centerZ
+                          };
+                          const endPos = {
+                            positionX: centerX,
+                            positionY: centerY,
+                            positionZ: centerZ + LEADER_HEIGHT_MM
+                          };
+
+                          markupsToCreate.push({
+                            text: assemblyMark,
+                            start: startPos,
+                            end: endPos
+                          });
+                          console.log(`📍 Will create leader markup: "${assemblyMark}"`);
+                        }
+                      }
+
+                      if (markupsToCreate.length === 0) {
+                        updateFunctionResult("addLeaderMarkups", {
+                          status: 'error',
+                          error: 'Detaile assembly markiga ei leitud'
+                        });
+                        return;
+                      }
+
+                      console.log('📍 Creating', markupsToCreate.length, 'leader markups');
+
+                      // Create markups
+                      const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
+
+                      // Extract created IDs
+                      let createdIds: number[] = [];
+                      if (Array.isArray(result)) {
+                        result.forEach((r: any) => {
+                          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+                          else if (typeof r === 'number') createdIds.push(r);
+                        });
+                      } else if (typeof result === 'object' && result?.id) {
+                        createdIds.push(Number(result.id));
+                      }
+
+                      // Color them blue
+                      const blueColor = '#3B82F6';
+                      for (const id of createdIds) {
+                        try {
+                          await (api.markup as any)?.editMarkup?.(id, { color: blueColor });
+                        } catch (e) {
+                          console.warn('Could not set color for markup', id, e);
+                        }
+                      }
+
+                      updateFunctionResult("addLeaderMarkups", {
+                        status: 'success',
+                        result: `${createdIds.length} joonega markupit loodud`
+                      });
+                    } catch (e: any) {
+                      console.error('Leader markup error:', e);
+                      updateFunctionResult("addLeaderMarkups", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
             {/* CAMERA / VIEW section */}
             <div className="function-section">
               <h4>📷 Kaamera / Vaated</h4>
