@@ -1,15 +1,34 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
-import { TrimbleExUser } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight } from 'react-icons/fi';
+import { TrimbleExUser, supabase } from '../supabase';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 // Constants
 const MAX_MARKUPS_PER_BATCH = 200;
 const MAX_TABLE_DISPLAY_ROWS = 10;
+
+// Marker category definitions with default colors
+interface MarkerCategory {
+  id: string;
+  label: string;
+  defaultColor: { r: number; g: number; b: number };
+  guids: string[];
+  count: number;
+}
+
+// Default colors for marking categories
+const DEFAULT_MARKER_COLORS: Record<string, { r: number; g: number; b: number }> = {
+  in_delivery: { r: 59, g: 130, b: 246 },        // Blue - Tarnegraafikus
+  arrived: { r: 34, g: 197, b: 94 },              // Green - Saabunud
+  installed: { r: 168, g: 85, b: 247 },           // Purple - Paigaldatud
+  arrived_not_installed: { r: 249, g: 115, b: 22 }, // Orange - Saabunud paigaldamata
+  not_arrived: { r: 239, g: 68, b: 68 },          // Red - Tarnegraafikus saabumata
+};
 
 interface ToolsScreenProps {
   api: WorkspaceAPI.WorkspaceAPI;
@@ -54,7 +73,19 @@ export default function ToolsScreen({
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
 
   // Accordion state - which section is expanded
-  const [expandedSection, setExpandedSection] = useState<'export' | 'markup' | null>('export');
+  const [expandedSection, setExpandedSection] = useState<'export' | 'markup' | 'marker' | null>('export');
+
+  // Marker (Märgista) feature state
+  const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
+    { id: 'in_delivery', label: 'Tarnegraafikus', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: [], count: 0 },
+    { id: 'arrived', label: 'Saabunud', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: [], count: 0 },
+    { id: 'installed', label: 'Paigaldatud', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: [], count: 0 },
+    { id: 'arrived_not_installed', label: 'Saabunud paigaldamata', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: [], count: 0 },
+    { id: 'not_arrived', label: 'Tarnegraafikus saabumata', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: [], count: 0 },
+  ]);
+  const [markerColors, setMarkerColors] = useState<Record<string, { r: number; g: number; b: number }>>(DEFAULT_MARKER_COLORS);
+  const [markerLoading, setMarkerLoading] = useState(false);
+  const [coloringCategory, setColoringCategory] = useState<string | null>(null);
 
   // Progress overlay state for batch operations
   const [batchProgress, setBatchProgress] = useState<{ message: string; percent: number } | null>(null);
@@ -67,7 +98,7 @@ export default function ToolsScreen({
   const boltSummaryRef = useRef<HTMLDivElement>(null);
 
   // Toggle section expansion (accordion style)
-  const toggleSection = (section: 'export' | 'markup') => {
+  const toggleSection = (section: 'export' | 'markup' | 'marker') => {
     setExpandedSection(prev => prev === section ? null : section);
   };
 
@@ -76,6 +107,187 @@ export default function ToolsScreen({
     setToast({ message, type });
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // Load marker data from database
+  const loadMarkerData = useCallback(async () => {
+    setMarkerLoading(true);
+    try {
+      // 1. Fetch all delivery items with their guids and status
+      const { data: deliveryItems, error: deliveryError } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid_ifc, status')
+        .eq('trimble_project_id', _projectId)
+        .not('guid_ifc', 'is', null);
+
+      if (deliveryError) {
+        console.error('Error fetching delivery items:', deliveryError);
+        showToast('Viga tarneandmete lugemisel', 'error');
+        setMarkerLoading(false);
+        return;
+      }
+
+      // 2. Fetch all installation schedule items with completed status
+      const { data: installedItems, error: installError } = await supabase
+        .from('installation_schedule')
+        .select('guid_ifc, status')
+        .eq('project_id', _projectId)
+        .not('guid_ifc', 'is', null);
+
+      if (installError) {
+        console.error('Error fetching installation items:', installError);
+        showToast('Viga paigaldusandmete lugemisel', 'error');
+        setMarkerLoading(false);
+        return;
+      }
+
+      // Build sets for quick lookup
+      const deliveryGuids = new Set<string>();
+      const arrivedGuids = new Set<string>();
+      const installedGuids = new Set<string>();
+
+      // Process delivery items
+      for (const item of (deliveryItems || [])) {
+        if (item.guid_ifc) {
+          const guidLower = item.guid_ifc.toLowerCase();
+          deliveryGuids.add(guidLower);
+          if (item.status === 'delivered') {
+            arrivedGuids.add(guidLower);
+          }
+        }
+      }
+
+      // Process installation items
+      for (const item of (installedItems || [])) {
+        if (item.guid_ifc && item.status === 'completed') {
+          installedGuids.add(item.guid_ifc.toLowerCase());
+        }
+      }
+
+      // Calculate derived categories
+      const arrivedNotInstalledGuids = new Set<string>();
+      const notArrivedGuids = new Set<string>();
+
+      // Arrived but not installed: in arrivedGuids but not in installedGuids
+      for (const guid of arrivedGuids) {
+        if (!installedGuids.has(guid)) {
+          arrivedNotInstalledGuids.add(guid);
+        }
+      }
+
+      // In delivery schedule but not arrived: in deliveryGuids but not in arrivedGuids
+      for (const guid of deliveryGuids) {
+        if (!arrivedGuids.has(guid)) {
+          notArrivedGuids.add(guid);
+        }
+      }
+
+      // Update marker categories with data
+      setMarkerCategories([
+        { id: 'in_delivery', label: 'Tarnegraafikus', defaultColor: DEFAULT_MARKER_COLORS.in_delivery, guids: Array.from(deliveryGuids), count: deliveryGuids.size },
+        { id: 'arrived', label: 'Saabunud', defaultColor: DEFAULT_MARKER_COLORS.arrived, guids: Array.from(arrivedGuids), count: arrivedGuids.size },
+        { id: 'installed', label: 'Paigaldatud', defaultColor: DEFAULT_MARKER_COLORS.installed, guids: Array.from(installedGuids), count: installedGuids.size },
+        { id: 'arrived_not_installed', label: 'Saabunud paigaldamata', defaultColor: DEFAULT_MARKER_COLORS.arrived_not_installed, guids: Array.from(arrivedNotInstalledGuids), count: arrivedNotInstalledGuids.size },
+        { id: 'not_arrived', label: 'Tarnegraafikus saabumata', defaultColor: DEFAULT_MARKER_COLORS.not_arrived, guids: Array.from(notArrivedGuids), count: notArrivedGuids.size },
+      ]);
+
+    } catch (e) {
+      console.error('Error loading marker data:', e);
+      showToast('Viga andmete lugemisel', 'error');
+    } finally {
+      setMarkerLoading(false);
+    }
+  }, [_projectId, showToast]);
+
+  // Load marker data when section is expanded
+  useEffect(() => {
+    if (expandedSection === 'marker') {
+      loadMarkerData();
+    }
+  }, [expandedSection, loadMarkerData]);
+
+  // Color model by category
+  const colorByCategory = useCallback(async (categoryId: string) => {
+    const category = markerCategories.find(c => c.id === categoryId);
+    if (!category || category.guids.length === 0) {
+      showToast('Selles kategoorias pole objekte', 'error');
+      return;
+    }
+
+    setColoringCategory(categoryId);
+    setBatchProgress({ message: 'Otsin objekte mudelist...', percent: 0 });
+
+    try {
+      const color = markerColors[categoryId] || category.defaultColor;
+
+      // Step 1: Find objects in loaded models
+      setBatchProgress({ message: 'Otsin objekte mudelist...', percent: 10 });
+      const foundObjects = await findObjectsInLoadedModels(api, category.guids);
+
+      if (foundObjects.size === 0) {
+        setBatchProgress(null);
+        showToast('Objekte ei leitud laetud mudelitest', 'error');
+        setColoringCategory(null);
+        return;
+      }
+
+      // Step 2: Color all objects white first
+      setBatchProgress({ message: 'Värvin kõik valgeks...', percent: 30 });
+      await api.viewer.setObjectState(undefined, { color: { r: 255, g: 255, b: 255, a: 255 } });
+
+      // Step 3: Group objects by model
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+
+      // Step 4: Color category items with selected color in batches
+      setBatchProgress({ message: `Värvin ${category.label}...`, percent: 50 });
+      const BATCH_SIZE = 5000;
+      let processed = 0;
+      const total = foundObjects.size;
+
+      for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+          await api.viewer.setObjectState(
+            { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+            { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+          );
+          processed += batch.length;
+          const percent = 50 + Math.round((processed / total) * 50);
+          setBatchProgress({ message: `Värvin ${category.label}...`, percent });
+        }
+      }
+
+      setBatchProgress(null);
+      showToast(`${foundObjects.size} objekti värvitud`, 'success');
+
+    } catch (e) {
+      console.error('Error coloring category:', e);
+      setBatchProgress(null);
+      showToast('Viga värvimisel', 'error');
+    } finally {
+      setColoringCategory(null);
+    }
+  }, [api, markerCategories, markerColors, showToast]);
+
+  // Handle color change for a category
+  const handleMarkerColorChange = (categoryId: string, hexColor: string) => {
+    // Convert hex to RGB
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+    if (result) {
+      const r = parseInt(result[1], 16);
+      const g = parseInt(result[2], 16);
+      const b = parseInt(result[3], 16);
+      setMarkerColors(prev => ({ ...prev, [categoryId]: { r, g, b } }));
+    }
+  };
+
+  // Convert RGB to hex for color input
+  const rgbToHex = (color: { r: number; g: number; b: number }) => {
+    return '#' + [color.r, color.g, color.b].map(x => x.toString(16).padStart(2, '0')).join('');
+  };
 
   // Handle navigation from header
   const handleHeaderNavigate = (mode: InspectionMode | null) => {
@@ -1098,6 +1310,163 @@ export default function ToolsScreen({
                   <span>Eemalda</span>
                 </button>
               </div>
+            </>
+          )}
+        </div>
+
+        {/* Marker (Märgista) Section - Collapsible */}
+        <div className="tools-section">
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('marker')}
+          >
+            {expandedSection === 'marker' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <FiDroplet size={18} style={{ color: '#8b5cf6' }} />
+            <h3>Märgista</h3>
+          </div>
+
+          {expandedSection === 'marker' && (
+            <>
+              <p className="tools-section-desc">
+                Värvi detailid staatuse järgi. Vali värv ja klõpsa "Värvi" nuppu.
+              </p>
+
+              {/* Refresh button */}
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  className="tools-btn tools-btn-compact"
+                  onClick={loadMarkerData}
+                  disabled={markerLoading}
+                  style={{ width: '100%', background: '#f3f4f6' }}
+                >
+                  {markerLoading ? (
+                    <FiRefreshCw className="spinning" size={14} />
+                  ) : (
+                    <FiRefreshCw size={14} />
+                  )}
+                  <span>Uuenda andmed</span>
+                </button>
+              </div>
+
+              {/* Category rows */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                background: '#fafafa',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb'
+              }}>
+                {markerCategories.map(category => {
+                  const color = markerColors[category.id] || category.defaultColor;
+                  const isColoring = coloringCategory === category.id;
+                  const hasItems = category.count > 0;
+
+                  return (
+                    <div
+                      key={category.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 12px',
+                        background: '#fff',
+                        borderRadius: '6px',
+                        border: '1px solid #e5e7eb',
+                        opacity: hasItems ? 1 : 0.5
+                      }}
+                    >
+                      {/* Color indicator and picker */}
+                      <div style={{ position: 'relative', flexShrink: 0 }}>
+                        <input
+                          type="color"
+                          value={rgbToHex(color)}
+                          onChange={(e) => handleMarkerColorChange(category.id, e.target.value)}
+                          disabled={!hasItems || isColoring}
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            padding: 0,
+                            border: '2px solid #d1d5db',
+                            borderRadius: '6px',
+                            cursor: hasItems ? 'pointer' : 'not-allowed',
+                            background: 'transparent'
+                          }}
+                          title="Vali värv"
+                        />
+                      </div>
+
+                      {/* Label */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontWeight: 500,
+                          fontSize: '13px',
+                          color: '#374151',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {category.label}
+                        </div>
+                      </div>
+
+                      {/* Count badge */}
+                      <div style={{
+                        background: hasItems ? `rgb(${color.r}, ${color.g}, ${color.b})` : '#9ca3af',
+                        color: '#fff',
+                        padding: '4px 10px',
+                        borderRadius: '12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        minWidth: '40px',
+                        textAlign: 'center',
+                        flexShrink: 0
+                      }}>
+                        {category.count}
+                      </div>
+
+                      {/* Color button */}
+                      <button
+                        onClick={() => colorByCategory(category.id)}
+                        disabled={!hasItems || isColoring || coloringCategory !== null}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '6px 12px',
+                          background: hasItems ? `rgb(${color.r}, ${color.g}, ${color.b})` : '#d1d5db',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '12px',
+                          fontWeight: 500,
+                          cursor: hasItems && !isColoring ? 'pointer' : 'not-allowed',
+                          opacity: isColoring ? 0.7 : 1,
+                          flexShrink: 0
+                        }}
+                      >
+                        {isColoring ? (
+                          <FiLoader className="spinning" size={12} />
+                        ) : (
+                          <FiDroplet size={12} />
+                        )}
+                        <span>Värvi</span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Info text */}
+              <p style={{
+                marginTop: '12px',
+                fontSize: '11px',
+                color: '#6b7280',
+                lineHeight: 1.4
+              }}>
+                Värvimisel muudetakse ülejäänud mudel valgeks ja valitud kategooria detailid värviliseks.
+              </p>
             </>
           )}
         </div>
