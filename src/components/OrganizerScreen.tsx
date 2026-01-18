@@ -899,6 +899,7 @@ export default function OrganizerScreen({
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [lightboxItemId, setLightboxItemId] = useState<string | null>(null);
   const [lightboxFieldId, setLightboxFieldId] = useState<string | null>(null);
+  const lightboxTouchStartX = useRef<number | null>(null);
 
   // Photo/attachment upload state
   const [uploadingFieldId, setUploadingFieldId] = useState<string | null>(null);
@@ -10631,16 +10632,38 @@ export default function OrganizerScreen({
                 maxWidth: '90vw',
                 maxHeight: '75vh',
                 objectFit: 'contain',
-                borderRadius: '8px'
+                borderRadius: '8px',
+                touchAction: 'pan-y'
+              }}
+              onTouchStart={(e) => {
+                lightboxTouchStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (lightboxTouchStartX.current === null || lightboxPhotos.length <= 1) return;
+                const touchEndX = e.changedTouches[0].clientX;
+                const diff = lightboxTouchStartX.current - touchEndX;
+                const threshold = 50;
+                if (diff > threshold) {
+                  // Swipe left - next photo
+                  const newIndex = lightboxIndex === lightboxPhotos.length - 1 ? 0 : lightboxIndex + 1;
+                  setLightboxIndex(newIndex);
+                  setLightboxPhoto(lightboxPhotos[newIndex]);
+                } else if (diff < -threshold) {
+                  // Swipe right - previous photo
+                  const newIndex = lightboxIndex === 0 ? lightboxPhotos.length - 1 : lightboxIndex - 1;
+                  setLightboxIndex(newIndex);
+                  setLightboxPhoto(lightboxPhotos[newIndex]);
+                }
+                lightboxTouchStartX.current = null;
               }}
             />
             {/* Action buttons */}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {/* Download button */}
               <button
                 onClick={downloadPhoto}
                 style={{
-                  padding: '8px 16px',
+                  padding: '5px 10px',
                   background: 'rgba(59, 130, 246, 0.8)',
                   color: 'white',
                   border: 'none',
@@ -10648,18 +10671,19 @@ export default function OrganizerScreen({
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '4px',
+                  fontSize: '12px'
                 }}
                 title="Laadi alla"
               >
-                <FiDownload size={14} />
+                <FiDownload size={12} />
                 Laadi alla
               </button>
               {/* Copy URL button */}
               <button
                 onClick={copyPhotoUrl}
                 style={{
-                  padding: '8px 16px',
+                  padding: '5px 10px',
                   background: 'rgba(107, 114, 128, 0.8)',
                   color: 'white',
                   border: 'none',
@@ -10667,11 +10691,12 @@ export default function OrganizerScreen({
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px'
+                  gap: '4px',
+                  fontSize: '12px'
                 }}
                 title="Kopeeri link"
               >
-                <FiCopy size={14} />
+                <FiCopy size={12} />
                 Kopeeri link
               </button>
               {/* Delete button - only show if we have item and field info */}
@@ -10679,7 +10704,7 @@ export default function OrganizerScreen({
                 <button
                   onClick={deletePhotoFromLightbox}
                   style={{
-                    padding: '8px 16px',
+                    padding: '5px 10px',
                     background: 'rgba(239, 68, 68, 0.8)',
                     color: 'white',
                     border: 'none',
@@ -10687,11 +10712,12 @@ export default function OrganizerScreen({
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    gap: '4px',
+                    fontSize: '12px'
                   }}
                   title="Kustuta"
                 >
-                  <FiTrash2 size={14} />
+                  <FiTrash2 size={12} />
                   Kustuta
                 </button>
               )}
