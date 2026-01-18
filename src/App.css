@@ -13319,6 +13319,34 @@ button.stat-toggle.off:hover {
   pointer-events: none;
 }
 
+.template-chips-area.editable .markup-line-chip .chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 3px;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.15s ease;
+}
+
+.template-chips-area.editable .markup-line-chip .chip-remove:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+/* Custom color picker in markup options */
+.markup-custom-color {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
 /* Active template line */
 .markup-template-line-chip-editor.active {
   border-color: #3b82f6;

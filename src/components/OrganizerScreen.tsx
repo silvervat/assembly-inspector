@@ -109,6 +109,7 @@ interface MarkupSettings {
   applyToSubgroups: boolean;
   separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
+  customColor?: { r: number; g: number; b: number }; // Custom color when not using group colors
   onlySelectedInModel: boolean;
   // Leader markup height in cm (0-1000, default 10)
   leaderHeight: number;
@@ -754,6 +755,7 @@ export default function OrganizerScreen({
     applyToSubgroups: true,
     separator: 'newline',
     useGroupColors: true,
+    customColor: { r: 34, g: 197, b: 94 }, // Default green color
     onlySelectedInModel: false,
     leaderHeight: 10
   };
@@ -5699,10 +5701,13 @@ export default function OrganizerScreen({
             const startPos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
             const endPos = { positionX: centerX, positionY: centerY, positionZ: centerZ + leaderHeightMm };
 
-            // Get color if using group colors
+            // Get color - either from group or custom color
             let colorHex: string | undefined;
             if (markupSettings.useGroupColors && itemGroup.color) {
               const { r, g, b } = itemGroup.color;
+              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            } else if (!markupSettings.useGroupColors && markupSettings.customColor) {
+              const { r, g, b } = markupSettings.customColor;
               colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
             }
 
@@ -11671,6 +11676,22 @@ export default function OrganizerScreen({
           setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
         };
 
+        // Handle click on contenteditable (for chip removal)
+        const handleContentClick = (e: React.MouseEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+          const target = e.target as HTMLElement;
+          if (target.classList.contains('chip-remove') || target.dataset.remove) {
+            e.preventDefault();
+            e.stopPropagation();
+            const placeholder = target.dataset.remove;
+            if (placeholder) {
+              // Remove this placeholder from the template
+              const currentTemplate = markupSettings[lineKey];
+              const newTemplate = currentTemplate.replace(placeholder, '').trim();
+              setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
+            }
+          }
+        };
+
         // Handle drop on contenteditable
         const handleContentDrop = (e: React.DragEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
           e.preventDefault();
@@ -11710,9 +11731,9 @@ export default function OrganizerScreen({
           }
         };
 
-        // Render chip HTML for contenteditable
+        // Render chip HTML for contenteditable - with X button for removal
         const renderChipHtml = (placeholder: string, label: string): string => {
-          return `<span class="markup-line-chip" contenteditable="false" data-placeholder="${placeholder}"><span class="chip-label">${label}</span></span>`;
+          return `<span class="markup-line-chip" contenteditable="false" data-placeholder="${placeholder}"><span class="chip-label">${label}</span><span class="chip-remove" data-remove="${placeholder}">×</span></span>`;
         };
 
         // Convert template to HTML for contenteditable
@@ -11744,6 +11765,7 @@ export default function OrganizerScreen({
                 suppressContentEditableWarning
                 onInput={(e) => handleContentInput(e, lineKey)}
                 onFocus={() => setFocusedLine(lineKey)}
+                onClick={(e) => handleContentClick(e, lineKey)}
                 onDrop={(e) => handleContentDrop(e, lineKey)}
                 onDragOver={handleDragOver}
                 dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
@@ -11805,6 +11827,42 @@ export default function OrganizerScreen({
                     />
                     <span>Grupi värv</span>
                   </label>
+
+                  {/* Custom color picker when not using group colors */}
+                  {!markupSettings.useGroupColors && (
+                    <div className="markup-custom-color">
+                      <input
+                        type="color"
+                        value={markupSettings.customColor
+                          ? `#${markupSettings.customColor.r.toString(16).padStart(2, '0')}${markupSettings.customColor.g.toString(16).padStart(2, '0')}${markupSettings.customColor.b.toString(16).padStart(2, '0')}`
+                          : '#22c55e'
+                        }
+                        onChange={(e) => {
+                          const hex = e.target.value;
+                          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                          if (result) {
+                            setMarkupSettings(prev => ({
+                              ...prev,
+                              customColor: {
+                                r: parseInt(result[1], 16),
+                                g: parseInt(result[2], 16),
+                                b: parseInt(result[3], 16)
+                              }
+                            }));
+                          }
+                        }}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          padding: 0,
+                          border: '2px solid #d1d5db',
+                          borderRadius: '4px',
+                          cursor: 'pointer'
+                        }}
+                        title="Vali markup värv"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Template builder */}
@@ -11897,7 +11955,9 @@ export default function OrganizerScreen({
                     style={{
                       color: markupSettings.useGroupColors && markupGroup?.color
                         ? `rgb(${markupGroup.color.r}, ${markupGroup.color.g}, ${markupGroup.color.b})`
-                        : '#1f2937'
+                        : markupSettings.customColor
+                          ? `rgb(${markupSettings.customColor.r}, ${markupSettings.customColor.g}, ${markupSettings.customColor.b})`
+                          : '#22c55e'
                     }}
                   >
                     {generatePreview()}
