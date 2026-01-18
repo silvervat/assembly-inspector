@@ -3133,28 +3133,117 @@ export default function OrganizerScreen({
     if (!deleteGroupData) return;
     const { group } = deleteGroupData;
 
-    // Save group and items for undo before deleting
-    const itemsToSave = groupItems.get(group.id) || [];
-    pushUndo({ type: 'delete_group', group, items: [...itemsToSave] });
-
     // Mark this group as local change (for realtime sync to skip toast)
     recentLocalChangesRef.current.add(group.id);
     setTimeout(() => recentLocalChangesRef.current.delete(group.id), 5000);
 
     setSaving(true);
     try {
-      // Use cascade delete - DB handles children and items automatically
-      // (organizer_groups has ON DELETE CASCADE for parent_id)
-      // (organizer_group_items has ON DELETE CASCADE for group_id)
-      const { error } = await supabase.from('organizer_groups').delete().eq('id', group.id);
-      if (error) throw error;
+      // Collect all group IDs to delete (group + all children)
+      const allGroupIdsToDelete: string[] = [group.id];
+      const collectChildIds = (parentId: string) => {
+        const children = groups.filter(g => g.parent_id === parentId);
+        for (const child of children) {
+          allGroupIdsToDelete.push(child.id);
+          collectChildIds(child.id);
+        }
+      };
+      collectChildIds(group.id);
 
-      showToast('Grupp ja sisu kustutatud');
+      // Collect all items from all groups to be deleted (for storage cleanup and undo)
+      const allItemsToDelete: OrganizerGroupItem[] = [];
+      for (const gId of allGroupIdsToDelete) {
+        const items = groupItems.get(gId) || [];
+        allItemsToDelete.push(...items);
+      }
+
+      // Save for undo (note: undo only restores the main group, not children)
+      const itemsToSave = groupItems.get(group.id) || [];
+      pushUndo({ type: 'delete_group', group, items: [...itemsToSave] });
+
+      // Collect all file/photo URLs from items for storage cleanup
+      const fileUrlsToDelete: string[] = [];
+      const rootGroup = getRootParent(group.id) || group;
+      const customFields = rootGroup.custom_fields || [];
+      const fileFieldIds = customFields.filter(f => f.type === 'attachment' || f.type === 'photo').map(f => f.id);
+
+      for (const item of allItemsToDelete) {
+        // Collect files from file/photo custom fields
+        for (const fieldId of fileFieldIds) {
+          const urls = item.custom_properties?.[fieldId]?.split(',').filter(Boolean) || [];
+          fileUrlsToDelete.push(...urls);
+        }
+      }
+
+      // Show progress for large deletions
+      const totalOps = fileUrlsToDelete.length + allItemsToDelete.length;
+      if (totalOps > 100) {
+        setBatchProgress({ current: 0, total: totalOps });
+      }
+
+      let completedOps = 0;
+
+      // Delete files from storage in batches
+      if (fileUrlsToDelete.length > 0) {
+        const storagePaths: string[] = [];
+        for (const url of fileUrlsToDelete) {
+          try {
+            const urlObj = new URL(url);
+            const pathParts = urlObj.pathname.split('/');
+            const bucketIndex = pathParts.indexOf('organizer-attachments');
+            if (bucketIndex !== -1) {
+              const storagePath = pathParts.slice(bucketIndex + 1).join('/');
+              if (storagePath) {
+                storagePaths.push(storagePath);
+              }
+            }
+          } catch {
+            // Skip invalid URLs
+          }
+        }
+
+        // Delete storage files in batches of 100
+        for (let i = 0; i < storagePaths.length; i += 100) {
+          const batch = storagePaths.slice(i, i + 100);
+          await supabase.storage.from('organizer-attachments').remove(batch);
+          completedOps += batch.length;
+          if (totalOps > 100) {
+            setBatchProgress({ current: completedOps, total: totalOps });
+          }
+        }
+      }
+
+      // Delete items in batches (before group delete to avoid FK issues on some setups)
+      // This is more reliable for large datasets than CASCADE
+      const ITEM_BATCH_SIZE = 500;
+      for (let i = 0; i < allItemsToDelete.length; i += ITEM_BATCH_SIZE) {
+        const batch = allItemsToDelete.slice(i, i + ITEM_BATCH_SIZE);
+        const batchIds = batch.map(item => item.id);
+        await supabase.from('organizer_group_items').delete().in('id', batchIds);
+        completedOps += batch.length;
+        if (totalOps > 100) {
+          setBatchProgress({ current: completedOps, total: totalOps });
+        }
+      }
+
+      // Delete groups (children first, then parent - reverse order)
+      for (const gId of allGroupIdsToDelete.reverse()) {
+        const { error } = await supabase.from('organizer_groups').delete().eq('id', gId);
+        if (error) throw error;
+      }
+
+      setBatchProgress(null);
+
+      showToast(`Grupp ja ${allItemsToDelete.length} detaili kustutatud`);
       logActivity({
         action_type: 'delete_group',
         group_id: group.id,
         group_name: group.name,
-        item_count: itemsToSave.length
+        item_count: allItemsToDelete.length,
+        details: {
+          subgroups_deleted: allGroupIdsToDelete.length - 1,
+          files_deleted: fileUrlsToDelete.length
+        }
       });
       if (selectedGroupIds.has(group.id)) {
         setSelectedGroupIds(prev => {
@@ -3173,6 +3262,7 @@ export default function OrganizerScreen({
     } catch (e) {
       console.error('Error deleting group:', e);
       showToast('Viga grupi kustutamisel');
+      setBatchProgress(null);
     } finally {
       setSaving(false);
     }
@@ -9707,13 +9797,14 @@ export default function OrganizerScreen({
             <span className="bulk-count">{selectedItemIds.size} valitud</span>
             <div className="bulk-actions-left">
               <button onClick={() => { setBulkFieldValues({}); setShowBulkEdit(true); }}><FiEdit2 size={12} /> Muuda</button>
-              {/* Värvi - Markeeri dropdown */}
+              {/* Color/mark dropdown - icon only */}
               <div style={{ position: 'relative' }}>
                 <button
                   onClick={() => setShowColorMarkMenu(prev => !prev)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '2px', padding: '4px 8px' }}
+                  title="Värvimine ja markupid"
                 >
-                  <FiDroplet size={12} /> Värvi - Markeeri <FiChevronDown size={10} />
+                  <FiDroplet size={14} /> <FiChevronDown size={10} />
                 </button>
                 {showColorMarkMenu && (
                   <div
@@ -11076,52 +11167,50 @@ export default function OrganizerScreen({
         );
       })()}
 
-      {/* Delete confirmation modal */}
+      {/* Delete confirmation modal - compact */}
       {showDeleteConfirm && deleteGroupData && (
         <div className="org-modal-overlay" style={{ zIndex: 1010 }} onClick={() => setShowDeleteConfirm(false)}>
-          <div className="org-modal" onClick={e => e.stopPropagation()}>
-            <div className="org-modal-header">
-              <h2>Kustuta grupp</h2>
-              <button onClick={() => setShowDeleteConfirm(false)}><FiX size={18} /></button>
+          <div className="org-modal delete-confirm-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 340 }}>
+            <div className="org-modal-header" style={{ padding: '12px 16px' }}>
+              <h2 style={{ fontSize: 14 }}>Kustuta grupp</h2>
+              <button onClick={() => setShowDeleteConfirm(false)}><FiX size={16} /></button>
             </div>
-            <div className="org-modal-body">
-              <div className="org-delete-confirm">
-                <div className="icon">⚠️</div>
-                <h3>Kas oled kindel?</h3>
-                <p>Sa oled kustutamas gruppi <strong>"{deleteGroupData.group.name}"</strong></p>
-
-                {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
-                  <>
-                    <div className="stats">
-                      {deleteGroupData.childCount > 0 && (
-                        <div className="stat">
-                          <div className="stat-value">{deleteGroupData.childCount}</div>
-                          <div className="stat-label">alamgruppi</div>
-                        </div>
-                      )}
-                      <div className="stat">
-                        <div className="stat-value">{deleteGroupData.itemCount}</div>
-                        <div className="stat-label">detaili</div>
-                      </div>
+            <div className="org-modal-body" style={{ padding: '12px 16px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: '#374151' }}>
+                Kustutad grupi <strong>"{deleteGroupData.group.name}"</strong>
+              </p>
+              {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
+                <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                  {deleteGroupData.childCount > 0 && (
+                    <div style={{ padding: '6px 10px', background: '#fef2f2', borderRadius: 6, fontSize: 12 }}>
+                      <strong style={{ color: '#dc2626' }}>{deleteGroupData.childCount}</strong>
+                      <span style={{ color: '#7f1d1d', marginLeft: 4 }}>alamgruppi</span>
                     </div>
-                    <p className="warning">Kõik alamgrupid ja detailid kustutatakse jäädavalt!</p>
-                  </>
-                )}
-
-                {deleteGroupData.childCount === 0 && deleteGroupData.itemCount === 0 && (
-                  <p>See grupp on tühi.</p>
-                )}
-              </div>
+                  )}
+                  <div style={{ padding: '6px 10px', background: '#fef2f2', borderRadius: 6, fontSize: 12 }}>
+                    <strong style={{ color: '#dc2626' }}>{deleteGroupData.itemCount}</strong>
+                    <span style={{ color: '#7f1d1d', marginLeft: 4 }}>detaili</span>
+                  </div>
+                </div>
+              )}
+              {deleteGroupData.childCount === 0 && deleteGroupData.itemCount === 0 && (
+                <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Grupp on tühi.</p>
+              )}
+              {(deleteGroupData.childCount > 0 || deleteGroupData.itemCount > 0) && (
+                <p style={{ margin: 0, fontSize: 11, color: '#ef4444', fontWeight: 500 }}>
+                  Andmed, fotod ja failid kustutatakse jäädavalt!
+                </p>
+              )}
             </div>
-            <div className="org-modal-footer">
-              <button className="cancel" onClick={() => setShowDeleteConfirm(false)}>Tühista</button>
+            <div className="org-modal-footer" style={{ padding: '10px 16px', gap: 8 }}>
+              <button className="cancel" onClick={() => setShowDeleteConfirm(false)} style={{ padding: '6px 12px', fontSize: 12 }}>Tühista</button>
               <button
                 className="save"
-                style={{ background: '#dc2626' }}
+                style={{ background: '#dc2626', padding: '6px 12px', fontSize: 12 }}
                 onClick={deleteGroup}
                 disabled={saving}
               >
-                {saving ? 'Kustutan...' : 'Kustuta kõik'}
+                {saving ? 'Kustutan...' : 'Kustuta'}
               </button>
             </div>
           </div>
@@ -11196,29 +11285,6 @@ export default function OrganizerScreen({
           }))
         ];
 
-        // Insert field placeholder at cursor position in the active input
-        const insertFieldToTemplate = (fieldPlaceholder: string, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
-          const input = document.getElementById(`markup-${lineKey}`) as HTMLInputElement;
-          if (input) {
-            const start = input.selectionStart || 0;
-            const end = input.selectionEnd || 0;
-            const currentValue = markupSettings[lineKey];
-            const newValue = currentValue.substring(0, start) + fieldPlaceholder + currentValue.substring(end);
-            setMarkupSettings(prev => ({ ...prev, [lineKey]: newValue }));
-            // Restore cursor position after the inserted text
-            setTimeout(() => {
-              input.focus();
-              input.setSelectionRange(start + fieldPlaceholder.length, start + fieldPlaceholder.length);
-            }, 0);
-          } else {
-            // If no input focused, append to the template
-            setMarkupSettings(prev => ({
-              ...prev,
-              [lineKey]: prev[lineKey] + (prev[lineKey] ? ' ' : '') + fieldPlaceholder
-            }));
-          }
-        };
-
         // Generate preview from templates
         const generatePreview = (): string => {
           if (!markupGroup) return 'Eelvaade pole saadaval';
@@ -11248,22 +11314,93 @@ export default function OrganizerScreen({
           return lines.length > 0 ? lines.join(getSeparator(markupSettings.separator)) : 'Kirjuta tekst ja lisa veerge';
         };
 
-        // Render template editor for a line
+        // Parse template into chips and text segments
+        const parseTemplateToSegments = (template: string): Array<{ type: 'chip' | 'text'; value: string; fieldId?: string; label?: string }> => {
+          const segments: Array<{ type: 'chip' | 'text'; value: string; fieldId?: string; label?: string }> = [];
+          const regex = /\{([^}]+)\}/g;
+          let lastIndex = 0;
+          let match;
+
+          while ((match = regex.exec(template)) !== null) {
+            // Add text before the match
+            if (match.index > lastIndex) {
+              const textBefore = template.substring(lastIndex, match.index);
+              if (textBefore) {
+                segments.push({ type: 'text', value: textBefore });
+              }
+            }
+
+            // Add the chip
+            const placeholder = match[0];
+            const fieldId = match[1];
+            const field = availableFields.find(f => f.placeholder === placeholder);
+            segments.push({
+              type: 'chip',
+              value: placeholder,
+              fieldId,
+              label: field?.label || fieldId
+            });
+
+            lastIndex = regex.lastIndex;
+          }
+
+          // Add remaining text
+          if (lastIndex < template.length) {
+            segments.push({ type: 'text', value: template.substring(lastIndex) });
+          }
+
+          return segments;
+        };
+
+        // Remove a chip from template
+        const removeChipFromTemplate = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', placeholder: string) => {
+          setMarkupSettings(prev => ({
+            ...prev,
+            [lineKey]: prev[lineKey].replace(placeholder, '').replace(/\s+/g, ' ').trim()
+          }));
+        };
+
+        // Add field to line when clicking available chips
+        const addFieldToLine = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', placeholder: string) => {
+          setMarkupSettings(prev => ({
+            ...prev,
+            [lineKey]: prev[lineKey] ? prev[lineKey] + ' ' + placeholder : placeholder
+          }));
+          setFocusedLine(lineKey);
+        };
+
+        // Render template editor for a line with chips
         const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string) => {
           const template = markupSettings[lineKey];
+          const segments = parseTemplateToSegments(template);
+
           return (
-            <div className="markup-template-line">
-              <label className="template-label">{label}</label>
-              <div className="template-input-wrapper">
-                <input
-                  id={`markup-${lineKey}`}
-                  type="text"
-                  className="template-input"
-                  value={template}
-                  onChange={(e) => setMarkupSettings(prev => ({ ...prev, [lineKey]: e.target.value }))}
-                  onFocus={() => setFocusedLine(lineKey)}
-                  placeholder="Kirjuta teksti ja kliki väljadel, et neid lisada..."
-                />
+            <div className="markup-template-line-chip-editor" onClick={() => setFocusedLine(lineKey)}>
+              <label className="template-label-above">{label}</label>
+              <div className={`template-chips-area ${focusedLine === lineKey ? 'focused' : ''}`}>
+                {segments.length === 0 ? (
+                  <span className="template-placeholder">Kliki ülal väljadel, et neid lisada...</span>
+                ) : (
+                  segments.map((seg, idx) => (
+                    seg.type === 'chip' ? (
+                      <span key={idx} className="markup-line-chip">
+                        <span className="chip-label">{seg.label}</span>
+                        <button
+                          type="button"
+                          className="chip-remove"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeChipFromTemplate(lineKey, seg.value);
+                          }}
+                        >
+                          <FiX size={10} />
+                        </button>
+                      </span>
+                    ) : (
+                      <span key={idx} className="markup-line-text">{seg.value}</span>
+                    )
+                  ))
+                )}
               </div>
             </div>
           );
@@ -11327,7 +11464,7 @@ export default function OrganizerScreen({
                 <div className="markup-builder">
                   <div className="markup-builder-header">
                     <span>Koosta markup</span>
-                    <span className="markup-hint">Kirjuta teksti ja kliki väljadel, et need lisada</span>
+                    <span className="markup-hint">Kliki väljadel, et need lisada</span>
                   </div>
 
                   {/* Available fields as clickable chips */}
@@ -11337,7 +11474,7 @@ export default function OrganizerScreen({
                         key={f.id}
                         type="button"
                         className="markup-insert-chip"
-                        onClick={() => insertFieldToTemplate(f.placeholder, focusedLine)}
+                        onClick={() => addFieldToLine(focusedLine, f.placeholder)}
                         title={`Lisa: ${f.preview}`}
                       >
                         <FiPlus size={10} />

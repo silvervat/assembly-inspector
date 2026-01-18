@@ -12658,6 +12658,90 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+/* Chip-based template editor */
+.markup-template-line-chip-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.markup-template-line-chip-editor:hover {
+  border-color: #d1d5db;
+}
+
+.template-label-above {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.template-chips-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 32px;
+  align-items: center;
+  padding: 4px 0;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.template-chips-area.focused {
+  background: #f0f9ff;
+}
+
+.template-placeholder {
+  font-size: 11px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.markup-line-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  background: #003F87;
+  color: white;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.markup-line-chip .chip-label {
+  white-space: nowrap;
+}
+
+.markup-line-chip .chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.markup-line-chip .chip-remove:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.markup-line-text {
+  font-size: 11px;
+  color: #374151;
+}
+
 /* Legacy free text input - keeping for backwards compatibility */
 .markup-line-free-text {
   flex: 1;
@@ -12850,15 +12934,16 @@ button.stat-toggle.off:hover {
 
 /* Preview */
 .markup-preview {
-  background: #1e293b;
+  background: #f5f5f5;
   border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #e5e7eb;
 }
 
 .markup-preview .preview-label {
   font-size: 10px;
   font-weight: 600;
-  color: #64748b;
+  color: #6b7280;
   text-transform: uppercase;
   padding: 8px 12px 4px;
 }
@@ -12870,7 +12955,7 @@ button.stat-toggle.off:hover {
   white-space: pre-wrap;
   padding: 8px 12px 12px;
   min-height: 36px;
-  color: #f8fafc;
+  color: #1f2937;
 }
 
 /* Progress */
