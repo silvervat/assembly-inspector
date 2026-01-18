@@ -2551,6 +2551,35 @@ export default function OrganizerScreen({
     }
   };
 
+  // Move custom field up or down in the list
+  const moveCustomField = async (fieldId: string, groupId: string, direction: 'up' | 'down') => {
+    const rootGroup = getRootParent(groupId);
+    if (!rootGroup) return;
+
+    const fields = [...(rootGroup.custom_fields || [])];
+    const currentIndex = fields.findIndex(f => f.id === fieldId);
+    if (currentIndex === -1) return;
+
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (newIndex < 0 || newIndex >= fields.length) return;
+
+    // Swap the fields
+    [fields[currentIndex], fields[newIndex]] = [fields[newIndex], fields[currentIndex]];
+
+    try {
+      const { error } = await supabase
+        .from('organizer_groups')
+        .update({ custom_fields: fields, updated_at: new Date().toISOString(), updated_by: tcUserEmail })
+        .eq('id', rootGroup.id);
+
+      if (error) throw error;
+      await loadData();
+    } catch (e) {
+      console.error('Error reordering fields:', e);
+      showToast('Viga väljade järjestamisel');
+    }
+  };
+
   const startEditingField = (field: CustomFieldDefinition) => {
     setEditingField(field);
     setFieldName(field.name);
@@ -8624,30 +8653,67 @@ export default function OrganizerScreen({
                     Väljad päritakse grupist: <strong>{rootParent.name}</strong>
                   </p>
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   {customFields.length === 0 ? (
                     <p className="org-empty-hint">Lisavälju pole veel lisatud</p>
                   ) : (
-                    customFields.map(f => (
+                    customFields.map((f, idx) => (
                       <div
                         key={f.id}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '8px',
-                          padding: '8px 12px',
+                          gap: '6px',
+                          padding: '6px 10px',
                           background: '#f9fafb',
                           borderRadius: '6px'
                         }}
                       >
-                        <span style={{ fontWeight: 500, fontSize: '13px' }}>
+                        {/* Reorder buttons */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
+                          <button
+                            onClick={() => moveCustomField(f.id, effectiveGroup.id, 'up')}
+                            disabled={idx === 0}
+                            title="Liiguta üles"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: idx === 0 ? 'default' : 'pointer',
+                              color: idx === 0 ? '#d1d5db' : '#9ca3af',
+                              padding: '0px 2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              lineHeight: 1
+                            }}
+                          >
+                            <FiChevronsUp size={12} />
+                          </button>
+                          <button
+                            onClick={() => moveCustomField(f.id, effectiveGroup.id, 'down')}
+                            disabled={idx === customFields.length - 1}
+                            title="Liiguta alla"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: idx === customFields.length - 1 ? 'default' : 'pointer',
+                              color: idx === customFields.length - 1 ? '#d1d5db' : '#9ca3af',
+                              padding: '0px 2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              lineHeight: 1
+                            }}
+                          >
+                            <FiChevronsDown size={12} />
+                          </button>
+                        </div>
+                        <span style={{ fontWeight: 500, fontSize: '12px' }}>
                           {f.name}
                           {f.required && <span style={{ color: '#ef4444', marginLeft: '2px' }}>*</span>}
                         </span>
-                        <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#9ca3af', marginLeft: '2px' }}>
                           {FIELD_TYPE_LABELS[f.type]}
                         </span>
-                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '4px' }}>
                           <button
                             onClick={() => {
                               setSelectedGroupIds(new Set([effectiveGroup.id]));
@@ -8659,13 +8725,13 @@ export default function OrganizerScreen({
                               background: 'none',
                               border: 'none',
                               cursor: 'pointer',
-                              color: '#6b7280',
-                              padding: '4px',
+                              color: '#9ca3af',
+                              padding: '3px',
                               display: 'flex',
                               alignItems: 'center'
                             }}
                           >
-                            <FiEdit2 size={14} />
+                            <FiEdit2 size={12} />
                           </button>
                           <button
                             onClick={() => deleteCustomField(f.id, effectiveGroup.id)}
@@ -8674,13 +8740,15 @@ export default function OrganizerScreen({
                               background: 'none',
                               border: 'none',
                               cursor: 'pointer',
-                              color: '#ef4444',
-                              padding: '4px',
+                              color: '#d1d5db',
+                              padding: '3px',
                               display: 'flex',
                               alignItems: 'center'
                             }}
+                            onMouseOver={(e) => { e.currentTarget.style.color = '#ef4444'; }}
+                            onMouseOut={(e) => { e.currentTarget.style.color = '#d1d5db'; }}
                           >
-                            <FiTrash2 size={14} />
+                            <FiTrash2 size={12} />
                           </button>
                         </div>
                       </div>
