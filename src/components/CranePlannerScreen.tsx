@@ -795,6 +795,10 @@ export default function CranePlannerScreen({
     const safeCapacity = canReach ? (capacityKg / crane.safety_factor) - crane.hook_weight_kg - crane.lifting_block_kg : 0;
     const isSafe = objWeight > 0 ? objWeight <= safeCapacity && canReach : canReach;
 
+    // Calculate boom tip height from crane base and absolute Z coordinate
+    const boomTipHeight = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180)) - craneZ) / 1000 : 0;
+    const boomTipAbsZ = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180))) / 1000 : 0;
+
     return {
       distance: horizontalDistM,
       height: (objTopZ - craneZ) / 1000,
@@ -802,7 +806,9 @@ export default function CranePlannerScreen({
       chainLength: Math.round(chainLength * 10) / 10,
       capacity: Math.max(0, safeCapacity),
       isSafe,
-      canReach
+      canReach,
+      boomTipHeight: Math.round(boomTipHeight * 10) / 10,
+      boomTipAbsZ: Math.round(boomTipAbsZ * 10) / 10
     };
   };
 
@@ -849,6 +855,8 @@ export default function CranePlannerScreen({
         isSafe: boolean;
         boomAngle: number;
         chainLength: number;
+        boomTipHeight: number;
+        boomTipAbsZ: number;
         objCenterX: number;
         objCenterY: number;
         objTopZ: number;
@@ -2259,6 +2267,8 @@ export default function CranePlannerScreen({
                       <div>📐 Kõrgus: <strong>{obj.height.toFixed(1)}m</strong></div>
                       <div>🎯 Noole nurk: <strong>{obj.boomAngle}°</strong></div>
                       <div>⛓️ Keti pikkus: <strong>{obj.chainLength.toFixed(1)}m</strong></div>
+                      <div>📍 Noole tipp (baasist): <strong>{obj.boomTipHeight.toFixed(1)}m</strong></div>
+                      <div>🗺️ Noole tipp (Z): <strong>{obj.boomTipAbsZ.toFixed(1)}m</strong></div>
                       <div>⚖️ Kaal: <strong>{obj.weight > 0 ? formatWeight(obj.weight) : 'Teadmata'}</strong></div>
                       <div>💪 Tõstevõime: <strong style={{ color: obj.capacity > 0 ? '#16a34a' : '#dc2626' }}>
                         {obj.capacity > 0 ? formatWeight(obj.capacity) : 'Väljas ulatusest'}
