@@ -762,7 +762,7 @@ export default function CranePlannerScreen({
     let canReach = false;
 
     if (horizontalDistM <= boomLengthM) {
-      // Boom can reach horizontally
+      // Boom can reach - boom tip will be directly above object
       const cosAngle = horizontalDistM / boomLengthM;
       boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
 
@@ -773,8 +773,14 @@ export default function CranePlannerScreen({
       chainLength = (boomTipZ - objTopZ) / 1000;
       canReach = chainLength > 0;
     } else {
-      // Can't reach horizontally even at 0 degrees
+      // Object too far - boom at horizontal (0°) reaches max distance
+      // This means boom tip is NOT above object, but as close as possible
       boomAngle = 0;
+      // At 0°, boom tip is at max horizontal reach (boomLength away)
+      // Boom tip Z = boom pivot Z (no vertical component)
+      const boomTipZ = boomPivotZ;
+      // Chain length would need to cover both horizontal gap and vertical drop
+      // But we show it as 0 since boom can't reach
       chainLength = 0;
       canReach = false;
     }
@@ -802,8 +808,10 @@ export default function CranePlannerScreen({
     const isSafe = objWeight > 0 ? objWeight <= safeCapacity && canReach : canReach;
 
     // Calculate boom tip height from crane base and absolute Z coordinate
-    const boomTipHeight = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180)) - craneZ) / 1000 : 0;
-    const boomTipAbsZ = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180))) / 1000 : 0;
+    // Works for all angles including 0° (horizontal)
+    const boomTipZ = boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180));
+    const boomTipHeight = (boomTipZ - craneZ) / 1000;
+    const boomTipAbsZ = boomTipZ / 1000;
 
     return {
       distance: horizontalDistM,
