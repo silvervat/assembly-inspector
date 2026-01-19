@@ -122,7 +122,7 @@ export default function InspectorScreen({
       organizer: 'Organiseerija',
       issues: 'Probleemid',
       tools: 'Tööriistad',
-      crane_planner: 'Kraanide Planeerimine',
+      crane_planner: 'Kraanade Planeerimine',
       crane_library: 'Kraanade Andmebaas'
     };
     return titles[mode] || mode;

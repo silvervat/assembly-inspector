@@ -1198,7 +1198,7 @@ export default function App() {
     );
   }
 
-  // Kraanide planeerimine ekraan
+  // Kraanade planeerimine ekraan
   if (currentMode === 'crane_planner') {
     return (
       <>
@@ -1217,7 +1217,7 @@ export default function App() {
     );
   }
 
-  // Kraanide andmebaas ekraan
+  // Kraanade andmebaas ekraan
   if (currentMode === 'crane_library') {
     return (
       <>

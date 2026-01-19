@@ -335,8 +335,8 @@ function generateDottedCircleSegments(
   centerY: number,
   centerZ: number,
   radiusMm: number,
-  dashCount: number = 36, // Number of dashes
-  dashRatio: number = 0.6 // Ratio of dash to gap (0.6 = 60% dash, 40% gap)
+  dashCount: number = 36,
+  dashRatio: number = 0.6
 ): LineSegment[] {
   const lineSegments: LineSegment[] = [];
   const segmentAngle = (2 * Math.PI) / dashCount;
@@ -453,19 +453,25 @@ async function drawRadiusRings(
     // Collect all freeline entries for batch call
     const freelineEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
 
-    // Generate all rings
+    // Generate all rings with alternating dotted patterns
+    let ringIndex = 0;
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
 
-      // Use simplified dashed pattern: 8 dashes per ring (fewer markup entries)
-      const dashCount = 8;
-      const dashRatio = 0.7;
+      // Alternate between two dash patterns for visual distinction
+      const isAlternate = ringIndex % 2 === 1;
+      const dashCount = isAlternate ? 36 : 24; // More dashes on alternate rings
+      const dashRatio = isAlternate ? 0.4 : 0.7; // Shorter dashes on alternate rings
+
+      // Generate dotted circle segments
       const dashSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
 
-      // Each dash is a separate entry (to avoid connection)
+      // Each dash as separate entry (avoids line connections)
       for (const seg of dashSegments) {
         freelineEntries.push({ color, lines: [seg] });
       }
+
+      ringIndex++;
 
       // Add radius label if enabled
       if (showLabels) {

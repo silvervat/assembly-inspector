@@ -297,7 +297,7 @@ export default function PageHeader({
                         className="submenu-item"
                         onClick={() => handleNavigate('crane_planner')}
                       >
-                        Kraanide Planeerimine
+                        Kraanade Planeerimine
                       </button>
                       <button
                         className="submenu-item"
