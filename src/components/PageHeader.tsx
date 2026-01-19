@@ -17,6 +17,7 @@ interface PageHeaderProps {
   onColorModelWhite?: () => void; // Callback to color all model objects white
   api?: any; // Trimble Connect API for quick search
   projectId?: string; // Project ID for database queries
+  onSelectInspectionType?: (typeId: string, typeCode: string, typeName: string) => void; // Callback for inspection type selection
 }
 
 // Navigation items
@@ -30,12 +31,13 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { mode: 'delivery_schedule', label: 'Tarnegraafikud', icon: <FiTruck size={18} />, color: '#059669' },
+  { mode: 'schedule', label: 'Paigaldusgraafikud', icon: <FiCalendar size={18} />, color: '#8b5cf6' },
+  { mode: 'arrived_deliveries', label: 'Saabumised', icon: <FiClipboard size={18} />, color: '#0891b2' },
   { mode: 'installations', label: 'Paigaldamised', icon: <FiTruck size={18} />, color: 'var(--modus-info)' },
-  { mode: 'schedule', label: 'Paigaldusgraafik', icon: <FiCalendar size={18} />, color: '#8b5cf6' },
-  { mode: 'delivery_schedule', label: 'Tarnegraafik', icon: <FiTruck size={18} />, color: '#059669' },
-  { mode: 'arrived_deliveries', label: 'Saabunud tarned', icon: <FiClipboard size={18} />, color: '#0891b2' },
+  { mode: 'inspection_plans', label: 'Kontrollid', icon: <FiClipboard size={18} />, color: '#10b981', hasSubmenu: true },
+  { mode: 'issues', label: 'Mittevastavaused', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
   { mode: 'organizer', label: 'Organiseerija', icon: <FiFolder size={18} />, color: '#7c3aed' },
-  { mode: 'issues', label: 'Probleemid', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
   { mode: 'tools', label: 'Tööriistad', icon: <FiTool size={18} />, color: '#f59e0b', hasSubmenu: true },
   { mode: 'inspection_plan', label: 'Inspektsiooni kava', icon: <FiClipboard size={18} />, color: '#6b7280', adminOnly: true },
   { mode: 'admin', label: 'Administratsioon', icon: <FiShield size={18} />, color: '#6b7280', adminOnly: true },
@@ -51,7 +53,8 @@ export default function PageHeader({
   children,
   onColorModelWhite,
   api,
-  projectId
+  projectId,
+  onSelectInspectionType
 }: PageHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
@@ -63,7 +66,51 @@ export default function PageHeader({
   const [searchResult, setSearchResult] = useState<{ count: number; message: string } | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Inspection types state
+  const [inspectionTypes, setInspectionTypes] = useState<Array<{ id: string; code: string; name: string; color: string }>>([]);
+
   const isAdmin = user?.role === 'admin';
+
+  // Load inspection types for submenu
+  useEffect(() => {
+    if (!projectId) return;
+
+    async function loadInspectionTypes() {
+      try {
+        const { data: planItems, error } = await supabase
+          .from('inspection_plan_items')
+          .select(`
+            inspection_type_id,
+            inspection_types!inspection_plan_items_inspection_type_id_fkey (
+              id, code, name, color, sort_order, is_active
+            )
+          `)
+          .eq('project_id', projectId);
+
+        if (error) throw error;
+
+        // Get unique types
+        const typeMap = new Map<string, any>();
+        for (const item of planItems || []) {
+          const typeData = item.inspection_types as any;
+          if (typeData && typeData.is_active && typeData.code !== 'OTHER') {
+            typeMap.set(typeData.id, typeData);
+          }
+        }
+
+        // Sort by sort_order
+        const sorted = Array.from(typeMap.values())
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map(t => ({ id: t.id, code: t.code, name: t.name, color: t.color }));
+
+        setInspectionTypes(sorted);
+      } catch (e) {
+        console.error('Error loading inspection types:', e);
+      }
+    }
+
+    loadInspectionTypes();
+  }, [projectId]);
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -284,6 +331,33 @@ export default function PageHeader({
                       </span>
                     )}
                   </button>
+                  {/* Kontrollid submenu */}
+                  {item.hasSubmenu && item.mode === 'inspection_plans' && submenuOpen === 'inspection_plans' && (
+                    <div className="submenu">
+                      <button
+                        className="submenu-item"
+                        onClick={() => handleNavigate('inspection_plans')}
+                      >
+                        Kõik kontrollplaanid
+                      </button>
+                      {inspectionTypes.map((type) => (
+                        <button
+                          key={type.id}
+                          className="submenu-item"
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setSubmenuOpen(null);
+                            if (onSelectInspectionType) {
+                              onSelectInspectionType(type.id, type.code, type.name);
+                            }
+                          }}
+                        >
+                          <span style={{ color: type.color, marginRight: '8px' }}>●</span>
+                          {type.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {/* Tööriistad submenu */}
                   {item.hasSubmenu && item.mode === 'tools' && submenuOpen === 'tools' && (
                     <div className="submenu">
