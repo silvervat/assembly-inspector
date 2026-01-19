@@ -235,53 +235,34 @@ export async function drawCraneToModelGrouped(
       console.log('[CraneViz] Radius markups count:', radiusResult.rings.length + radiusResult.radiusLabels.length + radiusResult.capacityLabels.length);
     }
 
-    // === 8. POSITION LABEL (if set) - using native Text markup ===
+    // === 8. POSITION LABEL (if set) - at crane CENTER ===
     if (projectCrane.position_label) {
       const labelText = projectCrane.position_label;
       const labelHeight = projectCrane.label_height_mm || 800;
       const labelColor = projectCrane.label_color || { r: 50, g: 50, b: 50, a: 255 };
 
-      console.log('[CraneViz] Drawing position label as text markup:', labelText);
+      console.log('[CraneViz] Drawing position label at center:', labelText);
 
-      // Position label next to the crane (offset from outrigger span)
-      const labelOffsetX = outriggerSpanMm / 2 + labelHeight + 500;
-      const labelPos = transformPoint(labelOffsetX, 0);
-
-      // Use native text markup API for position label
-      try {
-        const textMarkup = await markupApi.addTextMarkup?.([{
-          text: labelText,
-          color: labelColor,
-          start: {
-            positionX: labelPos.x,
-            positionY: labelPos.y,
-            positionZ: posZ + 200
-          },
-          end: {
-            positionX: labelPos.x + labelHeight * labelText.length * 0.6,
-            positionY: labelPos.y + labelHeight,
-            positionZ: posZ + 200
-          }
-        }]);
-        if (textMarkup?.[0]?.id) {
-          groups.positionLabel.push(textMarkup[0].id);
-          groups.all.push(textMarkup[0].id);
-        }
-      } catch (textError) {
-        // Fallback to freeline text if text markup fails
-        console.log('[CraneViz] Text markup failed, falling back to freeline:', textError);
-        const labelMarkups = await drawText3D(
-          markupApi,
-          labelText,
-          labelPos.x,
-          labelPos.y,
-          posZ + 200,
-          labelHeight,
-          labelColor
-        );
-        groups.positionLabel.push(...labelMarkups);
-        groups.all.push(...labelMarkups);
+      // Calculate text width to center it
+      let textWidth = 0;
+      const charSpacing = labelHeight * 0.2;
+      for (const char of labelText.toLowerCase()) {
+        const charDef = LINE_FONT[char];
+        textWidth += (charDef?.width || 0.3) * labelHeight + charSpacing;
       }
+
+      // Position label at crane CENTER (offset by half text width to center)
+      const labelMarkups = await drawText3D(
+        markupApi,
+        labelText,
+        posX - textWidth / 2,  // Center horizontally
+        posY - labelHeight / 2,  // Center vertically
+        posZ + 500,  // Above the crane
+        labelHeight,
+        labelColor
+      );
+      groups.positionLabel.push(...labelMarkups);
+      groups.all.push(...labelMarkups);
     }
 
     console.log('[CraneViz] Total markups created:', groups.all.length);
@@ -389,43 +370,6 @@ function generateCircleSegments(
 }
 
 /**
- * Generate dotted/dashed circle line segments
- * Creates a circle with gaps to simulate a dotted line effect
- */
-function generateDottedCircleSegments(
-  centerX: number,
-  centerY: number,
-  centerZ: number,
-  radiusMm: number,
-  dashCount: number = 36,
-  dashRatio: number = 0.6
-): LineSegment[] {
-  const lineSegments: LineSegment[] = [];
-  const segmentAngle = (2 * Math.PI) / dashCount;
-  const dashAngle = segmentAngle * dashRatio;
-
-  for (let i = 0; i < dashCount; i++) {
-    const startAngle = i * segmentAngle;
-    const endAngle = startAngle + dashAngle;
-
-    lineSegments.push({
-      start: {
-        positionX: centerX + radiusMm * Math.cos(startAngle),
-        positionY: centerY + radiusMm * Math.sin(startAngle),
-        positionZ: centerZ
-      },
-      end: {
-        positionX: centerX + radiusMm * Math.cos(endAngle),
-        positionY: centerY + radiusMm * Math.sin(endAngle),
-        positionZ: centerZ
-      }
-    });
-  }
-
-  return lineSegments;
-}
-
-/**
  * Simple line-based font for 3D text rendering (top-view readable)
  * Returns line segments for each character (normalized 0-1 coordinate space)
  * Height is 1.0, width varies per character
@@ -481,15 +425,9 @@ const LINE_FONT: Record<string, { width: number; lines: [number, number, number,
   '/': { width: 0.4, lines: [[0, 0, 0.4, 1]] },
 };
 
-// Result type for grouped radius ring drawing
-interface RadiusRingsGrouped {
-  rings: number[];
-  radiusLabels: number[];
-  capacityLabels: number[];
-}
-
 /**
  * Draw radius rings around the crane - grouped for partial updates
+ * FAST: Use solid circles instead of dotted to reduce markup count drastically
  * Returns separate arrays for rings, radius labels, and capacity labels
  */
 async function drawRadiusRingsGrouped(
@@ -519,36 +457,29 @@ async function drawRadiusRingsGrouped(
   console.log('[CraneViz] Drawing radius rings:', { stepMeters, effectiveMaxRadius, showLabels });
 
   try {
-    // Collect ring entries (separate from labels)
-    const ringEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
-    const radiusLabelEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
-    const capacityLabelEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
+    // Collect all entries for single batch call
+    const allEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
+    const ringCount = Math.floor(effectiveMaxRadius / stepMeters);
+    const labelStartIndex = ringCount; // Where labels start in the array
+    let labelCount = 0;
+    let capacityLabelCount = 0;
 
-    // Generate all rings with alternating dotted patterns
-    let ringIndex = 0;
+    // Generate all rings as SOLID circles (72 segments each, connected = one markup per ring)
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
+      const segments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, 72);
+      allEntries.push({ color, lines: segments });
+    }
 
-      // Alternate between two dash patterns for visual distinction
-      const isAlternate = ringIndex % 2 === 1;
-      const dashCount = isAlternate ? 36 : 24;
-      const dashRatio = isAlternate ? 0.4 : 0.7;
-
-      // Generate dotted circle segments
-      const dashSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
-
-      // Each dash as separate entry
-      for (const seg of dashSegments) {
-        ringEntries.push({ color, lines: [seg] });
-      }
-
-      ringIndex++;
-
-      // Add radius label if enabled
-      if (showLabels) {
+    // Add radius labels if enabled
+    if (showLabels) {
+      for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
+        const radiusMm = r * 1000;
         const labelText = `${r}m`;
+        const labelSegments: LineSegment[] = [];
         let charX = centerX + radiusMm + 300;
         const charSpacing = textHeight * 0.2;
+
         for (const char of labelText.toLowerCase()) {
           const charDef = LINE_FONT[char];
           if (!charDef || charDef.lines.length === 0) {
@@ -556,15 +487,17 @@ async function drawRadiusRingsGrouped(
             continue;
           }
           for (const [x1, y1, x2, y2] of charDef.lines) {
-            radiusLabelEntries.push({
-              color: textColor,
-              lines: [{
-                start: { positionX: charX + x1 * textHeight, positionY: centerY - textHeight / 2 + y1 * textHeight, positionZ: centerZ + 100 },
-                end: { positionX: charX + x2 * textHeight, positionY: centerY - textHeight / 2 + y2 * textHeight, positionZ: centerZ + 100 }
-              }]
+            labelSegments.push({
+              start: { positionX: charX + x1 * textHeight, positionY: centerY - textHeight / 2 + y1 * textHeight, positionZ: centerZ + 100 },
+              end: { positionX: charX + x2 * textHeight, positionY: centerY - textHeight / 2 + y2 * textHeight, positionZ: centerZ + 100 }
             });
           }
           charX += charDef.width * textHeight + charSpacing;
+        }
+
+        if (labelSegments.length > 0) {
+          allEntries.push({ color: textColor, lines: labelSegments });
+          labelCount++;
         }
 
         // Capacity label if available
@@ -573,9 +506,11 @@ async function drawRadiusRingsGrouped(
           if (capacityPoint) {
             const capText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
             const capColor = { r: 0, g: 100, b: 180, a: 255 };
+            const capSegments: LineSegment[] = [];
             let capX = centerX + radiusMm + 300;
             const capHeight = textHeight * 0.85;
             const capY = centerY - textHeight / 2 - textHeight * 1.2;
+
             for (const char of capText.toLowerCase()) {
               const charDef = LINE_FONT[char];
               if (!charDef || charDef.lines.length === 0) {
@@ -583,58 +518,39 @@ async function drawRadiusRingsGrouped(
                 continue;
               }
               for (const [x1, y1, x2, y2] of charDef.lines) {
-                capacityLabelEntries.push({
-                  color: capColor,
-                  lines: [{
-                    start: { positionX: capX + x1 * capHeight, positionY: capY + y1 * capHeight, positionZ: centerZ + 100 },
-                    end: { positionX: capX + x2 * capHeight, positionY: capY + y2 * capHeight, positionZ: centerZ + 100 }
-                  }]
+                capSegments.push({
+                  start: { positionX: capX + x1 * capHeight, positionY: capY + y1 * capHeight, positionZ: centerZ + 100 },
+                  end: { positionX: capX + x2 * capHeight, positionY: capY + y2 * capHeight, positionZ: centerZ + 100 }
                 });
               }
               capX += charDef.width * capHeight + charSpacing;
+            }
+
+            if (capSegments.length > 0) {
+              allEntries.push({ color: capColor, lines: capSegments });
+              capacityLabelCount++;
             }
           }
         }
       }
     }
 
-    // Draw rings in chunks
-    const CHUNK_SIZE = 50;
-    console.log('[CraneViz] Drawing', ringEntries.length, 'ring entries');
-    for (let i = 0; i < ringEntries.length; i += CHUNK_SIZE) {
-      const chunk = ringEntries.slice(i, i + CHUNK_SIZE);
-      const markups = await markupApi.addFreelineMarkups?.(chunk);
-      if (markups) {
-        markups.forEach((m: any) => { if (m?.id) result.rings.push(m.id); });
-      }
-      if (i + CHUNK_SIZE < ringEntries.length) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-    }
-
-    // Draw radius labels in chunks
-    console.log('[CraneViz] Drawing', radiusLabelEntries.length, 'radius label entries');
-    for (let i = 0; i < radiusLabelEntries.length; i += CHUNK_SIZE) {
-      const chunk = radiusLabelEntries.slice(i, i + CHUNK_SIZE);
-      const markups = await markupApi.addFreelineMarkups?.(chunk);
-      if (markups) {
-        markups.forEach((m: any) => { if (m?.id) result.radiusLabels.push(m.id); });
-      }
-      if (i + CHUNK_SIZE < radiusLabelEntries.length) {
-        await new Promise(resolve => setTimeout(resolve, 10));
-      }
-    }
-
-    // Draw capacity labels in chunks
-    console.log('[CraneViz] Drawing', capacityLabelEntries.length, 'capacity label entries');
-    for (let i = 0; i < capacityLabelEntries.length; i += CHUNK_SIZE) {
-      const chunk = capacityLabelEntries.slice(i, i + CHUNK_SIZE);
-      const markups = await markupApi.addFreelineMarkups?.(chunk);
-      if (markups) {
-        markups.forEach((m: any) => { if (m?.id) result.capacityLabels.push(m.id); });
-      }
-      if (i + CHUNK_SIZE < capacityLabelEntries.length) {
-        await new Promise(resolve => setTimeout(resolve, 10));
+    // Draw ALL in ONE batch call (super fast!)
+    console.log('[CraneViz] Drawing', allEntries.length, 'total entries in one batch');
+    if (allEntries.length > 0) {
+      const allMarkups = await markupApi.addFreelineMarkups?.(allEntries);
+      if (allMarkups) {
+        allMarkups.forEach((m: any, idx: number) => {
+          if (m?.id) {
+            if (idx < ringCount) {
+              result.rings.push(m.id);
+            } else if (idx < labelStartIndex + labelCount) {
+              result.radiusLabels.push(m.id);
+            } else {
+              result.capacityLabels.push(m.id);
+            }
+          }
+        });
       }
     }
 
@@ -646,14 +562,21 @@ async function drawRadiusRingsGrouped(
   return result;
 }
 
+// Result type for grouped radius ring drawing
+interface RadiusRingsGrouped {
+  rings: number[];
+  radiusLabels: number[];
+  capacityLabels: number[];
+}
+
 /**
  * Draw only the position label (for partial updates)
- * Returns markup IDs for the label only
+ * Returns markup IDs for the label only - CENTERED on crane
  */
 export async function drawPositionLabel(
   api: WorkspaceAPI.WorkspaceAPI,
   projectCrane: ProjectCrane,
-  craneModel: CraneModel
+  _craneModel: CraneModel
 ): Promise<number[]> {
   const markupIds: number[] = [];
   const markupApi = api.markup as any;
@@ -663,54 +586,30 @@ export async function drawPositionLabel(
   const posX = projectCrane.position_x * 1000;
   const posY = projectCrane.position_y * 1000;
   const posZ = projectCrane.position_z * 1000;
-  const rotationRad = (projectCrane.rotation_deg * Math.PI) / 180;
-  const baseWidthMm = craneModel.base_width_m * 1000;
-  const outriggerSpanMm = baseWidthMm * 1.8;
-
-  const transformPoint = (localX: number, localY: number): { x: number; y: number } => {
-    const rotatedX = localX * Math.cos(rotationRad) - localY * Math.sin(rotationRad);
-    const rotatedY = localX * Math.sin(rotationRad) + localY * Math.cos(rotationRad);
-    return { x: posX + rotatedX, y: posY + rotatedY };
-  };
 
   const labelText = projectCrane.position_label;
   const labelHeight = projectCrane.label_height_mm || 800;
   const labelColor = projectCrane.label_color || { r: 50, g: 50, b: 50, a: 255 };
-  const labelOffsetX = outriggerSpanMm / 2 + labelHeight + 500;
-  const labelPos = transformPoint(labelOffsetX, 0);
 
-  try {
-    const textMarkup = await markupApi.addTextMarkup?.([{
-      text: labelText,
-      color: labelColor,
-      start: {
-        positionX: labelPos.x,
-        positionY: labelPos.y,
-        positionZ: posZ + 200
-      },
-      end: {
-        positionX: labelPos.x + labelHeight * labelText.length * 0.6,
-        positionY: labelPos.y + labelHeight,
-        positionZ: posZ + 200
-      }
-    }]);
-    if (textMarkup?.[0]?.id) {
-      markupIds.push(textMarkup[0].id);
-    }
-  } catch (error) {
-    console.error('[CraneViz] Error drawing position label:', error);
-    // Fallback to freeline
-    const labelMarkups = await drawText3D(
-      markupApi,
-      labelText,
-      labelPos.x,
-      labelPos.y,
-      posZ + 200,
-      labelHeight,
-      labelColor
-    );
-    markupIds.push(...labelMarkups);
+  // Calculate text width to center it
+  let textWidth = 0;
+  const charSpacing = labelHeight * 0.2;
+  for (const char of labelText.toLowerCase()) {
+    const charDef = LINE_FONT[char];
+    textWidth += (charDef?.width || 0.3) * labelHeight + charSpacing;
   }
+
+  // Draw at crane CENTER
+  const labelMarkups = await drawText3D(
+    markupApi,
+    labelText,
+    posX - textWidth / 2,  // Center horizontally
+    posY - labelHeight / 2,  // Center vertically
+    posZ + 500,  // Above the crane
+    labelHeight,
+    labelColor
+  );
+  markupIds.push(...labelMarkups);
 
   return markupIds;
 }
