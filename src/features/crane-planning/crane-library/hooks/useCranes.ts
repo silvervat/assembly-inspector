@@ -9,6 +9,7 @@ interface UseCranesResult {
   createCrane: (data: Partial<CraneModel>) => Promise<CraneModel | null>;
   updateCrane: (id: string, data: Partial<CraneModel>) => Promise<boolean>;
   deleteCrane: (id: string) => Promise<boolean>;
+  uploadCraneImage: (craneId: string, file: File) => Promise<string | null>;
 }
 
 export function useCranes(): UseCranesResult {
@@ -125,6 +126,60 @@ export function useCranes(): UseCranesResult {
     }
   }, []);
 
+  // Upload crane image to Supabase storage
+  const uploadCraneImage = useCallback(async (craneId: string, file: File): Promise<string | null> => {
+    try {
+      // Create a unique filename
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `crane_${craneId}_${Date.now()}.${fileExt}`;
+      const filePath = `crane-images/${fileName}`;
+
+      // Upload to Supabase storage
+      const { error: uploadError } = await supabase.storage
+        .from('public-assets')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Error uploading crane image:', uploadError);
+        setError(uploadError.message);
+        return null;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from('public-assets')
+        .getPublicUrl(filePath);
+
+      const imageUrl = urlData.publicUrl;
+
+      // Update crane with image URL
+      const { error: updateError } = await supabase
+        .from('crane_models')
+        .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
+        .eq('id', craneId);
+
+      if (updateError) {
+        console.error('Error updating crane image URL:', updateError);
+        setError(updateError.message);
+        return null;
+      }
+
+      // Update local state
+      setCranes(prev => prev.map(crane =>
+        crane.id === craneId ? { ...crane, image_url: imageUrl } : crane
+      ));
+
+      return imageUrl;
+    } catch (err) {
+      console.error('Error uploading crane image:', err);
+      setError(err instanceof Error ? err.message : 'Unknown error');
+      return null;
+    }
+  }, []);
+
   return {
     cranes,
     loading,
@@ -132,6 +187,7 @@ export function useCranes(): UseCranesResult {
     refetch: fetchCranes,
     createCrane,
     updateCrane,
-    deleteCrane
+    deleteCrane,
+    uploadCraneImage
   };
 }
