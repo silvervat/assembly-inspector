@@ -1791,7 +1791,8 @@ export interface ProjectCrane {
   // Visual settings
   crane_color: CraneRGBAColor;
   radius_color: CraneRGBAColor;
-  label_color?: CraneRGBAColor; // Optional separate color for radius labels
+  label_color?: CraneRGBAColor; // Optional separate color for radius labels (client-side only until DB migration)
+  label_height_mm?: number; // Height of labels in mm (500-2000), client-side only until DB migration
   show_radius_rings: boolean;
   radius_step_m: number;
   show_capacity_labels: boolean;

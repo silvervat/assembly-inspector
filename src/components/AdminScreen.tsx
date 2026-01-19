@@ -4006,7 +4006,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             style={{ background: '#f97316', color: 'white' }}
           >
             <FiBox size={18} />
-            <span>Kraanide Andmebaas</span>
+            <span>Kraanade Andmebaas</span>
           </button>
 
           <button

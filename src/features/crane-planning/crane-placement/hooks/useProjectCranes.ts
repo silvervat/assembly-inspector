@@ -12,6 +12,20 @@ interface UseProjectCranesResult {
   updateMarkupIds: (id: string, markupIds: number[]) => Promise<boolean>;
 }
 
+// Fields that exist only on the client side (not in database yet)
+const CLIENT_ONLY_FIELDS = ['label_color', 'label_height_mm', 'crane_model', 'counterweight_config'];
+
+// Remove client-only fields before sending to database
+function filterForDatabase(data: Partial<ProjectCrane>): Record<string, unknown> {
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!CLIENT_ONLY_FIELDS.includes(key)) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 export function useProjectCranes(projectId: string): UseProjectCranesResult {
   const [projectCranes, setProjectCranes] = useState<ProjectCrane[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,8 +82,10 @@ export function useProjectCranes(projectId: string): UseProjectCranesResult {
     if (!projectId) return null;
 
     try {
+      // Filter out client-only fields before sending to database
+      const dbData = filterForDatabase(data);
       const insertData = {
-        ...data,
+        ...dbData,
         trimble_project_id: projectId,
         markup_ids: data.markup_ids || []
       };
@@ -109,9 +125,12 @@ export function useProjectCranes(projectId: string): UseProjectCranesResult {
 
   const updateProjectCrane = useCallback(async (id: string, data: Partial<ProjectCrane>): Promise<boolean> => {
     try {
+      // Filter out client-only fields before sending to database
+      const dbData = filterForDatabase(data);
+
       const { error: updateError } = await supabase
         .from('project_cranes')
-        .update(data)
+        .update(dbData)
         .eq('id', id);
 
       if (updateError) {
