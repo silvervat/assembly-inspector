@@ -24,11 +24,10 @@ export async function drawCraneToModel(
   const posY = projectCrane.position_y * 1000;
   const posZ = projectCrane.position_z * 1000;
 
-  const boomLengthMm = projectCrane.boom_length_m * 1000;
   const rotationRad = (projectCrane.rotation_deg * Math.PI) / 180;
 
   try {
-    // 1. Draw crane base (rectangle)
+    // 1. Draw crane base (rectangle) - simple top view to scale
     const baseMarkups = await drawCraneBase(
       api,
       posX,
@@ -41,53 +40,7 @@ export async function drawCraneToModel(
     );
     markupIds.push(...baseMarkups);
 
-    // 2. Draw mast (vertical line)
-    const mastHeight = craneModel.max_height_m * 1000 * 0.5; // Show 50% of max height
-    const mastMarkup = await markupApi.addLineMarkups?.([{
-      start: {
-        positionX: posX,
-        positionY: posY,
-        positionZ: posZ
-      },
-      end: {
-        positionX: posX,
-        positionY: posY,
-        positionZ: posZ + mastHeight
-      },
-      color: projectCrane.crane_color
-    }]);
-    if (mastMarkup?.[0]?.id) markupIds.push(mastMarkup[0].id);
-
-    // 3. Draw boom (horizontal line from top of mast)
-    const boomEndX = posX + boomLengthMm * Math.cos(rotationRad);
-    const boomEndY = posY + boomLengthMm * Math.sin(rotationRad);
-
-    const boomMarkup = await markupApi.addLineMarkups?.([{
-      start: {
-        positionX: posX,
-        positionY: posY,
-        positionZ: posZ + mastHeight
-      },
-      end: {
-        positionX: boomEndX,
-        positionY: boomEndY,
-        positionZ: posZ + mastHeight
-      },
-      color: { ...projectCrane.crane_color, a: 200 }
-    }]);
-    if (boomMarkup?.[0]?.id) markupIds.push(boomMarkup[0].id);
-
-    // 4. Draw hook point marker using a small circle at boom end
-    const hookCircle = await drawSmallMarker(
-      api,
-      boomEndX,
-      boomEndY,
-      posZ + mastHeight,
-      { r: 255, g: 0, b: 0, a: 255 }
-    );
-    markupIds.push(...hookCircle);
-
-    // 5. Draw cabin marker
+    // 2. Draw cabin marker
     const cabinMarkups = await drawCabinMarker(
       api,
       posX,
@@ -100,7 +53,7 @@ export async function drawCraneToModel(
     );
     markupIds.push(...cabinMarkups);
 
-    // 6. Draw radius rings (if enabled)
+    // 3. Draw radius rings (if enabled)
     if (projectCrane.show_radius_rings) {
       const radiusMarkups = await drawRadiusRings(
         api,
@@ -118,7 +71,7 @@ export async function drawCraneToModel(
       markupIds.push(...radiusMarkups);
     }
 
-    // 7. Draw position label (if set) - using 3D text readable from above
+    // 4. Draw position label (if set) - using 3D text readable from above
     if (projectCrane.position_label) {
       const labelText = projectCrane.position_label;
       const labelHeight = 800; // 800mm tall for crane name
