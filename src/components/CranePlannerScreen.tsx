@@ -323,8 +323,19 @@ export default function CranePlannerScreen({
     setIsPlacing(true);
   }, [resetForm]);
 
+  // Track original crane markup IDs when editing (to restore if cancelled)
+  const originalCraneMarkupsRef = useRef<{ craneId: string; markupIds: number[] } | null>(null);
+
   // Start editing existing crane
-  const startEditing = useCallback((crane: ProjectCrane) => {
+  const startEditing = useCallback(async (crane: ProjectCrane) => {
+    // Remove existing crane markups from model so they don't overlap with preview
+    if (crane.markup_ids && crane.markup_ids.length > 0) {
+      console.log('[CranePlanner] Removing existing crane markups for editing:', crane.markup_ids.length);
+      await removeCraneMarkups(api, crane.markup_ids);
+      // Store original markups to restore if cancelled
+      originalCraneMarkupsRef.current = { craneId: crane.id, markupIds: [...crane.markup_ids] };
+    }
+
     setSelectedCraneModelId(crane.crane_model_id);
     setSelectedCounterweightId(crane.counterweight_config_id || '');
     setPickedPosition({ x: crane.position_x, y: crane.position_y, z: crane.position_z });
@@ -351,15 +362,10 @@ export default function CranePlannerScreen({
     });
     setEditingCraneId(crane.id);
     setIsPlacing(false);
-  }, []);
+  }, [api]);
 
   // Cancel placing/editing
   const cancelPlacing = useCallback(async () => {
-    setIsPlacing(false);
-    setEditingCraneId(null);
-    resetForm();
-    setIsPickingPosition(false);
-
     // Clear preview markups using ref
     if (previewMarkupIdsRef.current.length > 0) {
       await removeCraneMarkups(api, previewMarkupIdsRef.current);
@@ -368,12 +374,34 @@ export default function CranePlannerScreen({
     previewMarkupGroupsRef.current = null;
     prevLabelConfigRef.current = null;
 
+    // If we were editing and removed original crane markups, restore them
+    if (originalCraneMarkupsRef.current) {
+      const originalCrane = projectCranes.find(c => c.id === originalCraneMarkupsRef.current?.craneId);
+      if (originalCrane && originalCrane.crane_model) {
+        console.log('[CranePlanner] Restoring original crane markups after cancel');
+        const chartData = loadCharts.find(lc =>
+          lc.counterweight_config_id === originalCrane.counterweight_config_id &&
+          lc.boom_length_m === originalCrane.boom_length_m
+        )?.chart_data;
+
+        // Redraw the original crane
+        const newMarkupIds = await drawCraneToModel(api, originalCrane, originalCrane.crane_model, chartData);
+        await updateMarkupIds(originalCrane.id, newMarkupIds);
+      }
+      originalCraneMarkupsRef.current = null;
+    }
+
+    setIsPlacing(false);
+    setEditingCraneId(null);
+    resetForm();
+    setIsPickingPosition(false);
+
     // Remove picking listener
     if (pickingListenerRef.current) {
       (api.viewer as any).removeEventListener?.('onSelectionChanged', pickingListenerRef.current);
       pickingListenerRef.current = null;
     }
-  }, [resetForm, api]);
+  }, [resetForm, api, projectCranes, loadCharts, updateMarkupIds]);
 
   // Start picking position from model - use getSelection approach like AdminScreen
   const startPickingPosition = useCallback(async () => {
@@ -606,6 +634,9 @@ export default function CranePlannerScreen({
         console.error('Error drawing crane:', error);
       }
     }
+
+    // Clear original crane ref to prevent restore on cancel (we saved successfully)
+    originalCraneMarkupsRef.current = null;
 
     cancelPlacing();
     refetch();
