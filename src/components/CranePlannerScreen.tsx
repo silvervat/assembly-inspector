@@ -1922,7 +1922,9 @@ export default function CranePlannerScreen({
                       backgroundColor: 'white',
                       borderRadius: '6px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      position: 'relative',
+                      zIndex: openMenuCraneId === crane.id ? 1003 : 'auto'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', gap: '8px' }}>
