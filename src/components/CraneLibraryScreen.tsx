@@ -151,7 +151,7 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
   if (loading && cranes.length === 0) {
     return (
       <div className="crane-library-screen">
-        <PageHeader title="Kraanide Andmebaas" onBack={onBackToMenu} user={user} />
+        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} user={user} />
         <div className="flex items-center justify-center p-8">
           <FiLoader className="animate-spin mr-2" size={24} />
           <span>Laadin kraanasid...</span>
@@ -164,7 +164,7 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
   if (error) {
     return (
       <div className="crane-library-screen">
-        <PageHeader title="Kraanide Andmebaas" onBack={onBackToMenu} user={user} />
+        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} user={user} />
         <div className="flex items-center justify-center p-8 text-red-600">
           <FiAlertCircle className="mr-2" size={24} />
           <span>Viga: {error}</span>
@@ -175,7 +175,7 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
 
   return (
     <div className="crane-library-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanide Andmebaas" onBack={onBackToMenu} user={user}>
+      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} user={user}>
         {!isCreating && !editingCraneId && (
           <button
             onClick={startCreating}

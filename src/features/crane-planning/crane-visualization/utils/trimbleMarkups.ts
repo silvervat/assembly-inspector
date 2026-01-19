@@ -66,7 +66,8 @@ export async function drawCraneToModel(
         projectCrane.show_capacity_labels,
         loadChartData,
         projectCrane.max_radius_limit_m,
-        projectCrane.label_color // Pass separate label color if set
+        projectCrane.label_color, // Pass separate label color if set
+        projectCrane.label_height_mm // Pass label height
       );
       markupIds.push(...radiusMarkups);
     }
@@ -74,7 +75,7 @@ export async function drawCraneToModel(
     // 4. Draw position label (if set) - using 3D text readable from above
     if (projectCrane.position_label) {
       const labelText = projectCrane.position_label;
-      const labelHeight = 800; // 800mm tall for crane name
+      const labelHeight = projectCrane.label_height_mm || 800; // Default 800mm
       const labelColor = projectCrane.label_color || { r: 50, g: 50, b: 50, a: 255 };
 
       // Generate 3D text for position label
@@ -82,17 +83,16 @@ export async function drawCraneToModel(
       const labelSegments = generate3DTextTopView(
         labelText,
         posX - textWidth / 2, // Center above crane
-        posY + labelHeight / 2,
+        posY - labelHeight, // Position below crane center (readable from above)
         posZ + 200, // Just above ground
         labelHeight
       );
 
-      // Draw each line segment separately for better rendering
-      for (const segment of labelSegments) {
-        const textMarkup = await markupApi.addLineMarkups?.([{
-          start: segment.start,
-          end: segment.end,
-          color: labelColor
+      // Draw all segments in one freeline call for performance
+      if (labelSegments.length > 0) {
+        const textMarkup = await markupApi.addFreelineMarkups?.([{
+          color: labelColor,
+          lines: labelSegments
         }]);
         if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
       }
@@ -258,19 +258,21 @@ function generate3DTextTopView(
     const charWidth = charDef.width * heightMm;
 
     for (const [x1, y1, x2, y2] of charDef.lines) {
-      // Draw in X-Y plane (readable from above)
-      // x1,x2 -> X axis (text width direction)
-      // y1,y2 -> Y axis (text height direction, going negative = up when viewing from above)
+      // Draw in X-Y plane (readable from above, looking down)
+      // x1,x2 -> X axis (text width direction, left to right)
+      // y1,y2 -> Y axis (text height direction, positive = up when viewing from above)
+      // In font: y=0 is bottom of char, y=1 is top
+      // When looking from above: higher Y = further "up" on screen = top of letter
       lineSegments.push({
         start: {
           positionX: currentX + x1 * heightMm,
-          positionY: startY - y1 * heightMm, // Negative so text reads correctly from above
+          positionY: startY + y1 * heightMm, // Positive Y so text reads correctly from above
           positionZ: startZ
         },
         end: {
           positionX: currentX + x2 * heightMm,
-          positionY: startY - y2 * heightMm,
-          positionZ: startZ // Constant Z for top view
+          positionY: startY + y2 * heightMm,
+          positionZ: startZ
         }
       });
     }
@@ -444,6 +446,7 @@ async function drawCabinMarker(
  * Draw radius rings around the crane
  * @param maxRadiusLimitMeters - Optional limit for maximum radius to draw (defaults to crane's max radius)
  * @param labelColor - Optional separate color for labels (defaults to ring color)
+ * @param labelHeightMm - Height of labels in mm (default 500)
  */
 async function drawRadiusRings(
   api: WorkspaceAPI.WorkspaceAPI,
@@ -456,7 +459,8 @@ async function drawRadiusRings(
   showLabels: boolean,
   loadChartData?: LoadChartDataPoint[],
   maxRadiusLimitMeters?: number,
-  labelColor?: CraneRGBAColor
+  labelColor?: CraneRGBAColor,
+  labelHeightMm?: number
 ): Promise<number[]> {
   const markupIds: number[] = [];
   const markupApi = api.markup as any;
@@ -471,8 +475,13 @@ async function drawRadiusRings(
 
   // Use separate label color if provided, otherwise use ring color
   const textColor = labelColor || { ...color, a: 255 };
+  const textHeight = labelHeightMm || 500; // Default 500mm tall letters
 
   try {
+    // Collect all ring segments and all label segments for batch rendering
+    const allRingSegments: LineSegment[] = [];
+    const allLabelSegments: LineSegment[] = [];
+
     // Generate rings with step interval
     let ringIndex = 0;
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
@@ -486,15 +495,9 @@ async function drawRadiusRings(
       const dashCount = isAlternate ? Math.round(baseDashForRadius * 1.5) : baseDashForRadius;
       const dashRatio = isAlternate ? 0.4 : 0.7; // Shorter dashes on alternate rings
 
-      // Generate dotted circle with {start, end} line segments
-      const lineSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
-
-      // Draw ring as freeline (dotted)
-      const ringMarkup = await markupApi.addFreelineMarkups?.([{
-        color,
-        lines: lineSegments
-      }]);
-      if (ringMarkup?.[0]?.id) markupIds.push(ringMarkup[0].id);
+      // Generate dotted circle segments
+      const ringSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
+      allRingSegments.push(...ringSegments);
 
       ringIndex++;
 
@@ -509,28 +512,35 @@ async function drawRadiusRings(
           }
         }
 
-        // Generate 3D text (500mm tall, readable from above)
-        const textHeight = 500; // 500mm tall letters
+        // Generate 3D text (readable from above)
         const textSegments = generate3DTextTopView(
           labelText,
           centerX + radiusMm + 300, // Offset from ring
-          centerY + textHeight / 2, // Center text vertically relative to ring
+          centerY - textHeight / 2, // Position label so it reads correctly from above
           centerZ + 100, // Slightly above ground
           textHeight
         );
 
-        if (textSegments.length > 0) {
-          // Draw each line segment separately for better rendering
-          for (const segment of textSegments) {
-            const textMarkup = await markupApi.addLineMarkups?.([{
-              start: segment.start,
-              end: segment.end,
-              color: textColor
-            }]);
-            if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
-          }
-        }
+        allLabelSegments.push(...textSegments);
       }
+    }
+
+    // Draw all ring segments in one call for performance
+    if (allRingSegments.length > 0) {
+      const ringMarkup = await markupApi.addFreelineMarkups?.([{
+        color,
+        lines: allRingSegments
+      }]);
+      if (ringMarkup?.[0]?.id) markupIds.push(ringMarkup[0].id);
+    }
+
+    // Draw all label segments in one call for performance
+    if (allLabelSegments.length > 0) {
+      const textMarkup = await markupApi.addFreelineMarkups?.([{
+        color: textColor,
+        lines: allLabelSegments
+      }]);
+      if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
     }
   } catch (error) {
     console.error('Error drawing radius rings:', error);

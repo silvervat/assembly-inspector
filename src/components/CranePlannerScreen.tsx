@@ -70,6 +70,7 @@ export default function CranePlannerScreen({
     show_radius_rings: true,
     show_capacity_labels: true,
     max_radius_limit_m: 0, // 0 = no limit, use crane's max radius
+    label_height_mm: 500, // Label height in mm (500-2000)
     crane_color: DEFAULT_CRANE_COLOR,
     radius_color: DEFAULT_RADIUS_COLOR,
     label_color: DEFAULT_LABEL_COLOR,
@@ -131,6 +132,7 @@ export default function CranePlannerScreen({
         show_radius_rings: config.show_radius_rings,
         show_capacity_labels: config.show_capacity_labels,
         max_radius_limit_m: config.max_radius_limit_m || undefined,
+        label_height_mm: config.label_height_mm || 500,
         crane_color: config.crane_color,
         radius_color: config.radius_color,
         label_color: config.label_color,
@@ -210,6 +212,7 @@ export default function CranePlannerScreen({
       show_radius_rings: true,
       show_capacity_labels: true,
       max_radius_limit_m: 0,
+      label_height_mm: 500,
       crane_color: DEFAULT_CRANE_COLOR,
       radius_color: DEFAULT_RADIUS_COLOR,
       label_color: DEFAULT_LABEL_COLOR,
@@ -244,6 +247,7 @@ export default function CranePlannerScreen({
       show_radius_rings: crane.show_radius_rings,
       show_capacity_labels: crane.show_capacity_labels,
       max_radius_limit_m: crane.max_radius_limit_m || 0,
+      label_height_mm: crane.label_height_mm || 500,
       crane_color: crane.crane_color,
       radius_color: crane.radius_color,
       label_color: crane.label_color || DEFAULT_LABEL_COLOR,
@@ -452,6 +456,7 @@ export default function CranePlannerScreen({
       show_radius_rings: config.show_radius_rings,
       show_capacity_labels: config.show_capacity_labels,
       max_radius_limit_m: config.max_radius_limit_m || undefined,
+      label_height_mm: config.label_height_mm || 500,
       crane_color: config.crane_color,
       radius_color: config.radius_color,
       label_color: config.label_color,
@@ -616,7 +621,7 @@ export default function CranePlannerScreen({
             <div>
               <div style={{ fontWeight: 500, color: '#92400e' }}>Kraanasid pole andmebaasis</div>
               <div style={{ fontSize: '13px', color: '#a16207' }}>
-                Lisa esmalt kraanasid Administratsiooni &gt; Kraanide Andmebaas lehel
+                Lisa esmalt kraanasid Administratsiooni &gt; Kraanade Andmebaas lehel
               </div>
             </div>
           </div>
@@ -1013,21 +1018,38 @@ export default function CranePlannerScreen({
                       </div>
                     </div>
                   </div>
-                  {/* Label Color Settings */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '13px' }}>Sildi värv:</span>
-                    <input
-                      type="color"
-                      value={`#${config.label_color.r.toString(16).padStart(2, '0')}${config.label_color.g.toString(16).padStart(2, '0')}${config.label_color.b.toString(16).padStart(2, '0')}`}
-                      onChange={e => {
-                        const hex = e.target.value;
-                        const r = parseInt(hex.slice(1, 3), 16);
-                        const g = parseInt(hex.slice(3, 5), 16);
-                        const b = parseInt(hex.slice(5, 7), 16);
-                        setConfig(prev => ({ ...prev, label_color: { ...prev.label_color, r, g, b } }));
-                      }}
-                      style={{ width: '40px', height: '32px', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
-                    />
+                  {/* Label Settings */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px' }}>Sildi kõrgus:</span>
+                      <select
+                        value={config.label_height_mm}
+                        onChange={e => setConfig(prev => ({ ...prev, label_height_mm: parseInt(e.target.value) }))}
+                        style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
+                      >
+                        <option value="500">500mm</option>
+                        <option value="750">750mm</option>
+                        <option value="1000">1000mm</option>
+                        <option value="1250">1250mm</option>
+                        <option value="1500">1500mm</option>
+                        <option value="2000">2000mm</option>
+                      </select>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '13px' }}>Sildi värv:</span>
+                      <input
+                        type="color"
+                        value={`#${config.label_color.r.toString(16).padStart(2, '0')}${config.label_color.g.toString(16).padStart(2, '0')}${config.label_color.b.toString(16).padStart(2, '0')}`}
+                        onChange={e => {
+                          const hex = e.target.value;
+                          const r = parseInt(hex.slice(1, 3), 16);
+                          const g = parseInt(hex.slice(3, 5), 16);
+                          const b = parseInt(hex.slice(5, 7), 16);
+                          setConfig(prev => ({ ...prev, label_color: { ...prev.label_color, r, g, b } }));
+                        }}
+                        style={{ width: '40px', height: '32px', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
+                      />
+                    </div>
                   </div>
                   {/* Crane Color Settings */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
