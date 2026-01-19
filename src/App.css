@@ -271,7 +271,7 @@ body {
   min-width: 160px;
   max-width: 180px;
   padding: 4px;
-  z-index: 1000;
+  z-index: 5000;
   animation: slideInLeft 0.15s ease-out;
 }
 
@@ -341,7 +341,7 @@ body {
   box-shadow: 2px 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 160px;
   padding: 4px;
-  z-index: 1001;
+  z-index: 5001;
   animation: slideInLeft 0.1s ease-out;
 }
 
