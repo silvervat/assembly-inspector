@@ -465,10 +465,25 @@ async function drawRadiusRingsGrouped(
     let capacityLabelCount = 0;
 
     // Generate all rings as SOLID circles (72 segments each, connected = one markup per ring)
+    // Alternate colors: every second ring is 25% lighter for visual distinction
+    let ringIndex = 0;
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
       const segments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, 72);
-      allEntries.push({ color, lines: segments });
+
+      // Make every second ring 25% lighter
+      let ringColor = color;
+      if (ringIndex % 2 === 1) {
+        ringColor = {
+          r: Math.min(255, Math.round(color.r + (255 - color.r) * 0.25)),
+          g: Math.min(255, Math.round(color.g + (255 - color.g) * 0.25)),
+          b: Math.min(255, Math.round(color.b + (255 - color.b) * 0.25)),
+          a: color.a
+        };
+      }
+
+      allEntries.push({ color: ringColor, lines: segments });
+      ringIndex++;
     }
 
     // Add radius labels if enabled
