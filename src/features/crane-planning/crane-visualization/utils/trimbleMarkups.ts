@@ -465,48 +465,63 @@ async function drawRadiusRingsGrouped(
     let capacityLabelCount = 0;
 
     // Generate all rings as SOLID circles (72 segments each, connected = one markup per ring)
+    // Alternate colors: every second ring is 25% lighter for visual distinction
+    let ringIndex = 0;
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
       const segments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, 72);
-      allEntries.push({ color, lines: segments });
+
+      // Make every second ring 25% lighter
+      let ringColor = color;
+      if (ringIndex % 2 === 1) {
+        ringColor = {
+          r: Math.min(255, Math.round(color.r + (255 - color.r) * 0.25)),
+          g: Math.min(255, Math.round(color.g + (255 - color.g) * 0.25)),
+          b: Math.min(255, Math.round(color.b + (255 - color.b) * 0.25)),
+          a: color.a
+        };
+      }
+
+      allEntries.push({ color: ringColor, lines: segments });
+      ringIndex++;
     }
 
-    // Add radius labels if enabled
+    // Add radius labels if enabled - each CHARACTER is a separate entry to avoid connections
     if (showLabels) {
+      const charSpacing = textHeight * 0.2;
+
       for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
         const radiusMm = r * 1000;
         const labelText = `${r}m`;
-        const labelSegments: LineSegment[] = [];
         let charX = centerX + radiusMm + 300;
-        const charSpacing = textHeight * 0.2;
 
+        // Each character is a separate entry (like drawText3D)
         for (const char of labelText.toLowerCase()) {
           const charDef = LINE_FONT[char];
           if (!charDef || charDef.lines.length === 0) {
             charX += (charDef?.width || 0.3) * textHeight + charSpacing;
             continue;
           }
+          const charSegments: LineSegment[] = [];
           for (const [x1, y1, x2, y2] of charDef.lines) {
-            labelSegments.push({
+            charSegments.push({
               start: { positionX: charX + x1 * textHeight, positionY: centerY - textHeight / 2 + y1 * textHeight, positionZ: centerZ + 100 },
               end: { positionX: charX + x2 * textHeight, positionY: centerY - textHeight / 2 + y2 * textHeight, positionZ: centerZ + 100 }
             });
           }
+          if (charSegments.length > 0) {
+            allEntries.push({ color: textColor, lines: charSegments });
+            labelCount++;
+          }
           charX += charDef.width * textHeight + charSpacing;
         }
 
-        if (labelSegments.length > 0) {
-          allEntries.push({ color: textColor, lines: labelSegments });
-          labelCount++;
-        }
-
-        // Capacity label if available
+        // Capacity label if available - each character separate
         if (loadChartData && loadChartData.length > 0) {
           const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
           if (capacityPoint) {
             const capText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
             const capColor = { r: 0, g: 100, b: 180, a: 255 };
-            const capSegments: LineSegment[] = [];
             let capX = centerX + radiusMm + 300;
             const capHeight = textHeight * 0.85;
             const capY = centerY - textHeight / 2 - textHeight * 1.2;
@@ -517,18 +532,18 @@ async function drawRadiusRingsGrouped(
                 capX += (charDef?.width || 0.3) * capHeight + charSpacing;
                 continue;
               }
+              const charSegments: LineSegment[] = [];
               for (const [x1, y1, x2, y2] of charDef.lines) {
-                capSegments.push({
+                charSegments.push({
                   start: { positionX: capX + x1 * capHeight, positionY: capY + y1 * capHeight, positionZ: centerZ + 100 },
                   end: { positionX: capX + x2 * capHeight, positionY: capY + y2 * capHeight, positionZ: centerZ + 100 }
                 });
               }
+              if (charSegments.length > 0) {
+                allEntries.push({ color: capColor, lines: charSegments });
+                capacityLabelCount++;
+              }
               capX += charDef.width * capHeight + charSpacing;
-            }
-
-            if (capSegments.length > 0) {
-              allEntries.push({ color: capColor, lines: capSegments });
-              capacityLabelCount++;
             }
           }
         }

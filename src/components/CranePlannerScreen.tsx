@@ -99,10 +99,17 @@ export default function CranePlannerScreen({
 
   // Update preview when config changes
   const updatePreview = useCallback(async (labelOnly: boolean = false) => {
-    if (!selectedCraneModel || !pickedPosition) return;
+    console.log('[Preview] updatePreview called:', { labelOnly, hasModel: !!selectedCraneModel, hasPosition: !!pickedPosition, isUpdating: isUpdatingPreviewRef.current });
+    if (!selectedCraneModel || !pickedPosition) {
+      console.log('[Preview] Skipped - missing model or position');
+      return;
+    }
 
     // Prevent concurrent updates - skip if already updating
-    if (isUpdatingPreviewRef.current) return;
+    if (isUpdatingPreviewRef.current) {
+      console.log('[Preview] Skipped - already updating');
+      return;
+    }
     isUpdatingPreviewRef.current = true;
 
     try {
@@ -576,81 +583,25 @@ export default function CranePlannerScreen({
     refetch();
   };
 
-  // Move crane - view-relative movement based on camera direction
-  // screenDx: positive = screen right, negative = screen left
-  // screenDy: positive = screen up, negative = screen down
-  // dz: height change (always in world coordinates)
-  const moveCrane = useCallback(async (screenDx: number, screenDy: number, dz: number) => {
-    try {
-      // Get camera state
-      const camera = await api.viewer.getCamera();
-
-      let worldDx = screenDx;
-      let worldDy = screenDy;
-
-      if (camera && camera.position && camera.lookAt) {
-        // Calculate view direction projected onto XY plane
-        const eyeX = camera.position.x ?? 0;
-        const eyeY = camera.position.y ?? 0;
-        const targetX = camera.lookAt.x ?? 0;
-        const targetY = camera.lookAt.y ?? 0;
-
-        // View direction in XY plane (towards where we're looking)
-        let viewDirX = targetX - eyeX;
-        let viewDirY = targetY - eyeY;
-
-        // Normalize the view direction
-        const len = Math.sqrt(viewDirX * viewDirX + viewDirY * viewDirY);
-        if (len > 0.001) {
-          viewDirX /= len;
-          viewDirY /= len;
-        } else {
-          // Looking straight down, use default orientation (Y = forward)
-          viewDirX = 0;
-          viewDirY = 1;
-        }
-
-        // Right direction (perpendicular to view in XY plane, 90° clockwise)
-        const rightDirX = viewDirY;
-        const rightDirY = -viewDirX;
-
-        // Transform screen coordinates to world coordinates
-        // screenDy > 0 means "up on screen" = moving forward in view direction
-        // screenDx > 0 means "right on screen" = moving right in view direction
-        worldDx = screenDx * rightDirX + screenDy * viewDirX;
-        worldDy = screenDx * rightDirY + screenDy * viewDirY;
-      }
-
-      setConfig(prev => ({
-        ...prev,
-        position_x: prev.position_x + worldDx,
-        position_y: prev.position_y + worldDy,
-        position_z: prev.position_z + dz
-      }));
-      setPickedPosition(prev => prev ? {
-        x: prev.x + worldDx,
-        y: prev.y + worldDy,
-        z: prev.z + dz
-      } : null);
-    } catch (error) {
-      console.error('Error getting camera for view-relative movement:', error);
-      // Fallback to world coordinates if camera fails
-      setConfig(prev => ({
-        ...prev,
-        position_x: prev.position_x + screenDx,
-        position_y: prev.position_y + screenDy,
-        position_z: prev.position_z + dz
-      }));
-      setPickedPosition(prev => prev ? {
-        x: prev.x + screenDx,
-        y: prev.y + screenDy,
-        z: prev.z + dz
-      } : null);
-    }
-  }, [api]);
+  // Move crane - uses world coordinates (Y = up/down, X = left/right in model space)
+  const moveCrane = useCallback((dx: number, dy: number, dz: number) => {
+    console.log('[CranePlanner] moveCrane called:', { dx, dy, dz });
+    setConfig(prev => ({
+      ...prev,
+      position_x: prev.position_x + dx,
+      position_y: prev.position_y + dy,
+      position_z: prev.position_z + dz
+    }));
+    setPickedPosition(prev => prev ? {
+      x: prev.x + dx,
+      y: prev.y + dy,
+      z: prev.z + dz
+    } : null);
+  }, []);
 
   // Rotate crane
   const rotateCrane = useCallback((degrees: number) => {
+    console.log('[CranePlanner] rotateCrane called:', { degrees });
     setConfig(prev => ({
       ...prev,
       rotation_deg: (prev.rotation_deg + degrees + 360) % 360
