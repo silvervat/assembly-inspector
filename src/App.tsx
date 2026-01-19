@@ -4,6 +4,7 @@ import MainMenu, { InspectionMode } from './components/MainMenu';
 import InspectorScreen from './components/InspectorScreen';
 import AdminScreen from './components/AdminScreen';
 import InspectionPlanScreen from './components/InspectionPlanScreen';
+import InspectionPlansScreen from './components/InspectionPlansScreen';
 import InstallationsScreen from './components/InstallationsScreen';
 import InstallationScheduleScreen from './components/InstallationScheduleScreen';
 import DeliveryScheduleScreen from './components/DeliveryScheduleScreen';
@@ -28,7 +29,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.726';
+export const APP_VERSION = '3.0.727';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1026,6 +1027,25 @@ export default function App() {
           user={user}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Kontrollplaanid ekraan (kõik inspektsioonid)
+  if (currentMode === 'inspection_plans') {
+    return (
+      <>
+        <NavigationOverlay />
+        {ColorWhiteOverlay}
+        <InspectionPlansScreen
+          user={user}
+          projectId={projectId}
+          onBack={handleBackToMenu}
+          onSelectInspectionType={handleSelectInspectionType}
+          matchedTypeIds={matchedTypeIds}
+          completedTypeIds={completedTypeIds}
         />
         <VersionFooter />
       </>

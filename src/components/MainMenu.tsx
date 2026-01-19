@@ -18,6 +18,7 @@ export type InspectionMode =
   | 'eos2'
   | 'admin'
   | 'inspection_plan'
+  | 'inspection_plans' // Kontrollplaanid (kõik inspektsioonid)
   | 'inspection_type'
   | 'installations' // Paigaldamiste süsteem
   | 'schedule' // Paigaldusgraafik
@@ -250,52 +251,56 @@ export default function MainMenu({
           </div>
         ) : (
           <>
-            {/* Dynamic inspection types from database */}
-            {inspectionTypes.map((type) => {
-              const IconComponent = getIcon(type.icon);
-              const stats = typeStats[type.id];
-              const pendingCount = stats ? stats.totalItems - stats.completedItems : 0;
-              const isMatched = matchedTypeIds.includes(type.id);
-              const isCompleted = completedTypeIds.includes(type.id);
-              // matched-completed = green (inspected), matched-pending = blue/gray (not yet)
-              const matchClass = isMatched ? (isCompleted ? 'matched-completed' : 'matched-pending') : '';
+            {/* Tarnegraafik - delivery schedule */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('delivery_schedule')}
+            >
+              <span className="menu-item-icon" style={{ color: '#059669' }}>
+                <FiTruck size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Tarnegraafikud</span>
+                <span className="menu-item-desc">Planeeri ja jälgi tarneid veokite kaupa</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
 
-              return (
-                <button
-                  key={type.id}
-                  className={`menu-item enabled ${matchClass}`}
-                  onClick={() => handleTypeClick(type)}
-                >
-                  <span className="menu-item-icon" style={{ color: type.color || 'var(--modus-primary)' }}>
-                    <IconComponent size={20} />
-                  </span>
-                  <div className="menu-item-content">
-                    <span className="menu-item-title">{type.name}</span>
-                    {stats && (
-                      <>
-                        <span className="menu-item-desc">
-                          {pendingCount > 0
-                            ? `${pendingCount} tegemata / ${stats.totalItems} kokku`
-                            : `${stats.totalItems} tehtud`
-                          }
-                        </span>
-                        {stats.totalItems > 0 && (
-                          <div className="menu-item-progress">
-                            <div
-                              className="menu-item-progress-bar"
-                              style={{ width: `${(stats.completedItems / stats.totalItems) * 100}%` }}
-                            />
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  <span className="menu-item-arrow">
-                    <FiChevronRight size={18} />
-                  </span>
-                </button>
-              );
-            })}
+            {/* Paigaldusgraafik - installation schedule */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('schedule')}
+            >
+              <span className="menu-item-icon" style={{ color: '#8b5cf6' }}>
+                <FiCalendar size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Paigaldusgraafikud</span>
+                <span className="menu-item-desc">Planeeri ja esitle paigaldusi</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Saabunud tarned - arrived deliveries */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('arrived_deliveries')}
+            >
+              <span className="menu-item-icon" style={{ color: '#0891b2' }}>
+                <FiClipboard size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Saabumised</span>
+                <span className="menu-item-desc">Kontrolli ja kinnita saabunud veokite sisu</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
 
             {/* Paigaldamised - installations log */}
             <button
@@ -314,51 +319,39 @@ export default function MainMenu({
               </span>
             </button>
 
-            {/* Paigaldusgraafik - installation schedule */}
+            {/* Kontrollplaanid - inspection plans */}
             <button
               className="menu-item enabled"
-              onClick={() => onSelectMode('schedule')}
+              onClick={() => onSelectMode('inspection_plans')}
             >
-              <span className="menu-item-icon" style={{ color: '#8b5cf6' }}>
-                <FiCalendar size={20} />
-              </span>
-              <div className="menu-item-content">
-                <span className="menu-item-title">Paigaldusgraafik</span>
-                <span className="menu-item-desc">Planeeri ja esitle paigaldusi</span>
-              </div>
-              <span className="menu-item-arrow">
-                <FiChevronRight size={18} />
-              </span>
-            </button>
-
-            {/* Tarnegraafik - delivery schedule */}
-            <button
-              className="menu-item enabled"
-              onClick={() => onSelectMode('delivery_schedule')}
-            >
-              <span className="menu-item-icon" style={{ color: '#059669' }}>
-                <FiTruck size={20} />
-              </span>
-              <div className="menu-item-content">
-                <span className="menu-item-title">Tarnegraafik</span>
-                <span className="menu-item-desc">Planeeri ja jälgi tarneid veokite kaupa</span>
-              </div>
-              <span className="menu-item-arrow">
-                <FiChevronRight size={18} />
-              </span>
-            </button>
-
-            {/* Saabunud tarned - arrived deliveries */}
-            <button
-              className="menu-item enabled"
-              onClick={() => onSelectMode('arrived_deliveries')}
-            >
-              <span className="menu-item-icon" style={{ color: '#0891b2' }}>
+              <span className="menu-item-icon" style={{ color: '#10b981' }}>
                 <FiClipboard size={20} />
               </span>
               <div className="menu-item-content">
-                <span className="menu-item-title">Saabunud tarned</span>
-                <span className="menu-item-desc">Kontrolli ja kinnita saabunud veokite sisu</span>
+                <span className="menu-item-title">Kontrollplaanid</span>
+                <span className="menu-item-desc">Inspektsioonide haldus ja täitmine</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Mittevastavaused - issues and non-conformances (renamed from Probleemid) */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('issues')}
+            >
+              <span className="menu-item-icon" style={{ color: '#dc2626' }}>
+                <FiAlertTriangle size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">
+                  Mittevastavaused
+                  {activeIssuesCount > 0 && (
+                    <span className="menu-badge">{activeIssuesCount}</span>
+                  )}
+                </span>
+                <span className="menu-item-desc">Mittevastavused ja probleemide haldus</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />
@@ -376,28 +369,6 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Organiseerija</span>
                 <span className="menu-item-desc">Grupeeri ja organiseeri detaile</span>
-              </div>
-              <span className="menu-item-arrow">
-                <FiChevronRight size={18} />
-              </span>
-            </button>
-
-            {/* Probleemid - issues and non-conformances */}
-            <button
-              className="menu-item enabled"
-              onClick={() => onSelectMode('issues')}
-            >
-              <span className="menu-item-icon" style={{ color: '#dc2626' }}>
-                <FiAlertTriangle size={20} />
-              </span>
-              <div className="menu-item-content">
-                <span className="menu-item-title">
-                  Probleemid
-                  {activeIssuesCount > 0 && (
-                    <span className="menu-badge">{activeIssuesCount}</span>
-                  )}
-                </span>
-                <span className="menu-item-desc">Mittevastavused ja probleemide haldus</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />

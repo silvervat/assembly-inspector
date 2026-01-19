@@ -16593,3 +16593,118 @@ button.stat-toggle.off:hover {
     transform: translateX(-50%) translateY(0);
   }
 }
+
+/* ======= INSPECTION PLANS SCREEN ======= */
+.inspection-plans-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--modus-spacing-md);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Reuse inspection-plan-card for the list items */
+.inspection-plans-list .inspection-plan-card {
+  background: var(--modus-bg-primary);
+  border: 1px solid var(--modus-border-light);
+  border-radius: var(--modus-radius-md);
+  padding: 0;
+  margin-bottom: 0;
+  cursor: pointer;
+  transition: all 0.15s;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.inspection-plans-list .inspection-plan-card:hover {
+  background: var(--modus-primary-selected);
+  border-color: var(--modus-primary);
+  box-shadow: 0 2px 8px rgba(0, 99, 163, 0.1);
+}
+
+.inspection-plans-list .inspection-plan-card.matched-pending {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: #3b82f6;
+}
+
+.inspection-plans-list .inspection-plan-card.matched-completed {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: #22c55e;
+}
+
+.inspection-plan-header {
+  display: flex;
+  align-items: center;
+  gap: var(--modus-spacing-md);
+  padding: var(--modus-spacing-md);
+}
+
+.inspection-plan-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inspection-plan-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.inspection-plan-title {
+  font-size: var(--modus-font-size-md);
+  font-weight: 600;
+  color: var(--modus-text-primary);
+  margin: 0 0 4px 0;
+}
+
+.inspection-plan-description {
+  font-size: var(--modus-font-size-xs);
+  color: var(--modus-text-secondary);
+  margin: 0;
+}
+
+.inspection-plan-arrow {
+  flex-shrink: 0;
+  color: var(--modus-text-tertiary);
+}
+
+.inspection-plan-stats {
+  padding: 0 var(--modus-spacing-md) var(--modus-spacing-md) var(--modus-spacing-md);
+}
+
+.inspection-plan-counts {
+  display: flex;
+  gap: var(--modus-spacing-md);
+  margin-bottom: var(--modus-spacing-sm);
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--modus-font-size-xs);
+}
+
+.stat-label {
+  color: var(--modus-text-secondary);
+}
+
+.stat-value {
+  color: var(--modus-text-primary);
+  font-weight: 600;
+}
+
+.inspection-plan-progress {
+  height: 6px;
+  background: var(--modus-bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.inspection-plan-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
