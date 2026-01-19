@@ -725,6 +725,7 @@ export default function CranePlannerScreen({
   };
 
   // Helper function to calculate boom geometry and capacity for an object
+  // GEOMETRY: Boom tip must be DIRECTLY above object (same X,Y), chain is ALWAYS vertical
   const calculateBoomGeometry = (
     crane: ProjectCrane,
     boomLengthM: number,
@@ -739,66 +740,47 @@ export default function CranePlannerScreen({
     const craneY = crane.position_y * 1000;
     const craneZ = crane.position_z * 1000;
     const boomBaseHeight = 3500; // 3.5m boom pivot point above crane base
+    const boomPivotZ = craneZ + boomBaseHeight;
 
-    // Horizontal distance from crane to object (in mm)
+    // Horizontal distance from crane to object (this is where boom tip must be)
     const horizontalDistMm = Math.sqrt(
       Math.pow(objCenterX - craneX, 2) +
       Math.pow(objCenterY - craneY, 2)
     );
     const horizontalDistM = horizontalDistMm / 1000;
 
-    // Vertical distance from boom pivot to object top + clearance (in mm)
-    const clearance = 1000; // 1m above object for hook
-    const targetZ = objTopZ + clearance;
-    const verticalDistMm = targetZ - (craneZ + boomBaseHeight);
-    const verticalDistM = verticalDistMm / 1000;
-
-    // Calculate boom angle (from horizontal) to reach the target point
-    // Using boom tip position: crane + boom at angle
-    // We need boom_tip.x = horizontal_dist, boom_tip.z = vertical_dist
-    // boom_tip.horizontal = boomLength * cos(angle)
-    // boom_tip.vertical = boomLength * sin(angle)
-    // So we need to find angle where:
-    // sqrt(horizontal_dist^2 + vertical_dist^2) <= boomLength
-
-    const requiredReach = Math.sqrt(
-      Math.pow(horizontalDistM, 2) +
-      Math.pow(verticalDistM, 2)
-    );
-
-    // Calculate boom angle
+    // Calculate boom angle so that boom tip is directly above object
+    // boom tip horizontal position = boomLength * cos(angle) = horizontalDist
+    // So: angle = acos(horizontalDist / boomLength)
     let boomAngle = 0;
     let chainLength = 0;
     let canReach = false;
+    let boomTipZ = boomPivotZ;
 
-    if (requiredReach <= boomLengthM) {
-      // Boom can reach - calculate angle
-      boomAngle = Math.atan2(verticalDistM, horizontalDistM) * (180 / Math.PI);
-      // When boom reaches exactly to target, chain length is minimal (just hook drop)
-      chainLength = clearance / 1000; // Chain drops from boom tip to object top
-      canReach = true;
+    if (horizontalDistM <= boomLengthM) {
+      // Boom can reach horizontally - calculate angle
+      const cosAngle = horizontalDistM / boomLengthM;
+      boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
+
+      // Calculate boom tip Z position
+      // boomTipZ = pivotZ + boomLength * sin(angle)
+      const boomLengthMm = boomLengthM * 1000;
+      boomTipZ = boomPivotZ + boomLengthMm * Math.sin(boomAngle * Math.PI / 180);
+
+      // Chain length = vertical drop from boom tip to object top
+      chainLength = (boomTipZ - objTopZ) / 1000;
+
+      // Can reach if chain length is positive (boom tip is above object)
+      canReach = chainLength > 0;
     } else {
-      // Boom too short - calculate max angle (most vertical) to get closest
-      // At max angle, horizontal reach = boomLength * cos(maxAngle)
-      // For a given horizontal distance, find the angle
-      if (horizontalDistM <= boomLengthM) {
-        // Can reach horizontally, calculate angle
-        const cosAngle = horizontalDistM / boomLengthM;
-        boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
-        // Boom tip Z = craneZ + boomBaseHeight + boomLength * sin(angle)
-        const boomTipZ = craneZ + boomBaseHeight + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180));
-        // Chain needs to drop from boom tip to object top
-        chainLength = Math.max(0, (boomTipZ - objTopZ) / 1000);
-        canReach = chainLength > 0;
-      } else {
-        // Can't even reach horizontally at 0 degrees
-        boomAngle = 0;
-        chainLength = 0;
-        canReach = false;
-      }
+      // Boom too short to reach horizontally
+      boomAngle = 0;
+      boomTipZ = boomPivotZ; // Boom horizontal at max reach
+      chainLength = 0;
+      canReach = false;
     }
 
-    // Calculate capacity at this horizontal distance
+    // Calculate capacity at this horizontal distance (radius)
     let capacityKg = 0;
     if (chartData.length > 0) {
       const sortedChart = [...chartData].sort((a, b) => a.radius_m - b.radius_m);
@@ -959,25 +941,28 @@ export default function CranePlannerScreen({
     const craneZ = crane.position_z * 1000;
     const boomBaseHeight = 3500; // 3.5m boom pivot height
     const boomPivotZ = craneZ + boomBaseHeight;
+    const boomLengthMm = boomLengthM * 1000;
 
     for (const obj of objects) {
-      const { objCenterX, objCenterY, objTopZ, boomAngle } = obj;
+      const { objCenterX, objCenterY, objTopZ } = obj;
 
-      // Calculate boom tip position
-      const boomAngleRad = boomAngle * (Math.PI / 180);
-      const horizontalDist = Math.sqrt(Math.pow(objCenterX - craneX, 2) + Math.pow(objCenterY - craneY, 2));
+      // GEOMETRY: Chain is ALWAYS vertical, boom tip is DIRECTLY above object (same X,Y)
+      // Calculate boom angle based on horizontal distance (recalculate for precision, not using rounded value)
+      const horizontalDistMm = Math.sqrt(Math.pow(objCenterX - craneX, 2) + Math.pow(objCenterY - craneY, 2));
+      const horizontalDistM = horizontalDistMm / 1000;
 
-      // Direction vector from crane to object (normalized)
-      const dirX = (objCenterX - craneX) / horizontalDist;
-      const dirY = (objCenterY - craneY) / horizontalDist;
+      // Boom tip is directly above object
+      const boomTipX = objCenterX;
+      const boomTipY = objCenterY;
 
-      // Boom tip position - horizontal reach along direction, vertical based on angle
-      const boomHorizontalReach = boomLengthM * 1000 * Math.cos(boomAngleRad);
-      const boomVerticalReach = boomLengthM * 1000 * Math.sin(boomAngleRad);
-
-      const boomTipX = craneX + dirX * boomHorizontalReach;
-      const boomTipY = craneY + dirY * boomHorizontalReach;
-      const boomTipZ = boomPivotZ + boomVerticalReach;
+      // Calculate boom tip Z based on exact angle (not rounded)
+      let boomTipZ = boomPivotZ;
+      if (horizontalDistM <= boomLengthM) {
+        // angle = acos(horizontalDist / boomLength)
+        const cosAngle = horizontalDistM / boomLengthM;
+        const sinAngle = Math.sqrt(1 - cosAngle * cosAngle); // sin = sqrt(1 - cos^2)
+        boomTipZ = boomPivotZ + boomLengthMm * sinAngle;
+      }
 
       // 1. Crane mast (from base to boom pivot) - blue
       allMarkupEntries.push({
