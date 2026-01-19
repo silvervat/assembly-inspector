@@ -795,6 +795,10 @@ export default function CranePlannerScreen({
     const safeCapacity = canReach ? (capacityKg / crane.safety_factor) - crane.hook_weight_kg - crane.lifting_block_kg : 0;
     const isSafe = objWeight > 0 ? objWeight <= safeCapacity && canReach : canReach;
 
+    // Calculate boom tip height from crane base and absolute Z coordinate
+    const boomTipHeight = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180)) - craneZ) / 1000 : 0;
+    const boomTipAbsZ = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180))) / 1000 : 0;
+
     return {
       distance: horizontalDistM,
       height: (objTopZ - craneZ) / 1000,
@@ -802,7 +806,9 @@ export default function CranePlannerScreen({
       chainLength: Math.round(chainLength * 10) / 10,
       capacity: Math.max(0, safeCapacity),
       isSafe,
-      canReach
+      canReach,
+      boomTipHeight: Math.round(boomTipHeight * 10) / 10,
+      boomTipAbsZ: Math.round(boomTipAbsZ * 10) / 10
     };
   };
 
@@ -849,6 +855,8 @@ export default function CranePlannerScreen({
         isSafe: boolean;
         boomAngle: number;
         chainLength: number;
+        boomTipHeight: number;
+        boomTipAbsZ: number;
         objCenterX: number;
         objCenterY: number;
         objTopZ: number;
@@ -973,13 +981,14 @@ export default function CranePlannerScreen({
         }]
       });
 
-      // 3. Chain/rope (from object top, vertically up to boom tip) - green
+      // 3. Chain/rope (from boom tip, through object, down to crane base) - green
       // Chain is ALWAYS VERTICAL - same X,Y coordinates, only Z changes
+      // Goes through detail to show full vertical line
       allMarkupEntries.push({
         color: { r: 34, g: 197, b: 94, a: 255 },
         lines: [{
-          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: boomTipZ }
+          start: { positionX: objCenterX, positionY: objCenterY, positionZ: boomTipZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ }
         }]
       });
 
@@ -997,6 +1006,15 @@ export default function CranePlannerScreen({
             end: { positionX: objCenterX, positionY: objCenterY + crossSize, positionZ: objTopZ }
           }
         ]
+      });
+
+      // 5. Horizontal distance measurement line (from crane center to object center at crane base level) - yellow
+      allMarkupEntries.push({
+        color: { r: 255, g: 200, b: 0, a: 255 },
+        lines: [{
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ }
+        }]
       });
     }
 
@@ -1899,7 +1917,7 @@ export default function CranePlannerScreen({
                       backgroundColor: 'white',
                       borderRadius: '6px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-                      overflow: 'hidden',
+                      overflow: openMenuCraneId === crane.id ? 'visible' : 'hidden',
                       position: 'relative',
                       zIndex: openMenuCraneId === crane.id ? 1003 : 'auto'
                     }}
@@ -2259,6 +2277,8 @@ export default function CranePlannerScreen({
                       <div>📐 Kõrgus: <strong>{obj.height.toFixed(1)}m</strong></div>
                       <div>🎯 Noole nurk: <strong>{obj.boomAngle}°</strong></div>
                       <div>⛓️ Keti pikkus: <strong>{obj.chainLength.toFixed(1)}m</strong></div>
+                      <div>📍 Noole tipp (baasist): <strong>{obj.boomTipHeight.toFixed(1)}m</strong></div>
+                      <div>🗺️ Noole tipp (Z): <strong>{obj.boomTipAbsZ.toFixed(1)}m</strong></div>
                       <div>⚖️ Kaal: <strong>{obj.weight > 0 ? formatWeight(obj.weight) : 'Teadmata'}</strong></div>
                       <div>💪 Tõstevõime: <strong style={{ color: obj.capacity > 0 ? '#16a34a' : '#dc2626' }}>
                         {obj.capacity > 0 ? formatWeight(obj.capacity) : 'Väljas ulatusest'}
@@ -2286,6 +2306,7 @@ export default function CranePlannerScreen({
                     <span>🔵 Kraana mast</span>
                     <span>🟠 Nool (boom)</span>
                     <span>🟢 Kett/tross</span>
+                    <span>🟡 Horisontaalne kaugus</span>
                   </div>
                 </div>
               </div>
