@@ -31,7 +31,6 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
   const [editingCraneId, setEditingCraneId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
-  const [creatingForType, setCreatingForType] = useState<CraneType | null>(null);
   const [expandedCraneId, setExpandedCraneId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<CraneType>>(new Set(['mobile', 'crawler', 'loader', 'tower', 'telehandler']));
   const [activeTab, setActiveTab] = useState<'basic' | 'counterweights' | 'charts'>('basic');
@@ -85,7 +84,6 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
     resetForm();
     if (craneType) {
       setFormData(prev => ({ ...prev, crane_type: craneType }));
-      setCreatingForType(craneType);
     }
     setEditingCraneId(null);
     setIsCreating(true);
@@ -118,7 +116,6 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
   const cancelEdit = useCallback(() => {
     setEditingCraneId(null);
     setIsCreating(false);
-    setCreatingForType(null);
     resetForm();
   }, [resetForm]);
 
@@ -420,8 +417,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
                                     style={{
                                       padding: '8px 12px 8px 40px',
                                       borderBottom: idx < cranesInGroup.length - 1 ? '1px solid #f3f4f6' : 'none',
-                                      cursor: 'pointer',
-                                      ':hover': { backgroundColor: '#f9fafb' }
+                                      cursor: 'pointer'
                                     }}
                                     onClick={() => toggleExpand(crane.id)}
                                   >
