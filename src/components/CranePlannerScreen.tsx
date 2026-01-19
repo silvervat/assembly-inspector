@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiPlus, FiEdit2, FiTrash2, FiEye, FiEyeOff, FiMapPin, FiRotateCw,
   FiArrowUp, FiArrowDown, FiArrowLeft, FiArrowRight, FiLoader, FiAlertCircle,
-  FiX, FiTarget, FiSave, FiCheck
+  FiX, FiTarget, FiSave, FiCheck, FiMoreVertical
 } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { useCranes } from '../features/crane-planning/crane-library/hooks/useCranes';
@@ -89,6 +89,16 @@ export default function CranePlannerScreen({
 
   // Preview loading state for UI feedback
   const [previewLoading, setPreviewLoading] = useState(false);
+
+  // Crane menu state
+  const [openMenuCraneId, setOpenMenuCraneId] = useState<string | null>(null);
+
+  // Lifting capacity modal state
+  const [liftingModal, setLiftingModal] = useState<{
+    crane: ProjectCrane;
+    objects: { name: string; distance: number; height: number; weight: number; capacity: number; isSafe: boolean }[];
+    markupIds: number[];
+  } | null>(null);
 
   // Selected crane model data
   const selectedCraneModel = craneModels.find(c => c.id === selectedCraneModelId);
@@ -697,6 +707,195 @@ export default function CranePlannerScreen({
     }
 
     refetch();
+  };
+
+  // Calculate lifting capacity for selected objects
+  const calculateLiftingCapacity = async (crane: ProjectCrane) => {
+    try {
+      // Close menu
+      setOpenMenuCraneId(null);
+
+      // Get selected objects from model
+      const selection = await api.viewer.getSelection();
+      if (!selection || selection.length === 0) {
+        alert('Vali esmalt mudelist objekt(id)!');
+        return;
+      }
+
+      const modelId = selection[0].modelId;
+      const runtimeIds = selection.flatMap(s => s.objectRuntimeIds || []);
+      if (runtimeIds.length === 0) {
+        alert('Valitud objektidel puudub info!');
+        return;
+      }
+
+      // Get bounding boxes and properties
+      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+      const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
+
+      // Get load chart data for this crane
+      const chartData = loadCharts.find(lc =>
+        lc.counterweight_config_id === crane.counterweight_config_id &&
+        lc.boom_length_m === crane.boom_length_m
+      )?.chart_data || [];
+
+      // Crane position in mm
+      const craneX = crane.position_x * 1000;
+      const craneY = crane.position_y * 1000;
+      const craneZ = crane.position_z * 1000;
+      const boomFoldHeight = 3500; // 3.5m typical boom fold point
+
+      const markupApi = api.markup as any;
+      const allMarkupEntries: { color: { r: number; g: number; b: number; a: number }; lines: any[] }[] = [];
+      const objectResults: { name: string; distance: number; height: number; weight: number; capacity: number; isSafe: boolean }[] = [];
+
+      // Process each selected object
+      for (let i = 0; i < bboxes.length; i++) {
+        const bbox = bboxes[i];
+        if (!bbox?.boundingBox) continue;
+        const b = bbox.boundingBox;
+
+        // Object center of gravity (center of bounding box) in mm
+        const objCenterX = ((b.min.x + b.max.x) / 2) * 1000;
+        const objCenterY = ((b.min.y + b.max.y) / 2) * 1000;
+        const objTopZ = b.max.z * 1000; // Top of object
+
+        // Calculate horizontal distance from crane center to object center (in meters)
+        const distanceM = Math.sqrt(
+          Math.pow((objCenterX - craneX) / 1000, 2) +
+          Math.pow((objCenterY - craneY) / 1000, 2)
+        );
+
+        // Height difference (object top - crane base) in meters
+        const heightDiffM = (objTopZ - craneZ) / 1000;
+
+        // Find object name and weight from properties
+        let objName = `Objekt ${i + 1}`;
+        let objWeight = 0;
+        const objProps = props[i] as any;
+        if (objProps?.properties) {
+          // Properties can be array of PropertySet objects which contain properties array
+          const allProps: any[] = [];
+          for (const propSet of objProps.properties) {
+            if (propSet.properties && Array.isArray(propSet.properties)) {
+              allProps.push(...propSet.properties);
+            } else if (propSet.name) {
+              allProps.push(propSet);
+            }
+          }
+          for (const prop of allProps) {
+            const nameLower = (prop.name || '').toLowerCase();
+            const propValue = prop.value || '';
+            if (nameLower.includes('name') || nameLower.includes('nimi') || nameLower === 'assembly_pos') {
+              objName = propValue || objName;
+            }
+            if (nameLower.includes('weight') || nameLower.includes('kaal') || nameLower.includes('mass')) {
+              objWeight = parseFloat(propValue) || 0;
+            }
+          }
+        }
+
+        // Calculate capacity at this distance
+        let capacityKg = 0;
+        if (chartData.length > 0) {
+          // Find the capacity at the calculated radius
+          const sortedChart = [...chartData].sort((a, b) => a.radius_m - b.radius_m);
+          for (const point of sortedChart) {
+            if (point.radius_m >= distanceM) {
+              capacityKg = point.capacity_kg;
+              break;
+            }
+          }
+          // If distance exceeds max radius, use the last (smallest) capacity or 0
+          if (capacityKg === 0 && sortedChart.length > 0) {
+            const maxRadius = sortedChart[sortedChart.length - 1].radius_m;
+            if (distanceM <= maxRadius) {
+              capacityKg = sortedChart[sortedChart.length - 1].capacity_kg;
+            }
+          }
+        }
+
+        // Apply safety factor and deduct hook weight
+        const safeCapacity = (capacityKg / crane.safety_factor) - crane.hook_weight_kg - crane.lifting_block_kg;
+        const isSafe = objWeight > 0 ? objWeight <= safeCapacity : true;
+
+        objectResults.push({
+          name: objName,
+          distance: distanceM,
+          height: heightDiffM,
+          weight: objWeight,
+          capacity: Math.max(0, safeCapacity),
+          isSafe
+        });
+
+        // Create visualization lines
+        // 1. Crane vertical line (from crane center up 3.5m) - blue
+        const craneVerticalLine = {
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          end: { positionX: craneX, positionY: craneY, positionZ: craneZ + boomFoldHeight }
+        };
+
+        // 2. Object vertical line (from object COG up to same height as crane fold point or higher) - green
+        const objVerticalTop = Math.max(craneZ + boomFoldHeight, objTopZ + 1000); // At least 1m above object
+        const objVerticalLine = {
+          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objVerticalTop }
+        };
+
+        // 3. Boom path line (from crane fold point to object vertical top) - orange
+        const boomLine = {
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ + boomFoldHeight },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objVerticalTop }
+        };
+
+        // 4. Hook drop line (from boom end down to object) - orange dashed (we'll use same color)
+        const hookDropLine = {
+          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objVerticalTop },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ }
+        };
+
+        // Add as separate markup entries for different colors
+        allMarkupEntries.push({
+          color: { r: 0, g: 100, b: 255, a: 255 }, // Blue - crane vertical
+          lines: [craneVerticalLine]
+        });
+        allMarkupEntries.push({
+          color: { r: 34, g: 197, b: 94, a: 255 }, // Green - object vertical
+          lines: [objVerticalLine]
+        });
+        allMarkupEntries.push({
+          color: { r: 255, g: 165, b: 0, a: 255 }, // Orange - boom path
+          lines: [boomLine, hookDropLine]
+        });
+      }
+
+      // Draw all visualization markups
+      let markupIds: number[] = [];
+      if (allMarkupEntries.length > 0) {
+        const result = await markupApi.addFreelineMarkups(allMarkupEntries);
+        if (result && Array.isArray(result)) {
+          markupIds = result;
+        }
+      }
+
+      // Open modal with results
+      setLiftingModal({
+        crane,
+        objects: objectResults,
+        markupIds
+      });
+    } catch (error: any) {
+      console.error('Error calculating lifting capacity:', error);
+      alert('Viga arvutamisel: ' + error.message);
+    }
+  };
+
+  // Close lifting modal and remove visualization markups
+  const closeLiftingModal = async () => {
+    if (liftingModal && liftingModal.markupIds.length > 0) {
+      await removeCraneMarkups(api, liftingModal.markupIds);
+    }
+    setLiftingModal(null);
   };
 
   // Move crane - uses world coordinates (Y = up/down, X = left/right in model space)
@@ -1652,6 +1851,62 @@ export default function CranePlannerScreen({
                         >
                           <FiTrash2 size={12} />
                         </button>
+                        {/* Three-dot menu */}
+                        <div style={{ position: 'relative' }}>
+                          <button
+                            onClick={() => setOpenMenuCraneId(openMenuCraneId === crane.id ? null : crane.id)}
+                            style={{
+                              padding: '4px',
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '4px',
+                              backgroundColor: openMenuCraneId === crane.id ? '#f3f4f6' : 'white',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                            title="Rohkem"
+                          >
+                            <FiMoreVertical size={12} />
+                          </button>
+                          {/* Dropdown menu */}
+                          {openMenuCraneId === crane.id && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%',
+                              right: 0,
+                              marginTop: '4px',
+                              backgroundColor: 'white',
+                              borderRadius: '6px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              border: '1px solid #e5e7eb',
+                              zIndex: 100,
+                              minWidth: '180px',
+                              overflow: 'hidden'
+                            }}>
+                              <button
+                                onClick={() => calculateLiftingCapacity(crane)}
+                                style={{
+                                  width: '100%',
+                                  padding: '10px 12px',
+                                  border: 'none',
+                                  backgroundColor: 'white',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  fontSize: '12px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px'
+                                }}
+                                onMouseEnter={e => (e.target as HTMLElement).style.backgroundColor = '#f3f4f6'}
+                                onMouseLeave={e => (e.target as HTMLElement).style.backgroundColor = 'white'}
+                              >
+                                <FiTarget size={14} />
+                                Arvuta tõstevõime
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -1702,6 +1957,166 @@ export default function CranePlannerScreen({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Lifting Capacity Modal */}
+        {liftingModal && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000
+          }}>
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+              maxWidth: '500px',
+              width: '90%',
+              maxHeight: '80vh',
+              overflow: 'auto'
+            }}>
+              {/* Modal header */}
+              <div style={{
+                padding: '16px 20px',
+                borderBottom: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center'
+              }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Tõstevõime arvutus</h3>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#6b7280' }}>
+                    {liftingModal.crane.position_label || 'Kraana'} • {liftingModal.crane.crane_model?.manufacturer} {liftingModal.crane.crane_model?.model}
+                  </p>
+                </div>
+                <button
+                  onClick={closeLiftingModal}
+                  style={{
+                    padding: '8px',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <FiX size={20} />
+                </button>
+              </div>
+
+              {/* Modal content */}
+              <div style={{ padding: '16px 20px' }}>
+                {/* Crane info */}
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: '#f0f9ff',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  fontSize: '12px'
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div><strong>Noole pikkus:</strong> {liftingModal.crane.boom_length_m}m</div>
+                    <div><strong>Ohutustegur:</strong> {liftingModal.crane.safety_factor}x</div>
+                    <div><strong>Konksu kaal:</strong> {formatWeight(liftingModal.crane.hook_weight_kg)}</div>
+                    <div><strong>Tõsteplokk:</strong> {formatWeight(liftingModal.crane.lifting_block_kg)}</div>
+                  </div>
+                </div>
+
+                {/* Object results */}
+                <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>
+                  Valitud objektid ({liftingModal.objects.length})
+                </h4>
+
+                {liftingModal.objects.map((obj, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      padding: '12px',
+                      backgroundColor: obj.isSafe ? '#f0fdf4' : '#fef2f2',
+                      border: `1px solid ${obj.isSafe ? '#bbf7d0' : '#fecaca'}`,
+                      borderRadius: '8px',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                      <strong style={{ fontSize: '13px' }}>{obj.name}</strong>
+                      {obj.weight > 0 && (
+                        <span style={{
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          backgroundColor: obj.isSafe ? '#22c55e' : '#ef4444',
+                          color: 'white'
+                        }}>
+                          {obj.isSafe ? '✓ SOBIB' : '✗ LIIGA RASKE'}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px', color: '#374151' }}>
+                      <div>📏 Kaugus: <strong>{obj.distance.toFixed(1)}m</strong></div>
+                      <div>📐 Kõrgus: <strong>{obj.height.toFixed(1)}m</strong></div>
+                      <div>⚖️ Kaal: <strong>{obj.weight > 0 ? formatWeight(obj.weight) : 'Teadmata'}</strong></div>
+                      <div>💪 Tõstevõime: <strong style={{ color: obj.capacity > 0 ? '#16a34a' : '#dc2626' }}>
+                        {obj.capacity > 0 ? formatWeight(obj.capacity) : 'Väljas ulatusest'}
+                      </strong></div>
+                    </div>
+                    {obj.capacity > 0 && obj.weight > 0 && (
+                      <div style={{ marginTop: '8px', fontSize: '11px', color: '#6b7280' }}>
+                        Varu: {formatWeight(obj.capacity - obj.weight)} ({((obj.capacity - obj.weight) / obj.capacity * 100).toFixed(0)}%)
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {/* Legend */}
+                <div style={{
+                  marginTop: '16px',
+                  padding: '12px',
+                  backgroundColor: '#f9fafb',
+                  borderRadius: '8px',
+                  fontSize: '11px',
+                  color: '#6b7280'
+                }}>
+                  <strong>Visualiseering mudelis:</strong>
+                  <div style={{ display: 'flex', gap: '16px', marginTop: '6px' }}>
+                    <span>🔵 Kraana mast (3.5m)</span>
+                    <span>🟢 Objekti tõstepunkt</span>
+                    <span>🟠 Noole trajektoor</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal footer */}
+              <div style={{
+                padding: '12px 20px',
+                borderTop: '1px solid #e5e7eb',
+                display: 'flex',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  onClick={closeLiftingModal}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: 'var(--modus-primary)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  Sulge
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
