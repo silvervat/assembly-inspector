@@ -1661,7 +1661,7 @@ export interface CraneRGBAColor {
 }
 
 // Crane type enumeration
-export type CraneType = 'mobile' | 'tower' | 'crawler';
+export type CraneType = 'mobile' | 'tower' | 'crawler' | 'loader' | 'telehandler';
 
 // Cab position enumeration
 export type CabPosition = 'front' | 'rear' | 'left' | 'right';
@@ -1673,6 +1673,7 @@ export interface CraneModel {
   updated_at: string;
 
   // Basic info
+  display_id?: string;  // User-friendly ID like C001, C002, ...
   manufacturer: string;
   model: string;
   crane_type: CraneType;
@@ -1861,9 +1862,11 @@ export const CRANE_DOCUMENT_TYPE_LABELS: Record<CraneDocumentType, string> = {
 
 // Crane type labels
 export const CRANE_TYPE_LABELS: Record<CraneType, string> = {
-  mobile: 'Mobiilne',
+  mobile: 'Mobiilkraana',
+  crawler: 'Roomikkraana',
+  loader: 'Manipulaator',
   tower: 'Tornkraana',
-  crawler: 'Roomikkraana'
+  telehandler: 'Pöörlev teleskooplaadur'
 };
 
 // Cab position labels
