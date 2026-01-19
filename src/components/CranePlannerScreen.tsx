@@ -801,23 +801,26 @@ export default function CranePlannerScreen({
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    {/* Movement */}
+                    {/* Movement with diagonal arrows */}
                     <div>
                       <div style={{ fontWeight: 500, fontSize: '13px', marginBottom: '8px', textAlign: 'center' }}>
                         Liiguta ({moveStep}m samm)
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
-                        <div />
-                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle}><FiArrowUp /></button>
-                        <div />
-                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle}><FiArrowLeft /></button>
-                        <div style={{ textAlign: 'center', fontSize: '11px', color: '#6b7280', padding: '4px' }}>
-                          {config.position_x.toFixed(2)}m<br />{config.position_y.toFixed(2)}m
+                        {/* Top row: NW, N, NE */}
+                        <button onClick={() => moveCrane(-moveStep, moveStep, 0)} style={btnStyle} title="Loe-Põhi">↖</button>
+                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle} title="Põhi"><FiArrowUp /></button>
+                        <button onClick={() => moveCrane(moveStep, moveStep, 0)} style={btnStyle} title="Ida-Põhi">↗</button>
+                        {/* Middle row: W, Center, E */}
+                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle} title="Lääs"><FiArrowLeft /></button>
+                        <div style={{ textAlign: 'center', fontSize: '10px', color: '#6b7280', padding: '2px' }}>
+                          X:{config.position_x.toFixed(1)}<br />Y:{config.position_y.toFixed(1)}
                         </div>
-                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle}><FiArrowRight /></button>
-                        <div />
-                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle}><FiArrowDown /></button>
-                        <div />
+                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle} title="Ida"><FiArrowRight /></button>
+                        {/* Bottom row: SW, S, SE */}
+                        <button onClick={() => moveCrane(-moveStep, -moveStep, 0)} style={btnStyle} title="Loe-Lõuna">↙</button>
+                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle} title="Lõuna"><FiArrowDown /></button>
+                        <button onClick={() => moveCrane(moveStep, -moveStep, 0)} style={btnStyle} title="Ida-Lõuna">↘</button>
                       </div>
                     </div>
                     {/* Rotation */}
@@ -837,7 +840,7 @@ export default function CranePlannerScreen({
                     </div>
                   </div>
 
-                  {/* Height */}
+                  {/* Height with colored buttons */}
                   <div style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       <span style={{ fontSize: '13px', fontWeight: 500 }}>Kõrgus:</span>
@@ -853,7 +856,18 @@ export default function CranePlannerScreen({
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <button onClick={() => moveCrane(0, 0, -heightStep)} style={btnStyle}>-{heightStep}m</button>
+                      <button
+                        onClick={() => moveCrane(0, 0, -heightStep)}
+                        style={{
+                          ...btnStyle,
+                          backgroundColor: '#fee2e2',
+                          borderColor: '#fca5a5',
+                          color: '#dc2626',
+                          fontWeight: 600
+                        }}
+                      >
+                        -{heightStep}m
+                      </button>
                       <input
                         type="number"
                         value={config.position_z}
@@ -863,7 +877,7 @@ export default function CranePlannerScreen({
                           moveCrane(0, 0, dz);
                         }}
                         style={{
-                          width: '80px',
+                          width: '100px',
                           padding: '8px',
                           textAlign: 'center',
                           border: '1px solid #d1d5db',
@@ -874,7 +888,18 @@ export default function CranePlannerScreen({
                         step={heightStep}
                       />
                       <span style={{ fontSize: '13px' }}>m</span>
-                      <button onClick={() => moveCrane(0, 0, heightStep)} style={btnStyle}>+{heightStep}m</button>
+                      <button
+                        onClick={() => moveCrane(0, 0, heightStep)}
+                        style={{
+                          ...btnStyle,
+                          backgroundColor: '#dcfce7',
+                          borderColor: '#86efac',
+                          color: '#16a34a',
+                          fontWeight: 600
+                        }}
+                      >
+                        +{heightStep}m
+                      </button>
                     </div>
                   </div>
                 </div>
