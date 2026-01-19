@@ -26,8 +26,8 @@ export type InspectionMode =
   | 'organizer' // Organiseeri (gruppide haldus)
   | 'issues' // Probleemid (mittevastavused)
   | 'tools' // Tööriistad
-  | 'crane_planner' // Kraanide planeerimine
-  | 'crane_library'; // Kraanide andmebaas (admin)
+  | 'crane_planner' // Kraanade planeerimine
+  | 'crane_library'; // Kraanade andmebaas (admin)
 
 interface MainMenuProps {
   user: TrimbleExUser;

@@ -1115,7 +1115,7 @@ export default function ToolsScreen({
           >
             <FiTarget size={24} style={{ color: '#f97316' }} />
             <div>
-              <div style={{ fontWeight: 600, fontSize: '16px', color: '#c2410c' }}>Kraanide Planeerimine</div>
+              <div style={{ fontWeight: 600, fontSize: '16px', color: '#c2410c' }}>Kraanade Planeerimine</div>
               <div style={{ fontSize: '13px', color: '#ea580c' }}>Paiguta ja halda kraanasid mudelis</div>
             </div>
           </button>

@@ -576,7 +576,7 @@ export default function CranePlannerScreen({
   if (cranesLoading || projectCranesLoading) {
     return (
       <div className="crane-planner-screen">
-        <PageHeader title="Kraanide Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
+        <PageHeader title="Kraanade Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
           <FiLoader className="animate-spin" size={24} style={{ marginRight: '8px' }} />
           <span>Laadin...</span>
@@ -603,7 +603,7 @@ export default function CranePlannerScreen({
 
   return (
     <div className="crane-planner-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanide Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
+      <PageHeader title="Kraanade Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* No crane models warning */}
@@ -972,6 +972,8 @@ export default function CranePlannerScreen({
                       value={config.safety_factor}
                       onChange={e => setConfig(prev => ({ ...prev, safety_factor: parseFloat(e.target.value) }))}
                     >
+                      <option value="1.05">1.05x</option>
+                      <option value="1.1">1.1x</option>
                       <option value="1.2">1.2x</option>
                       <option value="1.25">1.25x</option>
                       <option value="1.5">1.5x</option>
