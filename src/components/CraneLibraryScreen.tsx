@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiLoader, FiAlertCircle, FiDatabase, FiSettings, FiUpload, FiImage, FiDownload, FiInfo, FiFileText } from 'react-icons/fi';
 import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
 import { useCranes } from '../features/crane-planning/crane-library/hooks/useCranes';
 import { useCounterweights } from '../features/crane-planning/crane-library/hooks/useCounterweights';
 import { useLoadCharts } from '../features/crane-planning/crane-library/hooks/useLoadCharts';
@@ -20,11 +21,12 @@ import {
 
 interface CraneLibraryScreenProps {
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
   userEmail: string;
   user?: TrimbleExUser;
 }
 
-export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: CraneLibraryScreenProps) {
+export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail, user }: CraneLibraryScreenProps) {
   const { cranes, loading, error, createCrane, updateCrane, deleteCrane, uploadCraneImage } = useCranes();
 
   const [editingCraneId, setEditingCraneId] = useState<string | null>(null);
@@ -156,7 +158,7 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
   if (loading && cranes.length === 0) {
     return (
       <div className="crane-library-screen">
-        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} user={user} />
+        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
         <div className="flex items-center justify-center p-8">
           <FiLoader className="animate-spin mr-2" size={24} />
           <span>Laadin kraanasid...</span>
@@ -169,7 +171,7 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
   if (error) {
     return (
       <div className="crane-library-screen">
-        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} user={user} />
+        <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
         <div className="flex items-center justify-center p-8 text-red-600">
           <FiAlertCircle className="mr-2" size={24} />
           <span>Viga: {error}</span>
@@ -180,7 +182,7 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
 
   return (
     <div className="crane-library-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} user={user}>
+      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user}>
         {!isCreating && !editingCraneId && (
           <button
             onClick={startCreating}
