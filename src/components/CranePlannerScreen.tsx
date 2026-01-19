@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiPlus, FiEdit2, FiTrash2, FiEye, FiEyeOff, FiMapPin, FiRotateCw,
   FiArrowUp, FiArrowDown, FiArrowLeft, FiArrowRight, FiLoader, FiAlertCircle,
-  FiX, FiTarget, FiSave
+  FiX, FiTarget, FiSave, FiCheck
 } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { useCranes } from '../features/crane-planning/crane-library/hooks/useCranes';
@@ -81,6 +81,11 @@ export default function CranePlannerScreen({
   const [moveStep, setMoveStep] = useState(0.5); // meters
   const [rotateStep, setRotateStep] = useState(15); // degrees
   const [heightStep, setHeightStep] = useState(0.5); // meters
+
+  // Auto-save state for editing existing cranes
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedConfigRef = useRef<string>(''); // JSON string of last saved config to detect changes
 
   // Selected crane model data
   const selectedCraneModel = craneModels.find(c => c.id === selectedCraneModelId);
@@ -630,6 +635,67 @@ export default function CranePlannerScreen({
     });
   }, [pickedPosition, selectedCraneModel]);
 
+  // Auto-save function for editing existing cranes
+  const autoSaveChanges = useCallback(async () => {
+    if (!editingCraneId || !selectedCraneModel || !pickedPosition) return;
+
+    // Build current config string to compare
+    const currentConfigStr = JSON.stringify({
+      position_x: config.position_x,
+      position_y: config.position_y,
+      position_z: config.position_z,
+      rotation_deg: config.rotation_deg
+    });
+
+    // Skip if nothing changed
+    if (currentConfigStr === lastSavedConfigRef.current) return;
+
+    setAutoSaveStatus('saving');
+    try {
+      // Update database
+      const craneData = {
+        position_x: config.position_x,
+        position_y: config.position_y,
+        position_z: config.position_z,
+        rotation_deg: config.rotation_deg
+      };
+
+      const success = await updateProjectCrane(editingCraneId, craneData);
+      if (success) {
+        lastSavedConfigRef.current = currentConfigStr;
+        setAutoSaveStatus('saved');
+        // Clear saved status after 2 seconds
+        setTimeout(() => setAutoSaveStatus('idle'), 2000);
+      } else {
+        setAutoSaveStatus('error');
+      }
+    } catch (err) {
+      console.error('[CranePlanner] Auto-save error:', err);
+      setAutoSaveStatus('error');
+    }
+  }, [editingCraneId, selectedCraneModel, pickedPosition, config.position_x, config.position_y, config.position_z, config.rotation_deg, updateProjectCrane]);
+
+  // Trigger auto-save with debounce when editing and position/rotation changes
+  useEffect(() => {
+    if (!editingCraneId) return; // Only auto-save when editing existing crane
+
+    // Clear previous timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Schedule auto-save after 500ms of no changes
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveChanges();
+    }, 500);
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [editingCraneId, config.position_x, config.position_y, config.position_z, config.rotation_deg, autoSaveChanges]);
+
   // Get load calculations
   const loadCalculations = loadCharts.length > 0 && selectedCounterweightId
     ? calculateLoadCapacities(
@@ -833,6 +899,58 @@ export default function CranePlannerScreen({
               {/* Movement Controls */}
               {pickedPosition && (
                 <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                  {/* Auto-save status indicator (only when editing existing crane) */}
+                  {editingCraneId && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginBottom: '12px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      backgroundColor: autoSaveStatus === 'saving' ? '#fef3c7' :
+                                       autoSaveStatus === 'saved' ? '#dcfce7' :
+                                       autoSaveStatus === 'error' ? '#fef2f2' : '#f3f4f6',
+                      fontSize: '12px',
+                      transition: 'all 0.3s ease'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {autoSaveStatus === 'saving' && (
+                          <>
+                            <FiLoader className="animate-spin" size={14} style={{ color: '#d97706' }} />
+                            <span style={{ color: '#d97706' }}>Salvestamine...</span>
+                          </>
+                        )}
+                        {autoSaveStatus === 'saved' && (
+                          <>
+                            <FiCheck size={14} style={{ color: '#16a34a' }} />
+                            <span style={{ color: '#16a34a' }}>Muudatused salvestatud</span>
+                          </>
+                        )}
+                        {autoSaveStatus === 'error' && (
+                          <>
+                            <FiAlertCircle size={14} style={{ color: '#dc2626' }} />
+                            <span style={{ color: '#dc2626' }}>Salvestamine ebaõnnestus</span>
+                          </>
+                        )}
+                        {autoSaveStatus === 'idle' && (
+                          <span style={{ color: '#6b7280' }}>Muudatused salvestatakse automaatselt</span>
+                        )}
+                      </div>
+                      {autoSaveStatus === 'saving' && (
+                        <div style={{ width: '60px', height: '4px', backgroundColor: '#e5e7eb', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{
+                            width: '50%',
+                            height: '100%',
+                            backgroundColor: '#d97706',
+                            borderRadius: '2px',
+                            animation: 'pulse 1s ease-in-out infinite'
+                          }} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Step Settings Row */}
                   <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '13px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
