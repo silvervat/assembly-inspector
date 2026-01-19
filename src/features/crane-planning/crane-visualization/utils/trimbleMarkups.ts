@@ -26,8 +26,18 @@ export async function drawCraneToModel(
 
   const rotationRad = (projectCrane.rotation_deg * Math.PI) / 180;
 
+  console.log('[CraneViz] Drawing crane:', {
+    position: { x: projectCrane.position_x, y: projectCrane.position_y, z: projectCrane.position_z },
+    rotation: projectCrane.rotation_deg,
+    craneModel: craneModel.manufacturer + ' ' + craneModel.model,
+    base: { width: craneModel.base_width_m, length: craneModel.base_length_m },
+    showRings: projectCrane.show_radius_rings,
+    positionLabel: projectCrane.position_label
+  });
+
   try {
     // 1. Draw crane base (rectangle) - simple top view to scale
+    console.log('[CraneViz] Drawing crane base...');
     const baseMarkups = await drawCraneBase(
       api,
       posX,
@@ -39,8 +49,10 @@ export async function drawCraneToModel(
       projectCrane.crane_color
     );
     markupIds.push(...baseMarkups);
+    console.log('[CraneViz] Base markups:', baseMarkups);
 
     // 2. Draw cabin marker
+    console.log('[CraneViz] Drawing cabin marker...');
     const cabinMarkups = await drawCabinMarker(
       api,
       posX,
@@ -52,9 +64,11 @@ export async function drawCraneToModel(
       rotationRad
     );
     markupIds.push(...cabinMarkups);
+    console.log('[CraneViz] Cabin markups:', cabinMarkups);
 
     // 3. Draw radius rings (if enabled)
     if (projectCrane.show_radius_rings) {
+      console.log('[CraneViz] Drawing radius rings...');
       const radiusMarkups = await drawRadiusRings(
         api,
         posX,
@@ -70,20 +84,32 @@ export async function drawCraneToModel(
         projectCrane.label_height_mm // Pass label height
       );
       markupIds.push(...radiusMarkups);
+      console.log('[CraneViz] Radius markups count:', radiusMarkups.length);
     }
 
-    // 4. Draw position label (if set) - using 3D text readable from above
+    // 4. Draw position label (if set) - positioned alongside the crane (along Y axis)
     if (projectCrane.position_label) {
       const labelText = projectCrane.position_label;
       const labelHeight = projectCrane.label_height_mm || 800; // Default 800mm
       const labelColor = projectCrane.label_color || { r: 50, g: 50, b: 50, a: 255 };
 
-      // Generate 3D text for position label
+      console.log('[CraneViz] Drawing position label:', labelText, 'height:', labelHeight);
+
+      // Calculate text width and position label alongside the crane
       const textWidth = calculateTextWidth(labelText, labelHeight);
+
+      // Position label along the crane's length (offset in X direction, extending along Y)
+      // Offset from crane center by crane width + small gap
+      const labelOffsetX = (craneModel.base_width_m * 1000 / 2) + labelHeight + 500;
+
+      // Rotate the offset to match crane rotation
+      const rotatedOffsetX = labelOffsetX * Math.cos(rotationRad);
+      const rotatedOffsetY = labelOffsetX * Math.sin(rotationRad);
+
       const labelSegments = generate3DTextTopView(
         labelText,
-        posX - textWidth / 2, // Center above crane
-        posY - labelHeight, // Position below crane center (readable from above)
+        posX + rotatedOffsetX, // Position alongside crane
+        posY + rotatedOffsetY - textWidth / 2, // Center along Y
         posZ + 200, // Just above ground
         labelHeight
       );
@@ -95,12 +121,14 @@ export async function drawCraneToModel(
           lines: labelSegments
         }]);
         if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
+        console.log('[CraneViz] Position label markup:', textMarkup?.[0]?.id);
       }
     }
 
+    console.log('[CraneViz] Total markups created:', markupIds.length);
     return markupIds;
   } catch (error) {
-    console.error('Error drawing crane to model:', error);
+    console.error('[CraneViz] Error drawing crane to model:', error);
     return markupIds;
   }
 }
@@ -477,12 +505,14 @@ async function drawRadiusRings(
   const textColor = labelColor || { ...color, a: 255 };
   const textHeight = labelHeightMm || 500; // Default 500mm tall letters
 
-  try {
-    // Collect all ring segments and all label segments for batch rendering
-    const allRingSegments: LineSegment[] = [];
-    const allLabelSegments: LineSegment[] = [];
+  console.log('[CraneViz] Drawing radius rings:', {
+    centerX, centerY, centerZ,
+    stepMeters, maxRadiusMeters, effectiveMaxRadius,
+    showLabels, textHeight
+  });
 
-    // Generate rings with step interval
+  try {
+    // Generate rings with step interval - EACH RING SEPARATE to avoid line connections
     let ringIndex = 0;
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
@@ -495,55 +525,85 @@ async function drawRadiusRings(
       const dashCount = isAlternate ? Math.round(baseDashForRadius * 1.5) : baseDashForRadius;
       const dashRatio = isAlternate ? 0.4 : 0.7; // Shorter dashes on alternate rings
 
-      // Generate dotted circle segments
+      // Generate dotted circle segments for THIS ring only
       const ringSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
-      allRingSegments.push(...ringSegments);
+
+      // Draw THIS ring as SEPARATE freeline (so dashes stay separate)
+      if (ringSegments.length > 0) {
+        // Each dash segment must be a separate freeline entry to avoid connection
+        const ringMarkup = await markupApi.addFreelineMarkups?.(
+          ringSegments.map(seg => ({
+            color,
+            lines: [seg]  // Each segment separate
+          }))
+        );
+        if (ringMarkup) {
+          ringMarkup.forEach((m: any) => {
+            if (m?.id) markupIds.push(m.id);
+          });
+        }
+      }
 
       ringIndex++;
 
       // Add label if enabled - using 3D geometry text (top-view readable)
       if (showLabels) {
-        // Find capacity at this radius
-        let labelText = `${r}m`;
-        if (loadChartData) {
-          const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
-          if (capacityPoint) {
-            labelText = `${r}m (${(capacityPoint.capacity_kg / 1000).toFixed(0)}t)`;
-          }
-        }
+        // Radius label - show radius in meters
+        const radiusLabelText = `${r}m`;
 
-        // Generate 3D text (readable from above)
-        const textSegments = generate3DTextTopView(
-          labelText,
+        // Generate 3D text for radius label (readable from above)
+        const radiusTextSegments = generate3DTextTopView(
+          radiusLabelText,
           centerX + radiusMm + 300, // Offset from ring
           centerY - textHeight / 2, // Position label so it reads correctly from above
           centerZ + 100, // Slightly above ground
           textHeight
         );
 
-        allLabelSegments.push(...textSegments);
+        // Draw radius label
+        if (radiusTextSegments.length > 0) {
+          const radiusMarkup = await markupApi.addFreelineMarkups?.([{
+            color: textColor,
+            lines: radiusTextSegments
+          }]);
+          if (radiusMarkup?.[0]?.id) markupIds.push(radiusMarkup[0].id);
+        }
+
+        // Capacity label - show capacity at this radius (if load chart data available)
+        if (loadChartData && loadChartData.length > 0) {
+          // Find exact or interpolated capacity at this radius
+          const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
+
+          if (capacityPoint) {
+            const capacityText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
+            console.log('[CraneViz] Capacity label at', r, 'm:', capacityText);
+
+            // Position capacity label BELOW the radius label
+            const capacityTextSegments = generate3DTextTopView(
+              capacityText,
+              centerX + radiusMm + 300, // Same X as radius label
+              centerY - textHeight / 2 - textHeight * 1.2, // Below radius label
+              centerZ + 100, // Same height
+              textHeight * 0.85 // Slightly smaller text
+            );
+
+            // Draw capacity label in different color (blue tint)
+            if (capacityTextSegments.length > 0) {
+              const capacityColor = { r: 0, g: 100, b: 180, a: 255 };
+              const capacityMarkup = await markupApi.addFreelineMarkups?.([{
+                color: capacityColor,
+                lines: capacityTextSegments
+              }]);
+              if (capacityMarkup?.[0]?.id) markupIds.push(capacityMarkup[0].id);
+            }
+          }
+        }
       }
     }
 
-    // Draw all ring segments in one call for performance
-    if (allRingSegments.length > 0) {
-      const ringMarkup = await markupApi.addFreelineMarkups?.([{
-        color,
-        lines: allRingSegments
-      }]);
-      if (ringMarkup?.[0]?.id) markupIds.push(ringMarkup[0].id);
-    }
-
-    // Draw all label segments in one call for performance
-    if (allLabelSegments.length > 0) {
-      const textMarkup = await markupApi.addFreelineMarkups?.([{
-        color: textColor,
-        lines: allLabelSegments
-      }]);
-      if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
-    }
+    console.log('[CraneViz] Radius rings complete, markupIds:', markupIds.length);
   } catch (error) {
-    console.error('Error drawing radius rings:', error);
+    console.error('[CraneViz] Error drawing radius rings:', error);
   }
 
   return markupIds;
