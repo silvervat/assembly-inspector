@@ -592,27 +592,7 @@ export default function CranePlannerScreen({
 
   return (
     <div className="crane-planner-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanide Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate}>
-        {!isPlacing && !editingCraneId && (
-          <button
-            onClick={startPlacing}
-            disabled={craneModels.filter(c => c.is_active).length === 0}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              backgroundColor: craneModels.filter(c => c.is_active).length > 0 ? 'var(--modus-primary)' : '#d1d5db',
-              color: 'white',
-              border: 'none',
-              cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
-            }}
-          >
-            <FiPlus size={16} /> Paiguta Kraana
-          </button>
-        )}
-      </PageHeader>
+      <PageHeader title="Kraanide Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* No crane models warning */}
@@ -1130,15 +1110,65 @@ export default function CranePlannerScreen({
         {/* Placed Cranes List */}
         {!isPlacing && !editingCraneId && (
           <div>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600 }}>
-              Paigutatud kraanid ({projectCranes.length})
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              {projectCranes.length > 0 && (
+                <button
+                  onClick={startPlacing}
+                  disabled={craneModels.filter(c => c.is_active).length === 0}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    backgroundColor: craneModels.filter(c => c.is_active).length > 0 ? 'var(--modus-primary)' : '#d1d5db',
+                    color: 'white',
+                    border: 'none',
+                    cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <FiPlus size={16} /> Paiguta Kraana
+                </button>
+              )}
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
+                Paigutatud kraanid ({projectCranes.length})
+              </h3>
+            </div>
 
             {projectCranes.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280', backgroundColor: 'white', borderRadius: '8px' }}>
+              <div style={{
+                textAlign: 'center',
+                padding: '60px 40px',
+                color: '#6b7280',
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
                 <FiMapPin size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
                 <p style={{ fontSize: '16px', marginBottom: '8px' }}>Kraanasid pole veel paigutatud</p>
-                <p style={{ fontSize: '14px' }}>Kliki "Paiguta Kraana" et alustada</p>
+                <p style={{ fontSize: '14px', marginBottom: '24px' }}>Lisa esimene kraana projekti</p>
+                <button
+                  onClick={startPlacing}
+                  disabled={craneModels.filter(c => c.is_active).length === 0}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    backgroundColor: craneModels.filter(c => c.is_active).length > 0 ? 'var(--modus-primary)' : '#d1d5db',
+                    color: 'white',
+                    border: 'none',
+                    fontSize: '16px',
+                    fontWeight: 500,
+                    cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <FiPlus size={20} /> Paiguta Kraana
+                </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
