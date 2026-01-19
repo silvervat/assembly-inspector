@@ -739,63 +739,38 @@ export default function CranePlannerScreen({
     const craneY = crane.position_y * 1000;
     const craneZ = crane.position_z * 1000;
     const boomBaseHeight = 3500; // 3.5m boom pivot point above crane base
+    const boomPivotZ = craneZ + boomBaseHeight;
 
-    // Horizontal distance from crane to object (in mm)
+    // Horizontal distance from crane to object (in mm) - this is the horizontal reach needed
     const horizontalDistMm = Math.sqrt(
       Math.pow(objCenterX - craneX, 2) +
       Math.pow(objCenterY - craneY, 2)
     );
     const horizontalDistM = horizontalDistMm / 1000;
 
-    // Vertical distance from boom pivot to object top + clearance (in mm)
-    const clearance = 1000; // 1m above object for hook
-    const targetZ = objTopZ + clearance;
-    const verticalDistMm = targetZ - (craneZ + boomBaseHeight);
-    const verticalDistM = verticalDistMm / 1000;
-
-    // Calculate boom angle (from horizontal) to reach the target point
-    // Using boom tip position: crane + boom at angle
-    // We need boom_tip.x = horizontal_dist, boom_tip.z = vertical_dist
-    // boom_tip.horizontal = boomLength * cos(angle)
-    // boom_tip.vertical = boomLength * sin(angle)
-    // So we need to find angle where:
-    // sqrt(horizontal_dist^2 + vertical_dist^2) <= boomLength
-
-    const requiredReach = Math.sqrt(
-      Math.pow(horizontalDistM, 2) +
-      Math.pow(verticalDistM, 2)
-    );
-
-    // Calculate boom angle
+    // Calculate boom angle so that boom tip is directly above object
+    // Horizontal reach = boomLength * cos(angle)
+    // So: cos(angle) = horizontalDist / boomLength
     let boomAngle = 0;
     let chainLength = 0;
     let canReach = false;
 
-    if (requiredReach <= boomLengthM) {
-      // Boom can reach - calculate angle
-      boomAngle = Math.atan2(verticalDistM, horizontalDistM) * (180 / Math.PI);
-      // When boom reaches exactly to target, chain length is minimal (just hook drop)
-      chainLength = clearance / 1000; // Chain drops from boom tip to object top
-      canReach = true;
+    if (horizontalDistM <= boomLengthM) {
+      // Boom can reach horizontally
+      const cosAngle = horizontalDistM / boomLengthM;
+      boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
+
+      // Boom tip Z = boom pivot Z + vertical component of boom
+      const boomTipZ = boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180));
+
+      // Chain is vertical from object top to boom tip
+      chainLength = (boomTipZ - objTopZ) / 1000;
+      canReach = chainLength > 0;
     } else {
-      // Boom too short - calculate max angle (most vertical) to get closest
-      // At max angle, horizontal reach = boomLength * cos(maxAngle)
-      // For a given horizontal distance, find the angle
-      if (horizontalDistM <= boomLengthM) {
-        // Can reach horizontally, calculate angle
-        const cosAngle = horizontalDistM / boomLengthM;
-        boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
-        // Boom tip Z = craneZ + boomBaseHeight + boomLength * sin(angle)
-        const boomTipZ = craneZ + boomBaseHeight + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180));
-        // Chain needs to drop from boom tip to object top
-        chainLength = Math.max(0, (boomTipZ - objTopZ) / 1000);
-        canReach = chainLength > 0;
-      } else {
-        // Can't even reach horizontally at 0 degrees
-        boomAngle = 0;
-        chainLength = 0;
-        canReach = false;
-      }
+      // Can't reach horizontally even at 0 degrees
+      boomAngle = 0;
+      chainLength = 0;
+      canReach = false;
     }
 
     // Calculate capacity at this horizontal distance
@@ -963,15 +938,16 @@ export default function CranePlannerScreen({
     for (const obj of objects) {
       const { objCenterX, objCenterY, objTopZ, boomAngle } = obj;
 
-      // Calculate boom tip position
+      // Calculate boom tip position - boom tip is directly above the object
       const boomAngleRad = boomAngle * (Math.PI / 180);
       const horizontalDist = Math.sqrt(Math.pow(objCenterX - craneX, 2) + Math.pow(objCenterY - craneY, 2));
 
       // Direction vector from crane to object (normalized)
-      const dirX = (objCenterX - craneX) / horizontalDist;
-      const dirY = (objCenterY - craneY) / horizontalDist;
+      const dirX = horizontalDist > 0 ? (objCenterX - craneX) / horizontalDist : 0;
+      const dirY = horizontalDist > 0 ? (objCenterY - craneY) / horizontalDist : 0;
 
-      // Boom tip position - horizontal reach along direction, vertical based on angle
+      // Boom tip is directly above object (same X,Y coordinates as object)
+      // Horizontal reach = boomLength * cos(angle)
       const boomHorizontalReach = boomLengthM * 1000 * Math.cos(boomAngleRad);
       const boomVerticalReach = boomLengthM * 1000 * Math.sin(boomAngleRad);
 
@@ -997,12 +973,13 @@ export default function CranePlannerScreen({
         }]
       });
 
-      // 3. Chain/rope (from boom tip down to object top) - green
+      // 3. Chain/rope (from object top, vertically up to boom tip) - green
+      // Chain is ALWAYS VERTICAL - same X,Y coordinates, only Z changes
       allMarkupEntries.push({
         color: { r: 34, g: 197, b: 94, a: 255 },
         lines: [{
-          start: { positionX: boomTipX, positionY: boomTipY, positionZ: boomTipZ },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ }
+          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: boomTipZ }
         }]
       });
 
@@ -1922,7 +1899,9 @@ export default function CranePlannerScreen({
                       backgroundColor: 'white',
                       borderRadius: '6px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-                      overflow: 'hidden'
+                      overflow: 'hidden',
+                      position: 'relative',
+                      zIndex: openMenuCraneId === crane.id ? 1003 : 'auto'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', gap: '8px' }}>
