@@ -378,9 +378,11 @@ function generateCircleSegments(
 const LINE_FONT: Record<string, { width: number; lines: [number, number, number, number][] }> = {
   // Numbers
   '0': { width: 0.6, lines: [[0, 0, 0.6, 0], [0.6, 0, 0.6, 1], [0.6, 1, 0, 1], [0, 1, 0, 0]] },
-  '1': { width: 0.4, lines: [[0.2, 0, 0.2, 1], [0, 0.8, 0.2, 1], [0, 0, 0.4, 0]] },
+  // '1' as continuous trace-back: vertical up, tick, back, down, base left-right
+  '1': { width: 0.4, lines: [[0.2, 0, 0.2, 1], [0.2, 1, 0, 0.8], [0, 0.8, 0.2, 1], [0.2, 1, 0.2, 0], [0.2, 0, 0, 0], [0, 0, 0.4, 0]] },
   '2': { width: 0.6, lines: [[0, 1, 0.6, 1], [0.6, 1, 0.6, 0.5], [0.6, 0.5, 0, 0.5], [0, 0.5, 0, 0], [0, 0, 0.6, 0]] },
-  '3': { width: 0.6, lines: [[0, 1, 0.6, 1], [0.6, 1, 0.6, 0], [0.6, 0, 0, 0], [0.2, 0.5, 0.6, 0.5]] },
+  // '3' as continuous trace-back: top, down right, middle bar (out and back), continue down, bottom
+  '3': { width: 0.6, lines: [[0, 1, 0.6, 1], [0.6, 1, 0.6, 0.5], [0.6, 0.5, 0.2, 0.5], [0.2, 0.5, 0.6, 0.5], [0.6, 0.5, 0.6, 0], [0.6, 0, 0, 0]] },
   '4': { width: 0.6, lines: [[0, 1, 0, 0.4], [0, 0.4, 0.6, 0.4], [0.5, 1, 0.5, 0]] },
   '5': { width: 0.6, lines: [[0.6, 1, 0, 1], [0, 1, 0, 0.5], [0, 0.5, 0.5, 0.5], [0.5, 0.5, 0.6, 0.4], [0.6, 0.4, 0.6, 0.1], [0.6, 0.1, 0.5, 0], [0.5, 0, 0, 0]] },
   '6': { width: 0.6, lines: [[0.5, 1, 0.1, 1], [0.1, 1, 0, 0.8], [0, 0.8, 0, 0.1], [0, 0.1, 0.1, 0], [0.1, 0, 0.5, 0], [0.5, 0, 0.6, 0.1], [0.6, 0.1, 0.6, 0.4], [0.6, 0.4, 0.5, 0.5], [0.5, 0.5, 0, 0.5]] },
@@ -465,21 +467,25 @@ async function drawRadiusRingsGrouped(
     let capacityLabelCount = 0;
 
     // Generate all rings as SOLID circles (72 segments each, connected = one markup per ring)
-    // Alternate colors: every second ring is 25% lighter for visual distinction
+    // Alternate colors: every second ring is 40% lighter for visual distinction
     let ringIndex = 0;
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
       const segments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, 72);
 
-      // Make every second ring 25% lighter
-      let ringColor = color;
+      // Make every second ring 40% lighter (more noticeable)
+      let ringColor: CraneRGBAColor;
       if (ringIndex % 2 === 1) {
         ringColor = {
-          r: Math.min(255, Math.round(color.r + (255 - color.r) * 0.25)),
-          g: Math.min(255, Math.round(color.g + (255 - color.g) * 0.25)),
-          b: Math.min(255, Math.round(color.b + (255 - color.b) * 0.25)),
+          r: Math.min(255, Math.round(color.r + (255 - color.r) * 0.4)),
+          g: Math.min(255, Math.round(color.g + (255 - color.g) * 0.4)),
+          b: Math.min(255, Math.round(color.b + (255 - color.b) * 0.4)),
           a: color.a
         };
+        console.log('[CraneViz] Ring', ringIndex, 'lighter color:', ringColor);
+      } else {
+        ringColor = { r: color.r, g: color.g, b: color.b, a: color.a };
+        console.log('[CraneViz] Ring', ringIndex, 'base color:', ringColor);
       }
 
       allEntries.push({ color: ringColor, lines: segments });

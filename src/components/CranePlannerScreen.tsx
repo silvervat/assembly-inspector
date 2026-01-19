@@ -203,8 +203,12 @@ export default function CranePlannerScreen({
 
   // Update preview when position/structure config changes (full redraw)
   useEffect(() => {
+    console.log('[Preview] useEffect triggered:', { hasPosition: !!pickedPosition, hasModel: !!selectedCraneModel, pos: { x: config.position_x, y: config.position_y, z: config.position_z }, rotation: config.rotation_deg });
     if (pickedPosition && selectedCraneModel) {
+      console.log('[Preview] Scheduling full update...');
       schedulePreviewUpdate(false); // Full update
+    } else {
+      console.log('[Preview] Skipped - no position or model');
     }
     return () => {
       if (previewTimeoutRef.current) {
@@ -485,6 +489,15 @@ export default function CranePlannerScreen({
     previewMarkupGroupsRef.current = null;
     prevLabelConfigRef.current = null;
 
+    // When editing, also remove old crane markups from the model
+    if (editingCraneId) {
+      const existingCrane = projectCranes.find(c => c.id === editingCraneId);
+      if (existingCrane && existingCrane.markup_ids && existingCrane.markup_ids.length > 0) {
+        console.log('[CranePlanner] Removing old crane markups:', existingCrane.markup_ids.length);
+        await removeCraneMarkups(api, existingCrane.markup_ids);
+      }
+    }
+
     const craneData: Partial<ProjectCrane> = {
       trimble_project_id: projectId,
       crane_model_id: selectedCraneModelId,
@@ -585,28 +598,37 @@ export default function CranePlannerScreen({
 
   // Move crane - uses world coordinates (Y = up/down, X = left/right in model space)
   const moveCrane = useCallback((dx: number, dy: number, dz: number) => {
-    console.log('[CranePlanner] moveCrane called:', { dx, dy, dz });
-    setConfig(prev => ({
-      ...prev,
-      position_x: prev.position_x + dx,
-      position_y: prev.position_y + dy,
-      position_z: prev.position_z + dz
-    }));
+    console.log('[CranePlanner] moveCrane called:', { dx, dy, dz, hasPosition: !!pickedPosition, hasModel: !!selectedCraneModel });
+    // Reset update lock if somehow stuck
+    isUpdatingPreviewRef.current = false;
+    setConfig(prev => {
+      const newConfig = {
+        ...prev,
+        position_x: prev.position_x + dx,
+        position_y: prev.position_y + dy,
+        position_z: prev.position_z + dz
+      };
+      console.log('[CranePlanner] New position:', { x: newConfig.position_x, y: newConfig.position_y, z: newConfig.position_z });
+      return newConfig;
+    });
     setPickedPosition(prev => prev ? {
       x: prev.x + dx,
       y: prev.y + dy,
       z: prev.z + dz
     } : null);
-  }, []);
+  }, [pickedPosition, selectedCraneModel]);
 
   // Rotate crane
   const rotateCrane = useCallback((degrees: number) => {
-    console.log('[CranePlanner] rotateCrane called:', { degrees });
-    setConfig(prev => ({
-      ...prev,
-      rotation_deg: (prev.rotation_deg + degrees + 360) % 360
-    }));
-  }, []);
+    console.log('[CranePlanner] rotateCrane called:', { degrees, hasPosition: !!pickedPosition, hasModel: !!selectedCraneModel });
+    // Reset update lock if somehow stuck
+    isUpdatingPreviewRef.current = false;
+    setConfig(prev => {
+      const newRotation = (prev.rotation_deg + degrees + 360) % 360;
+      console.log('[CranePlanner] New rotation:', newRotation);
+      return { ...prev, rotation_deg: newRotation };
+    });
+  }, [pickedPosition, selectedCraneModel]);
 
   // Get load calculations
   const loadCalculations = loadCharts.length > 0 && selectedCounterweightId
