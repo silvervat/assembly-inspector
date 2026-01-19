@@ -946,7 +946,7 @@ export default function CranePlannerScreen({
                     </div>
                   </div>
                   <div>
-                    <label style={labelStyle}>Konks (kg)</label>
+                    <label style={labelStyle}>Konks / Tõsteblokk + ketid (kg)</label>
                     <input
                       type="number"
                       style={inputStyle}
@@ -956,7 +956,7 @@ export default function CranePlannerScreen({
                     />
                   </div>
                   <div>
-                    <label style={labelStyle}>Tõsteblokk (kg)</label>
+                    <label style={labelStyle}>Lisakaal (kg)</label>
                     <input
                       type="number"
                       style={inputStyle}
