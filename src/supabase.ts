@@ -1791,6 +1791,7 @@ export interface ProjectCrane {
   // Visual settings
   crane_color: CraneRGBAColor;
   radius_color: CraneRGBAColor;
+  label_color?: CraneRGBAColor; // Optional separate color for radius labels
   show_radius_rings: boolean;
   radius_step_m: number;
   show_capacity_labels: boolean;
@@ -1847,6 +1848,7 @@ export interface LoadCalculationResult {
 // Default crane colors
 export const DEFAULT_CRANE_COLOR: CraneRGBAColor = { r: 255, g: 165, b: 0, a: 255 };  // Orange
 export const DEFAULT_RADIUS_COLOR: CraneRGBAColor = { r: 255, g: 0, b: 0, a: 128 };   // Semi-transparent red
+export const DEFAULT_LABEL_COLOR: CraneRGBAColor = { r: 50, g: 50, b: 50, a: 255 };   // Dark gray for labels
 
 // Crane document type labels
 export const CRANE_DOCUMENT_TYPE_LABELS: Record<CraneDocumentType, string> = {

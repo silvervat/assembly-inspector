@@ -36,11 +36,9 @@ const NAV_ITEMS: NavItem[] = [
   { mode: 'arrived_deliveries', label: 'Saabunud tarned', icon: <FiClipboard size={18} />, color: '#0891b2' },
   { mode: 'organizer', label: 'Organiseerija', icon: <FiFolder size={18} />, color: '#7c3aed' },
   { mode: 'issues', label: 'Probleemid', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
-  { mode: 'crane_planner', label: 'Kraanide Planeerimine', icon: <FiTool size={18} />, color: '#f97316' },
   { mode: 'tools', label: 'Tööriistad', icon: <FiTool size={18} />, color: '#f59e0b', hasSubmenu: true },
   { mode: 'inspection_plan', label: 'Inspektsiooni kava', icon: <FiClipboard size={18} />, color: '#6b7280', adminOnly: true },
   { mode: 'admin', label: 'Administratsioon', icon: <FiShield size={18} />, color: '#6b7280', adminOnly: true },
-  { mode: 'crane_library', label: 'Kraanide Andmebaas', icon: <FiTool size={18} />, color: '#f97316', adminOnly: true },
   { mode: null, label: 'Peamenüü', icon: <FiMenu size={18} />, color: '#6b7280' },
 ];
 
@@ -294,6 +292,12 @@ export default function PageHeader({
                         onClick={() => handleNavigate('tools')}
                       >
                         Kõik tööriistad
+                      </button>
+                      <button
+                        className="submenu-item"
+                        onClick={() => handleNavigate('crane_planner')}
+                      >
+                        Kraanide Planeerimine
                       </button>
                       <button
                         className="submenu-item"

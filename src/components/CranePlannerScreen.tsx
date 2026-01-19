@@ -17,7 +17,8 @@ import {
   TrimbleExUser,
   CRANE_TYPE_LABELS,
   DEFAULT_CRANE_COLOR,
-  DEFAULT_RADIUS_COLOR
+  DEFAULT_RADIUS_COLOR,
+  DEFAULT_LABEL_COLOR
 } from '../supabase';
 
 import { InspectionMode } from './MainMenu';
@@ -71,6 +72,7 @@ export default function CranePlannerScreen({
     max_radius_limit_m: 0, // 0 = no limit, use crane's max radius
     crane_color: DEFAULT_CRANE_COLOR,
     radius_color: DEFAULT_RADIUS_COLOR,
+    label_color: DEFAULT_LABEL_COLOR,
     notes: ''
   });
 
@@ -131,6 +133,7 @@ export default function CranePlannerScreen({
         max_radius_limit_m: config.max_radius_limit_m || undefined,
         crane_color: config.crane_color,
         radius_color: config.radius_color,
+        label_color: config.label_color,
         notes: config.notes || undefined,
         markup_ids: [],
         created_by_email: userEmail,
@@ -209,6 +212,7 @@ export default function CranePlannerScreen({
       max_radius_limit_m: 0,
       crane_color: DEFAULT_CRANE_COLOR,
       radius_color: DEFAULT_RADIUS_COLOR,
+      label_color: DEFAULT_LABEL_COLOR,
       notes: ''
     });
   }, []);
@@ -242,6 +246,7 @@ export default function CranePlannerScreen({
       max_radius_limit_m: crane.max_radius_limit_m || 0,
       crane_color: crane.crane_color,
       radius_color: crane.radius_color,
+      label_color: crane.label_color || DEFAULT_LABEL_COLOR,
       notes: crane.notes || ''
     });
     setEditingCraneId(crane.id);
@@ -449,6 +454,7 @@ export default function CranePlannerScreen({
       max_radius_limit_m: config.max_radius_limit_m || undefined,
       crane_color: config.crane_color,
       radius_color: config.radius_color,
+      label_color: config.label_color,
       notes: config.notes || undefined,
       created_by_email: userEmail
     };
@@ -592,27 +598,7 @@ export default function CranePlannerScreen({
 
   return (
     <div className="crane-planner-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanide Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate}>
-        {!isPlacing && !editingCraneId && (
-          <button
-            onClick={startPlacing}
-            disabled={craneModels.filter(c => c.is_active).length === 0}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '6px',
-              backgroundColor: craneModels.filter(c => c.is_active).length > 0 ? 'var(--modus-primary)' : '#d1d5db',
-              color: 'white',
-              border: 'none',
-              cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
-            }}
-          >
-            <FiPlus size={16} /> Paiguta Kraana
-          </button>
-        )}
-      </PageHeader>
+      <PageHeader title="Kraanide Planeerimine" onBack={onBackToMenu} user={user} onNavigate={onNavigate} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* No crane models warning */}
@@ -1027,6 +1013,22 @@ export default function CranePlannerScreen({
                       </div>
                     </div>
                   </div>
+                  {/* Label Color Settings */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px' }}>Sildi värv:</span>
+                    <input
+                      type="color"
+                      value={`#${config.label_color.r.toString(16).padStart(2, '0')}${config.label_color.g.toString(16).padStart(2, '0')}${config.label_color.b.toString(16).padStart(2, '0')}`}
+                      onChange={e => {
+                        const hex = e.target.value;
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        setConfig(prev => ({ ...prev, label_color: { ...prev.label_color, r, g, b } }));
+                      }}
+                      style={{ width: '40px', height: '32px', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
+                    />
+                  </div>
                   {/* Crane Color Settings */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13px' }}>Kraana värv:</span>
@@ -1130,15 +1132,65 @@ export default function CranePlannerScreen({
         {/* Placed Cranes List */}
         {!isPlacing && !editingCraneId && (
           <div>
-            <h3 style={{ margin: '0 0 16px 0', fontSize: '16px', fontWeight: 600 }}>
-              Paigutatud kraanid ({projectCranes.length})
-            </h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+              {projectCranes.length > 0 && (
+                <button
+                  onClick={startPlacing}
+                  disabled={craneModels.filter(c => c.is_active).length === 0}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    backgroundColor: craneModels.filter(c => c.is_active).length > 0 ? 'var(--modus-primary)' : '#d1d5db',
+                    color: 'white',
+                    border: 'none',
+                    cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <FiPlus size={16} /> Paiguta Kraana
+                </button>
+              )}
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
+                Paigutatud kraanid ({projectCranes.length})
+              </h3>
+            </div>
 
             {projectCranes.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280', backgroundColor: 'white', borderRadius: '8px' }}>
+              <div style={{
+                textAlign: 'center',
+                padding: '60px 40px',
+                color: '#6b7280',
+                backgroundColor: 'white',
+                borderRadius: '8px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
                 <FiMapPin size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
                 <p style={{ fontSize: '16px', marginBottom: '8px' }}>Kraanasid pole veel paigutatud</p>
-                <p style={{ fontSize: '14px' }}>Kliki "Paiguta Kraana" et alustada</p>
+                <p style={{ fontSize: '14px', marginBottom: '24px' }}>Lisa esimene kraana projekti</p>
+                <button
+                  onClick={startPlacing}
+                  disabled={craneModels.filter(c => c.is_active).length === 0}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '12px 24px',
+                    borderRadius: '8px',
+                    backgroundColor: craneModels.filter(c => c.is_active).length > 0 ? 'var(--modus-primary)' : '#d1d5db',
+                    color: 'white',
+                    border: 'none',
+                    fontSize: '16px',
+                    fontWeight: 500,
+                    cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
+                  }}
+                >
+                  <FiPlus size={20} /> Paiguta Kraana
+                </button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
