@@ -1021,17 +1021,9 @@ export default function CranePlannerScreen({
           }
         ]
       });
-
-      // 5. Horizontal distance measurement line (from crane center to object center at crane base level) - yellow
-      allMarkupEntries.push({
-        color: { r: 255, g: 200, b: 0, a: 255 },
-        lines: [{
-          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ }
-        }]
-      });
     }
 
+    // Add freeline markups (crane, boom, chain, markers)
     let markupIds: number[] = [];
     if (allMarkupEntries.length > 0) {
       const result = await markupApi.addFreelineMarkups(allMarkupEntries);
@@ -1039,6 +1031,26 @@ export default function CranePlannerScreen({
         markupIds = result;
       }
     }
+
+    // Add measurement markups (horizontal distance) for each object
+    for (const obj of objects) {
+      const { objCenterX, objCenterY } = obj;
+      try {
+        const measurementIds = await markupApi.addMeasurementMarkups([{
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ },
+          mainLineStart: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          mainLineEnd: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ },
+          color: { r: 255, g: 200, b: 0, a: 255 }
+        }]);
+        if (measurementIds && Array.isArray(measurementIds)) {
+          markupIds.push(...measurementIds);
+        }
+      } catch (e) {
+        console.warn('Failed to add measurement markup:', e);
+      }
+    }
+
     return markupIds;
   };
 
