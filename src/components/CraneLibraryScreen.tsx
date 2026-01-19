@@ -182,17 +182,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
   return (
     <div className="crane-library-screen" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user}>
-        {!isCreating && !editingCraneId && (
-          <button
-            onClick={startCreating}
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '6px', backgroundColor: 'var(--modus-primary)', color: 'white', border: 'none', cursor: 'pointer' }}
-          >
-            <FiPlus size={16} /> Lisa Kraana
-          </button>
-        )}
-      </PageHeader>
+      <PageHeader title="Kraanade Andmebaas" onBack={onBackToMenu} onNavigate={onNavigate} user={user} />
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
         {/* Editor Form - Compact */}
@@ -282,7 +272,18 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
         {/* Crane List - Compact like Organizer */}
         {!isCreating && !editingCraneId && (
-          <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
+          <div>
+            {/* Add Crane button above list */}
+            <div style={{ marginBottom: '10px' }}>
+              <button
+                onClick={startCreating}
+                className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', backgroundColor: 'var(--modus-primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px' }}
+              >
+                <FiPlus size={14} /> Lisa Kraana
+              </button>
+            </div>
+            <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
             {cranes.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
                 <FiDatabase size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
@@ -406,6 +407,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
               ))}
             </div>
             )}
+            </div>
           </div>
         )}
       </div>
