@@ -17,7 +17,8 @@ import {
   TrimbleExUser,
   CRANE_TYPE_LABELS,
   DEFAULT_CRANE_COLOR,
-  DEFAULT_RADIUS_COLOR
+  DEFAULT_RADIUS_COLOR,
+  DEFAULT_LABEL_COLOR
 } from '../supabase';
 
 import { InspectionMode } from './MainMenu';
@@ -71,6 +72,7 @@ export default function CranePlannerScreen({
     max_radius_limit_m: 0, // 0 = no limit, use crane's max radius
     crane_color: DEFAULT_CRANE_COLOR,
     radius_color: DEFAULT_RADIUS_COLOR,
+    label_color: DEFAULT_LABEL_COLOR,
     notes: ''
   });
 
@@ -131,6 +133,7 @@ export default function CranePlannerScreen({
         max_radius_limit_m: config.max_radius_limit_m || undefined,
         crane_color: config.crane_color,
         radius_color: config.radius_color,
+        label_color: config.label_color,
         notes: config.notes || undefined,
         markup_ids: [],
         created_by_email: userEmail,
@@ -209,6 +212,7 @@ export default function CranePlannerScreen({
       max_radius_limit_m: 0,
       crane_color: DEFAULT_CRANE_COLOR,
       radius_color: DEFAULT_RADIUS_COLOR,
+      label_color: DEFAULT_LABEL_COLOR,
       notes: ''
     });
   }, []);
@@ -242,6 +246,7 @@ export default function CranePlannerScreen({
       max_radius_limit_m: crane.max_radius_limit_m || 0,
       crane_color: crane.crane_color,
       radius_color: crane.radius_color,
+      label_color: crane.label_color || DEFAULT_LABEL_COLOR,
       notes: crane.notes || ''
     });
     setEditingCraneId(crane.id);
@@ -449,6 +454,7 @@ export default function CranePlannerScreen({
       max_radius_limit_m: config.max_radius_limit_m || undefined,
       crane_color: config.crane_color,
       radius_color: config.radius_color,
+      label_color: config.label_color,
       notes: config.notes || undefined,
       created_by_email: userEmail
     };
@@ -1006,6 +1012,22 @@ export default function CranePlannerScreen({
                         <span style={{ fontSize: '12px', minWidth: '35px' }}>{Math.round((config.radius_color.a / 255) * 100)}%</span>
                       </div>
                     </div>
+                  </div>
+                  {/* Label Color Settings */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '13px' }}>Sildi värv:</span>
+                    <input
+                      type="color"
+                      value={`#${config.label_color.r.toString(16).padStart(2, '0')}${config.label_color.g.toString(16).padStart(2, '0')}${config.label_color.b.toString(16).padStart(2, '0')}`}
+                      onChange={e => {
+                        const hex = e.target.value;
+                        const r = parseInt(hex.slice(1, 3), 16);
+                        const g = parseInt(hex.slice(3, 5), 16);
+                        const b = parseInt(hex.slice(5, 7), 16);
+                        setConfig(prev => ({ ...prev, label_color: { ...prev.label_color, r, g, b } }));
+                      }}
+                      style={{ width: '40px', height: '32px', border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
+                    />
                   </div>
                   {/* Crane Color Settings */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
