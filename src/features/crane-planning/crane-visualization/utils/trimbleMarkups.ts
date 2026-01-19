@@ -409,7 +409,8 @@ const LINE_FONT: Record<string, { width: number; lines: [number, number, number,
   'q': { width: 0.6, lines: [[0.6, -0.3, 0.6, 0.4], [0.6, 0.4, 0.1, 0.4], [0.1, 0.4, 0, 0.3], [0, 0.3, 0, 0.1], [0, 0.1, 0.1, 0], [0.1, 0, 0.6, 0]] },
   'r': { width: 0.4, lines: [[0, 0, 0, 0.4], [0, 0.3, 0.2, 0.4], [0.2, 0.4, 0.4, 0.4]] },
   's': { width: 0.5, lines: [[0.5, 0.4, 0.1, 0.4], [0.1, 0.4, 0, 0.35], [0, 0.35, 0, 0.25], [0, 0.25, 0.1, 0.2], [0.1, 0.2, 0.4, 0.2], [0.4, 0.2, 0.5, 0.15], [0.5, 0.15, 0.5, 0.05], [0.5, 0.05, 0.4, 0], [0.4, 0, 0, 0]] },
-  't': { width: 0.4, lines: [[0.15, 0, 0.15, 0.8], [0.15, 0.8, 0.25, 1], [0, 0.4, 0.35, 0.4], [0.15, 0, 0.3, 0], [0.3, 0, 0.4, 0.1]] },
+  // 't' as continuous trace-back: bar out-back, stem down, base-foot out-back, stem up, top curve
+  't': { width: 0.4, lines: [[0, 0.4, 0.35, 0.4], [0.35, 0.4, 0.15, 0.4], [0.15, 0.4, 0.15, 0], [0.15, 0, 0.3, 0], [0.3, 0, 0.4, 0.1], [0.4, 0.1, 0.3, 0], [0.3, 0, 0.15, 0], [0.15, 0, 0.15, 0.8], [0.15, 0.8, 0.25, 1]] },
   'u': { width: 0.6, lines: [[0, 0.4, 0, 0.1], [0, 0.1, 0.1, 0], [0.1, 0, 0.5, 0], [0.5, 0, 0.6, 0.1], [0.6, 0.1, 0.6, 0.4]] },
   'v': { width: 0.6, lines: [[0, 0.4, 0.3, 0], [0.3, 0, 0.6, 0.4]] },
   'w': { width: 0.9, lines: [[0, 0.4, 0.15, 0], [0.15, 0, 0.35, 0.3], [0.35, 0.3, 0.55, 0], [0.55, 0, 0.7, 0.4]] },
@@ -522,20 +523,21 @@ async function drawRadiusRingsGrouped(
           charX += charDef.width * textHeight + charSpacing;
         }
 
-        // Capacity label if available - each character separate
+        // Capacity label if available - each character separate, smaller than radius
         if (loadChartData && loadChartData.length > 0) {
           const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
           if (capacityPoint) {
             const capText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
             const capColor = { r: 0, g: 100, b: 180, a: 255 };
             let capX = centerX + radiusMm + 300;
-            const capHeight = textHeight * 0.85;
-            const capY = centerY - textHeight / 2 - textHeight * 1.2;
+            const capHeight = textHeight * 0.65; // Smaller than radius label
+            const capY = centerY - textHeight / 2 - textHeight * 0.9;
 
+            const capSpacing = capHeight * 0.2; // Proportional spacing for smaller text
             for (const char of capText.toLowerCase()) {
               const charDef = LINE_FONT[char];
               if (!charDef || charDef.lines.length === 0) {
-                capX += (charDef?.width || 0.3) * capHeight + charSpacing;
+                capX += (charDef?.width || 0.3) * capHeight + capSpacing;
                 continue;
               }
               const charSegments: LineSegment[] = [];
@@ -549,7 +551,7 @@ async function drawRadiusRingsGrouped(
                 allEntries.push({ color: capColor, lines: charSegments });
                 capacityLabelCount++;
               }
-              capX += charDef.width * capHeight + charSpacing;
+              capX += charDef.width * capHeight + capSpacing;
             }
           }
         }
