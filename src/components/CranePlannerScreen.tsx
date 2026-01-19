@@ -981,13 +981,14 @@ export default function CranePlannerScreen({
         }]
       });
 
-      // 3. Chain/rope (from object top, vertically up to boom tip) - green
+      // 3. Chain/rope (from boom tip, through object, down to crane base) - green
       // Chain is ALWAYS VERTICAL - same X,Y coordinates, only Z changes
+      // Goes through detail to show full vertical line
       allMarkupEntries.push({
         color: { r: 34, g: 197, b: 94, a: 255 },
         lines: [{
-          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: boomTipZ }
+          start: { positionX: objCenterX, positionY: objCenterY, positionZ: boomTipZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ }
         }]
       });
 
@@ -1005,6 +1006,15 @@ export default function CranePlannerScreen({
             end: { positionX: objCenterX, positionY: objCenterY + crossSize, positionZ: objTopZ }
           }
         ]
+      });
+
+      // 5. Horizontal distance measurement line (from crane center to object center at crane base level) - yellow
+      allMarkupEntries.push({
+        color: { r: 255, g: 200, b: 0, a: 255 },
+        lines: [{
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ }
+        }]
       });
     }
 
@@ -1907,7 +1917,7 @@ export default function CranePlannerScreen({
                       backgroundColor: 'white',
                       borderRadius: '6px',
                       boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
-                      overflow: 'hidden',
+                      overflow: openMenuCraneId === crane.id ? 'visible' : 'hidden',
                       position: 'relative',
                       zIndex: openMenuCraneId === crane.id ? 1003 : 'auto'
                     }}
@@ -2296,6 +2306,7 @@ export default function CranePlannerScreen({
                     <span>🔵 Kraana mast</span>
                     <span>🟠 Nool (boom)</span>
                     <span>🟢 Kett/tross</span>
+                    <span>🟡 Horisontaalne kaugus</span>
                   </div>
                 </div>
               </div>
