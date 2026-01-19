@@ -8136,6 +8136,73 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="🎯 Tõstepunkt (COG)"
+                  result={functionResults["liftingPoint"]}
+                  onClick={async () => {
+                    updateFunctionResult("liftingPoint", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeIds = sel.flatMap(s => s.objectRuntimeIds || []);
+                      if (runtimeIds.length === 0) throw new Error('RuntimeId puudub');
+
+                      // Get bounding boxes for all selected objects
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
+                      if (!bboxes || bboxes.length === 0) throw new Error('Bounding box puudub');
+
+                      const markupsToCreate: any[] = [];
+                      const results: string[] = [];
+
+                      for (let i = 0; i < bboxes.length; i++) {
+                        const bbox = bboxes[i];
+                        if (!bbox?.boundingBox) continue;
+                        const b = bbox.boundingBox;
+
+                        // Calculate center of gravity (center of bounding box)
+                        const centerX = (b.min.x + b.max.x) / 2 * 1000; // mm
+                        const centerY = (b.min.y + b.max.y) / 2 * 1000;
+                        const topZ = b.max.z * 1000; // Top of object for lifting point
+
+                        // Create crosshair markup at the lifting point (top center)
+                        const crossSize = 300; // 300mm crosshair
+                        const lineHeight = 500; // 500mm vertical line below
+
+                        // Crosshair lines + vertical drop line
+                        const liftingPointLines = [
+                          // X-axis crosshair
+                          { start: { positionX: centerX - crossSize, positionY: centerY, positionZ: topZ }, end: { positionX: centerX + crossSize, positionY: centerY, positionZ: topZ } },
+                          // Y-axis crosshair
+                          { start: { positionX: centerX, positionY: centerY - crossSize, positionZ: topZ }, end: { positionX: centerX, positionY: centerY + crossSize, positionZ: topZ } },
+                          // Vertical line down (lifting indicator)
+                          { start: { positionX: centerX, positionY: centerY, positionZ: topZ }, end: { positionX: centerX, positionY: centerY, positionZ: topZ + lineHeight } },
+                        ];
+
+                        markupsToCreate.push({
+                          color: { r: 255, g: 165, b: 0, a: 255 }, // Orange
+                          lines: liftingPointLines
+                        });
+
+                        results.push(`#${i + 1}: X=${(centerX/1000).toFixed(2)}m, Y=${(centerY/1000).toFixed(2)}m, Z=${(topZ/1000).toFixed(2)}m`);
+                      }
+
+                      if (markupsToCreate.length === 0) throw new Error('Ei leidnud ühtegi objekti');
+
+                      // Create freeline markups for all lifting points
+                      const markupApi = api.markup as any;
+                      await markupApi.addFreelineMarkups(markupsToCreate);
+
+                      updateFunctionResult("liftingPoint", {
+                        status: 'success',
+                        result: `🎯 ${markupsToCreate.length} tõstepunkti loodud:\n\n${results.join('\n')}\n\n⚠️ Rist detaili peal, joon üles`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("liftingPoint", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="🔷 Geomeetria servad"
                   result={functionResults["geometryEdges"]}
                   onClick={async () => {
