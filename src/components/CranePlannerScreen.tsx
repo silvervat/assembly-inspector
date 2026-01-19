@@ -1431,111 +1431,162 @@ export default function CranePlannerScreen({
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {projectCranes.map(crane => (
                   <div
                     key={crane.id}
                     style={{
                       backgroundColor: 'white',
-                      borderRadius: '8px',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+                      borderRadius: '6px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
                       overflow: 'hidden'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', padding: '16px', gap: '12px' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '16px' }}>
-                          {crane.position_label || 'Nimetu'}
+                    <div style={{ display: 'flex', alignItems: 'center', padding: '8px 10px', gap: '8px' }}>
+                      {/* Crane thumbnail */}
+                      {crane.crane_model?.image_url ? (
+                        <img
+                          src={crane.crane_model.image_url}
+                          alt=""
+                          style={{
+                            width: '32px',
+                            height: '24px',
+                            objectFit: 'cover',
+                            borderRadius: '3px',
+                            flexShrink: 0
+                          }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '32px',
+                          height: '24px',
+                          borderRadius: '3px',
+                          backgroundColor: '#f3f4f6',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <FiMapPin size={12} style={{ color: '#9ca3af' }} />
                         </div>
-                        <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
-                          {crane.crane_model?.manufacturer} {crane.crane_model?.model} •
-                          Nool {crane.boom_length_m}m •
-                          Pos: ({crane.position_x.toFixed(1)}, {crane.position_y.toFixed(1)}, {crane.position_z.toFixed(1)})m
+                      )}
+
+                      {/* Crane info - compact single line */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#374151',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          <span style={{ fontWeight: 600 }}>{crane.position_label || 'Nimetu'}</span>
+                          <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
+                          <span style={{ color: '#6b7280' }}>
+                            {crane.crane_model?.manufacturer} {crane.crane_model?.model}
+                          </span>
+                          <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
+                          <span style={{ color: '#6b7280' }}>Nool {crane.boom_length_m}m</span>
+                          <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
+                          <span style={{ color: '#9ca3af', fontSize: '11px' }}>
+                            ({crane.position_x.toFixed(1)}, {crane.position_y.toFixed(1)}, {crane.position_z.toFixed(1)})
+                          </span>
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      {/* Action buttons - smaller */}
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                         <button
                           onClick={() => toggleCraneVisibility(crane, crane.markup_ids.length === 0)}
                           style={{
-                            padding: '8px',
+                            padding: '4px',
                             border: '1px solid #e5e7eb',
-                            borderRadius: '6px',
+                            borderRadius: '4px',
                             backgroundColor: crane.markup_ids.length > 0 ? '#dcfce7' : 'white',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           }}
                           title={crane.markup_ids.length > 0 ? 'Peida mudelis' : 'Näita mudelis'}
                         >
-                          {crane.markup_ids.length > 0 ? <FiEye size={16} /> : <FiEyeOff size={16} />}
+                          {crane.markup_ids.length > 0 ? <FiEye size={12} /> : <FiEyeOff size={12} />}
                         </button>
                         <button
                           onClick={() => startEditing(crane)}
                           style={{
-                            padding: '8px',
+                            padding: '4px',
                             border: '1px solid #e5e7eb',
-                            borderRadius: '6px',
+                            borderRadius: '4px',
                             backgroundColor: 'white',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           }}
                           title="Muuda"
                         >
-                          <FiEdit2 size={16} />
+                          <FiEdit2 size={12} />
                         </button>
                         <button
                           onClick={() => setDeleteConfirmId(crane.id)}
                           style={{
-                            padding: '8px',
+                            padding: '4px',
                             border: '1px solid #fecaca',
-                            borderRadius: '6px',
+                            borderRadius: '4px',
                             backgroundColor: '#fef2f2',
                             color: '#dc2626',
-                            cursor: 'pointer'
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                           }}
                           title="Kustuta"
                         >
-                          <FiTrash2 size={16} />
+                          <FiTrash2 size={12} />
                         </button>
                       </div>
                     </div>
 
-                    {/* Delete Confirmation */}
+                    {/* Delete Confirmation - compact */}
                     {deleteConfirmId === crane.id && (
                       <div style={{
-                        padding: '16px',
+                        padding: '6px 10px',
                         borderTop: '1px solid #fecaca',
                         backgroundColor: '#fef2f2',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'space-between'
+                        justifyContent: 'space-between',
+                        fontSize: '11px'
                       }}>
-                        <span style={{ color: '#dc2626' }}>
-                          Kas oled kindel?
-                        </span>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <span style={{ color: '#dc2626' }}>Kustuta kraana?</span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
                           <button
                             onClick={() => setDeleteConfirmId(null)}
                             style={{
-                              padding: '6px 12px',
+                              padding: '3px 8px',
                               border: '1px solid #e5e7eb',
-                              borderRadius: '6px',
+                              borderRadius: '4px',
                               backgroundColor: 'white',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              fontSize: '11px'
                             }}
                           >
-                            Tühista
+                            Ei
                           </button>
                           <button
                             onClick={() => handleDelete(crane.id)}
                             style={{
-                              padding: '6px 12px',
+                              padding: '3px 8px',
                               border: 'none',
-                              borderRadius: '6px',
+                              borderRadius: '4px',
                               backgroundColor: '#dc2626',
                               color: 'white',
-                              cursor: 'pointer'
+                              cursor: 'pointer',
+                              fontSize: '11px'
                             }}
                           >
-                            Kustuta
+                            Jah
                           </button>
                         </div>
                       </div>

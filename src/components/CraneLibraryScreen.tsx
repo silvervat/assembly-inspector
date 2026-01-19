@@ -193,26 +193,27 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
       </PageHeader>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px' }}>
-        {/* Editor Form */}
+        {/* Editor Form - Compact */}
         {(isCreating || editingCraneId) && (
-          <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '16px' }}>
-            <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)', marginBottom: '12px' }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: '13px', fontWeight: 600, margin: 0 }}>
                 {isCreating ? 'Lisa Uus Kraana' : `Muuda: ${formData.manufacturer} ${formData.model}`}
               </h2>
             </div>
 
-            {/* Tabs */}
-            <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+            {/* Tabs - Compact */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', fontSize: '12px' }}>
               <button
                 onClick={() => setActiveTab('basic')}
                 style={{
-                  padding: '12px 20px',
+                  padding: '6px 12px',
                   border: 'none',
                   backgroundColor: activeTab === 'basic' ? '#f3f4f6' : 'white',
                   borderBottom: activeTab === 'basic' ? '2px solid var(--modus-primary)' : '2px solid transparent',
                   cursor: 'pointer',
-                  fontWeight: activeTab === 'basic' ? 600 : 400
+                  fontWeight: activeTab === 'basic' ? 600 : 400,
+                  fontSize: '12px'
                 }}
               >
                 Põhiandmed
@@ -221,13 +222,14 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
                 onClick={() => setActiveTab('counterweights')}
                 disabled={isCreating}
                 style={{
-                  padding: '12px 20px',
+                  padding: '6px 12px',
                   border: 'none',
                   backgroundColor: activeTab === 'counterweights' ? '#f3f4f6' : 'white',
                   borderBottom: activeTab === 'counterweights' ? '2px solid var(--modus-primary)' : '2px solid transparent',
                   cursor: isCreating ? 'not-allowed' : 'pointer',
                   fontWeight: activeTab === 'counterweights' ? 600 : 400,
-                  opacity: isCreating ? 0.5 : 1
+                  opacity: isCreating ? 0.5 : 1,
+                  fontSize: '12px'
                 }}
               >
                 Vastukaalud
@@ -236,20 +238,21 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
                 onClick={() => setActiveTab('charts')}
                 disabled={isCreating}
                 style={{
-                  padding: '12px 20px',
+                  padding: '6px 12px',
                   border: 'none',
                   backgroundColor: activeTab === 'charts' ? '#f3f4f6' : 'white',
                   borderBottom: activeTab === 'charts' ? '2px solid var(--modus-primary)' : '2px solid transparent',
                   cursor: isCreating ? 'not-allowed' : 'pointer',
                   fontWeight: activeTab === 'charts' ? 600 : 400,
-                  opacity: isCreating ? 0.5 : 1
+                  opacity: isCreating ? 0.5 : 1,
+                  fontSize: '12px'
                 }}
               >
                 Tõstegraafikud
               </button>
             </div>
 
-            <div style={{ padding: '16px' }}>
+            <div style={{ padding: '10px' }}>
               {activeTab === 'basic' && (
                 <BasicInfoForm
                   formData={formData}
@@ -275,184 +278,131 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
           </div>
         )}
 
-        {/* Crane List */}
+        {/* Crane List - Compact like Organizer */}
         {!isCreating && !editingCraneId && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
             {cranes.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
-                <FiDatabase size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-                <p style={{ fontSize: '16px', marginBottom: '8px' }}>Kraanasid pole veel lisatud</p>
-                <p style={{ fontSize: '14px' }}>Kliki "Lisa Kraana" et alustada</p>
+              <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
+                <FiDatabase size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                <p style={{ fontSize: '13px', margin: 0 }}>Kraanasid pole veel lisatud</p>
               </div>
             ) : (
-              cranes.map(crane => (
-                <div
-                  key={crane.id}
-                  style={{
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                    overflow: 'hidden'
-                  }}
-                >
-                  {/* Crane Header */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '16px',
-                      cursor: 'pointer',
-                      gap: '12px'
-                    }}
-                    onClick={() => toggleExpand(crane.id)}
-                  >
-                    <span style={{ color: '#9ca3af' }}>
-                      {expandedCraneId === crane.id ? <FiChevronDown size={20} /> : <FiChevronRight size={20} />}
-                    </span>
-
-                    {/* Thumbnail */}
-                    {crane.image_url ? (
-                      <img
-                        src={crane.image_url}
-                        alt={`${crane.manufacturer} ${crane.model}`}
-                        style={{
-                          width: '60px',
-                          height: '40px',
-                          objectFit: 'cover',
-                          borderRadius: '4px',
-                          border: '1px solid #e5e7eb'
-                        }}
-                      />
-                    ) : (
-                      <div style={{
-                        width: '60px',
-                        height: '40px',
-                        borderRadius: '4px',
-                        backgroundColor: '#f3f4f6',
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {cranes.map((crane, idx) => (
+                  <div key={crane.id}>
+                    {/* Compact crane row */}
+                    <div
+                      style={{
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#9ca3af'
+                        padding: '6px 10px',
+                        gap: '8px',
+                        borderBottom: idx < cranes.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => toggleExpand(crane.id)}
+                    >
+                      {/* Expand icon */}
+                      <span style={{ color: '#9ca3af', flexShrink: 0 }}>
+                        {expandedCraneId === crane.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
+                      </span>
+
+                      {/* Thumbnail */}
+                      {crane.image_url ? (
+                        <img
+                          src={crane.image_url}
+                          alt=""
+                          style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
+                        />
+                      ) : (
+                        <div style={{
+                          width: '28px', height: '20px', borderRadius: '2px', backgroundColor: '#f3f4f6',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                        }}>
+                          <FiImage size={10} style={{ color: '#9ca3af' }} />
+                        </div>
+                      )}
+
+                      {/* Crane info - single line */}
+                      <div style={{ flex: 1, minWidth: 0, fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ fontWeight: 600, color: '#374151' }}>{crane.manufacturer} {crane.model}</span>
+                        <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
+                        <span style={{ color: '#6b7280' }}>{CRANE_TYPE_LABELS[crane.crane_type]}</span>
+                        <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
+                        <span style={{ color: '#6b7280' }}>{(crane.max_capacity_kg / 1000).toFixed(0)}t</span>
+                        <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
+                        <span style={{ color: '#9ca3af' }}>{crane.max_radius_m}m</span>
+                      </div>
+
+                      {/* Status badge - tiny */}
+                      <span style={{
+                        padding: '1px 4px', borderRadius: '2px', fontSize: '9px', fontWeight: 500,
+                        backgroundColor: crane.is_active ? '#dcfce7' : '#f3f4f6',
+                        color: crane.is_active ? '#166534' : '#9ca3af',
+                        flexShrink: 0
                       }}>
-                        <FiImage size={20} />
+                        {crane.is_active ? 'OK' : '–'}
+                      </span>
+
+                      {/* Action buttons */}
+                      <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                        <button
+                          onClick={() => startEditing(crane)}
+                          style={{ padding: '3px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#6b7280' }}
+                          title="Muuda"
+                        >
+                          <FiEdit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => setDeleteConfirmId(crane.id)}
+                          style={{ padding: '3px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#dc2626' }}
+                          title="Kustuta"
+                        >
+                          <FiTrash2 size={12} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Details - compact */}
+                    {expandedCraneId === crane.id && (
+                      <div style={{ padding: '8px 10px 8px 44px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: '11px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '4px 12px' }}>
+                          <span><span style={{ color: '#9ca3af' }}>Max kõrgus:</span> {crane.max_height_m}m</span>
+                          <span><span style={{ color: '#9ca3af' }}>Min radius:</span> {crane.min_radius_m}m</span>
+                          <span><span style={{ color: '#9ca3af' }}>Alus:</span> {crane.base_width_m}×{crane.base_length_m}m</span>
+                          <span><span style={{ color: '#9ca3af' }}>Kabiin:</span> {CAB_POSITION_LABELS[crane.cab_position]}</span>
+                          <span><span style={{ color: '#9ca3af' }}>Nool:</span> {crane.default_boom_length_m}m</span>
+                          {crane.notes && <span style={{ gridColumn: 'span 2' }}><span style={{ color: '#9ca3af' }}>Märkus:</span> {crane.notes}</span>}
+                        </div>
                       </div>
                     )}
 
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: '16px' }}>
-                        {crane.manufacturer} {crane.model}
+                    {/* Delete Confirmation - compact */}
+                    {deleteConfirmId === crane.id && (
+                      <div style={{
+                        padding: '4px 10px 4px 44px', backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px'
+                      }}>
+                        <span style={{ color: '#dc2626' }}>Kustuta?</span>
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            onClick={() => setDeleteConfirmId(null)}
+                            style={{ padding: '2px 8px', border: '1px solid #d1d5db', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}
+                          >
+                            Ei
+                          </button>
+                          <button
+                            onClick={() => handleDelete(crane.id)}
+                            style={{ padding: '2px 8px', border: 'none', borderRadius: '3px', backgroundColor: '#dc2626', color: 'white', cursor: 'pointer', fontSize: '11px' }}
+                          >
+                            Jah
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>
-                        {CRANE_TYPE_LABELS[crane.crane_type]} • Max {(crane.max_capacity_kg / 1000).toFixed(0)}t • {crane.max_radius_m}m radius
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        backgroundColor: crane.is_active ? '#dcfce7' : '#f3f4f6',
-                        color: crane.is_active ? '#166534' : '#6b7280'
-                      }}
-                    >
-                      {crane.is_active ? 'Aktiivne' : 'Mitteaktiivne'}
-                    </span>
-
-                    <div style={{ display: 'flex', gap: '8px' }} onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => startEditing(crane)}
-                        style={{
-                          padding: '8px',
-                          border: '1px solid #e5e7eb',
-                          borderRadius: '6px',
-                          backgroundColor: 'white',
-                          cursor: 'pointer'
-                        }}
-                        title="Muuda"
-                      >
-                        <FiEdit2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirmId(crane.id)}
-                        style={{
-                          padding: '8px',
-                          border: '1px solid #fecaca',
-                          borderRadius: '6px',
-                          backgroundColor: '#fef2f2',
-                          color: '#dc2626',
-                          cursor: 'pointer'
-                        }}
-                        title="Kustuta"
-                      >
-                        <FiTrash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expanded Details */}
-                  {expandedCraneId === crane.id && (
-                    <div style={{ padding: '16px', borderTop: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-                        <DetailItem label="Tootja" value={crane.manufacturer} />
-                        <DetailItem label="Mudel" value={crane.model} />
-                        <DetailItem label="Tüüp" value={CRANE_TYPE_LABELS[crane.crane_type]} />
-                        <DetailItem label="Max koormus" value={`${(crane.max_capacity_kg / 1000).toFixed(1)}t`} />
-                        <DetailItem label="Max kõrgus" value={`${crane.max_height_m}m`} />
-                        <DetailItem label="Max radius" value={`${crane.max_radius_m}m`} />
-                        <DetailItem label="Min radius" value={`${crane.min_radius_m}m`} />
-                        <DetailItem label="Aluse mõõdud" value={`${crane.base_width_m} x ${crane.base_length_m}m`} />
-                        <DetailItem label="Kabiini pos." value={CAB_POSITION_LABELS[crane.cab_position]} />
-                        <DetailItem label="Default nool" value={`${crane.default_boom_length_m}m`} />
-                        {crane.notes && <DetailItem label="Märkused" value={crane.notes} />}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Delete Confirmation */}
-                  {deleteConfirmId === crane.id && (
-                    <div style={{
-                      padding: '16px',
-                      borderTop: '1px solid #fecaca',
-                      backgroundColor: '#fef2f2',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <span style={{ color: '#dc2626' }}>
-                        Kas oled kindel, et soovid selle kraana kustutada?
-                      </span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button
-                          onClick={() => setDeleteConfirmId(null)}
-                          style={{
-                            padding: '8px 16px',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '6px',
-                            backgroundColor: 'white',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Tühista
-                        </button>
-                        <button
-                          onClick={() => handleDelete(crane.id)}
-                          style={{
-                            padding: '8px 16px',
-                            border: 'none',
-                            borderRadius: '6px',
-                            backgroundColor: '#dc2626',
-                            color: 'white',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Kustuta
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    )}
                 </div>
-              ))
+              ))}
+            </div>
             )}
           </div>
         )}
@@ -461,15 +411,6 @@ export default function CraneLibraryScreen({ onBackToMenu, userEmail, user }: Cr
   );
 }
 
-// Helper component for detail items
-function DetailItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '2px' }}>{label}</div>
-      <div style={{ fontSize: '14px', fontWeight: 500 }}>{value}</div>
-    </div>
-  );
-}
 
 // Basic Info Form Component
 function BasicInfoForm({
@@ -518,23 +459,23 @@ function BasicInfoForm({
   };
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    padding: '10px 12px',
+    padding: '5px 8px',
     border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    fontSize: '14px'
+    borderRadius: '4px',
+    fontSize: '12px'
   };
 
   const labelStyle: React.CSSProperties = {
     display: 'block',
-    marginBottom: '4px',
-    fontSize: '13px',
+    marginBottom: '2px',
+    fontSize: '11px',
     fontWeight: 500,
-    color: '#374151'
+    color: '#6b7280'
   };
 
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
         <div>
           <label style={labelStyle}>Tootja *</label>
           <input
@@ -644,13 +585,13 @@ function BasicInfoForm({
           />
         </div>
 
-        {/* Crane shape visualization settings with info */}
-        <div style={{ gridColumn: 'span 2', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '6px', marginTop: '8px', marginBottom: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <FiInfo size={16} style={{ color: '#0369a1' }} />
-            <span style={{ fontSize: '13px', fontWeight: 500, color: '#0369a1' }}>Kraana kuju mudelis</span>
+        {/* Crane shape visualization settings with info - Compact */}
+        <div style={{ gridColumn: 'span 2', padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px', marginTop: '4px', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+            <FiInfo size={12} style={{ color: '#0369a1' }} />
+            <span style={{ fontSize: '11px', fontWeight: 500, color: '#0369a1' }}>Kraana kuju mudelis</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
             <div>
               <label style={labelStyle}>Aluse laius (m)</label>
               <input
@@ -686,13 +627,8 @@ function BasicInfoForm({
               </select>
             </div>
           </div>
-          <div style={{ marginTop: '12px', fontSize: '12px', color: '#6b7280' }}>
-            <strong>Visualiseerimine mudelis:</strong> Kraana joonistatakse ristkülikuna (laius × pikkus),
-            4 tugijalga nurkades, pöördalus keskel, nool üles suunatud. Kabiini asend määrab operaatori positsiooni.
-            <br />
-            <span style={{ fontSize: '11px', fontStyle: 'italic' }}>
-              Vihje: Tekla/IFC koordinaatide saamiseks kasuta mudeli mõõtmistööriistu.
-            </span>
+          <div style={{ marginTop: '6px', fontSize: '10px', color: '#6b7280' }}>
+            Kraana = ristküliku alus + 4 tugijalga + pöördalus. Kabiini asend määrab operaatori positsiooni.
           </div>
         </div>
 
@@ -709,132 +645,70 @@ function BasicInfoForm({
         </div>
       </div>
 
-      <div style={{ marginTop: '16px' }}>
+      <div style={{ marginTop: '8px' }}>
         <label style={labelStyle}>Märkused</label>
         <textarea
-          style={{ ...inputStyle, minHeight: '80px', resize: 'vertical' }}
+          style={{ ...inputStyle, minHeight: '50px', resize: 'vertical' }}
           value={formData.notes || ''}
           onChange={(e) => onChange({ ...formData, notes: e.target.value })}
           placeholder="Lisainfo, eripärad, piirangud..."
         />
       </div>
 
-      {/* Image Upload - only show when editing existing crane */}
+      {/* Image Upload - compact, only show when editing existing crane */}
       {!isCreating && craneId && (
-        <div style={{ marginTop: '16px' }}>
+        <div style={{ marginTop: '8px' }}>
           <label style={labelStyle}>Kraana pilt</label>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
             {formData.image_url ? (
               <div style={{ position: 'relative' }}>
                 <img
                   src={formData.image_url}
                   alt="Kraana"
-                  style={{
-                    width: '150px',
-                    height: '100px',
-                    objectFit: 'cover',
-                    borderRadius: '6px',
-                    border: '1px solid #e5e7eb'
-                  }}
+                  style={{ width: '80px', height: '50px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #e5e7eb' }}
                 />
                 <button
                   onClick={() => onChange({ ...formData, image_url: '' })}
                   style={{
-                    position: 'absolute',
-                    top: '-8px',
-                    right: '-8px',
-                    width: '24px',
-                    height: '24px',
-                    borderRadius: '50%',
-                    border: 'none',
-                    backgroundColor: '#dc2626',
-                    color: 'white',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px'
+                    position: 'absolute', top: '-6px', right: '-6px', width: '16px', height: '16px', borderRadius: '50%',
+                    border: 'none', backgroundColor: '#dc2626', color: 'white', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px'
                   }}
-                >
-                  ×
-                </button>
+                >×</button>
               </div>
             ) : (
               <div style={{
-                width: '150px',
-                height: '100px',
-                borderRadius: '6px',
-                border: '2px dashed #d1d5db',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#9ca3af'
+                width: '80px', height: '50px', borderRadius: '4px', border: '1px dashed #d1d5db',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af'
               }}>
-                <FiImage size={32} />
+                <FiImage size={20} />
               </div>
             )}
             <div>
-              <label
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '8px 16px',
-                  backgroundColor: 'var(--modus-primary)',
-                  color: 'white',
-                  borderRadius: '6px',
-                  cursor: uploadingImage ? 'not-allowed' : 'pointer',
-                  opacity: uploadingImage ? 0.7 : 1
-                }}
-              >
-                {uploadingImage ? (
-                  <>
-                    <FiLoader className="animate-spin" size={16} /> Üleslaadimine...
-                  </>
-                ) : (
-                  <>
-                    <FiUpload size={16} /> Lae pilt üles
-                  </>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={handleImageUpload}
-                  disabled={uploadingImage}
-                />
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '4px 10px',
+                backgroundColor: 'var(--modus-primary)', color: 'white', borderRadius: '4px', fontSize: '11px',
+                cursor: uploadingImage ? 'not-allowed' : 'pointer', opacity: uploadingImage ? 0.7 : 1
+              }}>
+                {uploadingImage ? <><FiLoader className="animate-spin" size={12} /> Laen...</> : <><FiUpload size={12} /> Lae üles</>}
+                <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} disabled={uploadingImage} />
               </label>
-              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '8px' }}>
-                Max 5MB, JPEG/PNG formaat
-              </div>
+              <div style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>Max 5MB</div>
             </div>
           </div>
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px', marginTop: '12px' }}>
         <button
           onClick={onCancel}
-          style={{
-            padding: '10px 20px',
-            border: '1px solid #e5e7eb',
-            borderRadius: '6px',
-            backgroundColor: 'white',
-            cursor: 'pointer'
-          }}
+          style={{ padding: '5px 12px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '12px' }}
         >
           Tühista
         </button>
         <button
           onClick={onSave}
-          style={{
-            padding: '10px 20px',
-            border: 'none',
-            borderRadius: '6px',
-            backgroundColor: 'var(--modus-primary)',
-            color: 'white',
-            cursor: 'pointer'
-          }}
+          style={{ padding: '5px 12px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: 'pointer', fontSize: '12px' }}
         >
           {isCreating ? 'Salvesta ja jätka' : 'Salvesta'}
         </button>
@@ -843,7 +717,7 @@ function BasicInfoForm({
   );
 }
 
-// Counterweights Manager Component
+// Counterweights Manager Component - Compact
 function CounterweightsManager({ craneId }: { craneId: string }) {
   const { counterweights, loading, createCounterweight, updateCounterweight, deleteCounterweight } = useCounterweights(craneId);
   const [isAdding, setIsAdding] = useState(false);
@@ -852,10 +726,10 @@ function CounterweightsManager({ craneId }: { craneId: string }) {
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    padding: '10px 12px',
+    padding: '5px 8px',
     border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    fontSize: '14px'
+    borderRadius: '4px',
+    fontSize: '12px'
   };
 
   const handleSave = async () => {
@@ -879,121 +753,59 @@ function CounterweightsManager({ craneId }: { craneId: string }) {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '20px' }}><FiLoader className="animate-spin" /></div>;
+    return <div style={{ textAlign: 'center', padding: '12px' }}><FiLoader className="animate-spin" size={16} /></div>;
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Vastukaalu konfiguratsioonid</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>Vastukaalu konfiguratsioonid</h3>
         {!isAdding && !editingId && (
-          <button
-            onClick={() => setIsAdding(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              backgroundColor: 'white',
-              cursor: 'pointer'
-            }}
-          >
-            <FiPlus size={14} /> Lisa
+          <button onClick={() => setIsAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}>
+            <FiPlus size={12} /> Lisa
           </button>
         )}
       </div>
 
       {(isAdding || editingId) && (
-        <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '6px', marginBottom: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+        <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '4px', marginBottom: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Nimi *</label>
-              <input
-                type="text"
-                style={inputStyle}
-                value={formData.name}
-                onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                placeholder="Standard 20t"
-              />
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Nimi *</label>
+              <input type="text" style={inputStyle} value={formData.name} onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))} placeholder="Standard 20t" />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Kaal (t) *</label>
-              <input
-                type="number"
-                style={inputStyle}
-                value={formData.weight_kg / 1000}
-                onChange={e => setFormData(prev => ({ ...prev, weight_kg: parseFloat(e.target.value) * 1000 }))}
-                step="0.1"
-              />
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Kaal (t) *</label>
+              <input type="number" style={inputStyle} value={formData.weight_kg / 1000} onChange={e => setFormData(prev => ({ ...prev, weight_kg: parseFloat(e.target.value) * 1000 }))} step="0.1" />
             </div>
             <div style={{ gridColumn: 'span 2' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Kirjeldus</label>
-              <input
-                type="text"
-                style={inputStyle}
-                value={formData.description}
-                onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Valikuline kirjeldus..."
-              />
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Kirjeldus</label>
+              <input type="text" style={inputStyle} value={formData.description} onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))} placeholder="Valikuline..." />
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <button
-              onClick={() => { setIsAdding(false); setEditingId(null); setFormData({ name: '', weight_kg: 0, description: '', sort_order: 0 }); }}
-              style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer' }}
-            >
-              Tühista
-            </button>
-            <button
-              onClick={handleSave}
-              style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: 'pointer' }}
-            >
-              Salvesta
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '8px' }}>
+            <button onClick={() => { setIsAdding(false); setEditingId(null); setFormData({ name: '', weight_kg: 0, description: '', sort_order: 0 }); }} style={{ padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}>Tühista</button>
+            <button onClick={handleSave} style={{ padding: '4px 10px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: 'pointer', fontSize: '11px' }}>Salvesta</button>
           </div>
         </div>
       )}
 
       {counterweights.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
-          <FiSettings size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
-          <p>Vastukaalusid pole veel lisatud</p>
+        <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+          <FiSettings size={24} style={{ opacity: 0.3, marginBottom: '6px' }} />
+          <p style={{ fontSize: '11px', margin: 0 }}>Vastukaalusid pole</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {counterweights.map(cw => (
-            <div
-              key={cw.id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px',
-                backgroundColor: '#f9fafb',
-                borderRadius: '6px'
-              }}
-            >
+            <div key={cw.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px', backgroundColor: '#f9fafb', borderRadius: '4px' }}>
               <div>
-                <div style={{ fontWeight: 500 }}>{cw.name}</div>
-                <div style={{ fontSize: '13px', color: '#6b7280' }}>
-                  {(cw.weight_kg / 1000).toFixed(1)}t {cw.description && `- ${cw.description}`}
-                </div>
+                <div style={{ fontWeight: 500, fontSize: '12px' }}>{cw.name}</div>
+                <div style={{ fontSize: '11px', color: '#6b7280' }}>{(cw.weight_kg / 1000).toFixed(1)}t {cw.description && `- ${cw.description}`}</div>
               </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  onClick={() => { setEditingId(cw.id); setFormData({ name: cw.name, weight_kg: cw.weight_kg, description: cw.description || '', sort_order: cw.sort_order }); }}
-                  style={{ padding: '6px', border: '1px solid #e5e7eb', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer' }}
-                >
-                  <FiEdit2 size={14} />
-                </button>
-                <button
-                  onClick={() => deleteCounterweight(cw.id)}
-                  style={{ padding: '6px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
-                >
-                  <FiTrash2 size={14} />
-                </button>
+              <div style={{ display: 'flex', gap: '4px' }}>
+                <button onClick={() => { setEditingId(cw.id); setFormData({ name: cw.name, weight_kg: cw.weight_kg, description: cw.description || '', sort_order: cw.sort_order }); }} style={{ padding: '4px', border: '1px solid #e5e7eb', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer' }}><FiEdit2 size={12} /></button>
+                <button onClick={() => deleteCounterweight(cw.id)} style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}><FiTrash2 size={12} /></button>
               </div>
             </div>
           ))}
@@ -1003,7 +815,7 @@ function CounterweightsManager({ craneId }: { craneId: string }) {
   );
 }
 
-// Load Charts Manager Component
+// Load Charts Manager Component - Compact
 function LoadChartsManager({ craneId }: { craneId: string }) {
   const { counterweights, createCounterweight, refetch: refetchCounterweights } = useCounterweights(craneId);
   const { loadCharts, loading, createLoadChart, updateLoadChart, deleteLoadChart, refetch: refetchLoadCharts } = useLoadCharts(craneId);
@@ -1012,13 +824,7 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
   const [saving, setSaving] = useState(false);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [formData, setFormData] = useState({
-    counterweight_name: '',
-    counterweight_kg: 0,
-    boom_length_m: 40,
-    chart_data: [] as LoadChartDataPoint[],
-    notes: ''
-  });
+  const [formData, setFormData] = useState({ counterweight_name: '', counterweight_kg: 0, boom_length_m: 40, chart_data: [] as LoadChartDataPoint[], notes: '' });
   const [pasteText, setPasteText] = useState('');
 
   // Download Excel template for load charts
@@ -1168,26 +974,10 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '10px 12px',
-    border: '1px solid #d1d5db',
-    borderRadius: '6px',
-    fontSize: '14px'
-  };
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '5px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' };
 
-  const handlePasteChange = (text: string) => {
-    setPasteText(text);
-    const parsed = parseLoadChartFromPaste(text);
-    setFormData(prev => ({ ...prev, chart_data: parsed }));
-  };
-
-  const resetForm = () => {
-    setFormData({ counterweight_name: '', counterweight_kg: 0, boom_length_m: 40, chart_data: [], notes: '' });
-    setPasteText('');
-    setIsAdding(false);
-    setEditingId(null);
-  };
+  const handlePasteChange = (text: string) => { setPasteText(text); setFormData(prev => ({ ...prev, chart_data: parseLoadChartFromPaste(text) })); };
+  const resetForm = () => { setFormData({ counterweight_name: '', counterweight_kg: 0, boom_length_m: 40, chart_data: [], notes: '' }); setPasteText(''); setIsAdding(false); setEditingId(null); };
 
   const handleSave = async () => {
     if (!formData.counterweight_name || formData.counterweight_kg <= 0) {
@@ -1266,213 +1056,84 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
   };
 
   if (loading) {
-    return <div style={{ textAlign: 'center', padding: '20px' }}><FiLoader className="animate-spin" /></div>;
+    return <div style={{ textAlign: 'center', padding: '12px' }}><FiLoader className="animate-spin" size={16} /></div>;
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Tõstevõime graafikud</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 style={{ margin: 0, fontSize: '12px', fontWeight: 600 }}>Tõstevõime graafikud</h3>
         {!isAdding && !editingId && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={downloadTemplate}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                backgroundColor: 'white',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}
-              title="Lae alla Excel mall"
-            >
-              <FiDownload size={14} /> Mall
-            </button>
-            <label
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                backgroundColor: 'white',
-                cursor: importing ? 'not-allowed' : 'pointer',
-                fontSize: '13px',
-                opacity: importing ? 0.7 : 1
-              }}
-              title="Impordi Excelist"
-            >
-              {importing ? <FiLoader className="animate-spin" size={14} /> : <FiFileText size={14} />}
-              {importing ? 'Importimine...' : 'Impordi'}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.xls"
-                style={{ display: 'none' }}
-                onChange={handleExcelImport}
-                disabled={importing}
-              />
+          <div style={{ display: 'flex', gap: '4px' }}>
+            <button onClick={downloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }} title="Lae alla Excel mall"><FiDownload size={12} /> Mall</button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: importing ? 'not-allowed' : 'pointer', fontSize: '11px', opacity: importing ? 0.7 : 1 }} title="Impordi Excelist">
+              {importing ? <FiLoader className="animate-spin" size={12} /> : <FiFileText size={12} />}
+              {importing ? 'Laen...' : 'Impordi'}
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleExcelImport} disabled={importing} />
             </label>
-            <button
-              onClick={() => setIsAdding(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                backgroundColor: 'white',
-                cursor: 'pointer',
-                fontSize: '13px'
-              }}
-            >
-              <FiPlus size={14} /> Lisa
-            </button>
+            <button onClick={() => setIsAdding(true)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}><FiPlus size={12} /> Lisa</button>
           </div>
         )}
       </div>
 
-      <div style={{ padding: '12px', backgroundColor: '#e0f2fe', borderRadius: '6px', marginBottom: '16px', fontSize: '13px', color: '#0369a1' }}>
-        <strong>Vihje:</strong> Lae alla mall (Excel), täida andmed ja impordi tagasi. Vastukaalu konfiguratsioonid luuakse automaatselt.
+      <div style={{ padding: '6px 10px', backgroundColor: '#e0f2fe', borderRadius: '4px', marginBottom: '8px', fontSize: '10px', color: '#0369a1' }}>
+        <strong>Vihje:</strong> Lae alla mall, täida ja impordi. Vastukaalud luuakse automaatselt.
       </div>
 
       {(isAdding || editingId) && (
-        <div style={{ backgroundColor: '#f9fafb', padding: '16px', borderRadius: '6px', marginBottom: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+        <div style={{ backgroundColor: '#f9fafb', padding: '10px', borderRadius: '4px', marginBottom: '8px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Vastukaalu nimi *</label>
-              <input
-                type="text"
-                style={inputStyle}
-                value={formData.counterweight_name}
-                onChange={e => setFormData(prev => ({ ...prev, counterweight_name: e.target.value }))}
-                placeholder="Standard 20t"
-                list="counterweight-names"
-              />
-              <datalist id="counterweight-names">
-                {counterweights.map(cw => (
-                  <option key={cw.id} value={cw.name} />
-                ))}
-              </datalist>
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Vastukaalu nimi *</label>
+              <input type="text" style={inputStyle} value={formData.counterweight_name} onChange={e => setFormData(prev => ({ ...prev, counterweight_name: e.target.value }))} placeholder="Standard 20t" list="counterweight-names" />
+              <datalist id="counterweight-names">{counterweights.map(cw => <option key={cw.id} value={cw.name} />)}</datalist>
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Vastukaalu kaal (t) *</label>
-              <input
-                type="number"
-                style={inputStyle}
-                value={formData.counterweight_kg / 1000 || ''}
-                onChange={e => setFormData(prev => ({ ...prev, counterweight_kg: parseFloat(e.target.value) * 1000 || 0 }))}
-                step="0.5"
-                placeholder="20"
-              />
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Kaal (t) *</label>
+              <input type="number" style={inputStyle} value={formData.counterweight_kg / 1000 || ''} onChange={e => setFormData(prev => ({ ...prev, counterweight_kg: parseFloat(e.target.value) * 1000 || 0 }))} step="0.5" placeholder="20" />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>Noole pikkus (m) *</label>
-              <input
-                type="number"
-                style={inputStyle}
-                value={formData.boom_length_m}
-                onChange={e => setFormData(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) }))}
-                step="1"
-              />
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Nool (m) *</label>
+              <input type="number" style={inputStyle} value={formData.boom_length_m} onChange={e => setFormData(prev => ({ ...prev, boom_length_m: parseFloat(e.target.value) }))} step="1" />
             </div>
             <div style={{ gridColumn: 'span 3' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px' }}>
-                Tõstegraafiku andmed (kleebitud Excelist: radius [TAB] koormus tonnides)
-              </label>
-              <textarea
-                style={{ ...inputStyle, minHeight: '120px', fontFamily: 'monospace' }}
-                value={pasteText}
-                onChange={e => handlePasteChange(e.target.value)}
-                placeholder="3&#9;100&#10;5&#9;80&#10;10&#9;50&#10;15&#9;35&#10;20&#9;25"
-              />
-              <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
-                Näide: "3 [TAB] 100" tähendab 3m raadiusel 100 tonni
-              </div>
+              <label style={{ display: 'block', marginBottom: '2px', fontSize: '11px', color: '#6b7280' }}>Graafik (radius [TAB] tonnid)</label>
+              <textarea style={{ ...inputStyle, minHeight: '80px', fontFamily: 'monospace' }} value={pasteText} onChange={e => handlePasteChange(e.target.value)} placeholder="3&#9;100&#10;5&#9;80&#10;10&#9;50" />
             </div>
           </div>
-
           {formData.chart_data.length > 0 && (
-            <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#dcfce7', borderRadius: '6px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '8px', color: '#166534' }}>
-                Eelvaade: {formData.chart_data.length} punkti
-              </div>
-              <div style={{ fontSize: '12px', color: '#166534', maxHeight: '100px', overflow: 'auto' }}>
-                {formData.chart_data.map((d, i) => (
-                  <span key={i}>{d.radius_m}m={d.capacity_kg / 1000}t{i < formData.chart_data.length - 1 ? ', ' : ''}</span>
-                ))}
-              </div>
+            <div style={{ marginTop: '6px', padding: '6px 8px', backgroundColor: '#dcfce7', borderRadius: '4px', fontSize: '10px', color: '#166534' }}>
+              <strong>Eelvaade ({formData.chart_data.length}):</strong> {formData.chart_data.slice(0, 8).map(d => `${d.radius_m}m=${d.capacity_kg / 1000}t`).join(', ')}{formData.chart_data.length > 8 && '...'}
             </div>
           )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <button
-              onClick={resetForm}
-              disabled={saving}
-              style={{ padding: '8px 16px', border: '1px solid #e5e7eb', borderRadius: '6px', backgroundColor: 'white', cursor: 'pointer' }}
-            >
-              Tühista
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{ padding: '8px 16px', border: 'none', borderRadius: '6px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}
-            >
-              {saving ? 'Salvestamine...' : (editingId ? 'Uuenda' : 'Salvesta')}
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '4px', marginTop: '8px' }}>
+            <button onClick={resetForm} disabled={saving} style={{ padding: '4px 10px', border: '1px solid #d1d5db', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}>Tühista</button>
+            <button onClick={handleSave} disabled={saving} style={{ padding: '4px 10px', border: 'none', borderRadius: '4px', backgroundColor: 'var(--modus-primary)', color: 'white', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1, fontSize: '11px' }}>{saving ? 'Salvestamine...' : (editingId ? 'Uuenda' : 'Salvesta')}</button>
           </div>
         </div>
       )}
 
       {loadCharts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
-          <FiDatabase size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
-          <p>Tõstegraafikuid pole veel lisatud</p>
+        <div style={{ textAlign: 'center', padding: '20px', color: '#9ca3af' }}>
+          <FiDatabase size={24} style={{ opacity: 0.3, marginBottom: '6px' }} />
+          <p style={{ fontSize: '11px', margin: 0 }}>Graafikuid pole</p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           {loadCharts.map(lc => {
             const cw = counterweights.find(c => c.id === lc.counterweight_config_id);
             return (
-              <div
-                key={lc.id}
-                style={{
-                  padding: '12px',
-                  backgroundColor: '#f9fafb',
-                  borderRadius: '6px'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500 }}>
-                      {cw?.name || 'Tundmatu vastukaal'} ({cw ? (cw.weight_kg / 1000).toFixed(0) + 't' : '?'}) • Nool {lc.boom_length_m}m
-                    </div>
-                    <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
-                      {lc.chart_data.length} punkti: {lc.chart_data.slice(0, 5).map(d => `${d.radius_m}m=${d.capacity_kg / 1000}t`).join(', ')}
-                      {lc.chart_data.length > 5 && '...'}
+              <div key={lc.id} style={{ padding: '6px 8px', backgroundColor: '#f9fafb', borderRadius: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: '12px' }}>{cw?.name || '?'} ({cw ? (cw.weight_kg / 1000).toFixed(0) + 't' : '?'}) • Nool {lc.boom_length_m}m</div>
+                    <div style={{ fontSize: '10px', color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {lc.chart_data.length} p: {lc.chart_data.slice(0, 4).map(d => `${d.radius_m}m=${d.capacity_kg / 1000}t`).join(', ')}{lc.chart_data.length > 4 && '...'}
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                      onClick={() => startEditing(lc)}
-                      style={{ padding: '6px', border: '1px solid #e5e7eb', borderRadius: '4px', backgroundColor: 'white', cursor: 'pointer' }}
-                      title="Muuda"
-                    >
-                      <FiEdit2 size={14} />
-                    </button>
-                    <button
-                      onClick={() => deleteLoadChart(lc.id)}
-                      style={{ padding: '6px', border: '1px solid #fecaca', borderRadius: '4px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }}
-                      title="Kustuta"
-                    >
-                      <FiTrash2 size={14} />
-                    </button>
+                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                    <button onClick={() => startEditing(lc)} style={{ padding: '4px', border: '1px solid #e5e7eb', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer' }} title="Muuda"><FiEdit2 size={12} /></button>
+                    <button onClick={() => deleteLoadChart(lc.id)} style={{ padding: '4px', border: '1px solid #fecaca', borderRadius: '3px', backgroundColor: '#fef2f2', color: '#dc2626', cursor: 'pointer' }} title="Kustuta"><FiTrash2 size={12} /></button>
                   </div>
                 </div>
               </div>
