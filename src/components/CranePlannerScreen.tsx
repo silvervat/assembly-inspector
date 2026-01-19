@@ -103,6 +103,7 @@ export default function CranePlannerScreen({
   const previewMarkupGroupsRef = useRef<CraneMarkupGroups | null>(null);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdatingPreviewRef = useRef(false); // Lock to prevent concurrent updates
+  const pendingUpdateRef = useRef<boolean | null>(null); // Track skipped updates (stores labelOnly value, or null if no pending)
   const prevLabelConfigRef = useRef<{ label: string; color: any; height: number } | null>(null);
 
   // Update preview when config changes
@@ -113,12 +114,17 @@ export default function CranePlannerScreen({
       return;
     }
 
-    // Prevent concurrent updates - skip if already updating
+    // Prevent concurrent updates - mark as pending if already updating
     if (isUpdatingPreviewRef.current) {
-      console.log('[Preview] Skipped - already updating');
+      console.log('[Preview] Marking as pending - already updating');
+      // Always upgrade to full update (false) if any update requests full, otherwise keep label-only
+      // pendingUpdateRef stores the labelOnly value (true = label-only, false = full)
+      const currentPending = pendingUpdateRef.current;
+      pendingUpdateRef.current = labelOnly && (currentPending === null ? true : currentPending);
       return;
     }
     isUpdatingPreviewRef.current = true;
+    pendingUpdateRef.current = null; // Clear pending since we're starting
     setPreviewLoading(true);
 
     try {
@@ -199,12 +205,24 @@ export default function CranePlannerScreen({
       console.error('Error updating preview:', error);
     } finally {
       isUpdatingPreviewRef.current = false;
-      setPreviewLoading(false);
+
+      // Check if there's a pending update that was skipped
+      const pendingLabelOnly = pendingUpdateRef.current;
+      if (pendingLabelOnly !== null) {
+        pendingUpdateRef.current = null;
+        console.log('[Preview] Running pending update after completion:', { labelOnly: pendingLabelOnly });
+        // Use the ref to get the LATEST schedulePreviewUpdate with current config
+        setTimeout(() => schedulePreviewUpdateRef.current(pendingLabelOnly), 10);
+      } else {
+        setPreviewLoading(false);
+      }
     }
   }, [api, selectedCraneModel, pickedPosition, projectId, selectedCraneModelId, selectedCounterweightId, config, loadCharts, userEmail]);
 
   // Track pending full update to prevent label-only from overriding
   const fullUpdatePendingRef = useRef(false);
+  // Store latest schedulePreviewUpdate for use in callbacks
+  const schedulePreviewUpdateRef = useRef<(labelOnly?: boolean) => void>(() => {});
 
   // Debounced preview update (full)
   const schedulePreviewUpdate = useCallback((labelOnly: boolean = false) => {
@@ -228,6 +246,9 @@ export default function CranePlannerScreen({
       updatePreview(labelOnly);
     }, labelOnly ? 50 : 100); // Faster for label-only updates
   }, [updatePreview]);
+
+  // Keep ref updated with latest function
+  schedulePreviewUpdateRef.current = schedulePreviewUpdate;
 
   // Update preview when position/structure config changes (full redraw)
   useEffect(() => {
@@ -1447,8 +1468,15 @@ export default function CranePlannerScreen({
         {/* Placed Cranes List */}
         {!isPlacing && !editingCraneId && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              {projectCranes.length > 0 && (
+            {/* Heading on separate line */}
+            <div style={{ marginBottom: '8px' }}>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: '#6b7280' }}>
+                Paigutatud kraanid ({projectCranes.length})
+              </span>
+            </div>
+            {/* Button */}
+            {projectCranes.length > 0 && (
+              <div style={{ marginBottom: '12px' }}>
                 <button
                   onClick={startPlacing}
                   disabled={craneModels.filter(c => c.is_active).length === 0}
@@ -1466,11 +1494,8 @@ export default function CranePlannerScreen({
                 >
                   <FiPlus size={16} /> Paiguta uus Kraana
                 </button>
-              )}
-              <h3 style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: '#6b7280' }}>
-                Paigutatud kraanid ({projectCranes.length})
-              </h3>
-            </div>
+              </div>
+            )}
 
             {projectCranes.length === 0 ? (
               <div style={{
