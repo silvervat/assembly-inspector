@@ -105,6 +105,8 @@ export default function CranePlannerScreen({
       isSafe: boolean;
       boomAngle: number;
       chainLength: number;
+      boomTipHeight: number;
+      boomTipAbsZ: number;
       // Raw data for recalculation
       objCenterX: number;
       objCenterY: number;
@@ -201,7 +203,8 @@ export default function CranePlannerScreen({
         // Full update: remove all and redraw
         console.log('[Preview] Full update - all markups, idsToRemove:', previewMarkupIdsRef.current.length);
         const idsToRemove = [...previewMarkupIdsRef.current];
-        previewMarkupIdsRef.current = [];
+
+        // Clear groups ref now, but keep IDs in ref until after removal
         previewMarkupGroupsRef.current = null;
 
         if (idsToRemove.length > 0) {
@@ -209,6 +212,9 @@ export default function CranePlannerScreen({
           // Small delay to let viewer process removal before drawing new markups
           await new Promise(resolve => setTimeout(resolve, 50));
         }
+
+        // Clear IDs only AFTER successful removal to prevent race condition
+        previewMarkupIdsRef.current = [];
 
         const chartData = loadCharts.find(lc =>
           lc.counterweight_config_id === selectedCounterweightId &&
@@ -1078,8 +1084,7 @@ export default function CranePlannerScreen({
   // Move crane - uses world coordinates (Y = up/down, X = left/right in model space)
   const moveCrane = useCallback((dx: number, dy: number, dz: number) => {
     console.log('[CranePlanner] moveCrane called:', { dx, dy, dz, hasPosition: !!pickedPosition, hasModel: !!selectedCraneModel });
-    // Reset update lock if somehow stuck
-    isUpdatingPreviewRef.current = false;
+    // Don't reset update lock - let pending update mechanism handle rapid movements
     setConfig(prev => {
       const newConfig = {
         ...prev,
@@ -1100,8 +1105,7 @@ export default function CranePlannerScreen({
   // Rotate crane
   const rotateCrane = useCallback((degrees: number) => {
     console.log('[CranePlanner] rotateCrane called:', { degrees, hasPosition: !!pickedPosition, hasModel: !!selectedCraneModel });
-    // Reset update lock if somehow stuck
-    isUpdatingPreviewRef.current = false;
+    // Don't reset update lock - let pending update mechanism handle rapid rotations
     setConfig(prev => {
       const newRotation = (prev.rotation_deg + degrees + 360) % 360;
       console.log('[CranePlanner] New rotation:', newRotation);
