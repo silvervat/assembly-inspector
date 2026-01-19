@@ -87,6 +87,9 @@ export default function CranePlannerScreen({
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSavedConfigRef = useRef<string>(''); // JSON string of last saved config to detect changes
 
+  // Preview loading state for UI feedback
+  const [previewLoading, setPreviewLoading] = useState(false);
+
   // Selected crane model data
   const selectedCraneModel = craneModels.find(c => c.id === selectedCraneModelId);
   const { counterweights } = useCounterweights(selectedCraneModelId);
@@ -116,6 +119,7 @@ export default function CranePlannerScreen({
       return;
     }
     isUpdatingPreviewRef.current = true;
+    setPreviewLoading(true);
 
     try {
       // Create preview crane data
@@ -193,15 +197,32 @@ export default function CranePlannerScreen({
       console.error('Error updating preview:', error);
     } finally {
       isUpdatingPreviewRef.current = false;
+      setPreviewLoading(false);
     }
   }, [api, selectedCraneModel, pickedPosition, projectId, selectedCraneModelId, selectedCounterweightId, config, loadCharts, userEmail]);
 
+  // Track pending full update to prevent label-only from overriding
+  const fullUpdatePendingRef = useRef(false);
+
   // Debounced preview update (full)
   const schedulePreviewUpdate = useCallback((labelOnly: boolean = false) => {
+    // If a full update is requested, mark it as pending
+    if (!labelOnly) {
+      fullUpdatePendingRef.current = true;
+    }
+    // If this is a label-only update but a full update is pending, skip it
+    if (labelOnly && fullUpdatePendingRef.current) {
+      console.log('[Preview] Skipping label-only - full update pending');
+      return;
+    }
+
     if (previewTimeoutRef.current) {
       clearTimeout(previewTimeoutRef.current);
     }
     previewTimeoutRef.current = setTimeout(() => {
+      if (!labelOnly) {
+        fullUpdatePendingRef.current = false;
+      }
       updatePreview(labelOnly);
     }, labelOnly ? 50 : 100); // Faster for label-only updates
   }, [updatePreview]);
@@ -220,7 +241,7 @@ export default function CranePlannerScreen({
         clearTimeout(previewTimeoutRef.current);
       }
     };
-  }, [config.position_x, config.position_y, config.position_z, config.rotation_deg, config.boom_length_m, config.show_radius_rings, config.radius_step_m, config.max_radius_limit_m, config.crane_color, config.radius_color, pickedPosition, selectedCraneModel, schedulePreviewUpdate]);
+  }, [config.position_x, config.position_y, config.position_z, config.rotation_deg, config.boom_length_m, config.show_radius_rings, config.show_capacity_labels, config.radius_step_m, config.max_radius_limit_m, config.crane_color, config.radius_color, pickedPosition, selectedCraneModel, schedulePreviewUpdate]);
 
   // Update preview when only label config changes (partial redraw)
   useEffect(() => {
@@ -244,8 +265,31 @@ export default function CranePlannerScreen({
     };
   }, [api]);
 
+  // Generate next position label (C.POS-A, C.POS-B, etc.)
+  const generateNextPositionLabel = useCallback(() => {
+    const existingLabels = projectCranes
+      .map(c => c.position_label)
+      .filter((label): label is string => !!label);
+
+    // Find C.POS-X pattern labels and get the highest letter
+    const posPattern = /^C\.POS-([A-Z])$/i;
+    let maxLetter = 0; // A=1, B=2, etc.
+
+    for (const label of existingLabels) {
+      const match = label.match(posPattern);
+      if (match) {
+        const letterCode = match[1].toUpperCase().charCodeAt(0) - 64; // A=1, B=2
+        if (letterCode > maxLetter) maxLetter = letterCode;
+      }
+    }
+
+    // Generate next letter (A if none exist, or next after highest)
+    const nextLetter = String.fromCharCode(65 + maxLetter); // 65 = 'A'
+    return `C.POS-${nextLetter}`;
+  }, [projectCranes]);
+
   // Reset form when opening placer
-  const resetForm = useCallback(() => {
+  const resetForm = useCallback((autoFillLabel = false) => {
     setSelectedCraneModelId('');
     setSelectedCounterweightId('');
     setPickedPosition(null);
@@ -259,7 +303,7 @@ export default function CranePlannerScreen({
       hook_weight_kg: 500,
       lifting_block_kg: 200,
       safety_factor: 1.25,
-      position_label: '',
+      position_label: autoFillLabel ? generateNextPositionLabel() : '',
       radius_step_m: 5,
       show_radius_rings: true,
       show_capacity_labels: true,
@@ -270,11 +314,11 @@ export default function CranePlannerScreen({
       label_color: DEFAULT_LABEL_COLOR,
       notes: ''
     });
-  }, []);
+  }, [generateNextPositionLabel]);
 
   // Start placing new crane
   const startPlacing = useCallback(() => {
-    resetForm();
+    resetForm(true); // Auto-fill position label
     setEditingCraneId(null);
     setIsPlacing(true);
   }, [resetForm]);
@@ -768,9 +812,17 @@ export default function CranePlannerScreen({
         {(isPlacing || editingCraneId) && (
           <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '16px' }}>
             <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
-                {editingCraneId ? 'Muuda Kraana' : 'Paiguta Uus Kraana'}
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
+                  {editingCraneId ? 'Muuda Kraana' : 'Paiguta Uus Kraana'}
+                </h2>
+                {previewLoading && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0ea5e9', fontSize: '12px' }}>
+                    <FiLoader size={14} className="spin" />
+                    <span>Uuendan...</span>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={cancelPlacing}
                 style={{ padding: '8px', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
@@ -1471,26 +1523,31 @@ export default function CranePlannerScreen({
                         </div>
                       )}
 
-                      {/* Crane info - compact single line */}
+                      {/* Crane info - two lines: label on first, details smaller on second */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
                           fontSize: '12px',
+                          fontWeight: 600,
                           color: '#374151',
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis'
                         }}>
-                          <span style={{ fontWeight: 600 }}>{crane.position_label || 'Nimetu'}</span>
-                          <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
-                          <span style={{ color: '#6b7280' }}>
-                            {crane.crane_model?.manufacturer} {crane.crane_model?.model}
-                          </span>
-                          <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
-                          <span style={{ color: '#6b7280' }}>Nool {crane.boom_length_m}m</span>
-                          <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
-                          <span style={{ color: '#9ca3af', fontSize: '11px' }}>
-                            ({crane.position_x.toFixed(1)}, {crane.position_y.toFixed(1)}, {crane.position_z.toFixed(1)})
-                          </span>
+                          {crane.position_label || 'Nimetu'}
+                        </div>
+                        <div style={{
+                          fontSize: '10px',
+                          color: '#9ca3af',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          marginTop: '1px'
+                        }}>
+                          {crane.crane_model?.manufacturer} {crane.crane_model?.model}
+                          <span style={{ margin: '0 3px' }}>•</span>
+                          Nool {crane.boom_length_m}m
+                          <span style={{ margin: '0 3px' }}>•</span>
+                          ({crane.position_x.toFixed(1)}, {crane.position_y.toFixed(1)}, {crane.position_z.toFixed(1)})
                         </div>
                       </div>
 
