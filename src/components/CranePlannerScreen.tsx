@@ -2062,7 +2062,7 @@ export default function CranePlannerScreen({
                               borderRadius: '6px',
                               boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                               border: '1px solid #e5e7eb',
-                              zIndex: 100,
+                              zIndex: 1002,
                               minWidth: '180px',
                               overflow: 'hidden'
                             }}>
