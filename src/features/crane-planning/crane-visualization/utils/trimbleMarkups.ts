@@ -486,42 +486,42 @@ async function drawRadiusRingsGrouped(
       ringIndex++;
     }
 
-    // Add radius labels if enabled
+    // Add radius labels if enabled - each CHARACTER is a separate entry to avoid connections
     if (showLabels) {
+      const charSpacing = textHeight * 0.2;
+
       for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
         const radiusMm = r * 1000;
         const labelText = `${r}m`;
-        const labelSegments: LineSegment[] = [];
         let charX = centerX + radiusMm + 300;
-        const charSpacing = textHeight * 0.2;
 
+        // Each character is a separate entry (like drawText3D)
         for (const char of labelText.toLowerCase()) {
           const charDef = LINE_FONT[char];
           if (!charDef || charDef.lines.length === 0) {
             charX += (charDef?.width || 0.3) * textHeight + charSpacing;
             continue;
           }
+          const charSegments: LineSegment[] = [];
           for (const [x1, y1, x2, y2] of charDef.lines) {
-            labelSegments.push({
+            charSegments.push({
               start: { positionX: charX + x1 * textHeight, positionY: centerY - textHeight / 2 + y1 * textHeight, positionZ: centerZ + 100 },
               end: { positionX: charX + x2 * textHeight, positionY: centerY - textHeight / 2 + y2 * textHeight, positionZ: centerZ + 100 }
             });
           }
+          if (charSegments.length > 0) {
+            allEntries.push({ color: textColor, lines: charSegments });
+            labelCount++;
+          }
           charX += charDef.width * textHeight + charSpacing;
         }
 
-        if (labelSegments.length > 0) {
-          allEntries.push({ color: textColor, lines: labelSegments });
-          labelCount++;
-        }
-
-        // Capacity label if available
+        // Capacity label if available - each character separate
         if (loadChartData && loadChartData.length > 0) {
           const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
           if (capacityPoint) {
             const capText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
             const capColor = { r: 0, g: 100, b: 180, a: 255 };
-            const capSegments: LineSegment[] = [];
             let capX = centerX + radiusMm + 300;
             const capHeight = textHeight * 0.85;
             const capY = centerY - textHeight / 2 - textHeight * 1.2;
@@ -532,18 +532,18 @@ async function drawRadiusRingsGrouped(
                 capX += (charDef?.width || 0.3) * capHeight + charSpacing;
                 continue;
               }
+              const charSegments: LineSegment[] = [];
               for (const [x1, y1, x2, y2] of charDef.lines) {
-                capSegments.push({
+                charSegments.push({
                   start: { positionX: capX + x1 * capHeight, positionY: capY + y1 * capHeight, positionZ: centerZ + 100 },
                   end: { positionX: capX + x2 * capHeight, positionY: capY + y2 * capHeight, positionZ: centerZ + 100 }
                 });
               }
+              if (charSegments.length > 0) {
+                allEntries.push({ color: capColor, lines: charSegments });
+                capacityLabelCount++;
+              }
               capX += charDef.width * capHeight + charSpacing;
-            }
-
-            if (capSegments.length > 0) {
-              allEntries.push({ color: capColor, lines: capSegments });
-              capacityLabelCount++;
             }
           }
         }
