@@ -10,6 +10,7 @@ interface LineSegment {
 /**
  * Draw a complete crane visualization in the model
  * Detailed top-view showing: chassis, outriggers with pads, boom, cabin, center point
+ * OPTIMIZED: Each separate shape is one freeline call to avoid line connections
  */
 export async function drawCraneToModel(
   api: WorkspaceAPI.WorkspaceAPI,
@@ -50,33 +51,40 @@ export async function drawCraneToModel(
     return { x: posX + rotatedX, y: posY + rotatedY };
   };
 
-  try {
-    const allCraneSegments: LineSegment[] = [];
-    const craneColor = projectCrane.crane_color;
+  // Helper to create line segment
+  const seg = (p1: {x: number, y: number}, p2: {x: number, y: number}, z: number): LineSegment => ({
+    start: { positionX: p1.x, positionY: p1.y, positionZ: z },
+    end: { positionX: p2.x, positionY: p2.y, positionZ: z }
+  });
 
-    // === 1. MAIN CHASSIS (rectangle) ===
+  // Helper to draw connected polygon (returns segments for closed shape)
+  const createPolygon = (corners: {x: number, y: number}[], z: number): LineSegment[] => {
+    const segments: LineSegment[] = [];
+    for (let i = 0; i < corners.length; i++) {
+      const next = (i + 1) % corners.length;
+      segments.push(seg(corners[i], corners[next], z));
+    }
+    return segments;
+  };
+
+  const craneColor = projectCrane.crane_color;
+
+  try {
+    // Collect all freeline entries - each separate shape is one entry
+    const freelineEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
+
+    // === 1. MAIN CHASSIS (rectangle - connected shape) ===
     const halfWidth = baseWidthMm / 2;
     const halfLength = baseLengthMm / 2;
-
-    // Chassis corners
     const chassisCorners = [
       transformPoint(-halfWidth, -halfLength),
       transformPoint(halfWidth, -halfLength),
       transformPoint(halfWidth, halfLength),
       transformPoint(-halfWidth, halfLength)
     ];
+    freelineEntries.push({ color: craneColor, lines: createPolygon(chassisCorners, posZ) });
 
-    // Draw chassis rectangle
-    for (let i = 0; i < 4; i++) {
-      const next = (i + 1) % 4;
-      allCraneSegments.push({
-        start: { positionX: chassisCorners[i].x, positionY: chassisCorners[i].y, positionZ: posZ },
-        end: { positionX: chassisCorners[next].x, positionY: chassisCorners[next].y, positionZ: posZ }
-      });
-    }
-
-    // === 2. OUTRIGGERS with SUPPORT PADS ===
-    // 4 outriggers at corners, extending diagonally
+    // === 2. OUTRIGGERS with SUPPORT PADS (each outrigger separate) ===
     const outriggerPositions = [
       { cornerX: -halfWidth, cornerY: -halfLength, padX: -outriggerSpanMm / 2, padY: -outriggerSpanMm / 2 },
       { cornerX: halfWidth, cornerY: -halfLength, padX: outriggerSpanMm / 2, padY: -outriggerSpanMm / 2 },
@@ -88,13 +96,10 @@ export async function drawCraneToModel(
       const corner = transformPoint(outrigger.cornerX, outrigger.cornerY);
       const padCenter = transformPoint(outrigger.padX, outrigger.padY);
 
-      // Outrigger beam (line from corner to pad)
-      allCraneSegments.push({
-        start: { positionX: corner.x, positionY: corner.y, positionZ: posZ },
-        end: { positionX: padCenter.x, positionY: padCenter.y, positionZ: posZ }
-      });
+      // Outrigger beam (single line)
+      freelineEntries.push({ color: craneColor, lines: [seg(corner, padCenter, posZ)] });
 
-      // Support pad (square)
+      // Support pad (connected rectangle)
       const padHalf = outriggerPadSizeMm / 2;
       const padCorners = [
         transformPoint(outrigger.padX - padHalf, outrigger.padY - padHalf),
@@ -102,110 +107,75 @@ export async function drawCraneToModel(
         transformPoint(outrigger.padX + padHalf, outrigger.padY + padHalf),
         transformPoint(outrigger.padX - padHalf, outrigger.padY + padHalf)
       ];
-
-      for (let i = 0; i < 4; i++) {
-        const next = (i + 1) % 4;
-        allCraneSegments.push({
-          start: { positionX: padCorners[i].x, positionY: padCorners[i].y, positionZ: posZ },
-          end: { positionX: padCorners[next].x, positionY: padCorners[next].y, positionZ: posZ }
-        });
-      }
+      freelineEntries.push({ color: craneColor, lines: createPolygon(padCorners, posZ) });
     }
 
-    // === 3. CENTER TURNTABLE (circle) ===
+    // === 3. CENTER TURNTABLE (circle - connected) ===
     const turntableRadius = Math.min(baseWidthMm, baseLengthMm) * 0.3;
-    const turntableSegments = 24;
-    for (let i = 0; i < turntableSegments; i++) {
-      const angle1 = (i / turntableSegments) * 2 * Math.PI;
-      const angle2 = ((i + 1) / turntableSegments) * 2 * Math.PI;
+    const turntableSegments: LineSegment[] = [];
+    const numTurntableSegs = 24;
+    for (let i = 0; i < numTurntableSegs; i++) {
+      const angle1 = (i / numTurntableSegs) * 2 * Math.PI;
+      const angle2 = ((i + 1) / numTurntableSegs) * 2 * Math.PI;
       const p1 = transformPoint(turntableRadius * Math.cos(angle1), turntableRadius * Math.sin(angle1));
       const p2 = transformPoint(turntableRadius * Math.cos(angle2), turntableRadius * Math.sin(angle2));
-      allCraneSegments.push({
-        start: { positionX: p1.x, positionY: p1.y, positionZ: posZ + 100 },
-        end: { positionX: p2.x, positionY: p2.y, positionZ: posZ + 100 }
-      });
+      turntableSegments.push(seg(p1, p2, posZ + 100));
     }
+    freelineEntries.push({ color: craneColor, lines: turntableSegments });
 
-    // === 4. BOOM INDICATOR (tapered shape pointing from center forward) ===
-    const boomLength = baseLengthMm * 0.7; // Boom shown on chassis
+    // === 4. BOOM (trapezoid outline - connected, centerline - separate) ===
+    const boomLength = baseLengthMm * 0.7;
     const boomBaseWidth = baseWidthMm * 0.25;
     const boomTipWidth = baseWidthMm * 0.1;
+    const boomCorners = [
+      transformPoint(-boomBaseWidth / 2, 0),
+      transformPoint(-boomTipWidth / 2, halfLength + boomLength * 0.3),
+      transformPoint(boomTipWidth / 2, halfLength + boomLength * 0.3),
+      transformPoint(boomBaseWidth / 2, 0)
+    ];
+    freelineEntries.push({ color: craneColor, lines: createPolygon(boomCorners, posZ + 200) });
 
-    // Boom is along Y axis (forward direction), starts from center
-    const boomBase1 = transformPoint(-boomBaseWidth / 2, 0);
-    const boomBase2 = transformPoint(boomBaseWidth / 2, 0);
-    const boomTip1 = transformPoint(-boomTipWidth / 2, halfLength + boomLength * 0.3);
-    const boomTip2 = transformPoint(boomTipWidth / 2, halfLength + boomLength * 0.3);
-
-    // Boom outline (tapered trapezoid)
-    allCraneSegments.push(
-      { start: { positionX: boomBase1.x, positionY: boomBase1.y, positionZ: posZ + 200 },
-        end: { positionX: boomTip1.x, positionY: boomTip1.y, positionZ: posZ + 200 } },
-      { start: { positionX: boomTip1.x, positionY: boomTip1.y, positionZ: posZ + 200 },
-        end: { positionX: boomTip2.x, positionY: boomTip2.y, positionZ: posZ + 200 } },
-      { start: { positionX: boomTip2.x, positionY: boomTip2.y, positionZ: posZ + 200 },
-        end: { positionX: boomBase2.x, positionY: boomBase2.y, positionZ: posZ + 200 } },
-      { start: { positionX: boomBase2.x, positionY: boomBase2.y, positionZ: posZ + 200 },
-        end: { positionX: boomBase1.x, positionY: boomBase1.y, positionZ: posZ + 200 } }
-    );
-
-    // Boom center line
+    // Boom centerline (separate line)
     const boomStart = transformPoint(0, 0);
     const boomEnd = transformPoint(0, halfLength + boomLength * 0.3);
-    allCraneSegments.push({
-      start: { positionX: boomStart.x, positionY: boomStart.y, positionZ: posZ + 200 },
-      end: { positionX: boomEnd.x, positionY: boomEnd.y, positionZ: posZ + 200 }
-    });
+    freelineEntries.push({ color: craneColor, lines: [seg(boomStart, boomEnd, posZ + 200)] });
 
-    // === 5. CABIN (rectangle on one side) ===
+    // === 5. CABIN (rectangle - connected) ===
     const cabinWidth = baseWidthMm * 0.3;
     const cabinLength = baseLengthMm * 0.2;
     let cabinCenterX = 0, cabinCenterY = 0;
-
     switch (craneModel.cab_position) {
       case 'front': cabinCenterY = halfLength - cabinLength / 2 - 100; break;
       case 'rear': cabinCenterY = -halfLength + cabinLength / 2 + 100; break;
       case 'left': cabinCenterX = -halfWidth + cabinWidth / 2 + 100; break;
       case 'right': cabinCenterX = halfWidth - cabinWidth / 2 - 100; break;
-      default: cabinCenterY = -halfLength + cabinLength / 2 + 100; // Default rear
+      default: cabinCenterY = -halfLength + cabinLength / 2 + 100;
     }
-
     const cabinCorners = [
       transformPoint(cabinCenterX - cabinWidth / 2, cabinCenterY - cabinLength / 2),
       transformPoint(cabinCenterX + cabinWidth / 2, cabinCenterY - cabinLength / 2),
       transformPoint(cabinCenterX + cabinWidth / 2, cabinCenterY + cabinLength / 2),
       transformPoint(cabinCenterX - cabinWidth / 2, cabinCenterY + cabinLength / 2)
     ];
+    freelineEntries.push({ color: craneColor, lines: createPolygon(cabinCorners, posZ + 50) });
 
-    for (let i = 0; i < 4; i++) {
-      const next = (i + 1) % 4;
-      allCraneSegments.push({
-        start: { positionX: cabinCorners[i].x, positionY: cabinCorners[i].y, positionZ: posZ + 50 },
-        end: { positionX: cabinCorners[next].x, positionY: cabinCorners[next].y, positionZ: posZ + 50 }
-      });
-    }
-
-    // === 6. CENTER CROSS (+ mark at rotation center) ===
+    // === 6. CENTER CROSS (two separate lines) ===
     const crossSize = 500;
     const cross1 = transformPoint(-crossSize, 0);
     const cross2 = transformPoint(crossSize, 0);
     const cross3 = transformPoint(0, -crossSize);
     const cross4 = transformPoint(0, crossSize);
+    freelineEntries.push({ color: craneColor, lines: [seg(cross1, cross2, posZ + 300)] });
+    freelineEntries.push({ color: craneColor, lines: [seg(cross3, cross4, posZ + 300)] });
 
-    allCraneSegments.push(
-      { start: { positionX: cross1.x, positionY: cross1.y, positionZ: posZ + 300 },
-        end: { positionX: cross2.x, positionY: cross2.y, positionZ: posZ + 300 } },
-      { start: { positionX: cross3.x, positionY: cross3.y, positionZ: posZ + 300 },
-        end: { positionX: cross4.x, positionY: cross4.y, positionZ: posZ + 300 } }
-    );
-
-    // Draw all crane segments
-    console.log('[CraneViz] Drawing', allCraneSegments.length, 'crane segments');
-    const craneMarkup = await markupApi.addFreelineMarkups?.([{
-      color: craneColor,
-      lines: allCraneSegments
-    }]);
-    if (craneMarkup?.[0]?.id) markupIds.push(craneMarkup[0].id);
+    // Draw all crane shapes in ONE batch call (but each entry is separate)
+    console.log('[CraneViz] Drawing', freelineEntries.length, 'crane shapes');
+    const craneMarkups = await markupApi.addFreelineMarkups?.(freelineEntries);
+    if (craneMarkups) {
+      craneMarkups.forEach((m: any) => {
+        if (m?.id) markupIds.push(m.id);
+      });
+    }
 
     // === 7. RADIUS RINGS (if enabled) ===
     if (projectCrane.show_radius_rings) {
@@ -236,27 +206,20 @@ export async function drawCraneToModel(
 
       console.log('[CraneViz] Drawing position label:', labelText);
 
-      const textWidth = calculateTextWidth(labelText, labelHeight);
-
       // Position label next to the crane (offset from outrigger span)
       const labelOffsetX = outriggerSpanMm / 2 + labelHeight + 500;
-      const labelPos = transformPoint(labelOffsetX, -textWidth / 2);
+      const labelPos = transformPoint(labelOffsetX, 0);
 
-      const labelSegments = generate3DTextTopView(
+      const labelMarkups = await drawText3D(
+        markupApi,
         labelText,
         labelPos.x,
         labelPos.y,
         posZ + 200,
-        labelHeight
+        labelHeight,
+        labelColor
       );
-
-      if (labelSegments.length > 0) {
-        const textMarkup = await markupApi.addFreelineMarkups?.([{
-          color: labelColor,
-          lines: labelSegments
-        }]);
-        if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
-      }
+      markupIds.push(...labelMarkups);
     }
 
     console.log('[CraneViz] Total markups created:', markupIds.length);
@@ -265,6 +228,69 @@ export async function drawCraneToModel(
     console.error('[CraneViz] Error drawing crane to model:', error);
     return markupIds;
   }
+}
+
+/**
+ * Draw 3D text with each character as separate freeline (avoids line connections)
+ * OPTIMIZED: All characters drawn in one batch call
+ */
+async function drawText3D(
+  markupApi: any,
+  text: string,
+  startX: number,
+  startY: number,
+  startZ: number,
+  heightMm: number,
+  color: CraneRGBAColor
+): Promise<number[]> {
+  const markupIds: number[] = [];
+  const spacing = heightMm * 0.2;
+  let currentX = startX;
+
+  // Collect all character entries for batch call
+  const charEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
+
+  for (const char of text.toLowerCase()) {
+    const charDef = LINE_FONT[char];
+    if (!charDef) continue;
+
+    const charWidth = charDef.width * heightMm;
+
+    // Generate line segments for this character
+    const charSegments: LineSegment[] = [];
+    for (const [x1, y1, x2, y2] of charDef.lines) {
+      charSegments.push({
+        start: {
+          positionX: currentX + x1 * heightMm,
+          positionY: startY + y1 * heightMm,
+          positionZ: startZ
+        },
+        end: {
+          positionX: currentX + x2 * heightMm,
+          positionY: startY + y2 * heightMm,
+          positionZ: startZ
+        }
+      });
+    }
+
+    if (charSegments.length > 0) {
+      charEntries.push({ color, lines: charSegments });
+    }
+
+    currentX += charWidth + spacing;
+  }
+
+  // Draw all characters in ONE batch call
+  if (charEntries.length > 0) {
+    const charMarkups = await markupApi.addFreelineMarkups?.(charEntries);
+    if (charMarkups) {
+      charMarkups.forEach((m: any) => {
+        if (m?.id) markupIds.push(m.id);
+      });
+    }
+  }
+
+  return markupIds;
 }
 
 /**
@@ -394,77 +420,8 @@ const LINE_FONT: Record<string, { width: number; lines: [number, number, number,
 };
 
 /**
- * Generate 3D text as line segments (readable from above - in X-Y plane)
- * @param text - Text to render
- * @param startX - Starting X position (mm)
- * @param startY - Starting Y position (mm)
- * @param startZ - Starting Z position (mm) - constant for all text
- * @param heightMm - Height of text in mm (e.g., 500 for 500mm tall)
- * @returns Array of line segments forming the text
- */
-function generate3DTextTopView(
-  text: string,
-  startX: number,
-  startY: number,
-  startZ: number,
-  heightMm: number
-): LineSegment[] {
-  const lineSegments: LineSegment[] = [];
-  let currentX = startX;
-  const spacing = heightMm * 0.2; // Space between characters
-
-  for (const char of text.toLowerCase()) {
-    const charDef = LINE_FONT[char];
-    if (!charDef) continue;
-
-    const charWidth = charDef.width * heightMm;
-
-    for (const [x1, y1, x2, y2] of charDef.lines) {
-      // Draw in X-Y plane (readable from above, looking down)
-      // x1,x2 -> X axis (text width direction, left to right)
-      // y1,y2 -> Y axis (text height direction, positive = up when viewing from above)
-      // In font: y=0 is bottom of char, y=1 is top
-      // When looking from above: higher Y = further "up" on screen = top of letter
-      lineSegments.push({
-        start: {
-          positionX: currentX + x1 * heightMm,
-          positionY: startY + y1 * heightMm, // Positive Y so text reads correctly from above
-          positionZ: startZ
-        },
-        end: {
-          positionX: currentX + x2 * heightMm,
-          positionY: startY + y2 * heightMm,
-          positionZ: startZ
-        }
-      });
-    }
-
-    currentX += charWidth + spacing;
-  }
-
-  return lineSegments;
-}
-
-/**
- * Calculate total width of text in mm
- */
-function calculateTextWidth(text: string, heightMm: number): number {
-  const spacing = heightMm * 0.2;
-  let width = 0;
-  for (const char of text.toLowerCase()) {
-    const charDef = LINE_FONT[char];
-    if (charDef) {
-      width += charDef.width * heightMm + spacing;
-    }
-  }
-  return width - spacing; // Remove last spacing
-}
-
-/**
  * Draw radius rings around the crane
- * @param maxRadiusLimitMeters - Optional limit for maximum radius to draw (defaults to crane's max radius)
- * @param labelColor - Optional separate color for labels (defaults to ring color)
- * @param labelHeightMm - Height of labels in mm (default 500)
+ * OPTIMIZED: All rings and labels drawn in minimal API calls
  */
 async function drawRadiusRings(
   api: WorkspaceAPI.WorkspaceAPI,
@@ -483,111 +440,86 @@ async function drawRadiusRings(
   const markupIds: number[] = [];
   const markupApi = api.markup as any;
 
-  // Use limit if provided, otherwise use crane's max radius
   const effectiveMaxRadius = maxRadiusLimitMeters && maxRadiusLimitMeters > 0
     ? Math.min(maxRadiusLimitMeters, maxRadiusMeters)
     : maxRadiusMeters;
 
-  // Calculate dash count based on radius for consistent dash size
-  const baseDashCount = 48; // For a medium-sized radius
-
-  // Use separate label color if provided, otherwise use ring color
   const textColor = labelColor || { ...color, a: 255 };
-  const textHeight = labelHeightMm || 500; // Default 500mm tall letters
+  const textHeight = labelHeightMm || 500;
 
-  console.log('[CraneViz] Drawing radius rings:', {
-    centerX, centerY, centerZ,
-    stepMeters, maxRadiusMeters, effectiveMaxRadius,
-    showLabels, textHeight
-  });
+  console.log('[CraneViz] Drawing radius rings:', { stepMeters, effectiveMaxRadius, showLabels });
 
   try {
-    // Generate rings with step interval - EACH RING SEPARATE to avoid line connections
-    let ringIndex = 0;
+    // Collect all freeline entries for batch call
+    const freelineEntries: { color: CraneRGBAColor; lines: LineSegment[] }[] = [];
+
+    // Generate all rings
     for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
 
-      // Adjust dash count based on radius for consistent dash size
-      const baseDashForRadius = Math.max(24, Math.round(baseDashCount * (r / 20)));
+      // Use simplified dashed pattern: 8 dashes per ring (fewer markup entries)
+      const dashCount = 8;
+      const dashRatio = 0.7;
+      const dashSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
 
-      // Alternate between two patterns: every other ring has different dash pattern
-      const isAlternate = ringIndex % 2 === 1;
-      const dashCount = isAlternate ? Math.round(baseDashForRadius * 1.5) : baseDashForRadius;
-      const dashRatio = isAlternate ? 0.4 : 0.7; // Shorter dashes on alternate rings
-
-      // Generate dotted circle segments for THIS ring only
-      const ringSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, dashRatio);
-
-      // Draw THIS ring as SEPARATE freeline (so dashes stay separate)
-      if (ringSegments.length > 0) {
-        // Each dash segment must be a separate freeline entry to avoid connection
-        const ringMarkup = await markupApi.addFreelineMarkups?.(
-          ringSegments.map(seg => ({
-            color,
-            lines: [seg]  // Each segment separate
-          }))
-        );
-        if (ringMarkup) {
-          ringMarkup.forEach((m: any) => {
-            if (m?.id) markupIds.push(m.id);
-          });
-        }
+      // Each dash is a separate entry (to avoid connection)
+      for (const seg of dashSegments) {
+        freelineEntries.push({ color, lines: [seg] });
       }
 
-      ringIndex++;
-
-      // Add label if enabled - using 3D geometry text (top-view readable)
+      // Add radius label if enabled
       if (showLabels) {
-        // Radius label - show radius in meters
-        const radiusLabelText = `${r}m`;
-
-        // Generate 3D text for radius label (readable from above)
-        const radiusTextSegments = generate3DTextTopView(
-          radiusLabelText,
-          centerX + radiusMm + 300, // Offset from ring
-          centerY - textHeight / 2, // Position label so it reads correctly from above
-          centerZ + 100, // Slightly above ground
-          textHeight
-        );
-
-        // Draw radius label
-        if (radiusTextSegments.length > 0) {
-          const radiusMarkup = await markupApi.addFreelineMarkups?.([{
-            color: textColor,
-            lines: radiusTextSegments
-          }]);
-          if (radiusMarkup?.[0]?.id) markupIds.push(radiusMarkup[0].id);
+        const labelText = `${r}m`;
+        // Each character separate to avoid connection
+        let charX = centerX + radiusMm + 300;
+        const charSpacing = textHeight * 0.2;
+        for (const char of labelText.toLowerCase()) {
+          const charDef = LINE_FONT[char];
+          if (!charDef || charDef.lines.length === 0) {
+            charX += (charDef?.width || 0.3) * textHeight + charSpacing;
+            continue;
+          }
+          const charSegs: LineSegment[] = charDef.lines.map(([x1, y1, x2, y2]) => ({
+            start: { positionX: charX + x1 * textHeight, positionY: centerY - textHeight / 2 + y1 * textHeight, positionZ: centerZ + 100 },
+            end: { positionX: charX + x2 * textHeight, positionY: centerY - textHeight / 2 + y2 * textHeight, positionZ: centerZ + 100 }
+          }));
+          freelineEntries.push({ color: textColor, lines: charSegs });
+          charX += charDef.width * textHeight + charSpacing;
         }
 
-        // Capacity label - show capacity at this radius (if load chart data available)
+        // Capacity label if available
         if (loadChartData && loadChartData.length > 0) {
-          // Find exact or interpolated capacity at this radius
           const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
-
           if (capacityPoint) {
-            const capacityText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
-            console.log('[CraneViz] Capacity label at', r, 'm:', capacityText);
-
-            // Position capacity label BELOW the radius label
-            const capacityTextSegments = generate3DTextTopView(
-              capacityText,
-              centerX + radiusMm + 300, // Same X as radius label
-              centerY - textHeight / 2 - textHeight * 1.2, // Below radius label
-              centerZ + 100, // Same height
-              textHeight * 0.85 // Slightly smaller text
-            );
-
-            // Draw capacity label in different color (blue tint)
-            if (capacityTextSegments.length > 0) {
-              const capacityColor = { r: 0, g: 100, b: 180, a: 255 };
-              const capacityMarkup = await markupApi.addFreelineMarkups?.([{
-                color: capacityColor,
-                lines: capacityTextSegments
-              }]);
-              if (capacityMarkup?.[0]?.id) markupIds.push(capacityMarkup[0].id);
+            const capText = `${(capacityPoint.capacity_kg / 1000).toFixed(0)}t`;
+            const capColor = { r: 0, g: 100, b: 180, a: 255 };
+            let capX = centerX + radiusMm + 300;
+            const capHeight = textHeight * 0.85;
+            const capY = centerY - textHeight / 2 - textHeight * 1.2;
+            for (const char of capText.toLowerCase()) {
+              const charDef = LINE_FONT[char];
+              if (!charDef || charDef.lines.length === 0) {
+                capX += (charDef?.width || 0.3) * capHeight + charSpacing;
+                continue;
+              }
+              const charSegs: LineSegment[] = charDef.lines.map(([x1, y1, x2, y2]) => ({
+                start: { positionX: capX + x1 * capHeight, positionY: capY + y1 * capHeight, positionZ: centerZ + 100 },
+                end: { positionX: capX + x2 * capHeight, positionY: capY + y2 * capHeight, positionZ: centerZ + 100 }
+              }));
+              freelineEntries.push({ color: capColor, lines: charSegs });
+              capX += charDef.width * capHeight + charSpacing;
             }
           }
         }
+      }
+    }
+
+    // Draw all in ONE batch call
+    console.log('[CraneViz] Drawing', freelineEntries.length, 'ring/label entries in batch');
+    if (freelineEntries.length > 0) {
+      const markups = await markupApi.addFreelineMarkups?.(freelineEntries);
+      if (markups) {
+        markups.forEach((m: any) => { if (m?.id) markupIds.push(m.id); });
       }
     }
 
