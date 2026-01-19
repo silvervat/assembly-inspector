@@ -404,6 +404,23 @@ export default function MainMenu({
               </span>
             </button>
 
+            {/* Tööriistad - tools */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('tools')}
+            >
+              <span className="menu-item-icon" style={{ color: '#0891b2' }}>
+                <FiTool size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Tööriistad</span>
+                <span className="menu-item-desc">Ekspordid, markup'id ja märgistamine</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
           </>
         )}
 
