@@ -49,6 +49,7 @@ export default function CranePlannerScreen({
   const [isPickingPosition, setIsPickingPosition] = useState(false);
   const [pickedPosition, setPickedPosition] = useState<{ x: number; y: number; z: number } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [positionPickMode, setPositionPickMode] = useState<'location' | 'location_height' | 'height'>('location_height');
 
   // Form state for new/edit crane
   const [selectedCraneModelId, setSelectedCraneModelId] = useState<string>('');
@@ -67,6 +68,7 @@ export default function CranePlannerScreen({
     radius_step_m: 5,
     show_radius_rings: true,
     show_capacity_labels: true,
+    max_radius_limit_m: 0, // 0 = no limit, use crane's max radius
     crane_color: DEFAULT_CRANE_COLOR,
     radius_color: DEFAULT_RADIUS_COLOR,
     notes: ''
@@ -126,6 +128,7 @@ export default function CranePlannerScreen({
         radius_step_m: config.radius_step_m,
         show_radius_rings: config.show_radius_rings,
         show_capacity_labels: config.show_capacity_labels,
+        max_radius_limit_m: config.max_radius_limit_m || undefined,
         crane_color: config.crane_color,
         radius_color: config.radius_color,
         notes: config.notes || undefined,
@@ -203,6 +206,7 @@ export default function CranePlannerScreen({
       radius_step_m: 5,
       show_radius_rings: true,
       show_capacity_labels: true,
+      max_radius_limit_m: 0,
       crane_color: DEFAULT_CRANE_COLOR,
       radius_color: DEFAULT_RADIUS_COLOR,
       notes: ''
@@ -235,6 +239,7 @@ export default function CranePlannerScreen({
       radius_step_m: crane.radius_step_m,
       show_radius_rings: crane.show_radius_rings,
       show_capacity_labels: crane.show_capacity_labels,
+      max_radius_limit_m: crane.max_radius_limit_m || 0,
       crane_color: crane.crane_color,
       radius_color: crane.radius_color,
       notes: crane.notes || ''
@@ -285,13 +290,28 @@ export default function CranePlannerScreen({
             const centerY = (bbox.min.y + bbox.max.y) / 2;
             const bottomZ = bbox.min.z; // Use bottom of object
 
-            setPickedPosition({ x: centerX, y: centerY, z: bottomZ });
-            setConfig(prev => ({
-              ...prev,
-              position_x: centerX,
-              position_y: centerY,
-              position_z: bottomZ
-            }));
+            // Apply based on pick mode
+            setConfig(prev => {
+              const newX = positionPickMode !== 'height' ? centerX : prev.position_x;
+              const newY = positionPickMode !== 'height' ? centerY : prev.position_y;
+              const newZ = positionPickMode !== 'location' ? bottomZ : prev.position_z;
+              return {
+                ...prev,
+                position_x: newX,
+                position_y: newY,
+                position_z: newZ
+              };
+            });
+            setPickedPosition(prev => {
+              const currentX = prev?.x ?? 0;
+              const currentY = prev?.y ?? 0;
+              const currentZ = prev?.z ?? 0;
+              return {
+                x: positionPickMode !== 'height' ? centerX : currentX,
+                y: positionPickMode !== 'height' ? centerY : currentY,
+                z: positionPickMode !== 'location' ? bottomZ : currentZ
+              };
+            });
 
             setIsPickingPosition(false);
             return;
@@ -332,13 +352,28 @@ export default function CranePlannerScreen({
             const centerY = (bbox.min.y + bbox.max.y) / 2;
             const bottomZ = bbox.min.z; // Use bottom of object
 
-            setPickedPosition({ x: centerX, y: centerY, z: bottomZ });
-            setConfig(prev => ({
-              ...prev,
-              position_x: centerX,
-              position_y: centerY,
-              position_z: bottomZ
-            }));
+            // Apply based on pick mode
+            setConfig(prev => {
+              const newX = positionPickMode !== 'height' ? centerX : prev.position_x;
+              const newY = positionPickMode !== 'height' ? centerY : prev.position_y;
+              const newZ = positionPickMode !== 'location' ? bottomZ : prev.position_z;
+              return {
+                ...prev,
+                position_x: newX,
+                position_y: newY,
+                position_z: newZ
+              };
+            });
+            setPickedPosition(prev => {
+              const currentX = prev?.x ?? 0;
+              const currentY = prev?.y ?? 0;
+              const currentZ = prev?.z ?? 0;
+              return {
+                x: positionPickMode !== 'height' ? centerX : currentX,
+                y: positionPickMode !== 'height' ? centerY : currentY,
+                z: positionPickMode !== 'location' ? bottomZ : currentZ
+              };
+            });
 
             setIsPickingPosition(false);
 
@@ -357,7 +392,7 @@ export default function CranePlannerScreen({
       console.error('Error in startPickingPosition:', error);
       setIsPickingPosition(false);
     }
-  }, [api]);
+  }, [api, positionPickMode]);
 
   // Cancel picking
   const cancelPicking = useCallback(() => {
@@ -411,6 +446,7 @@ export default function CranePlannerScreen({
       radius_step_m: config.radius_step_m,
       show_radius_rings: config.show_radius_rings,
       show_capacity_labels: config.show_capacity_labels,
+      max_radius_limit_m: config.max_radius_limit_m || undefined,
       crane_color: config.crane_color,
       radius_color: config.radius_color,
       notes: config.notes || undefined,
@@ -662,7 +698,23 @@ export default function CranePlannerScreen({
 
               {/* Position */}
               <div style={{ marginBottom: '20px' }}>
-                <label style={labelStyle}>Positsioon *</label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Positsioon *</label>
+                  {pickedPosition && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                      <span style={{ color: '#6b7280' }}>Uuenda:</span>
+                      <select
+                        value={positionPickMode}
+                        onChange={e => setPositionPickMode(e.target.value as 'location' | 'location_height' | 'height')}
+                        style={{ padding: '2px 6px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '12px' }}
+                      >
+                        <option value="location">Ainult asukoht (X, Y)</option>
+                        <option value="location_height">Asukoht + kõrgus (X, Y, Z)</option>
+                        <option value="height">Ainult kõrgus (Z)</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
                 {isPickingPosition ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={{
@@ -728,11 +780,15 @@ export default function CranePlannerScreen({
                         onChange={e => setMoveStep(parseFloat(e.target.value))}
                         style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
                       >
-                        <option value="0.1">0.1m</option>
-                        <option value="0.25">0.25m</option>
                         <option value="0.5">0.5m</option>
                         <option value="1">1m</option>
                         <option value="2">2m</option>
+                        <option value="5">5m</option>
+                        <option value="10">10m</option>
+                        <option value="15">15m</option>
+                        <option value="20">20m</option>
+                        <option value="30">30m</option>
+                        <option value="50">50m</option>
                       </select>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -742,6 +798,7 @@ export default function CranePlannerScreen({
                         onChange={e => setRotateStep(parseFloat(e.target.value))}
                         style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #d1d5db', fontSize: '13px' }}
                       >
+                        <option value="1">1°</option>
                         <option value="5">5°</option>
                         <option value="10">10°</option>
                         <option value="15">15°</option>
@@ -856,6 +913,21 @@ export default function CranePlannerScreen({
                       <option value="5">5m</option>
                       <option value="10">10m</option>
                     </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Max raadius (m)</label>
+                    <input
+                      type="number"
+                      style={inputStyle}
+                      value={config.max_radius_limit_m || ''}
+                      onChange={e => setConfig(prev => ({ ...prev, max_radius_limit_m: parseFloat(e.target.value) || 0 }))}
+                      placeholder={selectedCraneModel ? `Max ${selectedCraneModel.max_radius_m}m` : 'Piir puudub'}
+                      step="5"
+                      min="0"
+                    />
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                      0 = piir puudub
+                    </div>
                   </div>
                   <div>
                     <label style={labelStyle}>Konks (kg)</label>

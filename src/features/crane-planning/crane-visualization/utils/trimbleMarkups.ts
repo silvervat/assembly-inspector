@@ -111,7 +111,8 @@ export async function drawCraneToModel(
         craneModel.max_radius_m,
         projectCrane.radius_color,
         projectCrane.show_capacity_labels,
-        loadChartData
+        loadChartData,
+        projectCrane.max_radius_limit_m
       );
       markupIds.push(...radiusMarkups);
     }
@@ -169,6 +170,114 @@ function generateCircleSegments(
         positionZ: centerZ
       }
     });
+  }
+
+  return lineSegments;
+}
+
+/**
+ * Generate dotted/dashed circle line segments
+ * Creates a circle with gaps to simulate a dotted line effect
+ */
+function generateDottedCircleSegments(
+  centerX: number,
+  centerY: number,
+  centerZ: number,
+  radiusMm: number,
+  dashCount: number = 36, // Number of dashes
+  dashRatio: number = 0.6 // Ratio of dash to gap (0.6 = 60% dash, 40% gap)
+): LineSegment[] {
+  const lineSegments: LineSegment[] = [];
+  const segmentAngle = (2 * Math.PI) / dashCount;
+  const dashAngle = segmentAngle * dashRatio;
+
+  for (let i = 0; i < dashCount; i++) {
+    const startAngle = i * segmentAngle;
+    const endAngle = startAngle + dashAngle;
+
+    lineSegments.push({
+      start: {
+        positionX: centerX + radiusMm * Math.cos(startAngle),
+        positionY: centerY + radiusMm * Math.sin(startAngle),
+        positionZ: centerZ
+      },
+      end: {
+        positionX: centerX + radiusMm * Math.cos(endAngle),
+        positionY: centerY + radiusMm * Math.sin(endAngle),
+        positionZ: centerZ
+      }
+    });
+  }
+
+  return lineSegments;
+}
+
+/**
+ * Simple line-based font for 3D text rendering
+ * Returns line segments for each character (normalized 0-1 coordinate space)
+ * Height is 1.0, width varies per character
+ */
+const LINE_FONT: Record<string, { width: number; lines: [number, number, number, number][] }> = {
+  '0': { width: 0.6, lines: [[0, 0, 0.6, 0], [0.6, 0, 0.6, 1], [0.6, 1, 0, 1], [0, 1, 0, 0]] },
+  '1': { width: 0.3, lines: [[0.15, 0, 0.15, 1], [0, 0.8, 0.15, 1]] },
+  '2': { width: 0.6, lines: [[0, 1, 0.6, 1], [0.6, 1, 0.6, 0.5], [0.6, 0.5, 0, 0.5], [0, 0.5, 0, 0], [0, 0, 0.6, 0]] },
+  '3': { width: 0.6, lines: [[0, 1, 0.6, 1], [0.6, 1, 0.6, 0], [0.6, 0, 0, 0], [0, 0.5, 0.6, 0.5]] },
+  '4': { width: 0.6, lines: [[0, 1, 0, 0.5], [0, 0.5, 0.6, 0.5], [0.6, 1, 0.6, 0]] },
+  '5': { width: 0.6, lines: [[0.6, 1, 0, 1], [0, 1, 0, 0.5], [0, 0.5, 0.6, 0.5], [0.6, 0.5, 0.6, 0], [0.6, 0, 0, 0]] },
+  '6': { width: 0.6, lines: [[0.6, 1, 0, 1], [0, 1, 0, 0], [0, 0, 0.6, 0], [0.6, 0, 0.6, 0.5], [0.6, 0.5, 0, 0.5]] },
+  '7': { width: 0.6, lines: [[0, 1, 0.6, 1], [0.6, 1, 0.3, 0]] },
+  '8': { width: 0.6, lines: [[0, 0, 0.6, 0], [0.6, 0, 0.6, 1], [0.6, 1, 0, 1], [0, 1, 0, 0], [0, 0.5, 0.6, 0.5]] },
+  '9': { width: 0.6, lines: [[0.6, 0, 0.6, 1], [0.6, 1, 0, 1], [0, 1, 0, 0.5], [0, 0.5, 0.6, 0.5]] },
+  'm': { width: 0.8, lines: [[0, 0, 0, 0.7], [0, 0.7, 0.4, 0.35], [0.4, 0.35, 0.8, 0.7], [0.8, 0.7, 0.8, 0]] },
+  't': { width: 0.5, lines: [[0.25, 0, 0.25, 0.7], [0, 0.7, 0.5, 0.7]] },
+  '(': { width: 0.3, lines: [[0.3, 1, 0.1, 0.75], [0.1, 0.75, 0.1, 0.25], [0.1, 0.25, 0.3, 0]] },
+  ')': { width: 0.3, lines: [[0, 1, 0.2, 0.75], [0.2, 0.75, 0.2, 0.25], [0.2, 0.25, 0, 0]] },
+  '.': { width: 0.2, lines: [[0.1, 0, 0.1, 0.1]] },
+  ' ': { width: 0.3, lines: [] },
+};
+
+/**
+ * Generate 3D text as line segments
+ * @param text - Text to render
+ * @param startX - Starting X position (mm)
+ * @param startY - Starting Y position (mm)
+ * @param startZ - Starting Z position (mm)
+ * @param heightMm - Height of text in mm (e.g., 500 for 500mm tall)
+ * @returns Array of line segments forming the text
+ */
+function generate3DText(
+  text: string,
+  startX: number,
+  startY: number,
+  startZ: number,
+  heightMm: number
+): LineSegment[] {
+  const lineSegments: LineSegment[] = [];
+  let currentX = startX;
+  const spacing = heightMm * 0.15; // Space between characters
+
+  for (const char of text.toLowerCase()) {
+    const charDef = LINE_FONT[char];
+    if (!charDef) continue;
+
+    const charWidth = charDef.width * heightMm;
+
+    for (const [x1, y1, x2, y2] of charDef.lines) {
+      lineSegments.push({
+        start: {
+          positionX: currentX + x1 * heightMm,
+          positionY: startY,
+          positionZ: startZ + y1 * heightMm
+        },
+        end: {
+          positionX: currentX + x2 * heightMm,
+          positionY: startY,
+          positionZ: startZ + y2 * heightMm
+        }
+      });
+    }
+
+    currentX += charWidth + spacing;
   }
 
   return lineSegments;
@@ -320,6 +429,7 @@ async function drawCabinMarker(
 
 /**
  * Draw radius rings around the crane
+ * @param maxRadiusLimitMeters - Optional limit for maximum radius to draw (defaults to crane's max radius)
  */
 async function drawRadiusRings(
   api: WorkspaceAPI.WorkspaceAPI,
@@ -330,52 +440,66 @@ async function drawRadiusRings(
   maxRadiusMeters: number,
   color: CraneRGBAColor,
   showLabels: boolean,
-  loadChartData?: LoadChartDataPoint[]
+  loadChartData?: LoadChartDataPoint[],
+  maxRadiusLimitMeters?: number
 ): Promise<number[]> {
   const markupIds: number[] = [];
   const markupApi = api.markup as any;
-  const segments = 72; // 5° per segment
+
+  // Use limit if provided, otherwise use crane's max radius
+  const effectiveMaxRadius = maxRadiusLimitMeters && maxRadiusLimitMeters > 0
+    ? Math.min(maxRadiusLimitMeters, maxRadiusMeters)
+    : maxRadiusMeters;
+
+  // Calculate dash count based on radius for consistent dash size
+  const baseDashCount = 48; // For a medium-sized radius
 
   try {
     // Generate rings with step interval
-    for (let r = stepMeters; r <= maxRadiusMeters; r += stepMeters) {
+    for (let r = stepMeters; r <= effectiveMaxRadius; r += stepMeters) {
       const radiusMm = r * 1000;
 
-      // Generate circle with {start, end} line segments
-      const lineSegments = generateCircleSegments(centerX, centerY, centerZ, radiusMm, segments);
+      // Adjust dash count to keep dash size roughly consistent
+      const dashCount = Math.max(24, Math.round(baseDashCount * (r / 20)));
 
-      // Draw ring as freeline
+      // Generate dotted circle with {start, end} line segments
+      const lineSegments = generateDottedCircleSegments(centerX, centerY, centerZ, radiusMm, dashCount, 0.6);
+
+      // Draw ring as freeline (dotted)
       const ringMarkup = await markupApi.addFreelineMarkups?.([{
         color,
         lines: lineSegments
       }]);
       if (ringMarkup?.[0]?.id) markupIds.push(ringMarkup[0].id);
 
-      // Add label if enabled
+      // Add label if enabled - now using 3D geometry text
       if (showLabels) {
         // Find capacity at this radius
-        let capacityText = '';
+        let labelText = `${r}m`;
         if (loadChartData) {
           const capacityPoint = loadChartData.find(lc => lc.radius_m === r);
           if (capacityPoint) {
-            capacityText = ` (${(capacityPoint.capacity_kg / 1000).toFixed(1)}t)`;
+            labelText = `${r}m (${(capacityPoint.capacity_kg / 1000).toFixed(0)}t)`;
           }
         }
 
-        const labelMarkup = await markupApi.addTextMarkup?.([{
-          text: `${r}m${capacityText}`,
-          start: {
-            positionX: centerX + radiusMm,
-            positionY: centerY,
-            positionZ: centerZ + 300 // 0.3m up
-          },
-          end: {
-            positionX: centerX + radiusMm + 100,
-            positionY: centerY + 100,
-            positionZ: centerZ + 300
-          }
-        }]);
-        if (labelMarkup?.[0]?.id) markupIds.push(labelMarkup[0].id);
+        // Generate 3D text (500mm tall)
+        const textHeight = 500; // 500mm tall letters
+        const textSegments = generate3DText(
+          labelText,
+          centerX + radiusMm + 200, // Offset slightly from ring
+          centerY,
+          centerZ,
+          textHeight
+        );
+
+        if (textSegments.length > 0) {
+          const textMarkup = await markupApi.addFreelineMarkups?.([{
+            color: { ...color, a: 255 }, // Full opacity for text
+            lines: textSegments
+          }]);
+          if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
+        }
       }
     }
   } catch (error) {

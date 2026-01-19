@@ -1794,6 +1794,7 @@ export interface ProjectCrane {
   show_radius_rings: boolean;
   radius_step_m: number;
   show_capacity_labels: boolean;
+  max_radius_limit_m?: number; // Optional limit for radius ring generation
 
   // Labels
   position_label?: string;
