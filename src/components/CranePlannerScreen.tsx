@@ -10,7 +10,7 @@ import { useCranes } from '../features/crane-planning/crane-library/hooks/useCra
 import { useCounterweights } from '../features/crane-planning/crane-library/hooks/useCounterweights';
 import { useLoadCharts } from '../features/crane-planning/crane-library/hooks/useLoadCharts';
 import { useProjectCranes } from '../features/crane-planning/crane-placement/hooks/useProjectCranes';
-import { drawCraneToModel, removeCraneMarkups } from '../features/crane-planning/crane-visualization/utils/trimbleMarkups';
+import { drawCraneToModel, drawCraneToModelGrouped, removeCraneMarkups, updatePositionLabel, CraneMarkupGroups } from '../features/crane-planning/crane-visualization/utils/trimbleMarkups';
 import { calculateLoadCapacities, formatWeight } from '../features/crane-planning/load-calculator/utils/liftingCalculations';
 import {
   ProjectCrane,
@@ -92,11 +92,13 @@ export default function CranePlannerScreen({
 
   // Preview markups for real-time visualization - use ref to avoid stale closure
   const previewMarkupIdsRef = useRef<number[]>([]);
+  const previewMarkupGroupsRef = useRef<CraneMarkupGroups | null>(null);
   const previewTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdatingPreviewRef = useRef(false); // Lock to prevent concurrent updates
+  const prevLabelConfigRef = useRef<{ label: string; color: any; height: number } | null>(null);
 
   // Update preview when config changes
-  const updatePreview = useCallback(async () => {
+  const updatePreview = useCallback(async (labelOnly: boolean = false) => {
     if (!selectedCraneModel || !pickedPosition) return;
 
     // Prevent concurrent updates - skip if already updating
@@ -104,14 +106,6 @@ export default function CranePlannerScreen({
     isUpdatingPreviewRef.current = true;
 
     try {
-      // Clear existing preview using ref (always has current value)
-      const idsToRemove = [...previewMarkupIdsRef.current];
-      previewMarkupIdsRef.current = []; // Clear immediately to prevent duplicate removal
-
-      if (idsToRemove.length > 0) {
-        await removeCraneMarkups(api, idsToRemove);
-      }
-
       // Create preview crane data
       const previewCrane = {
         id: 'preview',
@@ -143,13 +137,46 @@ export default function CranePlannerScreen({
         updated_at: new Date().toISOString()
       } as ProjectCrane;
 
-      const chartData = loadCharts.find(lc =>
-        lc.counterweight_config_id === selectedCounterweightId &&
-        lc.boom_length_m === config.boom_length_m
-      )?.chart_data;
+      // Partial update: only update position label
+      if (labelOnly && previewMarkupGroupsRef.current) {
+        console.log('[Preview] Partial update - position label only');
+        const oldLabelIds = previewMarkupGroupsRef.current.positionLabel;
+        const newLabelIds = await updatePositionLabel(api, previewCrane, selectedCraneModel, oldLabelIds);
 
-      const markupIds = await drawCraneToModel(api, previewCrane, selectedCraneModel, chartData);
-      previewMarkupIdsRef.current = markupIds;
+        // Update the groups ref
+        previewMarkupGroupsRef.current.positionLabel = newLabelIds;
+
+        // Update the all array
+        const allWithoutOldLabel = previewMarkupIdsRef.current.filter(id => !oldLabelIds.includes(id));
+        previewMarkupIdsRef.current = [...allWithoutOldLabel, ...newLabelIds];
+        previewMarkupGroupsRef.current.all = previewMarkupIdsRef.current;
+      } else {
+        // Full update: remove all and redraw
+        console.log('[Preview] Full update - all markups');
+        const idsToRemove = [...previewMarkupIdsRef.current];
+        previewMarkupIdsRef.current = [];
+        previewMarkupGroupsRef.current = null;
+
+        if (idsToRemove.length > 0) {
+          await removeCraneMarkups(api, idsToRemove);
+        }
+
+        const chartData = loadCharts.find(lc =>
+          lc.counterweight_config_id === selectedCounterweightId &&
+          lc.boom_length_m === config.boom_length_m
+        )?.chart_data;
+
+        const groups = await drawCraneToModelGrouped(api, previewCrane, selectedCraneModel, chartData);
+        previewMarkupGroupsRef.current = groups;
+        previewMarkupIdsRef.current = groups.all;
+      }
+
+      // Update prev label config for next comparison
+      prevLabelConfigRef.current = {
+        label: config.position_label || '',
+        color: config.label_color,
+        height: config.label_height_mm || 500
+      };
     } catch (error) {
       console.error('Error updating preview:', error);
     } finally {
@@ -157,27 +184,34 @@ export default function CranePlannerScreen({
     }
   }, [api, selectedCraneModel, pickedPosition, projectId, selectedCraneModelId, selectedCounterweightId, config, loadCharts, userEmail]);
 
-  // Debounced preview update
-  const schedulePreviewUpdate = useCallback(() => {
+  // Debounced preview update (full)
+  const schedulePreviewUpdate = useCallback((labelOnly: boolean = false) => {
     if (previewTimeoutRef.current) {
       clearTimeout(previewTimeoutRef.current);
     }
     previewTimeoutRef.current = setTimeout(() => {
-      updatePreview();
-    }, 100); // 100ms debounce
+      updatePreview(labelOnly);
+    }, labelOnly ? 50 : 100); // Faster for label-only updates
   }, [updatePreview]);
 
-  // Update preview when config changes (movement, rotation, etc.)
+  // Update preview when position/structure config changes (full redraw)
   useEffect(() => {
     if (pickedPosition && selectedCraneModel) {
-      schedulePreviewUpdate();
+      schedulePreviewUpdate(false); // Full update
     }
     return () => {
       if (previewTimeoutRef.current) {
         clearTimeout(previewTimeoutRef.current);
       }
     };
-  }, [config.position_x, config.position_y, config.position_z, config.rotation_deg, config.boom_length_m, config.show_radius_rings, config.radius_step_m, pickedPosition, selectedCraneModel, schedulePreviewUpdate]);
+  }, [config.position_x, config.position_y, config.position_z, config.rotation_deg, config.boom_length_m, config.show_radius_rings, config.radius_step_m, config.max_radius_limit_m, config.crane_color, config.radius_color, pickedPosition, selectedCraneModel, schedulePreviewUpdate]);
+
+  // Update preview when only label config changes (partial redraw)
+  useEffect(() => {
+    if (pickedPosition && selectedCraneModel && previewMarkupGroupsRef.current) {
+      schedulePreviewUpdate(true); // Label-only update
+    }
+  }, [config.position_label, config.label_color, config.label_height_mm, pickedPosition, selectedCraneModel, schedulePreviewUpdate]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -189,6 +223,8 @@ export default function CranePlannerScreen({
       if (previewMarkupIdsRef.current.length > 0) {
         removeCraneMarkups(api, previewMarkupIdsRef.current);
       }
+      previewMarkupGroupsRef.current = null;
+      prevLabelConfigRef.current = null;
     };
   }, [api]);
 
@@ -269,6 +305,8 @@ export default function CranePlannerScreen({
       await removeCraneMarkups(api, previewMarkupIdsRef.current);
       previewMarkupIdsRef.current = [];
     }
+    previewMarkupGroupsRef.current = null;
+    prevLabelConfigRef.current = null;
 
     // Remove picking listener
     if (pickingListenerRef.current) {
@@ -437,6 +475,8 @@ export default function CranePlannerScreen({
       await removeCraneMarkups(api, previewMarkupIdsRef.current);
       previewMarkupIdsRef.current = [];
     }
+    previewMarkupGroupsRef.current = null;
+    prevLabelConfigRef.current = null;
 
     const craneData: Partial<ProjectCrane> = {
       trimble_project_id: projectId,
@@ -536,20 +576,78 @@ export default function CranePlannerScreen({
     refetch();
   };
 
-  // Move crane
-  const moveCrane = useCallback((dx: number, dy: number, dz: number) => {
-    setConfig(prev => ({
-      ...prev,
-      position_x: prev.position_x + dx,
-      position_y: prev.position_y + dy,
-      position_z: prev.position_z + dz
-    }));
-    setPickedPosition(prev => prev ? {
-      x: prev.x + dx,
-      y: prev.y + dy,
-      z: prev.z + dz
-    } : null);
-  }, []);
+  // Move crane - view-relative movement based on camera direction
+  // screenDx: positive = screen right, negative = screen left
+  // screenDy: positive = screen up, negative = screen down
+  // dz: height change (always in world coordinates)
+  const moveCrane = useCallback(async (screenDx: number, screenDy: number, dz: number) => {
+    try {
+      // Get camera state
+      const camera = await api.viewer.getCamera();
+
+      let worldDx = screenDx;
+      let worldDy = screenDy;
+
+      if (camera && camera.position && camera.lookAt) {
+        // Calculate view direction projected onto XY plane
+        const eyeX = camera.position.x ?? 0;
+        const eyeY = camera.position.y ?? 0;
+        const targetX = camera.lookAt.x ?? 0;
+        const targetY = camera.lookAt.y ?? 0;
+
+        // View direction in XY plane (towards where we're looking)
+        let viewDirX = targetX - eyeX;
+        let viewDirY = targetY - eyeY;
+
+        // Normalize the view direction
+        const len = Math.sqrt(viewDirX * viewDirX + viewDirY * viewDirY);
+        if (len > 0.001) {
+          viewDirX /= len;
+          viewDirY /= len;
+        } else {
+          // Looking straight down, use default orientation (Y = forward)
+          viewDirX = 0;
+          viewDirY = 1;
+        }
+
+        // Right direction (perpendicular to view in XY plane, 90° clockwise)
+        const rightDirX = viewDirY;
+        const rightDirY = -viewDirX;
+
+        // Transform screen coordinates to world coordinates
+        // screenDy > 0 means "up on screen" = moving forward in view direction
+        // screenDx > 0 means "right on screen" = moving right in view direction
+        worldDx = screenDx * rightDirX + screenDy * viewDirX;
+        worldDy = screenDx * rightDirY + screenDy * viewDirY;
+      }
+
+      setConfig(prev => ({
+        ...prev,
+        position_x: prev.position_x + worldDx,
+        position_y: prev.position_y + worldDy,
+        position_z: prev.position_z + dz
+      }));
+      setPickedPosition(prev => prev ? {
+        x: prev.x + worldDx,
+        y: prev.y + worldDy,
+        z: prev.z + dz
+      } : null);
+    } catch (error) {
+      console.error('Error getting camera for view-relative movement:', error);
+      // Fallback to world coordinates if camera fails
+      setConfig(prev => ({
+        ...prev,
+        position_x: prev.position_x + screenDx,
+        position_y: prev.position_y + screenDy,
+        position_z: prev.position_z + dz
+      }));
+      setPickedPosition(prev => prev ? {
+        x: prev.x + screenDx,
+        y: prev.y + screenDy,
+        z: prev.z + dz
+      } : null);
+    }
+  }, [api]);
 
   // Rotate crane
   const rotateCrane = useCallback((degrees: number) => {
@@ -807,20 +905,20 @@ export default function CranePlannerScreen({
                         Liiguta ({moveStep}m samm)
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
-                        {/* Top row: NW, N, NE */}
-                        <button onClick={() => moveCrane(-moveStep, moveStep, 0)} style={btnStyle} title="Loe-Põhi">↖</button>
-                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle} title="Põhi"><FiArrowUp /></button>
-                        <button onClick={() => moveCrane(moveStep, moveStep, 0)} style={btnStyle} title="Ida-Põhi">↗</button>
-                        {/* Middle row: W, Center, E */}
-                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle} title="Lääs"><FiArrowLeft /></button>
+                        {/* Top row: screen up-left, up, up-right (view-relative) */}
+                        <button onClick={() => moveCrane(-moveStep, moveStep, 0)} style={btnStyle} title="Üles-Vasak">↖</button>
+                        <button onClick={() => moveCrane(0, moveStep, 0)} style={btnStyle} title="Üles"><FiArrowUp /></button>
+                        <button onClick={() => moveCrane(moveStep, moveStep, 0)} style={btnStyle} title="Üles-Parem">↗</button>
+                        {/* Middle row: screen left, center, right */}
+                        <button onClick={() => moveCrane(-moveStep, 0, 0)} style={btnStyle} title="Vasak"><FiArrowLeft /></button>
                         <div style={{ textAlign: 'center', fontSize: '10px', color: '#6b7280', padding: '2px' }}>
                           X:{config.position_x.toFixed(1)}<br />Y:{config.position_y.toFixed(1)}
                         </div>
-                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle} title="Ida"><FiArrowRight /></button>
-                        {/* Bottom row: SW, S, SE */}
-                        <button onClick={() => moveCrane(-moveStep, -moveStep, 0)} style={btnStyle} title="Loe-Lõuna">↙</button>
-                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle} title="Lõuna"><FiArrowDown /></button>
-                        <button onClick={() => moveCrane(moveStep, -moveStep, 0)} style={btnStyle} title="Ida-Lõuna">↘</button>
+                        <button onClick={() => moveCrane(moveStep, 0, 0)} style={btnStyle} title="Parem"><FiArrowRight /></button>
+                        {/* Bottom row: screen down-left, down, down-right */}
+                        <button onClick={() => moveCrane(-moveStep, -moveStep, 0)} style={btnStyle} title="Alla-Vasak">↙</button>
+                        <button onClick={() => moveCrane(0, -moveStep, 0)} style={btnStyle} title="Alla"><FiArrowDown /></button>
+                        <button onClick={() => moveCrane(moveStep, -moveStep, 0)} style={btnStyle} title="Alla-Parem">↘</button>
                       </div>
                     </div>
                     {/* Rotation */}
