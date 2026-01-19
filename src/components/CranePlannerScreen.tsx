@@ -96,8 +96,23 @@ export default function CranePlannerScreen({
   // Lifting capacity modal state
   const [liftingModal, setLiftingModal] = useState<{
     crane: ProjectCrane;
-    objects: { name: string; distance: number; height: number; weight: number; capacity: number; isSafe: boolean }[];
+    objects: {
+      name: string;
+      distance: number;
+      height: number;
+      weight: number;
+      capacity: number;
+      isSafe: boolean;
+      boomAngle: number;
+      chainLength: number;
+      // Raw data for recalculation
+      objCenterX: number;
+      objCenterY: number;
+      objTopZ: number;
+    }[];
     markupIds: number[];
+    selectedBoomLength: number;
+    availableBoomLengths: number[];
   } | null>(null);
 
   // Selected crane model data
@@ -709,6 +724,113 @@ export default function CranePlannerScreen({
     refetch();
   };
 
+  // Helper function to calculate boom geometry and capacity for an object
+  const calculateBoomGeometry = (
+    crane: ProjectCrane,
+    boomLengthM: number,
+    objCenterX: number,
+    objCenterY: number,
+    objTopZ: number,
+    objWeight: number,
+    chartData: { radius_m: number; capacity_kg: number }[]
+  ) => {
+    // Crane position in mm
+    const craneX = crane.position_x * 1000;
+    const craneY = crane.position_y * 1000;
+    const craneZ = crane.position_z * 1000;
+    const boomBaseHeight = 3500; // 3.5m boom pivot point above crane base
+
+    // Horizontal distance from crane to object (in mm)
+    const horizontalDistMm = Math.sqrt(
+      Math.pow(objCenterX - craneX, 2) +
+      Math.pow(objCenterY - craneY, 2)
+    );
+    const horizontalDistM = horizontalDistMm / 1000;
+
+    // Vertical distance from boom pivot to object top + clearance (in mm)
+    const clearance = 1000; // 1m above object for hook
+    const targetZ = objTopZ + clearance;
+    const verticalDistMm = targetZ - (craneZ + boomBaseHeight);
+    const verticalDistM = verticalDistMm / 1000;
+
+    // Calculate boom angle (from horizontal) to reach the target point
+    // Using boom tip position: crane + boom at angle
+    // We need boom_tip.x = horizontal_dist, boom_tip.z = vertical_dist
+    // boom_tip.horizontal = boomLength * cos(angle)
+    // boom_tip.vertical = boomLength * sin(angle)
+    // So we need to find angle where:
+    // sqrt(horizontal_dist^2 + vertical_dist^2) <= boomLength
+
+    const requiredReach = Math.sqrt(
+      Math.pow(horizontalDistM, 2) +
+      Math.pow(verticalDistM, 2)
+    );
+
+    // Calculate boom angle
+    let boomAngle = 0;
+    let chainLength = 0;
+    let canReach = false;
+
+    if (requiredReach <= boomLengthM) {
+      // Boom can reach - calculate angle
+      boomAngle = Math.atan2(verticalDistM, horizontalDistM) * (180 / Math.PI);
+      // When boom reaches exactly to target, chain length is minimal (just hook drop)
+      chainLength = clearance / 1000; // Chain drops from boom tip to object top
+      canReach = true;
+    } else {
+      // Boom too short - calculate max angle (most vertical) to get closest
+      // At max angle, horizontal reach = boomLength * cos(maxAngle)
+      // For a given horizontal distance, find the angle
+      if (horizontalDistM <= boomLengthM) {
+        // Can reach horizontally, calculate angle
+        const cosAngle = horizontalDistM / boomLengthM;
+        boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
+        // Boom tip Z = craneZ + boomBaseHeight + boomLength * sin(angle)
+        const boomTipZ = craneZ + boomBaseHeight + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180));
+        // Chain needs to drop from boom tip to object top
+        chainLength = Math.max(0, (boomTipZ - objTopZ) / 1000);
+        canReach = chainLength > 0;
+      } else {
+        // Can't even reach horizontally at 0 degrees
+        boomAngle = 0;
+        chainLength = 0;
+        canReach = false;
+      }
+    }
+
+    // Calculate capacity at this horizontal distance
+    let capacityKg = 0;
+    if (chartData.length > 0) {
+      const sortedChart = [...chartData].sort((a, b) => a.radius_m - b.radius_m);
+      for (const point of sortedChart) {
+        if (point.radius_m >= horizontalDistM) {
+          capacityKg = point.capacity_kg;
+          break;
+        }
+      }
+      if (capacityKg === 0 && sortedChart.length > 0) {
+        const maxRadius = sortedChart[sortedChart.length - 1].radius_m;
+        if (horizontalDistM <= maxRadius) {
+          capacityKg = sortedChart[sortedChart.length - 1].capacity_kg;
+        }
+      }
+    }
+
+    // Apply safety factor and deduct hook weight
+    const safeCapacity = canReach ? (capacityKg / crane.safety_factor) - crane.hook_weight_kg - crane.lifting_block_kg : 0;
+    const isSafe = objWeight > 0 ? objWeight <= safeCapacity && canReach : canReach;
+
+    return {
+      distance: horizontalDistM,
+      height: (objTopZ - craneZ) / 1000,
+      boomAngle: Math.round(boomAngle * 10) / 10,
+      chainLength: Math.round(chainLength * 10) / 10,
+      capacity: Math.max(0, safeCapacity),
+      isSafe,
+      canReach
+    };
+  };
+
   // Calculate lifting capacity for selected objects
   const calculateLiftingCapacity = async (crane: ProjectCrane) => {
     try {
@@ -733,21 +855,29 @@ export default function CranePlannerScreen({
       const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, runtimeIds);
       const props = await api.viewer.getObjectProperties(modelId, runtimeIds);
 
-      // Get load chart data for this crane
-      const chartData = loadCharts.find(lc =>
-        lc.counterweight_config_id === crane.counterweight_config_id &&
-        lc.boom_length_m === crane.boom_length_m
-      )?.chart_data || [];
+      // Get available boom lengths for this crane from load charts
+      const craneLc = loadCharts.filter(lc => lc.counterweight_config_id === crane.counterweight_config_id);
+      const availableBoomLengths = [...new Set(craneLc.map(lc => lc.boom_length_m))].sort((a, b) => a - b);
 
-      // Crane position in mm
-      const craneX = crane.position_x * 1000;
-      const craneY = crane.position_y * 1000;
-      const craneZ = crane.position_z * 1000;
-      const boomFoldHeight = 3500; // 3.5m typical boom fold point
+      // Use current crane boom length
+      const currentBoomLength = crane.boom_length_m;
 
-      const markupApi = api.markup as any;
-      const allMarkupEntries: { color: { r: number; g: number; b: number; a: number }; lines: any[] }[] = [];
-      const objectResults: { name: string; distance: number; height: number; weight: number; capacity: number; isSafe: boolean }[] = [];
+      // Get chart data for current boom length
+      const chartData = craneLc.find(lc => lc.boom_length_m === currentBoomLength)?.chart_data || [];
+
+      const objectResults: {
+        name: string;
+        distance: number;
+        height: number;
+        weight: number;
+        capacity: number;
+        isSafe: boolean;
+        boomAngle: number;
+        chainLength: number;
+        objCenterX: number;
+        objCenterY: number;
+        objTopZ: number;
+      }[] = [];
 
       // Process each selected object
       for (let i = 0; i < bboxes.length; i++) {
@@ -758,23 +888,13 @@ export default function CranePlannerScreen({
         // Object center of gravity (center of bounding box) in mm
         const objCenterX = ((b.min.x + b.max.x) / 2) * 1000;
         const objCenterY = ((b.min.y + b.max.y) / 2) * 1000;
-        const objTopZ = b.max.z * 1000; // Top of object
-
-        // Calculate horizontal distance from crane center to object center (in meters)
-        const distanceM = Math.sqrt(
-          Math.pow((objCenterX - craneX) / 1000, 2) +
-          Math.pow((objCenterY - craneY) / 1000, 2)
-        );
-
-        // Height difference (object top - crane base) in meters
-        const heightDiffM = (objTopZ - craneZ) / 1000;
+        const objTopZ = b.max.z * 1000;
 
         // Find object name and weight from properties
         let objName = `Objekt ${i + 1}`;
         let objWeight = 0;
         const objProps = props[i] as any;
         if (objProps?.properties) {
-          // Properties can be array of PropertySet objects which contain properties array
           const allProps: any[] = [];
           for (const propSet of objProps.properties) {
             if (propSet.properties && Array.isArray(propSet.properties)) {
@@ -795,99 +915,161 @@ export default function CranePlannerScreen({
           }
         }
 
-        // Calculate capacity at this distance
-        let capacityKg = 0;
-        if (chartData.length > 0) {
-          // Find the capacity at the calculated radius
-          const sortedChart = [...chartData].sort((a, b) => a.radius_m - b.radius_m);
-          for (const point of sortedChart) {
-            if (point.radius_m >= distanceM) {
-              capacityKg = point.capacity_kg;
-              break;
-            }
-          }
-          // If distance exceeds max radius, use the last (smallest) capacity or 0
-          if (capacityKg === 0 && sortedChart.length > 0) {
-            const maxRadius = sortedChart[sortedChart.length - 1].radius_m;
-            if (distanceM <= maxRadius) {
-              capacityKg = sortedChart[sortedChart.length - 1].capacity_kg;
-            }
-          }
-        }
-
-        // Apply safety factor and deduct hook weight
-        const safeCapacity = (capacityKg / crane.safety_factor) - crane.hook_weight_kg - crane.lifting_block_kg;
-        const isSafe = objWeight > 0 ? objWeight <= safeCapacity : true;
+        // Calculate geometry for current boom length
+        const geom = calculateBoomGeometry(crane, currentBoomLength, objCenterX, objCenterY, objTopZ, objWeight, chartData);
 
         objectResults.push({
           name: objName,
-          distance: distanceM,
-          height: heightDiffM,
           weight: objWeight,
-          capacity: Math.max(0, safeCapacity),
-          isSafe
-        });
-
-        // Create visualization lines
-        // 1. Crane vertical line (from crane center up 3.5m) - blue
-        const craneVerticalLine = {
-          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
-          end: { positionX: craneX, positionY: craneY, positionZ: craneZ + boomFoldHeight }
-        };
-
-        // 2. Object vertical line (from object COG up to same height as crane fold point or higher) - green
-        const objVerticalTop = Math.max(craneZ + boomFoldHeight, objTopZ + 1000); // At least 1m above object
-        const objVerticalLine = {
-          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objVerticalTop }
-        };
-
-        // 3. Boom path line (from crane fold point to object vertical top) - orange
-        const boomLine = {
-          start: { positionX: craneX, positionY: craneY, positionZ: craneZ + boomFoldHeight },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objVerticalTop }
-        };
-
-        // 4. Hook drop line (from boom end down to object) - orange dashed (we'll use same color)
-        const hookDropLine = {
-          start: { positionX: objCenterX, positionY: objCenterY, positionZ: objVerticalTop },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ }
-        };
-
-        // Add as separate markup entries for different colors
-        allMarkupEntries.push({
-          color: { r: 0, g: 100, b: 255, a: 255 }, // Blue - crane vertical
-          lines: [craneVerticalLine]
-        });
-        allMarkupEntries.push({
-          color: { r: 34, g: 197, b: 94, a: 255 }, // Green - object vertical
-          lines: [objVerticalLine]
-        });
-        allMarkupEntries.push({
-          color: { r: 255, g: 165, b: 0, a: 255 }, // Orange - boom path
-          lines: [boomLine, hookDropLine]
+          objCenterX,
+          objCenterY,
+          objTopZ,
+          ...geom
         });
       }
 
-      // Draw all visualization markups
-      let markupIds: number[] = [];
-      if (allMarkupEntries.length > 0) {
-        const result = await markupApi.addFreelineMarkups(allMarkupEntries);
-        if (result && Array.isArray(result)) {
-          markupIds = result;
-        }
-      }
+      // Draw visualization
+      const markupIds = await drawLiftingVisualization(crane, currentBoomLength, objectResults);
 
       // Open modal with results
       setLiftingModal({
         crane,
         objects: objectResults,
-        markupIds
+        markupIds,
+        selectedBoomLength: currentBoomLength,
+        availableBoomLengths: availableBoomLengths.length > 0 ? availableBoomLengths : [currentBoomLength]
       });
     } catch (error: any) {
       console.error('Error calculating lifting capacity:', error);
       alert('Viga arvutamisel: ' + error.message);
     }
+  };
+
+  // Draw lifting visualization markups
+  const drawLiftingVisualization = async (
+    crane: ProjectCrane,
+    boomLengthM: number,
+    objects: { objCenterX: number; objCenterY: number; objTopZ: number; boomAngle: number; chainLength: number }[]
+  ): Promise<number[]> => {
+    const markupApi = api.markup as any;
+    const allMarkupEntries: { color: { r: number; g: number; b: number; a: number }; lines: any[] }[] = [];
+
+    const craneX = crane.position_x * 1000;
+    const craneY = crane.position_y * 1000;
+    const craneZ = crane.position_z * 1000;
+    const boomBaseHeight = 3500; // 3.5m boom pivot height
+    const boomPivotZ = craneZ + boomBaseHeight;
+
+    for (const obj of objects) {
+      const { objCenterX, objCenterY, objTopZ, boomAngle } = obj;
+
+      // Calculate boom tip position
+      const boomAngleRad = boomAngle * (Math.PI / 180);
+      const horizontalDist = Math.sqrt(Math.pow(objCenterX - craneX, 2) + Math.pow(objCenterY - craneY, 2));
+
+      // Direction vector from crane to object (normalized)
+      const dirX = (objCenterX - craneX) / horizontalDist;
+      const dirY = (objCenterY - craneY) / horizontalDist;
+
+      // Boom tip position - horizontal reach along direction, vertical based on angle
+      const boomHorizontalReach = boomLengthM * 1000 * Math.cos(boomAngleRad);
+      const boomVerticalReach = boomLengthM * 1000 * Math.sin(boomAngleRad);
+
+      const boomTipX = craneX + dirX * boomHorizontalReach;
+      const boomTipY = craneY + dirY * boomHorizontalReach;
+      const boomTipZ = boomPivotZ + boomVerticalReach;
+
+      // 1. Crane mast (from base to boom pivot) - blue
+      allMarkupEntries.push({
+        color: { r: 0, g: 100, b: 255, a: 255 },
+        lines: [{
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          end: { positionX: craneX, positionY: craneY, positionZ: boomPivotZ }
+        }]
+      });
+
+      // 2. Boom (from pivot to tip) - orange
+      allMarkupEntries.push({
+        color: { r: 255, g: 165, b: 0, a: 255 },
+        lines: [{
+          start: { positionX: craneX, positionY: craneY, positionZ: boomPivotZ },
+          end: { positionX: boomTipX, positionY: boomTipY, positionZ: boomTipZ }
+        }]
+      });
+
+      // 3. Chain/rope (from boom tip down to object top) - green
+      allMarkupEntries.push({
+        color: { r: 34, g: 197, b: 94, a: 255 },
+        lines: [{
+          start: { positionX: boomTipX, positionY: boomTipY, positionZ: boomTipZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: objTopZ }
+        }]
+      });
+
+      // 4. Object lift point marker (small cross at object top) - green
+      const crossSize = 500; // 500mm cross
+      allMarkupEntries.push({
+        color: { r: 34, g: 197, b: 94, a: 255 },
+        lines: [
+          {
+            start: { positionX: objCenterX - crossSize, positionY: objCenterY, positionZ: objTopZ },
+            end: { positionX: objCenterX + crossSize, positionY: objCenterY, positionZ: objTopZ }
+          },
+          {
+            start: { positionX: objCenterX, positionY: objCenterY - crossSize, positionZ: objTopZ },
+            end: { positionX: objCenterX, positionY: objCenterY + crossSize, positionZ: objTopZ }
+          }
+        ]
+      });
+    }
+
+    let markupIds: number[] = [];
+    if (allMarkupEntries.length > 0) {
+      const result = await markupApi.addFreelineMarkups(allMarkupEntries);
+      if (result && Array.isArray(result)) {
+        markupIds = result;
+      }
+    }
+    return markupIds;
+  };
+
+  // Update lifting calculation when boom length changes
+  const updateLiftingBoomLength = async (newBoomLength: number) => {
+    if (!liftingModal) return;
+
+    // Remove old visualization
+    if (liftingModal.markupIds.length > 0) {
+      await removeCraneMarkups(api, liftingModal.markupIds);
+    }
+
+    // Get chart data for new boom length
+    const craneLc = loadCharts.filter(lc => lc.counterweight_config_id === liftingModal.crane.counterweight_config_id);
+    const chartData = craneLc.find(lc => lc.boom_length_m === newBoomLength)?.chart_data || [];
+
+    // Recalculate for all objects
+    const updatedObjects = liftingModal.objects.map(obj => {
+      const geom = calculateBoomGeometry(
+        liftingModal.crane,
+        newBoomLength,
+        obj.objCenterX,
+        obj.objCenterY,
+        obj.objTopZ,
+        obj.weight,
+        chartData
+      );
+      return { ...obj, ...geom };
+    });
+
+    // Draw new visualization
+    const newMarkupIds = await drawLiftingVisualization(liftingModal.crane, newBoomLength, updatedObjects);
+
+    // Update modal state
+    setLiftingModal({
+      ...liftingModal,
+      objects: updatedObjects,
+      markupIds: newMarkupIds,
+      selectedBoomLength: newBoomLength
+    });
   };
 
   // Close lifting modal and remove visualization markups
@@ -2013,6 +2195,39 @@ export default function CranePlannerScreen({
 
               {/* Modal content */}
               <div style={{ padding: '16px 20px' }}>
+                {/* Boom length selector */}
+                <div style={{
+                  padding: '12px',
+                  backgroundColor: '#fef3c7',
+                  borderRadius: '8px',
+                  marginBottom: '12px',
+                  border: '1px solid #fcd34d'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <label style={{ fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      Noole pikkus:
+                    </label>
+                    <select
+                      value={liftingModal.selectedBoomLength}
+                      onChange={(e) => updateLiftingBoomLength(Number(e.target.value))}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        border: '2px solid #f59e0b',
+                        backgroundColor: 'white',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {liftingModal.availableBoomLengths.map(len => (
+                        <option key={len} value={len}>{len}m</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 {/* Crane info */}
                 <div style={{
                   padding: '12px',
@@ -2022,10 +2237,10 @@ export default function CranePlannerScreen({
                   fontSize: '12px'
                 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                    <div><strong>Noole pikkus:</strong> {liftingModal.crane.boom_length_m}m</div>
                     <div><strong>Ohutustegur:</strong> {liftingModal.crane.safety_factor}x</div>
                     <div><strong>Konksu kaal:</strong> {formatWeight(liftingModal.crane.hook_weight_kg)}</div>
                     <div><strong>Tõsteplokk:</strong> {formatWeight(liftingModal.crane.lifting_block_kg)}</div>
+                    <div><strong>Masti kõrgus:</strong> 3.5m</div>
                   </div>
                 </div>
 
@@ -2056,13 +2271,15 @@ export default function CranePlannerScreen({
                           backgroundColor: obj.isSafe ? '#22c55e' : '#ef4444',
                           color: 'white'
                         }}>
-                          {obj.isSafe ? '✓ SOBIB' : '✗ LIIGA RASKE'}
+                          {obj.isSafe ? '✓ SOBIB' : '✗ EI SOBI'}
                         </span>
                       )}
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '12px', color: '#374151' }}>
                       <div>📏 Kaugus: <strong>{obj.distance.toFixed(1)}m</strong></div>
                       <div>📐 Kõrgus: <strong>{obj.height.toFixed(1)}m</strong></div>
+                      <div>🎯 Noole nurk: <strong>{obj.boomAngle}°</strong></div>
+                      <div>⛓️ Keti pikkus: <strong>{obj.chainLength.toFixed(1)}m</strong></div>
                       <div>⚖️ Kaal: <strong>{obj.weight > 0 ? formatWeight(obj.weight) : 'Teadmata'}</strong></div>
                       <div>💪 Tõstevõime: <strong style={{ color: obj.capacity > 0 ? '#16a34a' : '#dc2626' }}>
                         {obj.capacity > 0 ? formatWeight(obj.capacity) : 'Väljas ulatusest'}
@@ -2086,10 +2303,10 @@ export default function CranePlannerScreen({
                   color: '#6b7280'
                 }}>
                   <strong>Visualiseering mudelis:</strong>
-                  <div style={{ display: 'flex', gap: '16px', marginTop: '6px' }}>
-                    <span>🔵 Kraana mast (3.5m)</span>
-                    <span>🟢 Objekti tõstepunkt</span>
-                    <span>🟠 Noole trajektoor</span>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+                    <span>🔵 Kraana mast</span>
+                    <span>🟠 Nool (boom)</span>
+                    <span>🟢 Kett/tross</span>
                   </div>
                 </div>
               </div>
