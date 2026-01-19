@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
-import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiLoader, FiAlertCircle, FiDatabase, FiSettings, FiUpload, FiImage } from 'react-icons/fi';
+import { useState, useCallback, useRef } from 'react';
+import { FiPlus, FiEdit2, FiTrash2, FiChevronDown, FiChevronRight, FiLoader, FiAlertCircle, FiDatabase, FiSettings, FiUpload, FiImage, FiDownload, FiInfo, FiFileText } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 import { useCranes } from '../features/crane-planning/crane-library/hooks/useCranes';
 import { useCounterweights } from '../features/crane-planning/crane-library/hooks/useCounterweights';
 import { useLoadCharts } from '../features/crane-planning/crane-library/hooks/useLoadCharts';
 import { parseLoadChartFromPaste } from '../features/crane-planning/load-calculator/utils/liftingCalculations';
+import * as XLSX from 'xlsx';
 import {
   CraneModel,
   CraneType,
@@ -595,11 +596,25 @@ function BasicInfoForm({
           <label style={labelStyle}>Max radius (m)</label>
           <input
             type="number"
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              borderColor: (formData.max_radius_m || 0) > (formData.default_boom_length_m || 0) ? '#dc2626' : '#d1d5db'
+            }}
             value={formData.max_radius_m || 0}
-            onChange={(e) => onChange({ ...formData, max_radius_m: parseFloat(e.target.value) })}
+            onChange={(e) => {
+              const newRadius = parseFloat(e.target.value);
+              // Auto-limit to boom length
+              const maxAllowed = formData.default_boom_length_m || 100;
+              onChange({ ...formData, max_radius_m: Math.min(newRadius, maxAllowed) });
+            }}
+            max={formData.default_boom_length_m || 100}
             step="0.1"
           />
+          {(formData.max_radius_m || 0) > (formData.default_boom_length_m || 0) && (
+            <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>
+              Max radius ei saa olla suurem kui nool ({formData.default_boom_length_m}m)
+            </div>
+          )}
         </div>
 
         <div>
@@ -619,44 +634,66 @@ function BasicInfoForm({
             type="number"
             style={inputStyle}
             value={formData.default_boom_length_m || 40}
-            onChange={(e) => onChange({ ...formData, default_boom_length_m: parseFloat(e.target.value) })}
+            onChange={(e) => {
+              const newBoom = parseFloat(e.target.value);
+              // Also adjust max_radius if it would exceed new boom length
+              const newMaxRadius = Math.min(formData.max_radius_m || 0, newBoom);
+              onChange({ ...formData, default_boom_length_m: newBoom, max_radius_m: newMaxRadius });
+            }}
             step="0.1"
           />
         </div>
 
-        <div>
-          <label style={labelStyle}>Aluse laius (m)</label>
-          <input
-            type="number"
-            style={inputStyle}
-            value={formData.base_width_m || 3}
-            onChange={(e) => onChange({ ...formData, base_width_m: parseFloat(e.target.value) })}
-            step="0.1"
-          />
-        </div>
-
-        <div>
-          <label style={labelStyle}>Aluse pikkus (m)</label>
-          <input
-            type="number"
-            style={inputStyle}
-            value={formData.base_length_m || 4}
-            onChange={(e) => onChange({ ...formData, base_length_m: parseFloat(e.target.value) })}
-            step="0.1"
-          />
-        </div>
-
-        <div>
-          <label style={labelStyle}>Kabiini positsioon</label>
-          <select
-            style={inputStyle}
-            value={formData.cab_position || 'rear'}
-            onChange={(e) => onChange({ ...formData, cab_position: e.target.value as CabPosition })}
-          >
-            {Object.entries(CAB_POSITION_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+        {/* Crane shape visualization settings with info */}
+        <div style={{ gridColumn: 'span 2', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '6px', marginTop: '8px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <FiInfo size={16} style={{ color: '#0369a1' }} />
+            <span style={{ fontSize: '13px', fontWeight: 500, color: '#0369a1' }}>Kraana kuju mudelis</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={labelStyle}>Aluse laius (m)</label>
+              <input
+                type="number"
+                style={inputStyle}
+                value={formData.base_width_m || 3}
+                onChange={(e) => onChange({ ...formData, base_width_m: parseFloat(e.target.value) })}
+                step="0.1"
+                min="1"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Aluse pikkus (m)</label>
+              <input
+                type="number"
+                style={inputStyle}
+                value={formData.base_length_m || 4}
+                onChange={(e) => onChange({ ...formData, base_length_m: parseFloat(e.target.value) })}
+                step="0.1"
+                min="1"
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Kabiini positsioon</label>
+              <select
+                style={inputStyle}
+                value={formData.cab_position || 'rear'}
+                onChange={(e) => onChange({ ...formData, cab_position: e.target.value as CabPosition })}
+              >
+                {Object.entries(CAB_POSITION_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div style={{ marginTop: '12px', fontSize: '12px', color: '#6b7280' }}>
+            <strong>Visualiseerimine mudelis:</strong> Kraana joonistatakse ristkülikuna (laius × pikkus),
+            4 tugijalga nurkades, pöördalus keskel, nool üles suunatud. Kabiini asend määrab operaatori positsiooni.
+            <br />
+            <span style={{ fontSize: '11px', fontStyle: 'italic' }}>
+              Vihje: Tekla/IFC koordinaatide saamiseks kasuta mudeli mõõtmistööriistu.
+            </span>
+          </div>
         </div>
 
         <div>
@@ -969,10 +1006,12 @@ function CounterweightsManager({ craneId }: { craneId: string }) {
 // Load Charts Manager Component
 function LoadChartsManager({ craneId }: { craneId: string }) {
   const { counterweights, createCounterweight, refetch: refetchCounterweights } = useCounterweights(craneId);
-  const { loadCharts, loading, createLoadChart, updateLoadChart, deleteLoadChart } = useLoadCharts(craneId);
+  const { loadCharts, loading, createLoadChart, updateLoadChart, deleteLoadChart, refetch: refetchLoadCharts } = useLoadCharts(craneId);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     counterweight_name: '',
     counterweight_kg: 0,
@@ -981,6 +1020,153 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
     notes: ''
   });
   const [pasteText, setPasteText] = useState('');
+
+  // Download Excel template for load charts
+  const downloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Instructions sheet
+    const instructions = [
+      ['TÕSTEVÕIME GRAAFIKU MALL'],
+      [''],
+      ['Juhised:'],
+      ['1. Täida "Andmed" leht oma kraana tõstevõime andmetega'],
+      ['2. Iga rida on üks tõstevõime punkt'],
+      ['3. Vastukaalu nimi ja kaal peavad kattuma (sama kombinatsioon = sama konfiguratsioon)'],
+      ['4. Radius ja võimsus on kohustuslikud'],
+      [''],
+      ['Veerud:'],
+      ['- Vastukaalu nimi: nt "Standard 20t", "Max 40t"'],
+      ['- Vastukaalu kaal (t): vastukaalu mass tonnides'],
+      ['- Noole pikkus (m): boom pikkus meetrites'],
+      ['- Radius (m): tõsteraadiuse kaugus'],
+      ['- Tõstevõime (t): max koormus selle raadiuse juures'],
+    ];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instructions);
+    wsInstr['!cols'] = [{ wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Juhised');
+
+    // Data template sheet
+    const dataTemplate = [
+      ['Vastukaalu nimi', 'Vastukaalu kaal (t)', 'Noole pikkus (m)', 'Radius (m)', 'Tõstevõime (t)'],
+      ['Standard 20t', 20, 40, 3, 100],
+      ['Standard 20t', 20, 40, 5, 80],
+      ['Standard 20t', 20, 40, 10, 50],
+      ['Standard 20t', 20, 40, 15, 35],
+      ['Standard 20t', 20, 40, 20, 25],
+      ['Standard 20t', 20, 50, 3, 90],
+      ['Standard 20t', 20, 50, 5, 70],
+      ['Max 40t', 40, 40, 3, 120],
+      ['Max 40t', 40, 40, 5, 100],
+    ];
+    const wsData = XLSX.utils.aoa_to_sheet(dataTemplate);
+    wsData['!cols'] = [{ wch: 20 }, { wch: 18 }, { wch: 16 }, { wch: 12 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsData, 'Andmed');
+
+    XLSX.writeFile(wb, 'tostevoimete_mall.xlsx');
+  };
+
+  // Import Excel file with load charts
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+
+      // Find data sheet
+      const dataSheet = workbook.Sheets['Andmed'] || workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length > 1 ? 1 : 0]];
+      if (!dataSheet) {
+        alert('Excel fail peab sisaldama "Andmed" lehte!');
+        return;
+      }
+
+      const rows = XLSX.utils.sheet_to_json<{
+        'Vastukaalu nimi': string;
+        'Vastukaalu kaal (t)': number;
+        'Noole pikkus (m)': number;
+        'Radius (m)': number;
+        'Tõstevõime (t)': number;
+      }>(dataSheet, { header: 1, range: 1 }) as any[];
+
+      // Group by counterweight + boom length
+      const grouped: Record<string, {
+        counterweight_name: string;
+        counterweight_kg: number;
+        boom_length_m: number;
+        chart_data: LoadChartDataPoint[];
+      }> = {};
+
+      for (const row of rows) {
+        if (!row[0] || !row[3] || !row[4]) continue; // Skip empty rows
+
+        const cwName = String(row[0]);
+        const cwKg = (parseFloat(row[1]) || 0) * 1000;
+        const boomLength = parseFloat(row[2]) || 40;
+        const radius = parseFloat(row[3]);
+        const capacity = (parseFloat(row[4]) || 0) * 1000;
+
+        const key = `${cwName}|${boomLength}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            counterweight_name: cwName,
+            counterweight_kg: cwKg,
+            boom_length_m: boomLength,
+            chart_data: []
+          };
+        }
+        grouped[key].chart_data.push({ radius_m: radius, capacity_kg: capacity });
+      }
+
+      // Import each group
+      let imported = 0;
+      for (const group of Object.values(grouped)) {
+        if (group.chart_data.length === 0) continue;
+
+        // Find or create counterweight
+        let counterweightId = counterweights.find(
+          cw => cw.name.toLowerCase() === group.counterweight_name.toLowerCase()
+        )?.id;
+
+        if (!counterweightId) {
+          const newCw = await createCounterweight({
+            name: group.counterweight_name,
+            weight_kg: group.counterweight_kg,
+            description: 'Imporditud Excelist',
+            sort_order: counterweights.length + 1
+          });
+          if (newCw) {
+            counterweightId = newCw.id;
+          }
+        }
+
+        if (counterweightId) {
+          // Sort chart data by radius
+          group.chart_data.sort((a, b) => a.radius_m - b.radius_m);
+
+          await createLoadChart({
+            counterweight_config_id: counterweightId,
+            boom_length_m: group.boom_length_m,
+            chart_data: group.chart_data,
+            notes: 'Imporditud Excelist'
+          });
+          imported++;
+        }
+      }
+
+      await refetchCounterweights();
+      await refetchLoadCharts();
+      alert(`Imporditud ${imported} tõstegraafikut!`);
+    } catch (err) {
+      console.error('Excel import error:', err);
+      alert('Excel importimine ebaõnnestus! Kontrolli faili formaati.');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   const inputStyle: React.CSSProperties = {
     width: '100%',
@@ -1088,26 +1274,72 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Tõstevõime graafikud</h3>
         {!isAdding && !editingId && (
-          <button
-            onClick={() => setIsAdding(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 12px',
-              border: '1px solid #d1d5db',
-              borderRadius: '6px',
-              backgroundColor: 'white',
-              cursor: 'pointer'
-            }}
-          >
-            <FiPlus size={14} /> Lisa Graafik
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={downloadTemplate}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                backgroundColor: 'white',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+              title="Lae alla Excel mall"
+            >
+              <FiDownload size={14} /> Mall
+            </button>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                backgroundColor: 'white',
+                cursor: importing ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                opacity: importing ? 0.7 : 1
+              }}
+              title="Impordi Excelist"
+            >
+              {importing ? <FiLoader className="animate-spin" size={14} /> : <FiFileText size={14} />}
+              {importing ? 'Importimine...' : 'Impordi'}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={handleExcelImport}
+                disabled={importing}
+              />
+            </label>
+            <button
+              onClick={() => setIsAdding(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                backgroundColor: 'white',
+                cursor: 'pointer',
+                fontSize: '13px'
+              }}
+            >
+              <FiPlus size={14} /> Lisa
+            </button>
+          </div>
         )}
       </div>
 
       <div style={{ padding: '12px', backgroundColor: '#e0f2fe', borderRadius: '6px', marginBottom: '16px', fontSize: '13px', color: '#0369a1' }}>
-        Vastukaalu konfiguratsioonid luuakse automaatselt tõstegraafiku sisestamisel.
+        <strong>Vihje:</strong> Lae alla mall (Excel), täida andmed ja impordi tagasi. Vastukaalu konfiguratsioonid luuakse automaatselt.
       </div>
 
       {(isAdding || editingId) && (

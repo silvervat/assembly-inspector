@@ -127,31 +127,38 @@ export function useCranes(): UseCranesResult {
   }, []);
 
   // Upload crane image to Supabase storage
+  // NOTE: Requires 'crane-images' bucket to be created in Supabase Storage with public access
   const uploadCraneImage = useCallback(async (craneId: string, file: File): Promise<string | null> => {
+    const BUCKET_NAME = 'crane-images';
+
     try {
       // Create a unique filename
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
       const fileName = `crane_${craneId}_${Date.now()}.${fileExt}`;
-      const filePath = `crane-images/${fileName}`;
 
       // Upload to Supabase storage
       const { error: uploadError } = await supabase.storage
-        .from('public-assets')
-        .upload(filePath, file, {
+        .from(BUCKET_NAME)
+        .upload(fileName, file, {
           cacheControl: '3600',
           upsert: true
         });
 
       if (uploadError) {
         console.error('Error uploading crane image:', uploadError);
-        setError(uploadError.message);
+        // Provide helpful error message for bucket not found
+        if (uploadError.message.includes('Bucket not found') || uploadError.message.includes('bucket')) {
+          setError(`Storage bucket '${BUCKET_NAME}' not found. Please create it in Supabase Dashboard → Storage with public access enabled.`);
+        } else {
+          setError(uploadError.message);
+        }
         return null;
       }
 
       // Get public URL
       const { data: urlData } = supabase.storage
-        .from('public-assets')
-        .getPublicUrl(filePath);
+        .from(BUCKET_NAME)
+        .getPublicUrl(fileName);
 
       const imageUrl = urlData.publicUrl;
 
