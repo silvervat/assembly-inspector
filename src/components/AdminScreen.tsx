@@ -9127,6 +9127,178 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     }
                   }}
                 />
+
+                {/* Shape Paste Feature */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '12px', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #0ea5e9' }}>
+                  <h5 style={{ margin: '0 0 8px 0', fontSize: '13px', fontWeight: 600 }}>✏️ Kujundi kleepija</h5>
+                  <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px' }}>
+                    Formaat: Jooned millimeetrites, eraldi kujundid tühja reaga. Koordinaadid X, Y, Z.<br/>
+                    <code>x1,y1,z1 → x2,y2,z2</code> või <code>x1,y1,z1 - x2,y2,z2</code><br/>
+                    Värv: <code>#FF0000</code> või <code>rgb(255,0,0)</code> real enne jooni<br/>
+                    Ühikud: mm (vaikimisi) või lisa <code>[m]</code> meetrite jaoks
+                  </p>
+                  <textarea
+                    id="shapeCodeInput"
+                    placeholder={`Näide (mm):
+#FF6600
+0,0,0 → 1000,0,0
+1000,0,0 → 1000,1000,0
+1000,1000,0 → 0,1000,0
+0,1000,0 → 0,0,0
+
+#00FF00
+500,500,0 → 500,500,2000
+
+[m]
+#0000FF
+0,0,0 → 5,0,0`}
+                    style={{
+                      width: '100%',
+                      height: '120px',
+                      fontFamily: 'monospace',
+                      fontSize: '11px',
+                      padding: '8px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      resize: 'vertical'
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                    <button
+                      onClick={async () => {
+                        const textarea = document.getElementById('shapeCodeInput') as HTMLTextAreaElement;
+                        const code = textarea?.value?.trim();
+                        if (!code) {
+                          alert('Sisesta kujundi kood!');
+                          return;
+                        }
+
+                        try {
+                          const markupApi = api.markup as any;
+                          const freelineEntries: { color: { r: number; g: number; b: number; a: number }; lines: any[] }[] = [];
+
+                          // Split by double newline for separate shapes
+                          const shapes = code.split(/\n\s*\n/);
+                          let totalLines = 0;
+                          let currentColor = { r: 255, g: 100, b: 0, a: 255 }; // Default orange
+                          let useMeters = false;
+
+                          for (const shape of shapes) {
+                            if (!shape.trim()) continue;
+
+                            const lines = shape.trim().split('\n');
+                            const lineSegments: any[] = [];
+
+                            for (const line of lines) {
+                              const trimmed = line.trim();
+                              if (!trimmed) continue;
+
+                              // Check for unit specifier
+                              if (trimmed.toLowerCase() === '[m]' || trimmed.toLowerCase() === '[meters]') {
+                                useMeters = true;
+                                continue;
+                              }
+                              if (trimmed.toLowerCase() === '[mm]' || trimmed.toLowerCase() === '[millimeters]') {
+                                useMeters = false;
+                                continue;
+                              }
+
+                              // Check for hex color
+                              if (trimmed.startsWith('#')) {
+                                const hex = trimmed.slice(1);
+                                if (hex.length === 6) {
+                                  currentColor = {
+                                    r: parseInt(hex.slice(0, 2), 16),
+                                    g: parseInt(hex.slice(2, 4), 16),
+                                    b: parseInt(hex.slice(4, 6), 16),
+                                    a: 255
+                                  };
+                                }
+                                continue;
+                              }
+
+                              // Check for rgb color
+                              const rgbMatch = trimmed.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+                              if (rgbMatch) {
+                                currentColor = {
+                                  r: parseInt(rgbMatch[1]),
+                                  g: parseInt(rgbMatch[2]),
+                                  b: parseInt(rgbMatch[3]),
+                                  a: 255
+                                };
+                                continue;
+                              }
+
+                              // Parse line: "x1,y1,z1 → x2,y2,z2" or "x1,y1,z1 - x2,y2,z2"
+                              const parts = trimmed.split(/\s*[→\->\->]\s*/);
+                              if (parts.length === 2) {
+                                const start = parts[0].split(',').map(s => parseFloat(s.trim()));
+                                const end = parts[1].split(',').map(s => parseFloat(s.trim()));
+
+                                if (start.length >= 2 && end.length >= 2 && !start.some(isNaN) && !end.some(isNaN)) {
+                                  // Default Z to 0 if not provided
+                                  const z1 = start.length >= 3 ? start[2] : 0;
+                                  const z2 = end.length >= 3 ? end[2] : 0;
+
+                                  // Convert to mm if input is in meters
+                                  const factor = useMeters ? 1000 : 1;
+
+                                  lineSegments.push({
+                                    start: { positionX: start[0] * factor, positionY: start[1] * factor, positionZ: z1 * factor },
+                                    end: { positionX: end[0] * factor, positionY: end[1] * factor, positionZ: z2 * factor }
+                                  });
+                                  totalLines++;
+                                }
+                              }
+                            }
+
+                            if (lineSegments.length > 0) {
+                              freelineEntries.push({ color: { ...currentColor }, lines: lineSegments });
+                            }
+                          }
+
+                          if (freelineEntries.length === 0) {
+                            alert('Jooni ei leitud! Kontrolli formaati.');
+                            return;
+                          }
+
+                          await markupApi.addFreelineMarkups(freelineEntries);
+                          alert(`✅ Joonistatud ${totalLines} joont (${freelineEntries.length} kujundit)`);
+                        } catch (e: any) {
+                          alert('Viga: ' + e.message);
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#0ea5e9',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Joonista
+                    </button>
+                    <button
+                      onClick={() => {
+                        const textarea = document.getElementById('shapeCodeInput') as HTMLTextAreaElement;
+                        if (textarea) textarea.value = '';
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        backgroundColor: '#6b7280',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px'
+                      }}
+                    >
+                      Tühjenda
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
