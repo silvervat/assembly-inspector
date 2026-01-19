@@ -9,6 +9,7 @@ interface LineSegment {
 
 /**
  * Draw a complete crane visualization in the model
+ * Detailed top-view showing: chassis, outriggers with pads, boom, cabin, center point
  */
 export async function drawCraneToModel(
   api: WorkspaceAPI.WorkspaceAPI,
@@ -26,47 +27,187 @@ export async function drawCraneToModel(
 
   const rotationRad = (projectCrane.rotation_deg * Math.PI) / 180;
 
-  console.log('[CraneViz] Drawing crane:', {
+  // Crane dimensions in mm
+  const baseWidthMm = craneModel.base_width_m * 1000;
+  const baseLengthMm = craneModel.base_length_m * 1000;
+
+  // Calculate outrigger span (typically 1.8x base width for mobile cranes)
+  const outriggerSpanMm = baseWidthMm * 1.8;
+  const outriggerPadSizeMm = 600; // 600mm square pad
+
+  console.log('[CraneViz] Drawing detailed crane:', {
     position: { x: projectCrane.position_x, y: projectCrane.position_y, z: projectCrane.position_z },
     rotation: projectCrane.rotation_deg,
     craneModel: craneModel.manufacturer + ' ' + craneModel.model,
     base: { width: craneModel.base_width_m, length: craneModel.base_length_m },
-    showRings: projectCrane.show_radius_rings,
-    positionLabel: projectCrane.position_label
+    outriggerSpan: outriggerSpanMm / 1000
   });
 
+  // Helper function to rotate and translate a point
+  const transformPoint = (localX: number, localY: number): { x: number; y: number } => {
+    const rotatedX = localX * Math.cos(rotationRad) - localY * Math.sin(rotationRad);
+    const rotatedY = localX * Math.sin(rotationRad) + localY * Math.cos(rotationRad);
+    return { x: posX + rotatedX, y: posY + rotatedY };
+  };
+
   try {
-    // 1. Draw crane base (rectangle) - simple top view to scale
-    console.log('[CraneViz] Drawing crane base...');
-    const baseMarkups = await drawCraneBase(
-      api,
-      posX,
-      posY,
-      posZ,
-      craneModel.base_width_m * 1000,
-      craneModel.base_length_m * 1000,
-      rotationRad,
-      projectCrane.crane_color
-    );
-    markupIds.push(...baseMarkups);
-    console.log('[CraneViz] Base markups:', baseMarkups);
+    const allCraneSegments: LineSegment[] = [];
+    const craneColor = projectCrane.crane_color;
 
-    // 2. Draw cabin marker
-    console.log('[CraneViz] Drawing cabin marker...');
-    const cabinMarkups = await drawCabinMarker(
-      api,
-      posX,
-      posY,
-      posZ,
-      craneModel.cab_position,
-      craneModel.base_width_m * 1000,
-      craneModel.base_length_m * 1000,
-      rotationRad
-    );
-    markupIds.push(...cabinMarkups);
-    console.log('[CraneViz] Cabin markups:', cabinMarkups);
+    // === 1. MAIN CHASSIS (rectangle) ===
+    const halfWidth = baseWidthMm / 2;
+    const halfLength = baseLengthMm / 2;
 
-    // 3. Draw radius rings (if enabled)
+    // Chassis corners
+    const chassisCorners = [
+      transformPoint(-halfWidth, -halfLength),
+      transformPoint(halfWidth, -halfLength),
+      transformPoint(halfWidth, halfLength),
+      transformPoint(-halfWidth, halfLength)
+    ];
+
+    // Draw chassis rectangle
+    for (let i = 0; i < 4; i++) {
+      const next = (i + 1) % 4;
+      allCraneSegments.push({
+        start: { positionX: chassisCorners[i].x, positionY: chassisCorners[i].y, positionZ: posZ },
+        end: { positionX: chassisCorners[next].x, positionY: chassisCorners[next].y, positionZ: posZ }
+      });
+    }
+
+    // === 2. OUTRIGGERS with SUPPORT PADS ===
+    // 4 outriggers at corners, extending diagonally
+    const outriggerPositions = [
+      { cornerX: -halfWidth, cornerY: -halfLength, padX: -outriggerSpanMm / 2, padY: -outriggerSpanMm / 2 },
+      { cornerX: halfWidth, cornerY: -halfLength, padX: outriggerSpanMm / 2, padY: -outriggerSpanMm / 2 },
+      { cornerX: halfWidth, cornerY: halfLength, padX: outriggerSpanMm / 2, padY: outriggerSpanMm / 2 },
+      { cornerX: -halfWidth, cornerY: halfLength, padX: -outriggerSpanMm / 2, padY: outriggerSpanMm / 2 }
+    ];
+
+    for (const outrigger of outriggerPositions) {
+      const corner = transformPoint(outrigger.cornerX, outrigger.cornerY);
+      const padCenter = transformPoint(outrigger.padX, outrigger.padY);
+
+      // Outrigger beam (line from corner to pad)
+      allCraneSegments.push({
+        start: { positionX: corner.x, positionY: corner.y, positionZ: posZ },
+        end: { positionX: padCenter.x, positionY: padCenter.y, positionZ: posZ }
+      });
+
+      // Support pad (square)
+      const padHalf = outriggerPadSizeMm / 2;
+      const padCorners = [
+        transformPoint(outrigger.padX - padHalf, outrigger.padY - padHalf),
+        transformPoint(outrigger.padX + padHalf, outrigger.padY - padHalf),
+        transformPoint(outrigger.padX + padHalf, outrigger.padY + padHalf),
+        transformPoint(outrigger.padX - padHalf, outrigger.padY + padHalf)
+      ];
+
+      for (let i = 0; i < 4; i++) {
+        const next = (i + 1) % 4;
+        allCraneSegments.push({
+          start: { positionX: padCorners[i].x, positionY: padCorners[i].y, positionZ: posZ },
+          end: { positionX: padCorners[next].x, positionY: padCorners[next].y, positionZ: posZ }
+        });
+      }
+    }
+
+    // === 3. CENTER TURNTABLE (circle) ===
+    const turntableRadius = Math.min(baseWidthMm, baseLengthMm) * 0.3;
+    const turntableSegments = 24;
+    for (let i = 0; i < turntableSegments; i++) {
+      const angle1 = (i / turntableSegments) * 2 * Math.PI;
+      const angle2 = ((i + 1) / turntableSegments) * 2 * Math.PI;
+      const p1 = transformPoint(turntableRadius * Math.cos(angle1), turntableRadius * Math.sin(angle1));
+      const p2 = transformPoint(turntableRadius * Math.cos(angle2), turntableRadius * Math.sin(angle2));
+      allCraneSegments.push({
+        start: { positionX: p1.x, positionY: p1.y, positionZ: posZ + 100 },
+        end: { positionX: p2.x, positionY: p2.y, positionZ: posZ + 100 }
+      });
+    }
+
+    // === 4. BOOM INDICATOR (tapered shape pointing from center forward) ===
+    const boomLength = baseLengthMm * 0.7; // Boom shown on chassis
+    const boomBaseWidth = baseWidthMm * 0.25;
+    const boomTipWidth = baseWidthMm * 0.1;
+
+    // Boom is along Y axis (forward direction), starts from center
+    const boomBase1 = transformPoint(-boomBaseWidth / 2, 0);
+    const boomBase2 = transformPoint(boomBaseWidth / 2, 0);
+    const boomTip1 = transformPoint(-boomTipWidth / 2, halfLength + boomLength * 0.3);
+    const boomTip2 = transformPoint(boomTipWidth / 2, halfLength + boomLength * 0.3);
+
+    // Boom outline (tapered trapezoid)
+    allCraneSegments.push(
+      { start: { positionX: boomBase1.x, positionY: boomBase1.y, positionZ: posZ + 200 },
+        end: { positionX: boomTip1.x, positionY: boomTip1.y, positionZ: posZ + 200 } },
+      { start: { positionX: boomTip1.x, positionY: boomTip1.y, positionZ: posZ + 200 },
+        end: { positionX: boomTip2.x, positionY: boomTip2.y, positionZ: posZ + 200 } },
+      { start: { positionX: boomTip2.x, positionY: boomTip2.y, positionZ: posZ + 200 },
+        end: { positionX: boomBase2.x, positionY: boomBase2.y, positionZ: posZ + 200 } },
+      { start: { positionX: boomBase2.x, positionY: boomBase2.y, positionZ: posZ + 200 },
+        end: { positionX: boomBase1.x, positionY: boomBase1.y, positionZ: posZ + 200 } }
+    );
+
+    // Boom center line
+    const boomStart = transformPoint(0, 0);
+    const boomEnd = transformPoint(0, halfLength + boomLength * 0.3);
+    allCraneSegments.push({
+      start: { positionX: boomStart.x, positionY: boomStart.y, positionZ: posZ + 200 },
+      end: { positionX: boomEnd.x, positionY: boomEnd.y, positionZ: posZ + 200 }
+    });
+
+    // === 5. CABIN (rectangle on one side) ===
+    const cabinWidth = baseWidthMm * 0.3;
+    const cabinLength = baseLengthMm * 0.2;
+    let cabinCenterX = 0, cabinCenterY = 0;
+
+    switch (craneModel.cab_position) {
+      case 'front': cabinCenterY = halfLength - cabinLength / 2 - 100; break;
+      case 'rear': cabinCenterY = -halfLength + cabinLength / 2 + 100; break;
+      case 'left': cabinCenterX = -halfWidth + cabinWidth / 2 + 100; break;
+      case 'right': cabinCenterX = halfWidth - cabinWidth / 2 - 100; break;
+      default: cabinCenterY = -halfLength + cabinLength / 2 + 100; // Default rear
+    }
+
+    const cabinCorners = [
+      transformPoint(cabinCenterX - cabinWidth / 2, cabinCenterY - cabinLength / 2),
+      transformPoint(cabinCenterX + cabinWidth / 2, cabinCenterY - cabinLength / 2),
+      transformPoint(cabinCenterX + cabinWidth / 2, cabinCenterY + cabinLength / 2),
+      transformPoint(cabinCenterX - cabinWidth / 2, cabinCenterY + cabinLength / 2)
+    ];
+
+    for (let i = 0; i < 4; i++) {
+      const next = (i + 1) % 4;
+      allCraneSegments.push({
+        start: { positionX: cabinCorners[i].x, positionY: cabinCorners[i].y, positionZ: posZ + 50 },
+        end: { positionX: cabinCorners[next].x, positionY: cabinCorners[next].y, positionZ: posZ + 50 }
+      });
+    }
+
+    // === 6. CENTER CROSS (+ mark at rotation center) ===
+    const crossSize = 500;
+    const cross1 = transformPoint(-crossSize, 0);
+    const cross2 = transformPoint(crossSize, 0);
+    const cross3 = transformPoint(0, -crossSize);
+    const cross4 = transformPoint(0, crossSize);
+
+    allCraneSegments.push(
+      { start: { positionX: cross1.x, positionY: cross1.y, positionZ: posZ + 300 },
+        end: { positionX: cross2.x, positionY: cross2.y, positionZ: posZ + 300 } },
+      { start: { positionX: cross3.x, positionY: cross3.y, positionZ: posZ + 300 },
+        end: { positionX: cross4.x, positionY: cross4.y, positionZ: posZ + 300 } }
+    );
+
+    // Draw all crane segments
+    console.log('[CraneViz] Drawing', allCraneSegments.length, 'crane segments');
+    const craneMarkup = await markupApi.addFreelineMarkups?.([{
+      color: craneColor,
+      lines: allCraneSegments
+    }]);
+    if (craneMarkup?.[0]?.id) markupIds.push(craneMarkup[0].id);
+
+    // === 7. RADIUS RINGS (if enabled) ===
     if (projectCrane.show_radius_rings) {
       console.log('[CraneViz] Drawing radius rings...');
       const radiusMarkups = await drawRadiusRings(
@@ -80,48 +221,41 @@ export async function drawCraneToModel(
         projectCrane.show_capacity_labels,
         loadChartData,
         projectCrane.max_radius_limit_m,
-        projectCrane.label_color, // Pass separate label color if set
-        projectCrane.label_height_mm // Pass label height
+        projectCrane.label_color,
+        projectCrane.label_height_mm
       );
       markupIds.push(...radiusMarkups);
       console.log('[CraneViz] Radius markups count:', radiusMarkups.length);
     }
 
-    // 4. Draw position label (if set) - positioned alongside the crane (along Y axis)
+    // === 8. POSITION LABEL (if set) ===
     if (projectCrane.position_label) {
       const labelText = projectCrane.position_label;
-      const labelHeight = projectCrane.label_height_mm || 800; // Default 800mm
+      const labelHeight = projectCrane.label_height_mm || 800;
       const labelColor = projectCrane.label_color || { r: 50, g: 50, b: 50, a: 255 };
 
-      console.log('[CraneViz] Drawing position label:', labelText, 'height:', labelHeight);
+      console.log('[CraneViz] Drawing position label:', labelText);
 
-      // Calculate text width and position label alongside the crane
       const textWidth = calculateTextWidth(labelText, labelHeight);
 
-      // Position label along the crane's length (offset in X direction, extending along Y)
-      // Offset from crane center by crane width + small gap
-      const labelOffsetX = (craneModel.base_width_m * 1000 / 2) + labelHeight + 500;
-
-      // Rotate the offset to match crane rotation
-      const rotatedOffsetX = labelOffsetX * Math.cos(rotationRad);
-      const rotatedOffsetY = labelOffsetX * Math.sin(rotationRad);
+      // Position label next to the crane (offset from outrigger span)
+      const labelOffsetX = outriggerSpanMm / 2 + labelHeight + 500;
+      const labelPos = transformPoint(labelOffsetX, -textWidth / 2);
 
       const labelSegments = generate3DTextTopView(
         labelText,
-        posX + rotatedOffsetX, // Position alongside crane
-        posY + rotatedOffsetY - textWidth / 2, // Center along Y
-        posZ + 200, // Just above ground
+        labelPos.x,
+        labelPos.y,
+        posZ + 200,
         labelHeight
       );
 
-      // Draw all segments in one freeline call for performance
       if (labelSegments.length > 0) {
         const textMarkup = await markupApi.addFreelineMarkups?.([{
           color: labelColor,
           lines: labelSegments
         }]);
         if (textMarkup?.[0]?.id) markupIds.push(textMarkup[0].id);
-        console.log('[CraneViz] Position label markup:', textMarkup?.[0]?.id);
       }
     }
 
@@ -324,150 +458,6 @@ function calculateTextWidth(text: string, heightMm: number): number {
     }
   }
   return width - spacing; // Remove last spacing
-}
-
-/**
- * Draw a small marker (tiny circle) at a point
- */
-async function drawSmallMarker(
-  api: WorkspaceAPI.WorkspaceAPI,
-  x: number,
-  y: number,
-  z: number,
-  color: CraneRGBAColor
-): Promise<number[]> {
-  const markupIds: number[] = [];
-  const markupApi = api.markup as any;
-  const markerRadius = 500; // 500mm marker for visibility
-  const segments = 16;
-
-  try {
-    // Generate circle with {start, end} line segments
-    const lineSegments = generateCircleSegments(x, y, z, markerRadius, segments);
-
-    const markerMarkup = await markupApi.addFreelineMarkups?.([{
-      color,
-      lines: lineSegments
-    }]);
-    if (markerMarkup?.[0]?.id) markupIds.push(markerMarkup[0].id);
-  } catch (error) {
-    console.error('Error drawing marker:', error);
-  }
-
-  return markupIds;
-}
-
-/**
- * Draw crane base as a rectangle
- */
-async function drawCraneBase(
-  api: WorkspaceAPI.WorkspaceAPI,
-  centerX: number,
-  centerY: number,
-  centerZ: number,
-  widthMm: number,
-  lengthMm: number,
-  rotation: number,
-  color: CraneRGBAColor
-): Promise<number[]> {
-  const markupIds: number[] = [];
-  const markupApi = api.markup as any;
-
-  const halfWidth = widthMm / 2;
-  const halfLength = lengthMm / 2;
-
-  // Calculate corner points (rotated)
-  const cornerOffsets = [
-    { x: -halfWidth, y: -halfLength },
-    { x: halfWidth, y: -halfLength },
-    { x: halfWidth, y: halfLength },
-    { x: -halfWidth, y: halfLength }
-  ];
-
-  const corners = cornerOffsets.map(corner => {
-    const rotatedX = corner.x * Math.cos(rotation) - corner.y * Math.sin(rotation);
-    const rotatedY = corner.x * Math.sin(rotation) + corner.y * Math.cos(rotation);
-    return {
-      positionX: centerX + rotatedX,
-      positionY: centerY + rotatedY,
-      positionZ: centerZ
-    };
-  });
-
-  // Create line segments connecting corners
-  const lineSegments: LineSegment[] = [];
-  for (let i = 0; i < corners.length; i++) {
-    const nextI = (i + 1) % corners.length;
-    lineSegments.push({
-      start: corners[i],
-      end: corners[nextI]
-    });
-  }
-
-  try {
-    // Draw as freeline with proper {start, end} segments
-    const freeline = await markupApi.addFreelineMarkups?.([{
-      color,
-      lines: lineSegments
-    }]);
-    if (freeline?.[0]?.id) markupIds.push(freeline[0].id);
-  } catch (error) {
-    console.error('Error drawing crane base:', error);
-  }
-
-  return markupIds;
-}
-
-/**
- * Draw cabin marker to indicate crane orientation
- */
-async function drawCabinMarker(
-  api: WorkspaceAPI.WorkspaceAPI,
-  centerX: number,
-  centerY: number,
-  centerZ: number,
-  cabPosition: string,
-  widthMm: number,
-  lengthMm: number,
-  rotation: number
-): Promise<number[]> {
-  const markupIds: number[] = [];
-
-  let offsetX = 0, offsetY = 0;
-
-  switch (cabPosition) {
-    case 'front':
-      offsetY = lengthMm / 2;
-      break;
-    case 'rear':
-      offsetY = -lengthMm / 2;
-      break;
-    case 'left':
-      offsetX = -widthMm / 2;
-      break;
-    case 'right':
-      offsetX = widthMm / 2;
-      break;
-  }
-
-  // Rotate offset
-  const rotatedX = offsetX * Math.cos(rotation) - offsetY * Math.sin(rotation);
-  const rotatedY = offsetX * Math.sin(rotation) + offsetY * Math.cos(rotation);
-
-  try {
-    const cabMarker = await drawSmallMarker(
-      api,
-      centerX + rotatedX,
-      centerY + rotatedY,
-      centerZ + 500, // 0.5m up
-      { r: 0, g: 0, b: 255, a: 255 } // Blue
-    );
-    markupIds.push(...cabMarker);
-  } catch (error) {
-    console.error('Error drawing cabin marker:', error);
-  }
-
-  return markupIds;
 }
 
 /**
