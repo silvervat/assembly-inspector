@@ -1004,9 +1004,6 @@ export default function App() {
           userInitials={getUserInitials(tcUser)}
           projectId={projectId}
           onSelectMode={setCurrentMode}
-          onSelectInspectionType={handleSelectInspectionType}
-          matchedTypeIds={matchedTypeIds}
-          completedTypeIds={completedTypeIds}
         />
         <VersionFooter />
       </>
