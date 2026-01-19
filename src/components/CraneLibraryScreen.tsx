@@ -31,8 +31,11 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
 
   const [editingCraneId, setEditingCraneId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [creatingForType, setCreatingForType] = useState<CraneType | null>(null);
   const [expandedCraneId, setExpandedCraneId] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<CraneType>>(new Set(['mobile', 'crawler', 'loader', 'tower', 'telehandler']));
   const [activeTab, setActiveTab] = useState<'basic' | 'counterweights' | 'charts'>('basic');
+  const [activeMainTab, setActiveMainTab] = useState<'library' | 'import'>('library');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Form state
@@ -78,8 +81,12 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
     setActiveTab('basic');
   }, []);
 
-  const startCreating = useCallback(() => {
+  const startCreating = useCallback((craneType?: CraneType) => {
     resetForm();
+    if (craneType) {
+      setFormData(prev => ({ ...prev, crane_type: craneType }));
+      setCreatingForType(craneType);
+    }
     setEditingCraneId(null);
     setIsCreating(true);
   }, [resetForm]);
@@ -111,6 +118,7 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
   const cancelEdit = useCallback(() => {
     setEditingCraneId(null);
     setIsCreating(false);
+    setCreatingForType(null);
     resetForm();
   }, [resetForm]);
 
@@ -153,6 +161,30 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
   const toggleExpand = (craneId: string) => {
     setExpandedCraneId(prev => prev === craneId ? null : craneId);
   };
+
+  const toggleGroup = (type: CraneType) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  };
+
+  // Group cranes by type
+  const cranesByType = cranes.reduce((acc, crane) => {
+    if (!acc[crane.crane_type]) {
+      acc[crane.crane_type] = [];
+    }
+    acc[crane.crane_type].push(crane);
+    return acc;
+  }, {} as Record<CraneType, CraneModel[]>);
+
+  // Define order of crane types
+  const craneTypeOrder: CraneType[] = ['mobile', 'crawler', 'loader', 'tower', 'telehandler'];
 
   // If loading
   if (loading && cranes.length === 0) {
@@ -270,144 +302,265 @@ export default function CraneLibraryScreen({ onBackToMenu, onNavigate, userEmail
           </div>
         )}
 
-        {/* Crane List - Compact like Organizer */}
+        {/* Main Content */}
         {!isCreating && !editingCraneId && (
           <div>
-            {/* Add Crane button above list */}
-            <div style={{ marginBottom: '10px' }}>
+            {/* Main Tabs: Library | Import */}
+            <div style={{ display: 'flex', gap: '4px', marginBottom: '12px' }}>
               <button
-                onClick={startCreating}
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '6px', backgroundColor: 'var(--modus-primary)', color: 'white', border: 'none', cursor: 'pointer', fontSize: '12px' }}
+                onClick={() => setActiveMainTab('library')}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderRadius: '6px 6px 0 0',
+                  backgroundColor: activeMainTab === 'library' ? 'white' : '#f3f4f6',
+                  borderBottom: activeMainTab === 'library' ? '2px solid var(--modus-primary)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  fontWeight: activeMainTab === 'library' ? 600 : 400,
+                  fontSize: '13px',
+                  color: activeMainTab === 'library' ? '#374151' : '#6b7280'
+                }}
               >
-                <FiPlus size={14} /> Lisa Kraana
+                <FiDatabase size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+                Kraanide Raamatukogu
+              </button>
+              <button
+                onClick={() => setActiveMainTab('import')}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderRadius: '6px 6px 0 0',
+                  backgroundColor: activeMainTab === 'import' ? 'white' : '#f3f4f6',
+                  borderBottom: activeMainTab === 'import' ? '2px solid var(--modus-primary)' : '2px solid transparent',
+                  cursor: 'pointer',
+                  fontWeight: activeMainTab === 'import' ? 600 : 400,
+                  fontSize: '13px',
+                  color: activeMainTab === 'import' ? '#374151' : '#6b7280'
+                }}
+              >
+                <FiUpload size={14} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+                Import
               </button>
             </div>
-            <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
-            {cranes.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
-                <FiDatabase size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
-                <p style={{ fontSize: '13px', margin: 0 }}>Kraanasid pole veel lisatud</p>
+
+            {/* Library Tab */}
+            {activeMainTab === 'library' && (
+              <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
+                {cranes.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '30px', color: '#6b7280' }}>
+                    <FiDatabase size={32} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                    <p style={{ fontSize: '13px', margin: 0 }}>Kraanasid pole veel lisatud</p>
+                  </div>
+                ) : (
+                  <div>
+                    {craneTypeOrder.map((type, typeIdx) => {
+                      const cranesInGroup = cranesByType[type] || [];
+                      const isExpanded = expandedGroups.has(type);
+
+                      return (
+                        <div key={type} style={{ borderBottom: typeIdx < craneTypeOrder.length - 1 ? '1px solid #e5e7eb' : 'none' }}>
+                          {/* Group Header */}
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              padding: '10px 12px',
+                              backgroundColor: '#f9fafb',
+                              cursor: 'pointer',
+                              gap: '8px'
+                            }}
+                            onClick={() => toggleGroup(type)}
+                          >
+                            <span style={{ color: '#6b7280', flexShrink: 0 }}>
+                              {isExpanded ? <FiChevronDown size={16} /> : <FiChevronRight size={16} />}
+                            </span>
+                            <span style={{ fontSize: '13px', fontWeight: 600, color: '#374151', flex: 1 }}>
+                              {CRANE_TYPE_LABELS[type]}
+                            </span>
+                            <span style={{
+                              fontSize: '11px',
+                              color: '#9ca3af',
+                              backgroundColor: '#f3f4f6',
+                              padding: '2px 6px',
+                              borderRadius: '10px',
+                              fontWeight: 500
+                            }}>
+                              {cranesInGroup.length}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startCreating(type);
+                              }}
+                              style={{
+                                padding: '4px 8px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: '4px',
+                                backgroundColor: 'white',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '11px',
+                                color: '#374151'
+                              }}
+                              title={`Lisa ${CRANE_TYPE_LABELS[type]}`}
+                            >
+                              <FiPlus size={12} /> Lisa
+                            </button>
+                          </div>
+
+                          {/* Group Content */}
+                          {isExpanded && cranesInGroup.length > 0 && (
+                            <div>
+                              {cranesInGroup.map((crane, idx) => (
+                                <div key={crane.id}>
+                                  {/* Crane Row - Compact two-line design */}
+                                  <div
+                                    style={{
+                                      padding: '8px 12px 8px 40px',
+                                      borderBottom: idx < cranesInGroup.length - 1 ? '1px solid #f3f4f6' : 'none',
+                                      cursor: 'pointer',
+                                      ':hover': { backgroundColor: '#f9fafb' }
+                                    }}
+                                    onClick={() => toggleExpand(crane.id)}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                      {/* Expand icon */}
+                                      <span style={{ color: '#9ca3af', flexShrink: 0 }}>
+                                        {expandedCraneId === crane.id ? <FiChevronDown size={12} /> : <FiChevronRight size={12} />}
+                                      </span>
+
+                                      {/* Display ID */}
+                                      <span style={{
+                                        fontSize: '10px',
+                                        fontWeight: 600,
+                                        color: '#6b7280',
+                                        backgroundColor: '#f3f4f6',
+                                        padding: '2px 6px',
+                                        borderRadius: '3px',
+                                        flexShrink: 0
+                                      }}>
+                                        {crane.display_id || '–'}
+                                      </span>
+
+                                      {/* Thumbnail */}
+                                      {crane.image_url ? (
+                                        <img
+                                          src={crane.image_url}
+                                          alt=""
+                                          style={{ width: '32px', height: '24px', objectFit: 'cover', borderRadius: '3px', flexShrink: 0 }}
+                                        />
+                                      ) : (
+                                        <div style={{
+                                          width: '32px', height: '24px', borderRadius: '3px', backgroundColor: '#f3f4f6',
+                                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                                        }}>
+                                          <FiImage size={12} style={{ color: '#9ca3af' }} />
+                                        </div>
+                                      )}
+
+                                      {/* Crane name - one line */}
+                                      <div style={{ flex: 1, minWidth: 0 }}>
+                                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                          {crane.manufacturer} {crane.model}
+                                        </div>
+                                      </div>
+
+                                      {/* Action buttons */}
+                                      <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+                                        <button
+                                          onClick={() => startEditing(crane)}
+                                          style={{ padding: '4px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#6b7280' }}
+                                          title="Muuda"
+                                        >
+                                          <FiEdit2 size={12} />
+                                        </button>
+                                        <button
+                                          onClick={() => setDeleteConfirmId(crane.id)}
+                                          style={{ padding: '4px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#dc2626' }}
+                                          title="Kustuta"
+                                        >
+                                          <FiTrash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* Details line - small text */}
+                                    <div style={{ fontSize: '11px', color: '#6b7280', marginLeft: '20px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                      <span>{(crane.max_capacity_kg / 1000).toFixed(0)}t tõstevõime</span>
+                                      <span style={{ color: '#d1d5db' }}>•</span>
+                                      <span>{crane.max_radius_m}m raadius</span>
+                                      <span style={{ color: '#d1d5db' }}>•</span>
+                                      <span>{crane.default_boom_length_m}m nool</span>
+                                      {crane.is_active && (
+                                        <>
+                                          <span style={{ color: '#d1d5db' }}>•</span>
+                                          <span style={{ color: '#16a34a' }}>✓ Aktiivne</span>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Expanded Details */}
+                                  {expandedCraneId === crane.id && (
+                                    <div style={{ padding: '10px 12px 10px 60px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: '11px' }}>
+                                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '6px 12px' }}>
+                                        <span><span style={{ color: '#9ca3af' }}>Max kõrgus:</span> {crane.max_height_m}m</span>
+                                        <span><span style={{ color: '#9ca3af' }}>Min radius:</span> {crane.min_radius_m}m</span>
+                                        <span><span style={{ color: '#9ca3af' }}>Alus:</span> {crane.base_width_m}×{crane.base_length_m}m</span>
+                                        <span><span style={{ color: '#9ca3af' }}>Kabiin:</span> {CAB_POSITION_LABELS[crane.cab_position]}</span>
+                                        {crane.notes && <span style={{ gridColumn: 'span 2' }}><span style={{ color: '#9ca3af' }}>Märkus:</span> {crane.notes}</span>}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Delete Confirmation */}
+                                  {deleteConfirmId === crane.id && (
+                                    <div style={{
+                                      padding: '6px 12px 6px 60px', backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca',
+                                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px'
+                                    }}>
+                                      <span style={{ color: '#dc2626' }}>Kas kustutada {crane.manufacturer} {crane.model}?</span>
+                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button
+                                          onClick={() => setDeleteConfirmId(null)}
+                                          style={{ padding: '3px 10px', border: '1px solid #d1d5db', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}
+                                        >
+                                          Ei
+                                        </button>
+                                        <button
+                                          onClick={() => handleDelete(crane.id)}
+                                          style={{ padding: '3px 10px', border: 'none', borderRadius: '3px', backgroundColor: '#dc2626', color: 'white', cursor: 'pointer', fontSize: '11px' }}
+                                        >
+                                          Jah, kustuta
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Empty group message */}
+                          {isExpanded && cranesInGroup.length === 0 && (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: '11px' }}>
+                              Selles grupis pole veel kraanasid. Vajuta "Lisa" nuppu kraana lisamiseks.
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {cranes.map((crane, idx) => (
-                  <div key={crane.id}>
-                    {/* Compact crane row */}
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '6px 10px',
-                        gap: '8px',
-                        borderBottom: idx < cranes.length - 1 ? '1px solid #f3f4f6' : 'none',
-                        cursor: 'pointer'
-                      }}
-                      onClick={() => toggleExpand(crane.id)}
-                    >
-                      {/* Expand icon */}
-                      <span style={{ color: '#9ca3af', flexShrink: 0 }}>
-                        {expandedCraneId === crane.id ? <FiChevronDown size={14} /> : <FiChevronRight size={14} />}
-                      </span>
-
-                      {/* Thumbnail */}
-                      {crane.image_url ? (
-                        <img
-                          src={crane.image_url}
-                          alt=""
-                          style={{ width: '28px', height: '20px', objectFit: 'cover', borderRadius: '2px', flexShrink: 0 }}
-                        />
-                      ) : (
-                        <div style={{
-                          width: '28px', height: '20px', borderRadius: '2px', backgroundColor: '#f3f4f6',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-                        }}>
-                          <FiImage size={10} style={{ color: '#9ca3af' }} />
-                        </div>
-                      )}
-
-                      {/* Crane info - single line */}
-                      <div style={{ flex: 1, minWidth: 0, fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        <span style={{ fontWeight: 600, color: '#374151' }}>{crane.manufacturer} {crane.model}</span>
-                        <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
-                        <span style={{ color: '#6b7280' }}>{CRANE_TYPE_LABELS[crane.crane_type]}</span>
-                        <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
-                        <span style={{ color: '#6b7280' }}>{(crane.max_capacity_kg / 1000).toFixed(0)}t</span>
-                        <span style={{ color: '#9ca3af', margin: '0 4px' }}>•</span>
-                        <span style={{ color: '#9ca3af' }}>{crane.max_radius_m}m</span>
-                      </div>
-
-                      {/* Status badge - tiny */}
-                      <span style={{
-                        padding: '1px 4px', borderRadius: '2px', fontSize: '9px', fontWeight: 500,
-                        backgroundColor: crane.is_active ? '#dcfce7' : '#f3f4f6',
-                        color: crane.is_active ? '#166534' : '#9ca3af',
-                        flexShrink: 0
-                      }}>
-                        {crane.is_active ? 'OK' : '–'}
-                      </span>
-
-                      {/* Action buttons */}
-                      <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => startEditing(crane)}
-                          style={{ padding: '3px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#6b7280' }}
-                          title="Muuda"
-                        >
-                          <FiEdit2 size={12} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteConfirmId(crane.id)}
-                          style={{ padding: '3px', border: 'none', borderRadius: '3px', backgroundColor: 'transparent', cursor: 'pointer', color: '#dc2626' }}
-                          title="Kustuta"
-                        >
-                          <FiTrash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Expanded Details - compact */}
-                    {expandedCraneId === crane.id && (
-                      <div style={{ padding: '8px 10px 8px 44px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb', fontSize: '11px' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '4px 12px' }}>
-                          <span><span style={{ color: '#9ca3af' }}>Max kõrgus:</span> {crane.max_height_m}m</span>
-                          <span><span style={{ color: '#9ca3af' }}>Min radius:</span> {crane.min_radius_m}m</span>
-                          <span><span style={{ color: '#9ca3af' }}>Alus:</span> {crane.base_width_m}×{crane.base_length_m}m</span>
-                          <span><span style={{ color: '#9ca3af' }}>Kabiin:</span> {CAB_POSITION_LABELS[crane.cab_position]}</span>
-                          <span><span style={{ color: '#9ca3af' }}>Nool:</span> {crane.default_boom_length_m}m</span>
-                          {crane.notes && <span style={{ gridColumn: 'span 2' }}><span style={{ color: '#9ca3af' }}>Märkus:</span> {crane.notes}</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Delete Confirmation - compact */}
-                    {deleteConfirmId === crane.id && (
-                      <div style={{
-                        padding: '4px 10px 4px 44px', backgroundColor: '#fef2f2', borderBottom: '1px solid #fecaca',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px'
-                      }}>
-                        <span style={{ color: '#dc2626' }}>Kustuta?</span>
-                        <div style={{ display: 'flex', gap: '4px' }}>
-                          <button
-                            onClick={() => setDeleteConfirmId(null)}
-                            style={{ padding: '2px 8px', border: '1px solid #d1d5db', borderRadius: '3px', backgroundColor: 'white', cursor: 'pointer', fontSize: '11px' }}
-                          >
-                            Ei
-                          </button>
-                          <button
-                            onClick={() => handleDelete(crane.id)}
-                            style={{ padding: '2px 8px', border: 'none', borderRadius: '3px', backgroundColor: '#dc2626', color: 'white', cursor: 'pointer', fontSize: '11px' }}
-                          >
-                            Jah
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                </div>
-              ))}
-            </div>
             )}
-            </div>
+
+            {/* Import Tab */}
+            {activeMainTab === 'import' && (
+              <CraneImportTab userEmail={userEmail} />
+            )}
           </div>
         )}
       </div>
@@ -1145,6 +1298,325 @@ function LoadChartsManager({ craneId }: { craneId: string }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+
+// Crane Import Tab Component
+function CraneImportTab({ userEmail }: { userEmail: string }) {
+  const { createCrane } = useCranes();
+  const [importing, setImporting] = useState(false);
+  const [importResults, setImportResults] = useState<{success: number; failed: number; errors: string[]} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Download Excel template
+  const downloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+
+    // Instructions sheet
+    const instructions = [
+      ['KRAANIDE IMPORDI MALL'],
+      [''],
+      ['Juhised:'],
+      ['1. Täida "Andmed" leht oma kraanide andmetega'],
+      ['2. Iga rida on üks kraana'],
+      ['3. Grupp määrab kraana tüübi (vali nimekirjast)'],
+      ['4. Tootja ja Mudel on kohustuslikud'],
+      [''],
+      ['Veerud:'],
+      ['- Grupp: Mobiilkraana, Roomikkraana, Manipulaator, Tornkraana, või Pöörlev teleskooplaadur'],
+      ['- Tootja: nt "Liebherr", "Terex", "Manitowoc"'],
+      ['- Mudel: nt "LTM 1100-5.2"'],
+      ['- Max tõstevõime (t): max koormus tonnides'],
+      ['- Vastukaal (t): vastukaalu mass tonnides (valikuline)'],
+      ['- Põhinoole pikkus (m): põhinoole pikkus meetrites'],
+      ['- Lisanoole pikkus (m): lisanoole pikkus meetrites (valikuline)'],
+    ];
+    const wsInstr = XLSX.utils.aoa_to_sheet(instructions);
+    wsInstr['!cols'] = [{ wch: 80 }];
+    XLSX.utils.book_append_sheet(wb, wsInstr, 'Juhised');
+
+    // Data template sheet
+    const dataTemplate = [
+      ['Grupp', 'Tootja', 'Mudel', 'Max tõstevõime (t)', 'Vastukaal (t)', 'Põhinoole pikkus (m)', 'Lisanoole pikkus (m)'],
+      ['Mobiilkraana', 'Liebherr', 'LTM 1100-5.2', 100, 20, 40, 0],
+      ['Mobiilkraana', 'Terex', 'AC 55-1', 55, 15, 35, 0],
+      ['Roomikkraana', 'Liebherr', 'LR 1600/2', 600, 200, 84, 35],
+      ['Manipulaator', 'Hiab', 'X-HiPro 638', 63.8, 0, 24, 0],
+      ['Tornkraana', 'Liebherr', '380 EC-B', 18, 0, 70, 0],
+      ['Pöörlev teleskooplaadur', 'Magni', 'RTH 5.25 SH', 5, 0, 25, 0],
+    ];
+    const wsData = XLSX.utils.aoa_to_sheet(dataTemplate);
+    wsData['!cols'] = [{ wch: 25 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 15 }, { wch: 22 }, { wch: 22 }];
+    XLSX.utils.book_append_sheet(wb, wsData, 'Andmed');
+
+    XLSX.writeFile(wb, 'kraanide_import_mall.xlsx');
+  };
+
+  // Parse crane type from Estonian label
+  const parseCraneType = (label: string): CraneType | null => {
+    const normalized = label.trim().toLowerCase();
+    if (normalized.includes('mobiil')) return 'mobile';
+    if (normalized.includes('roomik')) return 'crawler';
+    if (normalized.includes('manipul')) return 'loader';
+    if (normalized.includes('torn')) return 'tower';
+    if (normalized.includes('tele')) return 'telehandler';
+    return null;
+  };
+
+  // Import Excel file
+  const handleExcelImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    setImportResults(null);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+
+      // Find data sheet
+      const dataSheet = workbook.Sheets['Andmed'] || workbook.Sheets[workbook.SheetNames[workbook.SheetNames.length > 1 ? 1 : 0]];
+      if (!dataSheet) {
+        alert('Excel fail peab sisaldama "Andmed" lehte!');
+        setImporting(false);
+        return;
+      }
+
+      const rows = XLSX.utils.sheet_to_json<any>(dataSheet, { header: 1, range: 1 }) as any[];
+
+      let successCount = 0;
+      let failedCount = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row[0] || !row[1] || !row[2]) {
+          // Skip empty rows
+          continue;
+        }
+
+        try {
+          const craneType = parseCraneType(String(row[0]));
+          if (!craneType) {
+            errors.push('Rida ' + (i + 2) + ': Tundmatu kraana grupp "' + row[0] + '"');
+            failedCount++;
+            continue;
+          }
+
+          const manufacturer = String(row[1]).trim();
+          const model = String(row[2]).trim();
+          const maxCapacityKg = (parseFloat(row[3]) || 0) * 1000;
+          const counterweightKg = (parseFloat(row[4]) || 0) * 1000;
+          const mainBoomLength = parseFloat(row[5]) || 40;
+          const jibLength = parseFloat(row[6]) || 0;
+
+          // Calculate max radius and height (estimate based on boom length)
+          const maxRadius = mainBoomLength + jibLength;
+          const maxHeight = maxRadius * 1.2; // Rough estimate
+
+          await createCrane({
+            manufacturer,
+            model,
+            crane_type: craneType,
+            max_capacity_kg: maxCapacityKg,
+            max_height_m: maxHeight,
+            max_radius_m: maxRadius,
+            min_radius_m: 3,
+            base_width_m: 3,
+            base_length_m: 4,
+            default_boom_length_m: mainBoomLength,
+            cab_position: 'rear',
+            default_crane_color: DEFAULT_CRANE_COLOR,
+            default_radius_color: DEFAULT_RADIUS_COLOR,
+            notes: counterweightKg > 0 ? 'Vastukaal: ' + (counterweightKg / 1000).toFixed(0) + 't. Imporditud Excelist.' : 'Imporditud Excelist.',
+            is_active: true,
+            created_by_email: userEmail
+          });
+
+          successCount++;
+        } catch (err: any) {
+          errors.push('Rida ' + (i + 2) + ': ' + (err.message || 'Tundmatu viga'));
+          failedCount++;
+        }
+      }
+
+      setImportResults({ success: successCount, failed: failedCount, errors });
+    } catch (err: any) {
+      console.error('Excel import error:', err);
+      alert('Excel importimine ebaõnnestus! ' + (err.message || 'Kontrolli faili formaati.'));
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div style={{ backgroundColor: 'white', borderRadius: '6px', boxShadow: '0 1px 2px rgba(0,0,0,0.08)', padding: '20px' }}>
+      <div style={{ marginBottom: '20px' }}>
+        <h3 style={{ fontSize: '15px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Kraanide Import Excelist</h3>
+        <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
+          Impordi mitut kraana korraga Excel failist. Lae alla mall, täida andmed ja lae üles.
+        </p>
+      </div>
+
+      <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            backgroundColor: '#0891b2',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 600,
+            fontSize: '14px',
+            flexShrink: 0
+          }}>
+            1
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Lae alla mall</h4>
+            <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>
+              Lae alla Excel mall ja täida see oma kraanide andmetega.
+            </p>
+            <button
+              onClick={downloadTemplate}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 14px',
+                border: '1px solid #0891b2',
+                borderRadius: '6px',
+                backgroundColor: 'white',
+                color: '#0891b2',
+                cursor: 'pointer',
+                fontSize: '12px',
+                fontWeight: 500
+              }}
+            >
+              <FiDownload size={14} />
+              Lae alla mall
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            backgroundColor: '#0891b2',
+            color: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontWeight: 600,
+            fontSize: '14px',
+            flexShrink: 0
+          }}>
+            2
+          </div>
+          <div style={{ flex: 1 }}>
+            <h4 style={{ fontSize: '13px', fontWeight: 600, margin: '0 0 8px 0', color: '#374151' }}>Lae üles täidetud fail</h4>
+            <p style={{ fontSize: '12px', color: '#6b7280', margin: '0 0 12px 0' }}>
+              Vali täidetud Excel fail oma arvutist ja impordi kraanid andmebaasi.
+            </p>
+            <label style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              backgroundColor: 'var(--modus-primary)',
+              color: 'white',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: 500,
+              cursor: importing ? 'not-allowed' : 'pointer',
+              opacity: importing ? 0.7 : 1
+            }}>
+              {importing ? (
+                <>
+                  <FiLoader className="animate-spin" size={14} />
+                  Importin...
+                </>
+              ) : (
+                <>
+                  <FiUpload size={14} />
+                  Vali fail ja impordi
+                </>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={handleExcelImport}
+                disabled={importing}
+              />
+            </label>
+          </div>
+        </div>
+      </div>
+
+      {importResults && (
+        <div style={{
+          padding: '16px',
+          borderRadius: '6px',
+          backgroundColor: importResults.failed === 0 ? '#dcfce7' : '#fef2f2',
+          border: '1px solid ' + (importResults.failed === 0 ? '#86efac' : '#fecaca')
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+            {importResults.failed === 0 ? (
+              <>
+                <span style={{ fontSize: '16px' }}>✓</span>
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#166534' }}>Import õnnestus!</span>
+              </>
+            ) : (
+              <>
+                <FiAlertCircle size={16} style={{ color: '#dc2626' }} />
+                <span style={{ fontSize: '13px', fontWeight: 600, color: '#dc2626' }}>Import osaliselt ebaõnnestus</span>
+              </>
+            )}
+          </div>
+          <div style={{ fontSize: '12px', color: '#374151', marginBottom: importResults.errors.length > 0 ? '12px' : '0' }}>
+            <p style={{ margin: 0 }}>Õnnestunud: <strong>{importResults.success}</strong></p>
+            {importResults.failed > 0 && <p style={{ margin: '4px 0 0 0' }}>Ebaõnnestunud: <strong>{importResults.failed}</strong></p>}
+          </div>
+          {importResults.errors.length > 0 && (
+            <div style={{ fontSize: '11px', color: '#dc2626', backgroundColor: 'white', padding: '8px', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto' }}>
+              <strong>Vead:</strong>
+              <ul style={{ margin: '4px 0 0 0', paddingLeft: '20px' }}>
+                {importResults.errors.map((err, idx) => (
+                  <li key={idx}>{err}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ marginTop: '20px', padding: '12px', backgroundColor: '#e0f2fe', borderRadius: '6px', border: '1px solid #7dd3fc' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <FiInfo size={14} style={{ color: '#0369a1', flexShrink: 0, marginTop: '2px' }} />
+          <div style={{ fontSize: '11px', color: '#0369a1' }}>
+            <strong>Näpunäited:</strong>
+            <ul style={{ margin: '4px 0 0 0', paddingLeft: '16px' }}>
+              <li>Kraana tüüp peab olema täpselt üks järgnevatest: Mobiilkraana, Roomikkraana, Manipulaator, Tornkraana, Pöörlev teleskooplaadur</li>
+              <li>Tootja ja Mudel on kohustuslikud väljad</li>
+              <li>Iga imporditud kraana saab automaatselt unikaalse ID (C001, C002, jne)</li>
+              <li>Vastukaal ja lisanool on valikulised - jäta tühjaks kui ei ole</li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

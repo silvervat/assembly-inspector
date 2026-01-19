@@ -776,9 +776,6 @@ export default function CranePlannerScreen({
       // Object too far - boom at horizontal (0°) reaches max distance
       // This means boom tip is NOT above object, but as close as possible
       boomAngle = 0;
-      // At 0°, boom tip is at max horizontal reach (boomLength away)
-      // Boom tip Z = boom pivot Z (no vertical component)
-      const boomTipZ = boomPivotZ;
       // Chain length would need to cover both horizontal gap and vertical drop
       // But we show it as 0 since boom can't reach
       chainLength = 0;
