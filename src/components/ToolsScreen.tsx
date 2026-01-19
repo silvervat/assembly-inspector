@@ -71,6 +71,7 @@ export default function ToolsScreen({
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
   const [scanLoading, setScanLoading] = useState(false);
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
+  const [hasSelection, setHasSelection] = useState(false);
 
   // Accordion state - which section is expanded
   const [expandedSection, setExpandedSection] = useState<'export' | 'markup' | 'marker' | null>('export');
@@ -204,6 +205,29 @@ export default function ToolsScreen({
       loadMarkerData();
     }
   }, [expandedSection, loadMarkerData]);
+
+  // Check if there's a selection in the model (for bolt scanning)
+  useEffect(() => {
+    const checkSelection = async () => {
+      try {
+        const selected = await api.viewer.getSelection();
+        setHasSelection(selected && selected.length > 0);
+      } catch (e) {
+        setHasSelection(false);
+      }
+    };
+
+    // Check on mount
+    checkSelection();
+
+    // Listen for selection changes
+    const listener = () => checkSelection();
+    (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
+
+    return () => {
+      (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
+    };
+  }, [api]);
 
   // Color model by category - like Organizer does it
   const colorByCategory = useCallback(async (categoryId: string) => {
@@ -1153,18 +1177,33 @@ export default function ToolsScreen({
                 </button>
               </div>
 
-              {/* Scan button - always visible */}
-              <div className="tools-buttons">
-                <button
-                  className="tools-btn tools-btn-primary"
-                  onClick={handleScanBolts}
-                  disabled={scanLoading}
-                  style={{ background: '#22c55e', width: '100%' }}
-                >
-                  {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
-                  <span>Skaneeri poldid</span>
-                </button>
-              </div>
+              {/* Scan button or selection message */}
+              {!hasSelection ? (
+                <div style={{
+                  padding: '16px',
+                  backgroundColor: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  color: '#0369a1',
+                  fontSize: '14px',
+                  fontWeight: 500
+                }}>
+                  ℹ️ Vali mudelist detailid mis on poltidega
+                </div>
+              ) : (
+                <div className="tools-buttons">
+                  <button
+                    className="tools-btn tools-btn-primary"
+                    onClick={handleScanBolts}
+                    disabled={scanLoading}
+                    style={{ background: '#22c55e', width: '100%' }}
+                  >
+                    {scanLoading ? <FiRefreshCw className="spinning" size={14} /> : <FiRefreshCw size={14} />}
+                    <span>Skaneeri poldid</span>
+                  </button>
+                </div>
+              )}
 
               {/* Action buttons - only show when data available */}
               {boltSummary.length > 0 && (

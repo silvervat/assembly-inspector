@@ -762,7 +762,7 @@ export default function CranePlannerScreen({
     let canReach = false;
 
     if (horizontalDistM <= boomLengthM) {
-      // Boom can reach horizontally
+      // Boom can reach - boom tip will be directly above object
       const cosAngle = horizontalDistM / boomLengthM;
       boomAngle = Math.acos(cosAngle) * (180 / Math.PI);
 
@@ -773,8 +773,14 @@ export default function CranePlannerScreen({
       chainLength = (boomTipZ - objTopZ) / 1000;
       canReach = chainLength > 0;
     } else {
-      // Can't reach horizontally even at 0 degrees
+      // Object too far - boom at horizontal (0°) reaches max distance
+      // This means boom tip is NOT above object, but as close as possible
       boomAngle = 0;
+      // At 0°, boom tip is at max horizontal reach (boomLength away)
+      // Boom tip Z = boom pivot Z (no vertical component)
+      const boomTipZ = boomPivotZ;
+      // Chain length would need to cover both horizontal gap and vertical drop
+      // But we show it as 0 since boom can't reach
       chainLength = 0;
       canReach = false;
     }
@@ -802,8 +808,10 @@ export default function CranePlannerScreen({
     const isSafe = objWeight > 0 ? objWeight <= safeCapacity && canReach : canReach;
 
     // Calculate boom tip height from crane base and absolute Z coordinate
-    const boomTipHeight = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180)) - craneZ) / 1000 : 0;
-    const boomTipAbsZ = boomAngle > 0 ? (boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180))) / 1000 : 0;
+    // Works for all angles including 0° (horizontal)
+    const boomTipZ = boomPivotZ + (boomLengthM * 1000 * Math.sin(boomAngle * Math.PI / 180));
+    const boomTipHeight = (boomTipZ - craneZ) / 1000;
+    const boomTipAbsZ = boomTipZ / 1000;
 
     return {
       distance: horizontalDistM,
@@ -1013,17 +1021,9 @@ export default function CranePlannerScreen({
           }
         ]
       });
-
-      // 5. Horizontal distance measurement line (from crane center to object center at crane base level) - yellow
-      allMarkupEntries.push({
-        color: { r: 255, g: 200, b: 0, a: 255 },
-        lines: [{
-          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
-          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ }
-        }]
-      });
     }
 
+    // Add freeline markups (crane, boom, chain, markers)
     let markupIds: number[] = [];
     if (allMarkupEntries.length > 0) {
       const result = await markupApi.addFreelineMarkups(allMarkupEntries);
@@ -1031,6 +1031,26 @@ export default function CranePlannerScreen({
         markupIds = result;
       }
     }
+
+    // Add measurement markups (horizontal distance) for each object
+    for (const obj of objects) {
+      const { objCenterX, objCenterY } = obj;
+      try {
+        const measurementIds = await markupApi.addMeasurementMarkups([{
+          start: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          end: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ },
+          mainLineStart: { positionX: craneX, positionY: craneY, positionZ: craneZ },
+          mainLineEnd: { positionX: objCenterX, positionY: objCenterY, positionZ: craneZ },
+          color: { r: 255, g: 200, b: 0, a: 255 }
+        }]);
+        if (measurementIds && Array.isArray(measurementIds)) {
+          markupIds.push(...measurementIds);
+        }
+      } catch (e) {
+        console.warn('Failed to add measurement markup:', e);
+      }
+    }
+
     return markupIds;
   };
 
