@@ -168,13 +168,15 @@ export default function CranePlannerScreen({
         previewMarkupGroupsRef.current.all = previewMarkupIdsRef.current;
       } else {
         // Full update: remove all and redraw
-        console.log('[Preview] Full update - all markups');
+        console.log('[Preview] Full update - all markups, idsToRemove:', previewMarkupIdsRef.current.length);
         const idsToRemove = [...previewMarkupIdsRef.current];
         previewMarkupIdsRef.current = [];
         previewMarkupGroupsRef.current = null;
 
         if (idsToRemove.length > 0) {
           await removeCraneMarkups(api, idsToRemove);
+          // Small delay to let viewer process removal before drawing new markups
+          await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         const chartData = loadCharts.find(lc =>
@@ -843,17 +845,9 @@ export default function CranePlannerScreen({
         {(isPlacing || editingCraneId) && (
           <div style={{ backgroundColor: 'white', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '16px' }}>
             <div style={{ padding: '16px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
-                  {editingCraneId ? 'Muuda Kraana' : 'Paiguta Uus Kraana'}
-                </h2>
-                {previewLoading && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0ea5e9', fontSize: '12px' }}>
-                    <FiLoader size={14} className="spin" />
-                    <span>Uuendan...</span>
-                  </div>
-                )}
-              </div>
+              <h2 style={{ fontSize: '18px', fontWeight: 600, margin: 0 }}>
+                {editingCraneId ? 'Muuda Kraana' : 'Paiguta Uus Kraana'}
+              </h2>
               <button
                 onClick={cancelPlacing}
                 style={{ padding: '8px', border: 'none', backgroundColor: 'transparent', cursor: 'pointer' }}
@@ -1470,10 +1464,10 @@ export default function CranePlannerScreen({
                     cursor: craneModels.filter(c => c.is_active).length > 0 ? 'pointer' : 'not-allowed'
                   }}
                 >
-                  <FiPlus size={16} /> Paiguta Kraana
+                  <FiPlus size={16} /> Paiguta uus Kraana
                 </button>
               )}
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>
+              <h3 style={{ margin: 0, fontSize: '11px', fontWeight: 600, color: '#6b7280' }}>
                 Paigutatud kraanid ({projectCranes.length})
               </h3>
             </div>
@@ -1683,6 +1677,28 @@ export default function CranePlannerScreen({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Centered loading overlay */}
+        {previewLoading && (
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            color: 'white',
+            padding: '16px 24px',
+            borderRadius: '8px',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+          }}>
+            <FiLoader size={20} className="spin" />
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>Uuendan...</span>
           </div>
         )}
       </div>
