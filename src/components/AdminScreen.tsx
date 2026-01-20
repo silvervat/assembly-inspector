@@ -2212,14 +2212,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           .eq('project_id', projectId)
           .eq('guid_ifc', guidLower),
 
-        // Organizer group items - use eq instead of ilike
+        // Organizer group items - filter through parent group's trimble_project_id
         supabase
           .from('organizer_group_items')
           .select(`
             *,
-            group:organizer_groups(id, name, color, description)
+            group:organizer_groups!inner(id, name, color, description, trimble_project_id)
           `)
-          .eq('trimble_project_id', projectId)
+          .eq('group.trimble_project_id', projectId)
           .eq('guid_ifc', guidLower),
 
         // Inspections - use eq instead of ilike
@@ -2229,18 +2229,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           .eq('project_id', projectId)
           .eq('guid_ifc', guidLower),
 
-        // Issues (through issue_objects) - use eq instead of ilike
+        // Issues (through issue_objects) - filter through parent issue's trimble_project_id
         supabase
           .from('issue_objects')
           .select(`
             *,
-            issue:issues(
+            issue:issues!inner(
               *,
               comments:issue_comments(*),
               attachments:issue_attachments(*)
             )
           `)
-          .eq('trimble_project_id', projectId)
+          .eq('issue.trimble_project_id', projectId)
           .eq('guid_ifc', guidLower)
       ]);
 

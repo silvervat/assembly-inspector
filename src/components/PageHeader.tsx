@@ -3,6 +3,7 @@ import {
   FiArrowLeft, FiMenu, FiTruck, FiCalendar, FiClipboard,
   FiFolder, FiAlertTriangle, FiShield, FiX, FiTool, FiChevronRight, FiSearch, FiLoader
 } from 'react-icons/fi';
+import { PiCraneTowerFill } from 'react-icons/pi';
 import { InspectionMode } from './MainMenu';
 import { supabase, TrimbleExUser } from '../supabase';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -34,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { mode: 'delivery_schedule', label: 'Tarnegraafikud', icon: <FiTruck size={18} />, color: '#059669' },
   { mode: 'schedule', label: 'Paigaldusgraafikud', icon: <FiCalendar size={18} />, color: '#8b5cf6' },
   { mode: 'arrived_deliveries', label: 'Saabumised', icon: <FiClipboard size={18} />, color: '#0891b2' },
-  { mode: 'installations', label: 'Paigaldamised', icon: <FiTruck size={18} />, color: 'var(--modus-info)' },
+  { mode: 'installations', label: 'Paigaldamised', icon: <PiCraneTowerFill size={18} />, color: 'var(--modus-info)' },
   { mode: 'inspection_plans', label: 'Kontrollid', icon: <FiClipboard size={18} />, color: '#10b981', hasSubmenu: true },
   { mode: 'issues', label: 'Mittevastavaused', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
   { mode: 'organizer', label: 'Organiseerija', icon: <FiFolder size={18} />, color: '#7c3aed' },

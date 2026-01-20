@@ -5,6 +5,7 @@ import {
   FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
   FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder, FiSearch
 } from 'react-icons/fi';
+import { PiCraneTowerFill } from 'react-icons/pi';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 export type InspectionMode =
@@ -257,7 +258,7 @@ export default function MainMenu({
               onClick={() => onSelectMode('installations')}
             >
               <span className="menu-item-icon" style={{ color: 'var(--modus-info)' }}>
-                <FiTruck size={20} />
+                <PiCraneTowerFill size={20} />
               </span>
               <div className="menu-item-content">
                 <span className="menu-item-title">Paigaldamised</span>

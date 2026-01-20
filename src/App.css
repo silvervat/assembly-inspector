@@ -10122,12 +10122,31 @@ button.stat-toggle.off:hover {
   font-size: 11px;
 }
 
+.selected-object-row .object-product-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
 .selected-object-row .object-product {
   color: var(--modus-text-secondary);
   font-size: 10px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.selected-object-row .object-inline-status {
+  font-size: 9px;
+  color: #b45309;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.selected-object-row.installed .object-inline-status {
+  color: #b45309;
 }
 
 .selected-object-row .installed-badge {
