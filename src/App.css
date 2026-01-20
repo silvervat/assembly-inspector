@@ -1651,9 +1651,9 @@ button.stat-toggle.off:hover {
 }
 
 .search-button {
-  padding: 10px 12px;
+  padding: 5px 12px;
   background: var(--modus-primary);
-  color: white;
+  color: #fff;
   border: 1px solid var(--modus-primary);
   border-radius: 0 var(--modus-radius-sm) var(--modus-radius-sm) 0;
   cursor: pointer;
