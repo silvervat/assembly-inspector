@@ -4048,6 +4048,7 @@ export default function ArrivedDeliveriesScreen({
                               onChange={(e) => updateArrival(arrivedVehicle.id, { notes: e.target.value })}
                               placeholder="Lisa märkused tarne kohta..."
                               rows={2}
+                              disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                             />
                           </div>
 
@@ -4058,6 +4059,7 @@ export default function ArrivedDeliveriesScreen({
                               <button
                                 className="upload-photo-btn"
                                 onClick={() => photoInputRef.current?.click()}
+                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               >
                                 <FiUpload /> Lisa
                               </button>
@@ -4090,6 +4092,8 @@ export default function ArrivedDeliveriesScreen({
                               className="photos-grid"
                               tabIndex={0}
                               onClick={(e) => {
+                                // Don't allow photo uploads if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 // Only trigger if clicking on empty area or no-photos div
                                 if ((e.target as HTMLElement).closest('.photo-item')) return;
                                 photoInputRef.current?.click();
@@ -4101,6 +4105,8 @@ export default function ArrivedDeliveriesScreen({
                                 e.currentTarget.classList.remove('paste-ready');
                               }}
                               onDragOver={(e) => {
+                                // Don't allow drag-drop if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 e.preventDefault();
                                 e.currentTarget.classList.add('drag-over');
                               }}
@@ -4110,11 +4116,15 @@ export default function ArrivedDeliveriesScreen({
                               onDrop={(e) => {
                                 e.preventDefault();
                                 e.currentTarget.classList.remove('drag-over');
+                                // Don't allow photo uploads if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 if (e.dataTransfer.files?.length > 0) {
                                   handlePhotoUpload(arrivedVehicle.id, e.dataTransfer.files, 'general');
                                 }
                               }}
                               onPaste={(e) => {
+                                // Don't allow pasting images if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 const items = e.clipboardData?.items;
                                 if (!items) return;
                                 const files: File[] = [];
@@ -4142,6 +4152,7 @@ export default function ArrivedDeliveriesScreen({
                                   <button
                                     className="delete-photo-btn"
                                     onClick={() => deletePhoto(photo.id, photo.file_url)}
+                                    disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                                   >
                                     <FiX />
                                   </button>
@@ -4164,6 +4175,7 @@ export default function ArrivedDeliveriesScreen({
                               <button
                                 className="upload-photo-btn"
                                 onClick={() => deliveryNotePhotoInputRef.current?.click()}
+                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               >
                                 <FiUpload /> Lisa
                               </button>
@@ -4184,6 +4196,8 @@ export default function ArrivedDeliveriesScreen({
                               className="photos-grid"
                               tabIndex={0}
                               onClick={(e) => {
+                                // Don't allow photo uploads if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 // Only trigger if clicking on empty area or no-photos div
                                 if ((e.target as HTMLElement).closest('.photo-item')) return;
                                 deliveryNotePhotoInputRef.current?.click();
@@ -4195,6 +4209,8 @@ export default function ArrivedDeliveriesScreen({
                                 e.currentTarget.classList.remove('paste-ready');
                               }}
                               onDragOver={(e) => {
+                                // Don't allow drag-drop if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 e.preventDefault();
                                 e.currentTarget.classList.add('drag-over');
                               }}
@@ -4204,11 +4220,15 @@ export default function ArrivedDeliveriesScreen({
                               onDrop={(e) => {
                                 e.preventDefault();
                                 e.currentTarget.classList.remove('drag-over');
+                                // Don't allow photo uploads if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 if (e.dataTransfer.files?.length > 0) {
                                   handlePhotoUpload(arrivedVehicle.id, e.dataTransfer.files, 'delivery_note');
                                 }
                               }}
                               onPaste={(e) => {
+                                // Don't allow pasting images if not in edit mode
+                                if (arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id) return;
                                 const items = e.clipboardData?.items;
                                 if (!items) return;
                                 const files: File[] = [];
@@ -4237,6 +4257,7 @@ export default function ArrivedDeliveriesScreen({
                                   <button
                                     className="delete-photo-btn"
                                     onClick={() => deletePhoto(photo.id, photo.file_url)}
+                                    disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                                   >
                                     <FiX />
                                   </button>
