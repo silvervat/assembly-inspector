@@ -6853,35 +6853,78 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         // Get name from properties
                         let name = children[idx]?.name || `Child ${idx}`;
 
+                        // Sort dimensions to determine pikkus (length), laius (width), paksus (thickness)
+                        const dims = [
+                          { label: 'X', value: width },
+                          { label: 'Y', value: depth },
+                          { label: 'Z', value: height }
+                        ].sort((a, b) => b.value - a.value);
+
                         return {
                           name,
                           id: childIds[idx],
-                          width: Math.round(width * 1000),
-                          depth: Math.round(depth * 1000),
-                          height: Math.round(height * 1000),
-                          maxDim: Math.round(Math.max(width, depth, height) * 1000)
+                          x_mm: Math.round(width * 1000),
+                          y_mm: Math.round(depth * 1000),
+                          z_mm: Math.round(height * 1000),
+                          pikkus_mm: Math.round(dims[0].value * 1000),  // Longest
+                          laius_mm: Math.round(dims[1].value * 1000),   // Middle
+                          paksus_mm: Math.round(dims[2].value * 1000),  // Shortest
+                          pikkus_axis: dims[0].label,
+                          laius_axis: dims[1].label,
+                          paksus_axis: dims[2].label
                         };
-                      }).filter(Boolean);
+                      }).filter((c): c is NonNullable<typeof c> => c !== null);
 
                       // Calculate assembly dimensions from combined children
                       const assemblyWidth = maxX - minX;
                       const assemblyDepth = maxY - minY;
                       const assemblyHeight = maxZ - minZ;
 
+                      const assemblyDims = [
+                        { label: 'X', value: assemblyWidth },
+                        { label: 'Y', value: assemblyDepth },
+                        { label: 'Z', value: assemblyHeight }
+                      ].sort((a, b) => b.value - a.value);
+
+                      // Calculate statistics
+                      const pikkusValues = childResults.map(c => c.pikkus_mm);
+                      const laiusValues = childResults.map(c => c.laius_mm);
+                      const paksusValues = childResults.map(c => c.paksus_mm);
+
+                      const avgPikkus = Math.round(pikkusValues.reduce((a, b) => a + b, 0) / pikkusValues.length);
+                      const avgLaius = Math.round(laiusValues.reduce((a, b) => a + b, 0) / laiusValues.length);
+                      const avgPaksus = Math.round(paksusValues.reduce((a, b) => a + b, 0) / paksusValues.length);
+
+                      // Format output as readable text
+                      let output = `📊 KOONDKOGU (${childResults.length} alamdetaili):\n`;
+                      output += `┌─────────────────────────────────┐\n`;
+                      output += `│ Pikkus: ${Math.round(assemblyDims[0].value * 1000)} mm (${assemblyDims[0].label}-telg)\n`;
+                      output += `│ Laius:  ${Math.round(assemblyDims[1].value * 1000)} mm (${assemblyDims[1].label}-telg)\n`;
+                      output += `│ Paksus: ${Math.round(assemblyDims[2].value * 1000)} mm (${assemblyDims[2].label}-telg)\n`;
+                      output += `└─────────────────────────────────┘\n\n`;
+
+                      output += `📈 STATISTIKA:\n`;
+                      output += `• Keskmine pikkus: ${avgPikkus} mm\n`;
+                      output += `• Keskmine laius: ${avgLaius} mm\n`;
+                      output += `• Keskmine paksus: ${avgPaksus} mm\n`;
+                      output += `• Min pikkus: ${Math.min(...pikkusValues)} mm\n`;
+                      output += `• Max pikkus: ${Math.max(...pikkusValues)} mm\n\n`;
+
+                      output += `📋 ALAMDETAILID (esimesed ${Math.min(10, childResults.length)}):\n`;
+                      childResults.slice(0, 10).forEach((c, i) => {
+                        output += `\n${i + 1}. ${c.name}\n`;
+                        output += `   Pikkus: ${c.pikkus_mm} mm (${c.pikkus_axis})\n`;
+                        output += `   Laius:  ${c.laius_mm} mm (${c.laius_axis})\n`;
+                        output += `   Paksus: ${c.paksus_mm} mm (${c.paksus_axis})\n`;
+                      });
+
+                      if (childResults.length > 10) {
+                        output += `\n... ja veel ${childResults.length - 10} alamdetaili`;
+                      }
+
                       updateFunctionResult("childDimensions", {
                         status: 'success',
-                        result: JSON.stringify({
-                          assemblyFromChildren: {
-                            width_mm: Math.round(assemblyWidth * 1000),
-                            depth_mm: Math.round(assemblyDepth * 1000),
-                            height_mm: Math.round(assemblyHeight * 1000),
-                            maxDim_mm: Math.round(Math.max(assemblyWidth, assemblyDepth, assemblyHeight) * 1000),
-                            orientation: assemblyWidth > assemblyDepth && assemblyWidth > assemblyHeight ? 'X-axis' :
-                                        assemblyDepth > assemblyWidth && assemblyDepth > assemblyHeight ? 'Y-axis' : 'Z-axis'
-                          },
-                          childCount: childResults.length,
-                          children: childResults.slice(0, 10) // Limit to first 10
-                        }, null, 2)
+                        result: output
                       });
                     } catch (e: any) {
                       updateFunctionResult("childDimensions", { status: 'error', error: e.message });
