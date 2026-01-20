@@ -73,8 +73,8 @@ export default function ToolsScreen({
   const [boltSummary, setBoltSummary] = useState<BoltSummaryItem[]>([]);
   const [hasSelection, setHasSelection] = useState(false);
 
-  // Accordion state - which section is expanded
-  const [expandedSection, setExpandedSection] = useState<'export' | 'markup' | 'marker' | null>('export');
+  // Accordion state - which section is expanded (null = all collapsed by default)
+  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | null>(null);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -99,7 +99,7 @@ export default function ToolsScreen({
   const boltSummaryRef = useRef<HTMLDivElement>(null);
 
   // Toggle section expansion (accordion style)
-  const toggleSection = (section: 'export' | 'markup' | 'marker') => {
+  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker') => {
     setExpandedSection(prev => prev === section ? null : section);
   };
 
@@ -1120,29 +1120,34 @@ export default function ToolsScreen({
       )}
 
       <div className="tools-content">
-        {/* Crane Planning Button */}
+        {/* Crane Planning Section - Collapsible */}
         <div className="tools-section">
-          <button
-            onClick={() => onNavigate?.('crane_planner')}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              padding: '16px',
-              backgroundColor: '#fff7ed',
-              border: '1px solid #fdba74',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              textAlign: 'left'
-            }}
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('crane')}
           >
-            <FiTarget size={24} style={{ color: '#f97316' }} />
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '16px', color: '#c2410c' }}>Kraanade Planeerimine</div>
-              <div style={{ fontSize: '13px', color: '#ea580c' }}>Paiguta ja halda kraanasid mudelis</div>
-            </div>
-          </button>
+            {expandedSection === 'crane' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <FiTarget size={18} style={{ color: '#f97316' }} />
+            <h3>Kraanade planeerimine</h3>
+          </div>
+
+          {expandedSection === 'crane' && (
+            <>
+              <p className="tools-section-desc">
+                Paiguta ja halda kraanasid mudelis. Lisa kraanaid teegist ja visualiseeri nende ulatust.
+              </p>
+              <div className="tools-buttons">
+                <button
+                  className="tools-btn tools-btn-primary"
+                  onClick={() => onNavigate?.('crane_planner')}
+                  style={{ backgroundColor: '#f97316' }}
+                >
+                  <FiTarget size={16} />
+                  <span>Ava Kraanaplaneeriaja</span>
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Bolt Export Section - Collapsible */}
@@ -1159,7 +1164,7 @@ export default function ToolsScreen({
           {expandedSection === 'export' && (
             <>
               <p className="tools-section-desc">
-                Vali mudelist detailid ja skaneeri poldid koondtabelisse.
+                Skaneeri valitud elementide poldid ja ekspordi Excel-faili. Vali kõigepealt mudelist poltidega detailid.
               </p>
 
               <div className="tools-lang-toggle">
