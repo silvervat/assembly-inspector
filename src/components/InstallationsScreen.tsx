@@ -521,60 +521,100 @@ export default function InstallationsScreen({
     try { return JSON.parse(localStorage.getItem(`known_monteerijad_${projectId}`) || '[]'); } catch { return []; }
   });
 
-  // Load resources from project_resources table and merge with localStorage known names
+  // Load resources from project_resources table AND existing installations, merge with localStorage
   useEffect(() => {
-    const loadProjectResources = async () => {
+    const loadAllResources = async () => {
       try {
-        const { data, error } = await supabase
+        // 1. Load from project_resources table
+        const { data: projectRes, error: projectError } = await supabase
           .from('project_resources')
           .select('resource_type, name')
           .eq('trimble_project_id', projectId)
           .eq('is_active', true);
 
-        if (error) {
-          console.error('Error loading project resources:', error);
-          return;
+        if (projectError) {
+          console.error('Error loading project resources:', projectError);
         }
 
-        if (!data || data.length === 0) return;
+        // 2. Load team_members from existing installations
+        const { data: installData, error: installError } = await supabase
+          .from('installation_schedule')
+          .select('team_members')
+          .eq('project_id', projectId)
+          .not('team_members', 'is', null);
 
-        // Group resources by type and merge with existing known arrays
+        if (installError) {
+          console.error('Error loading installation team members:', installError);
+        }
+
+        // Group resources by type from project_resources
         const resourcesByType: Record<string, string[]> = {};
-        for (const res of data) {
+        for (const res of (projectRes || [])) {
           if (!resourcesByType[res.resource_type]) {
             resourcesByType[res.resource_type] = [];
           }
           resourcesByType[res.resource_type].push(res.name);
         }
 
-        // Merge with localStorage known arrays (avoid duplicates)
-        if (resourcesByType['crane']) {
-          setKnownKraanad(prev => [...new Set([...prev, ...resourcesByType['crane']])]);
+        // Parse team_members from installations and extract resource names
+        // Format: "Kraana: K1", "Monteerija: Jaan", "Korvtõstuk: Tõstuk1", etc.
+        const extractedResources: Record<string, Set<string>> = {
+          crane: new Set<string>(),
+          forklift: new Set<string>(),
+          poomtostuk: new Set<string>(),
+          kaartostuk: new Set<string>(),
+          troppija: new Set<string>(),
+          monteerija: new Set<string>(),
+          keevitaja: new Set<string>(),
+        };
+
+        for (const install of (installData || [])) {
+          const members = install.team_members as string[] | null;
+          if (!members) continue;
+
+          for (const member of members) {
+            // Parse "Type: Name" format
+            const parts = member.split(':');
+            if (parts.length >= 2) {
+              const typeLabel = parts[0].trim().toLowerCase();
+              const name = parts.slice(1).join(':').trim();
+              if (!name) continue;
+
+              // Map labels to resource types
+              if (typeLabel.includes('kraana') || typeLabel.includes('crane')) {
+                extractedResources.crane.add(name);
+              } else if (typeLabel.includes('teleskoop') || typeLabel.includes('forklift')) {
+                extractedResources.forklift.add(name);
+              } else if (typeLabel.includes('korv') || typeLabel.includes('poom') || typeLabel.includes('boom')) {
+                extractedResources.poomtostuk.add(name);
+              } else if (typeLabel.includes('käär') || typeLabel.includes('scissor')) {
+                extractedResources.kaartostuk.add(name);
+              } else if (typeLabel.includes('tropp') || typeLabel.includes('rigger')) {
+                extractedResources.troppija.add(name);
+              } else if (typeLabel.includes('monteer') || typeLabel.includes('install')) {
+                extractedResources.monteerija.add(name);
+              } else if (typeLabel.includes('keevit') || typeLabel.includes('weld')) {
+                extractedResources.keevitaja.add(name);
+              }
+            }
+          }
         }
-        if (resourcesByType['forklift']) {
-          setKnownTeleskooplaadrid(prev => [...new Set([...prev, ...resourcesByType['forklift']])]);
-        }
-        if (resourcesByType['poomtostuk']) {
-          setKnownKorvtostukid(prev => [...new Set([...prev, ...resourcesByType['poomtostuk']])]);
-        }
-        if (resourcesByType['kaartostuk']) {
-          setKnownKaartostukid(prev => [...new Set([...prev, ...resourcesByType['kaartostuk']])]);
-        }
-        if (resourcesByType['troppija']) {
-          setKnownTroppijad(prev => [...new Set([...prev, ...resourcesByType['troppija']])]);
-        }
-        if (resourcesByType['monteerija']) {
-          setKnownMonteerijad(prev => [...new Set([...prev, ...resourcesByType['monteerija']])]);
-        }
-        if (resourcesByType['keevitaja']) {
-          setKnownKeevitajad(prev => [...new Set([...prev, ...resourcesByType['keevitaja']])]);
-        }
+
+        // Merge all sources: localStorage + project_resources + existing installations
+        setKnownKraanad(prev => [...new Set([...prev, ...(resourcesByType['crane'] || []), ...extractedResources.crane])]);
+        setKnownTeleskooplaadrid(prev => [...new Set([...prev, ...(resourcesByType['forklift'] || []), ...extractedResources.forklift])]);
+        setKnownKorvtostukid(prev => [...new Set([...prev, ...(resourcesByType['poomtostuk'] || []), ...extractedResources.poomtostuk])]);
+        setKnownKaartostukid(prev => [...new Set([...prev, ...(resourcesByType['kaartostuk'] || []), ...extractedResources.kaartostuk])]);
+        setKnownTroppijad(prev => [...new Set([...prev, ...(resourcesByType['troppija'] || []), ...extractedResources.troppija])]);
+        setKnownMonteerijad(prev => [...new Set([...prev, ...(resourcesByType['monteerija'] || []), ...extractedResources.monteerija])]);
+        setKnownKeevitajad(prev => [...new Set([...prev, ...(resourcesByType['keevitaja'] || []), ...extractedResources.keevitaja])]);
+
       } catch (e) {
-        console.error('Error loading project resources:', e);
+        console.error('Error loading resources:', e);
       }
     };
 
-    loadProjectResources();
+    loadAllResources();
   }, [projectId]);
 
   // Resource equipment/workers - separate arrays for each type (with localStorage persistence)
