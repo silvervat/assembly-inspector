@@ -10038,6 +10038,98 @@ button.stat-toggle.off:hover {
   color: white;
 }
 
+/* Temp list styles */
+.selected-object-row.in-temp-list {
+  background: rgba(16, 185, 129, 0.08);
+  border-left: 3px solid #10b981;
+}
+
+.temp-list-indicator {
+  color: #10b981;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.object-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.object-status-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: #fbbf24;
+  color: #78350f;
+  border-radius: 4px;
+  font-weight: 500;
+  margin-top: 2px;
+  width: fit-content;
+}
+
+.title-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-to-temp-list-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.add-to-temp-list-btn:hover:not(:disabled) {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+.add-to-temp-list-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.temp-list-badge {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.clear-temp-list-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.clear-temp-list-btn:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
 /* Installation info modal */
 .install-info-modal {
   max-width: 360px;
