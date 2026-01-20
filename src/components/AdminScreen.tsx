@@ -407,6 +407,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const [partDbLoading, setPartDbLoading] = useState(false);
   const [partDbSelectedGuid, setPartDbSelectedGuid] = useState<string | null>(null);
   const [partDbSelectedMark, setPartDbSelectedMark] = useState<string | null>(null);
+  const [partDbSearchResults, setPartDbSearchResults] = useState<{guid_ifc: string; assembly_mark: string; product_name?: string}[]>([]);
   const [partDbExpandedSections, setPartDbExpandedSections] = useState<Set<string>>(new Set(['delivery', 'arrivals', 'installation', 'organizer', 'inspections', 'issues']));
   const [partDbData, setPartDbData] = useState<{
     deliveryItems: any[];
@@ -2267,6 +2268,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Load part database from current model selection
   const loadPartDatabaseFromSelection = useCallback(async () => {
     if (!api) return;
+    setPartDbSearchResults([]); // Clear any search results
 
     try {
       const selection = await api.viewer.getSelection();
@@ -2363,20 +2365,32 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const searchPartDatabase = useCallback(async () => {
     if (!projectId || !partDbSearchQuery.trim()) return;
     setPartDbLoading(true);
+    setPartDbSearchResults([]); // Clear previous results
 
     try {
       const searchTerm = `%${partDbSearchQuery.trim()}%`;
 
-      // Search in trimble_model_objects for matching assembly marks
+      // Search in trimble_model_objects for matching assembly marks (get up to 50 results)
       const { data } = await supabase
         .from('trimble_model_objects')
-        .select('guid_ifc, assembly_mark')
+        .select('guid_ifc, assembly_mark, product_name')
         .eq('trimble_project_id', projectId)
         .ilike('assembly_mark', searchTerm)
-        .limit(1);
+        .order('assembly_mark')
+        .limit(50);
 
       if (data && data.length > 0) {
-        loadPartDatabaseByGuid(data[0].guid_ifc, data[0].assembly_mark);
+        if (data.length === 1) {
+          // Only one result - load it directly
+          loadPartDatabaseByGuid(data[0].guid_ifc, data[0].assembly_mark);
+        } else {
+          // Multiple results - show list for user to choose
+          setPartDbSearchResults(data);
+          setPartDbData(null);
+          setPartDbSelectedGuid(null);
+          setPartDbSelectedMark(null);
+          setMessage(`Leiti ${data.length} detaili - vali nimekirjast`);
+        }
       } else {
         setMessage('Detaili ei leitud');
         setPartDbData(null);
@@ -15975,6 +15989,60 @@ document.body.appendChild(div);`;
               Lae mudeli valikust
             </button>
           </div>
+
+          {/* Search results list (when multiple matches) */}
+          {partDbSearchResults.length > 0 && (
+            <div style={{
+              marginBottom: '20px',
+              background: '#fefce8',
+              borderRadius: '8px',
+              border: '1px solid #fde047',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                padding: '10px 16px',
+                background: '#fef9c3',
+                borderBottom: '1px solid #fde047',
+                fontWeight: 600,
+                fontSize: '13px',
+                color: '#854d0e'
+              }}>
+                Leiti {partDbSearchResults.length} detaili - vali õige:
+              </div>
+              <div style={{ maxHeight: '200px', overflow: 'auto' }}>
+                {partDbSearchResults.map((item, idx) => (
+                  <div
+                    key={item.guid_ifc}
+                    onClick={() => {
+                      setPartDbSearchResults([]);
+                      loadPartDatabaseByGuid(item.guid_ifc, item.assembly_mark);
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      cursor: 'pointer',
+                      borderBottom: idx < partDbSearchResults.length - 1 ? '1px solid #fef3c7' : 'none',
+                      background: 'white',
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#fefce8'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: '#1e40af' }}>
+                      {item.assembly_mark}
+                    </div>
+                    {item.product_name && (
+                      <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                        {item.product_name}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', fontFamily: 'monospace' }}>
+                      {item.guid_ifc}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Selected part info */}
           {partDbSelectedGuid && (

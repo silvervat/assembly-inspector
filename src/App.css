@@ -49,7 +49,7 @@ html, body, #root {
   /* Spacing */
   --modus-spacing-xs: 4px;
   --modus-spacing-sm: 8px;
-  --modus-spacing-md: 16px;
+  --modus-spacing-md: 5px;
   --modus-spacing-lg: 24px;
   --modus-spacing-xl: 32px;
 
@@ -1564,7 +1564,7 @@ button.stat-toggle.off:hover {
 }
 
 .menu-user-email {
-  font-size: var(--modus-font-size-sm);
+  font-size: 10px;
   color: var(--modus-text-primary);
   font-weight: 500;
   white-space: nowrap;
@@ -1573,7 +1573,7 @@ button.stat-toggle.off:hover {
 }
 
 .menu-user-role {
-  font-size: var(--modus-font-size-xs);
+  font-size: 9px;
   color: var(--modus-text-secondary);
   text-transform: uppercase;
 }
@@ -10145,6 +10145,39 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
+.selected-object-row .object-inline-status.clickable {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  transition: all 0.15s;
+}
+
+.selected-object-row .object-inline-status.clickable:hover {
+  background: #fcd34d;
+  color: #92400e;
+}
+
+.selected-object-row .object-inline-status.clickable.installed {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.selected-object-row .object-inline-status.clickable.installed:hover {
+  background: #fcd34d;
+  color: #92400e;
+}
+
+.selected-object-row .object-inline-status.clickable.preassembly {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.selected-object-row .object-inline-status.clickable.preassembly:hover {
+  background: #ddd6fe;
+  color: #6d28d9;
+}
+
 .selected-object-row.installed .object-inline-status {
   color: #b45309;
 }
@@ -11881,6 +11914,7 @@ button.stat-toggle.off:hover {
   position: relative;
   border-radius: 6px;
   z-index: 1; /* Keep below navigation menus */
+  margin-bottom: 6px; /* Extra space to show bottom border clearly */
 }
 
 /* When menu or color picker is open, raise section z-index so menu appears above other groups */

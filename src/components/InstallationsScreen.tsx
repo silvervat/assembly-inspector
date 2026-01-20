@@ -5960,18 +5960,36 @@ export default function InstallationsScreen({
                 <div className="selected-objects-list">
                   {selectedObjects.map((obj, idx) => {
                     const guid = getObjectGuid(obj);
-                    const isInstalled = guid && installedGuids.has(guid);
-                    const isPreassembly = guid && preassemblies.some(p => p.guid_ifc === guid || p.guid === guid);
+                    const installedInfo = guid ? installedGuids.get(guid) : null;
+                    const isInstalled = !!installedInfo;
+                    const preassemblyRecord = guid ? preassemblies.find(p => p.guid_ifc === guid || p.guid === guid) : null;
+                    const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
                     const isInTempList = guid && tempList.has(guid);
 
-                    // Determine short inline status text
-                    let inlineStatus = '';
+                    // Format date as dd.mm.yy
+                    const formatShortDate = (dateStr: string) => {
+                      const d = new Date(dateStr);
+                      return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear().toString().slice(-2)}`;
+                    };
+
+                    // Get status info with date
+                    let statusInfo: { type: 'installed' | 'preassembly'; date: string; fullDate: string; user?: string } | null = null;
                     if (entryMode === 'preassembly') {
-                      if (isPreassembly) inlineStatus = '(preassembly)';
-                      else if (isInstalled) inlineStatus = '(paigaldatud)';
+                      if (preassemblyInfo) {
+                        statusInfo = { type: 'preassembly', date: formatShortDate(preassemblyInfo.preassembledAt), fullDate: preassemblyInfo.preassembledAt, user: preassemblyInfo.userEmail };
+                      } else if (preassemblyRecord) {
+                        statusInfo = { type: 'preassembly', date: formatShortDate(preassemblyRecord.preassembled_at), fullDate: preassemblyRecord.preassembled_at, user: preassemblyRecord.user_email };
+                      } else if (installedInfo) {
+                        statusInfo = { type: 'installed', date: formatShortDate(installedInfo.installedAt), fullDate: installedInfo.installedAt, user: installedInfo.userEmail };
+                      }
                     } else {
-                      if (isInstalled) inlineStatus = '(paigaldatud)';
-                      else if (isPreassembly) inlineStatus = '(preassembly)';
+                      if (installedInfo) {
+                        statusInfo = { type: 'installed', date: formatShortDate(installedInfo.installedAt), fullDate: installedInfo.installedAt, user: installedInfo.userEmail };
+                      } else if (preassemblyInfo) {
+                        statusInfo = { type: 'preassembly', date: formatShortDate(preassemblyInfo.preassembledAt), fullDate: preassemblyInfo.preassembledAt, user: preassemblyInfo.userEmail };
+                      } else if (preassemblyRecord) {
+                        statusInfo = { type: 'preassembly', date: formatShortDate(preassemblyRecord.preassembled_at), fullDate: preassemblyRecord.preassembled_at, user: preassemblyRecord.user_email };
+                      }
                     }
 
                     return (
@@ -5983,8 +6001,34 @@ export default function InstallationsScreen({
                           </span>
                           <span className="object-product-row">
                             {obj.productName && <span className="object-product">{obj.productName}</span>}
-                            {inlineStatus && (
-                              <span className="object-inline-status">{inlineStatus}</span>
+                            {statusInfo && (
+                              <span
+                                className={`object-inline-status clickable ${statusInfo.type}`}
+                                title={`${statusInfo.type === 'installed' ? 'Paigaldatud' : 'Preassembly'}: ${statusInfo.fullDate.split('T')[0]}${statusInfo.user ? `\nKasutaja: ${statusInfo.user}` : ''}\nKliki, et avada päeva ülevaade`}
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  // Navigate to overview with that date expanded
+                                  const dateStr = statusInfo!.fullDate.split('T')[0];
+                                  const monthKey = dateStr.substring(0, 7); // YYYY-MM
+
+                                  // Set entry mode to match the status type
+                                  if (statusInfo!.type === 'installed') {
+                                    handleEntryModeChange('installation');
+                                    await applyInstallationColoring(installedGuids);
+                                  } else {
+                                    handleEntryModeChange('preassembly');
+                                    await applyPreassemblyColoring();
+                                  }
+                                  await applyTempListColoring();
+
+                                  // Expand month and day
+                                  setExpandedMonths(new Set([monthKey]));
+                                  setExpandedDays(new Set([dateStr]));
+                                  setShowList(true);
+                                }}
+                              >
+                                {statusInfo.type === 'installed' ? 'Paigaldatud' : 'Preassembly'} {statusInfo.date}
+                              </span>
                             )}
                           </span>
                         </div>
