@@ -10101,6 +10101,9 @@ button.stat-toggle.off:hover {
 .selected-object-row .object-product {
   color: var(--modus-text-secondary);
   font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .selected-object-row .installed-badge {
@@ -10163,8 +10166,9 @@ button.stat-toggle.off:hover {
 
 .object-info-col {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
   flex: 1;
   min-width: 0;
 }
@@ -10284,8 +10288,8 @@ button.stat-toggle.off:hover {
   background: white;
   border: 1px solid #d1fae5;
   border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 12px;
+  padding: 4px 8px;
+  font-size: 11px;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -10307,7 +10311,7 @@ button.stat-toggle.off:hover {
 }
 
 .temp-list-item-product {
-  font-size: 11px;
+  font-size: 10px;
   color: #6b7280;
   flex: 1;
   text-align: right;
