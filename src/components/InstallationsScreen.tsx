@@ -2797,12 +2797,30 @@ export default function InstallationsScreen({
       return true;
     });
 
-    // Show duplicate warning if there are duplicates
+    // Calculate tempList items BEFORE early return check
+    const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
+    const tempListGuidsToAdd = Array.from(tempList).filter(guid => {
+      const guidLower = guid.toLowerCase();
+      // Skip if already in newObjects
+      if (newObjectGuids.has(guidLower)) return false;
+      // Skip if already installed
+      if (installedGuids.has(guidLower)) return false;
+      return true;
+    });
+
+    // Count skipped items (already installed)
+    const skippedFromSelection = duplicates.length;
+    const skippedFromTempList = tempList.size - tempListGuidsToAdd.length -
+      Array.from(tempList).filter(guid => newObjectGuids.has(guid.toLowerCase())).length;
+    const totalSkipped = skippedFromSelection + skippedFromTempList;
+
+    // Show duplicate warning if there are duplicates from selection
     if (duplicates.length > 0) {
       setDuplicateWarning(duplicates);
     }
 
-    if (newObjects.length === 0) {
+    // Check if there's ANYTHING to save (from selection OR tempList)
+    if (newObjects.length === 0 && tempListGuidsToAdd.length === 0) {
       setMessage('Kõik valitud detailid on juba paigaldatud');
       return;
     }
@@ -2822,17 +2840,6 @@ export default function InstallationsScreen({
           return count === 1 ? config?.label : `${count}x ${config?.label}`;
         })
         .join(', ');
-
-      // Collect GUIDs from tempList that are not already in newObjects AND not already installed
-      const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
-      const tempListGuidsToAdd = Array.from(tempList).filter(guid => {
-        const guidLower = guid.toLowerCase();
-        // Skip if already in newObjects
-        if (newObjectGuids.has(guidLower)) return false;
-        // Skip if already installed
-        if (installedGuids.has(guidLower)) return false;
-        return true;
-      });
 
       // Fetch object info from database for tempList items
       let tempListObjects: SelectedObject[] = [];
@@ -2908,7 +2915,8 @@ export default function InstallationsScreen({
           throw error;
         }
       } else {
-        setMessage(`${allObjectsToSave.length} detail(i) edukalt paigaldatud!`);
+        const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} juba paigaldatud jäeti vahele)` : '';
+        setMessage(`${allObjectsToSave.length} detail(i) edukalt paigaldatud!${skippedMsg}`);
         setNotes('');
         // Don't reset monteerijad and method - keep them for next installation
 
@@ -3006,6 +3014,23 @@ export default function InstallationsScreen({
       return true;
     });
 
+    // Calculate tempList items BEFORE early return checks
+    const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
+    const tempListGuidsToAdd = Array.from(tempList).filter(guid => {
+      const guidLower = guid.toLowerCase();
+      // Skip if already in newObjects
+      if (newObjectGuids.has(guidLower)) return false;
+      // Skip if already preassembled
+      if (preassembledGuids.has(guidLower)) return false;
+      return true;
+    });
+
+    // Count skipped items
+    const skippedFromSelection = alreadyPreassembled.length + installedBlocked.length;
+    const skippedFromTempList = tempList.size - tempListGuidsToAdd.length -
+      Array.from(tempList).filter(guid => newObjectGuids.has(guid.toLowerCase())).length;
+    const totalSkipped = skippedFromSelection + skippedFromTempList;
+
     // Show warnings for blocked items (preassembly time is not before installation time)
     if (installedBlocked.length > 0) {
       const blockedMsg = installedBlocked.length === 1
@@ -3014,7 +3039,7 @@ export default function InstallationsScreen({
       setMessage(blockedMsg);
 
       // If there are items that can be added, still continue with those
-      if (installedCanAdd.length === 0 && newObjects.length === 0) {
+      if (installedCanAdd.length === 0 && newObjects.length === 0 && tempListGuidsToAdd.length === 0) {
         return;
       }
     }
@@ -3034,13 +3059,13 @@ export default function InstallationsScreen({
       return; // Wait for user confirmation
     }
 
-    if (alreadyPreassembled.length > 0 && newObjects.length === 0) {
-      setMessage('Kõik valitud detailid on juba preassembly listis');
-      return;
-    }
-
-    if (newObjects.length === 0) {
-      setMessage('Pole uusi detaile lisamiseks');
+    // Check if there's ANYTHING to save
+    if (newObjects.length === 0 && tempListGuidsToAdd.length === 0) {
+      if (alreadyPreassembled.length > 0) {
+        setMessage('Kõik valitud detailid on juba preassembly listis');
+      } else {
+        setMessage('Pole uusi detaile lisamiseks');
+      }
       return;
     }
 
@@ -3059,17 +3084,6 @@ export default function InstallationsScreen({
           return count === 1 ? config?.label : `${count}x ${config?.label}`;
         })
         .join(', ');
-
-      // Collect GUIDs from tempList that are not already in newObjects AND not already installed
-      const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
-      const tempListGuidsToAdd = Array.from(tempList).filter(guid => {
-        const guidLower = guid.toLowerCase();
-        // Skip if already in newObjects
-        if (newObjectGuids.has(guidLower)) return false;
-        // Skip if already installed
-        if (installedGuids.has(guidLower)) return false;
-        return true;
-      });
 
       // Fetch object info from database for tempList items
       let tempListObjects: SelectedObject[] = [];
@@ -3145,7 +3159,8 @@ export default function InstallationsScreen({
           throw error;
         }
       } else {
-        setMessage(`${allObjectsToSave.length} detail(i) edukalt preassembly lisatud!`);
+        const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} juba olemas jäeti vahele)` : '';
+        setMessage(`${allObjectsToSave.length} detail(i) edukalt preassembly lisatud!${skippedMsg}`);
         setNotes('');
 
         // Clear temp list after successful save
