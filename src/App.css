@@ -10743,6 +10743,11 @@ button.stat-toggle.off:hover {
 /* Day Group */
 .installation-date-group {
   border-bottom: 1px solid var(--modus-border-light);
+  position: relative;
+}
+
+.installation-date-group:has(.day-menu-dropdown) {
+  z-index: 2000;
 }
 
 .installation-date-group:last-child {
@@ -10909,7 +10914,7 @@ button.stat-toggle.off:hover {
   border-radius: 4px;
   color: var(--modus-text-secondary);
   transition: all 0.15s;
-  opacity: 0;
+  opacity: 0.6;
 }
 
 .date-group-header:hover .day-menu-btn {
@@ -10929,7 +10934,7 @@ button.stat-toggle.off:hover {
   border: 1px solid var(--modus-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  z-index: 2000;
   min-width: 160px;
   overflow: hidden;
 }
