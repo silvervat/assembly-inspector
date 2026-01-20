@@ -6373,6 +6373,11 @@ button.stat-toggle.off:hover {
   border: 1px solid var(--modus-border);
   border-radius: 6px;
   margin-bottom: 8px;
+  position: relative;
+}
+
+.arrived-deliveries .vehicle-card:has(.vehicle-menu-dropdown) {
+  z-index: 2000;
 }
 
 .arrived-deliveries .vehicle-card.confirmed {
@@ -6525,7 +6530,7 @@ button.stat-toggle.off:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 180px;
   padding: 4px;
-  z-index: 500;
+  z-index: 2000;
 }
 
 .arrived-deliveries .vehicle-menu-dropdown button {

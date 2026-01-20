@@ -142,6 +142,7 @@ interface ItemRowProps {
   isSelected: boolean;
   isExpanded: boolean;
   isLocked: boolean; // Vehicle is confirmed, no more changes allowed
+  isEditing: boolean; // Whether this vehicle is currently being edited
   duplicateIndex: number;
   duplicateCount: number;
   itemCommentValue: string;
@@ -165,6 +166,7 @@ const ItemRow = memo(({
   isSelected,
   isExpanded,
   isLocked: _isLocked,
+  isEditing,
   duplicateIndex,
   duplicateCount,
   itemCommentValue,
@@ -257,14 +259,16 @@ const ItemRow = memo(({
               <button
                 className="action-btn confirm"
                 onClick={() => onConfirmItem(item.id, 'confirmed')}
-                title="Kinnita"
+                disabled={!isEditing}
+                title={isEditing ? "Kinnita" : "Aktiveeri redigeerimise režiim"}
               >
                 <FiCheck size={12} />
               </button>
               <button
                 className="action-btn missing"
                 onClick={() => onConfirmItem(item.id, 'missing')}
-                title="Puudub"
+                disabled={!isEditing}
+                title={isEditing ? "Puudub" : "Aktiveeri redigeerimise režiim"}
               >
                 <FiX size={12} />
               </button>
@@ -273,7 +277,8 @@ const ItemRow = memo(({
             <button
               className="action-btn reset"
               onClick={() => onConfirmItem(item.id, 'pending')}
-              title="Muuda staatust"
+              disabled={!isEditing}
+              title={isEditing ? "Muuda staatust" : "Aktiveeri redigeerimise režiim"}
             >
               <FiRefreshCw size={12} />
             </button>
@@ -3837,7 +3842,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.arrival_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { arrival_time: e.target.value })}
                                 placeholder="HH:MM"
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                               <datalist id={`arrival-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
@@ -3851,7 +3855,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.unload_start_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_start_time: e.target.value })}
                                 placeholder="HH:MM"
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                               <datalist id={`unload-start-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
@@ -3865,7 +3868,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.unload_end_time || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_end_time: e.target.value })}
                                 placeholder="HH:MM"
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                               <datalist id={`unload-end-times-${arrivedVehicle.id}`}>
                                 {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
@@ -3881,7 +3883,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.reg_number || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { reg_number: e.target.value })}
                                 placeholder="Nt. 123ABC"
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                             </div>
                             <div className="detail-field">
@@ -3891,7 +3892,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.trailer_number || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { trailer_number: e.target.value })}
                                 placeholder="Nt. 456DEF"
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                             </div>
                             <div className="detail-field wide">
@@ -3901,7 +3901,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.unload_location || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { unload_location: e.target.value })}
                                 placeholder="Nt. Plats A, hoone 2 juures..."
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                             </div>
                           </div>
@@ -3914,7 +3913,6 @@ export default function ArrivedDeliveriesScreen({
                                 value={arrivedVehicle.checked_by_workers || ''}
                                 onChange={(e) => updateArrival(arrivedVehicle.id, { checked_by_workers: e.target.value })}
                                 placeholder="Nt. Jaan Tamm, Mari Mets..."
-                                disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                               />
                             </div>
                           </div>
@@ -3927,19 +3925,15 @@ export default function ArrivedDeliveriesScreen({
                                 const currentValue = (arrivedVehicle.unload_resources as any)?.[res.key] || 0;
                                 const isActive = currentValue > 0;
                                 const showQtyDropdown = res.maxCount > 1 && isActive;
-                                const isDisabled = arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id;
                                 return (
                                   <div
                                     key={res.key}
-                                    className={`resource-button ${isActive ? 'active' : ''} ${showQtyDropdown ? 'has-dropdown' : ''} ${isDisabled ? 'disabled' : ''}`}
+                                    className={`resource-button ${isActive ? 'active' : ''} ${showQtyDropdown ? 'has-dropdown' : ''}`}
                                     style={{
-                                      backgroundColor: isActive ? res.activeBgColor : res.bgColor,
-                                      opacity: isDisabled ? 0.5 : 1,
-                                      cursor: isDisabled ? 'not-allowed' : 'pointer'
+                                      backgroundColor: isActive ? res.activeBgColor : res.bgColor
                                     }}
                                     title={res.label}
                                     onClick={() => {
-                                      if (isDisabled) return;
                                       if (isActive) {
                                         // Toggle off - set to 0 and clear name
                                         const newResources = {
@@ -3971,7 +3965,7 @@ export default function ArrivedDeliveriesScreen({
                                       <span className="resource-count">{currentValue}</span>
                                     )}
                                     {/* Quantity selector on hover - only for resources with maxCount > 1 */}
-                                    {showQtyDropdown && !isDisabled && (
+                                    {showQtyDropdown && (
                                       <div className="resource-qty-dropdown">
                                         <div className="resource-qty-dropdown-inner">
                                           {Array.from({ length: res.maxCount }, (_, i) => i + 1).map(num => (
@@ -4022,7 +4016,6 @@ export default function ArrivedDeliveriesScreen({
                                         updateArrival(arrivedVehicle.id, { unload_resources: newResources });
                                       }}
                                       placeholder={`Nt. ${res.label === 'Kraana' ? 'Liebherr LTM 1050' : res.label === 'Teleskooplaadur' ? 'JCB 540-170' : 'Haulotte HA16'}`}
-                                      disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                                     />
                                   </div>
                                 ))}
@@ -4044,7 +4037,6 @@ export default function ArrivedDeliveriesScreen({
                                       updateArrival(arrivedVehicle.id, { unload_resources: newResources });
                                     }}
                                     placeholder="Nt. Jaan Tamm, Mari Mets..."
-                                    disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                                   />
                                 </div>
                               </div>
@@ -4060,7 +4052,6 @@ export default function ArrivedDeliveriesScreen({
                               onChange={(e) => updateArrival(arrivedVehicle.id, { notes: e.target.value })}
                               placeholder="Lisa märkused tarne kohta..."
                               rows={2}
-                              disabled={arrivedVehicle.is_confirmed || editingArrivalId !== arrivedVehicle.id}
                             />
                           </div>
 
@@ -4337,33 +4328,35 @@ export default function ArrivedDeliveriesScreen({
                                 }}
                                 title="Märgista kõik saabunud detailid mudelis"
                               >Detailid ({searchTerm ? `${filteredItems.length}/${vehicleItems.length}` : vehicleItems.length})</h3>
-                              <div className="items-title-buttons">
-                                <button
-                                  className="add-item-btn"
-                                  onClick={() => {
-                                    setActiveArrivalId(arrivedVehicle.id);
-                                    setShowAddItemModal(true);
-                                  }}
-                                >
-                                  <FiPlus /> Lisa
-                                </button>
-                                <button
-                                  className={`add-item-btn model ${modelSelectionMode ? 'active' : ''}`}
-                                  onClick={() => {
-                                    setActiveArrivalId(arrivedVehicle.id);
-                                    if (modelSelectionMode) {
-                                      setModelSelectionMode(false);
-                                      setMessage('');
-                                    } else {
-                                      setModelSelectionMode(true);
-                                      setMessage('Vali mudelist detailid, mida soovid lisada...');
-                                    }
-                                  }}
-                                  title="Vali detailid 3D mudelist"
-                                >
-                                  🎯 Mudelist
-                                </button>
-                              </div>
+                              {!arrivedVehicle.is_confirmed && editingArrivalId === arrivedVehicle.id && (
+                                <div className="items-title-buttons">
+                                  <button
+                                    className="add-item-btn"
+                                    onClick={() => {
+                                      setActiveArrivalId(arrivedVehicle.id);
+                                      setShowAddItemModal(true);
+                                    }}
+                                  >
+                                    <FiPlus /> Lisa
+                                  </button>
+                                  <button
+                                    className={`add-item-btn model ${modelSelectionMode ? 'active' : ''}`}
+                                    onClick={() => {
+                                      setActiveArrivalId(arrivedVehicle.id);
+                                      if (modelSelectionMode) {
+                                        setModelSelectionMode(false);
+                                        setMessage('');
+                                      } else {
+                                        setModelSelectionMode(true);
+                                        setMessage('Vali mudelist detailid, mida soovid lisada...');
+                                      }
+                                    }}
+                                    title="Vali detailid 3D mudelist"
+                                  >
+                                    🎯 Mudelist
+                                  </button>
+                                </div>
+                              )}
                             </div>
                             {/* Bulk actions when items are selected */}
                             {selectedItemsForConfirm.size > 0 && (
@@ -4390,7 +4383,7 @@ export default function ArrivedDeliveriesScreen({
                                 </button>
                               </div>
                             )}
-                            {selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && (
+                            {!arrivedVehicle.is_confirmed && editingArrivalId === arrivedVehicle.id && selectedItemsForConfirm.size === 0 && filteredPendingItems.length > 0 && (
                               <div className="items-bulk-actions">
                                 <button
                                   className="confirm-all-btn"
@@ -4424,6 +4417,7 @@ export default function ArrivedDeliveriesScreen({
                                   isSelected={isSelected}
                                   isExpanded={isExpanded}
                                   isLocked={arrivedVehicle.is_confirmed}
+                                  isEditing={editingArrivalId === arrivedVehicle.id}
                                   duplicateIndex={duplicateIndex}
                                   duplicateCount={duplicateCount}
                                   itemCommentValue={itemCommentValue}
@@ -4490,7 +4484,7 @@ export default function ArrivedDeliveriesScreen({
                                                 <FiArrowLeft size={10} />
                                                 <span>{conf.source_vehicle_code}</span>
                                               </div>
-                                              {!arrivedVehicle.is_confirmed && (
+                                              {!arrivedVehicle.is_confirmed && editingArrivalId === arrivedVehicle.id && (
                                                 <button
                                                   className="delete-btn"
                                                   onClick={(e) => {
@@ -4545,7 +4539,7 @@ export default function ArrivedDeliveriesScreen({
                                                 <span className="item-mark">{item.assembly_mark}</span>
                                                 <span className="item-name">{item.product_name || ''}</span>
                                               </div>
-                                              {!arrivedVehicle.is_confirmed && (
+                                              {!arrivedVehicle.is_confirmed && editingArrivalId === arrivedVehicle.id && (
                                                 <button
                                                   className="delete-btn"
                                                   onClick={(e) => {
