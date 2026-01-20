@@ -204,15 +204,15 @@ const VIEW_PRESET_COLORS = [
 // Resource types configuration
 const RESOURCE_TYPES = [
   // Machines (matches InstallationScheduleScreen INSTALL_METHODS)
-  { key: 'crane', label: 'Kraana', icon: '/icons/crane.png' },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: '/icons/forklift.png' },
-  { key: 'manual', label: 'Käsitsi', icon: '/icons/manual.png' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: '/icons/poomtostuk.png' },
-  { key: 'kaartostuk', label: 'Käärtõstuk', icon: '/icons/kaartostuk.png' },
+  { key: 'crane', label: 'Kraana', icon: `${import.meta.env.BASE_URL}icons/crane.png` },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: `${import.meta.env.BASE_URL}icons/forklift.png` },
+  { key: 'manual', label: 'Käsitsi', icon: `${import.meta.env.BASE_URL}icons/manual.png` },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: `${import.meta.env.BASE_URL}icons/poomtostuk.png` },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: `${import.meta.env.BASE_URL}icons/kaartostuk.png` },
   // Labor (matches InstallationScheduleScreen INSTALL_METHODS)
-  { key: 'troppija', label: 'Troppija', icon: '/icons/troppija.png' },
-  { key: 'monteerija', label: 'Monteerija', icon: '/icons/monteerija.png' },
-  { key: 'keevitaja', label: 'Keevitaja', icon: '/icons/keevitaja.png' },
+  { key: 'troppija', label: 'Troppija', icon: `${import.meta.env.BASE_URL}icons/troppija.png` },
+  { key: 'monteerija', label: 'Monteerija', icon: `${import.meta.env.BASE_URL}icons/monteerija.png` },
+  { key: 'keevitaja', label: 'Keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
 ] as const;
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite }: AdminScreenProps) {
