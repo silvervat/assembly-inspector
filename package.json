@@ -1,6 +1,6 @@
 {
   "name": "assembly-inspector",
-  "version": "3.0.768",
+  "version": "3.0.769",
   "description": "Trimble Connect Assembly Inspector with Trimble user email authentication",
   "type": "module",
   "scripts": {
