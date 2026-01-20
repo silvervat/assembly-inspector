@@ -6000,7 +6000,40 @@ export default function InstallationsScreen({
           {tempList.size > 0 && (
             <div className="temp-list-section">
               <div className="temp-list-header">
-                <span className="temp-list-title">
+                <span
+                  className="temp-list-title clickable"
+                  onClick={async () => {
+                    try {
+                      // Find all temp list items in model
+                      const guids = Array.from(tempList);
+                      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+                      if (foundObjects.size > 0) {
+                        // Group by model
+                        const byModel: Record<string, number[]> = {};
+                        for (const [, found] of foundObjects) {
+                          if (!byModel[found.modelId]) byModel[found.modelId] = [];
+                          byModel[found.modelId].push(found.runtimeId);
+                        }
+
+                        // Build selection
+                        const modelObjectIds = Object.entries(byModel).map(([modelId, objectRuntimeIds]) => ({
+                          modelId,
+                          objectRuntimeIds
+                        }));
+
+                        await api.viewer.setSelection({ modelObjectIds }, 'set');
+                        setMessage(`✅ ${foundObjects.size}/${guids.length} elementi valitud`);
+                      } else {
+                        setMessage('⚠️ Elemente ei leitud mudelist');
+                      }
+                    } catch (e: any) {
+                      console.error('Error selecting temp list items:', e);
+                      setMessage('Viga valimisel');
+                    }
+                  }}
+                  title="Vali kõik mudelis"
+                >
                   <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> Ajutine nimekiri: {tempList.size}
                 </span>
                 <button

@@ -9221,12 +9221,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         // Create 3 measurement lines from origin
                         const measurements = [];
 
-                        // Length measurement (along extrusion)
+                        // Length measurement (along extrusion direction, using actual length)
+                        // Use Tekla/BaseQuantities length, not extrusion vector magnitude
                         measurements.push({
                           start: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
-                          end: { positionX: origin.x + extVec.x, positionY: origin.y + extVec.y, positionZ: origin.z + extVec.z },
+                          end: { positionX: origin.x + length * extNorm.x, positionY: origin.y + length * extNorm.y, positionZ: origin.z + length * extNorm.z },
                           mainLineStart: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
-                          mainLineEnd: { positionX: origin.x + extVec.x, positionY: origin.y + extVec.y, positionZ: origin.z + extVec.z },
+                          mainLineEnd: { positionX: origin.x + length * extNorm.x, positionY: origin.y + length * extNorm.y, positionZ: origin.z + length * extNorm.z },
                           color: { r: 255, g: 0, b: 0, a: 255 } // Red = Length
                         });
 
