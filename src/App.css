@@ -1600,6 +1600,73 @@ button.stat-toggle.off:hover {
   border-color: var(--modus-primary);
 }
 
+.main-menu-search {
+  background: var(--modus-bg-primary);
+  padding: var(--modus-spacing-md);
+  border-radius: var(--modus-radius-md);
+  border: 1px solid var(--modus-border-light);
+  margin-bottom: var(--modus-spacing-md);
+}
+
+.search-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--modus-text-secondary);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 12px 10px 38px;
+  border: 1px solid var(--modus-border);
+  border-radius: var(--modus-radius-sm);
+  font-size: 14px;
+  background: var(--modus-bg-secondary);
+  color: var(--modus-text-primary);
+  transition: all 0.15s;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--modus-primary);
+  background: white;
+}
+
+.search-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.search-spinner {
+  position: absolute;
+  right: 12px;
+  font-size: 14px;
+}
+
+.search-message {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--modus-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.search-message.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.search-message.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 .main-menu-items {
   display: flex;
   flex-direction: column;
