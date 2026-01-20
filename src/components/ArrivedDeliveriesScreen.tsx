@@ -3498,6 +3498,7 @@ export default function ArrivedDeliveriesScreen({
             const confirmedCount = arrivalConfirmations.filter(c => c.status === 'confirmed').length;
             const missingCount = arrivalConfirmations.filter(c => c.status === 'missing').length;
             const pendingCount = arrivalConfirmations.filter(c => c.status === 'pending').length;
+            const addedCount = arrivalConfirmations.filter(c => c.status === 'added').length;
 
             // Find items that were supposed to be in THIS vehicle but arrived with ANOTHER vehicle
             // These are confirmations with source_vehicle_id matching this vehicle
@@ -3574,6 +3575,11 @@ export default function ArrivedDeliveriesScreen({
                         {missingCount > 0 && (
                           <span className="count-badge missing" title="Puudu">
                             <FiX size={10} /> {missingCount}
+                          </span>
+                        )}
+                        {addedCount > 0 && (
+                          <span className="count-badge added" title="Lisatud">
+                            <FiPlus size={10} /> {addedCount}
                           </span>
                         )}
                         {pendingCount > 0 && (

@@ -6478,6 +6478,11 @@ button.stat-toggle.off:hover {
   color: #dc2626;
 }
 
+.arrived-deliveries .count-badge.added {
+  background: #fef3c7;
+  color: #d97706;
+}
+
 .arrived-deliveries .count-badge.pending {
   background: #f3f4f6;
   color: #6b7280;
