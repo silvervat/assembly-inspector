@@ -417,6 +417,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     issues: any[];
   } | null>(null);
 
+  // Shape paste base point (for relative positioning)
+  const [shapeBasePoint, setShapeBasePoint] = useState<{ x: number; y: number; z: number } | null>(null);
+
   // Update function result
   const updateFunctionResult = (fnName: string, result: Partial<FunctionTestResult>) => {
     setFunctionResults(prev => ({
@@ -9283,6 +9286,96 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     Värv: <code>#FF0000</code> või <code>rgb(255,0,0)</code> real enne jooni<br/>
                     Ühikud: mm (vaikimisi) või lisa <code>[m]</code> meetrite jaoks
                   </p>
+
+                  {/* Base point info and controls */}
+                  <div style={{
+                    marginBottom: '12px',
+                    padding: '8px',
+                    backgroundColor: shapeBasePoint ? '#d1fae5' : '#fef3c7',
+                    borderRadius: '6px',
+                    border: `1px solid ${shapeBasePoint ? '#10b981' : '#f59e0b'}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 600 }}>
+                        📍 Baaspunkt: {shapeBasePoint
+                          ? `X: ${shapeBasePoint.x.toFixed(0)}mm, Y: ${shapeBasePoint.y.toFixed(0)}mm, Z: ${shapeBasePoint.z.toFixed(0)}mm`
+                          : 'Pole määratud (kasutatakse absoluutseid koordinaate)'
+                        }
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const selection = await api.viewer.getSelection();
+                            if (!selection || selection.length === 0) {
+                              alert('⚠️ Vali esmalt üks detail mudelist!');
+                              return;
+                            }
+
+                            const firstSel = selection[0];
+                            const modelId = firstSel.modelId;
+                            const runtimeIds = firstSel.objectRuntimeIds || [];
+
+                            if (runtimeIds.length === 0) {
+                              alert('⚠️ Valikul pole objekte!');
+                              return;
+                            }
+
+                            // Get bounding box of first selected object
+                            const bbox = await (api.viewer as any).getObjectBoundingBox(modelId, runtimeIds[0]);
+
+                            if (!bbox || !bbox.min || !bbox.max) {
+                              alert('❌ Ei saanud objekti bounding box-i!');
+                              return;
+                            }
+
+                            // Calculate center point
+                            const centerX = (bbox.min.x + bbox.max.x) / 2;
+                            const centerY = (bbox.min.y + bbox.max.y) / 2;
+                            const centerZ = (bbox.min.z + bbox.max.z) / 2;
+
+                            setShapeBasePoint({ x: centerX, y: centerY, z: centerZ });
+                            alert(`✅ Baaspunkt määratud:\nX: ${centerX.toFixed(0)}mm\nY: ${centerY.toFixed(0)}mm\nZ: ${centerZ.toFixed(0)}mm`);
+                          } catch (e: any) {
+                            alert('❌ Viga: ' + e.message);
+                          }
+                        }}
+                        style={{
+                          padding: '4px 10px',
+                          backgroundColor: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 500
+                        }}
+                      >
+                        📍 Määra baaspunkt valitud detaililt
+                      </button>
+                      {shapeBasePoint && (
+                        <button
+                          onClick={() => {
+                            setShapeBasePoint(null);
+                            alert('🔄 Baaspunkt tühjendatud');
+                          }}
+                          style={{
+                            padding: '4px 10px',
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '11px',
+                            fontWeight: 500
+                          }}
+                        >
+                          🗑️ Tühjenda baaspunkt
+                        </button>
+                      )}
+                    </div>
+                  </div>
                   <textarea
                     id="shapeCodeInput"
                     placeholder={`Näide (mm):
@@ -9389,9 +9482,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                                   // Convert to mm if input is in meters
                                   const factor = useMeters ? 1000 : 1;
 
+                                  // Apply base point offset if set
+                                  const offsetX = shapeBasePoint ? shapeBasePoint.x : 0;
+                                  const offsetY = shapeBasePoint ? shapeBasePoint.y : 0;
+                                  const offsetZ = shapeBasePoint ? shapeBasePoint.z : 0;
+
                                   lineSegments.push({
-                                    start: { positionX: start[0] * factor, positionY: start[1] * factor, positionZ: z1 * factor },
-                                    end: { positionX: end[0] * factor, positionY: end[1] * factor, positionZ: z2 * factor }
+                                    start: { positionX: start[0] * factor + offsetX, positionY: start[1] * factor + offsetY, positionZ: z1 * factor + offsetZ },
+                                    end: { positionX: end[0] * factor + offsetX, positionY: end[1] * factor + offsetY, positionZ: z2 * factor + offsetZ }
                                   });
                                   totalLines++;
                                 }
@@ -9409,7 +9507,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                           }
 
                           await markupApi.addFreelineMarkups(freelineEntries);
-                          alert(`✅ Joonistatud ${totalLines} joont (${freelineEntries.length} kujundit)`);
+
+                          const basePointInfo = shapeBasePoint
+                            ? `\n📍 Baaspunkt: X:${shapeBasePoint.x.toFixed(0)}, Y:${shapeBasePoint.y.toFixed(0)}, Z:${shapeBasePoint.z.toFixed(0)}mm`
+                            : '\n📍 Absoluutsed koordinaadid (baaspunkt pole määratud)';
+
+                          alert(`✅ Joonistatud ${totalLines} joont (${freelineEntries.length} kujundit)${basePointInfo}`);
                         } catch (e: any) {
                           alert('Viga: ' + e.message);
                         }
