@@ -78,7 +78,7 @@ export default function MainMenu({
         dbQuery = dbQuery.ilike('assembly_mark', `%${query.trim()}%`);
       }
 
-      const { data: results, error } = await dbQuery.limit(50);
+      const { data: results, error } = await dbQuery.limit(500);
 
       if (error) throw error;
 
