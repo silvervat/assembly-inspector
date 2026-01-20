@@ -1499,100 +1499,61 @@ export default function ToolsScreen({
                   const color = markerColors[category.id] || category.defaultColor;
                   const isColoring = coloringCategory === category.id;
                   const hasItems = category.count > 0;
+                  const canClick = hasItems && !isColoring && !coloringCategory;
+                  const handleClick = () => canClick && colorByCategory(category.id);
 
                   return (
                     <div
                       key={category.id}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        padding: '10px 12px',
-                        background: '#fff',
-                        borderRadius: '6px',
-                        border: '1px solid #e5e7eb',
+                        display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px',
+                        background: '#fff', borderRadius: '6px', border: '1px solid #e5e7eb',
                         opacity: hasItems ? 1 : 0.5
                       }}
                     >
-                      {/* Color indicator and picker */}
-                      <div style={{ position: 'relative', flexShrink: 0 }}>
-                        <input
-                          type="color"
-                          value={rgbToHex(color)}
-                          onChange={(e) => handleMarkerColorChange(category.id, e.target.value)}
-                          disabled={!hasItems || isColoring}
-                          style={{
-                            width: '32px',
-                            height: '32px',
-                            padding: 0,
-                            border: '2px solid #d1d5db',
-                            borderRadius: '6px',
-                            cursor: hasItems ? 'pointer' : 'not-allowed',
-                            background: 'transparent'
-                          }}
-                          title="Vali värv"
-                        />
-                      </div>
+                      {/* Color picker */}
+                      <input
+                        type="color"
+                        value={rgbToHex(color)}
+                        onChange={(e) => handleMarkerColorChange(category.id, e.target.value)}
+                        disabled={!hasItems || isColoring}
+                        style={{
+                          width: '32px', height: '32px', padding: 0, border: '2px solid #d1d5db',
+                          borderRadius: '6px', cursor: hasItems ? 'pointer' : 'not-allowed'
+                        }}
+                        title="Vali värv"
+                      />
 
-                      {/* Label - clickable */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div
-                          onClick={() => hasItems && !isColoring && coloringCategory === null && colorByCategory(category.id)}
-                          style={{
-                            fontWeight: 500,
-                            fontSize: '13px',
-                            color: hasItems ? '#2563eb' : '#9ca3af',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            cursor: hasItems && !isColoring && coloringCategory === null ? 'pointer' : 'not-allowed',
-                            textDecoration: hasItems && !isColoring && coloringCategory === null ? 'underline' : 'none',
-                            textDecorationStyle: 'dotted',
-                            transition: 'color 0.15s'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (hasItems && !isColoring && coloringCategory === null) {
-                              e.currentTarget.style.color = '#1d4ed8';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (hasItems) {
-                              e.currentTarget.style.color = '#2563eb';
-                            }
-                          }}
-                          title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks mudelis` : 'Pole detaile'}
-                        >
-                          {category.label}
-                        </div>
-                      </div>
-
-                      {/* Count badge - clickable */}
+                      {/* Label */}
                       <div
-                        onClick={() => hasItems && !isColoring && coloringCategory === null && colorByCategory(category.id)}
+                        onClick={handleClick}
+                        style={{
+                          flex: 1, minWidth: 0, fontWeight: 500, fontSize: '13px',
+                          color: hasItems ? '#2563eb' : '#9ca3af',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                          cursor: canClick ? 'pointer' : 'not-allowed',
+                          textDecoration: canClick ? 'underline dotted' : 'none',
+                          transition: 'color 0.15s'
+                        }}
+                        onMouseEnter={(e) => canClick && (e.currentTarget.style.color = '#1d4ed8')}
+                        onMouseLeave={(e) => hasItems && (e.currentTarget.style.color = '#2563eb')}
+                        title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks` : 'Pole detaile'}
+                      >
+                        {category.label}
+                      </div>
+
+                      {/* Count badge */}
+                      <div
+                        onClick={handleClick}
                         style={{
                           background: hasItems ? `rgb(${color.r}, ${color.g}, ${color.b})` : '#9ca3af',
-                          color: '#fff',
-                          padding: '4px 10px',
-                          borderRadius: '12px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          minWidth: '40px',
-                          textAlign: 'center',
-                          flexShrink: 0,
-                          cursor: hasItems && !isColoring && coloringCategory === null ? 'pointer' : 'not-allowed',
-                          transition: 'opacity 0.15s',
-                          opacity: hasItems && !isColoring && coloringCategory === null ? 1 : 0.7
+                          color: '#fff', padding: '4px 10px', borderRadius: '12px',
+                          fontSize: '12px', fontWeight: 600, minWidth: '40px', textAlign: 'center',
+                          cursor: canClick ? 'pointer' : 'not-allowed',
+                          transition: 'opacity 0.15s', opacity: canClick ? 1 : 0.7
                         }}
-                        onMouseEnter={(e) => {
-                          if (hasItems && !isColoring && coloringCategory === null) {
-                            e.currentTarget.style.opacity = '0.85';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (hasItems && !isColoring && coloringCategory === null) {
-                            e.currentTarget.style.opacity = '1';
-                          }
-                        }}
+                        onMouseEnter={(e) => canClick && (e.currentTarget.style.opacity = '0.85')}
+                        onMouseLeave={(e) => canClick && (e.currentTarget.style.opacity = '1')}
                         title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks` : 'Pole detaile'}
                       >
                         {category.count}
@@ -1601,28 +1562,17 @@ export default function ToolsScreen({
                       {/* Color button */}
                       <button
                         onClick={() => colorByCategory(category.id)}
-                        disabled={!hasItems || isColoring || coloringCategory !== null}
+                        disabled={!canClick}
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '6px 12px',
+                          display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px',
                           background: hasItems ? `rgb(${color.r}, ${color.g}, ${color.b})` : '#d1d5db',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                          fontWeight: 500,
-                          cursor: hasItems && !isColoring ? 'pointer' : 'not-allowed',
-                          opacity: isColoring ? 0.7 : 1,
-                          flexShrink: 0
+                          color: '#fff', border: 'none', borderRadius: '6px',
+                          fontSize: '12px', fontWeight: 500,
+                          cursor: canClick ? 'pointer' : 'not-allowed',
+                          opacity: isColoring ? 0.7 : 1
                         }}
                       >
-                        {isColoring ? (
-                          <FiLoader className="spinning" size={12} />
-                        ) : (
-                          <FiDroplet size={12} />
-                        )}
+                        {isColoring ? <FiLoader className="spinning" size={12} /> : <FiDroplet size={12} />}
                         <span>Värvi</span>
                       </button>
                     </div>
