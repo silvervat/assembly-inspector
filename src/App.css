@@ -1623,7 +1623,7 @@ button.stat-toggle.off:hover {
 
 .search-input {
   width: 100%;
-  padding: 10px 12px 10px 38px;
+  padding: 10px 12px;
   border: 1px solid var(--modus-border);
   border-radius: var(--modus-radius-sm);
   font-size: 14px;
@@ -1643,10 +1643,54 @@ button.stat-toggle.off:hover {
   cursor: not-allowed;
 }
 
+/* Main menu specific search input styling */
+.main-menu-search .search-input {
+  flex: 1;
+  border-radius: var(--modus-radius-sm) 0 0 var(--modus-radius-sm);
+  border-right: none;
+}
+
+.search-button {
+  padding: 10px 14px;
+  background: var(--modus-primary);
+  color: white;
+  border: 1px solid var(--modus-primary);
+  border-radius: 0 var(--modus-radius-sm) var(--modus-radius-sm) 0;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+}
+
+.search-button:hover:not(:disabled) {
+  background: var(--modus-primary-darker);
+  border-color: var(--modus-primary-darker);
+}
+
+.search-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .search-spinner {
-  position: absolute;
-  right: 12px;
   font-size: 14px;
+}
+
+.search-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--modus-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.search-checkbox input[type="checkbox"] {
+  cursor: pointer;
 }
 
 .search-message {

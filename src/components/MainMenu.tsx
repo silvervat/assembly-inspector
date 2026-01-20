@@ -52,9 +52,10 @@ export default function MainMenu({
   const [searchQuery, setSearchQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
+  const [exactMatch, setExactMatch] = useState(true);
 
   // Quick search function
-  const handleQuickSearch = useCallback(async (query: string) => {
+  const handleQuickSearch = useCallback(async (query: string, exact: boolean) => {
     if (!query.trim()) {
       setSearchMessage('Sisesta otsingu tekst');
       setTimeout(() => setSearchMessage(null), 2000);
@@ -65,13 +66,19 @@ export default function MainMenu({
     setSearchMessage(null);
 
     try {
-      // Search for exact assembly mark
-      const { data: results, error } = await supabase
+      // Search for assembly mark (exact or partial match)
+      let dbQuery = supabase
         .from('trimble_model_objects')
         .select('guid_ifc, guid, assembly_mark, product_name')
-        .eq('trimble_project_id', projectId)
-        .eq('assembly_mark', query.trim())
-        .limit(50);
+        .eq('trimble_project_id', projectId);
+
+      if (exact) {
+        dbQuery = dbQuery.eq('assembly_mark', query.trim());
+      } else {
+        dbQuery = dbQuery.ilike('assembly_mark', `%${query.trim()}%`);
+      }
+
+      const { data: results, error } = await dbQuery.limit(50);
 
       if (error) throw error;
 
@@ -110,7 +117,7 @@ export default function MainMenu({
     } finally {
       setSearching(false);
     }
-  }, [projectId, api]);
+  }, [projectId, api, exactMatch]);
 
   // Load active issues count for badge
   useEffect(() => {
@@ -153,22 +160,36 @@ export default function MainMenu({
       {/* Quick search */}
       <div className="main-menu-search">
         <div className="search-input-wrapper">
-          <FiSearch size={16} className="search-icon" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                handleQuickSearch(searchQuery);
+                handleQuickSearch(searchQuery, exactMatch);
               }
             }}
             placeholder="Otsi assembly marki..."
             className="search-input"
             disabled={searching}
           />
-          {searching && <span className="search-spinner">⏳</span>}
+          <button
+            className="search-button"
+            onClick={() => handleQuickSearch(searchQuery, exactMatch)}
+            disabled={searching || !searchQuery.trim()}
+            title="Otsi"
+          >
+            {searching ? <span className="search-spinner">⏳</span> : <FiSearch size={16} />}
+          </button>
         </div>
+        <label className="search-checkbox">
+          <input
+            type="checkbox"
+            checked={exactMatch}
+            onChange={(e) => setExactMatch(e.target.checked)}
+          />
+          <span>Täpne vaste</span>
+        </label>
         {searchMessage && (
           <div className={`search-message ${searchMessage.startsWith('✓') ? 'success' : 'error'}`}>
             {searchMessage}

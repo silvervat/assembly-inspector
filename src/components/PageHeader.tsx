@@ -64,7 +64,6 @@ export default function PageHeader({
   const [searchQuery, setSearchQuery] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<{ count: number; message: string } | null>(null);
-  const [exactSearch, setExactSearch] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Inspection types state
@@ -153,7 +152,8 @@ export default function PageHeader({
   };
 
   // Quick search - search by Cast Unit Mark in database and select in model
-  const handleQuickSearch = useCallback(async (query: string, isExact: boolean) => {
+  // Always uses exact match
+  const handleQuickSearch = useCallback(async (query: string) => {
     if (!query.trim() || !api || !projectId) {
       setSearchResult(null);
       return;
@@ -163,18 +163,12 @@ export default function PageHeader({
     setSearchResult(null);
 
     try {
-      // Search in database for matching assembly_mark
-      let dbQuery = supabase
+      // Search in database for matching assembly_mark (exact match only)
+      const dbQuery = supabase
         .from('trimble_model_objects')
         .select('guid_ifc, assembly_mark')
-        .eq('trimble_project_id', projectId);
-
-      // Use exact or partial match based on exactSearch state
-      if (isExact) {
-        dbQuery = dbQuery.eq('assembly_mark', query.trim());
-      } else {
-        dbQuery = dbQuery.ilike('assembly_mark', `%${query.trim()}%`);
-      }
+        .eq('trimble_project_id', projectId)
+        .eq('assembly_mark', query.trim());
 
       const { data, error } = await dbQuery.limit(100);
 
@@ -235,7 +229,7 @@ export default function PageHeader({
     } finally {
       setSearchLoading(false);
     }
-  }, [api, projectId, exactSearch]);
+  }, [api, projectId]);
 
   // Clear search
   const clearSearch = () => {
@@ -258,7 +252,7 @@ export default function PageHeader({
     // Debounce search - shorter delay for faster response
     if (value.trim().length >= 2) {
       searchTimeoutRef.current = setTimeout(() => {
-        handleQuickSearch(value, exactSearch);
+        handleQuickSearch(value);
       }, 300);
     } else {
       setSearchResult(null);
@@ -309,22 +303,6 @@ export default function PageHeader({
                         <FiX size={14} />
                       </button>
                     )}
-                  </div>
-                  <div className="quick-search-options">
-                    <label className="quick-search-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={exactSearch}
-                        onChange={(e) => {
-                          setExactSearch(e.target.checked);
-                          // Re-run search if there's a query
-                          if (searchQuery.trim().length >= 2) {
-                            handleQuickSearch(searchQuery, e.target.checked);
-                          }
-                        }}
-                      />
-                      <span>Täpne otsing</span>
-                    </label>
                   </div>
                   {searchResult && (
                     <div className={`quick-search-result ${searchResult.count > 0 ? 'success' : 'empty'}`}>
