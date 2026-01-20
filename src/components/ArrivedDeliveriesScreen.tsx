@@ -605,6 +605,17 @@ export default function ArrivedDeliveriesScreen({
     loadAllData();
   }, [loadAllData]);
 
+  // Check if we should auto-start arrival for a vehicle (coming from delivery schedule)
+  useEffect(() => {
+    const vehicleId = sessionStorage.getItem('startArrivalForVehicle');
+    if (vehicleId && vehicles.length > 0) {
+      // Clear the flag
+      sessionStorage.removeItem('startArrivalForVehicle');
+      // Start arrival for this vehicle
+      startArrival(vehicleId);
+    }
+  }, [vehicles]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Close vehicle menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
