@@ -1534,32 +1534,67 @@ export default function ToolsScreen({
                         />
                       </div>
 
-                      {/* Label */}
+                      {/* Label - clickable */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
-                          fontWeight: 500,
-                          fontSize: '13px',
-                          color: '#374151',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
+                        <div
+                          onClick={() => hasItems && !isColoring && coloringCategory === null && colorByCategory(category.id)}
+                          style={{
+                            fontWeight: 500,
+                            fontSize: '13px',
+                            color: hasItems ? '#2563eb' : '#9ca3af',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            cursor: hasItems && !isColoring && coloringCategory === null ? 'pointer' : 'not-allowed',
+                            textDecoration: hasItems && !isColoring && coloringCategory === null ? 'underline' : 'none',
+                            textDecorationStyle: 'dotted',
+                            transition: 'color 0.15s'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (hasItems && !isColoring && coloringCategory === null) {
+                              e.currentTarget.style.color = '#1d4ed8';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (hasItems) {
+                              e.currentTarget.style.color = '#2563eb';
+                            }
+                          }}
+                          title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks mudelis` : 'Pole detaile'}
+                        >
                           {category.label}
                         </div>
                       </div>
 
-                      {/* Count badge */}
-                      <div style={{
-                        background: hasItems ? `rgb(${color.r}, ${color.g}, ${color.b})` : '#9ca3af',
-                        color: '#fff',
-                        padding: '4px 10px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        minWidth: '40px',
-                        textAlign: 'center',
-                        flexShrink: 0
-                      }}>
+                      {/* Count badge - clickable */}
+                      <div
+                        onClick={() => hasItems && !isColoring && coloringCategory === null && colorByCategory(category.id)}
+                        style={{
+                          background: hasItems ? `rgb(${color.r}, ${color.g}, ${color.b})` : '#9ca3af',
+                          color: '#fff',
+                          padding: '4px 10px',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          fontWeight: 600,
+                          minWidth: '40px',
+                          textAlign: 'center',
+                          flexShrink: 0,
+                          cursor: hasItems && !isColoring && coloringCategory === null ? 'pointer' : 'not-allowed',
+                          transition: 'opacity 0.15s',
+                          opacity: hasItems && !isColoring && coloringCategory === null ? 1 : 0.7
+                        }}
+                        onMouseEnter={(e) => {
+                          if (hasItems && !isColoring && coloringCategory === null) {
+                            e.currentTarget.style.opacity = '0.85';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (hasItems && !isColoring && coloringCategory === null) {
+                            e.currentTarget.style.opacity = '1';
+                          }
+                        }}
+                        title={hasItems ? `Klõpsa ${category.count} detaili märgistamiseks` : 'Pole detaile'}
+                      >
                         {category.count}
                       </div>
 
@@ -1602,7 +1637,7 @@ export default function ToolsScreen({
                 color: '#6b7280',
                 lineHeight: 1.4
               }}>
-                Värvimisel muudetakse ülejäänud mudel valgeks ja valitud kategooria detailid värviliseks.
+                Värvimisel muudetakse ülejäänud mudel valgeks ja valitud kategooria detailid värviliseks. <strong>Klõpsa kategooria nimel</strong> detailide kiireks märgistamiseks.
               </p>
             </>
           )}
