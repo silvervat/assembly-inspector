@@ -10234,8 +10234,6 @@ button.stat-toggle.off:hover {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 200px;
-  overflow-y: auto;
 }
 
 .temp-list-item {
@@ -10245,18 +10243,52 @@ button.stat-toggle.off:hover {
   padding: 6px 8px;
   font-size: 12px;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
 }
 
 .temp-list-item-mark {
   font-weight: 600;
   color: #059669;
+  cursor: pointer;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.temp-list-item-mark.clickable:hover {
+  color: #047857;
+  text-decoration: underline;
 }
 
 .temp-list-item-product {
   font-size: 11px;
   color: #6b7280;
+  flex: 1;
+  text-align: right;
+  margin-right: 8px;
+}
+
+.temp-list-item-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.temp-list-item-remove:hover {
+  background: #dc2626;
+  transform: scale(1.1);
 }
 
 /* Installation info modal */

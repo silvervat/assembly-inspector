@@ -421,6 +421,21 @@ export default function InstallationsScreen({
     }
   });
 
+  // Store object info for temp list items (persisted in localStorage)
+  const TEMP_LIST_INFO_KEY = `installations_temp_list_info_${projectId}_${user.email}`;
+  const [tempListInfo, setTempListInfo] = useState<Map<string, { assemblyMark: string; productName?: string }>>(() => {
+    try {
+      const stored = localStorage.getItem(TEMP_LIST_INFO_KEY);
+      if (stored) {
+        const obj = JSON.parse(stored);
+        return new Map(Object.entries(obj));
+      }
+      return new Map();
+    } catch {
+      return new Map();
+    }
+  });
+
   // Save tempList to localStorage whenever it changes
   useEffect(() => {
     try {
@@ -429,6 +444,16 @@ export default function InstallationsScreen({
       console.error('Failed to save temp list to localStorage:', e);
     }
   }, [tempList, TEMP_LIST_KEY]);
+
+  // Save tempListInfo to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      const obj = Object.fromEntries(tempListInfo);
+      localStorage.setItem(TEMP_LIST_INFO_KEY, JSON.stringify(obj));
+    } catch (e) {
+      console.error('Failed to save temp list info to localStorage:', e);
+    }
+  }, [tempListInfo, TEMP_LIST_INFO_KEY]);
 
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -542,10 +567,6 @@ export default function InstallationsScreen({
   const [monthLocks, setMonthLocks] = useState<Map<string, InstallationMonthLock>>(new Map());
   const [monthMenuOpen, setMonthMenuOpen] = useState<string | null>(null);
   const [dayMenuOpen, setDayMenuOpen] = useState<string | null>(null);
-
-  // Property discovery state
-  const [showProperties, setShowProperties] = useState(false);
-  const [discoveredProperties, setDiscoveredProperties] = useState<any>(null);
 
   // Installation info modal state - stores full Installation object
   const [showInstallInfo, setShowInstallInfo] = useState<Installation | null>(null);
@@ -2694,6 +2715,7 @@ export default function InstallationsScreen({
 
         // Clear temp list after successful save
         setTempList(new Set());
+        setTempListInfo(new Map());
 
         // Reload data - skip full recoloring (we'll just color the new objects)
         await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
@@ -2922,6 +2944,7 @@ export default function InstallationsScreen({
 
         // Clear temp list after successful save
         setTempList(new Set());
+        setTempListInfo(new Map());
 
         // Reload data
         await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
@@ -3991,26 +4014,6 @@ export default function InstallationsScreen({
     setExpandedDays(newExpanded);
   };
 
-  // Discover all properties for the first selected object
-  const discoverProperties = async () => {
-    if (selectedObjects.length === 0) {
-      setMessage('Vali esmalt detail mudelilt');
-      return;
-    }
-
-    const obj = selectedObjects[0];
-    try {
-      const props = await (api.viewer as any).getObjectProperties(obj.modelId, [obj.runtimeId], { includeHidden: true });
-      if (props && props.length > 0) {
-        setDiscoveredProperties(props[0]);
-        setShowProperties(true);
-      }
-    } catch (e) {
-      console.error('Error discovering properties:', e);
-      setMessage('Viga omaduste laadimisel');
-    }
-  };
-
   // Unselect a single object
   const unselectObject = async (objIndex: number) => {
     const newSelection = selectedObjects.filter((_, idx) => idx !== objIndex);
@@ -4042,14 +4045,43 @@ export default function InstallationsScreen({
 
   // Temp list management functions
   const addSelectedToTempList = async () => {
-    const newGuids = selectedObjects
-      .map(obj => getObjectGuid(obj))
-      .filter((guid): guid is string => !!guid && !tempList.has(guid));
+    // Filter out items that are already installed or already in temp list
+    const itemsToAdd = selectedObjects.filter(obj => {
+      const guid = getObjectGuid(obj);
+      if (!guid) return false;
+      if (tempList.has(guid)) return false;
+      // Block already installed items
+      if (installedGuids.has(guid.toLowerCase())) return false;
+      return true;
+    });
 
-    if (newGuids.length > 0) {
+    const blockedCount = selectedObjects.length - itemsToAdd.length - selectedObjects.filter(obj => {
+      const guid = getObjectGuid(obj);
+      return guid && tempList.has(guid);
+    }).length;
+
+    if (itemsToAdd.length > 0) {
+      const newGuids = itemsToAdd.map(obj => getObjectGuid(obj)).filter((guid): guid is string => !!guid);
       const updatedList = new Set([...tempList, ...newGuids]);
       setTempList(updatedList);
-      setMessage(`${newGuids.length} detaili lisatud ajutisse nimekirja`);
+
+      // Save object info
+      const updatedInfo = new Map(tempListInfo);
+      itemsToAdd.forEach(obj => {
+        const guid = getObjectGuid(obj);
+        if (guid) {
+          updatedInfo.set(guid, {
+            assemblyMark: obj.assemblyMark || '',
+            productName: obj.productName
+          });
+        }
+      });
+      setTempListInfo(updatedInfo);
+
+      const msg = blockedCount > 0
+        ? `${itemsToAdd.length} detaili lisatud ajutisse nimekirja (${blockedCount} juba paigaldatud)`
+        : `${itemsToAdd.length} detaili lisatud ajutisse nimekirja`;
+      setMessage(msg);
       setTimeout(() => setMessage(null), 3000);
 
       // Color newly added items green immediately
@@ -4084,6 +4116,7 @@ export default function InstallationsScreen({
   const clearTempList = async () => {
     const tempListGuids = Array.from(tempList);
     setTempList(new Set());
+    setTempListInfo(new Map());
     setMessage('Ajutine nimekiri tühjendatud');
     setTimeout(() => setMessage(null), 2000);
 
@@ -5621,17 +5654,10 @@ export default function InstallationsScreen({
                       title="Lisa valitud ajutisse nimekirja"
                       disabled={selectedObjects.length === 0}
                     >
-                      + Lisa listi
+                      + Lisa ajutisse listi
                       {tempList.size > 0 && (
                         <span className="temp-list-badge">{tempList.size}</span>
                       )}
-                    </button>
-                    <button
-                      className="discover-props-btn"
-                      onClick={discoverProperties}
-                      title="Avasta propertised"
-                    >
-                      <FiEye size={14} />
                     </button>
                   </div>
                 </div>
@@ -5717,15 +5743,67 @@ export default function InstallationsScreen({
               </div>
               <div className="temp-list-items">
                 {Array.from(tempList).map((guid, idx) => {
-                  // Find object info from selectedObjects or from model cache
-                  const obj = selectedObjects.find(o => getObjectGuid(o) === guid);
-                  const assemblyMark = obj?.assemblyMark || guid.substring(0, 8);
-                  const productName = obj?.productName;
+                  // Get object info from tempListInfo
+                  const info = tempListInfo.get(guid);
+                  const assemblyMark = info?.assemblyMark || guid.substring(0, 8);
+                  const productName = info?.productName;
 
                   return (
                     <div key={idx} className="temp-list-item">
-                      <span className="temp-list-item-mark">{assemblyMark}</span>
+                      <span
+                        className="temp-list-item-mark clickable"
+                        onClick={async () => {
+                          try {
+                            const foundObjects = await findObjectsInLoadedModels(api, [guid]);
+                            if (foundObjects.size > 0) {
+                              const found = foundObjects.values().next().value;
+                              if (found) {
+                                const modelObjectIds = [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }];
+                                await api.viewer.setSelection({ modelObjectIds }, 'set');
+                                await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+                              }
+                            }
+                          } catch (e) {
+                            console.error('Error zooming to temp list item:', e);
+                          }
+                        }}
+                        title="Zoom detaili juurde"
+                      >
+                        {assemblyMark}
+                      </span>
                       {productName && <span className="temp-list-item-product">{productName}</span>}
+                      <button
+                        className="temp-list-item-remove"
+                        onClick={async () => {
+                          const updatedList = new Set(tempList);
+                          updatedList.delete(guid);
+                          setTempList(updatedList);
+
+                          const updatedInfo = new Map(tempListInfo);
+                          updatedInfo.delete(guid);
+                          setTempListInfo(updatedInfo);
+
+                          // Color white
+                          try {
+                            const foundObjects = await findObjectsInLoadedModels(api, [guid]);
+                            if (foundObjects.size > 0) {
+                              const found = foundObjects.values().next().value;
+                              if (found) {
+                                const white = { r: 255, g: 255, b: 255, a: 255 };
+                                await api.viewer.setObjectState(
+                                  { modelObjectIds: [{ modelId: found.modelId, objectRuntimeIds: [found.runtimeId] }] },
+                                  { color: white }
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            console.error('Error coloring removed item white:', e);
+                          }
+                        }}
+                        title="Eemalda listist"
+                      >
+                        <FiX size={12} />
+                      </button>
                     </div>
                   );
                 })}
@@ -7031,177 +7109,6 @@ export default function InstallationsScreen({
                   </span>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Properties Discovery Modal */}
-      {showProperties && discoveredProperties && (
-        <div className="modal-overlay" onClick={() => setShowProperties(false)}>
-          <div className="settings-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <h3>📋 Leitud {selectedObjects.length} objekti propertised</h3>
-              <button onClick={() => setShowProperties(false)}>
-                <FiX size={18} />
-              </button>
-            </div>
-            <div className="modal-body">
-              {/* Object Info */}
-              <div className="prop-object-info">
-                <div className="prop-info-row">
-                  <span className="prop-info-label">Class:</span>
-                  <span className="prop-info-value">{(discoveredProperties as any).class || 'Unknown'}</span>
-                </div>
-                <div className="prop-info-row">
-                  <span className="prop-info-label">ID:</span>
-                  <span className="prop-info-value">{(discoveredProperties as any).id || '-'}</span>
-                </div>
-                {(discoveredProperties as any).externalId && (
-                  <div className="prop-info-row">
-                    <span className="prop-info-label">GUID (IFC):</span>
-                    <code className="prop-info-guid">{(discoveredProperties as any).externalId}</code>
-                  </div>
-                )}
-                {/* Extract and display GUID (MS) from properties */}
-                {(() => {
-                  const props = (discoveredProperties as any).properties || [];
-                  // UUID regex pattern (MS GUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
-                  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-                  // Method 1: Find Reference Object property set
-                  const refObj = props.find((p: any) => {
-                    const setName = (p.set || p.name || '').toLowerCase();
-                    return setName.includes('reference') && setName.includes('object');
-                  });
-                  if (refObj?.properties) {
-                    const guidMs = refObj.properties.find((p: any) => {
-                      const propName = (p.name || '').toLowerCase();
-                      return propName === 'guid (ms)' || propName === 'guid' || propName === 'guid_ms';
-                    });
-                    const val = guidMs?.displayValue || guidMs?.value;
-                    if (val && uuidPattern.test(String(val))) {
-                      return (
-                        <div className="prop-info-row">
-                          <span className="prop-info-label">GUID (MS):</span>
-                          <code className="prop-info-guid guid-ms">{val}</code>
-                        </div>
-                      );
-                    }
-                  }
-
-                  // Method 2: Search ALL property sets for GUID property with UUID value
-                  for (const pset of props) {
-                    if (!pset.properties) continue;
-                    for (const prop of pset.properties) {
-                      const propName = (prop.name || '').toLowerCase();
-                      const val = prop.displayValue || prop.value;
-                      // Check if property name contains 'guid' and value is UUID format
-                      if (propName.includes('guid') && val && uuidPattern.test(String(val))) {
-                        return (
-                          <div className="prop-info-row">
-                            <span className="prop-info-label">GUID (MS):</span>
-                            <code className="prop-info-guid guid-ms">{val}</code>
-                            <span className="prop-info-source">({pset.set || pset.name})</span>
-                          </div>
-                        );
-                      }
-                    }
-                  }
-
-                  // Method 3: Search for any UUID-formatted value in common property names
-                  for (const pset of props) {
-                    if (!pset.properties) continue;
-                    for (const prop of pset.properties) {
-                      const val = prop.displayValue || prop.value;
-                      if (val && uuidPattern.test(String(val))) {
-                        return (
-                          <div className="prop-info-row">
-                            <span className="prop-info-label">GUID (MS):</span>
-                            <code className="prop-info-guid guid-ms">{val}</code>
-                            <span className="prop-info-source">({prop.name})</span>
-                          </div>
-                        );
-                      }
-                    }
-                  }
-
-                  // Method 4: Convert IFC GUID to MS GUID
-                  const ifcGuid = (discoveredProperties as any).externalId;
-                  if (ifcGuid && ifcGuid.length === 22) {
-                    // IFC GUID base64 charset (non-standard!)
-                    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
-
-                    // First char = 2 bits, remaining 21 chars = 6 bits each = 128 bits total
-                    let bits = '';
-                    let valid = true;
-                    for (let i = 0; i < 22 && valid; i++) {
-                      const idx = chars.indexOf(ifcGuid[i]);
-                      if (idx < 0) { valid = false; break; }
-                      // First char only 2 bits (values 0-3), rest 6 bits
-                      const numBits = i === 0 ? 2 : 6;
-                      bits += idx.toString(2).padStart(numBits, '0');
-                    }
-
-                    if (valid && bits.length === 128) {
-                      // Convert 128 bits to 32 hex chars
-                      let hex = '';
-                      for (let i = 0; i < 128; i += 4) {
-                        hex += parseInt(bits.slice(i, i + 4), 2).toString(16);
-                      }
-                      const msGuid = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
-                      return (
-                        <div className="prop-info-row">
-                          <span className="prop-info-label">GUID (MS):</span>
-                          <code className="prop-info-guid guid-ms">{msGuid}</code>
-                          <span className="prop-info-source">(arvutatud)</span>
-                        </div>
-                      );
-                    }
-                  }
-
-                  // Not found and can't convert
-                  return (
-                    <div className="prop-info-row prop-info-missing">
-                      <span className="prop-info-label">GUID (MS):</span>
-                      <span className="prop-info-value">Puudub</span>
-                    </div>
-                  );
-                })()}
-              </div>
-
-              {/* Property Sets */}
-              {(discoveredProperties as any).properties?.map((pset: any, psetIdx: number) => (
-                <div key={psetIdx} className="prop-set">
-                  <div className="prop-set-header">
-                    📁 {pset.set || pset.name || `Property Set ${psetIdx + 1}`}
-                    <span className="prop-set-count">({pset.properties?.length || 0})</span>
-                  </div>
-                  <div className="prop-set-table">
-                    {pset.properties?.map((prop: any, propIdx: number) => {
-                      let displayVal = prop.displayValue ?? prop.value ?? '-';
-                      // Handle BigInt values
-                      if (typeof displayVal === 'bigint') {
-                        displayVal = displayVal.toString();
-                      }
-                      return (
-                        <div key={propIdx} className="prop-row">
-                          <span className="prop-name">{prop.name}</span>
-                          <span className="prop-value">{String(displayVal)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-
-              {/* Raw JSON toggle */}
-              <details className="raw-json-section">
-                <summary>📄 Raw JSON</summary>
-                <pre>{JSON.stringify(discoveredProperties, (_key, value) =>
-                  typeof value === 'bigint' ? value.toString() : value
-                , 2)}</pre>
-              </details>
             </div>
           </div>
         </div>
