@@ -7843,6 +7843,124 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="🔷 Alamdet. 8 nurka"
+                  result={functionResults["childCorners"]}
+                  onClick={async () => {
+                    updateFunctionResult("childCorners", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get hierarchy children
+                      const children = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+                      if (!children || children.length === 0) {
+                        throw new Error('Alamdetaile pole (leaf node)');
+                      }
+
+                      const childIds = children.map((c: any) => c.id);
+                      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                      // Limit to first 3 sub-details to avoid too many lines
+                      const maxChildren = Math.min(3, bboxes.length);
+                      const measurements: any[] = [];
+                      let totalLines = 0;
+
+                      for (let childIdx = 0; childIdx < maxChildren; childIdx++) {
+                        const bbox = bboxes[childIdx];
+                        if (!bbox?.boundingBox) continue;
+                        const b = bbox.boundingBox;
+
+                        // Convert to mm
+                        const minMm = { x: b.min.x * 1000, y: b.min.y * 1000, z: b.min.z * 1000 };
+                        const maxMm = { x: b.max.x * 1000, y: b.max.y * 1000, z: b.max.z * 1000 };
+
+                        // Define 8 corners of bounding box
+                        const corners = [
+                          { x: minMm.x, y: minMm.y, z: minMm.z }, // 0: Bottom-Front-Left
+                          { x: maxMm.x, y: minMm.y, z: minMm.z }, // 1: Bottom-Front-Right
+                          { x: maxMm.x, y: maxMm.y, z: minMm.z }, // 2: Bottom-Back-Right
+                          { x: minMm.x, y: maxMm.y, z: minMm.z }, // 3: Bottom-Back-Left
+                          { x: minMm.x, y: minMm.y, z: maxMm.z }, // 4: Top-Front-Left
+                          { x: maxMm.x, y: minMm.y, z: maxMm.z }, // 5: Top-Front-Right
+                          { x: maxMm.x, y: maxMm.y, z: maxMm.z }, // 6: Top-Back-Right
+                          { x: minMm.x, y: maxMm.y, z: maxMm.z }  // 7: Top-Back-Left
+                        ];
+
+                        // Color variations per child
+                        const colors = [
+                          { r: 255, g: 100, b: 100, a: 200 },  // Light red
+                          { r: 100, g: 255, b: 100, a: 200 },  // Light green
+                          { r: 100, g: 100, b: 255, a: 200 }   // Light blue
+                        ];
+                        const color = colors[childIdx % colors.length];
+
+                        // Create all 28 possible lines between 8 corners (C(8,2) = 28)
+                        for (let i = 0; i < corners.length; i++) {
+                          for (let j = i + 1; j < corners.length; j++) {
+                            measurements.push({
+                              start: {
+                                positionX: corners[i].x,
+                                positionY: corners[i].y,
+                                positionZ: corners[i].z
+                              },
+                              end: {
+                                positionX: corners[j].x,
+                                positionY: corners[j].y,
+                                positionZ: corners[j].z
+                              },
+                              mainLineStart: {
+                                positionX: corners[i].x,
+                                positionY: corners[i].y,
+                                positionZ: corners[i].z
+                              },
+                              mainLineEnd: {
+                                positionX: corners[j].x,
+                                positionY: corners[j].y,
+                                positionZ: corners[j].z
+                              },
+                              color
+                            });
+                            totalLines++;
+                          }
+                        }
+                      }
+
+                      if (measurements.length > 0) {
+                        await api.markup.addMeasurementMarkups(measurements);
+                      }
+
+                      let result = `✅ ${totalLines} mõõtejoont lisatud\n`;
+                      result += `📦 ${maxChildren} alamdetaili (maksimaalselt 3)\n`;
+                      result += `🔷 Iga alamdetail: 28 joont (8 nurka)\n\n`;
+                      result += `8 nurka:\n`;
+                      result += `0: (min.x, min.y, min.z) - Alumine-Ees-Vasak\n`;
+                      result += `1: (max.x, min.y, min.z) - Alumine-Ees-Parem\n`;
+                      result += `2: (max.x, max.y, min.z) - Alumine-Taga-Parem\n`;
+                      result += `3: (min.x, max.y, min.z) - Alumine-Taga-Vasak\n`;
+                      result += `4: (min.x, min.y, max.z) - Ülemine-Ees-Vasak\n`;
+                      result += `5: (max.x, min.y, max.z) - Ülemine-Ees-Parem\n`;
+                      result += `6: (max.x, max.y, max.z) - Ülemine-Taga-Parem\n`;
+                      result += `7: (min.x, max.y, max.z) - Ülemine-Taga-Vasak\n\n`;
+
+                      if (bboxes.length > maxChildren) {
+                        result += `ℹ️ Näidatud ainult esimesed ${maxChildren} alamdetaili ${bboxes.length}-st\n`;
+                        result += `(Vältimaks liiga palju jooni mudelis)`;
+                      }
+
+                      updateFunctionResult("childCorners", {
+                        status: 'success',
+                        result
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("childCorners", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="↔️ Alamdet. vahekaugused"
                   result={functionResults["childDistances"]}
                   onClick={async () => {
