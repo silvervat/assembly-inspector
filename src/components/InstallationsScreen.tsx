@@ -3890,26 +3890,6 @@ export default function InstallationsScreen({
   };
 
   // Temp list management functions
-  const addToTempList = (guid: string) => {
-    setTempList(prev => new Set([...prev, guid]));
-  };
-
-  const removeFromTempList = (guid: string) => {
-    setTempList(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(guid);
-      return newSet;
-    });
-  };
-
-  const toggleTempList = (guid: string) => {
-    if (tempList.has(guid)) {
-      removeFromTempList(guid);
-    } else {
-      addToTempList(guid);
-    }
-  };
-
   const addSelectedToTempList = () => {
     const newGuids = selectedObjects
       .map(obj => getObjectGuid(obj))
