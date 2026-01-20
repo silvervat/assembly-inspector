@@ -10145,6 +10145,39 @@ button.stat-toggle.off:hover {
   flex-shrink: 0;
 }
 
+.selected-object-row .object-inline-status.clickable {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  transition: all 0.15s;
+}
+
+.selected-object-row .object-inline-status.clickable:hover {
+  background: #fcd34d;
+  color: #92400e;
+}
+
+.selected-object-row .object-inline-status.clickable.installed {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.selected-object-row .object-inline-status.clickable.installed:hover {
+  background: #fcd34d;
+  color: #92400e;
+}
+
+.selected-object-row .object-inline-status.clickable.preassembly {
+  background: #ede9fe;
+  color: #7c3aed;
+}
+
+.selected-object-row .object-inline-status.clickable.preassembly:hover {
+  background: #ddd6fe;
+  color: #6d28d9;
+}
+
 .selected-object-row.installed .object-inline-status {
   color: #b45309;
 }
