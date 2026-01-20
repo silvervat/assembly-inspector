@@ -1561,7 +1561,9 @@ export default function InstallationsScreen({
 
       // Apply coloring after loading GUIDs (skip when adding single items)
       if (!skipColoring) {
-        applyInstallationColoring(guidsMap);
+        await applyInstallationColoring(guidsMap);
+        // Apply temp list coloring on top of base coloring
+        await applyTempListColoring();
       }
     } catch (e) {
       console.error('Error loading installed GUIDs:', e);
@@ -2115,6 +2117,70 @@ export default function InstallationsScreen({
     }
   };
 
+  // Apply GREEN coloring for temp list items (items user marked for later save)
+  const applyTempListColoring = async () => {
+    if (tempList.size === 0) return;
+
+    try {
+      // Get all loaded models
+      const models = await api.viewer.getModels();
+      if (!models || models.length === 0) {
+        console.log('[TEMP_LIST] No models loaded');
+        return;
+      }
+
+      console.log('[TEMP_LIST] Coloring temp list items green:', tempList.size);
+
+      // Use cached foundObjects if available
+      let foundByLowercase = foundObjectsCacheRef.current;
+
+      // If no cache, we need to find objects in models
+      if (foundByLowercase.size === 0) {
+        const tempListArray = Array.from(tempList);
+        const foundObjects = await findObjectsInLoadedModels(api, tempListArray);
+
+        // Build case-insensitive lookup
+        foundByLowercase = new Map<string, { modelId: string; runtimeId: number }>();
+        for (const [guid, found] of foundObjects) {
+          foundByLowercase.set(guid.toLowerCase(), found);
+        }
+      }
+
+      // Find temp list objects in models
+      const greenByModel: Record<string, number[]> = {};
+
+      for (const guid of tempList) {
+        const guidLower = guid.toLowerCase();
+        const found = foundByLowercase.get(guidLower);
+
+        if (found) {
+          if (!greenByModel[found.modelId]) greenByModel[found.modelId] = [];
+          greenByModel[found.modelId].push(found.runtimeId);
+        }
+      }
+
+      // Color temp list items GREEN
+      const green = { r: 16, g: 185, b: 129, a: 1.0 }; // #10b981
+
+      for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
+        if (runtimeIds.length === 0) continue;
+
+        // Process in batches
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+          const batchIds = runtimeIds.slice(i, i + BATCH_SIZE);
+          const modelObjectIds = [{ modelId, objectRuntimeIds: batchIds }];
+
+          await api.viewer.setObjectState({ modelObjectIds }, { color: green });
+        }
+      }
+
+      console.log(`[TEMP_LIST] Colored ${Object.values(greenByModel).flat().length} objects green`);
+    } catch (e) {
+      console.error('[TEMP_LIST] Error applying coloring:', e);
+    }
+  };
+
   // Color only uninstalled preassemblies (those in preassemblyGuidSet but NOT in installedGuidSet)
   const colorUninstalledPreassemblies = async (monthItems?: Preassembly[]) => {
     setColoringInProgress(true);
@@ -2259,8 +2325,10 @@ export default function InstallationsScreen({
       setDayColors({});
       if (entryMode === 'preassembly') {
         await applyPreassemblyColoring();
+        await applyTempListColoring();
       } else {
         await colorInstalledGuidsBlack();
+        await applyTempListColoring();
       }
       setColoringInProgress(false);
       return;
@@ -2372,8 +2440,10 @@ export default function InstallationsScreen({
       setMonthColors({});
       if (entryMode === 'preassembly') {
         await applyPreassemblyColoring();
+        await applyTempListColoring();
       } else {
         await colorInstalledGuidsBlack();
+        await applyTempListColoring();
       }
       setColoringInProgress(false);
       return;
@@ -3276,6 +3346,7 @@ export default function InstallationsScreen({
 
       // Reapply coloring
       await applyPreassemblyColoring();
+      await applyTempListColoring();
     } catch (e) {
       console.error('Error marking as installed:', e);
       setMessage('Viga paigaldamisel');
@@ -3354,9 +3425,11 @@ export default function InstallationsScreen({
     // Apply appropriate coloring
     if (newMode === 'preassembly') {
       await applyPreassemblyColoring();
+      await applyTempListColoring();
     } else {
       // Back to installation mode - reapply installation coloring
       await applyInstallationColoring(installedGuids);
+      await applyTempListColoring();
     }
   };
 
@@ -3890,25 +3963,57 @@ export default function InstallationsScreen({
   };
 
   // Temp list management functions
-  const addSelectedToTempList = () => {
+  const addSelectedToTempList = async () => {
     const newGuids = selectedObjects
       .map(obj => getObjectGuid(obj))
       .filter((guid): guid is string => !!guid && !tempList.has(guid));
 
     if (newGuids.length > 0) {
-      setTempList(prev => new Set([...prev, ...newGuids]));
+      const updatedList = new Set([...tempList, ...newGuids]);
+      setTempList(updatedList);
       setMessage(`${newGuids.length} detaili lisatud ajutisse nimekirja`);
       setTimeout(() => setMessage(null), 3000);
+
+      // Color newly added items green immediately
+      try {
+        const foundObjects = await findObjectsInLoadedModels(api, newGuids);
+        const greenByModel: Record<string, number[]> = {};
+
+        for (const [, found] of foundObjects) {
+          if (!greenByModel[found.modelId]) greenByModel[found.modelId] = [];
+          greenByModel[found.modelId].push(found.runtimeId);
+        }
+
+        const green = { r: 16, g: 185, b: 129, a: 1.0 }; // #10b981
+
+        for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
+          if (runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: green }
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Error coloring newly added temp list items:', e);
+      }
     } else {
       setMessage('Kõik valitud detailid on juba listis');
       setTimeout(() => setMessage(null), 2000);
     }
   };
 
-  const clearTempList = () => {
+  const clearTempList = async () => {
     setTempList(new Set());
     setMessage('Ajutine nimekiri tühjendatud');
     setTimeout(() => setMessage(null), 2000);
+
+    // Reapply base coloring to remove green color
+    if (entryMode === 'preassembly') {
+      await applyPreassemblyColoring();
+    } else {
+      await applyInstallationColoring(installedGuids);
+    }
   };
 
   // Filter installations by search query
@@ -4689,6 +4794,7 @@ export default function InstallationsScreen({
                 setShowList(true);
                 // Apply installation coloring when opening installation overview
                 await applyInstallationColoring(installedGuids);
+                await applyTempListColoring();
                 // Check which items can't be found in current model
                 setTimeout(() => checkUnfoundItems('installation'), 500);
               }}
@@ -4709,6 +4815,7 @@ export default function InstallationsScreen({
                 setShowList(true);
                 // Apply preassembly coloring when opening preassembly overview
                 await applyPreassemblyColoring();
+                await applyTempListColoring();
                 // Check which items can't be found in current model
                 setTimeout(() => checkUnfoundItems('preassembly'), 500);
               }}
@@ -5522,8 +5629,10 @@ export default function InstallationsScreen({
                 }
                 if (entryMode === 'preassembly') {
                   await applyPreassemblyColoring();
+                  await applyTempListColoring();
                 } else {
                   await applyInstallationColoring(installedGuids);
+                  await applyTempListColoring();
                 }
               }}
               title="Tagasi"
