@@ -1662,7 +1662,7 @@ button.stat-toggle.off:hover {
   align-items: center;
   justify-content: center;
   min-width: 40px;
-  height: 100%;
+  align-self: stretch;
 }
 
 .search-button:hover:not(:disabled) {
@@ -1692,6 +1692,9 @@ button.stat-toggle.off:hover {
 
 .search-checkbox input[type="checkbox"] {
   cursor: pointer;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--modus-primary);
 }
 
 .search-message {
