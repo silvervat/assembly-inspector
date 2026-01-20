@@ -203,15 +203,16 @@ const VIEW_PRESET_COLORS = [
 
 // Resource types configuration
 const RESOURCE_TYPES = [
-  { key: 'crane', label: 'Kraana', icon: '🏗️' },
-  { key: 'telescopic_loader', label: 'Teleskooplaadur', icon: '🚜' },
-  { key: 'boom_lift', label: 'Korvtõstuk', icon: '🔧' },
-  { key: 'scissor_lift', label: 'Käärtõstuk', icon: '✂️' },
-  { key: 'crane_operator', label: 'Kraanajuht', icon: '👷' },
-  { key: 'forklift_operator', label: 'Tõstukijuht', icon: '🧑‍🔧' },
-  { key: 'installer', label: 'Monteerija', icon: '🔨' },
-  { key: 'rigger', label: 'Troppija', icon: '⛓️' },
-  { key: 'welder', label: 'Keevitaja', icon: '🔥' },
+  // Machines (matches InstallationScheduleScreen INSTALL_METHODS)
+  { key: 'crane', label: 'Kraana', icon: '/icons/crane.png' },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: '/icons/forklift.png' },
+  { key: 'manual', label: 'Käsitsi', icon: '/icons/manual.png' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: '/icons/poomtostuk.png' },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: '/icons/kaartostuk.png' },
+  // Labor (matches InstallationScheduleScreen INSTALL_METHODS)
+  { key: 'troppija', label: 'Troppija', icon: '/icons/troppija.png' },
+  { key: 'monteerija', label: 'Monteerija', icon: '/icons/monteerija.png' },
+  { key: 'keevitaja', label: 'Keevitaja', icon: '/icons/keevitaja.png' },
 ] as const;
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite }: AdminScreenProps) {
@@ -13664,7 +13665,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     transition: 'all 0.2s'
                   }}
                 >
-                  <span>{type.icon}</span>
+                  <img src={type.icon} alt="" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
                   <span>{type.label}</span>
                   {count > 0 && (
                     <span style={{
@@ -13735,7 +13736,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     type="text"
                     value={resourceFormData.name}
                     onChange={(e) => setResourceFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder={selectedResourceType.includes('operator') || ['installer', 'rigger', 'welder'].includes(selectedResourceType) ? 'Nt: Jaan Tamm' : 'Nt: Liebherr 50t'}
+                    placeholder={['troppija', 'monteerija', 'keevitaja'].includes(selectedResourceType) ? 'Nt: Jaan Tamm' : 'Nt: Liebherr 50t'}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -13863,35 +13864,19 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         </button>
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => openEditResourceForm(resource)}
-                            style={{
-                              background: '#f3f4f6',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '6px',
-                              cursor: 'pointer'
-                            }}
-                            title="Muuda"
-                          >
-                            <FiEdit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteResource(resource.id)}
-                            style={{
-                              background: '#fee2e2',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '6px',
-                              cursor: 'pointer',
-                              color: '#dc2626'
-                            }}
-                            title="Kustuta"
-                          >
-                            <FiTrash2 size={14} />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => openEditResourceForm(resource)}
+                          style={{
+                            background: '#f3f4f6',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '6px',
+                            cursor: 'pointer'
+                          }}
+                          title="Muuda"
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))}
