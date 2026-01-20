@@ -2183,7 +2183,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             *,
             vehicle:trimble_delivery_vehicles(
               id, vehicle_code, scheduled_date,
-              factory:trimble_delivery_factories(id, name, color)
+              factory:trimble_delivery_factories(id, factory_name, factory_code)
             )
           `)
           .eq('trimble_project_id', projectId)
@@ -16015,20 +16015,19 @@ document.body.appendChild(div);`;
                         marginBottom: idx < partDbData.deliveryItems.length - 1 ? '8px' : 0
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <span style={{ fontWeight: 600 }}>{item.vehicle?.name || 'Tundmatu veok'}</span>
+                          <span style={{ fontWeight: 600 }}>{item.vehicle?.vehicle_code || 'Tundmatu veok'}</span>
                           <span style={{
-                            background: item.vehicle?.factory?.color ? `rgb(${item.vehicle.factory.color.r},${item.vehicle.factory.color.g},${item.vehicle.factory.color.b})` : '#6b7280',
+                            background: '#6b7280',
                             color: 'white',
                             padding: '2px 8px',
                             borderRadius: '4px',
                             fontSize: '11px'
                           }}>
-                            {item.vehicle?.factory?.name || 'Tundmatu tehas'}
+                            {item.vehicle?.factory?.factory_name || 'Tundmatu tehas'}
                           </span>
                         </div>
                         <div style={{ fontSize: '12px', color: '#6b7280' }}>
                           <div>📅 Planeeritud: <strong>{item.vehicle?.scheduled_date || '-'}</strong></div>
-                          <div>🚛 Numbrimärk: {item.vehicle?.license_plate || '-'}</div>
                           <div>📝 Märkused: {item.notes || '-'}</div>
                         </div>
                       </div>
