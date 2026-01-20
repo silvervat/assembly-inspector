@@ -182,14 +182,16 @@ export default function MainMenu({
             {searching ? <span className="search-spinner">⏳</span> : <FiSearch size={16} />}
           </button>
         </div>
-        <label className="search-checkbox">
-          <input
-            type="checkbox"
-            checked={exactMatch}
-            onChange={(e) => setExactMatch(e.target.checked)}
-          />
-          <span>Täpne vaste</span>
-        </label>
+        {searchQuery.trim() && (
+          <label className="search-checkbox">
+            <input
+              type="checkbox"
+              checked={exactMatch}
+              onChange={(e) => setExactMatch(e.target.checked)}
+            />
+            <span>Täpne vaste</span>
+          </label>
+        )}
         {searchMessage && (
           <div className={`search-message ${searchMessage.startsWith('✓') ? 'success' : 'error'}`}>
             {searchMessage}
