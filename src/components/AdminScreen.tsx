@@ -2285,20 +2285,26 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       const guids = await api.viewer.convertToObjectIds(firstSel.modelId, [runtimeId]);
 
       if (guids && guids[0]) {
-        // Try to get assembly mark from properties
+        // Try to get assembly mark from properties using project's property mappings
         let assemblyMark = '';
         try {
           const props = await api.viewer.getObjectProperties(firstSel.modelId, [runtimeId]);
           if (props && props[0]) {
             const propsData = props[0];
-            // Look for Cast_unit_Mark in Tekla Assembly set
             const sets = (propsData as any).propertySets || (propsData as any).properties || [];
+
+            // Helper to normalize names for comparison
+            const normalizeName = (name: string) => name.replace(/\s+/g, '').toLowerCase();
+            const targetSetName = normalizeName(propertyMappings.assembly_mark_set);
+            const targetPropName = normalizeName(propertyMappings.assembly_mark_prop);
+
+            // Look for assembly mark using property mappings
             for (const set of sets) {
               const setName = set.name || set.setName || '';
-              const properties = set.properties || {};
-              if (setName.toLowerCase().includes('tekla') || setName.toLowerCase().includes('assembly')) {
+              if (normalizeName(setName) === targetSetName) {
+                const properties = set.properties || {};
                 for (const [key, val] of Object.entries(properties)) {
-                  if (key.toLowerCase().includes('mark')) {
+                  if (normalizeName(key) === targetPropName) {
                     assemblyMark = String(val);
                     break;
                   }
@@ -2306,9 +2312,44 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               }
               if (assemblyMark) break;
             }
+
+            // Fallback: if no match with mappings, try common patterns
+            if (!assemblyMark) {
+              for (const set of sets) {
+                const setName = set.name || set.setName || '';
+                const properties = set.properties || {};
+                // Try "Tekla Assembly" / "Cast_unit_Mark" as fallback
+                if (setName.toLowerCase().includes('tekla') || setName.toLowerCase().includes('assembly')) {
+                  for (const [key, val] of Object.entries(properties)) {
+                    if (key.toLowerCase().includes('mark')) {
+                      assemblyMark = String(val);
+                      break;
+                    }
+                  }
+                }
+                if (assemblyMark) break;
+              }
+            }
           }
         } catch (e) {
           console.warn('Could not get assembly mark:', e);
+        }
+
+        // If still no assembly mark, try to get from database
+        if (!assemblyMark && projectId) {
+          try {
+            const { data: dbObject } = await supabase
+              .from('trimble_model_objects')
+              .select('assembly_mark')
+              .eq('trimble_project_id', projectId)
+              .ilike('guid_ifc', guids[0])
+              .maybeSingle();
+            if (dbObject?.assembly_mark) {
+              assemblyMark = dbObject.assembly_mark;
+            }
+          } catch (e) {
+            console.warn('Could not get assembly mark from database:', e);
+          }
         }
 
         loadPartDatabaseByGuid(guids[0], assemblyMark);
@@ -2316,7 +2357,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     } catch (e: any) {
       console.error('Error loading from selection:', e);
     }
-  }, [api, loadPartDatabaseByGuid]);
+  }, [api, loadPartDatabaseByGuid, propertyMappings, projectId]);
 
   // Search for parts by assembly mark
   const searchPartDatabase = useCallback(async () => {
