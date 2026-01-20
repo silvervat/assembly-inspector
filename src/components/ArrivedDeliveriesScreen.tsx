@@ -4930,17 +4930,17 @@ export default function ArrivedDeliveriesScreen({
                         <div key={item.id} className={`model-selected-item ${isFromDifferentVehicle ? 'warning' : ''}`}>
                           <div className="item-info">
                             <span className="item-mark">{item.assembly_mark}</span>
-                            <span className="item-name">{item.product_name}</span>
+                            {item.product_name && <span className="item-name">{item.product_name}</span>}
                             {item.cast_unit_weight && (
                               <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
                             )}
+                            {isFromDifferentVehicle && plannedVehicle && (
+                              <span className="item-warning-inline">
+                                <FiAlertTriangle size={11} />
+                                Veokis: <strong>{plannedVehicle.vehicle_code}</strong>
+                              </span>
+                            )}
                           </div>
-                          {isFromDifferentVehicle && plannedVehicle && (
-                            <div className="item-warning">
-                              <FiAlertTriangle />
-                              <span>Planeeritud veokis: <strong>{plannedVehicle.vehicle_code}</strong></span>
-                            </div>
-                          )}
                         </div>
                       );
                     })}
