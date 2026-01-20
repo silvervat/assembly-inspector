@@ -1334,27 +1334,61 @@ export default function ArrivedDeliveriesScreen({
   const confirmAllItems = async (arrivedVehicleId: string, itemIds?: string[]) => {
     setSaving(true);
     try {
-      let query = supabase
-        .from('trimble_arrival_confirmations')
-        .update({
-          status: 'confirmed',
-          confirmed_at: new Date().toISOString(),
-          confirmed_by: tcUserEmail
-        })
-        .eq('arrived_vehicle_id', arrivedVehicleId)
-        .eq('status', 'pending');
+      // Get items to confirm
+      const itemsToConfirm = itemIds
+        ? items.filter(i => itemIds.includes(i.id))
+        : getVehicleItems(arrivedVehicles.find(av => av.id === arrivedVehicleId)?.vehicle_id || '');
 
-      // If itemIds provided, only confirm those items
-      if (itemIds && itemIds.length > 0) {
-        query = query.in('item_id', itemIds);
+      if (itemsToConfirm.length === 0) {
+        setMessage('Pole detaile kinnitamiseks');
+        return;
       }
 
-      const { error } = await query;
+      // Get existing confirmations for these items
+      const existingConfirmations = confirmations.filter(
+        c => c.arrived_vehicle_id === arrivedVehicleId &&
+        itemsToConfirm.some(item => item.id === c.item_id)
+      );
+      const existingItemIds = new Set(existingConfirmations.map(c => c.item_id));
 
-      if (error) throw error;
+      // Update existing pending confirmations
+      const pendingConfirmations = existingConfirmations.filter(c => c.status === 'pending');
+      if (pendingConfirmations.length > 0) {
+        const { error: updateError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .update({
+            status: 'confirmed',
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: tcUserEmail
+          })
+          .eq('arrived_vehicle_id', arrivedVehicleId)
+          .in('item_id', pendingConfirmations.map(c => c.item_id));
+
+        if (updateError) throw updateError;
+      }
+
+      // Create new confirmations for items that don't have one yet
+      const newItems = itemsToConfirm.filter(item => !existingItemIds.has(item.id));
+      if (newItems.length > 0) {
+        const newConfirmations = newItems.map(item => ({
+          trimble_project_id: projectId,
+          arrived_vehicle_id: arrivedVehicleId,
+          item_id: item.id,
+          status: 'confirmed' as ArrivalItemStatus,
+          confirmed_at: new Date().toISOString(),
+          confirmed_by: tcUserEmail
+        }));
+
+        const { error: insertError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .insert(newConfirmations);
+
+        if (insertError) throw insertError;
+      }
+
       await loadConfirmations();
       setSelectedItemsForConfirm(new Set());
-      setMessage(itemIds ? `${itemIds.length} detaili kinnitatud` : 'Kõik detailid kinnitatud');
+      setMessage(`${itemsToConfirm.length} detaili kinnitatud`);
     } catch (e: any) {
       console.error('Error confirming all items:', e);
       setMessage('Viga: ' + e.message);
