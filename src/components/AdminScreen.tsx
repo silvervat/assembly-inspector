@@ -203,15 +203,16 @@ const VIEW_PRESET_COLORS = [
 
 // Resource types configuration
 const RESOURCE_TYPES = [
-  { key: 'crane', label: 'Kraana', icon: '🏗️' },
-  { key: 'telescopic_loader', label: 'Teleskooplaadur', icon: '🚜' },
-  { key: 'boom_lift', label: 'Korvtõstuk', icon: '🔧' },
-  { key: 'scissor_lift', label: 'Käärtõstuk', icon: '✂️' },
-  { key: 'crane_operator', label: 'Kraanajuht', icon: '👷' },
-  { key: 'forklift_operator', label: 'Tõstukijuht', icon: '🧑‍🔧' },
-  { key: 'installer', label: 'Monteerija', icon: '🔨' },
-  { key: 'rigger', label: 'Troppija', icon: '⛓️' },
-  { key: 'welder', label: 'Keevitaja', icon: '🔥' },
+  // Machines (matches InstallationScheduleScreen INSTALL_METHODS)
+  { key: 'crane', label: 'Kraana', icon: '/icons/crane.png' },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: '/icons/forklift.png' },
+  { key: 'manual', label: 'Käsitsi', icon: '/icons/manual.png' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: '/icons/poomtostuk.png' },
+  { key: 'kaartostuk', label: 'Käärtõstuk', icon: '/icons/kaartostuk.png' },
+  // Labor (matches InstallationScheduleScreen INSTALL_METHODS)
+  { key: 'troppija', label: 'Troppija', icon: '/icons/troppija.png' },
+  { key: 'monteerija', label: 'Monteerija', icon: '/icons/monteerija.png' },
+  { key: 'keevitaja', label: 'Keevitaja', icon: '/icons/keevitaja.png' },
 ] as const;
 
 export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite }: AdminScreenProps) {
@@ -2172,40 +2173,43 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         inspectionsResult,
         issuesResult
       ] = await Promise.all([
-        // Delivery items
+        // Delivery items - use eq instead of ilike to avoid issues with $ in GUID
         supabase
           .from('trimble_delivery_items')
           .select(`
             *,
             vehicle:trimble_delivery_vehicles(
-              id, name, license_plate, scheduled_date,
+              id, vehicle_code, scheduled_date,
               factory:trimble_delivery_factories(id, name, color)
             )
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Arrival confirmations
+        // Arrival confirmations - join through item_id
         supabase
-          .from('arrival_item_confirmations')
+          .from('trimble_delivery_items')
           .select(`
-            *,
-            vehicle:arrived_vehicles(
-              id, license_plate, arrival_date, arrival_time, unload_method, unload_location,
-              photos:arrival_photos(id, photo_url, photo_type, uploaded_at)
+            guid_ifc,
+            confirmations:trimble_arrival_confirmations(
+              *,
+              arrived_vehicle:trimble_arrived_vehicles(
+                id, arrival_date, arrival_time, unload_start_time, unload_end_time,
+                photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at)
+              )
             )
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Installation schedule items
+        // Installation schedule - correct table name and use project_id
         supabase
-          .from('installation_schedule_items')
+          .from('installation_schedule')
           .select('*')
-          .eq('trimble_project_id', projectId)
-          .ilike('guid', guidLower),
+          .eq('project_id', projectId)
+          .eq('guid_ifc', guidLower),
 
-        // Organizer group items
+        // Organizer group items - use eq instead of ilike
         supabase
           .from('organizer_group_items')
           .select(`
@@ -2213,16 +2217,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             group:organizer_groups(id, name, color, description)
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Inspections
+        // Inspections - use eq instead of ilike
         supabase
           .from('inspections')
           .select('*')
           .eq('project_id', projectId)
-          .ilike('guid_ifc', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Issues (through issue_objects)
+        // Issues (through issue_objects) - use eq instead of ilike
         supabase
           .from('issue_objects')
           .select(`
@@ -2234,12 +2238,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             )
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidLower)
+          .eq('guid_ifc', guidLower)
       ]);
+
+      // Extract arrival confirmations from nested structure
+      const arrivalConfirmations = arrivalResult.data?.[0]?.confirmations || [];
 
       setPartDbData({
         deliveryItems: deliveryResult.data || [],
-        arrivalItems: arrivalResult.data || [],
+        arrivalItems: arrivalConfirmations,
         installationItems: installationResult.data || [],
         organizerItems: organizerResult.data || [],
         inspections: inspectionsResult.data || [],
@@ -13664,7 +13671,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     transition: 'all 0.2s'
                   }}
                 >
-                  <span>{type.icon}</span>
+                  <img src={type.icon} alt="" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
                   <span>{type.label}</span>
                   {count > 0 && (
                     <span style={{
@@ -13735,7 +13742,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     type="text"
                     value={resourceFormData.name}
                     onChange={(e) => setResourceFormData(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder={selectedResourceType.includes('operator') || ['installer', 'rigger', 'welder'].includes(selectedResourceType) ? 'Nt: Jaan Tamm' : 'Nt: Liebherr 50t'}
+                    placeholder={['troppija', 'monteerija', 'keevitaja'].includes(selectedResourceType) ? 'Nt: Jaan Tamm' : 'Nt: Liebherr 50t'}
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -13863,35 +13870,19 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                         </button>
                       </td>
                       <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => openEditResourceForm(resource)}
-                            style={{
-                              background: '#f3f4f6',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '6px',
-                              cursor: 'pointer'
-                            }}
-                            title="Muuda"
-                          >
-                            <FiEdit2 size={14} />
-                          </button>
-                          <button
-                            onClick={() => deleteResource(resource.id)}
-                            style={{
-                              background: '#fee2e2',
-                              border: 'none',
-                              borderRadius: '4px',
-                              padding: '6px',
-                              cursor: 'pointer',
-                              color: '#dc2626'
-                            }}
-                            title="Kustuta"
-                          >
-                            <FiTrash2 size={14} />
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => openEditResourceForm(resource)}
+                          style={{
+                            background: '#f3f4f6',
+                            border: 'none',
+                            borderRadius: '4px',
+                            padding: '6px',
+                            cursor: 'pointer'
+                          }}
+                          title="Muuda"
+                        >
+                          <FiEdit2 size={14} />
+                        </button>
                       </td>
                     </tr>
                   ))}
