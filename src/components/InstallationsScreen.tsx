@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -567,6 +567,18 @@ export default function InstallationsScreen({
   const [monthLocks, setMonthLocks] = useState<Map<string, InstallationMonthLock>>(new Map());
   const [monthMenuOpen, setMonthMenuOpen] = useState<string | null>(null);
   const [dayMenuOpen, setDayMenuOpen] = useState<string | null>(null);
+
+  // Edit day modal state
+  const [editDayModalDate, setEditDayModalDate] = useState<string | null>(null);
+  const [editDayModalType, setEditDayModalType] = useState<'installation' | 'preassembly' | null>(null);
+  const [editDayModalItemCount, setEditDayModalItemCount] = useState(0);
+  const [editDayNewDate, setEditDayNewDate] = useState('');
+  const [editDayResource, setEditDayResource] = useState('');
+  const [editDayNotes, setEditDayNotes] = useState('');
+  const [savingEditDay, setSavingEditDay] = useState(false);
+
+  // Day locks state (stored in same table as month locks, differentiated by lock_type)
+  const [dayLocks, setDayLocks] = useState<Map<string, boolean>>(new Map());
 
   // Installation info modal state - stores full Installation object
   const [showInstallInfo, setShowInstallInfo] = useState<Installation | null>(null);
@@ -1374,11 +1386,19 @@ export default function InstallationsScreen({
 
       if (error) throw error;
 
-      const locksMap = new Map<string, InstallationMonthLock>();
+      const monthLocksMap = new Map<string, InstallationMonthLock>();
+      const dayLocksMap = new Map<string, boolean>();
+
       for (const lock of data || []) {
-        locksMap.set(lock.month_key, lock);
+        if (lock.lock_type === 'day') {
+          dayLocksMap.set(lock.month_key, true); // month_key stores day key for day locks
+        } else {
+          monthLocksMap.set(lock.month_key, lock);
+        }
       }
-      setMonthLocks(locksMap);
+
+      setMonthLocks(monthLocksMap);
+      setDayLocks(dayLocksMap);
     } catch (e) {
       console.error('Error loading month locks:', e);
     }
@@ -1423,25 +1443,197 @@ export default function InstallationsScreen({
     }
 
     try {
-      const { error } = await supabase
+      // Delete month lock
+      const { error: monthError } = await supabase
         .from('installation_month_locks')
         .delete()
         .eq('project_id', projectId)
-        .eq('month_key', monthKey);
+        .eq('month_key', monthKey)
+        .eq('lock_type', 'month');
 
-      if (error) throw error;
+      if (monthError) throw monthError;
+
+      // Delete all day locks for this month
+      const { error: dayError } = await supabase
+        .from('installation_month_locks')
+        .delete()
+        .eq('project_id', projectId)
+        .like('month_key', `${monthKey}%`)
+        .eq('lock_type', 'day');
+
+      if (dayError) throw dayError;
 
       setMonthLocks(prev => {
         const newMap = new Map(prev);
         newMap.delete(monthKey);
         return newMap;
       });
-      setMessage(`🔓 Kuu ${getMonthLabel(monthKey + '-01')} on avatud`);
+
+      // Clear day locks for this month
+      setDayLocks(prev => {
+        const newMap = new Map(prev);
+        for (const dayKey of newMap.keys()) {
+          if (dayKey.startsWith(monthKey)) {
+            newMap.delete(dayKey);
+          }
+        }
+        return newMap;
+      });
+
+      setMessage(`🔓 Kuu ${getMonthLabel(monthKey + '-01')} on avatud (kõik päevade lukud eemaldatud)`);
     } catch (e) {
       console.error('Error unlocking month:', e);
       setMessage('Viga kuu avamisel');
     }
     setMonthMenuOpen(null);
+  };
+
+  // Check if a day is locked (either directly or via month lock)
+  const isDayLocked = (dayKey: string): boolean => {
+    // Check if day itself is locked
+    if (dayLocks.has(dayKey)) return true;
+
+    // Check if month is locked
+    const monthKey = dayKey.substring(0, 7); // YYYY-MM
+    if (monthLocks.has(monthKey)) return true;
+
+    return false;
+  };
+
+  // Lock a day
+  const lockDay = async (dayKey: string) => {
+    if (user.role !== 'admin') {
+      setMessage('Ainult administraatorid saavad päeva lukustada');
+      return;
+    }
+
+    const monthKey = dayKey.substring(0, 7);
+    if (monthLocks.has(monthKey)) {
+      setMessage('Kuu on juba lukus');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('installation_month_locks')
+        .insert({
+          project_id: projectId,
+          month_key: dayKey, // Using day key in month_key field
+          lock_type: 'day',
+          locked_by: user.email,
+          locked_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+
+      setDayLocks(prev => new Map(prev).set(dayKey, true));
+      setMessage(`🔒 Päev ${dayKey} on lukustatud`);
+    } catch (e) {
+      console.error('Error locking day:', e);
+      setMessage('Viga päeva lukustamisel');
+    }
+    setDayMenuOpen(null);
+  };
+
+  // Unlock a day
+  const unlockDay = async (dayKey: string) => {
+    if (user.role !== 'admin') {
+      setMessage('Ainult administraatorid saavad päeva avada');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('installation_month_locks')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('month_key', dayKey)
+        .eq('lock_type', 'day');
+
+      if (error) throw error;
+
+      setDayLocks(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(dayKey);
+        return newMap;
+      });
+      setMessage(`🔓 Päev ${dayKey} on avatud`);
+    } catch (e) {
+      console.error('Error unlocking day:', e);
+      setMessage('Viga päeva avamisel');
+    }
+    setDayMenuOpen(null);
+  };
+
+  // Edit all items in a day (bulk update)
+  const saveEditDay = async () => {
+    if (!editDayModalDate || !editDayModalType) return;
+
+    if (isDayLocked(editDayModalDate)) {
+      setMessage('See päev on lukustatud');
+      setSavingEditDay(false);
+      return;
+    }
+
+    setSavingEditDay(true);
+
+    try {
+      // Build update object
+      const updates: any = {
+        updated_by: user.email,
+        updated_at: new Date().toISOString()
+      };
+
+      if (editDayNewDate) {
+        updates.installed_at = `${editDayNewDate}T12:00:00Z`;
+      }
+      if (editDayResource.trim()) {
+        updates.resource = editDayResource.trim();
+      }
+      if (editDayNotes.trim()) {
+        updates.notes = editDayNotes.trim();
+      }
+
+      if (Object.keys(updates).length === 2) {
+        setSavingEditDay(false);
+        setEditDayModalDate(null);
+        return;
+      }
+
+      // Get table name
+      const tableName = editDayModalType === 'installation' ? 'installations' : 'preassemblies';
+
+      // Get items for this day
+      const dateFilter = editDayModalDate + 'T';
+      const { error } = await supabase
+        .from(tableName)
+        .update(updates)
+        .eq('project_id', projectId)
+        .like('installed_at', `${dateFilter}%`);
+
+      if (error) throw error;
+
+      setMessage(`✓ Uuendatud ${editDayModalItemCount} detaili`);
+
+      // Reload data
+      if (editDayModalType === 'installation') {
+        loadInstallations();
+      } else {
+        loadPreassemblies();
+      }
+
+      // Close modal
+      setEditDayModalDate(null);
+      setEditDayModalType(null);
+      setEditDayNewDate('');
+      setEditDayResource('');
+      setEditDayNotes('');
+    } catch (e) {
+      console.error('Error updating day:', e);
+      setMessage('Viga päeva muutmisel');
+    } finally {
+      setSavingEditDay(false);
+    }
   };
 
   // Export month to Excel
@@ -4731,8 +4923,44 @@ export default function InstallationsScreen({
             {dayMenuOpen === day.dayKey && (
               <div className="day-menu-dropdown">
                 <button
+                  onClick={() => {
+                    setEditDayModalDate(day.dayKey);
+                    setEditDayModalType('installation');
+                    setEditDayModalItemCount(day.items.length);
+                    setDayMenuOpen(null);
+                  }}
+                  disabled={isDayLocked(day.dayKey)}
+                >
+                  <FiEdit2 size={14} />
+                  <span>Muuda päeva ({day.items.length})</span>
+                </button>
+                {user.role === 'admin' && !monthLocks.has(day.dayKey.substring(0, 7)) && (
+                  <button
+                    onClick={() => dayLocks.has(day.dayKey) ? unlockDay(day.dayKey) : lockDay(day.dayKey)}
+                  >
+                    {dayLocks.has(day.dayKey) ? (
+                      <>
+                        <FiUnlock size={14} />
+                        <span>Ava päev</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiLock size={14} />
+                        <span>Lukusta päev</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {user.role === 'admin' && monthLocks.has(day.dayKey.substring(0, 7)) && (
+                  <button disabled title="Kuu on lukustatud">
+                    <FiLock size={14} />
+                    <span>Päev lukustatud (kuu lukus)</span>
+                  </button>
+                )}
+                <button
                   onClick={() => deleteDayInstallations(day.dayKey, day.items)}
                   className="delete-btn"
+                  disabled={isDayLocked(day.dayKey)}
                 >
                   <FiTrash2 size={14} />
                   <span>Kustuta päev ({day.items.length})</span>
@@ -4856,8 +5084,44 @@ export default function InstallationsScreen({
             {dayMenuOpen === `pa-${day.dayKey}` && (
               <div className="day-menu-dropdown">
                 <button
+                  onClick={() => {
+                    setEditDayModalDate(day.dayKey);
+                    setEditDayModalType('preassembly');
+                    setEditDayModalItemCount(day.items.length);
+                    setDayMenuOpen(null);
+                  }}
+                  disabled={isDayLocked(day.dayKey)}
+                >
+                  <FiEdit2 size={14} />
+                  <span>Muuda päeva ({day.items.length})</span>
+                </button>
+                {user.role === 'admin' && !monthLocks.has(day.dayKey.substring(0, 7)) && (
+                  <button
+                    onClick={() => dayLocks.has(day.dayKey) ? unlockDay(day.dayKey) : lockDay(day.dayKey)}
+                  >
+                    {dayLocks.has(day.dayKey) ? (
+                      <>
+                        <FiUnlock size={14} />
+                        <span>Ava päev</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiLock size={14} />
+                        <span>Lukusta päev</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                {user.role === 'admin' && monthLocks.has(day.dayKey.substring(0, 7)) && (
+                  <button disabled title="Kuu on lukustatud">
+                    <FiLock size={14} />
+                    <span>Päev lukustatud (kuu lukus)</span>
+                  </button>
+                )}
+                <button
                   onClick={() => deleteDayPreassemblies(day.dayKey, day.items)}
                   className="delete-btn"
+                  disabled={isDayLocked(day.dayKey)}
                 >
                   <FiTrash2 size={14} />
                   <span>Kustuta päev ({day.items.length})</span>
@@ -8279,6 +8543,90 @@ export default function InstallationsScreen({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit day modal */}
+      {editDayModalDate && editDayModalType && (
+        <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
+          <div className="comment-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Muuda päeva: {editDayModalDate} ({editDayModalItemCount} detaili)</h3>
+              <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
+            </div>
+            <div className="comment-modal-body">
+              <div className="edit-day-form">
+                <div className="form-group">
+                  <label>Uus kuupäev (valikuline):</label>
+                  <input
+                    type="date"
+                    value={editDayNewDate}
+                    onChange={e => setEditDayNewDate(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Ressurss (valikuline):</label>
+                  <input
+                    type="text"
+                    value={editDayResource}
+                    onChange={e => setEditDayResource(e.target.value)}
+                    placeholder="Nt: Kraana 1, Meeskond A"
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Märkmed (valikuline):</label>
+                  <textarea
+                    value={editDayNotes}
+                    onChange={e => setEditDayNotes(e.target.value)}
+                    placeholder="Lisainfo või märkmed..."
+                    rows={3}
+                    className="form-input"
+                  />
+                </div>
+                <div className="edit-day-info">
+                  <FiAlertCircle size={14} />
+                  <span>Muudatused rakenduvad kõigile {editDayModalItemCount} detailile sel päeval</span>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    className="cancel-btn"
+                    onClick={() => setEditDayModalDate(null)}
+                    disabled={savingEditDay}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    className="save-btn"
+                    onClick={saveEditDay}
+                    disabled={savingEditDay || (!editDayNewDate && !editDayResource.trim() && !editDayNotes.trim())}
+                  >
+                    {savingEditDay ? 'Salvestan...' : 'Salvesta'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backdrop to close menus on outside click */}
+      {(dayMenuOpen || monthMenuOpen) && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 99,
+            background: 'transparent'
+          }}
+          onClick={() => {
+            setDayMenuOpen(null);
+            setMonthMenuOpen(null);
+          }}
+        />
       )}
     </div>
   );
