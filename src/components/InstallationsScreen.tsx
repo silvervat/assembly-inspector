@@ -4261,7 +4261,10 @@ export default function InstallationsScreen({
     return guid && installedGuids.has(guid);
   }).length;
 
-  const newObjectsCount = selectedObjects.length - alreadyInstalledCount;
+  // Count temp list items that are not already installed
+  const tempListNewCount = Array.from(tempList).filter(guid => !installedGuids.has(guid.toLowerCase())).length;
+
+  const newObjectsCount = (selectedObjects.length - alreadyInstalledCount) + tempListNewCount;
 
   // Toggle installation selection
   const toggleInstallationSelect = (id: string, e: React.MouseEvent) => {
