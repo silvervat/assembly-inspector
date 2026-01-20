@@ -8766,6 +8766,265 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="📐 Nurkade mõõtja V2"
+                  result={functionResults["cornerMeasurerV2"]}
+                  onClick={async () => {
+                    updateFunctionResult("cornerMeasurerV2", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      // Get object properties
+                      const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeId]);
+                      if (!props || props.length === 0) throw new Error('Properties puuduvad');
+
+                      const objProps = props[0];
+
+                      // Helper to find property set
+                      const findPropSet = (name: string): any => {
+                        if (objProps.propertySets && Array.isArray(objProps.propertySets)) {
+                          for (const pset of objProps.propertySets) {
+                            if (pset.name === name && pset.properties) {
+                              const result: any = {};
+                              for (const p of pset.properties) {
+                                result[p.name] = p.value;
+                              }
+                              return result;
+                            }
+                          }
+                        }
+                        if (objProps.properties && Array.isArray(objProps.properties)) {
+                          for (const pset of objProps.properties) {
+                            if (pset.name === name && pset.properties) {
+                              const result: any = {};
+                              for (const p of pset.properties) {
+                                result[p.name] = p.value;
+                              }
+                              return result;
+                            }
+                          }
+                        }
+                        return null;
+                      };
+
+                      // Get Extrusion data (required)
+                      const extrusion = findPropSet('Extrusion');
+                      if (!extrusion) throw new Error('Extrusion andmed puuduvad');
+
+                      // Extract extrusion values
+                      const origin = {
+                        x: parseFloat(extrusion.OriginX) || 0,
+                        y: parseFloat(extrusion.OriginY) || 0,
+                        z: parseFloat(extrusion.OriginZ) || 0
+                      };
+                      const xDir = {
+                        x: parseFloat(extrusion.XDirX) || 0,
+                        y: parseFloat(extrusion.XDirY) || 0,
+                        z: parseFloat(extrusion.XDirZ) || 0
+                      };
+                      const extrusionVec = {
+                        x: parseFloat(extrusion.ExtrusionX) || 0,
+                        y: parseFloat(extrusion.ExtrusionY) || 0,
+                        z: parseFloat(extrusion.ExtrusionZ) || 0
+                      };
+
+                      // Calculate extrusion length
+                      const extLen = Math.sqrt(extrusionVec.x**2 + extrusionVec.y**2 + extrusionVec.z**2);
+
+                      // Try to get profile dimensions from various sources
+                      let xDim = 0;
+                      let yDim = 0;
+                      let profileSource = '';
+
+                      // 1. Try IfcRectangleProfile
+                      const rectProfile = findPropSet('IfcRectangleProfile') || findPropSet('Ifc Rectangle Profile');
+                      if (rectProfile && rectProfile.XDim && rectProfile.YDim) {
+                        xDim = parseFloat(rectProfile.XDim) || 0;
+                        yDim = parseFloat(rectProfile.YDim) || 0;
+                        profileSource = 'IfcRectangleProfile';
+                      }
+
+                      // 2. Try Tekla Quantity + CustomProfile
+                      if (xDim === 0 || yDim === 0) {
+                        const teklaQty = findPropSet('Tekla Quantity');
+                        const customProfile = findPropSet('CustomProfile');
+
+                        if (teklaQty) {
+                          const height = parseFloat(teklaQty.Height) || 0;
+                          const width = parseFloat(teklaQty.Width) || 0;
+                          const length = parseFloat(teklaQty.Length) || 0;
+
+                          // Determine which dimensions are profile vs extrusion
+                          // The extrusion length should match one of these dimensions
+                          const dims = [
+                            { name: 'Height', val: height },
+                            { name: 'Width', val: width },
+                            { name: 'Length', val: length }
+                          ].filter(d => d.val > 0);
+
+                          // Find dimension closest to extrusion length (that's the thickness)
+                          dims.sort((a, b) => Math.abs(a.val - extLen) - Math.abs(b.val - extLen));
+
+                          // The other two are profile dimensions
+                          const profileDims = dims.filter(d => Math.abs(d.val - extLen) > 1);
+
+                          if (profileDims.length >= 2) {
+                            xDim = profileDims[0].val;
+                            yDim = profileDims[1].val;
+                            profileSource = `Tekla Quantity (${profileDims[0].name}×${profileDims[1].name})`;
+                          } else if (profileDims.length === 1) {
+                            // Only one profile dim found, use it for both or try profile name
+                            xDim = profileDims[0].val;
+
+                            // Try to parse from profile name like "PL8X410"
+                            const profileName = customProfile?.ProfileName || teklaQty?.ProfileName || '';
+                            const match = profileName.match(/PL(\d+(?:\.\d+)?)[X×](\d+(?:\.\d+)?)/i);
+                            if (match) {
+                              const plThickness = parseFloat(match[1]);
+                              const plWidth = parseFloat(match[2]);
+                              if (Math.abs(plThickness - extLen) < 2) {
+                                yDim = plWidth;
+                              } else if (Math.abs(plWidth - extLen) < 2) {
+                                yDim = plThickness;
+                              }
+                            }
+                            profileSource = 'Tekla Quantity + ProfileName';
+                          }
+                        }
+                      }
+
+                      // 3. Try BaseQuantities
+                      if (xDim === 0 || yDim === 0) {
+                        const baseQty = findPropSet('BaseQuantities');
+                        if (baseQty) {
+                          const width = parseFloat(baseQty.Width) || 0;
+                          const length = parseFloat(baseQty.Length) || 0;
+                          if (width > 0 && length > 0) {
+                            xDim = width;
+                            yDim = length;
+                            profileSource = 'BaseQuantities';
+                          } else if (width > 0) {
+                            xDim = width;
+                            // Try NetArea / Width for other dim
+                            const netArea = parseFloat(baseQty.NetArea) || 0;
+                            if (netArea > 0 && width > 0) {
+                              yDim = (netArea * 1000000) / width; // Convert m² to mm²
+                            }
+                            profileSource = 'BaseQuantities (calculated)';
+                          }
+                        }
+                      }
+
+                      if (xDim === 0 || yDim === 0) {
+                        throw new Error(`Profiili mõõtmeid ei leitud. Extrusion=${extLen.toFixed(1)}mm`);
+                      }
+
+                      // Normalize extrusion direction
+                      const extNorm = {
+                        x: extrusionVec.x / extLen,
+                        y: extrusionVec.y / extLen,
+                        z: extrusionVec.z / extLen
+                      };
+
+                      // Calculate local Y axis (cross product of extNorm × xDir)
+                      const yDir = {
+                        x: extNorm.y * xDir.z - extNorm.z * xDir.y,
+                        y: extNorm.z * xDir.x - extNorm.x * xDir.z,
+                        z: extNorm.x * xDir.y - extNorm.y * xDir.x
+                      };
+
+                      // Normalize Y direction
+                      const yLen = Math.sqrt(yDir.x**2 + yDir.y**2 + yDir.z**2);
+                      if (yLen > 0.001) {
+                        yDir.x /= yLen;
+                        yDir.y /= yLen;
+                        yDir.z /= yLen;
+                      }
+
+                      // Calculate 8 corners
+                      const corners: { x: number; y: number; z: number }[] = [];
+                      const halfX = xDim / 2;
+                      const halfY = yDim / 2;
+
+                      for (const ez of [0, 1]) {
+                        for (const ey of [-1, 1]) {
+                          for (const ex of [-1, 1]) {
+                            corners.push({
+                              x: origin.x + ex * halfX * xDir.x + ey * halfY * yDir.x + ez * extrusionVec.x,
+                              y: origin.y + ex * halfX * xDir.y + ey * halfY * yDir.y + ez * extrusionVec.y,
+                              z: origin.z + ex * halfX * xDir.z + ey * halfY * yDir.z + ez * extrusionVec.z
+                            });
+                          }
+                        }
+                      }
+
+                      // Create measurement markups for edges 0-1, 0-2, 0-4
+                      const measurements = [
+                        {
+                          start: { positionX: corners[0].x, positionY: corners[0].y, positionZ: corners[0].z },
+                          end: { positionX: corners[1].x, positionY: corners[1].y, positionZ: corners[1].z },
+                          mainLineStart: { positionX: corners[0].x, positionY: corners[0].y, positionZ: corners[0].z },
+                          mainLineEnd: { positionX: corners[1].x, positionY: corners[1].y, positionZ: corners[1].z },
+                          color: { r: 255, g: 0, b: 0, a: 255 }
+                        },
+                        {
+                          start: { positionX: corners[0].x, positionY: corners[0].y, positionZ: corners[0].z },
+                          end: { positionX: corners[2].x, positionY: corners[2].y, positionZ: corners[2].z },
+                          mainLineStart: { positionX: corners[0].x, positionY: corners[0].y, positionZ: corners[0].z },
+                          mainLineEnd: { positionX: corners[2].x, positionY: corners[2].y, positionZ: corners[2].z },
+                          color: { r: 0, g: 255, b: 0, a: 255 }
+                        },
+                        {
+                          start: { positionX: corners[0].x, positionY: corners[0].y, positionZ: corners[0].z },
+                          end: { positionX: corners[4].x, positionY: corners[4].y, positionZ: corners[4].z },
+                          mainLineStart: { positionX: corners[0].x, positionY: corners[0].y, positionZ: corners[0].z },
+                          mainLineEnd: { positionX: corners[4].x, positionY: corners[4].y, positionZ: corners[4].z },
+                          color: { r: 0, g: 0, b: 255, a: 255 }
+                        }
+                      ];
+
+                      await api.markup.addMeasurementMarkups(measurements);
+
+                      // Calculate actual edge lengths
+                      const edge01 = Math.sqrt(
+                        (corners[1].x - corners[0].x)**2 +
+                        (corners[1].y - corners[0].y)**2 +
+                        (corners[1].z - corners[0].z)**2
+                      );
+                      const edge02 = Math.sqrt(
+                        (corners[2].x - corners[0].x)**2 +
+                        (corners[2].y - corners[0].y)**2 +
+                        (corners[2].z - corners[0].z)**2
+                      );
+                      const edge04 = Math.sqrt(
+                        (corners[4].x - corners[0].x)**2 +
+                        (corners[4].y - corners[0].y)**2 +
+                        (corners[4].z - corners[0].z)**2
+                      );
+
+                      let result = `📐 NURKADE MÕÕTJA V2\n${'═'.repeat(30)}\n\n`;
+                      result += `Allikas: ${profileSource}\n`;
+                      result += `Profiil: ${xDim.toFixed(1)} × ${yDim.toFixed(1)} mm\n`;
+                      result += `Ekstrusioon: ${extLen.toFixed(1)} mm\n\n`;
+                      result += `🔴 Serv 0→1 (X): ${edge01.toFixed(1)} mm\n`;
+                      result += `🟢 Serv 0→2 (Y): ${edge02.toFixed(1)} mm\n`;
+                      result += `🔵 Serv 0→4 (Z): ${edge04.toFixed(1)} mm\n\n`;
+                      result += `📍 Nurgad (m):\n`;
+                      corners.forEach((c, i) => {
+                        result += `  ${i}: (${(c.x/1000).toFixed(3)}, ${(c.y/1000).toFixed(3)}, ${(c.z/1000).toFixed(3)})\n`;
+                      });
+
+                      updateFunctionResult("cornerMeasurerV2", { status: 'success', result });
+                    } catch (e: any) {
+                      updateFunctionResult("cornerMeasurerV2", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="⭕ Joonista ring (r=20m)"
                   result={functionResults["drawCircle20m"]}
                   onClick={async () => {
