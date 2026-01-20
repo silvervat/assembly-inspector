@@ -2160,7 +2160,7 @@ export default function InstallationsScreen({
       }
 
       // Color temp list items GREEN
-      const green = { r: 16, g: 185, b: 129, a: 1.0 }; // #10b981
+      const green = { r: 16, g: 185, b: 129, a: 255 }; // #10b981
 
       for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
         if (runtimeIds.length === 0) continue;
@@ -3984,7 +3984,7 @@ export default function InstallationsScreen({
           greenByModel[found.modelId].push(found.runtimeId);
         }
 
-        const green = { r: 16, g: 185, b: 129, a: 1.0 }; // #10b981
+        const green = { r: 16, g: 185, b: 129, a: 255 }; // #10b981
 
         for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
           if (runtimeIds.length > 0) {
@@ -5498,6 +5498,39 @@ export default function InstallationsScreen({
               </button>
             </div>
           </div>
+
+          {/* Temp List Section - Always visible when list has items */}
+          {tempList.size > 0 && (
+            <div className="temp-list-section">
+              <div className="temp-list-header">
+                <span className="temp-list-title">
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> Ajutine nimekiri: {tempList.size}
+                </span>
+                <button
+                  className="clear-temp-list-btn"
+                  onClick={clearTempList}
+                  title="Tühjenda ajutine nimekiri"
+                >
+                  <FiX size={14} /> Tühjenda
+                </button>
+              </div>
+              <div className="temp-list-items">
+                {Array.from(tempList).map((guid, idx) => {
+                  // Find object info from selectedObjects or from model cache
+                  const obj = selectedObjects.find(o => getObjectGuid(o) === guid);
+                  const assemblyMark = obj?.assemblyMark || guid.substring(0, 8);
+                  const productName = obj?.productName;
+
+                  return (
+                    <div key={idx} className="temp-list-item">
+                      <span className="temp-list-item-mark">{assemblyMark}</span>
+                      {productName && <span className="temp-list-item-product">{productName}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Selected objects list */}
           <div className="selected-objects-section">

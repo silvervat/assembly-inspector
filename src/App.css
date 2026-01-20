@@ -10130,6 +10130,68 @@ button.stat-toggle.off:hover {
   transform: translateY(-1px);
 }
 
+/* Temp list section */
+.temp-list-section {
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px solid #10b981;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.temp-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.temp-list-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #059669;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.temp-list-section .clear-temp-list-btn {
+  width: auto;
+  padding: 4px 10px;
+  gap: 4px;
+  font-size: 12px;
+  height: auto;
+}
+
+.temp-list-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.temp-list-item {
+  background: white;
+  border: 1px solid #d1fae5;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.temp-list-item-mark {
+  font-weight: 600;
+  color: #059669;
+}
+
+.temp-list-item-product {
+  font-size: 11px;
+  color: #6b7280;
+}
+
 /* Installation info modal */
 .install-info-modal {
   max-width: 360px;
