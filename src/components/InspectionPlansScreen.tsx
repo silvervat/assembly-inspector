@@ -168,6 +168,7 @@ export default function InspectionPlansScreen({
         onBack={onBack}
         user={user}
         projectId={projectId}
+        onSelectInspectionType={onSelectInspectionType}
       />
 
       <div className="screen-content">

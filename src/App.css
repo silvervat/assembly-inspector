@@ -460,6 +460,30 @@ body {
   background: var(--modus-primary-selected);
 }
 
+.quick-search-options {
+  padding: 4px 0 8px 0;
+}
+
+.quick-search-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--modus-text-secondary);
+  user-select: none;
+}
+
+.quick-search-checkbox input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+
+.quick-search-checkbox:hover {
+  color: var(--modus-text-primary);
+}
+
 .quick-search-divider {
   height: 1px;
   background: var(--modus-border);
