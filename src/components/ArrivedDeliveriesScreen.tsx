@@ -605,6 +605,17 @@ export default function ArrivedDeliveriesScreen({
     loadAllData();
   }, [loadAllData]);
 
+  // Check if we should auto-start arrival for a vehicle (coming from delivery schedule)
+  useEffect(() => {
+    const vehicleId = sessionStorage.getItem('startArrivalForVehicle');
+    if (vehicleId && vehicles.length > 0) {
+      // Clear the flag
+      sessionStorage.removeItem('startArrivalForVehicle');
+      // Start arrival for this vehicle
+      startArrival(vehicleId);
+    }
+  }, [vehicles]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Close vehicle menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -1472,63 +1483,6 @@ export default function ArrivedDeliveriesScreen({
       arrivalUpdateTimersRef.current.clear();
     };
   }, []);
-
-  // Complete arrival confirmation
-  const completeArrival = async (arrivedVehicleId: string) => {
-    setSaving(true);
-    try {
-      // Update arrival as confirmed
-      await supabase
-        .from('trimble_arrived_vehicles')
-        .update({
-          is_confirmed: true,
-          confirmed_at: new Date().toISOString(),
-          confirmed_by: tcUserEmail,
-          updated_at: new Date().toISOString(),
-          updated_by: tcUserEmail
-        })
-        .eq('id', arrivedVehicleId);
-
-      // Update vehicle status in delivery schedule
-      const arrival = arrivedVehicles.find(av => av.id === arrivedVehicleId);
-      if (arrival) {
-        await supabase
-          .from('trimble_delivery_vehicles')
-          .update({
-            status: 'completed',
-            updated_at: new Date().toISOString(),
-            updated_by: tcUserEmail
-          })
-          .eq('id', arrival.vehicle_id);
-
-        // Update item statuses for confirmed items
-        const arrivalConfirmations = getConfirmationsForArrival(arrivedVehicleId);
-        const confirmedItemIds = arrivalConfirmations
-          .filter(c => c.status === 'confirmed')
-          .map(c => c.item_id);
-
-        if (confirmedItemIds.length > 0) {
-          await supabase
-            .from('trimble_delivery_items')
-            .update({
-              status: 'delivered',
-              updated_at: new Date().toISOString(),
-              updated_by: tcUserEmail
-            })
-            .in('id', confirmedItemIds);
-        }
-      }
-
-      await Promise.all([loadArrivedVehicles(), loadVehicles(), loadItems()]);
-      setActiveArrivalId(null);
-      setMessage('Saabumise kinnitus lõpetatud');
-    } catch (e: any) {
-      console.error('Error completing arrival:', e);
-      setMessage('Viga: ' + e.message);
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // ============================================
   // PDF & SHARE FUNCTIONS
@@ -4610,19 +4564,6 @@ export default function ArrivedDeliveriesScreen({
                           </div>
                         )}
 
-                        {/* Complete button */}
-                        {!arrivedVehicle.is_confirmed && pendingCount === 0 && (
-                          <div className="complete-section">
-                            <button
-                              className="complete-btn"
-                              onClick={() => completeArrival(arrivedVehicle.id)}
-                              disabled={saving}
-                            >
-                              <FiCheck /> Lõpeta kinnitus
-                            </button>
-                          </div>
-                        )}
-
                         {/* Share/Export section */}
                         <div className="share-export-section">
                           <div className="share-export-title">Jaga / Eksport</div>
@@ -4989,17 +4930,17 @@ export default function ArrivedDeliveriesScreen({
                         <div key={item.id} className={`model-selected-item ${isFromDifferentVehicle ? 'warning' : ''}`}>
                           <div className="item-info">
                             <span className="item-mark">{item.assembly_mark}</span>
-                            <span className="item-name">{item.product_name}</span>
+                            {item.product_name && <span className="item-name">{item.product_name}</span>}
                             {item.cast_unit_weight && (
                               <span className="item-weight">{Math.round(Number(item.cast_unit_weight))} kg</span>
                             )}
+                            {isFromDifferentVehicle && plannedVehicle && (
+                              <span className="item-warning-inline">
+                                <FiAlertTriangle size={11} />
+                                Veokis: <strong>{plannedVehicle.vehicle_code}</strong>
+                              </span>
+                            )}
                           </div>
-                          {isFromDifferentVehicle && plannedVehicle && (
-                            <div className="item-warning">
-                              <FiAlertTriangle />
-                              <span>Planeeritud veokis: <strong>{plannedVehicle.vehicle_code}</strong></span>
-                            </div>
-                          )}
                         </div>
                       );
                     })}

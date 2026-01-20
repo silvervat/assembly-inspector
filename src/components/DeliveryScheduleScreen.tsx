@@ -7233,6 +7233,14 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                                 </button>
                               ) : null;
                             })()}
+                            <button onClick={() => {
+                              // Save vehicle ID to sessionStorage
+                              sessionStorage.setItem('startArrivalForVehicle', vehicleId);
+                              setVehicleMenuId(null);
+                              onNavigate?.('arrived_deliveries');
+                            }}>
+                              <FiTruck /> Registreeri saabun
+                            </button>
                             <button
                               className="danger"
                               onClick={() => {

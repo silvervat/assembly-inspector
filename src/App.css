@@ -1662,7 +1662,6 @@ button.stat-toggle.off:hover {
   align-items: center;
   justify-content: center;
   min-width: 40px;
-  align-self: stretch;
 }
 
 .search-button:hover:not(:disabled) {
@@ -7385,16 +7384,16 @@ button.stat-toggle.off:hover {
 .model-selection-modal .model-selected-items {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   max-height: 300px;
   overflow-y: auto;
   margin: 12px 0;
 }
 
 .model-selection-modal .model-selected-item {
-  padding: 10px 12px;
+  padding: 6px 10px;
   background: #f9fafb;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid #e5e7eb;
 }
 
@@ -7405,22 +7404,33 @@ button.stat-toggle.off:hover {
 
 .model-selection-modal .model-selected-item .item-info {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .model-selection-modal .model-selected-item .item-mark {
   font-weight: 600;
+  font-size: 13px;
 }
 
 .model-selection-modal .model-selected-item .item-name {
   color: var(--modus-text-secondary);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .model-selection-modal .model-selected-item .item-weight {
   color: var(--modus-text-tertiary);
-  font-size: 12px;
+  font-size: 11px;
+}
+
+.model-selection-modal .model-selected-item .item-warning-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #d97706;
+  font-size: 11px;
+  margin-left: 4px;
 }
 
 .model-selection-modal .model-selected-item .item-warning {
@@ -10743,6 +10753,11 @@ button.stat-toggle.off:hover {
 /* Day Group */
 .installation-date-group {
   border-bottom: 1px solid var(--modus-border-light);
+  position: relative;
+}
+
+.installation-date-group:has(.day-menu-dropdown) {
+  z-index: 2000;
 }
 
 .installation-date-group:last-child {
@@ -10909,7 +10924,7 @@ button.stat-toggle.off:hover {
   border-radius: 4px;
   color: var(--modus-text-secondary);
   transition: all 0.15s;
-  opacity: 0;
+  opacity: 0.6;
 }
 
 .date-group-header:hover .day-menu-btn {
@@ -10929,7 +10944,7 @@ button.stat-toggle.off:hover {
   border: 1px solid var(--modus-border);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  z-index: 2000;
   min-width: 160px;
   overflow: hidden;
 }
