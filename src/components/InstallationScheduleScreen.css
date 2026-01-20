@@ -4082,3 +4082,105 @@
 .scheduled-edit-modal .modal-actions .btn-primary:hover {
   background: var(--modus-primary-dark);
 }
+
+/* Edit day modal */
+.edit-day-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edit-day-form .form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-day-form .form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.edit-day-form .form-input {
+  padding: 10px 12px;
+  border: 1px solid var(--modus-border);
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.edit-day-form .form-input:focus {
+  outline: none;
+  border-color: var(--modus-primary);
+}
+
+.edit-day-form textarea.form-input {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.edit-day-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #fef3c7;
+  border-left: 3px solid #f59e0b;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.edit-day-info svg {
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+/* Schedule locks */
+.month-lock-btn {
+  margin-left: 10px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.month-lock-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.month-lock-btn.locked {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #dc2626;
+}
+
+.month-lock-btn.locked:hover {
+  background: #fecaca;
+  border-color: #dc2626;
+}
+
+.date-header .lock-indicator {
+  margin-left: 8px;
+  padding: 2px 6px;
+  background: #fee2e2;
+  border: 1px solid #ef4444;
+  border-radius: 3px;
+  font-size: 11px;
+  color: #dc2626;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.date-menu-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
-import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion } from '../supabase';
+import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion, ScheduleLock } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
   findObjectsInLoadedModels,
@@ -18,7 +18,7 @@ import {
   FiArrowUp, FiArrowDown, FiDroplet, FiRefreshCw, FiPause, FiCamera, FiSearch,
   FiSettings, FiMoreVertical, FiCopy, FiUpload, FiAlertCircle, FiCheckCircle, FiCheck,
   FiMessageSquare, FiAlertTriangle, FiFilter, FiEdit3, FiTruck, FiLayers, FiSave, FiEdit,
-  FiPackage, FiTag, FiBarChart2
+  FiPackage, FiTag, FiBarChart2, FiLock, FiUnlock
 } from 'react-icons/fi';
 import './InstallationScheduleScreen.css';
 import PageHeader from './PageHeader';
@@ -236,6 +236,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [dateContextMenu, setDateContextMenu] = useState<{ x: number; y: number; sourceDate: string } | null>(null);
   const [contextMenuMonth, setContextMenuMonth] = useState(new Date());
 
+  // Edit day modal state
+  const [editDayModalDate, setEditDayModalDate] = useState<string | null>(null);
+  const [editDayModalItemCount, setEditDayModalItemCount] = useState(0);
+  const [editDayNewDate, setEditDayNewDate] = useState('');
+  const [editDayResource, setEditDayResource] = useState('');
+  const [editDayNotes, setEditDayNotes] = useState('');
+  const [savingEditDay, setSavingEditDay] = useState(false);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -409,6 +417,11 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [commentModalTarget, setCommentModalTarget] = useState<{ type: 'item' | 'date'; id: string } | null>(null);
   const [newCommentText, setNewCommentText] = useState('');
   const [savingComment, setSavingComment] = useState(false);
+
+  // Schedule locks state
+  const [_scheduleLocks, setScheduleLocks] = useState<ScheduleLock[]>([]);
+  const [lockedDays, setLockedDays] = useState<Set<string>>(new Set());
+  const [lockedMonths, setLockedMonths] = useState<Set<string>>(new Set()); // Format: YYYY-MM
 
   // Undo state - store previous states for Ctrl+Z
   const [undoStack, setUndoStack] = useState<{ items: ScheduleItem[]; description: string }[]>([]);
@@ -2071,8 +2084,244 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     }
   };
 
+  // Load schedule locks from database
+  const loadScheduleLocks = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('schedule_locks')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .eq('version_id', activeVersionId || null);
+
+      if (error) {
+        console.error('Error loading locks:', error);
+        return;
+      }
+
+      setScheduleLocks(data || []);
+
+      // Build Sets for fast lookup
+      const daySet = new Set<string>();
+      const monthSet = new Set<string>();
+
+      for (const lock of data || []) {
+        if (lock.lock_type === 'day') {
+          daySet.add(lock.lock_date);
+        } else if (lock.lock_type === 'month') {
+          // Extract YYYY-MM from lock_date
+          const yearMonth = lock.lock_date.substring(0, 7);
+          monthSet.add(yearMonth);
+        }
+      }
+
+      setLockedDays(daySet);
+      setLockedMonths(monthSet);
+    } catch (e) {
+      console.error('Error loading schedule locks:', e);
+    }
+  }, [projectId, activeVersionId]);
+
+  // Check if a date is locked (day or month)
+  const isDateLocked = useCallback((dateStr: string): boolean => {
+    // Check if day is locked
+    if (lockedDays.has(dateStr)) return true;
+
+    // Check if month is locked
+    const yearMonth = dateStr.substring(0, 7); // YYYY-MM
+    if (lockedMonths.has(yearMonth)) return true;
+
+    return false;
+  }, [lockedDays, lockedMonths]);
+
+  // Toggle day lock
+  const toggleDayLock = async (dateStr: string) => {
+    const isLocked = lockedDays.has(dateStr);
+
+    try {
+      if (isLocked) {
+        // Unlock - delete lock record
+        const { error } = await supabase
+          .from('schedule_locks')
+          .delete()
+          .eq('trimble_project_id', projectId)
+          .eq('version_id', activeVersionId || null)
+          .eq('lock_type', 'day')
+          .eq('lock_date', dateStr);
+
+        if (error) throw error;
+
+        setMessage(`Päev ${formatDateShort(dateStr)} avatud`);
+      } else {
+        // Lock - insert lock record
+        const { error } = await supabase
+          .from('schedule_locks')
+          .insert({
+            trimble_project_id: projectId,
+            version_id: activeVersionId || null,
+            lock_type: 'day',
+            lock_date: dateStr,
+            locked_by: tcUserEmail
+          });
+
+        if (error) throw error;
+
+        setMessage(`Päev ${formatDateShort(dateStr)} lukustatud`);
+      }
+
+      await loadScheduleLocks();
+    } catch (e) {
+      console.error('Error toggling day lock:', e);
+      setMessage('Viga lukustamisel');
+    }
+  };
+
+  // Toggle month lock
+  const toggleMonthLock = async (yearMonth: string) => {
+    const isLocked = lockedMonths.has(yearMonth);
+
+    try {
+      if (isLocked) {
+        // Unlock month - delete month lock
+        const lockDate = `${yearMonth}-01`;
+        const { error } = await supabase
+          .from('schedule_locks')
+          .delete()
+          .eq('trimble_project_id', projectId)
+          .eq('version_id', activeVersionId || null)
+          .eq('lock_type', 'month')
+          .eq('lock_date', lockDate);
+
+        if (error) throw error;
+
+        // When unlocking month, also remove all day locks for that month
+        const { error: dayError } = await supabase
+          .from('schedule_locks')
+          .delete()
+          .eq('trimble_project_id', projectId)
+          .eq('version_id', activeVersionId || null)
+          .eq('lock_type', 'day')
+          .gte('lock_date', `${yearMonth}-01`)
+          .lt('lock_date', `${yearMonth}-32`);
+
+        if (dayError) throw dayError;
+
+        setMessage(`Kuu ${yearMonth} avatud (kõik päevade lukud eemaldatud)`);
+      } else {
+        // Lock month - insert month lock
+        const lockDate = `${yearMonth}-01`;
+        const { error } = await supabase
+          .from('schedule_locks')
+          .insert({
+            trimble_project_id: projectId,
+            version_id: activeVersionId || null,
+            lock_type: 'month',
+            lock_date: lockDate,
+            locked_by: tcUserEmail
+          });
+
+        if (error) throw error;
+
+        setMessage(`Kuu ${yearMonth} lukustatud`);
+      }
+
+      await loadScheduleLocks();
+    } catch (e) {
+      console.error('Error toggling month lock:', e);
+      setMessage('Viga lukustamisel');
+    }
+  };
+
+  // Load locks when version changes
+  useEffect(() => {
+    loadScheduleLocks();
+  }, [loadScheduleLocks]);
+
+  // Edit all items from a specific day (bulk update date, resource, notes)
+  const saveEditDay = async () => {
+    if (!editDayModalDate) return;
+
+    // Check if date is locked
+    if (isDateLocked(editDayModalDate)) {
+      setMessage('See päev on lukustatud');
+      setSavingEditDay(false);
+      return;
+    }
+
+    const dateItems = itemsByDate[editDayModalDate] || [];
+    if (dateItems.length === 0) {
+      setEditDayModalDate(null);
+      return;
+    }
+
+    setSavingEditDay(true);
+
+    try {
+      // Build update object - only include fields that have values
+      const updates: any = {
+        updated_by: tcUserEmail,
+        updated_at: new Date().toISOString()
+      };
+
+      // Add fields if they have values
+      if (editDayNewDate) {
+        updates.scheduled_date = editDayNewDate;
+      }
+      if (editDayResource.trim()) {
+        updates.resource = editDayResource.trim();
+      }
+      if (editDayNotes.trim()) {
+        updates.notes = editDayNotes.trim();
+      }
+
+      // If no changes, close modal
+      if (Object.keys(updates).length === 2) { // Only updated_by and updated_at
+        setSavingEditDay(false);
+        setEditDayModalDate(null);
+        return;
+      }
+
+      // Update all items in this day
+      const itemIds = dateItems.map(i => i.id);
+
+      const { error } = await supabase
+        .from('installation_schedule_items')
+        .update(updates)
+        .in('id', itemIds);
+
+      if (error) {
+        console.error('Error updating day items:', error);
+        setMessage('Viga päeva muutmisel');
+        setSavingEditDay(false);
+        return;
+      }
+
+      setMessage(`Uuendatud ${dateItems.length} detaili`);
+
+      // Reload schedule
+      await loadSchedule(activeVersionId);
+
+      // Close modal and reset
+      setEditDayModalDate(null);
+      setEditDayNewDate('');
+      setEditDayResource('');
+      setEditDayNotes('');
+
+    } catch (e) {
+      console.error('Error updating day:', e);
+      setMessage('Viga päeva muutmisel');
+    } finally {
+      setSavingEditDay(false);
+    }
+  };
+
   // Delete all items from a specific date
   const deleteAllItemsInDate = async (date: string) => {
+    // Check if date is locked
+    if (isDateLocked(date)) {
+      setMessage('See päev on lukustatud');
+      return;
+    }
+
     const dateItems = itemsByDate[date] || [];
     if (dateItems.length === 0) return;
 
@@ -6235,6 +6484,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         <div className="calendar-header">
           <span className="calendar-month">
             {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+            {(() => {
+              const yearMonth = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth() + 1).padStart(2, '0')}`;
+              const isMonthLocked = lockedMonths.has(yearMonth);
+              return (
+                <button
+                  className={`month-lock-btn ${isMonthLocked ? 'locked' : ''}`}
+                  onClick={() => toggleMonthLock(yearMonth)}
+                  title={isMonthLocked ? 'Ava kuu' : 'Lukusta kuu'}
+                >
+                  {isMonthLocked ? <FiLock size={14} /> : <FiUnlock size={14} />}
+                </button>
+              );
+            })()}
           </span>
           {!calendarCollapsed && (
             <div className="calendar-nav">
@@ -7753,6 +8015,12 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                       }}
                       title="Paremklõps: muuda kuupäeva"
                     >{formatDateShort(date)}</span>
+                    {isDateLocked(date) && (
+                      <span className="lock-indicator" title="Lukustatud">
+                        <FiLock size={10} />
+                        Lukus
+                      </span>
+                    )}
                     <span className="date-header-spacer" />
                     <span className="date-count">{items.length} tk</span>
                     {/* Quick-add button - shows when unscheduled items are selected */}
@@ -7907,11 +8175,74 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           }
                           return null;
                         })()}
+                        {/* Edit entire day */}
+                        <div className="date-menu-divider" />
+                        <button
+                          className="date-menu-option"
+                          onClick={() => {
+                            setEditDayModalDate(date);
+                            setEditDayModalItemCount(items.length);
+                            setDateMenuId(null);
+                          }}
+                          disabled={isDateLocked(date)}
+                        >
+                          <FiEdit3 size={12} style={{ marginRight: '6px' }} />
+                          Muuda päeva ({items.length})
+                        </button>
+                        {/* Lock/Unlock day */}
+                        {(() => {
+                          const isDayLocked = lockedDays.has(date);
+                          const yearMonth = date.substring(0, 7);
+                          const isMonthLocked = lockedMonths.has(yearMonth);
+
+                          // Can only toggle day lock if month is not locked
+                          if (isMonthLocked) {
+                            return (
+                              <>
+                                <div className="date-menu-divider" />
+                                <button
+                                  className="date-menu-option"
+                                  disabled={true}
+                                  title="Kuu on lukustatud"
+                                >
+                                  <FiLock size={12} style={{ marginRight: '6px' }} />
+                                  Päev lukustatud (kuu lukus)
+                                </button>
+                              </>
+                            );
+                          }
+
+                          return (
+                            <>
+                              <div className="date-menu-divider" />
+                              <button
+                                className="date-menu-option"
+                                onClick={() => {
+                                  toggleDayLock(date);
+                                  setDateMenuId(null);
+                                }}
+                              >
+                                {isDayLocked ? (
+                                  <>
+                                    <FiUnlock size={12} style={{ marginRight: '6px' }} />
+                                    Ava päev
+                                  </>
+                                ) : (
+                                  <>
+                                    <FiLock size={12} style={{ marginRight: '6px' }} />
+                                    Lukusta päev
+                                  </>
+                                )}
+                              </button>
+                            </>
+                          );
+                        })()}
                         {/* Delete entire day */}
                         <div className="date-menu-divider" />
                         <button
                           className="date-menu-option delete"
                           onClick={() => deleteAllItemsInDate(date)}
+                          disabled={isDateLocked(date)}
                         >
                           <FiTrash2 size={12} style={{ marginRight: '6px' }} />
                           Kustuta päev ({items.length})
@@ -8469,6 +8800,71 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Comment Modal */}
+      {/* Edit day modal */}
+      {editDayModalDate && (
+        <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
+          <div className="comment-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Muuda päeva: {formatDateShort(editDayModalDate)} ({editDayModalItemCount} detaili)</h3>
+              <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
+            </div>
+            <div className="comment-modal-body">
+              <div className="edit-day-form">
+                <div className="form-group">
+                  <label>Uus kuupäev (valikuline):</label>
+                  <input
+                    type="date"
+                    value={editDayNewDate}
+                    onChange={e => setEditDayNewDate(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Ressurss (valikuline):</label>
+                  <input
+                    type="text"
+                    value={editDayResource}
+                    onChange={e => setEditDayResource(e.target.value)}
+                    placeholder="Nt: Kraana 1, Meeskond A"
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Märkmed (valikuline):</label>
+                  <textarea
+                    value={editDayNotes}
+                    onChange={e => setEditDayNotes(e.target.value)}
+                    placeholder="Lisainfo või märkmed..."
+                    rows={3}
+                    className="form-input"
+                  />
+                </div>
+                <div className="edit-day-info">
+                  <FiAlertCircle size={14} />
+                  <span>Muudatused rakenduvad kõigile {editDayModalItemCount} detailile sel päeval</span>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    className="cancel-btn"
+                    onClick={() => setEditDayModalDate(null)}
+                    disabled={savingEditDay}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    className="save-btn"
+                    onClick={saveEditDay}
+                    disabled={savingEditDay || (!editDayNewDate && !editDayResource.trim() && !editDayNotes.trim())}
+                  >
+                    {savingEditDay ? 'Salvestan...' : 'Salvesta'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCommentModal && commentModalTarget && (
         <div className="modal-overlay" onClick={() => setShowCommentModal(false)}>
           <div className="comment-modal" onClick={e => e.stopPropagation()}>

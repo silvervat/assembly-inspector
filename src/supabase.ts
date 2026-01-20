@@ -563,6 +563,7 @@ export interface ScheduleItem {
   scheduled_date: string;
   sort_order: number;
   notes?: string;
+  resource?: string;              // Resource/crew assignment (e.g., "Crane 1", "Team A")
   // Paigaldusviis (legacy - deprecated)
   install_method?: 'crane' | 'forklift' | 'manual' | null;
   install_method_count?: number;
@@ -619,6 +620,18 @@ export interface ScheduleVersion {
   created_at: string;
   updated_by?: string;
   updated_at?: string;
+}
+
+// Schedule locks - for day and month level locking
+export interface ScheduleLock {
+  id: string;
+  trimble_project_id: string;
+  version_id?: string | null;
+  lock_type: 'day' | 'month';
+  lock_date: string;                   // ISO date string (YYYY-MM-DD)
+  locked_by: string;                   // User email
+  locked_at: string;
+  notes?: string | null;
 }
 
 // Database schema:
