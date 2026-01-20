@@ -2775,28 +2775,6 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     });
   };
 
-  // Delete resource
-  const deleteResource = async (resourceId: string) => {
-    if (!confirm('Kas oled kindel, et soovid selle ressursi kustutada?')) return;
-
-    setResourcesLoading(true);
-    try {
-      const { error } = await supabase
-        .from('project_resources')
-        .delete()
-        .eq('id', resourceId);
-
-      if (error) throw error;
-      setMessage('Ressurss kustutatud');
-      await loadProjectResources();
-    } catch (e: any) {
-      console.error('Error deleting resource:', e);
-      setMessage(`Viga kustutamisel: ${e.message}`);
-    } finally {
-      setResourcesLoading(false);
-    }
-  };
-
   // Toggle resource active status
   const toggleResourceActive = async (resource: ProjectResource) => {
     try {
