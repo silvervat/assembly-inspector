@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { TrimbleExUser, supabase } from '../supabase';
+import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
-  FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder
+  FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder, FiSearch
 } from 'react-icons/fi';
+import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 export type InspectionMode =
   | 'paigaldatud'
@@ -32,6 +34,7 @@ interface MainMenuProps {
   user: TrimbleExUser;
   userInitials: string;
   projectId: string;
+  api: WorkspaceAPI.WorkspaceAPI;
   onSelectMode: (mode: InspectionMode) => void;
   onOpenSettings?: () => void;
 }
@@ -40,11 +43,74 @@ export default function MainMenu({
   user,
   userInitials,
   projectId,
+  api,
   onSelectMode,
   onOpenSettings
 }: MainMenuProps) {
   const isAdmin = user.role === 'admin';
   const [activeIssuesCount, setActiveIssuesCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchMessage, setSearchMessage] = useState<string | null>(null);
+
+  // Quick search function
+  const handleQuickSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchMessage('Sisesta otsingu tekst');
+      setTimeout(() => setSearchMessage(null), 2000);
+      return;
+    }
+
+    setSearching(true);
+    setSearchMessage(null);
+
+    try {
+      // Search for exact assembly mark
+      const { data: results, error } = await supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, guid, assembly_mark, product_name')
+        .eq('trimble_project_id', projectId)
+        .eq('assembly_mark', query.trim())
+        .limit(50);
+
+      if (error) throw error;
+
+      if (!results || results.length === 0) {
+        setSearchMessage(`Ei leidnud: ${query}`);
+        setTimeout(() => setSearchMessage(null), 3000);
+        return;
+      }
+
+      // Find objects in models
+      const guids = results.map(r => r.guid_ifc || r.guid).filter(Boolean) as string[];
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      if (foundObjects.size === 0) {
+        setSearchMessage(`Ei leidnud mudelist: ${query}`);
+        setTimeout(() => setSearchMessage(null), 3000);
+        return;
+      }
+
+      // Select and zoom to found objects
+      const modelObjectIds = Array.from(foundObjects.values()).map(obj => ({
+        modelId: obj.modelId,
+        objectRuntimeIds: [obj.runtimeId]
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds }, 'set');
+      await api.viewer.setCamera({ modelObjectIds }, { animationTime: 300 });
+
+      setSearchMessage(`✓ Leitud: ${results[0].assembly_mark}`);
+      setTimeout(() => setSearchMessage(null), 2000);
+      setSearchQuery('');
+    } catch (e) {
+      console.error('Quick search error:', e);
+      setSearchMessage('Viga otsingul');
+      setTimeout(() => setSearchMessage(null), 2000);
+    } finally {
+      setSearching(false);
+    }
+  }, [projectId, api]);
 
   // Load active issues count for badge
   useEffect(() => {
@@ -82,6 +148,32 @@ export default function MainMenu({
         <button className="menu-settings-btn" onClick={onOpenSettings} title="Seaded">
           <FiSettings size={18} />
         </button>
+      </div>
+
+      {/* Quick search */}
+      <div className="main-menu-search">
+        <div className="search-input-wrapper">
+          <FiSearch size={16} className="search-icon" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleQuickSearch(searchQuery);
+              }
+            }}
+            placeholder="Otsi assembly marki..."
+            className="search-input"
+            disabled={searching}
+          />
+          {searching && <span className="search-spinner">⏳</span>}
+        </div>
+        {searchMessage && (
+          <div className={`search-message ${searchMessage.startsWith('✓') ? 'success' : 'error'}`}>
+            {searchMessage}
+          </div>
+        )}
       </div>
 
       <div className="main-menu-items">
