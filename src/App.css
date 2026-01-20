@@ -10313,6 +10313,17 @@ button.stat-toggle.off:hover {
   gap: 4px;
 }
 
+.temp-list-title.clickable {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.temp-list-title.clickable:hover {
+  background-color: #d1fae5;
+}
+
 .temp-list-section .clear-temp-list-btn {
   width: auto;
   padding: 4px 10px;
