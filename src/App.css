@@ -1564,7 +1564,7 @@ button.stat-toggle.off:hover {
 }
 
 .menu-user-email {
-  font-size: var(--modus-font-size-sm);
+  font-size: 10px;
   color: var(--modus-text-primary);
   font-weight: 500;
   white-space: nowrap;
@@ -1573,7 +1573,7 @@ button.stat-toggle.off:hover {
 }
 
 .menu-user-role {
-  font-size: var(--modus-font-size-xs);
+  font-size: 9px;
   color: var(--modus-text-secondary);
   text-transform: uppercase;
 }
@@ -11914,6 +11914,7 @@ button.stat-toggle.off:hover {
   position: relative;
   border-radius: 6px;
   z-index: 1; /* Keep below navigation menus */
+  margin-bottom: 6px; /* Extra space to show bottom border clearly */
 }
 
 /* When menu or color picker is open, raise section z-index so menu appears above other groups */
