@@ -2173,40 +2173,43 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         inspectionsResult,
         issuesResult
       ] = await Promise.all([
-        // Delivery items
+        // Delivery items - use eq instead of ilike to avoid issues with $ in GUID
         supabase
           .from('trimble_delivery_items')
           .select(`
             *,
             vehicle:trimble_delivery_vehicles(
-              id, name, license_plate, scheduled_date,
+              id, vehicle_code, scheduled_date,
               factory:trimble_delivery_factories(id, name, color)
             )
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Arrival confirmations
+        // Arrival confirmations - join through item_id
         supabase
-          .from('arrival_item_confirmations')
+          .from('trimble_delivery_items')
           .select(`
-            *,
-            vehicle:arrived_vehicles(
-              id, license_plate, arrival_date, arrival_time, unload_method, unload_location,
-              photos:arrival_photos(id, photo_url, photo_type, uploaded_at)
+            guid_ifc,
+            confirmations:trimble_arrival_confirmations(
+              *,
+              arrived_vehicle:trimble_arrived_vehicles(
+                id, arrival_date, arrival_time, unload_start_time, unload_end_time,
+                photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at)
+              )
             )
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Installation schedule items
+        // Installation schedule - correct table name and use project_id
         supabase
-          .from('installation_schedule_items')
+          .from('installation_schedule')
           .select('*')
-          .eq('trimble_project_id', projectId)
-          .ilike('guid', guidLower),
+          .eq('project_id', projectId)
+          .eq('guid_ifc', guidLower),
 
-        // Organizer group items
+        // Organizer group items - use eq instead of ilike
         supabase
           .from('organizer_group_items')
           .select(`
@@ -2214,16 +2217,16 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             group:organizer_groups(id, name, color, description)
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Inspections
+        // Inspections - use eq instead of ilike
         supabase
           .from('inspections')
           .select('*')
           .eq('project_id', projectId)
-          .ilike('guid_ifc', guidLower),
+          .eq('guid_ifc', guidLower),
 
-        // Issues (through issue_objects)
+        // Issues (through issue_objects) - use eq instead of ilike
         supabase
           .from('issue_objects')
           .select(`
@@ -2235,12 +2238,15 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             )
           `)
           .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidLower)
+          .eq('guid_ifc', guidLower)
       ]);
+
+      // Extract arrival confirmations from nested structure
+      const arrivalConfirmations = arrivalResult.data?.[0]?.confirmations || [];
 
       setPartDbData({
         deliveryItems: deliveryResult.data || [],
-        arrivalItems: arrivalResult.data || [],
+        arrivalItems: arrivalConfirmations,
         installationItems: installationResult.data || [],
         organizerItems: organizerResult.data || [],
         inspections: inspectionsResult.data || [],
