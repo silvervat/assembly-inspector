@@ -1651,7 +1651,7 @@ button.stat-toggle.off:hover {
 }
 
 .search-button {
-  padding: 1px 1px;
+  padding: 10px 12px;
   background: var(--modus-primary);
   color: white;
   border: 1px solid var(--modus-primary);
@@ -1662,7 +1662,6 @@ button.stat-toggle.off:hover {
   align-items: center;
   justify-content: center;
   min-width: 40px;
-  align-self: stretch;
 }
 
 .search-button:hover:not(:disabled) {
