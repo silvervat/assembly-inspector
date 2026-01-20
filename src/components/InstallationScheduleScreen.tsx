@@ -236,6 +236,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
   const [dateContextMenu, setDateContextMenu] = useState<{ x: number; y: number; sourceDate: string } | null>(null);
   const [contextMenuMonth, setContextMenuMonth] = useState(new Date());
 
+  // Edit day modal state
+  const [editDayModalDate, setEditDayModalDate] = useState<string | null>(null);
+  const [editDayModalItemCount, setEditDayModalItemCount] = useState(0);
+  const [editDayNewDate, setEditDayNewDate] = useState('');
+  const [editDayResource, setEditDayResource] = useState('');
+  const [editDayNotes, setEditDayNotes] = useState('');
+  const [savingEditDay, setSavingEditDay] = useState(false);
+
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -2068,6 +2076,77 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
     } catch (e) {
       console.error('Error deleting items:', e);
       setMessage('Viga kustutamisel');
+    }
+  };
+
+  // Edit all items from a specific day (bulk update date, resource, notes)
+  const saveEditDay = async () => {
+    if (!editDayModalDate) return;
+
+    const dateItems = itemsByDate[editDayModalDate] || [];
+    if (dateItems.length === 0) {
+      setEditDayModalDate(null);
+      return;
+    }
+
+    setSavingEditDay(true);
+
+    try {
+      // Build update object - only include fields that have values
+      const updates: any = {
+        updated_by: tcUserEmail,
+        updated_at: new Date().toISOString()
+      };
+
+      // Add fields if they have values
+      if (editDayNewDate) {
+        updates.scheduled_date = editDayNewDate;
+      }
+      if (editDayResource.trim()) {
+        updates.resource = editDayResource.trim();
+      }
+      if (editDayNotes.trim()) {
+        updates.notes = editDayNotes.trim();
+      }
+
+      // If no changes, close modal
+      if (Object.keys(updates).length === 2) { // Only updated_by and updated_at
+        setSavingEditDay(false);
+        setEditDayModalDate(null);
+        return;
+      }
+
+      // Update all items in this day
+      const itemIds = dateItems.map(i => i.id);
+
+      const { error } = await supabase
+        .from('installation_schedule_items')
+        .update(updates)
+        .in('id', itemIds);
+
+      if (error) {
+        console.error('Error updating day items:', error);
+        setMessage('Viga päeva muutmisel');
+        setSavingEditDay(false);
+        return;
+      }
+
+      setMessage(`Uuendatud ${dateItems.length} detaili`);
+
+      // Reload schedule
+      await loadSchedule(activeVersionId);
+
+      // Close modal and reset
+      setEditDayModalDate(null);
+      setEditDayNewDate('');
+      setEditDayResource('');
+      setEditDayNotes('');
+
+    } catch (e) {
+      console.error('Error updating day:', e);
+      setMessage('Viga päeva muutmisel');
+    } finally {
+      setSavingEditDay(false);
     }
   };
 
@@ -7907,6 +7986,19 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
                           }
                           return null;
                         })()}
+                        {/* Edit entire day */}
+                        <div className="date-menu-divider" />
+                        <button
+                          className="date-menu-option"
+                          onClick={() => {
+                            setEditDayModalDate(date);
+                            setEditDayModalItemCount(items.length);
+                            setDateMenuId(null);
+                          }}
+                        >
+                          <FiEdit3 size={12} style={{ marginRight: '6px' }} />
+                          Muuda päeva ({items.length})
+                        </button>
                         {/* Delete entire day */}
                         <div className="date-menu-divider" />
                         <button
@@ -8469,6 +8561,71 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
       )}
 
       {/* Comment Modal */}
+      {/* Edit day modal */}
+      {editDayModalDate && (
+        <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
+          <div className="comment-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Muuda päeva: {formatDateShort(editDayModalDate)} ({editDayModalItemCount} detaili)</h3>
+              <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
+            </div>
+            <div className="comment-modal-body">
+              <div className="edit-day-form">
+                <div className="form-group">
+                  <label>Uus kuupäev (valikuline):</label>
+                  <input
+                    type="date"
+                    value={editDayNewDate}
+                    onChange={e => setEditDayNewDate(e.target.value)}
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Ressurss (valikuline):</label>
+                  <input
+                    type="text"
+                    value={editDayResource}
+                    onChange={e => setEditDayResource(e.target.value)}
+                    placeholder="Nt: Kraana 1, Meeskond A"
+                    className="form-input"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Märkmed (valikuline):</label>
+                  <textarea
+                    value={editDayNotes}
+                    onChange={e => setEditDayNotes(e.target.value)}
+                    placeholder="Lisainfo või märkmed..."
+                    rows={3}
+                    className="form-input"
+                  />
+                </div>
+                <div className="edit-day-info">
+                  <FiAlertCircle size={14} />
+                  <span>Muudatused rakenduvad kõigile {editDayModalItemCount} detailile sel päeval</span>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    className="cancel-btn"
+                    onClick={() => setEditDayModalDate(null)}
+                    disabled={savingEditDay}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    className="save-btn"
+                    onClick={saveEditDay}
+                    disabled={savingEditDay || (!editDayNewDate && !editDayResource.trim() && !editDayNotes.trim())}
+                  >
+                    {savingEditDay ? 'Salvestan...' : 'Salvesta'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCommentModal && commentModalTarget && (
         <div className="modal-overlay" onClick={() => setShowCommentModal(false)}>
           <div className="comment-modal" onClick={e => e.stopPropagation()}>
