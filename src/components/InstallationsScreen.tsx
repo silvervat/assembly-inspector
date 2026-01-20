@@ -2542,8 +2542,9 @@ export default function InstallationsScreen({
       return;
     }
 
-    if (selectedObjects.length === 0) {
-      setMessage('Vali esmalt detail(id) mudelilt');
+    // Allow saving if either selectedObjects OR tempList has items
+    if (selectedObjects.length === 0 && tempList.size === 0) {
+      setMessage('Vali esmalt detail(id) mudelilt või lisa detaile ajutisse nimekirja');
       return;
     }
 
@@ -2609,7 +2610,42 @@ export default function InstallationsScreen({
         })
         .join(', ');
 
-      const installationsToSave = newObjects.map(obj => ({
+      // Collect GUIDs from tempList that are not already in newObjects
+      const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
+      const tempListGuidsToAdd = Array.from(tempList).filter(guid => !newObjectGuids.has(guid.toLowerCase()));
+
+      // Fetch object info from database for tempList items
+      let tempListObjects: SelectedObject[] = [];
+      if (tempListGuidsToAdd.length > 0) {
+        const { data: dbObjects } = await supabase
+          .from('trimble_model_objects')
+          .select('*')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', tempListGuidsToAdd);
+
+        if (dbObjects) {
+          tempListObjects = dbObjects.map(obj => ({
+            modelId: obj.model_id || '',
+            runtimeId: obj.object_runtime_id || 0,
+            guid: obj.guid || '',
+            guidIfc: obj.guid_ifc || '',
+            guidMs: obj.guid_ms || '',
+            assemblyMark: obj.assembly_mark || '',
+            productName: obj.product_name || '',
+            fileName: obj.file_name || '',
+            castUnitWeight: obj.cast_unit_weight,
+            castUnitBottomElevation: obj.cast_unit_bottom_elevation,
+            castUnitTopElevation: obj.cast_unit_top_elevation,
+            castUnitPositionCode: obj.cast_unit_position_code,
+            objectType: obj.object_type || ''
+          }));
+        }
+      }
+
+      // Combine newObjects with tempListObjects
+      const allObjectsToSave = [...newObjects, ...tempListObjects];
+
+      const installationsToSave = allObjectsToSave.map(obj => ({
         project_id: projectId,
         model_id: obj.modelId,
         guid: obj.guidIfc || obj.guid || '',
@@ -2652,15 +2688,18 @@ export default function InstallationsScreen({
           throw error;
         }
       } else {
-        setMessage(`${newObjects.length} detail(i) edukalt paigaldatud!`);
+        setMessage(`${allObjectsToSave.length} detail(i) edukalt paigaldatud!`);
         setNotes('');
         // Don't reset monteerijad and method - keep them for next installation
+
+        // Clear temp list after successful save
+        setTempList(new Set());
 
         // Reload data - skip full recoloring (we'll just color the new objects)
         await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
 
         // Color only the newly installed objects BLACK (no full reset needed)
-        await colorObjectsBlack(newObjects.map(obj => ({ modelId: obj.modelId, runtimeId: obj.runtimeId })));
+        await colorObjectsBlack(allObjectsToSave.map(obj => ({ modelId: obj.modelId, runtimeId: obj.runtimeId })));
 
         // Clear selection
         await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
@@ -2683,8 +2722,9 @@ export default function InstallationsScreen({
       return;
     }
 
-    if (selectedObjects.length === 0) {
-      setMessage('Vali esmalt detail(id) mudelilt');
+    // Allow saving if either selectedObjects OR tempList has items
+    if (selectedObjects.length === 0 && tempList.size === 0) {
+      setMessage('Vali esmalt detail(id) mudelilt või lisa detaile ajutisse nimekirja');
       return;
     }
 
@@ -2799,7 +2839,42 @@ export default function InstallationsScreen({
         })
         .join(', ');
 
-      const preassembliesToSave = newObjects.map(obj => ({
+      // Collect GUIDs from tempList that are not already in newObjects
+      const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
+      const tempListGuidsToAdd = Array.from(tempList).filter(guid => !newObjectGuids.has(guid.toLowerCase()));
+
+      // Fetch object info from database for tempList items
+      let tempListObjects: SelectedObject[] = [];
+      if (tempListGuidsToAdd.length > 0) {
+        const { data: dbObjects } = await supabase
+          .from('trimble_model_objects')
+          .select('*')
+          .eq('trimble_project_id', projectId)
+          .in('guid_ifc', tempListGuidsToAdd);
+
+        if (dbObjects) {
+          tempListObjects = dbObjects.map(obj => ({
+            modelId: obj.model_id || '',
+            runtimeId: obj.object_runtime_id || 0,
+            guid: obj.guid || '',
+            guidIfc: obj.guid_ifc || '',
+            guidMs: obj.guid_ms || '',
+            assemblyMark: obj.assembly_mark || '',
+            productName: obj.product_name || '',
+            fileName: obj.file_name || '',
+            castUnitWeight: obj.cast_unit_weight,
+            castUnitBottomElevation: obj.cast_unit_bottom_elevation,
+            castUnitTopElevation: obj.cast_unit_top_elevation,
+            castUnitPositionCode: obj.cast_unit_position_code,
+            objectType: obj.object_type || ''
+          }));
+        }
+      }
+
+      // Combine newObjects with tempListObjects
+      const allObjectsToSave = [...newObjects, ...tempListObjects];
+
+      const preassembliesToSave = allObjectsToSave.map(obj => ({
         project_id: projectId,
         model_id: obj.modelId,
         guid: obj.guidIfc || obj.guid || '',
@@ -2842,14 +2917,17 @@ export default function InstallationsScreen({
           throw error;
         }
       } else {
-        setMessage(`${newObjects.length} detail(i) edukalt preassembly lisatud!`);
+        setMessage(`${allObjectsToSave.length} detail(i) edukalt preassembly lisatud!`);
         setNotes('');
+
+        // Clear temp list after successful save
+        setTempList(new Set());
 
         // Reload data
         await Promise.all([loadPreassemblies(), loadPreassembledGuids()]);
 
         // Color newly added items with PREASSEMBLY_COLOR immediately
-        const newGuids = newObjects.map(obj => obj.guidIfc || obj.guid).filter(Boolean) as string[];
+        const newGuids = allObjectsToSave.map(obj => obj.guidIfc || obj.guid).filter(Boolean) as string[];
         if (newGuids.length > 0) {
           const foundObjects = await findObjectsInLoadedModels(api, newGuids);
           const byModel: Record<string, number[]> = {};
@@ -4004,11 +4082,37 @@ export default function InstallationsScreen({
   };
 
   const clearTempList = async () => {
+    const tempListGuids = Array.from(tempList);
     setTempList(new Set());
     setMessage('Ajutine nimekiri tühjendatud');
     setTimeout(() => setMessage(null), 2000);
 
-    // Reapply base coloring to remove green color
+    // Color temp list items WHITE before reapplying base coloring
+    if (tempListGuids.length > 0) {
+      try {
+        const foundObjects = await findObjectsInLoadedModels(api, tempListGuids);
+        const whiteByModel: Record<string, number[]> = {};
+        const white = { r: 255, g: 255, b: 255, a: 255 };
+
+        for (const [, found] of foundObjects) {
+          if (!whiteByModel[found.modelId]) whiteByModel[found.modelId] = [];
+          whiteByModel[found.modelId].push(found.runtimeId);
+        }
+
+        for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+          if (runtimeIds.length > 0) {
+            await api.viewer.setObjectState(
+              { modelObjectIds: [{ modelId, objectRuntimeIds: runtimeIds }] },
+              { color: white }
+            );
+          }
+        }
+      } catch (e) {
+        console.error('Error coloring temp list items white:', e);
+      }
+    }
+
+    // Reapply base coloring to restore proper colors
     if (entryMode === 'preassembly') {
       await applyPreassemblyColoring();
     } else {
@@ -5499,39 +5603,6 @@ export default function InstallationsScreen({
             </div>
           </div>
 
-          {/* Temp List Section - Always visible when list has items */}
-          {tempList.size > 0 && (
-            <div className="temp-list-section">
-              <div className="temp-list-header">
-                <span className="temp-list-title">
-                  <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> Ajutine nimekiri: {tempList.size}
-                </span>
-                <button
-                  className="clear-temp-list-btn"
-                  onClick={clearTempList}
-                  title="Tühjenda ajutine nimekiri"
-                >
-                  <FiX size={14} /> Tühjenda
-                </button>
-              </div>
-              <div className="temp-list-items">
-                {Array.from(tempList).map((guid, idx) => {
-                  // Find object info from selectedObjects or from model cache
-                  const obj = selectedObjects.find(o => getObjectGuid(o) === guid);
-                  const assemblyMark = obj?.assemblyMark || guid.substring(0, 8);
-                  const productName = obj?.productName;
-
-                  return (
-                    <div key={idx} className="temp-list-item">
-                      <span className="temp-list-item-mark">{assemblyMark}</span>
-                      {productName && <span className="temp-list-item-product">{productName}</span>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Selected objects list */}
           <div className="selected-objects-section">
             {selectedObjects.length === 0 ? (
@@ -5555,15 +5626,6 @@ export default function InstallationsScreen({
                         <span className="temp-list-badge">{tempList.size}</span>
                       )}
                     </button>
-                    {tempList.size > 0 && (
-                      <button
-                        className="clear-temp-list-btn"
-                        onClick={clearTempList}
-                        title="Tühjenda ajutine nimekiri"
-                      >
-                        <FiX size={14} />
-                      </button>
-                    )}
                     <button
                       className="discover-props-btn"
                       onClick={discoverProperties}
@@ -5637,6 +5699,39 @@ export default function InstallationsScreen({
               </>
             )}
           </div>
+
+          {/* Temp List Section - Always visible when list has items */}
+          {tempList.size > 0 && (
+            <div className="temp-list-section">
+              <div className="temp-list-header">
+                <span className="temp-list-title">
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> Ajutine nimekiri: {tempList.size}
+                </span>
+                <button
+                  className="clear-temp-list-btn"
+                  onClick={clearTempList}
+                  title="Tühjenda ajutine nimekiri"
+                >
+                  <FiX size={14} /> Tühjenda
+                </button>
+              </div>
+              <div className="temp-list-items">
+                {Array.from(tempList).map((guid, idx) => {
+                  // Find object info from selectedObjects or from model cache
+                  const obj = selectedObjects.find(o => getObjectGuid(o) === guid);
+                  const assemblyMark = obj?.assemblyMark || guid.substring(0, 8);
+                  const productName = obj?.productName;
+
+                  return (
+                    <div key={idx} className="temp-list-item">
+                      <span className="temp-list-item-mark">{assemblyMark}</span>
+                      {productName && <span className="temp-list-item-product">{productName}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* List View */
