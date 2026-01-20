@@ -5935,13 +5935,14 @@ export default function InstallationsScreen({
                     const isPreassembly = guid && preassemblies.some(p => p.guid_ifc === guid || p.guid === guid);
                     const isInTempList = guid && tempList.has(guid);
 
-                    // Determine status text based on entry mode
-                    let statusText = '';
+                    // Determine short inline status text
+                    let inlineStatus = '';
                     if (entryMode === 'preassembly') {
-                      if (isPreassembly) statusText = 'eelnevalt preassembly märgitud';
-                      else if (isInstalled) statusText = 'eelnevalt paigaldatud';
+                      if (isPreassembly) inlineStatus = '(preassembly)';
+                      else if (isInstalled) inlineStatus = '(paigaldatud)';
                     } else {
-                      if (isInstalled) statusText = 'eelnevalt paigaldatud';
+                      if (isInstalled) inlineStatus = '(paigaldatud)';
+                      else if (isPreassembly) inlineStatus = '(preassembly)';
                     }
 
                     return (
@@ -5951,10 +5952,12 @@ export default function InstallationsScreen({
                             {isInTempList && <span className="temp-list-indicator">✓ </span>}
                             {obj.assemblyMark}
                           </span>
-                          {obj.productName && <span className="object-product">{obj.productName}</span>}
-                          {statusText && (
-                            <span className="object-status-badge">{statusText}</span>
-                          )}
+                          <span className="object-product-row">
+                            {obj.productName && <span className="object-product">{obj.productName}</span>}
+                            {inlineStatus && (
+                              <span className="object-inline-status">{inlineStatus}</span>
+                            )}
+                          </span>
                         </div>
                         <div className="object-actions">
                           {isInstalled && (
