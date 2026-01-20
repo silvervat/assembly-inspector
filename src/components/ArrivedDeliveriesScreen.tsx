@@ -3602,11 +3602,7 @@ export default function ArrivedDeliveriesScreen({
                   </div>
 
                   <div className="vehicle-status">
-                    {arrivedVehicle?.is_confirmed ? (
-                      <span className="status-badge confirmed">
-                        <FiCheck /> Kinnitatud
-                      </span>
-                    ) : arrivedVehicle ? (
+                    {arrivedVehicle ? (
                       <div className="status-counts">
                         <span className="count-badge confirmed" title="Kinnitatud">
                           <FiCheck size={10} /> {confirmedCount}
