@@ -300,17 +300,47 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
   doc.text(`Scheduled: ${scheduledText} | Arrived: ${arrivalText} | Items: ${items.length} | Weight: ${Math.round(totalWeight).toLocaleString()} kg | ${statusText}`, MARGIN, y);
   y += 6;
 
-  // Vehicle notes (if any) - translated to English
+  // Vehicle notes (if any) - translated to English + inspector info
   if (arrivedVehicle.notes && arrivedVehicle.notes.trim()) {
     doc.setFillColor(255, 251, 235); // Light yellow background
     const translatedNotes = translateNotesToEnglish(arrivedVehicle.notes);
-    const noteLines = doc.splitTextToSize(`Vehicle notes: ${translatedNotes}`, CONTENT_WIDTH - 6);
+    const noteText = `Delivery general notes: ${translatedNotes}`;
+    const noteLines = doc.splitTextToSize(noteText, CONTENT_WIDTH - 6);
     const noteHeight = noteLines.length * 4 + 4;
     doc.roundedRect(MARGIN, y, CONTENT_WIDTH, noteHeight, 2, 2, 'F');
     doc.setTextColor(...COLORS.dark);
     doc.setFontSize(8);
     doc.text(noteLines, MARGIN + 3, y + 5);
     y += noteHeight + 3;
+  }
+
+  // Inspector and unload info - compact
+  const inspectorInfo = [];
+  if (arrivedVehicle.confirmed_by) {
+    inspectorInfo.push(`Inspected by: ${arrivedVehicle.confirmed_by}`);
+  }
+  if (vehicle?.resources) {
+    const resourcesObj = typeof vehicle.resources === 'string'
+      ? JSON.parse(vehicle.resources)
+      : vehicle.resources;
+    const resourceText = Object.entries(resourcesObj as Record<string, number>)
+      .filter(([_, count]) => count > 0)
+      .map(([resource, count]) => `${count}x ${resource}`)
+      .join(', ');
+    if (resourceText) {
+      inspectorInfo.push(`Resources: ${resourceText}`);
+    }
+  }
+
+  if (inspectorInfo.length > 0) {
+    doc.setFillColor(...COLORS.lightGray);
+    const infoLines = doc.splitTextToSize(inspectorInfo.join(' | '), CONTENT_WIDTH - 6);
+    const infoHeight = infoLines.length * 4 + 4;
+    doc.roundedRect(MARGIN, y, CONTENT_WIDTH, infoHeight, 2, 2, 'F');
+    doc.setTextColor(...COLORS.dark);
+    doc.setFontSize(7);
+    doc.text(infoLines, MARGIN + 3, y + 5);
+    y += infoHeight + 3;
   }
 
   // Status badges - compact inline (small pills)
@@ -323,7 +353,7 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
   const badgeGap = 3;
 
   // Confirmed badge
-  const confirmedText = `✓ ${confirmedCount} Confirmed`;
+  const confirmedText = `${confirmedCount} Confirmed`;
   const confirmedWidth = doc.getTextWidth(confirmedText) + badgePadding * 2;
   doc.setFillColor(...COLORS.success);
   doc.roundedRect(MARGIN, y, confirmedWidth, badgeHeight, 1.5, 1.5, 'F');
@@ -331,14 +361,14 @@ export async function generateDeliveryReportPDF(data: DeliveryReportData): Promi
   doc.text(confirmedText, MARGIN + badgePadding, y + 4.2);
 
   // Missing badge
-  const missingText = `✗ ${missingCount} Missing`;
+  const missingText = `${missingCount} Missing`;
   const missingWidth = doc.getTextWidth(missingText) + badgePadding * 2;
   doc.setFillColor(...COLORS.danger);
   doc.roundedRect(MARGIN + confirmedWidth + badgeGap, y, missingWidth, badgeHeight, 1.5, 1.5, 'F');
   doc.text(missingText, MARGIN + confirmedWidth + badgeGap + badgePadding, y + 4.2);
 
   // Added badge
-  const addedText = `+ ${addedCount} Added`;
+  const addedText = `+${addedCount} Added`;
   const addedWidth = doc.getTextWidth(addedText) + badgePadding * 2;
   doc.setFillColor(...COLORS.primary);
   doc.roundedRect(MARGIN + confirmedWidth + badgeGap + missingWidth + badgeGap, y, addedWidth, badgeHeight, 1.5, 1.5, 'F');
