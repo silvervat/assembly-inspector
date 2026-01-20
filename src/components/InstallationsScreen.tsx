@@ -2823,9 +2823,16 @@ export default function InstallationsScreen({
         })
         .join(', ');
 
-      // Collect GUIDs from tempList that are not already in newObjects
+      // Collect GUIDs from tempList that are not already in newObjects AND not already installed
       const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
-      const tempListGuidsToAdd = Array.from(tempList).filter(guid => !newObjectGuids.has(guid.toLowerCase()));
+      const tempListGuidsToAdd = Array.from(tempList).filter(guid => {
+        const guidLower = guid.toLowerCase();
+        // Skip if already in newObjects
+        if (newObjectGuids.has(guidLower)) return false;
+        // Skip if already installed
+        if (installedGuids.has(guidLower)) return false;
+        return true;
+      });
 
       // Fetch object info from database for tempList items
       let tempListObjects: SelectedObject[] = [];
@@ -3053,9 +3060,16 @@ export default function InstallationsScreen({
         })
         .join(', ');
 
-      // Collect GUIDs from tempList that are not already in newObjects
+      // Collect GUIDs from tempList that are not already in newObjects AND not already installed
       const newObjectGuids = new Set(newObjects.map(obj => (obj.guidIfc || obj.guid || '').toLowerCase()));
-      const tempListGuidsToAdd = Array.from(tempList).filter(guid => !newObjectGuids.has(guid.toLowerCase()));
+      const tempListGuidsToAdd = Array.from(tempList).filter(guid => {
+        const guidLower = guid.toLowerCase();
+        // Skip if already in newObjects
+        if (newObjectGuids.has(guidLower)) return false;
+        // Skip if already installed
+        if (installedGuids.has(guidLower)) return false;
+        return true;
+      });
 
       // Fetch object info from database for tempList items
       let tempListObjects: SelectedObject[] = [];
