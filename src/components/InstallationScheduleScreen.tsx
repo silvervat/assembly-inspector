@@ -1877,6 +1877,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       // Clear selection
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      setSelectedObjects([]);
     } catch (e: any) {
       console.error('Error adding unscheduled items:', e);
       if (e.code === '23505') {
@@ -2454,6 +2455,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
 
       // Clear model selection
       await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+      setSelectedObjects([]);
 
       setMessage(`${itemsToRemove.length} detaili eemaldatud kuupäevalt`);
       setDateMenuId(null);
