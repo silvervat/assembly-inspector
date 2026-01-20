@@ -409,6 +409,27 @@ export default function InstallationsScreen({
   const [preassemblies, setPreassemblies] = useState<Preassembly[]>([]);
   const [preassembledGuids, setPreassembledGuids] = useState<Map<string, { preassembledAt: string; userEmail: string; assemblyMark: string; teamMembers?: string; methodName?: string }>>(new Map());
 
+  // Temporary list for tracking items before final save (stored in localStorage)
+  const TEMP_LIST_KEY = `installations_temp_list_${projectId}_${user.email}`;
+  const [tempList, setTempList] = useState<Set<string>>(() => {
+    // Load from localStorage on mount
+    try {
+      const stored = localStorage.getItem(TEMP_LIST_KEY);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  // Save tempList to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(TEMP_LIST_KEY, JSON.stringify(Array.from(tempList)));
+    } catch (e) {
+      console.error('Failed to save temp list to localStorage:', e);
+    }
+  }, [tempList, TEMP_LIST_KEY]);
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -3868,6 +3889,48 @@ export default function InstallationsScreen({
     }
   };
 
+  // Temp list management functions
+  const addToTempList = (guid: string) => {
+    setTempList(prev => new Set([...prev, guid]));
+  };
+
+  const removeFromTempList = (guid: string) => {
+    setTempList(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(guid);
+      return newSet;
+    });
+  };
+
+  const toggleTempList = (guid: string) => {
+    if (tempList.has(guid)) {
+      removeFromTempList(guid);
+    } else {
+      addToTempList(guid);
+    }
+  };
+
+  const addSelectedToTempList = () => {
+    const newGuids = selectedObjects
+      .map(obj => getObjectGuid(obj))
+      .filter((guid): guid is string => !!guid && !tempList.has(guid));
+
+    if (newGuids.length > 0) {
+      setTempList(prev => new Set([...prev, ...newGuids]));
+      setMessage(`${newGuids.length} detaili lisatud ajutisse nimekirja`);
+      setTimeout(() => setMessage(null), 3000);
+    } else {
+      setMessage('Kõik valitud detailid on juba listis');
+      setTimeout(() => setMessage(null), 2000);
+    }
+  };
+
+  const clearTempList = () => {
+    setTempList(new Set());
+    setMessage('Ajutine nimekiri tühjendatud');
+    setTimeout(() => setMessage(null), 2000);
+  };
+
   // Filter installations by search query
   const filteredInstallations = installations.filter(inst => {
     if (searchQuery) {
@@ -5360,22 +5423,64 @@ export default function InstallationsScreen({
               <>
                 <div className="selected-objects-title">
                   <span>Valitud: {selectedObjects.length}</span>
-                  <button
-                    className="discover-props-btn"
-                    onClick={discoverProperties}
-                    title="Avasta propertised"
-                  >
-                    <FiEye size={14} />
-                  </button>
+                  <div className="title-actions">
+                    <button
+                      className="add-to-temp-list-btn"
+                      onClick={addSelectedToTempList}
+                      title="Lisa valitud ajutisse nimekirja"
+                      disabled={selectedObjects.length === 0}
+                    >
+                      + Lisa listi
+                      {tempList.size > 0 && (
+                        <span className="temp-list-badge">{tempList.size}</span>
+                      )}
+                    </button>
+                    {tempList.size > 0 && (
+                      <button
+                        className="clear-temp-list-btn"
+                        onClick={clearTempList}
+                        title="Tühjenda ajutine nimekiri"
+                      >
+                        <FiX size={14} />
+                      </button>
+                    )}
+                    <button
+                      className="discover-props-btn"
+                      onClick={discoverProperties}
+                      title="Avasta propertised"
+                    >
+                      <FiEye size={14} />
+                    </button>
+                  </div>
                 </div>
                 <div className="selected-objects-list">
                   {selectedObjects.map((obj, idx) => {
                     const guid = getObjectGuid(obj);
                     const isInstalled = guid && installedGuids.has(guid);
+                    const isPreassembly = guid && preassemblies.some(p => p.guid_ifc === guid || p.guid === guid);
+                    const isInTempList = guid && tempList.has(guid);
+
+                    // Determine status text based on entry mode
+                    let statusText = '';
+                    if (entryMode === 'preassembly') {
+                      if (isPreassembly) statusText = 'eelnevalt preassembly märgitud';
+                      else if (isInstalled) statusText = 'eelnevalt paigaldatud';
+                    } else {
+                      if (isInstalled) statusText = 'eelnevalt paigaldatud';
+                    }
+
                     return (
-                      <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''}`}>
-                        <span className="object-mark">{obj.assemblyMark}</span>
-                        {obj.productName && <span className="object-product">{obj.productName}</span>}
+                      <div key={idx} className={`selected-object-row ${isInstalled ? 'installed' : ''} ${isInTempList ? 'in-temp-list' : ''}`}>
+                        <div className="object-info-col">
+                          <span className="object-mark">
+                            {isInTempList && <span className="temp-list-indicator">✓ </span>}
+                            {obj.assemblyMark}
+                          </span>
+                          {obj.productName && <span className="object-product">{obj.productName}</span>}
+                          {statusText && (
+                            <span className="object-status-badge">{statusText}</span>
+                          )}
+                        </div>
                         <div className="object-actions">
                           {isInstalled && (
                             <button
