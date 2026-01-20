@@ -9025,6 +9025,249 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   }}
                 />
                 <FunctionButton
+                  name="📏 Mõõtmed V3 (L×W×H)"
+                  result={functionResults["dimensionsV3"]}
+                  onClick={async () => {
+                    updateFunctionResult("dimensionsV3", { status: 'pending' });
+                    try {
+                      const sel = await api.viewer.getSelection();
+                      if (!sel || sel.length === 0) throw new Error('Vali esmalt objekt!');
+
+                      const modelId = sel[0].modelId;
+                      const runtimeId = sel[0].objectRuntimeIds?.[0];
+                      if (!runtimeId) throw new Error('RuntimeId puudub');
+
+                      const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeId]);
+                      if (!props || props.length === 0) throw new Error('Properties puuduvad');
+
+                      const objProps = props[0];
+
+                      // Helper to find property set
+                      const findPropSet = (name: string): any => {
+                        const sources = [objProps.propertySets, objProps.properties].filter(Boolean);
+                        for (const source of sources) {
+                          if (Array.isArray(source)) {
+                            for (const pset of source) {
+                              if (pset.name === name && pset.properties) {
+                                const result: any = {};
+                                for (const p of pset.properties) {
+                                  result[p.name] = p.value;
+                                }
+                                return result;
+                              }
+                            }
+                          }
+                        }
+                        return null;
+                      };
+
+                      // Helper to find any profile property set
+                      const findProfile = (): { name: string; data: any } | null => {
+                        const profileNames = [
+                          'IfcRectangleProfile', 'Ifc Rectangle Profile',
+                          'IfcRectangleHollowProfile', 'Ifc Rectangle Hollow Profile',
+                          'IfcCircleProfile', 'Ifc Circle Profile',
+                          'IfcIShapeProfile', 'Ifc I Shape Profile',
+                          'IfcLShapeProfile', 'Ifc L Shape Profile',
+                          'IfcTShapeProfile', 'Ifc T Shape Profile',
+                          'IfcUShapeProfile', 'Ifc U Shape Profile',
+                          'IfcCShapeProfile', 'Ifc C Shape Profile',
+                          'IfcZShapeProfile', 'Ifc Z Shape Profile',
+                          'CustomProfile'
+                        ];
+                        for (const name of profileNames) {
+                          const data = findPropSet(name);
+                          if (data) return { name, data };
+                        }
+                        return null;
+                      };
+
+                      // Collect all dimension sources
+                      const teklaQty = findPropSet('Tekla Quantity');
+                      const baseQty = findPropSet('BaseQuantities');
+                      const profile = findProfile();
+                      const extrusion = findPropSet('Extrusion');
+                      const metadata = objProps.product || objProps;
+
+                      // Build result
+                      let result = `📏 MÕÕTMED V3\n${'═'.repeat(35)}\n\n`;
+
+                      // Element info
+                      const name = metadata?.name || metadata?.Name || '?';
+                      const desc = metadata?.description || metadata?.Description || '';
+                      result += `🏷️ ${name}${desc ? ` (${desc})` : ''}\n\n`;
+
+                      // Main dimensions from Tekla Quantity (most reliable)
+                      if (teklaQty) {
+                        const l = parseFloat(teklaQty.Length) || 0;
+                        const w = parseFloat(teklaQty.Width) || 0;
+                        const h = parseFloat(teklaQty.Height) || 0;
+                        const weight = parseFloat(teklaQty.Weight) || 0;
+
+                        result += `📐 TEKLA QUANTITY:\n`;
+                        result += `   Pikkus (Length): ${l.toFixed(1)} mm\n`;
+                        result += `   Laius (Width):   ${w.toFixed(1)} mm\n`;
+                        result += `   Kõrgus (Height): ${h.toFixed(1)} mm\n`;
+                        if (weight > 0) result += `   Kaal: ${weight.toFixed(2)} kg\n`;
+                        result += '\n';
+                      }
+
+                      // Profile info
+                      if (profile) {
+                        result += `📊 PROFIIL (${profile.name}):\n`;
+                        const p = profile.data;
+                        if (p.ProfileName) result += `   Nimi: ${p.ProfileName}\n`;
+                        if (p.XDim) result += `   XDim: ${parseFloat(p.XDim).toFixed(1)} mm\n`;
+                        if (p.YDim) result += `   YDim: ${parseFloat(p.YDim).toFixed(1)} mm\n`;
+                        if (p.WallThickness) result += `   Seinapaksus: ${parseFloat(p.WallThickness).toFixed(1)} mm\n`;
+                        if (p.Radius || p.Diameter) {
+                          const r = parseFloat(p.Radius) || parseFloat(p.Diameter) / 2 || 0;
+                          result += `   Raadius: ${r.toFixed(1)} mm\n`;
+                        }
+                        if (p.WebThickness) result += `   Seina paksus: ${parseFloat(p.WebThickness).toFixed(1)} mm\n`;
+                        if (p.FlangeThickness) result += `   Äärise paksus: ${parseFloat(p.FlangeThickness).toFixed(1)} mm\n`;
+                        result += '\n';
+                      }
+
+                      // BaseQuantities
+                      if (baseQty) {
+                        result += `📋 BASE QUANTITIES:\n`;
+                        if (baseQty.Length) result += `   Length: ${parseFloat(baseQty.Length).toFixed(1)} mm\n`;
+                        if (baseQty.Width) result += `   Width: ${parseFloat(baseQty.Width).toFixed(1)} mm\n`;
+                        if (baseQty.Height) result += `   Height: ${parseFloat(baseQty.Height).toFixed(1)} mm\n`;
+                        if (baseQty.NetVolume) result += `   Volume: ${(parseFloat(baseQty.NetVolume) * 1e9).toFixed(0)} mm³\n`;
+                        if (baseQty.NetWeight) result += `   Weight: ${parseFloat(baseQty.NetWeight).toFixed(2)} kg\n`;
+                        result += '\n';
+                      }
+
+                      // Extrusion info
+                      if (extrusion) {
+                        const extVec = {
+                          x: parseFloat(extrusion.ExtrusionX) || 0,
+                          y: parseFloat(extrusion.ExtrusionY) || 0,
+                          z: parseFloat(extrusion.ExtrusionZ) || 0
+                        };
+                        const extLen = Math.sqrt(extVec.x**2 + extVec.y**2 + extVec.z**2);
+
+                        result += `🔄 EXTRUSION:\n`;
+                        result += `   Pikkus: ${extLen.toFixed(1)} mm\n`;
+                        result += `   Suund: (${extVec.x.toFixed(1)}, ${extVec.y.toFixed(1)}, ${extVec.z.toFixed(1)})\n`;
+                        result += '\n';
+                      }
+
+                      // Summary - determine main dimensions
+                      result += `${'─'.repeat(35)}\n`;
+                      result += `📦 KOKKUVÕTE:\n`;
+
+                      let length = 0, width = 0, height = 0;
+
+                      // Priority: Tekla Quantity > BaseQuantities > Profile
+                      if (teklaQty?.Length) length = parseFloat(teklaQty.Length);
+                      else if (baseQty?.Length) length = parseFloat(baseQty.Length);
+                      else if (extrusion) {
+                        const extVec = {
+                          x: parseFloat(extrusion.ExtrusionX) || 0,
+                          y: parseFloat(extrusion.ExtrusionY) || 0,
+                          z: parseFloat(extrusion.ExtrusionZ) || 0
+                        };
+                        length = Math.sqrt(extVec.x**2 + extVec.y**2 + extVec.z**2);
+                      }
+
+                      if (teklaQty?.Width) width = parseFloat(teklaQty.Width);
+                      else if (profile?.data?.XDim) width = parseFloat(profile.data.XDim);
+                      else if (baseQty?.Width) width = parseFloat(baseQty.Width);
+
+                      if (teklaQty?.Height) height = parseFloat(teklaQty.Height);
+                      else if (profile?.data?.YDim) height = parseFloat(profile.data.YDim);
+                      else if (baseQty?.Height) height = parseFloat(baseQty.Height);
+
+                      result += `   L × W × H = ${length.toFixed(1)} × ${width.toFixed(1)} × ${height.toFixed(1)} mm\n`;
+
+                      // Add measurements to model if we have valid dimensions
+                      if (length > 0 && (width > 0 || height > 0) && extrusion) {
+                        const origin = {
+                          x: parseFloat(extrusion.OriginX) || 0,
+                          y: parseFloat(extrusion.OriginY) || 0,
+                          z: parseFloat(extrusion.OriginZ) || 0
+                        };
+                        const xDir = {
+                          x: parseFloat(extrusion.XDirX) || 0,
+                          y: parseFloat(extrusion.XDirY) || 0,
+                          z: parseFloat(extrusion.XDirZ) || 0
+                        };
+                        const extVec = {
+                          x: parseFloat(extrusion.ExtrusionX) || 0,
+                          y: parseFloat(extrusion.ExtrusionY) || 0,
+                          z: parseFloat(extrusion.ExtrusionZ) || 0
+                        };
+                        const extLen = Math.sqrt(extVec.x**2 + extVec.y**2 + extVec.z**2);
+                        const extNorm = {
+                          x: extVec.x / extLen,
+                          y: extVec.y / extLen,
+                          z: extVec.z / extLen
+                        };
+
+                        // Calculate Y direction
+                        const yDir = {
+                          x: extNorm.y * xDir.z - extNorm.z * xDir.y,
+                          y: extNorm.z * xDir.x - extNorm.x * xDir.z,
+                          z: extNorm.x * xDir.y - extNorm.y * xDir.x
+                        };
+                        const yLen = Math.sqrt(yDir.x**2 + yDir.y**2 + yDir.z**2);
+                        if (yLen > 0.001) {
+                          yDir.x /= yLen; yDir.y /= yLen; yDir.z /= yLen;
+                        }
+
+                        // Create 3 measurement lines from origin
+                        const measurements = [];
+
+                        // Length measurement (along extrusion)
+                        measurements.push({
+                          start: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
+                          end: { positionX: origin.x + extVec.x, positionY: origin.y + extVec.y, positionZ: origin.z + extVec.z },
+                          mainLineStart: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
+                          mainLineEnd: { positionX: origin.x + extVec.x, positionY: origin.y + extVec.y, positionZ: origin.z + extVec.z },
+                          color: { r: 255, g: 0, b: 0, a: 255 } // Red = Length
+                        });
+
+                        // Width measurement (along X direction)
+                        if (width > 0) {
+                          measurements.push({
+                            start: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
+                            end: { positionX: origin.x + width * xDir.x, positionY: origin.y + width * xDir.y, positionZ: origin.z + width * xDir.z },
+                            mainLineStart: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
+                            mainLineEnd: { positionX: origin.x + width * xDir.x, positionY: origin.y + width * xDir.y, positionZ: origin.z + width * xDir.z },
+                            color: { r: 0, g: 255, b: 0, a: 255 } // Green = Width
+                          });
+                        }
+
+                        // Height measurement (along Y direction)
+                        if (height > 0) {
+                          measurements.push({
+                            start: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
+                            end: { positionX: origin.x + height * yDir.x, positionY: origin.y + height * yDir.y, positionZ: origin.z + height * yDir.z },
+                            mainLineStart: { positionX: origin.x, positionY: origin.y, positionZ: origin.z },
+                            mainLineEnd: { positionX: origin.x + height * yDir.x, positionY: origin.y + height * yDir.y, positionZ: origin.z + height * yDir.z },
+                            color: { r: 0, g: 0, b: 255, a: 255 } // Blue = Height
+                          });
+                        }
+
+                        if (measurements.length > 0) {
+                          await api.markup.addMeasurementMarkups(measurements);
+                          result += `\n✅ ${measurements.length} mõõtu lisatud mudelile\n`;
+                          result += `   🔴 Punane = Pikkus (L)\n`;
+                          result += `   🟢 Roheline = Laius (W)\n`;
+                          result += `   🔵 Sinine = Kõrgus (H)\n`;
+                        }
+                      }
+
+                      updateFunctionResult("dimensionsV3", { status: 'success', result });
+                    } catch (e: any) {
+                      updateFunctionResult("dimensionsV3", { status: 'error', error: e.message });
+                    }
+                  }}
+                />
+                <FunctionButton
                   name="⭕ Joonista ring (r=20m)"
                   result={functionResults["drawCircle20m"]}
                   onClick={async () => {
