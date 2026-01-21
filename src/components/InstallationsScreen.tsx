@@ -517,6 +517,105 @@ export default function InstallationsScreen({
   const [knownKeevitajad, setKnownKeevitajad] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem(`known_keevitajad_${projectId}`) || '[]'); } catch { return []; }
   });
+  const [knownMonteerijad, setKnownMonteerijad] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(`known_monteerijad_${projectId}`) || '[]'); } catch { return []; }
+  });
+
+  // Load resources from project_resources table AND existing installations, merge with localStorage
+  useEffect(() => {
+    const loadAllResources = async () => {
+      try {
+        // 1. Load from project_resources table
+        const { data: projectRes, error: projectError } = await supabase
+          .from('project_resources')
+          .select('resource_type, name')
+          .eq('trimble_project_id', projectId)
+          .eq('is_active', true);
+
+        if (projectError) {
+          console.error('Error loading project resources:', projectError);
+        }
+
+        // 2. Load team_members from existing installations
+        const { data: installData, error: installError } = await supabase
+          .from('installation_schedule')
+          .select('team_members')
+          .eq('project_id', projectId)
+          .not('team_members', 'is', null);
+
+        if (installError) {
+          console.error('Error loading installation team members:', installError);
+        }
+
+        // Group resources by type from project_resources
+        const resourcesByType: Record<string, string[]> = {};
+        for (const res of (projectRes || [])) {
+          if (!resourcesByType[res.resource_type]) {
+            resourcesByType[res.resource_type] = [];
+          }
+          resourcesByType[res.resource_type].push(res.name);
+        }
+
+        // Parse team_members from installations and extract resource names
+        // Format: "Kraana: K1", "Monteerija: Jaan", "Korvtõstuk: Tõstuk1", etc.
+        const extractedResources: Record<string, Set<string>> = {
+          crane: new Set<string>(),
+          forklift: new Set<string>(),
+          poomtostuk: new Set<string>(),
+          kaartostuk: new Set<string>(),
+          troppija: new Set<string>(),
+          monteerija: new Set<string>(),
+          keevitaja: new Set<string>(),
+        };
+
+        for (const install of (installData || [])) {
+          const members = install.team_members as string[] | null;
+          if (!members) continue;
+
+          for (const member of members) {
+            // Parse "Type: Name" format
+            const parts = member.split(':');
+            if (parts.length >= 2) {
+              const typeLabel = parts[0].trim().toLowerCase();
+              const name = parts.slice(1).join(':').trim();
+              if (!name) continue;
+
+              // Map labels to resource types
+              if (typeLabel.includes('kraana') || typeLabel.includes('crane')) {
+                extractedResources.crane.add(name);
+              } else if (typeLabel.includes('teleskoop') || typeLabel.includes('forklift')) {
+                extractedResources.forklift.add(name);
+              } else if (typeLabel.includes('korv') || typeLabel.includes('poom') || typeLabel.includes('boom')) {
+                extractedResources.poomtostuk.add(name);
+              } else if (typeLabel.includes('käär') || typeLabel.includes('scissor')) {
+                extractedResources.kaartostuk.add(name);
+              } else if (typeLabel.includes('tropp') || typeLabel.includes('rigger')) {
+                extractedResources.troppija.add(name);
+              } else if (typeLabel.includes('monteer') || typeLabel.includes('install')) {
+                extractedResources.monteerija.add(name);
+              } else if (typeLabel.includes('keevit') || typeLabel.includes('weld')) {
+                extractedResources.keevitaja.add(name);
+              }
+            }
+          }
+        }
+
+        // Merge all sources: localStorage + project_resources + existing installations
+        setKnownKraanad(prev => [...new Set([...prev, ...(resourcesByType['crane'] || []), ...extractedResources.crane])]);
+        setKnownTeleskooplaadrid(prev => [...new Set([...prev, ...(resourcesByType['forklift'] || []), ...extractedResources.forklift])]);
+        setKnownKorvtostukid(prev => [...new Set([...prev, ...(resourcesByType['poomtostuk'] || []), ...extractedResources.poomtostuk])]);
+        setKnownKaartostukid(prev => [...new Set([...prev, ...(resourcesByType['kaartostuk'] || []), ...extractedResources.kaartostuk])]);
+        setKnownTroppijad(prev => [...new Set([...prev, ...(resourcesByType['troppija'] || []), ...extractedResources.troppija])]);
+        setKnownMonteerijad(prev => [...new Set([...prev, ...(resourcesByType['monteerija'] || []), ...extractedResources.monteerija])]);
+        setKnownKeevitajad(prev => [...new Set([...prev, ...(resourcesByType['keevitaja'] || []), ...extractedResources.keevitaja])]);
+
+      } catch (e) {
+        console.error('Error loading resources:', e);
+      }
+    };
+
+    loadAllResources();
+  }, [projectId]);
 
   // Resource equipment/workers - separate arrays for each type (with localStorage persistence)
   const [craneOperators, setCraneOperators] = useState<string[]>(() => {
@@ -727,9 +826,14 @@ export default function InstallationsScreen({
   // Persist all resource values to localStorage
   useEffect(() => {
     localStorage.setItem(`last_monteerijad_${projectId}`, JSON.stringify(monteerijad));
-    // Add to known list if new
-    const newKnown = [...new Set([...knownTeamMembers, ...monteerijad])];
-    if (newKnown.length > knownTeamMembers.length) setKnownTeamMembers(newKnown);
+    // Add to known list if new (both knownTeamMembers and knownMonteerijad)
+    const newKnownTeam = [...new Set([...knownTeamMembers, ...monteerijad])];
+    if (newKnownTeam.length > knownTeamMembers.length) setKnownTeamMembers(newKnownTeam);
+    const newKnownMont = [...new Set([...knownMonteerijad, ...monteerijad])];
+    if (newKnownMont.length > knownMonteerijad.length) {
+      setKnownMonteerijad(newKnownMont);
+      localStorage.setItem(`known_monteerijad_${projectId}`, JSON.stringify(newKnownMont));
+    }
   }, [monteerijad, projectId]);
 
   useEffect(() => {
@@ -5750,11 +5854,11 @@ export default function InstallationsScreen({
                         : 'Monteerija nimi (Enter)'}
                       className="full-width-input"
                     />
-                    {showSuggestions && activeSuggestionField === 'monteerija' && knownTeamMembers.filter(k =>
+                    {showSuggestions && activeSuggestionField === 'monteerija' && [...new Set([...knownTeamMembers, ...knownMonteerijad])].filter(k =>
                       k.toLowerCase().includes(monteerijadInput.toLowerCase()) && !monteerijad.includes(k)
                     ).length > 0 && (
                       <div className="team-suggestions">
-                        {knownTeamMembers.filter(k =>
+                        {[...new Set([...knownTeamMembers, ...knownMonteerijad])].filter(k =>
                           k.toLowerCase().includes(monteerijadInput.toLowerCase()) && !monteerijad.includes(k)
                         ).slice(0, 5).map((name, idx) => (
                           <div key={idx} className="team-suggestion-item" onMouseDown={() => {
