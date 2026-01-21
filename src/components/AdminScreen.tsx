@@ -2316,18 +2316,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     setPartDbSelectedMark(assemblyMark || null);
 
     try {
-      const guidLower = guidIfc.toLowerCase();
+      // Use ilike for case-insensitive GUID matching
+      const guidPattern = guidIfc.toLowerCase();
 
       // Fetch all data in parallel
       const [
         deliveryResult,
         arrivalResult,
-        installationResult,
+        installationScheduleResult,
+        installationsResult,
+        preassembliesResult,
         organizerResult,
         inspectionsResult,
         issuesResult
       ] = await Promise.all([
-        // Delivery items - use eq instead of ilike to avoid issues with $ in GUID
+        // Delivery items - use ilike for case-insensitive GUID match
         supabase
           .from('trimble_delivery_items')
           .select(`
@@ -2338,7 +2341,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             )
           `)
           .eq('trimble_project_id', projectId)
-          .eq('guid_ifc', guidLower),
+          .ilike('guid_ifc', guidPattern),
 
         // Arrival confirmations - join through item_id
         supabase
@@ -2354,14 +2357,28 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             )
           `)
           .eq('trimble_project_id', projectId)
-          .eq('guid_ifc', guidLower),
+          .ilike('guid_ifc', guidPattern),
 
-        // Installation schedule - correct table name and use project_id
+        // Installation schedule (planned)
         supabase
           .from('installation_schedule')
           .select('*')
           .eq('project_id', projectId)
-          .eq('guid_ifc', guidLower),
+          .ilike('guid_ifc', guidPattern),
+
+        // Actual installations (completed)
+        supabase
+          .from('installations')
+          .select('*')
+          .eq('project_id', projectId)
+          .ilike('guid_ifc', guidPattern),
+
+        // Preassemblies
+        supabase
+          .from('preassemblies')
+          .select('*')
+          .eq('project_id', projectId)
+          .ilike('guid_ifc', guidPattern),
 
         // Organizer group items - filter through parent group's trimble_project_id
         supabase
@@ -2371,14 +2388,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             group:organizer_groups!inner(id, name, color, description, trimble_project_id)
           `)
           .eq('group.trimble_project_id', projectId)
-          .eq('guid_ifc', guidLower),
+          .ilike('guid_ifc', guidPattern),
 
-        // Inspections - use eq instead of ilike
+        // Inspections - use ilike for case-insensitive match
         supabase
           .from('inspections')
           .select('*')
           .eq('project_id', projectId)
-          .eq('guid_ifc', guidLower),
+          .ilike('guid_ifc', guidPattern),
 
         // Issues (through issue_objects) - filter through parent issue's trimble_project_id
         supabase
@@ -2392,16 +2409,23 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             )
           `)
           .eq('issue.trimble_project_id', projectId)
-          .eq('guid_ifc', guidLower)
+          .ilike('guid_ifc', guidPattern)
       ]);
 
       // Extract arrival confirmations from nested structure
       const arrivalConfirmations = arrivalResult.data?.[0]?.confirmations || [];
 
+      // Combine installation data from all sources
+      const allInstallations = [
+        ...(installationScheduleResult.data || []).map(i => ({ ...i, source: 'schedule' })),
+        ...(installationsResult.data || []).map(i => ({ ...i, source: 'installation' })),
+        ...(preassembliesResult.data || []).map(i => ({ ...i, source: 'preassembly' }))
+      ];
+
       setPartDbData({
         deliveryItems: deliveryResult.data || [],
         arrivalItems: arrivalConfirmations,
-        installationItems: installationResult.data || [],
+        installationItems: allInstallations,
         organizerItems: organizerResult.data || [],
         inspections: inspectionsResult.data || [],
         issues: issuesResult.data || []
@@ -16690,14 +16714,27 @@ document.body.appendChild(div);`;
                     {partDbData.installationItems.map((item: any, idx: number) => (
                       <div key={idx} style={{
                         padding: '10px',
-                        background: '#f9fafb',
+                        background: item.source === 'installation' ? '#dcfce7' : item.source === 'preassembly' ? '#dbeafe' : '#f9fafb',
                         borderRadius: '6px',
                         marginBottom: idx < partDbData.installationItems.length - 1 ? '8px' : 0
                       }}>
                         <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          <div>📅 Planeeritud: <strong>{item.scheduled_date || '-'}</strong></div>
-                          <div>👷 Meeskond: {item.team || '-'}</div>
-                          <div>📝 Märkused: {item.notes || '-'}</div>
+                          <div style={{ marginBottom: '4px' }}>
+                            <span style={{
+                              background: item.source === 'installation' ? '#22c55e' : item.source === 'preassembly' ? '#3b82f6' : '#9ca3af',
+                              color: 'white',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '10px',
+                              fontWeight: 500
+                            }}>
+                              {item.source === 'installation' ? '✅ Paigaldatud' : item.source === 'preassembly' ? '🔧 Eelkoostus' : '📋 Planeeritud'}
+                            </span>
+                          </div>
+                          <div>📅 Kuupäev: <strong>{item.installed_at || item.preassembled_at || item.scheduled_date || '-'}</strong></div>
+                          <div>👷 Meeskond: {item.team_members || item.team || '-'}</div>
+                          <div>🔨 Meetod: {item.installation_method_name || '-'}</div>
+                          {item.notes && <div>📝 Märkused: {item.notes}</div>}
                         </div>
                       </div>
                     ))}
