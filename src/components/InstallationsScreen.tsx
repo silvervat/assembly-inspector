@@ -1,12 +1,13 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+import { PhotoUploader, ProcessedFile } from './PhotoUploader';
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -481,6 +482,13 @@ export default function InstallationsScreen({
   // Form state
   const [installDate, setInstallDate] = useState<string>(getLocalDateTimeString());
   const [notes, setNotes] = useState<string>('');
+
+  // Photos state for form
+  const [formPhotos, setFormPhotos] = useState<{ file: File; preview: string }[]>([]);
+
+  // Lightbox gallery state
+  const [galleryPhotos, setGalleryPhotos] = useState<string[] | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
 
   // Installation methods (icon-based with counts)
   const [selectedInstallMethods, setSelectedInstallMethods] = useState<InstallMethods>(() => {
@@ -1535,6 +1543,97 @@ export default function InstallationsScreen({
       console.error('Error loading delivery status:', e);
     }
   };
+
+  // Photo handling functions
+  const handleProcessedPhotos = useCallback((processedFiles: ProcessedFile[]) => {
+    const newPhotos = processedFiles.map(pf => ({
+      file: pf.file,
+      preview: pf.dataUrl
+    }));
+    setFormPhotos(prev => [...prev, ...newPhotos]);
+  }, []);
+
+  const removeFormPhoto = useCallback((index: number) => {
+    setFormPhotos(prev => {
+      URL.revokeObjectURL(prev[index]?.preview);
+      return prev.filter((_, i) => i !== index);
+    });
+  }, []);
+
+  const clearFormPhotos = useCallback(() => {
+    formPhotos.forEach(p => URL.revokeObjectURL(p.preview));
+    setFormPhotos([]);
+  }, [formPhotos]);
+
+  // Upload photos to Supabase storage
+  const uploadPhotos = async (photos: { file: File; preview: string }[], prefix: string): Promise<string[]> => {
+    const uploadedUrls: string[] = [];
+
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      const timestamp = Date.now();
+      const fileName = `${prefix}_${timestamp}_${i}.jpg`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('installation-photos')
+        .upload(fileName, photo.file, {
+          contentType: photo.file.type || 'image/jpeg',
+          cacheControl: '3600'
+        });
+
+      if (uploadError) {
+        console.error('Photo upload failed:', uploadError);
+        continue;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('installation-photos')
+        .getPublicUrl(fileName);
+
+      if (urlData?.publicUrl) {
+        uploadedUrls.push(urlData.publicUrl);
+      }
+    }
+
+    return uploadedUrls;
+  };
+
+  // Gallery functions
+  const openGallery = useCallback((photos: string[], startIndex = 0) => {
+    setGalleryPhotos(photos);
+    setGalleryIndex(startIndex);
+  }, []);
+
+  const closeGallery = useCallback(() => {
+    setGalleryPhotos(null);
+    setGalleryIndex(0);
+  }, []);
+
+  const nextGalleryPhoto = useCallback(() => {
+    if (galleryPhotos && galleryIndex < galleryPhotos.length - 1) {
+      setGalleryIndex(prev => prev + 1);
+    }
+  }, [galleryPhotos, galleryIndex]);
+
+  const prevGalleryPhoto = useCallback(() => {
+    if (galleryIndex > 0) {
+      setGalleryIndex(prev => prev - 1);
+    }
+  }, [galleryIndex]);
+
+  // Keyboard navigation for gallery
+  useEffect(() => {
+    if (!galleryPhotos) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeGallery();
+      else if (e.key === 'ArrowRight') nextGalleryPhoto();
+      else if (e.key === 'ArrowLeft') prevGalleryPhoto();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [galleryPhotos, closeGallery, nextGalleryPhoto, prevGalleryPhoto]);
 
   // Load month locks from database
   const loadMonthLocks = async () => {
@@ -3032,6 +3131,14 @@ export default function InstallationsScreen({
       // Combine newObjects with tempListObjects
       const allObjectsToSave = [...newObjects, ...tempListObjects];
 
+      // Upload photos if any
+      let photoUrls: string[] = [];
+      if (formPhotos.length > 0) {
+        setMessage('Laadin üles pilte...');
+        const dateStr = installDate.split('T')[0].replace(/-/g, '');
+        photoUrls = await uploadPhotos(formPhotos, `paigaldus_${dateStr}_${projectId}`);
+      }
+
       const installationsToSave = allObjectsToSave.map(obj => ({
         project_id: projectId,
         model_id: obj.modelId,
@@ -3053,6 +3160,7 @@ export default function InstallationsScreen({
         installation_method_name: methodName,
         installed_at: installDate,
         notes: notes || null,
+        photo_urls: photoUrls.length > 0 ? photoUrls : null,
         team_members: [
           ...monteerijad.map(m => `Monteerija: ${m}`),
           ...troppijad.map(t => `Troppija: ${t}`),
@@ -3079,6 +3187,9 @@ export default function InstallationsScreen({
         setMessage(`${allObjectsToSave.length} detail(i) edukalt paigaldatud!${skippedMsg}`);
         setNotes('');
         // Don't reset monteerijad and method - keep them for next installation
+
+        // Clear photos after successful save
+        clearFormPhotos();
 
         // Clear temp list after successful save
         setTempList(new Set());
@@ -3276,6 +3387,14 @@ export default function InstallationsScreen({
       // Combine newObjects with tempListObjects
       const allObjectsToSave = [...newObjects, ...tempListObjects];
 
+      // Upload photos if any
+      let photoUrls: string[] = [];
+      if (formPhotos.length > 0) {
+        setMessage('Laadin üles pilte...');
+        const dateStr = installDate.split('T')[0].replace(/-/g, '');
+        photoUrls = await uploadPhotos(formPhotos, `preassembly_${dateStr}_${projectId}`);
+      }
+
       const preassembliesToSave = allObjectsToSave.map(obj => ({
         project_id: projectId,
         model_id: obj.modelId,
@@ -3297,6 +3416,7 @@ export default function InstallationsScreen({
         installation_method_name: methodName,
         preassembled_at: installDate, // Use same date field, just different column name
         notes: notes || null,
+        photo_urls: photoUrls.length > 0 ? photoUrls : null,
         team_members: [
           ...monteerijad.map(m => `Monteerija: ${m}`),
           ...troppijad.map(t => `Troppija: ${t}`),
@@ -3322,6 +3442,9 @@ export default function InstallationsScreen({
         const skippedMsg = totalSkipped > 0 ? ` (${totalSkipped} juba olemas jäeti vahele)` : '';
         setMessage(`${allObjectsToSave.length} detail(i) edukalt preassembly lisatud!${skippedMsg}`);
         setNotes('');
+
+        // Clear photos after successful save
+        clearFormPhotos();
 
         // Clear temp list after successful save
         setTempList(new Set());
@@ -4887,6 +5010,32 @@ export default function InstallationsScreen({
             PA
           </span>
         )}
+        {/* Photo indicator */}
+        {inst.photo_urls && inst.photo_urls.length > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openGallery(inst.photo_urls!, 0);
+            }}
+            title={`${inst.photo_urls.length} foto(t)`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 6px',
+              background: '#ecfdf5',
+              color: '#059669',
+              borderRadius: '10px',
+              fontSize: '10px',
+              fontWeight: 500,
+              marginRight: '4px',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <FiCamera size={10} style={{ marginRight: '3px' }} />
+            {inst.photo_urls.length}
+          </button>
+        )}
         <span className="installation-time compact-date">
           {new Date(inst.installed_at).toLocaleTimeString('et-EE', {
             hour: '2-digit',
@@ -4991,6 +5140,32 @@ export default function InstallationsScreen({
             <FiTool size={10} style={{ marginRight: '3px' }} />
             OK
           </span>
+        )}
+        {/* Photo indicator */}
+        {item.photo_urls && item.photo_urls.length > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openGallery(item.photo_urls!, 0);
+            }}
+            title={`${item.photo_urls.length} foto(t)`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 6px',
+              background: '#ecfdf5',
+              color: '#059669',
+              borderRadius: '10px',
+              fontSize: '10px',
+              fontWeight: 500,
+              marginRight: '4px',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            <FiCamera size={10} style={{ marginRight: '3px' }} />
+            {item.photo_urls.length}
+          </button>
         )}
         <span className="installation-time compact-date">
           {new Date(item.preassembled_at).toLocaleTimeString('et-EE', {
@@ -6071,6 +6246,82 @@ export default function InstallationsScreen({
                 className="full-width-textarea"
                 rows={2}
               />
+            </div>
+
+            {/* Photo upload section */}
+            <div className="form-row">
+              <label><FiCamera size={14} /> Fotod</label>
+
+              {/* Photo thumbnails */}
+              {formPhotos.length > 0 && (
+                <div className="form-photos-grid" style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  {formPhotos.map((photo, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'relative',
+                        width: '60px',
+                        height: '60px',
+                        borderRadius: '6px',
+                        overflow: 'hidden',
+                        border: '1px solid #e5e7eb',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => openGallery(formPhotos.map(p => p.preview), idx)}
+                    >
+                      <img
+                        src={photo.preview}
+                        alt={`Foto ${idx + 1}`}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFormPhoto(idx);
+                        }}
+                        style={{
+                          position: 'absolute',
+                          top: '2px',
+                          right: '2px',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: 'rgba(239, 68, 68, 0.9)',
+                          color: 'white',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 0
+                        }}
+                      >
+                        <FiX size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* PhotoUploader */}
+              {formPhotos.length < 10 && (
+                <PhotoUploader
+                  onUpload={handleProcessedPhotos}
+                  maxFiles={10 - formPhotos.length}
+                  disabled={false}
+                  showProgress={true}
+                />
+              )}
             </div>
 
             <div className="form-row">
@@ -8936,6 +9187,139 @@ export default function InstallationsScreen({
             setMonthMenuOpen(null);
           }}
         />
+      )}
+
+      {/* Photo Lightbox Gallery */}
+      {galleryPhotos && (
+        <div
+          className="photo-modal-overlay"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.9)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          onClick={closeGallery}
+        >
+          <div
+            className="photo-modal-content"
+            style={{
+              position: 'relative',
+              maxWidth: '90vw',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={closeGallery}
+              style={{
+                position: 'absolute',
+                top: '-40px',
+                right: '0',
+                background: 'transparent',
+                border: 'none',
+                color: 'white',
+                fontSize: '24px',
+                cursor: 'pointer',
+                padding: '8px'
+              }}
+            >
+              ✕
+            </button>
+
+            <img
+              src={galleryPhotos[galleryIndex]}
+              alt={`Foto ${galleryIndex + 1}`}
+              style={{
+                maxWidth: '90vw',
+                maxHeight: '80vh',
+                objectFit: 'contain',
+                borderRadius: '8px'
+              }}
+            />
+
+            {/* Navigation */}
+            {galleryPhotos.length > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                marginTop: '16px',
+                color: 'white'
+              }}>
+                <button
+                  onClick={prevGalleryPhoto}
+                  disabled={galleryIndex === 0}
+                  style={{
+                    background: galleryIndex === 0 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.3)',
+                    border: 'none',
+                    color: 'white',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    cursor: galleryIndex === 0 ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <FiChevronLeft size={24} />
+                </button>
+                <span style={{ fontSize: '14px' }}>
+                  {galleryIndex + 1} / {galleryPhotos.length}
+                </span>
+                <button
+                  onClick={nextGalleryPhoto}
+                  disabled={galleryIndex === galleryPhotos.length - 1}
+                  style={{
+                    background: galleryIndex === galleryPhotos.length - 1 ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.3)',
+                    border: 'none',
+                    color: 'white',
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    cursor: galleryIndex === galleryPhotos.length - 1 ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <FiChevronRight size={24} />
+                </button>
+              </div>
+            )}
+
+            {/* Download button */}
+            <div style={{ marginTop: '12px', display: 'flex', gap: '8px' }}>
+              <a
+                href={galleryPhotos[galleryIndex]}
+                download={`foto_${galleryIndex + 1}.jpg`}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'white',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '13px'
+                }}
+              >
+                <FiDownload size={14} /> Lae alla
+              </a>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
