@@ -302,6 +302,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     name: '',
     keywords: '',
   });
+  // Resource name suggestions for autocomplete
+  const [showResourceSuggestions, setShowResourceSuggestions] = useState(false);
+  const [filteredResourceSuggestions, setFilteredResourceSuggestions] = useState<string[]>([]);
+  const resourceSuggestionRef = useRef<HTMLDivElement>(null);
   // Installation resources (extracted from team_members)
   const [installationResources, setInstallationResources] = useState<Map<string, Set<string>>>(new Map());
   // Resource usage counts (how many installations use each resource)
@@ -3176,7 +3180,61 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
       name: '',
       keywords: '',
     });
+    setShowResourceSuggestions(false);
+    setFilteredResourceSuggestions([]);
   };
+
+  // Get all resource names for the current type (for suggestions)
+  const getResourceNamesForType = useCallback((type: string): string[] => {
+    const names = new Set<string>();
+
+    // Add from project_resources table
+    projectResources
+      .filter(r => r.resource_type === type)
+      .forEach(r => names.add(r.name));
+
+    // Add from installation resources
+    const installationNames = installationResources.get(type);
+    if (installationNames) {
+      installationNames.forEach(name => names.add(name));
+    }
+
+    return Array.from(names).sort((a, b) => a.localeCompare(b, 'et'));
+  }, [projectResources, installationResources]);
+
+  // Filter suggestions based on input
+  const updateResourceSuggestions = useCallback((input: string, type: string, currentName?: string) => {
+    if (!input.trim()) {
+      setFilteredResourceSuggestions([]);
+      setShowResourceSuggestions(false);
+      return;
+    }
+
+    const allNames = getResourceNamesForType(type);
+    const inputLower = input.toLowerCase().trim();
+
+    // Filter names that contain the input (case-insensitive)
+    // Exclude the current name being edited
+    const filtered = allNames.filter(name => {
+      if (currentName && name === currentName) return false;
+      return name.toLowerCase().includes(inputLower) && name.toLowerCase() !== inputLower;
+    });
+
+    setFilteredResourceSuggestions(filtered);
+    setShowResourceSuggestions(filtered.length > 0);
+  }, [getResourceNamesForType]);
+
+  // Handle clicking outside of suggestions dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (resourceSuggestionRef.current && !resourceSuggestionRef.current.contains(event.target as Node)) {
+        setShowResourceSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Toggle resource active status
   const toggleResourceActive = async (resource: ProjectResource) => {
@@ -14962,15 +15020,27 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   </button>
                 </div>
 
-                <div style={{ marginBottom: '12px' }}>
+                <div style={{ marginBottom: '12px', position: 'relative' }} ref={resourceSuggestionRef}>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
                     Nimi *
                   </label>
                   <input
                     type="text"
                     value={resourceFormData.name}
-                    onChange={(e) => setResourceFormData(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => {
+                      const newName = e.target.value;
+                      setResourceFormData(prev => ({ ...prev, name: newName }));
+                      const resourceType = editingInstallationResource?.type || editingResource?.resource_type || selectedResourceType;
+                      const currentName = editingInstallationResource?.oldName || editingResource?.name;
+                      updateResourceSuggestions(newName, resourceType, currentName);
+                    }}
+                    onFocus={() => {
+                      const resourceType = editingInstallationResource?.type || editingResource?.resource_type || selectedResourceType;
+                      const currentName = editingInstallationResource?.oldName || editingResource?.name;
+                      updateResourceSuggestions(resourceFormData.name, resourceType, currentName);
+                    }}
                     placeholder={['troppija', 'monteerija', 'keevitaja'].includes(selectedResourceType) ? 'Nt: Jaan Tamm' : 'Nt: Liebherr 50t'}
+                    autoComplete="off"
                     style={{
                       width: '100%',
                       padding: '8px 12px',
@@ -14979,6 +15049,48 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                       fontSize: '14px'
                     }}
                   />
+                  {/* Autocomplete suggestions dropdown */}
+                  {showResourceSuggestions && filteredResourceSuggestions.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: 'white',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      marginTop: '4px'
+                    }}>
+                      <div style={{ padding: '4px 8px', fontSize: '11px', color: '#6b7280', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                        Vali olemasolev ressurss ühendamiseks:
+                      </div>
+                      {filteredResourceSuggestions.map((suggestion, index) => (
+                        <div
+                          key={index}
+                          onClick={() => {
+                            setResourceFormData(prev => ({ ...prev, name: suggestion }));
+                            setShowResourceSuggestions(false);
+                          }}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            borderBottom: index < filteredResourceSuggestions.length - 1 ? '1px solid #f3f4f6' : 'none',
+                            background: 'white',
+                            transition: 'background 0.15s'
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = '#f3f4f6')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'white')}
+                        >
+                          {suggestion}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Show current name being edited for installation resources */}
