@@ -296,6 +296,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const [resourcesSaving, setResourcesSaving] = useState(false);
   const [selectedResourceType, setSelectedResourceType] = useState<string>('crane');
   const [editingResource, setEditingResource] = useState<ProjectResource | null>(null);
+  const [editingInstallationResource, setEditingInstallationResource] = useState<{ type: string; oldName: string } | null>(null);
   const [showResourceForm, setShowResourceForm] = useState(false);
   const [resourceFormData, setResourceFormData] = useState({
     name: '',
@@ -3067,6 +3068,38 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
     setResourcesSaving(true);
     try {
+      // Handle renaming installation-only resource
+      if (editingInstallationResource) {
+        const oldName = editingInstallationResource.oldName;
+        const newName = resourceFormData.name.trim();
+
+        if (oldName !== newName) {
+          const { data: updateCount, error: rpcError } = await supabase.rpc('update_installation_resource_name', {
+            p_project_id: projectId,
+            p_resource_type: editingInstallationResource.type,
+            p_old_name: oldName,
+            p_new_name: newName
+          });
+
+          if (rpcError) {
+            console.error('Error updating installations:', rpcError);
+            setMessage(`Viga uuendamisel: ${rpcError.message}`);
+          } else if (updateCount && updateCount > 0) {
+            setMessage(`✅ ${updateCount} paigaldust uuendatud (${oldName} → ${newName})`);
+            await loadInstallationResources(); // Reload to see changes
+          } else {
+            setMessage('Muudatusi ei tehtud');
+          }
+        } else {
+          setMessage('Nimi on sama, muudatusi ei tehtud');
+        }
+
+        setShowResourceForm(false);
+        setEditingInstallationResource(null);
+        resetResourceForm();
+        return;
+      }
+
       if (editingResource) {
         const oldName = editingResource.name;
         const newName = resourceFormData.name.trim();
@@ -14914,9 +14947,17 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ margin: 0 }}>
-                    {editingResource ? 'Muuda ressurssi' : `Lisa ${RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}`}
+                    {editingInstallationResource
+                      ? `Muuda ressurssi nime`
+                      : editingResource
+                        ? 'Muuda ressurssi'
+                        : `Lisa ${RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}`}
                   </h3>
-                  <button onClick={() => setShowResourceForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                  <button onClick={() => {
+                    setShowResourceForm(false);
+                    setEditingInstallationResource(null);
+                    setEditingResource(null);
+                  }} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
                     <FiX size={20} />
                   </button>
                 </div>
@@ -14940,6 +14981,17 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                   />
                 </div>
 
+                {/* Show current name being edited for installation resources */}
+                {editingInstallationResource && (
+                  <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#fef3c7', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
+                    Praegune nimi: <strong>{editingInstallationResource.oldName}</strong>
+                    <br />
+                    <span style={{ fontSize: '11px' }}>Uuendatakse kõikides paigaldustes automaatselt</span>
+                  </div>
+                )}
+
+                {/* Keywords field - only for database resources */}
+                {!editingInstallationResource && (
                 <div style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', fontWeight: 500 }}>
                     Märksõnad
@@ -14961,11 +15013,16 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     Märksõnad aitavad ressursse otsida ja filtreerida
                   </p>
                 </div>
+                )}
 
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button
                     className="btn-secondary"
-                    onClick={() => setShowResourceForm(false)}
+                    onClick={() => {
+                      setShowResourceForm(false);
+                      setEditingInstallationResource(null);
+                      setEditingResource(null);
+                    }}
                     style={{ flex: 1 }}
                   >
                     Tühista
@@ -14977,7 +15034,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                     style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                   >
                     {resourcesSaving ? <FiRefreshCw size={14} className="spin" /> : <FiSave size={14} />}
-                    {editingResource ? 'Salvesta' : 'Lisa'}
+                    {editingInstallationResource ? 'Uuenda nimi' : editingResource ? 'Salvesta' : 'Lisa'}
                   </button>
                 </div>
               </div>
@@ -15125,26 +15182,46 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
                             <span style={{ fontSize: '11px', color: '#6b7280' }}>-</span>
                           </td>
                           <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                            <button
-                              onClick={() => importInstallationResource(selectedResourceType, name)}
-                              disabled={resourcesSaving}
-                              style={{
-                                background: '#f59e0b',
-                                border: 'none',
-                                borderRadius: '4px',
-                                padding: '4px 8px',
-                                cursor: 'pointer',
-                                color: 'white',
-                                fontSize: '11px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px'
-                              }}
-                              title="Impordi ressursside haldusse"
-                            >
-                              <FiPlus size={12} />
-                              Impordi
-                            </button>
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => {
+                                  // Open edit form for this installation resource
+                                  setEditingInstallationResource({ type: selectedResourceType, oldName: name });
+                                  setResourceFormData({ name: name, keywords: '' });
+                                  setShowResourceForm(true);
+                                }}
+                                style={{
+                                  background: '#f3f4f6',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '6px',
+                                  cursor: 'pointer'
+                                }}
+                                title="Muuda nime"
+                              >
+                                <FiEdit2 size={14} />
+                              </button>
+                              <button
+                                onClick={() => importInstallationResource(selectedResourceType, name)}
+                                disabled={resourcesSaving}
+                                style={{
+                                  background: '#f59e0b',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  color: 'white',
+                                  fontSize: '11px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="Impordi ressursside haldusse"
+                              >
+                                <FiPlus size={12} />
+                                Impordi
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
