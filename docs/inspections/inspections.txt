@@ -1,0 +1,15 @@
+Loe läbi CLAUDE_CODE_INSTRUCTIONS.md ja implementeeri kontrollkavade süsteem v3.0.
+
+Alusta:
+1. Jooksuta SQL migratsioonid supabase/migrations/ kausta
+2. Lisa tüübid src/supabase.ts faili
+3. Loo komponendid vastavalt juhendile
+4. Testi mobiilivaates
+
+Pea meeles:
+- Fotod ALATI kompresseerida (max 1920px)
+- Progress bar ALATI pikemate operatsioonide juures
+- Offline queue ALATI kasutada
+- Audit log ALATI kirjutada
+
+Versioon: 3.0.800
