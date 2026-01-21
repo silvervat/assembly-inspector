@@ -1,13 +1,13 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera } from 'react-icons/fi';
+import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
-import { PhotoUploader, ProcessedFile } from './PhotoUploader';
+// Photo compression is now handled inline - no need for PhotoUploader
 
 // ============================================
 // PAIGALDUSVIISID - Installation Methods Config
@@ -509,6 +509,7 @@ export default function InstallationsScreen({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeSuggestionField, setActiveSuggestionField] = useState<string | null>(null);
   const teamInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Known equipment/workers for suggestions (loaded from localStorage)
   const [knownKraanad, setKnownKraanad] = useState<string[]>(() => {
@@ -1562,14 +1563,66 @@ export default function InstallationsScreen({
     }
   };
 
-  // Photo handling functions
-  const handleProcessedPhotos = useCallback((processedFiles: ProcessedFile[]) => {
-    const newPhotos = processedFiles.map(pf => ({
-      file: pf.file,
-      preview: pf.dataUrl
-    }));
-    setFormPhotos(prev => [...prev, ...newPhotos]);
-  }, []);
+  // Photo handling - handle raw file upload (from input, drag&drop, paste) with compression
+  const handleFileUpload = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files).slice(0, 10 - formPhotos.length);
+    if (fileArray.length === 0) return;
+
+    const COMPRESS_OPTIONS = { maxWidth: 1920, maxHeight: 1920, quality: 0.8 };
+
+    const processFile = (file: File): Promise<{ file: File; preview: string }> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > COMPRESS_OPTIONS.maxWidth || height > COMPRESS_OPTIONS.maxHeight) {
+              const ratio = Math.min(COMPRESS_OPTIONS.maxWidth / width, COMPRESS_OPTIONS.maxHeight / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { reject(new Error('Canvas context not available')); return; }
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) { reject(new Error('Failed to compress image')); return; }
+                const compressedFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+                resolve({
+                  file: compressedFile,
+                  preview: canvas.toDataURL('image/jpeg', COMPRESS_OPTIONS.quality)
+                });
+              },
+              'image/jpeg',
+              COMPRESS_OPTIONS.quality
+            );
+          };
+          img.onerror = () => reject(new Error('Failed to load image'));
+          img.src = e.target?.result as string;
+        };
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
+      });
+    };
+
+    const newPhotos: { file: File; preview: string }[] = [];
+    for (const file of fileArray) {
+      if (!file.type.startsWith('image/')) continue;
+      try {
+        const processed = await processFile(file);
+        newPhotos.push(processed);
+      } catch (e) {
+        console.error('Error processing photo:', e);
+      }
+    }
+    if (newPhotos.length > 0) {
+      setFormPhotos(prev => [...prev, ...newPhotos]);
+    }
+  }, [formPhotos.length]);
 
   const removeFormPhoto = useCallback((index: number) => {
     setFormPhotos(prev => {
@@ -6441,80 +6494,166 @@ export default function InstallationsScreen({
               />
             </div>
 
-            {/* Photo upload section */}
-            <div className="form-row">
-              <label><FiCamera size={14} /> Fotod</label>
-
-              {/* Photo thumbnails */}
-              {formPhotos.length > 0 && (
-                <div className="form-photos-grid" style={{
+            {/* Photo upload section - matching ArrivedDeliveriesScreen style */}
+            <div className="photos-section" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #e5e7eb' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 500, color: '#374151' }}>
+                  <FiCamera size={14} /> Fotod
+                </label>
+                {formPhotos.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '4px 10px',
+                      background: '#f3f4f6',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      cursor: 'pointer',
+                      color: '#374151'
+                    }}
+                  >
+                    <FiUpload size={12} /> Lisa
+                  </button>
+                )}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    if (e.target.files) {
+                      handleFileUpload(e.target.files);
+                      e.target.value = ''; // Reset input
+                    }
+                  }}
+                />
+              </div>
+              <div
+                style={{
                   display: 'flex',
                   flexWrap: 'wrap',
-                  gap: '8px',
-                  marginBottom: '8px'
-                }}>
-                  {formPhotos.map((photo, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        position: 'relative',
-                        width: '60px',
-                        height: '60px',
-                        borderRadius: '6px',
-                        overflow: 'hidden',
-                        border: '1px solid #e5e7eb',
-                        cursor: 'pointer'
+                  gap: '6px',
+                  minHeight: '60px',
+                  padding: '8px',
+                  border: '2px dashed #d1d5db',
+                  borderRadius: '6px',
+                  cursor: formPhotos.length < 10 ? 'pointer' : 'default',
+                  transition: 'all 0.15s ease',
+                  outline: 'none'
+                }}
+                tabIndex={0}
+                onClick={(e) => {
+                  if (formPhotos.length >= 10) return;
+                  if ((e.target as HTMLElement).closest('.photo-item')) return;
+                  photoInputRef.current?.click();
+                }}
+                onDragOver={(e) => {
+                  if (formPhotos.length >= 10) return;
+                  e.preventDefault();
+                  e.currentTarget.style.borderColor = '#3b82f6';
+                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.05)';
+                }}
+                onDragLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.style.borderColor = '#d1d5db';
+                  e.currentTarget.style.background = 'transparent';
+                  if (formPhotos.length >= 10) return;
+                  if (e.dataTransfer.files?.length > 0) {
+                    handleFileUpload(e.dataTransfer.files);
+                  }
+                }}
+                onPaste={(e) => {
+                  if (formPhotos.length >= 10) return;
+                  const items = e.clipboardData?.items;
+                  if (!items) return;
+                  const files: File[] = [];
+                  for (let i = 0; i < items.length; i++) {
+                    if (items[i].type.startsWith('image/')) {
+                      const file = items[i].getAsFile();
+                      if (file) files.push(file);
+                    }
+                  }
+                  if (files.length > 0) {
+                    handleFileUpload(files);
+                  }
+                }}
+              >
+                {formPhotos.map((photo, idx) => (
+                  <div
+                    key={idx}
+                    className="photo-item"
+                    style={{
+                      position: 'relative',
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '4px',
+                      overflow: 'hidden',
+                      border: '1px solid #e5e7eb'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openGallery(formPhotos.map(p => p.preview), idx);
+                    }}
+                  >
+                    <img
+                      src={photo.preview}
+                      alt={`Foto ${idx + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFormPhoto(idx);
                       }}
-                      onClick={() => openGallery(formPhotos.map(p => p.preview), idx)}
+                      style={{
+                        position: 'absolute',
+                        top: '2px',
+                        right: '2px',
+                        width: '16px',
+                        height: '16px',
+                        borderRadius: '50%',
+                        background: 'rgba(239, 68, 68, 0.9)',
+                        color: 'white',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: 0
+                      }}
                     >
-                      <img
-                        src={photo.preview}
-                        alt={`Foto ${idx + 1}`}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeFormPhoto(idx);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          top: '2px',
-                          right: '2px',
-                          width: '18px',
-                          height: '18px',
-                          borderRadius: '50%',
-                          background: 'rgba(239, 68, 68, 0.9)',
-                          color: 'white',
-                          border: 'none',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: 0
-                        }}
-                      >
-                        <FiX size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* PhotoUploader */}
-              {formPhotos.length < 10 && (
-                <PhotoUploader
-                  onUpload={handleProcessedPhotos}
-                  maxFiles={10 - formPhotos.length}
-                  disabled={false}
-                  showProgress={true}
-                />
-              )}
+                      <FiX size={10} />
+                    </button>
+                  </div>
+                ))}
+                {formPhotos.length === 0 && (
+                  <div style={{
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    color: '#9ca3af',
+                    padding: '12px'
+                  }}>
+                    <FiImage size={20} />
+                    <span style={{ fontSize: '12px' }}>Lohista, kleebi või klõpsa</span>
+                    <span style={{ fontSize: '10px', color: '#b1b5ba' }}>Ctrl+V kleepimiseks</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="form-row">
