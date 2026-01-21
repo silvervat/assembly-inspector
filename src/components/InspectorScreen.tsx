@@ -115,6 +115,7 @@ export default function InspectorScreen({
       admin: 'Administratsioon',
       inspection_plan: 'Inspektsiooni kava',
       inspection_plans: 'Kontrollplaanid',
+      inspection_admin: 'Kontrollkavade Admin',
       inspection_type: 'Inspektsioon',
       installations: 'Paigaldamised',
       schedule: 'Paigaldusgraafik',
@@ -1010,7 +1011,7 @@ export default function InspectorScreen({
         topview_url: topviewUrl,
         project_id: projectId,
         // inspection_type is for legacy modes only; inspection_type mode uses plan-based tracking
-        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_plans' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues' || inspectionMode === 'tools' || inspectionMode === 'crane_planner' || inspectionMode === 'crane_library')
+        inspection_type: (inspectionMode === 'admin' || inspectionMode === 'inspection_plan' || inspectionMode === 'inspection_plans' || inspectionMode === 'inspection_admin' || inspectionMode === 'inspection_type' || inspectionMode === 'installations' || inspectionMode === 'schedule' || inspectionMode === 'delivery_schedule' || inspectionMode === 'arrived_deliveries' || inspectionMode === 'organizer' || inspectionMode === 'issues' || inspectionMode === 'tools' || inspectionMode === 'crane_planner' || inspectionMode === 'crane_library')
           ? undefined
           : inspectionMode,
         // Additional Tekla fields

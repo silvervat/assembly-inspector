@@ -20,6 +20,7 @@ export type InspectionMode =
   | 'admin'
   | 'inspection_plan'
   | 'inspection_plans' // Kontrollplaanid (kõik inspektsioonid)
+  | 'inspection_admin' // Kontrollkavade admin paneel (v3.0)
   | 'inspection_type'
   | 'installations' // Paigaldamiste süsteem
   | 'schedule' // Paigaldusgraafik
