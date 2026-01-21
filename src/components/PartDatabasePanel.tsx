@@ -72,7 +72,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         const itemIds = deliveryItems.map((item: any) => item.id);
         const { data: confirmations } = await supabase
           .from('trimble_arrival_confirmations')
-          .select(`*, arrived_vehicle:trimble_arrived_vehicles(id, arrival_date, arrival_time, unload_location, unload_method, photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at))`)
+          .select(`*, arrived_vehicle:trimble_arrived_vehicles(id, arrival_date, arrival_time, unload_location, photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at))`)
           .in('item_id', itemIds);
 
         // Map confirmations with delivery vehicle info
