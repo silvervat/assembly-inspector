@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
-import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
+import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle, FiExternalLink, FiGrid } from 'react-icons/fi';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 interface PartDatabasePanelProps {
@@ -45,7 +45,6 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
 
       const [
         deliveryResult,
-        arrivalResult,
         installationScheduleResult,
         installationsResult,
         preassembliesResult,
@@ -58,11 +57,6 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           .select(`*, vehicle:trimble_delivery_vehicles(id, vehicle_code, scheduled_date, factory:trimble_delivery_factories(id, factory_name, factory_code))`)
           .eq('trimble_project_id', projectId)
           .ilike('guid_ifc', guidPattern),
-        supabase
-          .from('trimble_arrival_confirmations')
-          .select(`*, item:trimble_delivery_items!inner(id, guid_ifc, trimble_project_id, vehicle:trimble_delivery_vehicles(id, vehicle_code, scheduled_date, factory:trimble_delivery_factories(id, factory_name, factory_code))), arrived_vehicle:trimble_arrived_vehicles(id, arrival_date, arrival_time, unload_location, unload_method, photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at))`)
-          .eq('item.trimble_project_id', projectId)
-          .ilike('item.guid_ifc', guidPattern),
         supabase.from('installation_schedule').select('*').eq('project_id', projectId).ilike('guid_ifc', guidPattern),
         supabase.from('installations').select('*').eq('project_id', projectId).ilike('guid_ifc', guidPattern),
         supabase.from('preassemblies').select('*').eq('project_id', projectId).ilike('guid_ifc', guidPattern),
@@ -71,11 +65,23 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         supabase.from('issue_objects').select(`*, issue:issues!inner(*, comments:issue_comments(*), attachments:issue_attachments(*))`).eq('issue.trimble_project_id', projectId).ilike('guid_ifc', guidPattern)
       ]);
 
-      // Map arrival confirmations - now queried directly from confirmations table
-      const arrivalConfirmations = (arrivalResult.data || []).map(conf => ({
-        ...conf,
-        delivery_vehicle: conf.item?.vehicle
-      }));
+      // Query arrival confirmations using delivery item IDs (two-step approach because PostgREST doesn't support filtering on nested tables)
+      let arrivalConfirmations: any[] = [];
+      const deliveryItems = deliveryResult.data || [];
+      if (deliveryItems.length > 0) {
+        const itemIds = deliveryItems.map((item: any) => item.id);
+        const { data: confirmations } = await supabase
+          .from('trimble_arrival_confirmations')
+          .select(`*, arrived_vehicle:trimble_arrived_vehicles(id, arrival_date, arrival_time, unload_location, unload_method, photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at))`)
+          .in('item_id', itemIds);
+
+        // Map confirmations with delivery vehicle info
+        const itemIdToVehicle = new Map(deliveryItems.map((item: any) => [item.id, item.vehicle]));
+        arrivalConfirmations = (confirmations || []).map(conf => ({
+          ...conf,
+          delivery_vehicle: itemIdToVehicle.get(conf.item_id)
+        }));
+      }
 
       const allInstallations = [
         ...(installationScheduleResult.data || []).map(i => ({ ...i, source: 'schedule' })),
@@ -479,7 +485,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
             <button onClick={() => toggleSection('organizer')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('organizer') ? '#fae8ff' : '#fdf4ff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <img src={`${import.meta.env.BASE_URL}icons/organizer.png`} alt="" style={{ width: 14, height: 14 }} />
+                <FiGrid size={14} style={{ color: '#a855f7' }} />
                 Organiseerija
                 <span style={{ background: data.organizerItems.length > 0 ? '#a855f7' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.organizerItems.length}</span>
               </span>
