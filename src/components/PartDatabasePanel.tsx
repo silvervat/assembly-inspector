@@ -1,13 +1,15 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
-import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle } from 'react-icons/fi';
+import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 interface PartDatabasePanelProps {
   api: WorkspaceAPI.WorkspaceAPI;
   projectId: string;
   compact?: boolean; // For collapsible mode in ToolsScreen
+  onNavigateToDelivery?: (vehicleId: string) => void; // Callback to open delivery schedule with specific vehicle
+  autoLoadOnMount?: boolean; // If true, auto-load from selection when component mounts
 }
 
 interface PartDbData {
@@ -19,10 +21,11 @@ interface PartDbData {
   issues: any[];
 }
 
-export default function PartDatabasePanel({ api, projectId, compact = false }: PartDatabasePanelProps) {
+export default function PartDatabasePanel({ api, projectId, compact = false, onNavigateToDelivery, autoLoadOnMount = true }: PartDatabasePanelProps) {
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedGuid, setSelectedGuid] = useState<string | null>(null);
   const [selectedMark, setSelectedMark] = useState<string | null>(null);
@@ -68,11 +71,17 @@ export default function PartDatabasePanel({ api, projectId, compact = false }: P
         supabase.from('issue_objects').select(`*, issue:issues!inner(*, comments:issue_comments(*), attachments:issue_attachments(*))`).eq('issue.trimble_project_id', projectId).ilike('guid_ifc', guidPattern)
       ]);
 
-      const arrivalData = arrivalResult.data?.[0];
-      const arrivalConfirmations = (arrivalData?.confirmations || []).map((conf: any) => ({
-        ...conf,
-        delivery_vehicle: arrivalData?.vehicle
-      }));
+      // Aggregate all arrival confirmations from all matching delivery items
+      const arrivalConfirmations: any[] = [];
+      for (const item of arrivalResult.data || []) {
+        const confirmations = item.confirmations || [];
+        for (const conf of confirmations) {
+          arrivalConfirmations.push({
+            ...conf,
+            delivery_vehicle: item.vehicle
+          });
+        }
+      }
 
       const allInstallations = [
         ...(installationScheduleResult.data || []).map(i => ({ ...i, source: 'schedule' })),
@@ -182,6 +191,14 @@ export default function PartDatabasePanel({ api, projectId, compact = false }: P
       console.error('Error loading from selection:', e);
     }
   }, [api, loadByGuid, propertyMappings, projectId]);
+
+  // Auto-load from selection on mount
+  useEffect(() => {
+    if (autoLoadOnMount && !hasAutoLoaded && api && propertyMappings) {
+      setHasAutoLoaded(true);
+      loadFromSelection();
+    }
+  }, [autoLoadOnMount, hasAutoLoaded, api, propertyMappings, loadFromSelection]);
 
   // Search by assembly mark
   const search = useCallback(async () => {
@@ -361,7 +378,29 @@ export default function PartDatabasePanel({ api, projectId, compact = false }: P
                 {data.deliveryItems.map((item: any, idx: number) => (
                   <div key={idx} style={{ padding: '8px', background: '#f9fafb', borderRadius: '4px', marginBottom: idx < data.deliveryItems.length - 1 ? '6px' : 0, fontSize: '12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 600 }}>{item.vehicle?.vehicle_code || 'Tundmatu veok'}</span>
+                      {item.vehicle?.id && onNavigateToDelivery ? (
+                        <button
+                          onClick={() => onNavigateToDelivery(item.vehicle.id)}
+                          style={{
+                            fontWeight: 600,
+                            color: '#1e40af',
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '12px'
+                          }}
+                          title="Ava tarnegraafikus"
+                        >
+                          {item.vehicle?.vehicle_code || 'Tundmatu veok'}
+                          <FiExternalLink size={10} />
+                        </button>
+                      ) : (
+                        <span style={{ fontWeight: 600 }}>{item.vehicle?.vehicle_code || 'Tundmatu veok'}</span>
+                      )}
                       <span style={{ background: '#6b7280', color: 'white', padding: '1px 6px', borderRadius: '4px', fontSize: '10px' }}>{item.vehicle?.factory?.factory_name || '-'}</span>
                     </div>
                     <div style={{ color: '#6b7280' }}>
