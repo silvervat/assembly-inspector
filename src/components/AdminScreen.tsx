@@ -2733,6 +2733,69 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     }
   }, [projectId]);
 
+  // Update resource name in all installation tables (replaces the RPC function)
+  const updateInstallationResourceName = async (
+    resourceType: string,
+    oldName: string,
+    newName: string
+  ): Promise<number> => {
+    let totalUpdated = 0;
+
+    // Determine which field to update based on resource type
+    // team_members is stored as a comma-separated string
+    const fieldMap: Record<string, string> = {
+      'team': 'team_members',
+      'crane': 'crane_name',
+      'installer': 'team_members',
+      'brigadir': 'team_members',
+      'monteerija': 'team_members',
+      'keevitaja': 'team_members',
+    };
+
+    const field = fieldMap[resourceType] || 'team_members';
+
+    // Helper to update a table
+    const updateTable = async (tableName: string, projectField: string): Promise<number> => {
+      // First get all records that contain the old name
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('*')
+        .eq(projectField, projectId)
+        .ilike(field, `%${oldName}%`);
+
+      if (error || !data) return 0;
+
+      let count = 0;
+      for (const row of data) {
+        const currentValue = (row as Record<string, unknown>)[field] as string | null;
+        if (!currentValue) continue;
+
+        // Replace the old name with new name (handle comma-separated values)
+        const newValue = currentValue
+          .split(',')
+          .map((v: string) => v.trim() === oldName ? newName : v.trim())
+          .join(', ');
+
+        if (newValue !== currentValue) {
+          const { error: updateError } = await supabase
+            .from(tableName)
+            .update({ [field]: newValue })
+            .eq('id', (row as Record<string, unknown>).id);
+
+          if (!updateError) count++;
+        }
+      }
+      return count;
+    };
+
+    // Update all three tables
+    totalUpdated += await updateTable('installation_schedule', 'project_id');
+    totalUpdated += await updateTable('installations', 'project_id');
+    totalUpdated += await updateTable('preassemblies', 'project_id');
+
+    return totalUpdated;
+  };
+
   // Import installation resource to project_resources
   const importInstallationResource = async (resourceType: string, name: string) => {
     setResourcesSaving(true);
@@ -2778,21 +2841,22 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         const newName = resourceFormData.name.trim();
 
         if (oldName !== newName) {
-          const { data: updateCount, error: rpcError } = await supabase.rpc('update_installation_resource_name', {
-            p_project_id: projectId,
-            p_resource_type: editingInstallationResource.type,
-            p_old_name: oldName,
-            p_new_name: newName
-          });
+          try {
+            const updateCount = await updateInstallationResourceName(
+              editingInstallationResource.type,
+              oldName,
+              newName
+            );
 
-          if (rpcError) {
-            console.error('Error updating installations:', rpcError);
-            setMessage(`Viga uuendamisel: ${rpcError.message}`);
-          } else if (updateCount && updateCount > 0) {
-            setMessage(`✅ ${updateCount} paigaldust uuendatud (${oldName} → ${newName})`);
-            await loadInstallationResources(); // Reload to see changes
-          } else {
-            setMessage('Muudatusi ei tehtud');
+            if (updateCount > 0) {
+              setMessage(`✅ ${updateCount} paigaldust uuendatud (${oldName} → ${newName})`);
+              await loadInstallationResources(); // Reload to see changes
+            } else {
+              setMessage('Muudatusi ei tehtud');
+            }
+          } catch (e: any) {
+            console.error('Error updating installations:', e);
+            setMessage(`Viga uuendamisel: ${e.message}`);
           }
         } else {
           setMessage('Nimi on sama, muudatusi ei tehtud');
@@ -2823,19 +2887,21 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
         // If name changed, update all installations that use this resource
         if (oldName !== newName) {
-          const { data: updateCount, error: rpcError } = await supabase.rpc('update_installation_resource_name', {
-            p_project_id: projectId,
-            p_resource_type: editingResource.resource_type,
-            p_old_name: oldName,
-            p_new_name: newName
-          });
+          try {
+            const updateCount = await updateInstallationResourceName(
+              editingResource.resource_type,
+              oldName,
+              newName
+            );
 
-          if (rpcError) {
-            console.error('Error updating installations:', rpcError);
-          } else if (updateCount && updateCount > 0) {
-            setMessage(`Ressurss uuendatud, ${updateCount} paigaldust uuendatud`);
-          } else {
-            setMessage('Ressurss uuendatud');
+            if (updateCount > 0) {
+              setMessage(`Ressurss uuendatud, ${updateCount} paigaldust uuendatud`);
+            } else {
+              setMessage('Ressurss uuendatud');
+            }
+          } catch (e: any) {
+            console.error('Error updating installations:', e);
+            setMessage('Ressurss uuendatud (paigalduste uuendamine ebaõnnestus)');
           }
         } else {
           setMessage('Ressurss uuendatud');
