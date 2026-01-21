@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase } from '../supabase';
-import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle, FiExternalLink } from 'react-icons/fi';
+import { FiDatabase, FiSearch, FiZap, FiRefreshCw, FiTruck, FiBox, FiCheck, FiAlertTriangle, FiExternalLink, FiGrid } from 'react-icons/fi';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 interface PartDatabasePanelProps {
@@ -479,7 +479,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
             <button onClick={() => toggleSection('organizer')} style={{ width: '100%', padding: '10px 12px', background: expandedSections.has('organizer') ? '#fae8ff' : '#fdf4ff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontSize: '13px' }}>
               <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <img src={`${import.meta.env.BASE_URL}icons/organizer.png`} alt="" style={{ width: 14, height: 14 }} />
+                <FiGrid size={14} style={{ color: '#a855f7' }} />
                 Organiseerija
                 <span style={{ background: data.organizerItems.length > 0 ? '#a855f7' : '#d1d5db', color: 'white', padding: '1px 6px', borderRadius: '8px', fontSize: '10px' }}>{data.organizerItems.length}</span>
               </span>
