@@ -59,10 +59,10 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           .eq('trimble_project_id', projectId)
           .ilike('guid_ifc', guidPattern),
         supabase
-          .from('trimble_delivery_items')
-          .select(`guid_ifc, vehicle:trimble_delivery_vehicles(id, vehicle_code, scheduled_date, factory:trimble_delivery_factories(id, factory_name, factory_code)), confirmations:trimble_arrival_confirmations(*, arrived_vehicle:trimble_arrived_vehicles(id, arrival_date, arrival_time, unload_location, unload_method, photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at)))`)
-          .eq('trimble_project_id', projectId)
-          .ilike('guid_ifc', guidPattern),
+          .from('trimble_arrival_confirmations')
+          .select(`*, item:trimble_delivery_items!inner(id, guid_ifc, trimble_project_id, vehicle:trimble_delivery_vehicles(id, vehicle_code, scheduled_date, factory:trimble_delivery_factories(id, factory_name, factory_code))), arrived_vehicle:trimble_arrived_vehicles(id, arrival_date, arrival_time, unload_location, unload_method, photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at))`)
+          .eq('item.trimble_project_id', projectId)
+          .ilike('item.guid_ifc', guidPattern),
         supabase.from('installation_schedule').select('*').eq('project_id', projectId).ilike('guid_ifc', guidPattern),
         supabase.from('installations').select('*').eq('project_id', projectId).ilike('guid_ifc', guidPattern),
         supabase.from('preassemblies').select('*').eq('project_id', projectId).ilike('guid_ifc', guidPattern),
@@ -71,17 +71,11 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         supabase.from('issue_objects').select(`*, issue:issues!inner(*, comments:issue_comments(*), attachments:issue_attachments(*))`).eq('issue.trimble_project_id', projectId).ilike('guid_ifc', guidPattern)
       ]);
 
-      // Aggregate all arrival confirmations from all matching delivery items
-      const arrivalConfirmations: any[] = [];
-      for (const item of arrivalResult.data || []) {
-        const confirmations = item.confirmations || [];
-        for (const conf of confirmations) {
-          arrivalConfirmations.push({
-            ...conf,
-            delivery_vehicle: item.vehicle
-          });
-        }
-      }
+      // Map arrival confirmations - now queried directly from confirmations table
+      const arrivalConfirmations = (arrivalResult.data || []).map(conf => ({
+        ...conf,
+        delivery_vehicle: conf.item?.vehicle
+      }));
 
       const allInstallations = [
         ...(installationScheduleResult.data || []).map(i => ({ ...i, source: 'schedule' })),
