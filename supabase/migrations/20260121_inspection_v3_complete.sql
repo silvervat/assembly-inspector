@@ -12,21 +12,36 @@ VALUES ('inspection-signatures', 'inspection-signatures', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Storage policy allkirjade jaoks
-CREATE POLICY IF NOT EXISTS "Signatures are publicly accessible"
-ON storage.objects FOR SELECT
-USING (bucket_id = 'inspection-signatures');
+DO $$
+BEGIN
+  -- Select policy
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Signatures are publicly accessible') THEN
+    CREATE POLICY "Signatures are publicly accessible"
+    ON storage.objects FOR SELECT
+    USING (bucket_id = 'inspection-signatures');
+  END IF;
 
-CREATE POLICY IF NOT EXISTS "Authenticated users can upload signatures"
-ON storage.objects FOR INSERT
-WITH CHECK (bucket_id = 'inspection-signatures');
+  -- Insert policy
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Authenticated users can upload signatures') THEN
+    CREATE POLICY "Authenticated users can upload signatures"
+    ON storage.objects FOR INSERT
+    WITH CHECK (bucket_id = 'inspection-signatures');
+  END IF;
 
-CREATE POLICY IF NOT EXISTS "Users can update own signatures"
-ON storage.objects FOR UPDATE
-USING (bucket_id = 'inspection-signatures');
+  -- Update policy
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Users can update own signatures') THEN
+    CREATE POLICY "Users can update own signatures"
+    ON storage.objects FOR UPDATE
+    USING (bucket_id = 'inspection-signatures');
+  END IF;
 
-CREATE POLICY IF NOT EXISTS "Users can delete own signatures"
-ON storage.objects FOR DELETE
-USING (bucket_id = 'inspection-signatures');
+  -- Delete policy
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'objects' AND policyname = 'Users can delete own signatures') THEN
+    CREATE POLICY "Users can delete own signatures"
+    ON storage.objects FOR DELETE
+    USING (bucket_id = 'inspection-signatures');
+  END IF;
+END $$;
 
 -- ============================================
 -- 2. ELEMENT LIFECYCLE TABEL
