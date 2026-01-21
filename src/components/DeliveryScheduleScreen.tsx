@@ -1620,9 +1620,24 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
           if (vehicle.scheduled_date) {
             setSelectedDate(vehicle.scheduled_date);
             setCurrentMonth(new Date(vehicle.scheduled_date));
+
+            // Also expand the date group if it's collapsed
+            setCollapsedDates(prev => {
+              const next = new Set(prev);
+              next.delete(vehicle.scheduled_date!);
+              return next;
+            });
           }
 
           setMessage(`Avatud veok: ${vehicle.vehicle_code}`);
+
+          // Scroll to the vehicle after DOM update
+          setTimeout(() => {
+            const vehicleEl = document.querySelector(`[data-vehicle-id="${vehicleId}"]`);
+            if (vehicleEl) {
+              vehicleEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 150);
         }
       }
     }
