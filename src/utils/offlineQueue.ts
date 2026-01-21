@@ -11,14 +11,19 @@ const STORE_NAME = 'pendingUploads';
 
 interface PendingUpload {
   id: string;
-  type: 'photo' | 'result' | 'result_photo';
+  type: 'photo' | 'result' | 'result_photo' | 'signature' | 'lifecycle' | 'audit_log';
   data: any;
   blobData?: string; // Base64 encoded blob for photos
   fileName?: string;
   contentType?: string;
+  storageBucket?: string; // Storage bucket name
   createdAt: number;
   retryCount: number;
+  priority?: number; // Higher priority items processed first
 }
+
+// Progress callback type
+type ProgressCallback = (processed: number, total: number, currentItem?: string) => void;
 
 // Open IndexedDB
 const openDB = (): Promise<IDBDatabase> => {
@@ -188,15 +193,114 @@ const processResultPhotoInsert = async (item: PendingUpload): Promise<boolean> =
   }
 };
 
+// Process a signature upload
+const processSignatureUpload = async (item: PendingUpload): Promise<boolean> => {
+  if (!item.blobData || !item.fileName) return false;
+
+  try {
+    const blob = base64ToBlob(item.blobData, item.contentType || 'image/png');
+    const bucket = item.storageBucket || 'inspection-signatures';
+
+    const { error } = await supabase.storage
+      .from(bucket)
+      .upload(item.fileName, blob, {
+        contentType: item.contentType || 'image/png',
+        upsert: true
+      });
+
+    if (error) {
+      console.error('Signature upload error:', error);
+      return false;
+    }
+
+    // Update user profile if data contains user_id
+    if (item.data?.user_id) {
+      const { data: urlData } = supabase.storage
+        .from(bucket)
+        .getPublicUrl(item.fileName);
+
+      await supabase
+        .from('trimble_ex_users')
+        .update({
+          signature_url: urlData.publicUrl,
+          signature_storage_path: item.fileName,
+          signature_updated_at: new Date().toISOString()
+        })
+        .eq('id', item.data.user_id);
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Signature upload exception:', e);
+    return false;
+  }
+};
+
+// Process a lifecycle update
+const processLifecycleUpdate = async (item: PendingUpload): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('element_lifecycle')
+      .upsert(item.data, {
+        onConflict: 'guid_ifc,trimble_project_id'
+      });
+
+    if (error) {
+      console.error('Lifecycle update error:', error);
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Lifecycle update exception:', e);
+    return false;
+  }
+};
+
+// Process an audit log entry
+const processAuditLogInsert = async (item: PendingUpload): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('inspection_audit_log')
+      .insert(item.data);
+
+    if (error) {
+      console.error('Audit log insert error:', error);
+      return false;
+    }
+
+    return true;
+  } catch (e) {
+    console.error('Audit log insert exception:', e);
+    return false;
+  }
+};
+
 // Process all pending uploads
-export const processPendingUploads = async (): Promise<{ success: number; failed: number }> => {
+export const processPendingUploads = async (
+  onProgress?: ProgressCallback
+): Promise<{ success: number; failed: number }> => {
   const items = await getPendingItems();
+
+  // Sort by priority (higher first) and creation time
+  items.sort((a, b) => {
+    const priorityDiff = (b.priority || 0) - (a.priority || 0);
+    if (priorityDiff !== 0) return priorityDiff;
+    return a.createdAt - b.createdAt;
+  });
+
   let success = 0;
   let failed = 0;
+  const total = items.length;
 
-  console.log(`🔄 Processing ${items.length} pending uploads...`);
+  console.log(`🔄 Processing ${total} pending uploads...`);
 
-  for (const item of items) {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    // Report progress
+    onProgress?.(i, total, item.type);
+
     // Skip items with too many retries (max 5)
     if (item.retryCount >= 5) {
       console.warn(`⚠️ Skipping ${item.id} - too many retries`);
@@ -215,6 +319,15 @@ export const processPendingUploads = async (): Promise<{ success: number; failed
       case 'result_photo':
         processed = await processResultPhotoInsert(item);
         break;
+      case 'signature':
+        processed = await processSignatureUpload(item);
+        break;
+      case 'lifecycle':
+        processed = await processLifecycleUpdate(item);
+        break;
+      case 'audit_log':
+        processed = await processAuditLogInsert(item);
+        break;
     }
 
     if (processed) {
@@ -225,6 +338,9 @@ export const processPendingUploads = async (): Promise<{ success: number; failed
       failed++;
     }
   }
+
+  // Final progress report
+  onProgress?.(total, total);
 
   if (items.length > 0) {
     console.log(`📊 Queue processing complete: ${success} success, ${failed} failed`);
