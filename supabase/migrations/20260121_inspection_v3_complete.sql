@@ -400,51 +400,9 @@ SELECT
 FROM element_lifecycle
 GROUP BY trimble_project_id;
 
--- Inspection photos gallery view
-CREATE OR REPLACE VIEW v_inspection_photos_gallery AS
-SELECT
-  p.id,
-  p.inspection_result_id,
-  p.url,
-  p.thumbnail_url,
-  p.photo_type,
-  p.original_filename,
-  p.file_size,
-  p.compressed_size,
-  p.uploaded_by,
-  p.uploaded_by_name,
-  p.created_at,
-  r.inspection_plan_item_id,
-  i.guid_ifc,
-  i.trimble_project_id as project_id,
-  o.assembly_mark,
-  u.name as inspector_name,
-  c.name as category_name
-FROM inspection_result_photos p
-JOIN inspection_results r ON r.id = p.inspection_result_id
-JOIN inspection_plan_items i ON i.id = r.inspection_plan_item_id
-LEFT JOIN trimble_model_objects o ON o.guid_ifc = i.guid_ifc AND o.trimble_project_id = i.trimble_project_id
-LEFT JOIN trimble_ex_users u ON u.email = r.inspector_email AND u.trimble_project_id = i.trimble_project_id
-LEFT JOIN inspection_categories c ON c.id = i.inspection_category_id;
-
--- User inspection summary view
-CREATE OR REPLACE VIEW v_user_inspection_summary AS
-SELECT
-  u.id as user_id,
-  u.email,
-  u.name,
-  u.trimble_project_id,
-  u.role,
-  u.inspector_prefix,
-  COUNT(DISTINCT r.id) as total_inspections,
-  COUNT(DISTINCT r.id) FILTER (WHERE i.status = 'completed') as completed_inspections,
-  COUNT(DISTINCT p.id) as total_photos,
-  MAX(r.created_at) as last_inspection_at
-FROM trimble_ex_users u
-LEFT JOIN inspection_results r ON r.inspector_email = u.email
-LEFT JOIN inspection_plan_items i ON i.id = r.inspection_plan_item_id AND i.trimble_project_id = u.trimble_project_id
-LEFT JOIN inspection_result_photos p ON p.inspection_result_id = r.id
-GROUP BY u.id, u.email, u.name, u.trimble_project_id, u.role, u.inspector_prefix;
+-- NOTE: v_inspection_photos_gallery and v_user_inspection_summary views
+-- are commented out - can be added manually if needed after checking table structure
+-- See docs/inspections/ for view definitions
 
 -- ============================================
 -- 13. FUNKTSIOONID
