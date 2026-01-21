@@ -368,17 +368,27 @@ interface NewModelItem {
 interface UnassignedArrival {
   id: string;
   trimble_project_id: string;
+  // Reference to original delivery item
+  item_id?: string;
+  vehicle_id?: string;
+  vehicle_code?: string;
+  // Item info
   guid?: string;
   guid_ifc?: string;
   assembly_mark: string;
   product_name?: string;
+  // Where it was found
   location?: string;
   notes?: string;
+  // Who found it
   found_by: string;
   found_by_name?: string;
   found_at: string;
   photo_url?: string;
   created_at: string;
+  // Status - whether it's been resolved (marked in original vehicle)
+  is_resolved?: boolean;
+  resolved_at?: string;
 }
 
 export default function ArrivedDeliveriesScreen({
@@ -488,8 +498,9 @@ export default function ArrivedDeliveriesScreen({
   // State - Unassigned arrivals (items found on site without vehicle assignment)
   const [unassignedArrivals, setUnassignedArrivals] = useState<UnassignedArrival[]>([]);
   const [showUnassignedModal, setShowUnassignedModal] = useState(false);
+  const [unassignedSearchQuery, setUnassignedSearchQuery] = useState('');
+  const [unassignedSelectedItem, setUnassignedSelectedItem] = useState<DeliveryItem | null>(null);
   const [unassignedFormData, setUnassignedFormData] = useState({
-    assemblyMark: '',
     location: '',
     notes: ''
   });
@@ -4961,6 +4972,8 @@ export default function ArrivedDeliveriesScreen({
                     ? confirmations.filter(c => c.arrived_vehicle_id === arrivedVehicle.id)
                     : [];
                   const confirmedCount = arrivalConfs.filter(c => c.status === 'confirmed').length;
+                  const missingCount = arrivalConfs.filter(c => c.status === 'missing').length;
+                  const pendingCount = vehicleItems.length - confirmedCount - missingCount;
 
                   return (
                     <div
@@ -5002,20 +5015,66 @@ export default function ArrivedDeliveriesScreen({
                       <span style={{ color: '#64748b', fontSize: '12px' }}>
                         {vehicleItems.length} detaili
                       </span>
-                      {arrivedVehicle && (
-                        <span style={{
-                          marginLeft: 'auto',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          fontSize: '12px',
-                          color: arrivedVehicle.is_confirmed ? '#059669' : '#64748b'
-                        }}>
-                          <FiCheck size={14} />
-                          {confirmedCount}/{vehicleItems.length}
-                          {arrivedVehicle.is_confirmed && ' ✓'}
-                        </span>
-                      )}
+                      {/* Status badges - same as date-by-date view */}
+                      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {confirmedCount > 0 && (
+                          <span style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: '#dcfce7',
+                            color: '#16a34a'
+                          }}>
+                            <FiCheck size={12} />
+                            {confirmedCount}
+                          </span>
+                        )}
+                        {missingCount > 0 && (
+                          <span style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: '#fee2e2',
+                            color: '#dc2626'
+                          }}>
+                            <FiX size={12} />
+                            {missingCount}
+                          </span>
+                        )}
+                        {arrivedVehicle && pendingCount > 0 && (
+                          <span style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            background: '#f3f4f6',
+                            color: '#6b7280'
+                          }}>
+                            <FiClock size={12} />
+                            {pendingCount}
+                          </span>
+                        )}
+                        {arrivedVehicle?.is_confirmed && (
+                          <span style={{
+                            fontSize: '11px',
+                            fontWeight: 600,
+                            color: '#059669'
+                          }}>
+                            ✓
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -5072,26 +5131,56 @@ export default function ArrivedDeliveriesScreen({
                   key={arrival.id}
                   style={{
                     padding: '12px',
-                    background: '#fff',
-                    border: '1px solid #fcd34d',
+                    background: arrival.is_resolved ? '#f0fdf4' : '#fff',
+                    border: `1px solid ${arrival.is_resolved ? '#86efac' : '#fcd34d'}`,
                     borderRadius: '8px',
                     marginBottom: '8px'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                    <FiAlertTriangle style={{ color: '#f59e0b', marginTop: '2px' }} />
+                    {arrival.is_resolved ? (
+                      <FiCheck style={{ color: '#22c55e', marginTop: '2px' }} />
+                    ) : (
+                      <FiAlertTriangle style={{ color: '#f59e0b', marginTop: '2px' }} />
+                    )}
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>
-                        {arrival.assembly_mark}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ fontWeight: 600 }}>{arrival.assembly_mark}</span>
+                        {arrival.is_resolved && (
+                          <span style={{
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            background: '#dcfce7',
+                            color: '#16a34a',
+                            borderRadius: '4px',
+                            fontWeight: 500
+                          }}>
+                            Leitud
+                          </span>
+                        )}
                       </div>
                       {arrival.product_name && (
                         <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>
                           {arrival.product_name}
                         </div>
                       )}
+                      {/* Vehicle info - shows which vehicle this item was supposed to be in */}
+                      {arrival.vehicle_code && (
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#3b82f6',
+                          marginBottom: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <FiTruck size={12} />
+                          <span>Planeeritud veok: <strong>{arrival.vehicle_code}</strong></span>
+                        </div>
+                      )}
                       {arrival.location && (
-                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>
-                          <FiMapPin size={12} style={{ marginRight: '4px' }} />
+                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <FiMapPin size={12} />
                           {arrival.location}
                         </div>
                       )}
@@ -5134,118 +5223,433 @@ export default function ArrivedDeliveriesScreen({
         </div>
       )}
 
-      {/* Unassigned arrival modal */}
+      {/* Unassigned arrival modal - select from delivery items */}
       {showUnassignedModal && (
-        <div className="modal-overlay" onClick={() => setShowUnassignedModal(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+        <div className="modal-overlay" onClick={() => {
+          setShowUnassignedModal(false);
+          setUnassignedSearchQuery('');
+          setUnassignedSelectedItem(null);
+          setUnassignedFormData({ location: '', notes: '' });
+        }}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '80vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
-              <h2>Lisa määramata saabumine</h2>
-              <button className="close-btn" onClick={() => setShowUnassignedModal(false)}>
+              <h2>Lisa leitud detail</h2>
+              <button className="close-btn" onClick={() => {
+                setShowUnassignedModal(false);
+                setUnassignedSearchQuery('');
+                setUnassignedSelectedItem(null);
+                setUnassignedFormData({ location: '', notes: '' });
+              }}>
                 <FiX />
               </button>
             </div>
-            <div className="modal-body" style={{ padding: '16px' }}>
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
-                  Detaili mark *
-                </label>
-                <input
-                  type="text"
-                  value={unassignedFormData.assemblyMark}
-                  onChange={(e) => setUnassignedFormData(prev => ({ ...prev, assemblyMark: e.target.value }))}
-                  placeholder="nt. B-101, P-203..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
-                  Asukoht
-                </label>
-                <input
-                  type="text"
-                  value={unassignedFormData.location}
-                  onChange={(e) => setUnassignedFormData(prev => ({ ...prev, location: e.target.value }))}
-                  placeholder="nt. Telg 2, laoala põhjapool..."
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '14px'
-                  }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
-                  Märkused
-                </label>
-                <textarea
-                  value={unassignedFormData.notes}
-                  onChange={(e) => setUnassignedFormData(prev => ({ ...prev, notes: e.target.value }))}
-                  placeholder="Lisa lisainfo..."
-                  rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #e2e8f0',
-                    borderRadius: '6px',
-                    fontSize: '14px',
-                    resize: 'vertical'
-                  }}
-                />
-              </div>
-              <button
-                onClick={async () => {
-                  if (!unassignedFormData.assemblyMark.trim()) {
-                    setMessage('Detaili mark on kohustuslik');
-                    return;
-                  }
+            <div className="modal-body" style={{ padding: '16px', flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              {!unassignedSelectedItem ? (
+                <>
+                  {/* Search for delivery items */}
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
+                      Otsi detaili tarnegraafikus
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <FiSearch style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                      <input
+                        type="text"
+                        value={unassignedSearchQuery}
+                        onChange={(e) => setUnassignedSearchQuery(e.target.value)}
+                        placeholder="Otsi assembly mark või toote järgi..."
+                        autoFocus
+                        style={{
+                          width: '100%',
+                          padding: '10px 12px 10px 36px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '6px',
+                          fontSize: '14px'
+                        }}
+                      />
+                      {unassignedSearchQuery && (
+                        <button
+                          onClick={() => setUnassignedSearchQuery('')}
+                          style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+                        >
+                          <FiX size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                  const { data, error } = await supabase
-                    .from('unassigned_arrivals')
-                    .insert({
-                      trimble_project_id: projectId,
-                      assembly_mark: unassignedFormData.assemblyMark.trim(),
-                      location: unassignedFormData.location.trim() || null,
-                      notes: unassignedFormData.notes.trim() || null,
-                      found_by: tcUserEmail,
-                      found_by_name: user?.name || tcUserEmail.split('@')[0],
-                      found_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
+                  {/* List of pending/missing items from delivery schedule */}
+                  <div style={{ flex: 1, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                    {(() => {
+                      const query = unassignedSearchQuery.toLowerCase().trim();
 
-                  if (error) {
-                    setMessage('Viga salvestamisel: ' + error.message);
-                    return;
-                  }
+                      // Get items that are not yet confirmed in any arrival
+                      const pendingItems = items.filter(item => {
+                        // Check if item matches search
+                        if (query) {
+                          const matchesMark = item.assembly_mark?.toLowerCase().includes(query);
+                          const matchesProduct = item.product_name?.toLowerCase().includes(query);
+                          if (!matchesMark && !matchesProduct) return false;
+                        }
 
-                  setUnassignedArrivals(prev => [data as UnassignedArrival, ...prev]);
-                  setShowUnassignedModal(false);
-                  setUnassignedFormData({ assemblyMark: '', location: '', notes: '' });
-                  setMessage('Määramata saabumine salvestatud');
-                }}
-                disabled={!unassignedFormData.assemblyMark.trim()}
-                style={{
-                  width: '100%',
-                  padding: '12px',
-                  background: unassignedFormData.assemblyMark.trim() ? '#f59e0b' : '#e2e8f0',
-                  color: unassignedFormData.assemblyMark.trim() ? '#fff' : '#94a3b8',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: unassignedFormData.assemblyMark.trim() ? 'pointer' : 'not-allowed',
-                  fontWeight: 500,
-                  fontSize: '14px'
-                }}
-              >
-                Salvesta
-              </button>
+                        // Check if this item has already been confirmed as arrived
+                        const itemConf = confirmations.find(c => c.item_id === item.id && c.status === 'confirmed');
+                        if (itemConf) return false;
+
+                        return true;
+                      });
+
+                      if (!query && pendingItems.length > 50) {
+                        return (
+                          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                            <FiSearch size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                            <p style={{ margin: 0, fontSize: '13px' }}>Sisesta otsingutermin, et leida detail</p>
+                            <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#94a3b8' }}>{pendingItems.length} detaili ootab</p>
+                          </div>
+                        );
+                      }
+
+                      if (pendingItems.length === 0) {
+                        return (
+                          <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                            <p style={{ margin: 0, fontSize: '13px' }}>
+                              {query ? 'Otsingu tulemusi ei leitud' : 'Kõik detailid on kohale jõudnud'}
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      // Group items by vehicle for better display
+                      const itemsByVehicle = pendingItems.reduce((acc, item) => {
+                        const vehicleId = item.vehicle_id || 'no-vehicle';
+                        if (!acc[vehicleId]) acc[vehicleId] = [];
+                        acc[vehicleId].push(item);
+                        return acc;
+                      }, {} as Record<string, DeliveryItem[]>);
+
+                      return Object.entries(itemsByVehicle).map(([vehicleId, vehicleItems]) => {
+                        const vehicle = vehicles.find(v => v.id === vehicleId);
+                        const factory = vehicle ? factories.find(f => f.id === vehicle.factory_id) : null;
+
+                        return (
+                          <div key={vehicleId}>
+                            {/* Vehicle header */}
+                            <div style={{
+                              padding: '8px 12px',
+                              background: '#f8fafc',
+                              borderBottom: '1px solid #e2e8f0',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              position: 'sticky',
+                              top: 0
+                            }}>
+                              <FiTruck size={14} style={{ color: '#64748b' }} />
+                              <span style={{ fontWeight: 600, fontSize: '13px' }}>
+                                {vehicle?.vehicle_code || 'Veokita detailid'}
+                              </span>
+                              {factory && (
+                                <span style={{ fontSize: '12px', color: '#64748b' }}>
+                                  ({factory.factory_name})
+                                </span>
+                              )}
+                              {vehicle?.scheduled_date && (
+                                <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: 'auto' }}>
+                                  <FiCalendar size={12} style={{ marginRight: '4px' }} />
+                                  {formatDateEstonian(vehicle.scheduled_date)}
+                                </span>
+                              )}
+                            </div>
+                            {/* Vehicle items */}
+                            {vehicleItems.map(item => (
+                              <div
+                                key={item.id}
+                                onClick={() => setUnassignedSelectedItem(item)}
+                                style={{
+                                  padding: '10px 12px',
+                                  borderBottom: '1px solid #f1f5f9',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  transition: 'background 0.1s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                              >
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontWeight: 500, fontSize: '14px' }}>{item.assembly_mark}</div>
+                                  {item.product_name && (
+                                    <div style={{ fontSize: '12px', color: '#64748b' }}>{item.product_name}</div>
+                                  )}
+                                </div>
+                                <FiChevronRight size={16} style={{ color: '#94a3b8' }} />
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Selected item info */}
+                  <div style={{
+                    background: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '12px',
+                    marginBottom: '16px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <button
+                        onClick={() => setUnassignedSelectedItem(null)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#64748b',
+                          cursor: 'pointer',
+                          padding: '4px'
+                        }}
+                        title="Tagasi"
+                      >
+                        <FiArrowLeft size={16} />
+                      </button>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, fontSize: '15px', marginBottom: '4px' }}>
+                          {unassignedSelectedItem.assembly_mark}
+                        </div>
+                        {unassignedSelectedItem.product_name && (
+                          <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px' }}>
+                            {unassignedSelectedItem.product_name}
+                          </div>
+                        )}
+                        {(() => {
+                          const vehicle = vehicles.find(v => v.id === unassignedSelectedItem.vehicle_id);
+                          const factory = vehicle ? factories.find(f => f.id === vehicle.factory_id) : null;
+                          return vehicle ? (
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              fontSize: '12px',
+                              color: '#64748b',
+                              background: '#fff',
+                              padding: '6px 10px',
+                              borderRadius: '4px',
+                              border: '1px solid #e2e8f0'
+                            }}>
+                              <FiTruck size={12} />
+                              <span style={{ fontWeight: 500 }}>Planeeritud veokis: {vehicle.vehicle_code}</span>
+                              {factory && <span>({factory.factory_name})</span>}
+                              {vehicle.scheduled_date && (
+                                <>
+                                  <FiCalendar size={12} style={{ marginLeft: '8px' }} />
+                                  <span>{formatDateEstonian(vehicle.scheduled_date)}</span>
+                                </>
+                              )}
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form fields */}
+                  <div className="form-group" style={{ marginBottom: '12px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
+                      Kust leiti? *
+                    </label>
+                    <input
+                      type="text"
+                      value={unassignedFormData.location}
+                      onChange={(e) => setUnassignedFormData(prev => ({ ...prev, location: e.target.value }))}
+                      placeholder="nt. Telg 2, laoala põhjapool, teise veoki kastis..."
+                      autoFocus
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
+                      Lisainfo
+                    </label>
+                    <textarea
+                      value={unassignedFormData.notes}
+                      onChange={(e) => setUnassignedFormData(prev => ({ ...prev, notes: e.target.value }))}
+                      placeholder="Lisa lisainfo vajadusel..."
+                      rows={3}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        resize: 'vertical'
+                      }}
+                    />
+                  </div>
+
+                  {/* Save button */}
+                  <button
+                    onClick={async () => {
+                      if (!unassignedFormData.location.trim()) {
+                        setMessage('Asukoht on kohustuslik');
+                        return;
+                      }
+
+                      setSaving(true);
+                      try {
+                        const vehicle = vehicles.find(v => v.id === unassignedSelectedItem.vehicle_id);
+                        const locationNote = `Leitud: ${unassignedFormData.location.trim()}${unassignedFormData.notes.trim() ? ` (${unassignedFormData.notes.trim()})` : ''}`;
+
+                        // 1. Create unassigned_arrival record
+                        const { data: arrivalData, error: arrivalError } = await supabase
+                          .from('unassigned_arrivals')
+                          .insert({
+                            trimble_project_id: projectId,
+                            item_id: unassignedSelectedItem.id,
+                            vehicle_id: unassignedSelectedItem.vehicle_id || null,
+                            vehicle_code: vehicle?.vehicle_code || null,
+                            guid: unassignedSelectedItem.guid || null,
+                            guid_ifc: unassignedSelectedItem.guid_ifc || null,
+                            assembly_mark: unassignedSelectedItem.assembly_mark,
+                            product_name: unassignedSelectedItem.product_name || null,
+                            location: unassignedFormData.location.trim(),
+                            notes: unassignedFormData.notes.trim() || null,
+                            found_by: tcUserEmail,
+                            found_by_name: user?.name || tcUserEmail.split('@')[0],
+                            found_at: new Date().toISOString(),
+                            is_resolved: true,
+                            resolved_at: new Date().toISOString()
+                          })
+                          .select()
+                          .single();
+
+                        if (arrivalError) throw arrivalError;
+
+                        // 2. Find or create arrived_vehicle for this item's vehicle
+                        if (vehicle) {
+                          // Check if there's already an arrival for this vehicle on the scheduled date
+                          const arrivalDate = vehicle.scheduled_date || new Date().toISOString().split('T')[0];
+                          let arrivedVehicle = arrivedVehicles.find(
+                            av => av.vehicle_id === vehicle.id && av.arrival_date === arrivalDate
+                          );
+
+                          if (!arrivedVehicle) {
+                            // Create new arrived_vehicle
+                            const { data: newArrival, error: newArrivalError } = await supabase
+                              .from('trimble_arrived_vehicles')
+                              .insert({
+                                trimble_project_id: projectId,
+                                vehicle_id: vehicle.id,
+                                arrival_date: arrivalDate,
+                                is_confirmed: false,
+                                notes: '',
+                                created_by: tcUserEmail
+                              })
+                              .select()
+                              .single();
+
+                            if (newArrivalError) throw newArrivalError;
+                            arrivedVehicle = newArrival as ArrivedVehicle;
+                            setArrivedVehicles(prev => [...prev, arrivedVehicle!]);
+                          }
+
+                          // 3. Create or update confirmation for this item as 'confirmed'
+                          const existingConf = confirmations.find(
+                            c => c.arrived_vehicle_id === arrivedVehicle!.id && c.item_id === unassignedSelectedItem.id
+                          );
+
+                          if (existingConf) {
+                            // Update existing confirmation
+                            await supabase
+                              .from('trimble_arrival_confirmations')
+                              .update({
+                                status: 'confirmed' as ArrivalItemStatus,
+                                notes: locationNote,
+                                confirmed_at: new Date().toISOString(),
+                                confirmed_by: tcUserEmail
+                              })
+                              .eq('id', existingConf.id);
+
+                            setConfirmations(prev => prev.map(c =>
+                              c.id === existingConf.id
+                                ? { ...c, status: 'confirmed' as ArrivalItemStatus, notes: locationNote, confirmed_at: new Date().toISOString(), confirmed_by: tcUserEmail }
+                                : c
+                            ));
+                          } else {
+                            // Create new confirmation
+                            const { data: confData, error: confError } = await supabase
+                              .from('trimble_arrival_confirmations')
+                              .insert({
+                                trimble_project_id: projectId,
+                                arrived_vehicle_id: arrivedVehicle!.id,
+                                item_id: unassignedSelectedItem.id,
+                                status: 'confirmed' as ArrivalItemStatus,
+                                notes: locationNote,
+                                confirmed_at: new Date().toISOString(),
+                                confirmed_by: tcUserEmail
+                              })
+                              .select()
+                              .single();
+
+                            if (confError) throw confError;
+                            setConfirmations(prev => [...prev, confData as ArrivalItemConfirmation]);
+                          }
+                        }
+
+                        // Update local state
+                        setUnassignedArrivals(prev => [arrivalData as UnassignedArrival, ...prev]);
+                        setShowUnassignedModal(false);
+                        setUnassignedSearchQuery('');
+                        setUnassignedSelectedItem(null);
+                        setUnassignedFormData({ location: '', notes: '' });
+                        setMessage('Detail märgitud leiduks ja veokis kinnitatuks');
+                      } catch (e) {
+                        console.error('Error saving unassigned arrival:', e);
+                        setMessage('Viga salvestamisel');
+                      } finally {
+                        setSaving(false);
+                      }
+                    }}
+                    disabled={!unassignedFormData.location.trim() || saving}
+                    style={{
+                      width: '100%',
+                      padding: '12px',
+                      background: unassignedFormData.location.trim() && !saving ? '#f59e0b' : '#e2e8f0',
+                      color: unassignedFormData.location.trim() && !saving ? '#fff' : '#94a3b8',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: unassignedFormData.location.trim() && !saving ? 'pointer' : 'not-allowed',
+                      fontWeight: 500,
+                      fontSize: '14px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    {saving ? (
+                      <>
+                        <FiLoader size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                        Salvestamine...
+                      </>
+                    ) : (
+                      <>
+                        <FiCheck size={14} />
+                        Märgi leiduks
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
