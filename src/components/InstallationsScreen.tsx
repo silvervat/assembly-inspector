@@ -548,16 +548,31 @@ export default function InstallationsScreen({
           console.error('Error loading project resources:', projectError);
         }
 
-        // 2. Load team_members from existing installations
-        const { data: installData, error: installError } = await supabase
+        // 2. Load team_members from existing installations (installation_schedule + installations + preassemblies)
+        const { data: scheduleData } = await supabase
           .from('installation_schedule')
           .select('team_members')
           .eq('project_id', projectId)
           .not('team_members', 'is', null);
 
-        if (installError) {
-          console.error('Error loading installation team members:', installError);
-        }
+        const { data: installationsData } = await supabase
+          .from('installations')
+          .select('team_members')
+          .eq('project_id', projectId)
+          .not('team_members', 'is', null);
+
+        const { data: preassembliesData } = await supabase
+          .from('preassemblies')
+          .select('team_members')
+          .eq('project_id', projectId)
+          .not('team_members', 'is', null);
+
+        // Combine all sources
+        const installData = [
+          ...(scheduleData || []),
+          ...(installationsData || []),
+          ...(preassembliesData || [])
+        ];
 
         // Group resources by type from project_resources
         const resourcesByType: Record<string, string[]> = {};
@@ -581,8 +596,11 @@ export default function InstallationsScreen({
         };
 
         for (const install of (installData || [])) {
-          const members = install.team_members as string[] | null;
-          if (!members) continue;
+          const teamMembersStr = install.team_members as string | null;
+          if (!teamMembersStr) continue;
+
+          // Split comma-separated string into array
+          const members = teamMembersStr.split(',').map(m => m.trim()).filter(m => m);
 
           for (const member of members) {
             // Parse "Type: Name" format
