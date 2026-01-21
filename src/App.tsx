@@ -16,6 +16,7 @@ import DeliveryShareGallery from './components/DeliveryShareGallery';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
 import { InspectionAdminPanel } from './components/InspectionAdminPanel';
+import { UserProfileModal } from './components/UserProfileModal';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -30,7 +31,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.801';
+export const APP_VERSION = '3.0.802';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -177,6 +178,9 @@ export default function App() {
   const [authError, setAuthError] = useState<string>('');
   const [navigationStatus, setNavigationStatus] = useState<string>('');
   const [isNavigating, setIsNavigating] = useState(false);
+
+  // User profile modal state (v3.0)
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
   // Track matched inspection types for menu highlighting
   const [matchedTypeIds, setMatchedTypeIds] = useState<string[]>([]);
@@ -1006,7 +1010,16 @@ export default function App() {
           projectId={projectId}
           api={api!}
           onSelectMode={setCurrentMode}
+          onOpenSettings={() => setShowUserProfile(true)}
         />
+        {/* User Profile Modal (v3.0) */}
+        {showUserProfile && (
+          <UserProfileModal
+            userEmail={user.email}
+            projectId={projectId}
+            onClose={() => setShowUserProfile(false)}
+          />
+        )}
         <VersionFooter />
       </>
     );
