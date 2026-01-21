@@ -5,8 +5,9 @@ import { BulkActionBar } from './BulkActionBar';
 import { InspectionHistory } from './InspectionHistory';
 import { InspectionGallery } from './InspectionGallery';
 
-// Trimble Connect Workspace API type
-type WorkspaceAPI = { viewer: { setSelection: (p: unknown) => Promise<void> } };
+// Trimble Connect Workspace API type - simplified for this component
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type WorkspaceAPI = any;
 
 export interface InspectionAdminPanelProps {
   api: WorkspaceAPI;

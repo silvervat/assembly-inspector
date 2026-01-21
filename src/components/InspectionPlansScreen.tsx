@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { TrimbleExUser, supabase } from '../supabase';
 import {
   FiSearch, FiTool, FiBox, FiDroplet, FiZap, FiLayers,
-  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiChevronRight, FiClipboard, FiAlertTriangle
+  FiGrid, FiSquare, FiMoreHorizontal, FiLoader, FiChevronRight, FiClipboard, FiAlertTriangle, FiShield
 } from 'react-icons/fi';
 import { IconType } from 'react-icons';
 import PageHeader from './PageHeader';
@@ -12,6 +12,7 @@ interface InspectionPlansScreenProps {
   projectId: string;
   onBack: () => void;
   onSelectInspectionType: (typeId: string, typeCode: string, typeName: string) => void;
+  onNavigate?: (mode: 'inspection_admin') => void; // Navigation to admin panel
   matchedTypeIds?: string[]; // Inspection types that match currently selected detail
   completedTypeIds?: string[]; // Inspection types where selected detail is already inspected
 }
@@ -56,6 +57,7 @@ export default function InspectionPlansScreen({
   projectId,
   onBack,
   onSelectInspectionType,
+  onNavigate,
   matchedTypeIds = [],
   completedTypeIds = []
 }: InspectionPlansScreenProps) {
@@ -170,6 +172,33 @@ export default function InspectionPlansScreen({
         projectId={projectId}
         onSelectInspectionType={onSelectInspectionType}
       />
+
+      {/* Admin/Moderator button for inspection admin panel */}
+      {(user.role === 'admin' || user.role === 'moderator') && onNavigate && (
+        <div style={{ padding: '8px 12px', borderBottom: '1px solid #e5e7eb' }}>
+          <button
+            onClick={() => onNavigate('inspection_admin')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 16px',
+              backgroundColor: '#3B82F6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: 500,
+              width: '100%',
+              justifyContent: 'center'
+            }}
+          >
+            <FiShield size={18} />
+            Admin paneel
+          </button>
+        </div>
+      )}
 
       <div className="screen-content">
         {loading ? (

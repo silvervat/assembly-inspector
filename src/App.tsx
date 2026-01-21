@@ -15,6 +15,7 @@ import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
+import { InspectionAdminPanel } from './components/InspectionAdminPanel';
 import { supabase, TrimbleExUser } from './supabase';
 import {
   getPendingNavigation,
@@ -1042,8 +1043,26 @@ export default function App() {
           projectId={projectId}
           onBack={handleBackToMenu}
           onSelectInspectionType={handleSelectInspectionType}
+          onNavigate={setCurrentMode}
           matchedTypeIds={matchedTypeIds}
           completedTypeIds={completedTypeIds}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
+  // Kontrollkavade admin paneel (v3.0)
+  if (currentMode === 'inspection_admin') {
+    return (
+      <>
+        <NavigationOverlay />
+        {ColorWhiteOverlay}
+        <InspectionAdminPanel
+          api={api}
+          projectId={projectId}
+          user={user}
+          onClose={handleBackToMenu}
         />
         <VersionFooter />
       </>
