@@ -1616,7 +1616,17 @@ export default function ToolsScreen({
               <p className="tools-section-desc">
                 Vaata kõiki andmeid ühe konkreetse detaili kohta: tarnegraafik, saabumised, paigaldused, inspektsioonid jm.
               </p>
-              <PartDatabasePanel api={api} projectId={_projectId} compact={true} />
+              <PartDatabasePanel
+                api={api}
+                projectId={_projectId}
+                compact={true}
+                autoLoadOnMount={true}
+                onNavigateToDelivery={(vehicleId) => {
+                  // Store vehicle ID for DeliveryScheduleScreen to pick up
+                  localStorage.setItem('navigateToVehicleId', vehicleId);
+                  onNavigate?.('delivery_schedule');
+                }}
+              />
             </>
           )}
         </div>

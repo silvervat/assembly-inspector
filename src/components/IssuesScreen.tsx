@@ -226,6 +226,94 @@ export default function IssuesScreen({
   // Property mappings
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
+  // Helper function to extract selected objects from current model selection
+  const getSelectedObjectsFromModel = useCallback(async (): Promise<SelectedObject[]> => {
+    const selection = await api.viewer.getSelection();
+    if (!selection || selection.length === 0) return [];
+
+    const selectedObjects: SelectedObject[] = [];
+
+    for (const sel of selection) {
+      if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
+
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
+        const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+        for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+          const runtimeId = sel.objectRuntimeIds[i];
+          const props = propsArray?.[i];
+          const guid = guids?.[i] || '';
+
+          // Extract assembly mark using property mappings
+          let assemblyMark = '';
+          if (props?.propertySets && propertyMappings) {
+            const mapping = propertyMappings;
+            const set = props.propertySets[mapping.assembly_mark_set];
+            if (set) {
+              assemblyMark = String(set[mapping.assembly_mark_prop] || '');
+            }
+          }
+
+          // If no assembly mark from properties, try to get from database
+          if (!assemblyMark && guid && projectId) {
+            try {
+              const { data: dbObj } = await supabase
+                .from('trimble_model_objects')
+                .select('assembly_mark, product_name')
+                .eq('trimble_project_id', projectId)
+                .ilike('guid_ifc', guid)
+                .maybeSingle();
+              if (dbObj?.assembly_mark) {
+                assemblyMark = dbObj.assembly_mark;
+              }
+            } catch {
+              // Ignore database errors
+            }
+          }
+
+          selectedObjects.push({
+            modelId: sel.modelId,
+            runtimeId,
+            guidIfc: guid,
+            assemblyMark: assemblyMark || props?.name || '',
+            productName: props?.name,
+            castUnitWeight: props?.propertySets?.['Tekla Assembly']?.['Cast_unit_Weight']?.toString(),
+            castUnitPositionCode: props?.propertySets?.['Tekla Assembly']?.['Cast_unit_Position_Code']?.toString()
+          });
+        }
+      } catch (e) {
+        console.error('Error getting object properties:', e);
+      }
+    }
+
+    return selectedObjects;
+  }, [api, propertyMappings, projectId]);
+
+  // Listen for selection changes when form is open (for new issues)
+  useEffect(() => {
+    if (!showForm || editingIssue) return;
+
+    const handleSelectionChange = async () => {
+      const objects = await getSelectedObjectsFromModel();
+      setNewIssueObjects(objects);
+    };
+
+    // Get initial selection
+    handleSelectionChange();
+
+    // Listen for selection changes
+    const listener = () => handleSelectionChange();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
+
+    return () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
+    };
+  }, [showForm, editingIssue, api, getSelectedObjectsFromModel]);
+
   // ============================================
   // DATA LOADING
   // ============================================
@@ -475,7 +563,7 @@ export default function IssuesScreen({
   // Select issue in model (List -> Model)
   const selectIssueInModel = useCallback(async (issue: Issue) => {
     if (!issue.objects || issue.objects.length === 0) {
-      setMessage('⚠️ Probleem pole seotud mudeli objektiga');
+      setMessage('⚠️ Mittevastavus pole seotud mudeli objektiga');
       return;
     }
 
@@ -521,63 +609,8 @@ export default function IssuesScreen({
   // ISSUE CRUD OPERATIONS
   // ============================================
 
-  const handleCreateIssue = useCallback(async () => {
-    // Get current selection from model
-    const selection = await api.viewer.getSelection();
-
-    if (!selection || selection.length === 0) {
-      setMessage('⚠️ Vali mudelist vähemalt üks detail!');
-      return;
-    }
-
-    // Extract all selected objects
-    const selectedObjects: SelectedObject[] = [];
-
-    for (const sel of selection) {
-      if (!sel.objectRuntimeIds || sel.objectRuntimeIds.length === 0) continue;
-
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const propsArray = await (api.viewer as any).getObjectProperties(sel.modelId, sel.objectRuntimeIds, { includeHidden: true });
-        const guids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
-
-        for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
-          const runtimeId = sel.objectRuntimeIds[i];
-          const props = propsArray?.[i];
-          const guid = guids?.[i] || '';
-
-          // Extract assembly mark using property mappings
-          let assemblyMark = '';
-          if (props?.propertySets && propertyMappings) {
-            const mapping = propertyMappings;
-            const set = props.propertySets[mapping.assembly_mark_set];
-            if (set) {
-              assemblyMark = String(set[mapping.assembly_mark_prop] || '');
-            }
-          }
-
-          selectedObjects.push({
-            modelId: sel.modelId,
-            runtimeId,
-            guidIfc: guid,
-            assemblyMark: assemblyMark || props?.name || 'Unknown',
-            productName: props?.name,
-            castUnitWeight: props?.propertySets?.['Tekla Assembly']?.['Cast_unit_Weight']?.toString(),
-            castUnitPositionCode: props?.propertySets?.['Tekla Assembly']?.['Cast_unit_Position_Code']?.toString()
-          });
-        }
-      } catch (e) {
-        console.error('Error getting object properties:', e);
-      }
-    }
-
-    if (selectedObjects.length === 0) {
-      setMessage('⚠️ Valitud objektide andmeid ei saanud lugeda');
-      return;
-    }
-
-    // Set objects and show form
-    setNewIssueObjects(selectedObjects);
+  const handleCreateIssue = useCallback(() => {
+    // Reset form and show it - the selection will be loaded by the useEffect listener
     setFormData({
       title: '',
       description: '',
@@ -592,8 +625,7 @@ export default function IssuesScreen({
     });
     setEditingIssue(null);
     setShowForm(true);
-
-  }, [api, propertyMappings]);
+  }, []);
 
   const handleSubmitIssue = useCallback(async () => {
     if (!formData.title.trim()) {
@@ -628,7 +660,7 @@ export default function IssuesScreen({
 
         if (error) throw error;
 
-        setMessage('✅ Probleem uuendatud');
+        setMessage('✅ Mittevastavus uuendatud');
 
       } else {
         // Create new issue
@@ -675,7 +707,7 @@ export default function IssuesScreen({
 
         if (objectsError) throw objectsError;
 
-        setMessage('✅ Probleem loodud');
+        setMessage('✅ Mittevastavus loodud');
       }
 
       setShowForm(false);
@@ -690,7 +722,7 @@ export default function IssuesScreen({
   }, [formData, editingIssue, newIssueObjects, projectId, tcUserEmail, tcUserName, loadIssues, colorModelByIssueStatus]);
 
   const handleDeleteIssue = useCallback(async (issueId: string) => {
-    if (!confirm('Kas oled kindel, et soovid probleemi kustutada?')) return;
+    if (!confirm('Kas oled kindel, et soovid mittevastavust kustutada?')) return;
 
     try {
       const { error } = await supabase
@@ -700,7 +732,7 @@ export default function IssuesScreen({
 
       if (error) throw error;
 
-      setMessage('✅ Probleem kustutatud');
+      setMessage('✅ Mittevastavus kustutatud');
       setShowDetail(false);
       setDetailIssue(null);
       await loadIssues();
@@ -1170,11 +1202,11 @@ export default function IssuesScreen({
         { wch: 20 }, { wch: 20 }, { wch: 40 }, { wch: 20 }
       ];
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Probleemid');
+      XLSX.utils.book_append_sheet(wb, ws, 'Mittevastavused');
 
       // Generate filename
       const date = new Date().toISOString().split('T')[0];
-      const filename = `Probleemid_${date}.xlsx`;
+      const filename = `Mittevastavused_${date}.xlsx`;
 
       XLSX.writeFile(wb, filename);
       setMessage('✅ Excel alla laetud');
@@ -1235,7 +1267,7 @@ export default function IssuesScreen({
     <div className="issues-screen">
       {/* PageHeader with hamburger menu */}
       <PageHeader
-        title={`Probleemid (${filteredIssues.length}/${issues.length})`}
+        title={`Mittevastavused (${filteredIssues.length}/${issues.length})`}
         onBack={onBackToMenu}
         onNavigate={handleHeaderNavigate}
         currentMode="issues"
@@ -1380,14 +1412,14 @@ export default function IssuesScreen({
         {loading ? (
           <div className="issues-loading">
             <FiLoader className="spinning" size={24} />
-            <span>Laen probleeme...</span>
+            <span>Laen mittevastavusi...</span>
           </div>
         ) : filteredIssues.length === 0 ? (
           <div className="issues-empty">
             <FiAlertCircle size={48} />
-            <p>Probleeme ei leitud</p>
+            <p>Mittevastavusi ei leitud</p>
             <p className="issues-empty-hint">
-              Vali mudelist detail ja klõpsa "Lisa probleem"
+              Vali mudelist detail ja klõpsa "Lisa mittevastavus"
             </p>
           </div>
         ) : (
@@ -1523,7 +1555,7 @@ export default function IssuesScreen({
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-content issue-form-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editingIssue ? 'Muuda probleemi' : 'Lisa uus probleem'}</h2>
+              <h2>{editingIssue ? 'Muuda mittevastavust' : 'Lisa uus mittevastavus'}</h2>
               <button onClick={() => setShowForm(false)}>
                 <FiX size={20} />
               </button>
@@ -1531,17 +1563,37 @@ export default function IssuesScreen({
 
             <div className="issue-form">
               {/* Selected objects */}
-              {!editingIssue && newIssueObjects.length > 0 && (
+              {!editingIssue && (
                 <div className="form-section">
                   <label>Valitud detailid ({newIssueObjects.length})</label>
-                  <div className="selected-objects-list">
-                    {newIssueObjects.map((obj, index) => (
-                      <div key={index} className="selected-object">
-                        <span>{obj.assemblyMark || 'Unknown'}</span>
-                        {obj.productName && <span className="product-name">{obj.productName}</span>}
-                      </div>
-                    ))}
-                  </div>
+                  {newIssueObjects.length === 0 ? (
+                    <div style={{
+                      padding: '12px',
+                      background: '#fef3c7',
+                      borderRadius: '6px',
+                      color: '#92400e',
+                      fontSize: '13px',
+                      textAlign: 'center'
+                    }}>
+                      Vali mudelist detailid mida mittevastavus puudutab
+                    </div>
+                  ) : (
+                    <div className="selected-objects-list">
+                      {newIssueObjects.map((obj, index) => (
+                        <div key={index} className="selected-object" style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600 }}>{obj.assemblyMark || 'Tundmatu mark'}</span>
+                            {obj.productName && <span className="product-name" style={{ color: '#6b7280', fontSize: '12px' }}>{obj.productName}</span>}
+                          </div>
+                          {obj.guidIfc && (
+                            <span style={{ fontSize: '10px', color: '#9ca3af', fontFamily: 'monospace' }}>
+                              {obj.guidIfc}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1552,7 +1604,7 @@ export default function IssuesScreen({
                     type="text"
                     value={formData.title}
                     onChange={e => setFormData(f => ({ ...f, title: e.target.value }))}
-                    placeholder="Kirjelda probleemi lühidalt"
+                    placeholder="Kirjelda mittevastavust lühidalt"
                   />
                 </div>
               </div>
@@ -1610,7 +1662,7 @@ export default function IssuesScreen({
                   <textarea
                     value={formData.description}
                     onChange={e => setFormData(f => ({ ...f, description: e.target.value }))}
-                    placeholder="Detailne kirjeldus probleemist"
+                    placeholder="Detailne kirjeldus mittevastavusest"
                     rows={4}
                   />
                 </div>
@@ -1639,7 +1691,7 @@ export default function IssuesScreen({
                   className="primary-button"
                   onClick={handleSubmitIssue}
                 >
-                  {editingIssue ? 'Salvesta muudatused' : 'Lisa probleem'}
+                  {editingIssue ? 'Salvesta muudatused' : 'Lisa mittevastavus'}
                 </button>
               </div>
             </div>

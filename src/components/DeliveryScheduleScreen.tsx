@@ -1596,6 +1596,38 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
     }
   }, [loading, items.length, vehicles.length, colorMode]);
 
+  // Handle navigation from Part Database - expand and select specific vehicle
+  const navigateToVehicleHandled = useRef(false);
+  useEffect(() => {
+    if (!loading && vehicles.length > 0 && !navigateToVehicleHandled.current) {
+      const vehicleId = localStorage.getItem('navigateToVehicleId');
+      if (vehicleId) {
+        localStorage.removeItem('navigateToVehicleId');
+        navigateToVehicleHandled.current = true;
+
+        // Find the vehicle
+        const vehicle = vehicles.find(v => v.id === vehicleId);
+        if (vehicle) {
+          // Set active vehicle and expand it
+          setActiveVehicleId(vehicleId);
+          setCollapsedVehicles(prev => {
+            const next = new Set(prev);
+            next.delete(vehicleId);
+            return next;
+          });
+
+          // Set the calendar to the vehicle's date if it has one
+          if (vehicle.scheduled_date) {
+            setSelectedDate(vehicle.scheduled_date);
+            setCurrentMonth(new Date(vehicle.scheduled_date));
+          }
+
+          setMessage(`Avatud veok: ${vehicle.vehicle_code}`);
+        }
+      }
+    }
+  }, [loading, vehicles]);
+
   // BroadcastChannel for syncing between windows
   useEffect(() => {
     if (!projectId) return;
