@@ -9595,8 +9595,7 @@ button.stat-toggle.off:hover {
 .method-qty-dropdown {
   position: absolute;
   top: calc(100% - 4px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   z-index: 200;
   background: white;
   border: 1px solid #d1d5db;
@@ -9607,7 +9606,7 @@ button.stat-toggle.off:hover {
   flex-wrap: wrap;
   gap: 2px;
   width: max-content;
-  max-width: 120px;
+  max-width: calc(100vw - 60px);
 }
 
 .method-qty-dropdown .qty-btn {

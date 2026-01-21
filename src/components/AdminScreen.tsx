@@ -328,6 +328,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   // Reference to external GUID Controller window
   const guidControllerWindowRef = useRef<Window | null>(null);
 
+  // Reference to Selection Monitor popup window
+  const selectionMonitorWindowRef = useRef<Window | null>(null);
+
   // Cast Unit Mark search state (DATABASE - fast)
   const [markSearchInput, setMarkSearchInput] = useState('');
   const [markSearchResults, setMarkSearchResults] = useState<Array<{
@@ -980,6 +983,149 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  // Open Selection Monitor popup window
+  const openSelectionMonitorPopup = () => {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Selection Monitor</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 16px; background: #1f2937; color: #f9fafb; margin: 0; }
+          h2 { margin: 0 0 16px; color: #60a5fa; display: flex; align-items: center; gap: 8px; }
+          .count { font-size: 48px; font-weight: bold; color: #10b981; margin: 8px 0; }
+          .info { background: #374151; padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 13px; }
+          .label { color: #9ca3af; font-size: 11px; text-transform: uppercase; }
+          .item { padding: 8px 10px; background: #4b5563; margin: 4px 0; border-radius: 4px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; }
+          .mark { font-weight: 600; color: #f9fafb; }
+          .guid { font-family: monospace; color: #fbbf24; font-size: 10px; }
+          #list { max-height: 400px; overflow-y: auto; }
+          .empty { color: #6b7280; font-style: italic; padding: 20px; text-align: center; }
+          .status { width: 8px; height: 8px; border-radius: 50%; background: #10b981; animation: pulse 1s infinite; }
+          @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        </style>
+      </head>
+      <body>
+        <h2><span class="status"></span> Selection Monitor</h2>
+        <div class="info">
+          <div class="label">Valitud detailide arv:</div>
+          <div class="count" id="count">0</div>
+        </div>
+        <div class="info">
+          <div class="label">Detailid:</div>
+          <div id="list"><div class="empty">Midagi pole valitud</div></div>
+        </div>
+        <script>
+          window.addEventListener('message', (event) => {
+            if (event.data?.type === 'SELECTION_UPDATE') {
+              document.getElementById('count').textContent = event.data.count;
+              const list = document.getElementById('list');
+              if (event.data.items.length === 0) {
+                list.innerHTML = '<div class="empty">Midagi pole valitud</div>';
+              } else {
+                list.innerHTML = event.data.items.map(item =>
+                  '<div class="item">' +
+                  '<span class="mark">' + (item.mark || 'N/A') + '</span>' +
+                  '<span class="guid">' + (item.guid || '').substring(0, 16) + '...</span>' +
+                  '</div>'
+                ).join('');
+              }
+            }
+          });
+        </script>
+      </body>
+      </html>
+    `;
+
+    const popup = window.open('', 'SelectionMonitor', 'width=400,height=550,resizable=yes,scrollbars=yes');
+    if (popup) {
+      popup.document.write(htmlContent);
+      popup.document.close();
+      selectionMonitorWindowRef.current = popup;
+      console.log('🔍 Selection Monitor window opened');
+    } else {
+      alert('Popup blocker võib blokeerida akna avamist. Luba popupid selle lehe jaoks.');
+    }
+  };
+
+  // Polling for Selection Monitor popup
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    const pollSelection = async () => {
+      if (!selectionMonitorWindowRef.current || selectionMonitorWindowRef.current.closed) {
+        if (interval) clearInterval(interval);
+        return;
+      }
+
+      try {
+        const selection = await api.viewer.getSelection();
+        const items: Array<{ mark: string; guid: string }> = [];
+
+        if (selection?.length) {
+          for (const sel of selection) {
+            if (!sel.modelId || !sel.objectRuntimeIds?.length) continue;
+
+            const props = await api.viewer.getObjectProperties(sel.modelId, sel.objectRuntimeIds);
+            const ifcGuids = await api.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+
+            for (let i = 0; i < sel.objectRuntimeIds.length; i++) {
+              const objProps = props[i];
+              const guid = ifcGuids?.[i] || '';
+              let mark = '';
+
+              // Extract assembly mark from properties using property mappings
+              if (objProps?.properties) {
+                for (const propSet of objProps.properties) {
+                  if (propSet.properties) {
+                    for (const prop of propSet.properties) {
+                      if (prop.name?.includes('Mark') || prop.name?.includes('GUID') || prop.name === 'Cast_unit_Mark') {
+                        if (prop.name?.includes('Mark') && prop.value && !mark) {
+                          mark = String(prop.value);
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              items.push({ mark, guid });
+            }
+          }
+        }
+
+        selectionMonitorWindowRef.current.postMessage({
+          type: 'SELECTION_UPDATE',
+          count: items.length,
+          items: items.slice(0, 100)
+        }, '*');
+      } catch (e) {
+        console.error('Selection monitor error:', e);
+      }
+    };
+
+    // Start polling when popup is open
+    const checkAndPoll = () => {
+      if (selectionMonitorWindowRef.current && !selectionMonitorWindowRef.current.closed) {
+        if (!interval) {
+          interval = setInterval(pollSelection, 500);
+          pollSelection();
+        }
+      } else if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const windowCheckInterval = setInterval(checkAndPoll, 1000);
+    checkAndPoll();
+
+    return () => {
+      if (interval) clearInterval(interval);
+      clearInterval(windowCheckInterval);
+    };
+  }, [api]);
 
   // BigInt-safe JSON stringify helper
   const safeStringify = (obj: unknown, space?: number): string => {
@@ -4475,6 +4621,43 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               >
                 <FiExternalLink size={14} />
                 Ava eraldi brauseri aknas
+              </button>
+            </div>
+
+            {/* SELECTION MONITOR section */}
+            <div className="function-section" style={{
+              backgroundColor: 'var(--bg-tertiary)',
+              padding: '12px',
+              borderRadius: '8px',
+              border: '2px solid #10b981'
+            }}>
+              <h4>🔍 Selection Monitor</h4>
+              <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
+                Ava popup aken mis näitab reaalajas infot mudelist valitud detailide kohta.
+              </p>
+              <button
+                onClick={() => {
+                  openSelectionMonitorPopup();
+                  updateFunctionResult('Selection Monitor', { status: 'success', result: 'Popup opened' });
+                }}
+                style={{
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  border: '1px solid #10b981',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  color: '#10b981',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px'
+                }}
+              >
+                <FiExternalLink size={14} />
+                Ava Selection Monitor
               </button>
             </div>
 
