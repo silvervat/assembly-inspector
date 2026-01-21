@@ -19,6 +19,7 @@ interface PageHeaderProps {
   api?: any; // Trimble Connect API for quick search
   projectId?: string; // Project ID for database queries
   onSelectInspectionType?: (typeId: string, typeCode: string, typeName: string) => void; // Callback for inspection type selection
+  onOpenPartDatabase?: () => void; // Callback to open Part Database section in Tools
 }
 
 // Navigation items
@@ -55,7 +56,8 @@ export default function PageHeader({
   onColorModelWhite,
   api,
   projectId,
-  onSelectInspectionType
+  onSelectInspectionType,
+  onOpenPartDatabase
 }: PageHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [submenuOpen, setSubmenuOpen] = useState<string | null>(null);
@@ -375,6 +377,20 @@ export default function PageHeader({
                         onClick={() => handleNavigate('crane_planner')}
                       >
                         Kraanade Planeerimine
+                      </button>
+                      <button
+                        className="submenu-item"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setSubmenuOpen(null);
+                          if (onOpenPartDatabase) {
+                            onOpenPartDatabase();
+                          } else {
+                            handleNavigate('tools');
+                          }
+                        }}
+                      >
+                        Detaili andmebaas
                       </button>
                       <button
                         className="submenu-item"

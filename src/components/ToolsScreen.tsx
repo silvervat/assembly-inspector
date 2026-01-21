@@ -3,7 +3,8 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase } from 'react-icons/fi';
+import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
@@ -74,7 +75,7 @@ export default function ToolsScreen({
   const [hasSelection, setHasSelection] = useState(false);
 
   // Accordion state - which section is expanded (null = all collapsed by default)
-  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'partdb' | null>(null);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -99,7 +100,7 @@ export default function ToolsScreen({
   const boltSummaryRef = useRef<HTMLDivElement>(null);
 
   // Toggle section expansion (accordion style)
-  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker') => {
+  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'partdb') => {
     setExpandedSection(prev => prev === section ? null : section);
   };
 
@@ -1097,6 +1098,7 @@ export default function ToolsScreen({
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={_projectId}
+        onOpenPartDatabase={() => setExpandedSection('partdb')}
       />
 
       {/* Batch progress overlay */}
@@ -1594,6 +1596,27 @@ export default function ToolsScreen({
               }}>
                 Värvimisel muudetakse ülejäänud mudel valgeks ja valitud kategooria detailid värviliseks. <strong>Klõpsa kategooria nimel</strong> detailide kiireks märgistamiseks.
               </p>
+            </>
+          )}
+        </div>
+
+        {/* Part Database Section - Collapsible */}
+        <div className="tools-section">
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('partdb')}
+          >
+            {expandedSection === 'partdb' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <FiDatabase size={18} style={{ color: '#6366f1' }} />
+            <h3>Detaili andmebaas</h3>
+          </div>
+
+          {expandedSection === 'partdb' && (
+            <>
+              <p className="tools-section-desc">
+                Vaata kõiki andmeid ühe konkreetse detaili kohta: tarnegraafik, saabumised, paigaldused, inspektsioonid jm.
+              </p>
+              <PartDatabasePanel api={api} projectId={_projectId} compact={true} />
             </>
           )}
         </div>
