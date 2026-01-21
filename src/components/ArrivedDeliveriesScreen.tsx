@@ -8,7 +8,7 @@ import { selectObjectsByGuid, findObjectsInLoadedModels } from '../utils/navigat
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import {
   FiArrowLeft, FiArrowRight, FiChevronLeft, FiChevronRight, FiCheck, FiX,
-  FiCamera, FiClock, FiMapPin, FiTruck,
+  FiCamera, FiClock, FiMapPin, FiTruck, FiCalendar,
   FiAlertTriangle, FiPlay, FiSquare, FiRefreshCw,
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
@@ -364,6 +364,23 @@ interface NewModelItem {
   weight?: string;
 }
 
+// Interface for unassigned arrivals (items found on site without vehicle)
+interface UnassignedArrival {
+  id: string;
+  trimble_project_id: string;
+  guid?: string;
+  guid_ifc?: string;
+  assembly_mark: string;
+  product_name?: string;
+  location?: string;
+  notes?: string;
+  found_by: string;
+  found_by_name?: string;
+  found_at: string;
+  photo_url?: string;
+  created_at: string;
+}
+
 export default function ArrivedDeliveriesScreen({
   api,
   user,
@@ -463,6 +480,19 @@ export default function ArrivedDeliveriesScreen({
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
   const [generatingShareLink, setGeneratingShareLink] = useState<string | null>(null);
   const [shareLinks, setShareLinks] = useState<Record<string, { url: string; token: string }>>({});
+
+  // State - View mode and global search
+  const [viewMode, setViewMode] = useState<'by-date' | 'all' | 'unassigned'>('by-date');
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+
+  // State - Unassigned arrivals (items found on site without vehicle assignment)
+  const [unassignedArrivals, setUnassignedArrivals] = useState<UnassignedArrival[]>([]);
+  const [showUnassignedModal, setShowUnassignedModal] = useState(false);
+  const [unassignedFormData, setUnassignedFormData] = useState({
+    assemblyMark: '',
+    location: '',
+    notes: ''
+  });
 
   // ============================================
   // DATA LOADING
@@ -588,6 +618,22 @@ export default function ArrivedDeliveriesScreen({
     }
   }, [projectId, api]);
 
+  // Load unassigned arrivals
+  const loadUnassignedArrivals = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('unassigned_arrivals')
+        .select('*')
+        .eq('trimble_project_id', projectId)
+        .order('found_at', { ascending: false });
+
+      if (error) throw error;
+      setUnassignedArrivals(data || []);
+    } catch (e) {
+      console.error('Error loading unassigned arrivals:', e);
+    }
+  }, [projectId]);
+
   const loadAllData = useCallback(async () => {
     setLoading(true);
     try {
@@ -598,12 +644,13 @@ export default function ArrivedDeliveriesScreen({
         loadFactories(),
         loadArrivedVehicles(),
         loadConfirmations(),
-        loadPhotos()
+        loadPhotos(),
+        loadUnassignedArrivals()
       ]);
     } finally {
       setLoading(false);
     }
-  }, [loadProjectName, loadVehicles, loadItems, loadFactories, loadArrivedVehicles, loadConfirmations, loadPhotos]);
+  }, [loadProjectName, loadVehicles, loadItems, loadFactories, loadArrivedVehicles, loadConfirmations, loadPhotos, loadUnassignedArrivals]);
 
   // Initial load
   useEffect(() => {
@@ -3438,6 +3485,164 @@ export default function ArrivedDeliveriesScreen({
         </button>
       </PageHeader>
 
+      {/* View mode bar with search */}
+      <div className="view-mode-bar" style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '8px 12px',
+        background: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0',
+        flexWrap: 'wrap'
+      }}>
+        {/* View mode buttons */}
+        <div className="view-mode-buttons" style={{
+          display: 'flex',
+          gap: '4px',
+          background: '#e2e8f0',
+          borderRadius: '6px',
+          padding: '2px'
+        }}>
+          <button
+            onClick={() => setViewMode('by-date')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              background: viewMode === 'by-date' ? '#fff' : 'transparent',
+              color: viewMode === 'by-date' ? '#1e40af' : '#64748b',
+              boxShadow: viewMode === 'by-date' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+            }}
+          >
+            Kuupäeva järgi
+          </button>
+          <button
+            onClick={() => setViewMode('all')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              background: viewMode === 'all' ? '#fff' : 'transparent',
+              color: viewMode === 'all' ? '#1e40af' : '#64748b',
+              boxShadow: viewMode === 'all' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none'
+            }}
+          >
+            Kõik veokid
+          </button>
+          <button
+            onClick={() => setViewMode('unassigned')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              background: viewMode === 'unassigned' ? '#fff' : 'transparent',
+              color: viewMode === 'unassigned' ? '#f59e0b' : '#64748b',
+              boxShadow: viewMode === 'unassigned' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <FiAlertTriangle size={12} />
+            Määramata
+            {unassignedArrivals.length > 0 && (
+              <span style={{
+                background: '#f59e0b',
+                color: '#fff',
+                borderRadius: '10px',
+                padding: '0 6px',
+                fontSize: '10px',
+                minWidth: '18px',
+                textAlign: 'center'
+              }}>
+                {unassignedArrivals.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Global search */}
+        <div className="global-search" style={{
+          flex: 1,
+          minWidth: '200px',
+          maxWidth: '400px',
+          position: 'relative'
+        }}>
+          <FiSearch style={{
+            position: 'absolute',
+            left: '10px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: '#94a3b8',
+            pointerEvents: 'none'
+          }} size={14} />
+          <input
+            type="text"
+            placeholder="Otsi detaili, veoki koodi, tehast..."
+            value={globalSearchQuery}
+            onChange={(e) => setGlobalSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '8px 12px 8px 32px',
+              fontSize: '13px',
+              border: '1px solid #e2e8f0',
+              borderRadius: '6px',
+              outline: 'none'
+            }}
+          />
+          {globalSearchQuery && (
+            <button
+              onClick={() => setGlobalSearchQuery('')}
+              style={{
+                position: 'absolute',
+                right: '8px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#94a3b8',
+                padding: '2px'
+              }}
+            >
+              <FiX size={14} />
+            </button>
+          )}
+        </div>
+
+        {/* Add unassigned arrival button */}
+        {viewMode === 'unassigned' && (
+          <button
+            onClick={() => setShowUnassignedModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '8px 14px',
+              fontSize: '12px',
+              fontWeight: 500,
+              background: '#f59e0b',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer'
+            }}
+          >
+            <FiPlus size={14} />
+            Lisa määramata
+          </button>
+        )}
+      </div>
+
       {/* Message */}
       {message && (
         <div className={`message ${message.includes('Viga') ? 'error' : 'success'}`}>
@@ -3445,7 +3650,8 @@ export default function ArrivedDeliveriesScreen({
         </div>
       )}
 
-      {/* Calendar navigation */}
+      {/* Calendar navigation - only show in by-date mode */}
+      {viewMode === 'by-date' && (
       <div className="calendar-nav">
         <button
           className="nav-btn"
@@ -3514,8 +3720,10 @@ export default function ArrivedDeliveriesScreen({
           <FiDownload /> Excel
         </button>
       </div>
+      )}
 
-      {/* Vehicles list */}
+      {/* Vehicles list - by date view */}
+      {viewMode === 'by-date' && (
       <div className="vehicles-container">
         {dateVehicles.length === 0 ? (
           <div className="no-vehicles">
@@ -4678,6 +4886,370 @@ export default function ArrivedDeliveriesScreen({
           })
         )}
       </div>
+      )}
+
+      {/* All vehicles view - sorted by date */}
+      {viewMode === 'all' && (
+        <div className="vehicles-container all-vehicles-view">
+          {(() => {
+            // Filter vehicles by search query
+            const filteredVehicles = vehicles.filter(vehicle => {
+              if (!globalSearchQuery.trim()) return true;
+              const query = globalSearchQuery.toLowerCase();
+              const factory = factories.find(f => f.id === vehicle.factory_id);
+              const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+
+              // Check vehicle code
+              if (vehicle.vehicle_code?.toLowerCase().includes(query)) return true;
+              // Check factory name
+              if (factory?.factory_name?.toLowerCase().includes(query)) return true;
+              // Check items
+              if (vehicleItems.some(item =>
+                item.assembly_mark?.toLowerCase().includes(query) ||
+                item.product_name?.toLowerCase().includes(query)
+              )) return true;
+              return false;
+            });
+
+            // Sort by date descending
+            const sortedVehicles = [...filteredVehicles].sort((a, b) =>
+              (b.scheduled_date || '').localeCompare(a.scheduled_date || '')
+            );
+
+            if (sortedVehicles.length === 0) {
+              return (
+                <div className="no-vehicles">
+                  <FiSearch size={48} />
+                  <p>{globalSearchQuery ? 'Otsingutulemusi ei leitud' : 'Veokeid pole'}</p>
+                </div>
+              );
+            }
+
+            // Group by date
+            const byDate: Record<string, typeof sortedVehicles> = {};
+            sortedVehicles.forEach(v => {
+              const date = v.scheduled_date || 'unknown';
+              if (!byDate[date]) byDate[date] = [];
+              byDate[date].push(v);
+            });
+
+            return Object.entries(byDate).map(([date, dateVehicles]) => (
+              <div key={date} className="date-group" style={{ marginBottom: '16px' }}>
+                <div style={{
+                  padding: '8px 12px',
+                  background: '#e2e8f0',
+                  borderRadius: '6px',
+                  marginBottom: '8px',
+                  fontWeight: 600,
+                  fontSize: '13px',
+                  color: '#334155',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <FiCalendar size={14} />
+                  {formatDateFull(date)}
+                  <span style={{ fontWeight: 400, color: '#64748b' }}>
+                    ({dateVehicles.length} veok{dateVehicles.length === 1 ? '' : 'it'})
+                  </span>
+                </div>
+                {dateVehicles.map(vehicle => {
+                  const factory = factories.find(f => f.id === vehicle.factory_id);
+                  const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+                  const arrivedVehicle = arrivedVehicles.find(av => av.vehicle_id === vehicle.id);
+                  const arrivalConfs = arrivedVehicle
+                    ? confirmations.filter(c => c.arrived_vehicle_id === arrivedVehicle.id)
+                    : [];
+                  const confirmedCount = arrivalConfs.filter(c => c.status === 'confirmed').length;
+
+                  return (
+                    <div
+                      key={vehicle.id}
+                      style={{
+                        padding: '10px 12px',
+                        background: arrivedVehicle?.is_confirmed ? '#dcfce7' : '#fff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        marginBottom: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => {
+                        setViewMode('by-date');
+                        setSelectedDate(vehicle.scheduled_date || '');
+                      }}
+                    >
+                      <span style={{
+                        fontWeight: 600,
+                        color: '#1e40af',
+                        minWidth: '60px'
+                      }}>
+                        {vehicle.vehicle_code}
+                      </span>
+                      {factory && (
+                        <span style={{
+                          padding: '2px 8px',
+                          background: '#e2e8f0',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 500
+                        }}>
+                          {factory.factory_name}
+                        </span>
+                      )}
+                      <span style={{ color: '#64748b', fontSize: '12px' }}>
+                        {vehicleItems.length} detaili
+                      </span>
+                      {arrivedVehicle && (
+                        <span style={{
+                          marginLeft: 'auto',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '12px',
+                          color: arrivedVehicle.is_confirmed ? '#059669' : '#64748b'
+                        }}>
+                          <FiCheck size={14} />
+                          {confirmedCount}/{vehicleItems.length}
+                          {arrivedVehicle.is_confirmed && ' ✓'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+
+      {/* Unassigned arrivals view */}
+      {viewMode === 'unassigned' && (
+        <div className="vehicles-container unassigned-view" style={{ padding: '12px' }}>
+          <div style={{
+            background: '#fffbeb',
+            border: '1px solid #fcd34d',
+            borderRadius: '8px',
+            padding: '12px',
+            marginBottom: '16px',
+            fontSize: '13px',
+            color: '#92400e'
+          }}>
+            <FiAlertTriangle style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
+            Siin kuvatakse detailid, mis on leitud platsilt ilma veoki seoseta - nt mahalaaditud valesse kohta või tarnitud ilma dokumentideta.
+          </div>
+
+          {unassignedArrivals.length === 0 ? (
+            <div className="no-vehicles" style={{ padding: '40px 20px' }}>
+              <FiAlertTriangle size={48} style={{ color: '#fcd34d' }} />
+              <p>Määramata saabumisi pole</p>
+              <button
+                onClick={() => setShowUnassignedModal(true)}
+                style={{
+                  marginTop: '12px',
+                  padding: '10px 20px',
+                  background: '#f59e0b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '13px'
+                }}
+              >
+                <FiPlus size={14} />
+                Lisa esimene määramata saabumine
+              </button>
+            </div>
+          ) : (
+            <div className="unassigned-list">
+              {unassignedArrivals.map(arrival => (
+                <div
+                  key={arrival.id}
+                  style={{
+                    padding: '12px',
+                    background: '#fff',
+                    border: '1px solid #fcd34d',
+                    borderRadius: '8px',
+                    marginBottom: '8px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <FiAlertTriangle style={{ color: '#f59e0b', marginTop: '2px' }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                        {arrival.assembly_mark}
+                      </div>
+                      {arrival.product_name && (
+                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>
+                          {arrival.product_name}
+                        </div>
+                      )}
+                      {arrival.location && (
+                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>
+                          <FiMapPin size={12} style={{ marginRight: '4px' }} />
+                          {arrival.location}
+                        </div>
+                      )}
+                      {arrival.notes && (
+                        <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>
+                          {arrival.notes}
+                        </div>
+                      )}
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>
+                        Leidis: {arrival.found_by_name || arrival.found_by} • {new Date(arrival.found_at).toLocaleString('et-EE')}
+                      </div>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        if (confirm('Kas oled kindel, et soovid selle kirje kustutada?')) {
+                          await supabase
+                            .from('unassigned_arrivals')
+                            .delete()
+                            .eq('id', arrival.id);
+                          setUnassignedArrivals(prev => prev.filter(a => a.id !== arrival.id));
+                          setMessage('Kirje kustutatud');
+                        }
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        padding: '4px'
+                      }}
+                      title="Kustuta"
+                    >
+                      <FiTrash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Unassigned arrival modal */}
+      {showUnassignedModal && (
+        <div className="modal-overlay" onClick={() => setShowUnassignedModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header">
+              <h2>Lisa määramata saabumine</h2>
+              <button className="close-btn" onClick={() => setShowUnassignedModal(false)}>
+                <FiX />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: '16px' }}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
+                  Detaili mark *
+                </label>
+                <input
+                  type="text"
+                  value={unassignedFormData.assemblyMark}
+                  onChange={(e) => setUnassignedFormData(prev => ({ ...prev, assemblyMark: e.target.value }))}
+                  placeholder="nt. B-101, P-203..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
+                  Asukoht
+                </label>
+                <input
+                  type="text"
+                  value={unassignedFormData.location}
+                  onChange={(e) => setUnassignedFormData(prev => ({ ...prev, location: e.target.value }))}
+                  placeholder="nt. Telg 2, laoala põhjapool..."
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    fontSize: '14px'
+                  }}
+                />
+              </div>
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '13px' }}>
+                  Märkused
+                </label>
+                <textarea
+                  value={unassignedFormData.notes}
+                  onChange={(e) => setUnassignedFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Lisa lisainfo..."
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    fontSize: '14px',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              <button
+                onClick={async () => {
+                  if (!unassignedFormData.assemblyMark.trim()) {
+                    setMessage('Detaili mark on kohustuslik');
+                    return;
+                  }
+
+                  const { data, error } = await supabase
+                    .from('unassigned_arrivals')
+                    .insert({
+                      trimble_project_id: projectId,
+                      assembly_mark: unassignedFormData.assemblyMark.trim(),
+                      location: unassignedFormData.location.trim() || null,
+                      notes: unassignedFormData.notes.trim() || null,
+                      found_by: tcUserEmail,
+                      found_by_name: user?.name || tcUserEmail.split('@')[0],
+                      found_at: new Date().toISOString()
+                    })
+                    .select()
+                    .single();
+
+                  if (error) {
+                    setMessage('Viga salvestamisel: ' + error.message);
+                    return;
+                  }
+
+                  setUnassignedArrivals(prev => [data as UnassignedArrival, ...prev]);
+                  setShowUnassignedModal(false);
+                  setUnassignedFormData({ assemblyMark: '', location: '', notes: '' });
+                  setMessage('Määramata saabumine salvestatud');
+                }}
+                disabled={!unassignedFormData.assemblyMark.trim()}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  background: unassignedFormData.assemblyMark.trim() ? '#f59e0b' : '#e2e8f0',
+                  color: unassignedFormData.assemblyMark.trim() ? '#fff' : '#94a3b8',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: unassignedFormData.assemblyMark.trim() ? 'pointer' : 'not-allowed',
+                  fontWeight: 500,
+                  fontSize: '14px'
+                }}
+              >
+                Salvesta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add item modal */}
       {showAddItemModal && activeArrivalId && (
