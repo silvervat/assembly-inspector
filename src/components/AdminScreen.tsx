@@ -301,6 +301,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     name: '',
     keywords: '',
   });
+  // Installation resources (extracted from team_members)
+  const [installationResources, setInstallationResources] = useState<Map<string, Set<string>>>(new Map());
+  // Resource usage counts (how many installations use each resource)
+  const [resourceUsageCounts, setResourceUsageCounts] = useState<Map<string, number>>(new Map());
 
   // Camera Positions state
   const [cameraPositions, setCameraPositions] = useState<CameraPosition[]>([]);
@@ -2768,6 +2772,97 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     }
   }, [projectId]);
 
+  // Load resources from installation team_members
+  const loadInstallationResources = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const { data, error } = await supabase
+        .from('installation_schedule')
+        .select('team_members')
+        .eq('project_id', projectId)
+        .not('team_members', 'is', null);
+
+      if (error) throw error;
+
+      // Parse team_members format "Type: Name, Type: Name"
+      const resourcesByType = new Map<string, Set<string>>();
+      const usageCounts = new Map<string, number>(); // key: "type:name", value: count
+
+      // Type label to resource type mapping
+      const labelToType: Record<string, string> = {
+        'kraana': 'crane',
+        'teleskooplaadur': 'forklift',
+        'käsitsi': 'manual',
+        'korvtõstuk': 'poomtostuk',
+        'käärtõstuk': 'kaartostuk',
+        'troppija': 'troppija',
+        'monteerija': 'monteerija',
+        'keevitaja': 'keevitaja',
+      };
+
+      for (const row of data || []) {
+        if (!row.team_members) continue;
+        const members = row.team_members.split(',').map((m: string) => m.trim());
+
+        for (const member of members) {
+          const parts = member.split(':');
+          if (parts.length >= 2) {
+            const typeLabel = parts[0].trim().toLowerCase();
+            const name = parts.slice(1).join(':').trim();
+            const resourceType = labelToType[typeLabel];
+
+            if (resourceType && name) {
+              // Add to resources by type
+              if (!resourcesByType.has(resourceType)) {
+                resourcesByType.set(resourceType, new Set());
+              }
+              resourcesByType.get(resourceType)!.add(name);
+
+              // Count usage
+              const countKey = `${resourceType}:${name}`;
+              usageCounts.set(countKey, (usageCounts.get(countKey) || 0) + 1);
+            }
+          }
+        }
+      }
+
+      setInstallationResources(resourcesByType);
+      setResourceUsageCounts(usageCounts);
+    } catch (e: any) {
+      console.error('Error loading installation resources:', e);
+    }
+  }, [projectId]);
+
+  // Import installation resource to project_resources
+  const importInstallationResource = async (resourceType: string, name: string) => {
+    setResourcesSaving(true);
+    try {
+      const { error } = await supabase
+        .from('project_resources')
+        .insert({
+          trimble_project_id: projectId,
+          resource_type: resourceType,
+          name: name,
+          created_by: userEmail || null
+        });
+
+      if (error) {
+        if (error.code === '23505') {
+          setMessage('See ressurss on juba olemas');
+          return;
+        }
+        throw error;
+      }
+      setMessage('Ressurss imporditud');
+      await loadProjectResources();
+    } catch (e: any) {
+      console.error('Error importing resource:', e);
+      setMessage(`Viga importimisel: ${e.message}`);
+    } finally {
+      setResourcesSaving(false);
+    }
+  };
+
   // Save resource (create or update)
   const saveResource = async () => {
     if (!resourceFormData.name.trim()) {
@@ -2778,11 +2873,14 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     setResourcesSaving(true);
     try {
       if (editingResource) {
+        const oldName = editingResource.name;
+        const newName = resourceFormData.name.trim();
+
         // Update existing resource
         const { error } = await supabase
           .from('project_resources')
           .update({
-            name: resourceFormData.name.trim(),
+            name: newName,
             keywords: resourceFormData.keywords.trim() || null,
             updated_at: new Date().toISOString(),
             updated_by: userEmail || null
@@ -2790,7 +2888,26 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           .eq('id', editingResource.id);
 
         if (error) throw error;
-        setMessage('Ressurss uuendatud');
+
+        // If name changed, update all installations that use this resource
+        if (oldName !== newName) {
+          const { data: updateCount, error: rpcError } = await supabase.rpc('update_installation_resource_name', {
+            p_project_id: projectId,
+            p_resource_type: editingResource.resource_type,
+            p_old_name: oldName,
+            p_new_name: newName
+          });
+
+          if (rpcError) {
+            console.error('Error updating installations:', rpcError);
+          } else if (updateCount && updateCount > 0) {
+            setMessage(`Ressurss uuendatud, ${updateCount} paigaldust uuendatud`);
+          } else {
+            setMessage('Ressurss uuendatud');
+          }
+        } else {
+          setMessage('Ressurss uuendatud');
+        }
       } else {
         // Create new resource
         const { error } = await supabase
@@ -4024,6 +4141,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             onClick={() => {
               setAdminView('resources');
               loadProjectResources();
+              loadInstallationResources();
             }}
             style={{ background: '#f59e0b', color: 'white' }}
           >
@@ -14464,7 +14582,7 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             </p>
             <button
               className="admin-tool-btn"
-              onClick={loadProjectResources}
+              onClick={() => { loadProjectResources(); loadInstallationResources(); }}
               disabled={resourcesLoading}
               style={{ padding: '6px 12px' }}
             >
@@ -14484,7 +14602,11 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             borderRadius: '8px'
           }}>
             {RESOURCE_TYPES.map(type => {
-              const count = getResourcesByType(type.key).length;
+              const dbResources = getResourcesByType(type.key);
+              const dbNames = new Set(dbResources.map(r => r.name));
+              const installResources = installationResources.get(type.key) || new Set<string>();
+              const installOnlyCount = [...installResources].filter(name => !dbNames.has(name)).length;
+              const count = dbResources.length + installOnlyCount;
               return (
                 <button
                   key={type.key}
@@ -14637,91 +14759,168 @@ Genereeritud: ${new Date().toLocaleString('et-EE')} | Tarned: ${Object.keys(deli
             border: '1px solid #e5e7eb',
             overflow: 'hidden'
           }}>
-            {resourcesLoading ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                <FiRefreshCw size={24} className="spin" />
-                <p>Laadin ressursse...</p>
-              </div>
-            ) : getResourcesByType(selectedResourceType).length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                <p>Seda tüüpi ressursse pole veel lisatud.</p>
-                <p style={{ fontSize: '12px' }}>
-                  Klõpsa "Lisa uus" et lisada esimene {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}.
-                </p>
-              </div>
-            ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: '#f9fafb' }}>
-                    <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Nimi</th>
-                    <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Märksõnad</th>
-                    <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>Aktiivne</th>
-                    <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>Tegevused</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {getResourcesByType(selectedResourceType).map(resource => (
-                    <tr key={resource.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                      <td style={{ padding: '10px 12px', fontSize: '13px' }}>
-                        <span style={{ opacity: resource.is_active ? 1 : 0.5 }}>{resource.name}</span>
-                      </td>
-                      <td style={{ padding: '10px 12px', fontSize: '12px', color: '#6b7280' }}>
-                        {resource.keywords ? (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                            {resource.keywords.split(',').map((kw, i) => (
-                              <span
-                                key={i}
-                                style={{
-                                  background: '#e5e7eb',
-                                  padding: '2px 6px',
-                                  borderRadius: '4px',
-                                  fontSize: '11px'
-                                }}
-                              >
-                                {kw.trim()}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span style={{ opacity: 0.5 }}>-</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => toggleResourceActive(resource)}
-                          style={{
-                            background: resource.is_active ? '#10b981' : '#e5e7eb',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '4px 8px',
-                            cursor: 'pointer',
-                            color: resource.is_active ? 'white' : '#6b7280',
-                            fontSize: '11px'
-                          }}
-                        >
-                          {resource.is_active ? 'Jah' : 'Ei'}
-                        </button>
-                      </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                        <button
-                          onClick={() => openEditResourceForm(resource)}
-                          style={{
-                            background: '#f3f4f6',
-                            border: 'none',
-                            borderRadius: '4px',
-                            padding: '6px',
-                            cursor: 'pointer'
-                          }}
-                          title="Muuda"
-                        >
-                          <FiEdit2 size={14} />
-                        </button>
-                      </td>
+            {(() => {
+              const dbResources = getResourcesByType(selectedResourceType);
+              const dbNames = new Set(dbResources.map(r => r.name));
+              const installResources = installationResources.get(selectedResourceType) || new Set<string>();
+              const installOnlyNames = [...installResources].filter(name => !dbNames.has(name));
+              const hasAnyResources = dbResources.length > 0 || installOnlyNames.length > 0;
+
+              if (resourcesLoading) {
+                return (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                    <FiRefreshCw size={24} className="spin" />
+                    <p>Laadin ressursse...</p>
+                  </div>
+                );
+              }
+
+              if (!hasAnyResources) {
+                return (
+                  <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                    <p>Seda tüüpi ressursse pole veel lisatud.</p>
+                    <p style={{ fontSize: '12px' }}>
+                      Klõpsa "Lisa uus" et lisada esimene {RESOURCE_TYPES.find(t => t.key === selectedResourceType)?.label.toLowerCase()}.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: '#f9fafb' }}>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Nimi</th>
+                      <th style={{ textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600 }}>Märksõnad</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '60px' }}>Kasutus</th>
+                      <th style={{ textAlign: 'center', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '80px' }}>Aktiivne</th>
+                      <th style={{ textAlign: 'right', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', fontSize: '12px', fontWeight: 600, width: '100px' }}>Tegevused</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+                  </thead>
+                  <tbody>
+                    {/* Database resources */}
+                    {dbResources.map(resource => {
+                      const usageCount = resourceUsageCounts.get(`${selectedResourceType}:${resource.name}`) || 0;
+                      return (
+                        <tr key={resource.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                          <td style={{ padding: '10px 12px', fontSize: '13px' }}>
+                            <span style={{ opacity: resource.is_active ? 1 : 0.5 }}>{resource.name}</span>
+                          </td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: '#6b7280' }}>
+                            {resource.keywords ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                {resource.keywords.split(',').map((kw, i) => (
+                                  <span
+                                    key={i}
+                                    style={{
+                                      background: '#e5e7eb',
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontSize: '11px'
+                                    }}
+                                  >
+                                    {kw.trim()}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span style={{ opacity: 0.5 }}>-</span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '12px', color: '#6b7280' }}>
+                            {usageCount > 0 ? usageCount : '-'}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => toggleResourceActive(resource)}
+                              style={{
+                                background: resource.is_active ? '#10b981' : '#e5e7eb',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                color: resource.is_active ? 'white' : '#6b7280',
+                                fontSize: '11px'
+                              }}
+                            >
+                              {resource.is_active ? 'Jah' : 'Ei'}
+                            </button>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                            <button
+                              onClick={() => openEditResourceForm(resource)}
+                              style={{
+                                background: '#f3f4f6',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '6px',
+                                cursor: 'pointer'
+                              }}
+                              title="Muuda"
+                            >
+                              <FiEdit2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {/* Installation-only resources (not in database) */}
+                    {installOnlyNames.map(name => {
+                      const usageCount = resourceUsageCounts.get(`${selectedResourceType}:${name}`) || 0;
+                      return (
+                        <tr key={`install-${name}`} style={{ borderBottom: '1px solid #e5e7eb', background: '#fffbeb' }}>
+                          <td style={{ padding: '10px 12px', fontSize: '13px' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {name}
+                              <span style={{
+                                background: '#fef3c7',
+                                color: '#92400e',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '10px'
+                              }}>
+                                Paigaldustest
+                              </span>
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', fontSize: '12px', color: '#6b7280' }}>
+                            <span style={{ opacity: 0.5 }}>-</span>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', fontSize: '12px', color: '#6b7280' }}>
+                            {usageCount > 0 ? usageCount : '-'}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '11px', color: '#6b7280' }}>-</span>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                            <button
+                              onClick={() => importInstallationResource(selectedResourceType, name)}
+                              disabled={resourcesSaving}
+                              style={{
+                                background: '#f59e0b',
+                                border: 'none',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                cursor: 'pointer',
+                                color: 'white',
+                                fontSize: '11px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Impordi ressursside haldusse"
+                            >
+                              <FiPlus size={12} />
+                              Impordi
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              );
+            })()}
           </div>
 
           {/* Summary */}
