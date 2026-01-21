@@ -438,6 +438,8 @@ export interface Installation {
   team_members?: string;
   // Märkused
   notes?: string;
+  // Fotod
+  photo_urls?: string[];
   // Metadata
   created_at: string;
   updated_at: string;
@@ -476,6 +478,8 @@ export interface Preassembly {
   team_members?: string;
   // Märkused
   notes?: string;
+  // Fotod
+  photo_urls?: string[];
   // Metadata
   created_at: string;
   updated_at: string;
