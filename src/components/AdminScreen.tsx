@@ -2918,22 +2918,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
     }
   }, [projectId]);
 
-  // Load resources from installation team_members
+  // Load resources from installation team_members (both installation_schedule AND actual installations/preassemblies)
   const loadInstallationResources = useCallback(async () => {
     if (!projectId) return;
     try {
-      const { data, error } = await supabase
-        .from('installation_schedule')
-        .select('team_members')
-        .eq('project_id', projectId)
-        .not('team_members', 'is', null);
-
-      if (error) throw error;
-
-      // Parse team_members format "Type: Name, Type: Name"
-      const resourcesByType = new Map<string, Set<string>>();
-      const usageCounts = new Map<string, number>(); // key: "type:name", value: count
-
       // Type label to resource type mapping
       const labelToType: Record<string, string> = {
         'kraana': 'crane',
@@ -2946,9 +2934,13 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         'keevitaja': 'keevitaja',
       };
 
-      for (const row of data || []) {
-        if (!row.team_members) continue;
-        const members = row.team_members.split(',').map((m: string) => m.trim());
+      const resourcesByType = new Map<string, Set<string>>();
+      const usageCounts = new Map<string, number>(); // key: "type:name", value: count
+
+      // Helper to parse team_members string
+      const parseTeamMembers = (teamMembersStr: string | null) => {
+        if (!teamMembersStr) return;
+        const members = teamMembersStr.split(',').map((m: string) => m.trim());
 
         for (const member of members) {
           const parts = member.split(':');
@@ -2970,6 +2962,39 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
             }
           }
         }
+      };
+
+      // 1. Load from installation_schedule (legacy/planned installations)
+      const { data: scheduleData } = await supabase
+        .from('installation_schedule')
+        .select('team_members')
+        .eq('project_id', projectId)
+        .not('team_members', 'is', null);
+
+      for (const row of scheduleData || []) {
+        parseTeamMembers(row.team_members);
+      }
+
+      // 2. Load from installations table (actual completed installations)
+      const { data: installationsData } = await supabase
+        .from('installations')
+        .select('team_members')
+        .eq('project_id', projectId)
+        .not('team_members', 'is', null);
+
+      for (const row of installationsData || []) {
+        parseTeamMembers(row.team_members);
+      }
+
+      // 3. Load from preassemblies table
+      const { data: preassembliesData } = await supabase
+        .from('preassemblies')
+        .select('team_members')
+        .eq('project_id', projectId)
+        .not('team_members', 'is', null);
+
+      for (const row of preassembliesData || []) {
+        parseTeamMembers(row.team_members);
       }
 
       setInstallationResources(resourcesByType);

@@ -548,16 +548,31 @@ export default function InstallationsScreen({
           console.error('Error loading project resources:', projectError);
         }
 
-        // 2. Load team_members from existing installations
-        const { data: installData, error: installError } = await supabase
+        // 2. Load team_members from existing installations (installation_schedule + installations + preassemblies)
+        const { data: scheduleData } = await supabase
           .from('installation_schedule')
           .select('team_members')
           .eq('project_id', projectId)
           .not('team_members', 'is', null);
 
-        if (installError) {
-          console.error('Error loading installation team members:', installError);
-        }
+        const { data: installationsData } = await supabase
+          .from('installations')
+          .select('team_members')
+          .eq('project_id', projectId)
+          .not('team_members', 'is', null);
+
+        const { data: preassembliesData } = await supabase
+          .from('preassemblies')
+          .select('team_members')
+          .eq('project_id', projectId)
+          .not('team_members', 'is', null);
+
+        // Combine all sources
+        const installData = [
+          ...(scheduleData || []),
+          ...(installationsData || []),
+          ...(preassembliesData || [])
+        ];
 
         // Group resources by type from project_resources
         const resourcesByType: Record<string, string[]> = {};
@@ -581,8 +596,11 @@ export default function InstallationsScreen({
         };
 
         for (const install of (installData || [])) {
-          const members = install.team_members as string[] | null;
-          if (!members) continue;
+          const teamMembersStr = install.team_members as string | null;
+          if (!teamMembersStr) continue;
+
+          // Split comma-separated string into array
+          const members = teamMembersStr.split(',').map(m => m.trim()).filter(m => m);
 
           for (const member of members) {
             // Parse "Type: Name" format
@@ -5797,28 +5815,53 @@ export default function InstallationsScreen({
                   )}
                   {craneOperators.length < selectedInstallMethods.crane && (
                     <div className="team-input-wrapper">
-                      <input
-                        type="text"
-                        value={craneOperatorInput}
-                        onChange={(e) => {
-                          setCraneOperatorInput(e.target.value);
-                          setActiveSuggestionField('crane');
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => { setActiveSuggestionField('crane'); setShowSuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && craneOperatorInput.trim()) {
-                            e.preventDefault();
-                            if (craneOperators.length < selectedInstallMethods.crane!) {
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={craneOperatorInput}
+                          onChange={(e) => {
+                            setCraneOperatorInput(e.target.value);
+                            setActiveSuggestionField('crane');
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => { setActiveSuggestionField('crane'); setShowSuggestions(true); }}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && craneOperatorInput.trim()) {
+                              e.preventDefault();
+                              if (craneOperators.length < selectedInstallMethods.crane!) {
+                                setCraneOperators([...craneOperators, craneOperatorInput.trim()]);
+                                setCraneOperatorInput('');
+                              }
+                            }
+                          }}
+                          placeholder={`Kraana ${craneOperators.length + 1}`}
+                          className="full-width-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (craneOperatorInput.trim() && craneOperators.length < selectedInstallMethods.crane!) {
                               setCraneOperators([...craneOperators, craneOperatorInput.trim()]);
                               setCraneOperatorInput('');
                             }
-                          }
-                        }}
-                        placeholder={`Kraana ${craneOperators.length + 1} mudel/firma (Enter)`}
-                        className="full-width-input"
-                      />
+                          }}
+                          disabled={!craneOperatorInput.trim()}
+                          style={{
+                            padding: '8px 12px',
+                            background: craneOperatorInput.trim() ? '#3b82f6' : '#e2e8f0',
+                            color: craneOperatorInput.trim() ? '#fff' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: craneOperatorInput.trim() ? 'pointer' : 'not-allowed',
+                            fontWeight: 600,
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       {showSuggestions && activeSuggestionField === 'crane' && knownKraanad.filter(k =>
                         k.toLowerCase().includes(craneOperatorInput.toLowerCase()) && !craneOperators.includes(k)
                       ).length > 0 && (
@@ -5863,28 +5906,53 @@ export default function InstallationsScreen({
                   )}
                   {forkliftOperators.length < selectedInstallMethods.forklift && (
                     <div className="team-input-wrapper">
-                      <input
-                        type="text"
-                        value={forkliftOperatorInput}
-                        onChange={(e) => {
-                          setForkliftOperatorInput(e.target.value);
-                          setActiveSuggestionField('forklift');
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => { setActiveSuggestionField('forklift'); setShowSuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && forkliftOperatorInput.trim()) {
-                            e.preventDefault();
-                            if (forkliftOperators.length < selectedInstallMethods.forklift!) {
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={forkliftOperatorInput}
+                          onChange={(e) => {
+                            setForkliftOperatorInput(e.target.value);
+                            setActiveSuggestionField('forklift');
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => { setActiveSuggestionField('forklift'); setShowSuggestions(true); }}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && forkliftOperatorInput.trim()) {
+                              e.preventDefault();
+                              if (forkliftOperators.length < selectedInstallMethods.forklift!) {
+                                setForkliftOperators([...forkliftOperators, forkliftOperatorInput.trim()]);
+                                setForkliftOperatorInput('');
+                              }
+                            }
+                          }}
+                          placeholder={`Teleskooplaadur ${forkliftOperators.length + 1}`}
+                          className="full-width-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (forkliftOperatorInput.trim() && forkliftOperators.length < selectedInstallMethods.forklift!) {
                               setForkliftOperators([...forkliftOperators, forkliftOperatorInput.trim()]);
                               setForkliftOperatorInput('');
                             }
-                          }
-                        }}
-                        placeholder={`Teleskooplaadur ${forkliftOperators.length + 1} mudel/firma (Enter)`}
-                        className="full-width-input"
-                      />
+                          }}
+                          disabled={!forkliftOperatorInput.trim()}
+                          style={{
+                            padding: '8px 12px',
+                            background: forkliftOperatorInput.trim() ? '#3b82f6' : '#e2e8f0',
+                            color: forkliftOperatorInput.trim() ? '#fff' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: forkliftOperatorInput.trim() ? 'pointer' : 'not-allowed',
+                            fontWeight: 600,
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       {showSuggestions && activeSuggestionField === 'forklift' && knownTeleskooplaadrid.filter(k =>
                         k.toLowerCase().includes(forkliftOperatorInput.toLowerCase()) && !forkliftOperators.includes(k)
                       ).length > 0 && (
@@ -5929,28 +5997,53 @@ export default function InstallationsScreen({
                   )}
                   {poomtostukOperators.length < selectedInstallMethods.poomtostuk && (
                     <div className="team-input-wrapper">
-                      <input
-                        type="text"
-                        value={poomtostukOperatorInput}
-                        onChange={(e) => {
-                          setPoomtostukOperatorInput(e.target.value);
-                          setActiveSuggestionField('poomtostuk');
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => { setActiveSuggestionField('poomtostuk'); setShowSuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && poomtostukOperatorInput.trim()) {
-                            e.preventDefault();
-                            if (poomtostukOperators.length < selectedInstallMethods.poomtostuk!) {
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={poomtostukOperatorInput}
+                          onChange={(e) => {
+                            setPoomtostukOperatorInput(e.target.value);
+                            setActiveSuggestionField('poomtostuk');
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => { setActiveSuggestionField('poomtostuk'); setShowSuggestions(true); }}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && poomtostukOperatorInput.trim()) {
+                              e.preventDefault();
+                              if (poomtostukOperators.length < selectedInstallMethods.poomtostuk!) {
+                                setPoomtostukOperators([...poomtostukOperators, poomtostukOperatorInput.trim()]);
+                                setPoomtostukOperatorInput('');
+                              }
+                            }
+                          }}
+                          placeholder={`Korvtõstuk ${poomtostukOperators.length + 1}`}
+                          className="full-width-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (poomtostukOperatorInput.trim() && poomtostukOperators.length < selectedInstallMethods.poomtostuk!) {
                               setPoomtostukOperators([...poomtostukOperators, poomtostukOperatorInput.trim()]);
                               setPoomtostukOperatorInput('');
                             }
-                          }
-                        }}
-                        placeholder={`Korvtõstuk ${poomtostukOperators.length + 1} mudel/firma (Enter)`}
-                        className="full-width-input"
-                      />
+                          }}
+                          disabled={!poomtostukOperatorInput.trim()}
+                          style={{
+                            padding: '8px 12px',
+                            background: poomtostukOperatorInput.trim() ? '#3b82f6' : '#e2e8f0',
+                            color: poomtostukOperatorInput.trim() ? '#fff' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: poomtostukOperatorInput.trim() ? 'pointer' : 'not-allowed',
+                            fontWeight: 600,
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       {showSuggestions && activeSuggestionField === 'poomtostuk' && knownKorvtostukid.filter(k =>
                         k.toLowerCase().includes(poomtostukOperatorInput.toLowerCase()) && !poomtostukOperators.includes(k)
                       ).length > 0 && (
@@ -5995,28 +6088,53 @@ export default function InstallationsScreen({
                   )}
                   {kaartostukOperators.length < selectedInstallMethods.kaartostuk && (
                     <div className="team-input-wrapper">
-                      <input
-                        type="text"
-                        value={kaartostukOperatorInput}
-                        onChange={(e) => {
-                          setKaartostukOperatorInput(e.target.value);
-                          setActiveSuggestionField('kaartostuk');
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => { setActiveSuggestionField('kaartostuk'); setShowSuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && kaartostukOperatorInput.trim()) {
-                            e.preventDefault();
-                            if (kaartostukOperators.length < selectedInstallMethods.kaartostuk!) {
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={kaartostukOperatorInput}
+                          onChange={(e) => {
+                            setKaartostukOperatorInput(e.target.value);
+                            setActiveSuggestionField('kaartostuk');
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => { setActiveSuggestionField('kaartostuk'); setShowSuggestions(true); }}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && kaartostukOperatorInput.trim()) {
+                              e.preventDefault();
+                              if (kaartostukOperators.length < selectedInstallMethods.kaartostuk!) {
+                                setKaartostukOperators([...kaartostukOperators, kaartostukOperatorInput.trim()]);
+                                setKaartostukOperatorInput('');
+                              }
+                            }
+                          }}
+                          placeholder={`Käärtõstuk ${kaartostukOperators.length + 1}`}
+                          className="full-width-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (kaartostukOperatorInput.trim() && kaartostukOperators.length < selectedInstallMethods.kaartostuk!) {
                               setKaartostukOperators([...kaartostukOperators, kaartostukOperatorInput.trim()]);
                               setKaartostukOperatorInput('');
                             }
-                          }
-                        }}
-                        placeholder={`Käärtõstuk ${kaartostukOperators.length + 1} mudel/firma (Enter)`}
-                        className="full-width-input"
-                      />
+                          }}
+                          disabled={!kaartostukOperatorInput.trim()}
+                          style={{
+                            padding: '8px 12px',
+                            background: kaartostukOperatorInput.trim() ? '#3b82f6' : '#e2e8f0',
+                            color: kaartostukOperatorInput.trim() ? '#fff' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: kaartostukOperatorInput.trim() ? 'pointer' : 'not-allowed',
+                            fontWeight: 600,
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       {showSuggestions && activeSuggestionField === 'kaartostuk' && knownKaartostukid.filter(k =>
                         k.toLowerCase().includes(kaartostukOperatorInput.toLowerCase()) && !kaartostukOperators.includes(k)
                       ).length > 0 && (
@@ -6060,31 +6178,56 @@ export default function InstallationsScreen({
                 )}
                 {(!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) && (
                   <div className="team-input-wrapper">
-                    <input
-                      ref={teamInputRef}
-                      type="text"
-                      value={monteerijadInput}
-                      onChange={(e) => {
-                        setMonteerijadInput(e.target.value);
-                        setActiveSuggestionField('monteerija');
-                        setShowSuggestions(true);
-                      }}
-                      onFocus={() => { setActiveSuggestionField('monteerija'); setShowSuggestions(true); }}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && monteerijadInput.trim()) {
-                          e.preventDefault();
-                          if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        ref={teamInputRef}
+                        type="text"
+                        value={monteerijadInput}
+                        onChange={(e) => {
+                          setMonteerijadInput(e.target.value);
+                          setActiveSuggestionField('monteerija');
+                          setShowSuggestions(true);
+                        }}
+                        onFocus={() => { setActiveSuggestionField('monteerija'); setShowSuggestions(true); }}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && monteerijadInput.trim()) {
+                            e.preventDefault();
+                            if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                              setMonteerijad([...monteerijad, monteerijadInput.trim()]);
+                              setMonteerijadInput('');
+                            }
+                          }
+                        }}
+                        placeholder={selectedInstallMethods.monteerija
+                          ? `Monteerija ${monteerijad.length + 1}`
+                          : 'Monteerija nimi'}
+                        className="full-width-input"
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (monteerijadInput.trim() && (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija)) {
                             setMonteerijad([...monteerijad, monteerijadInput.trim()]);
                             setMonteerijadInput('');
                           }
-                        }
-                      }}
-                      placeholder={selectedInstallMethods.monteerija
-                        ? `Monteerija ${monteerijad.length + 1} nimi (Enter)`
-                        : 'Monteerija nimi (Enter)'}
-                      className="full-width-input"
-                    />
+                        }}
+                        disabled={!monteerijadInput.trim()}
+                        style={{
+                          padding: '8px 12px',
+                          background: monteerijadInput.trim() ? '#3b82f6' : '#e2e8f0',
+                          color: monteerijadInput.trim() ? '#fff' : '#94a3b8',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: monteerijadInput.trim() ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                          fontSize: '16px'
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                     {showSuggestions && activeSuggestionField === 'monteerija' && [...new Set([...knownTeamMembers, ...knownMonteerijad])].filter(k =>
                       k.toLowerCase().includes(monteerijadInput.toLowerCase()) && !monteerijad.includes(k)
                     ).length > 0 && (
@@ -6128,28 +6271,53 @@ export default function InstallationsScreen({
                   )}
                   {troppijad.length < selectedInstallMethods.troppija && (
                     <div className="team-input-wrapper">
-                      <input
-                        type="text"
-                        value={troppijaInput}
-                        onChange={(e) => {
-                          setTroppijaInput(e.target.value);
-                          setActiveSuggestionField('troppija');
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => { setActiveSuggestionField('troppija'); setShowSuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && troppijaInput.trim()) {
-                            e.preventDefault();
-                            if (troppijad.length < selectedInstallMethods.troppija!) {
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={troppijaInput}
+                          onChange={(e) => {
+                            setTroppijaInput(e.target.value);
+                            setActiveSuggestionField('troppija');
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => { setActiveSuggestionField('troppija'); setShowSuggestions(true); }}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && troppijaInput.trim()) {
+                              e.preventDefault();
+                              if (troppijad.length < selectedInstallMethods.troppija!) {
+                                setTroppijad([...troppijad, troppijaInput.trim()]);
+                                setTroppijaInput('');
+                              }
+                            }
+                          }}
+                          placeholder={`Troppija ${troppijad.length + 1}`}
+                          className="full-width-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (troppijaInput.trim() && troppijad.length < selectedInstallMethods.troppija!) {
                               setTroppijad([...troppijad, troppijaInput.trim()]);
                               setTroppijaInput('');
                             }
-                          }
-                        }}
-                        placeholder={`Troppija ${troppijad.length + 1} nimi (Enter)`}
-                        className="full-width-input"
-                      />
+                          }}
+                          disabled={!troppijaInput.trim()}
+                          style={{
+                            padding: '8px 12px',
+                            background: troppijaInput.trim() ? '#3b82f6' : '#e2e8f0',
+                            color: troppijaInput.trim() ? '#fff' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: troppijaInput.trim() ? 'pointer' : 'not-allowed',
+                            fontWeight: 600,
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       {showSuggestions && activeSuggestionField === 'troppija' && knownTroppijad.filter(k =>
                         k.toLowerCase().includes(troppijaInput.toLowerCase()) && !troppijad.includes(k)
                       ).length > 0 && (
@@ -6194,28 +6362,53 @@ export default function InstallationsScreen({
                   )}
                   {keevitajad.length < selectedInstallMethods.keevitaja && (
                     <div className="team-input-wrapper">
-                      <input
-                        type="text"
-                        value={keevitajaInput}
-                        onChange={(e) => {
-                          setKeevitajaInput(e.target.value);
-                          setActiveSuggestionField('keevitaja');
-                          setShowSuggestions(true);
-                        }}
-                        onFocus={() => { setActiveSuggestionField('keevitaja'); setShowSuggestions(true); }}
-                        onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && keevitajaInput.trim()) {
-                            e.preventDefault();
-                            if (keevitajad.length < selectedInstallMethods.keevitaja!) {
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <input
+                          type="text"
+                          value={keevitajaInput}
+                          onChange={(e) => {
+                            setKeevitajaInput(e.target.value);
+                            setActiveSuggestionField('keevitaja');
+                            setShowSuggestions(true);
+                          }}
+                          onFocus={() => { setActiveSuggestionField('keevitaja'); setShowSuggestions(true); }}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && keevitajaInput.trim()) {
+                              e.preventDefault();
+                              if (keevitajad.length < selectedInstallMethods.keevitaja!) {
+                                setKeevitajad([...keevitajad, keevitajaInput.trim()]);
+                                setKeevitajaInput('');
+                              }
+                            }
+                          }}
+                          placeholder={`Keevitaja ${keevitajad.length + 1}`}
+                          className="full-width-input"
+                          style={{ flex: 1 }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (keevitajaInput.trim() && keevitajad.length < selectedInstallMethods.keevitaja!) {
                               setKeevitajad([...keevitajad, keevitajaInput.trim()]);
                               setKeevitajaInput('');
                             }
-                          }
-                        }}
-                        placeholder={`Keevitaja ${keevitajad.length + 1} nimi (Enter)`}
-                        className="full-width-input"
-                      />
+                          }}
+                          disabled={!keevitajaInput.trim()}
+                          style={{
+                            padding: '8px 12px',
+                            background: keevitajaInput.trim() ? '#3b82f6' : '#e2e8f0',
+                            color: keevitajaInput.trim() ? '#fff' : '#94a3b8',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: keevitajaInput.trim() ? 'pointer' : 'not-allowed',
+                            fontWeight: 600,
+                            fontSize: '16px'
+                          }}
+                        >
+                          +
+                        </button>
+                      </div>
                       {showSuggestions && activeSuggestionField === 'keevitaja' && knownKeevitajad.filter(k =>
                         k.toLowerCase().includes(keevitajaInput.toLowerCase()) && !keevitajad.includes(k)
                       ).length > 0 && (
@@ -8398,19 +8591,42 @@ export default function InstallationsScreen({
                   </div>
                 )}
                 <div style={{ position: 'relative' }}>
-                  <input
-                    type="text"
-                    value={editTeamMemberInput}
-                    onChange={(e) => setEditTeamMemberInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && editTeamMemberInput.trim()) {
-                        e.preventDefault();
-                        addEditTeamMember(editTeamMemberInput);
-                      }
-                    }}
-                    placeholder="Lisa meeskonna liige (Enter)"
-                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
-                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={editTeamMemberInput}
+                      onChange={(e) => setEditTeamMemberInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && editTeamMemberInput.trim()) {
+                          e.preventDefault();
+                          addEditTeamMember(editTeamMemberInput);
+                        }
+                      }}
+                      placeholder="Meeskonna liige"
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (editTeamMemberInput.trim()) {
+                          addEditTeamMember(editTeamMemberInput);
+                        }
+                      }}
+                      disabled={!editTeamMemberInput.trim()}
+                      style={{
+                        padding: '8px 12px',
+                        background: editTeamMemberInput.trim() ? '#3b82f6' : '#e2e8f0',
+                        color: editTeamMemberInput.trim() ? '#fff' : '#94a3b8',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: editTeamMemberInput.trim() ? 'pointer' : 'not-allowed',
+                        fontWeight: 600,
+                        fontSize: '16px'
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                   {editTeamMemberInput && knownTeamMembers.filter(m =>
                     m.toLowerCase().includes(editTeamMemberInput.toLowerCase()) &&
                     !editTeamMembers.includes(m)
@@ -8852,24 +9068,48 @@ export default function InstallationsScreen({
                   </div>
                 )}
                 {(!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) && (
-                  <input
-                    type="text"
-                    value={monteerijadInput}
-                    onChange={(e) => setMonteerijadInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && monteerijadInput.trim()) {
-                        e.preventDefault();
-                        if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={monteerijadInput}
+                      onChange={(e) => setMonteerijadInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && monteerijadInput.trim()) {
+                          e.preventDefault();
+                          if (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija) {
+                            setMonteerijad([...monteerijad, monteerijadInput.trim()]);
+                            setMonteerijadInput('');
+                          }
+                        }
+                      }}
+                      placeholder={selectedInstallMethods.monteerija
+                        ? `Monteerija ${monteerijad.length + 1}/${selectedInstallMethods.monteerija}`
+                        : 'Monteerija nimi'}
+                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (monteerijadInput.trim() && (!selectedInstallMethods.monteerija || monteerijad.length < selectedInstallMethods.monteerija)) {
                           setMonteerijad([...monteerijad, monteerijadInput.trim()]);
                           setMonteerijadInput('');
                         }
-                      }
-                    }}
-                    placeholder={selectedInstallMethods.monteerija
-                      ? `Lisa monteerija ${monteerijad.length + 1}/${selectedInstallMethods.monteerija} (Enter)`
-                      : 'Lisa monteerija (Enter)'}
-                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
-                  />
+                      }}
+                      disabled={!monteerijadInput.trim()}
+                      style={{
+                        padding: '8px 12px',
+                        background: monteerijadInput.trim() ? '#3b82f6' : '#e2e8f0',
+                        color: monteerijadInput.trim() ? '#fff' : '#94a3b8',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: monteerijadInput.trim() ? 'pointer' : 'not-allowed',
+                        fontWeight: 600,
+                        fontSize: '16px'
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -8913,22 +9153,46 @@ export default function InstallationsScreen({
                     </div>
                   )}
                   {troppijad.length < selectedInstallMethods.troppija && (
-                    <input
-                      type="text"
-                      value={troppijaInput}
-                      onChange={(e) => setTroppijaInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && troppijaInput.trim()) {
-                          e.preventDefault();
-                          if (troppijad.length < selectedInstallMethods.troppija!) {
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        value={troppijaInput}
+                        onChange={(e) => setTroppijaInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && troppijaInput.trim()) {
+                            e.preventDefault();
+                            if (troppijad.length < selectedInstallMethods.troppija!) {
+                              setTroppijad([...troppijad, troppijaInput.trim()]);
+                              setTroppijaInput('');
+                            }
+                          }
+                        }}
+                        placeholder={`Troppija ${troppijad.length + 1}/${selectedInstallMethods.troppija}`}
+                        style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (troppijaInput.trim() && troppijad.length < selectedInstallMethods.troppija!) {
                             setTroppijad([...troppijad, troppijaInput.trim()]);
                             setTroppijaInput('');
                           }
-                        }
-                      }}
-                      placeholder={`Lisa troppija ${troppijad.length + 1}/${selectedInstallMethods.troppija} (Enter)`}
-                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
-                    />
+                        }}
+                        disabled={!troppijaInput.trim()}
+                        style={{
+                          padding: '8px 12px',
+                          background: troppijaInput.trim() ? '#3b82f6' : '#e2e8f0',
+                          color: troppijaInput.trim() ? '#fff' : '#94a3b8',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: troppijaInput.trim() ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                          fontSize: '16px'
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -8973,22 +9237,46 @@ export default function InstallationsScreen({
                     </div>
                   )}
                   {keevitajad.length < selectedInstallMethods.keevitaja && (
-                    <input
-                      type="text"
-                      value={keevitajaInput}
-                      onChange={(e) => setKeevitajaInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && keevitajaInput.trim()) {
-                          e.preventDefault();
-                          if (keevitajad.length < selectedInstallMethods.keevitaja!) {
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        value={keevitajaInput}
+                        onChange={(e) => setKeevitajaInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && keevitajaInput.trim()) {
+                            e.preventDefault();
+                            if (keevitajad.length < selectedInstallMethods.keevitaja!) {
+                              setKeevitajad([...keevitajad, keevitajaInput.trim()]);
+                              setKeevitajaInput('');
+                            }
+                          }
+                        }}
+                        placeholder={`Keevitaja ${keevitajad.length + 1}/${selectedInstallMethods.keevitaja}`}
+                        style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (keevitajaInput.trim() && keevitajad.length < selectedInstallMethods.keevitaja!) {
                             setKeevitajad([...keevitajad, keevitajaInput.trim()]);
                             setKeevitajaInput('');
                           }
-                        }
-                      }}
-                      placeholder={`Lisa keevitaja ${keevitajad.length + 1}/${selectedInstallMethods.keevitaja} (Enter)`}
-                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
-                    />
+                        }}
+                        disabled={!keevitajaInput.trim()}
+                        style={{
+                          padding: '8px 12px',
+                          background: keevitajaInput.trim() ? '#3b82f6' : '#e2e8f0',
+                          color: keevitajaInput.trim() ? '#fff' : '#94a3b8',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: keevitajaInput.trim() ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                          fontSize: '16px'
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
@@ -9033,22 +9321,46 @@ export default function InstallationsScreen({
                     </div>
                   )}
                   {craneOperators.length < selectedInstallMethods.crane && (
-                    <input
-                      type="text"
-                      value={craneOperatorInput}
-                      onChange={(e) => setCraneOperatorInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && craneOperatorInput.trim()) {
-                          e.preventDefault();
-                          if (craneOperators.length < selectedInstallMethods.crane!) {
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="text"
+                        value={craneOperatorInput}
+                        onChange={(e) => setCraneOperatorInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && craneOperatorInput.trim()) {
+                            e.preventDefault();
+                            if (craneOperators.length < selectedInstallMethods.crane!) {
+                              setCraneOperators([...craneOperators, craneOperatorInput.trim()]);
+                              setCraneOperatorInput('');
+                            }
+                          }
+                        }}
+                        placeholder={`Kraana ${craneOperators.length + 1}`}
+                        style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (craneOperatorInput.trim() && craneOperators.length < selectedInstallMethods.crane!) {
                             setCraneOperators([...craneOperators, craneOperatorInput.trim()]);
                             setCraneOperatorInput('');
                           }
-                        }
-                      }}
-                      placeholder={`Lisa kraana ${craneOperators.length + 1} operaator (Enter)`}
-                      style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #d1d5db', width: '100%' }}
-                    />
+                        }}
+                        disabled={!craneOperatorInput.trim()}
+                        style={{
+                          padding: '8px 12px',
+                          background: craneOperatorInput.trim() ? '#3b82f6' : '#e2e8f0',
+                          color: craneOperatorInput.trim() ? '#fff' : '#94a3b8',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: craneOperatorInput.trim() ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                          fontSize: '16px'
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                   )}
                 </div>
               )}
