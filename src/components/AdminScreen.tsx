@@ -2348,15 +2348,19 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           .eq('trimble_project_id', projectId)
           .ilike('guid_ifc', guidPattern),
 
-        // Arrival confirmations - join through item_id
+        // Arrival confirmations - join through item_id with delivery vehicle info
         supabase
           .from('trimble_delivery_items')
           .select(`
             guid_ifc,
+            vehicle:trimble_delivery_vehicles(
+              id, vehicle_code, scheduled_date,
+              factory:trimble_delivery_factories(id, factory_name, factory_code)
+            ),
             confirmations:trimble_arrival_confirmations(
               *,
               arrived_vehicle:trimble_arrived_vehicles(
-                id, arrival_date, arrival_time, unload_start_time, unload_end_time,
+                id, arrival_date, arrival_time, unload_location, unload_method,
                 photos:trimble_arrival_photos(id, file_url, photo_type, uploaded_at)
               )
             )
@@ -2417,8 +2421,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
           .ilike('guid_ifc', guidPattern)
       ]);
 
-      // Extract arrival confirmations from nested structure
-      const arrivalConfirmations = arrivalResult.data?.[0]?.confirmations || [];
+      // Extract arrival confirmations from nested structure with delivery vehicle info
+      const arrivalData = arrivalResult.data?.[0];
+      const arrivalConfirmations = (arrivalData?.confirmations || []).map((conf: any) => ({
+        ...conf,
+        delivery_vehicle: arrivalData?.vehicle // Attach delivery vehicle info
+      }));
 
       // Combine installation data from all sources
       const allInstallations = [
@@ -16703,31 +16711,33 @@ document.body.appendChild(div);`;
 
           {/* Data sections */}
           {!partDbLoading && partDbData && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
 
               {/* Delivery Schedule Section */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                 <button
                   onClick={() => togglePartDbSection('delivery')}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 12px',
                     background: partDbExpandedSections.has('delivery') ? '#fef3c7' : '#fefce8',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '13px'
                   }}
                 >
-                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🚚 Tarnegraafik
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FiTruck size={14} style={{ color: '#d97706' }} />
+                    Tarnegraafik
                     <span style={{
                       background: partDbData.deliveryItems.length > 0 ? '#f59e0b' : '#d1d5db',
                       color: 'white',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
                       {partDbData.deliveryItems.length}
                     </span>
@@ -16735,64 +16745,67 @@ document.body.appendChild(div);`;
                   {partDbExpandedSections.has('delivery') ? '▼' : '▶'}
                 </button>
                 {partDbExpandedSections.has('delivery') && partDbData.deliveryItems.length > 0 && (
-                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                  <div style={{ padding: '8px 12px', background: 'white' }}>
                     {partDbData.deliveryItems.map((item: any, idx: number) => (
                       <div key={idx} style={{
-                        padding: '10px',
+                        padding: '8px',
                         background: '#f9fafb',
-                        borderRadius: '6px',
-                        marginBottom: idx < partDbData.deliveryItems.length - 1 ? '8px' : 0
+                        borderRadius: '4px',
+                        marginBottom: idx < partDbData.deliveryItems.length - 1 ? '6px' : 0,
+                        fontSize: '12px'
                       }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <span style={{ fontWeight: 600 }}>{item.vehicle?.vehicle_code || 'Tundmatu veok'}</span>
                           <span style={{
                             background: '#6b7280',
                             color: 'white',
-                            padding: '2px 8px',
+                            padding: '1px 6px',
                             borderRadius: '4px',
-                            fontSize: '11px'
+                            fontSize: '10px'
                           }}>
-                            {item.vehicle?.factory?.factory_name || 'Tundmatu tehas'}
+                            {item.vehicle?.factory?.factory_name || '-'}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          <div>📅 Planeeritud: <strong>{item.vehicle?.scheduled_date || '-'}</strong></div>
-                          <div>📝 Märkused: {item.notes || '-'}</div>
+                        <div style={{ color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                          <span>Planeeritud: <strong>{item.vehicle?.scheduled_date ? new Date(item.vehicle.scheduled_date).toLocaleDateString('et-EE') : '-'}</strong></span>
+                          {item.notes && <span>• {item.notes}</span>}
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
                 {partDbExpandedSections.has('delivery') && partDbData.deliveryItems.length === 0 && (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-                    Tarnegraafikus pole seda detaili
+                  <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                    Tarnegraafikus pole
                   </div>
                 )}
               </div>
 
               {/* Arrivals Section */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                 <button
                   onClick={() => togglePartDbSection('arrivals')}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 12px',
                     background: partDbExpandedSections.has('arrivals') ? '#d1fae5' : '#ecfdf5',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '13px'
                   }}
                 >
-                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    📦 Saabumised
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FiBox size={14} style={{ color: '#059669' }} />
+                    Saabumised
                     <span style={{
                       background: partDbData.arrivalItems.length > 0 ? '#10b981' : '#d1d5db',
                       color: 'white',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
                       {partDbData.arrivalItems.length}
                     </span>
@@ -16800,62 +16813,60 @@ document.body.appendChild(div);`;
                   {partDbExpandedSections.has('arrivals') ? '▼' : '▶'}
                 </button>
                 {partDbExpandedSections.has('arrivals') && partDbData.arrivalItems.length > 0 && (
-                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                  <div style={{ padding: '8px 12px', background: 'white' }}>
                     {partDbData.arrivalItems.map((item: any, idx: number) => (
                       <div key={idx} style={{
-                        padding: '10px',
+                        padding: '8px',
                         background: '#f9fafb',
-                        borderRadius: '6px',
-                        marginBottom: idx < partDbData.arrivalItems.length - 1 ? '8px' : 0
+                        borderRadius: '4px',
+                        marginBottom: idx < partDbData.arrivalItems.length - 1 ? '6px' : 0,
+                        fontSize: '12px'
                       }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <span style={{ fontWeight: 600 }}>
-                            {item.vehicle?.license_plate || 'Tundmatu veok'}
+                            {item.delivery_vehicle?.vehicle_code || 'Tundmatu veok'}
                           </span>
                           <span style={{
-                            background: item.status === 'ok' ? '#10b981' : item.status === 'damaged' ? '#ef4444' : '#6b7280',
+                            background: item.status === 'confirmed' ? '#10b981' : item.status === 'missing' ? '#ef4444' : item.status === 'damaged' ? '#f59e0b' : '#6b7280',
                             color: 'white',
-                            padding: '2px 8px',
+                            padding: '1px 6px',
                             borderRadius: '4px',
-                            fontSize: '11px'
+                            fontSize: '10px'
                           }}>
-                            {item.status === 'ok' ? '✓ OK' : item.status === 'damaged' ? '⚠️ Kahjustatud' : item.status}
+                            {item.status === 'confirmed' ? 'Kinnitatud' : item.status === 'missing' ? 'Puudu' : item.status === 'damaged' ? 'Kahjustatud' : item.status}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          <div>📅 Saabus: <strong>{item.vehicle?.arrival_date} {item.vehicle?.arrival_time}</strong></div>
-                          <div>📍 Mahalaadimine: {item.vehicle?.unload_location || '-'}</div>
-                          <div>🔧 Meetod: {item.vehicle?.unload_method || '-'}</div>
-                          {item.notes && <div>📝 Märkused: {item.notes}</div>}
+                        <div style={{ color: '#6b7280', display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                          <span>Saabus: <strong>{item.arrived_vehicle?.arrival_date ? new Date(item.arrived_vehicle.arrival_date).toLocaleDateString('et-EE') : '-'}</strong></span>
+                          {item.arrived_vehicle?.unload_location && <span>• {item.arrived_vehicle.unload_location}</span>}
+                          {item.arrived_vehicle?.unload_method && <span>• {item.arrived_vehicle.unload_method}</span>}
                         </div>
+                        {item.notes && <div style={{ color: '#6b7280', marginTop: '2px' }}>Märkused: {item.notes}</div>}
                         {/* Arrival photos */}
-                        {item.vehicle?.photos && item.vehicle.photos.length > 0 && (
-                          <div style={{ marginTop: '10px' }}>
-                            <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>📷 Pildid:</div>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                              {item.vehicle.photos.map((photo: any, pIdx: number) => (
-                                <a
-                                  key={pIdx}
-                                  href={photo.photo_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    display: 'block',
-                                    width: '60px',
-                                    height: '60px',
-                                    borderRadius: '6px',
-                                    overflow: 'hidden',
-                                    border: '2px solid #e5e7eb'
-                                  }}
-                                >
-                                  <img
-                                    src={photo.photo_url}
-                                    alt={`Foto ${pIdx + 1}`}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                  />
-                                </a>
-                              ))}
-                            </div>
+                        {item.arrived_vehicle?.photos && item.arrived_vehicle.photos.length > 0 && (
+                          <div style={{ marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {item.arrived_vehicle.photos.map((photo: any, pIdx: number) => (
+                              <a
+                                key={pIdx}
+                                href={photo.file_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'block',
+                                  width: '40px',
+                                  height: '40px',
+                                  borderRadius: '4px',
+                                  overflow: 'hidden',
+                                  border: '1px solid #e5e7eb'
+                                }}
+                              >
+                                <img
+                                  src={photo.file_url}
+                                  alt={`Foto ${pIdx + 1}`}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </a>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -16863,35 +16874,37 @@ document.body.appendChild(div);`;
                   </div>
                 )}
                 {partDbExpandedSections.has('arrivals') && partDbData.arrivalItems.length === 0 && (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-                    Saabumisi pole registreeritud
+                  <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                    Saabumisi pole
                   </div>
                 )}
               </div>
 
               {/* Installation Schedule Section */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                 <button
                   onClick={() => togglePartDbSection('installation')}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 12px',
                     background: partDbExpandedSections.has('installation') ? '#dbeafe' : '#eff6ff',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '13px'
                   }}
                 >
-                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    🔧 Paigaldusgraafik
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 14, height: 14 }} />
+                    Paigaldusgraafik
                     <span style={{
                       background: partDbData.installationItems.length > 0 ? '#3b82f6' : '#d1d5db',
                       color: 'white',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
                       {partDbData.installationItems.length}
                     </span>
@@ -16899,66 +16912,77 @@ document.body.appendChild(div);`;
                   {partDbExpandedSections.has('installation') ? '▼' : '▶'}
                 </button>
                 {partDbExpandedSections.has('installation') && partDbData.installationItems.length > 0 && (
-                  <div style={{ padding: '12px 16px', background: 'white' }}>
-                    {partDbData.installationItems.map((item: any, idx: number) => (
-                      <div key={idx} style={{
-                        padding: '10px',
-                        background: item.source === 'installation' ? '#dcfce7' : item.source === 'preassembly' ? '#dbeafe' : '#f9fafb',
-                        borderRadius: '6px',
-                        marginBottom: idx < partDbData.installationItems.length - 1 ? '8px' : 0
-                      }}>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          <div style={{ marginBottom: '4px' }}>
+                  <div style={{ padding: '8px 12px', background: 'white' }}>
+                    {partDbData.installationItems.map((item: any, idx: number) => {
+                      // Format date properly (dd.mm.yyyy)
+                      const rawDate = item.installed_at || item.preassembled_at || item.scheduled_date;
+                      const formattedDate = rawDate ? new Date(rawDate).toLocaleDateString('et-EE') : '-';
+                      return (
+                        <div key={idx} style={{
+                          padding: '8px',
+                          background: item.source === 'installation' ? '#dcfce7' : item.source === 'preassembly' ? '#dbeafe' : '#f9fafb',
+                          borderRadius: '4px',
+                          marginBottom: idx < partDbData.installationItems.length - 1 ? '6px' : 0,
+                          fontSize: '12px'
+                        }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                             <span style={{
                               background: item.source === 'installation' ? '#22c55e' : item.source === 'preassembly' ? '#3b82f6' : '#9ca3af',
                               color: 'white',
-                              padding: '2px 6px',
+                              padding: '1px 6px',
                               borderRadius: '4px',
                               fontSize: '10px',
-                              fontWeight: 500
+                              fontWeight: 500,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
                             }}>
-                              {item.source === 'installation' ? '✅ Paigaldatud' : item.source === 'preassembly' ? '🔧 Eelkoostus' : '📋 Planeeritud'}
+                              {item.source === 'installation' ? <><FiCheck size={10} /> Paigaldatud</> : item.source === 'preassembly' ? 'Eelkoostus' : 'Planeeritud'}
                             </span>
+                            <span style={{ fontWeight: 600 }}>{formattedDate}</span>
                           </div>
-                          <div>📅 Kuupäev: <strong>{item.installed_at || item.preassembled_at || item.scheduled_date || '-'}</strong></div>
-                          <div>👷 Meeskond: {item.team_members || item.team || '-'}</div>
-                          <div>🔨 Meetod: {item.installation_method_name || '-'}</div>
-                          {item.notes && <div>📝 Märkused: {item.notes}</div>}
+                          <div style={{ color: '#6b7280' }}>
+                            {(item.team_members || item.team) && <div>Meeskond: {item.team_members || item.team}</div>}
+                            {item.installation_method_name && <div>Meetod: {item.installation_method_name}</div>}
+                            {item.notes && <div>Märkused: {item.notes}</div>}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {partDbExpandedSections.has('installation') && partDbData.installationItems.length === 0 && (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-                    Paigaldusgraafikus pole seda detaili
+                  <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                    Paigaldusgraafikus pole
                   </div>
                 )}
               </div>
 
               {/* Organizer Section */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                 <button
                   onClick={() => togglePartDbSection('organizer')}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 12px',
                     background: partDbExpandedSections.has('organizer') ? '#fae8ff' : '#fdf4ff',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '13px'
                   }}
                 >
-                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    📂 Organiseerija grupid
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <img src={`${import.meta.env.BASE_URL}icons/organizer.png`} alt="" style={{ width: 14, height: 14 }} />
+                    Organiseerija
                     <span style={{
                       background: partDbData.organizerItems.length > 0 ? '#a855f7' : '#d1d5db',
                       color: 'white',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
                       {partDbData.organizerItems.length}
                     </span>
@@ -16966,22 +16990,23 @@ document.body.appendChild(div);`;
                   {partDbExpandedSections.has('organizer') ? '▼' : '▶'}
                 </button>
                 {partDbExpandedSections.has('organizer') && partDbData.organizerItems.length > 0 && (
-                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                  <div style={{ padding: '8px 12px', background: 'white' }}>
                     {partDbData.organizerItems.map((item: any, idx: number) => (
                       <div key={idx} style={{
-                        padding: '10px',
+                        padding: '6px 8px',
                         background: '#f9fafb',
-                        borderRadius: '6px',
-                        marginBottom: idx < partDbData.organizerItems.length - 1 ? '8px' : 0,
+                        borderRadius: '4px',
+                        marginBottom: idx < partDbData.organizerItems.length - 1 ? '4px' : 0,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '10px'
+                        gap: '8px',
+                        fontSize: '12px'
                       }}>
                         <div
                           style={{
-                            width: '12px',
-                            height: '12px',
-                            borderRadius: '3px',
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '2px',
                             background: item.group?.color
                               ? `rgb(${item.group.color.r},${item.group.color.g},${item.group.color.b})`
                               : '#6b7280',
@@ -16989,49 +17014,47 @@ document.body.appendChild(div);`;
                           }}
                         />
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontWeight: 600, fontSize: '13px' }}>{item.group?.name || 'Tundmatu grupp'}</div>
-                          {item.group?.description && (
-                            <div style={{ fontSize: '11px', color: '#6b7280' }}>{item.group.description}</div>
-                          )}
-                          <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '4px' }}>
-                            Lisatud: {item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') : '-'}
-                            {item.added_by && ` • ${item.added_by}`}
-                          </div>
+                          <span style={{ fontWeight: 600 }}>{item.group?.name || 'Tundmatu grupp'}</span>
+                          <span style={{ color: '#9ca3af', marginLeft: '8px', fontSize: '11px' }}>
+                            {item.added_at ? new Date(item.added_at).toLocaleDateString('et-EE') : ''}
+                          </span>
                         </div>
                       </div>
                     ))}
                   </div>
                 )}
                 {partDbExpandedSections.has('organizer') && partDbData.organizerItems.length === 0 && (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                  <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
                     Üheski grupis pole
                   </div>
                 )}
               </div>
 
               {/* Inspections Section */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                 <button
                   onClick={() => togglePartDbSection('inspections')}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
-                    background: partDbExpandedSections.has('inspections') ? '#fee2e2' : '#fef2f2',
+                    padding: '10px 12px',
+                    background: partDbExpandedSections.has('inspections') ? '#dcfce7' : '#f0fdf4',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '13px'
                   }}
                 >
-                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    ✅ Inspektsioonid
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FiCheck size={14} style={{ color: '#16a34a' }} />
+                    Inspektsioonid
                     <span style={{
-                      background: partDbData.inspections.length > 0 ? '#ef4444' : '#d1d5db',
+                      background: partDbData.inspections.length > 0 ? '#22c55e' : '#d1d5db',
                       color: 'white',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
                       {partDbData.inspections.length}
                     </span>
@@ -17039,52 +17062,50 @@ document.body.appendChild(div);`;
                   {partDbExpandedSections.has('inspections') ? '▼' : '▶'}
                 </button>
                 {partDbExpandedSections.has('inspections') && partDbData.inspections.length > 0 && (
-                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                  <div style={{ padding: '8px 12px', background: 'white' }}>
                     {partDbData.inspections.map((item: any, idx: number) => (
                       <div key={idx} style={{
-                        padding: '10px',
+                        padding: '8px',
                         background: '#f9fafb',
-                        borderRadius: '6px',
-                        marginBottom: idx < partDbData.inspections.length - 1 ? '8px' : 0
+                        borderRadius: '4px',
+                        marginBottom: idx < partDbData.inspections.length - 1 ? '6px' : 0,
+                        fontSize: '12px'
                       }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <span style={{ fontWeight: 600 }}>{item.inspection_type || 'Inspektsioon'}</span>
-                          <span style={{ fontSize: '11px', color: '#6b7280' }}>
+                          <span style={{ color: '#6b7280' }}>
                             {item.inspected_at ? new Date(item.inspected_at).toLocaleDateString('et-EE') : '-'}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                          <div>👤 Inspektor: {item.inspector_name || item.user_email || '-'}</div>
-                          {item.notes && <div>📝 Märkused: {item.notes}</div>}
+                        <div style={{ color: '#6b7280' }}>
+                          <span>Inspektor: {item.inspector_name || item.user_email || '-'}</span>
+                          {item.notes && <span> • {item.notes}</span>}
                         </div>
                         {/* Inspection photos */}
-                        {(item.photo_urls || item.user_photos) && (
-                          <div style={{ marginTop: '10px' }}>
-                            <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>📷 Pildid:</div>
-                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                              {(item.photo_urls || item.user_photos || []).map((url: string, pIdx: number) => (
-                                <a
-                                  key={pIdx}
-                                  href={url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    display: 'block',
-                                    width: '60px',
-                                    height: '60px',
-                                    borderRadius: '6px',
-                                    overflow: 'hidden',
-                                    border: '2px solid #e5e7eb'
-                                  }}
-                                >
-                                  <img
-                                    src={url}
-                                    alt={`Foto ${pIdx + 1}`}
-                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                  />
-                                </a>
-                              ))}
-                            </div>
+                        {(item.photo_urls || item.user_photos) && (item.photo_urls || item.user_photos).length > 0 && (
+                          <div style={{ marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                            {(item.photo_urls || item.user_photos || []).map((url: string, pIdx: number) => (
+                              <a
+                                key={pIdx}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'block',
+                                  width: '40px',
+                                  height: '40px',
+                                  borderRadius: '4px',
+                                  overflow: 'hidden',
+                                  border: '1px solid #e5e7eb'
+                                }}
+                              >
+                                <img
+                                  src={url}
+                                  alt={`Foto ${pIdx + 1}`}
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              </a>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -17092,35 +17113,37 @@ document.body.appendChild(div);`;
                   </div>
                 )}
                 {partDbExpandedSections.has('inspections') && partDbData.inspections.length === 0 && (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
+                  <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
                     Inspektsioone pole
                   </div>
                 )}
               </div>
 
               {/* Issues Section */}
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #e5e7eb', borderRadius: '6px', overflow: 'hidden' }}>
                 <button
                   onClick={() => togglePartDbSection('issues')}
                   style={{
                     width: '100%',
-                    padding: '12px 16px',
+                    padding: '10px 12px',
                     background: partDbExpandedSections.has('issues') ? '#fef9c3' : '#fefce8',
                     border: 'none',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    fontSize: '13px'
                   }}
                 >
-                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    ⚠️ Mittevastavused
+                  <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FiAlertTriangle size={14} style={{ color: '#d97706' }} />
+                    Mittevastavused
                     <span style={{
                       background: partDbData.issues.length > 0 ? '#eab308' : '#d1d5db',
                       color: 'white',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
                       {partDbData.issues.length}
                     </span>
@@ -17128,31 +17151,32 @@ document.body.appendChild(div);`;
                   {partDbExpandedSections.has('issues') ? '▼' : '▶'}
                 </button>
                 {partDbExpandedSections.has('issues') && partDbData.issues.length > 0 && (
-                  <div style={{ padding: '12px 16px', background: 'white' }}>
+                  <div style={{ padding: '8px 12px', background: 'white' }}>
                     {partDbData.issues.map((issueObj: any, idx: number) => {
                       const issue = issueObj.issue;
                       if (!issue) return null;
                       return (
                         <div key={idx} style={{
-                          padding: '10px',
+                          padding: '8px',
                           background: '#f9fafb',
-                          borderRadius: '6px',
-                          marginBottom: idx < partDbData.issues.length - 1 ? '8px' : 0
+                          borderRadius: '4px',
+                          marginBottom: idx < partDbData.issues.length - 1 ? '6px' : 0,
+                          fontSize: '12px'
                         }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                             <span style={{ fontWeight: 600 }}>{issue.title || 'Probleem'}</span>
                             <span style={{
                               background: issue.status === 'open' ? '#ef4444' : issue.status === 'in_progress' ? '#f59e0b' : '#10b981',
                               color: 'white',
-                              padding: '2px 8px',
+                              padding: '1px 6px',
                               borderRadius: '4px',
-                              fontSize: '11px'
+                              fontSize: '10px'
                             }}>
                               {issue.status === 'open' ? 'Avatud' : issue.status === 'in_progress' ? 'Töös' : 'Lahendatud'}
                             </span>
                           </div>
                           {issue.description && (
-                            <div style={{ fontSize: '12px', color: '#374151', marginBottom: '6px' }}>
+                            <div style={{ color: '#374151', marginBottom: '4px' }}>
                               {issue.description}
                             </div>
                           )}
@@ -17163,12 +17187,12 @@ document.body.appendChild(div);`;
 
                           {/* Comments */}
                           {issue.comments && issue.comments.length > 0 && (
-                            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid #e5e7eb' }}>
-                              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>💬 Kommentaarid ({issue.comments.length}):</div>
-                              {issue.comments.slice(0, 3).map((comment: any, cIdx: number) => (
+                            <div style={{ marginTop: '6px', paddingTop: '6px', borderTop: '1px solid #e5e7eb' }}>
+                              <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '4px' }}>Kommentaarid ({issue.comments.length}):</div>
+                              {issue.comments.slice(0, 2).map((comment: any, cIdx: number) => (
                                 <div key={cIdx} style={{
                                   background: '#f0f9ff',
-                                  padding: '6px 10px',
+                                  padding: '4px 8px',
                                   borderRadius: '4px',
                                   marginBottom: '4px',
                                   fontSize: '12px'
@@ -17176,9 +17200,9 @@ document.body.appendChild(div);`;
                                   <span style={{ fontWeight: 500 }}>{comment.created_by}</span>: {comment.content}
                                 </div>
                               ))}
-                              {issue.comments.length > 3 && (
-                                <div style={{ fontSize: '11px', color: '#6b7280' }}>
-                                  ...ja veel {issue.comments.length - 3} kommentaari
+                              {issue.comments.length > 2 && (
+                                <div style={{ fontSize: '10px', color: '#6b7280' }}>
+                                  +{issue.comments.length - 2} veel
                                 </div>
                               )}
                             </div>
@@ -17186,49 +17210,44 @@ document.body.appendChild(div);`;
 
                           {/* Attachments */}
                           {issue.attachments && issue.attachments.length > 0 && (
-                            <div style={{ marginTop: '10px' }}>
-                              <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '6px' }}>📎 Manused:</div>
-                              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                {issue.attachments.map((att: any, aIdx: number) => (
-                                  <a
-                                    key={aIdx}
-                                    href={att.file_url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                      display: 'block',
-                                      width: '60px',
-                                      height: '60px',
-                                      borderRadius: '6px',
-                                      overflow: 'hidden',
-                                      border: '2px solid #e5e7eb'
-                                    }}
-                                  >
-                                    {att.file_type?.startsWith('image/') ? (
-                                      <img
-                                        src={att.file_url}
-                                        alt={att.file_name}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                                      />
-                                    ) : (
-                                      <div style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        background: '#f3f4f6',
-                                        fontSize: '10px',
-                                        color: '#6b7280',
-                                        textAlign: 'center',
-                                        padding: '4px'
-                                      }}>
-                                        📄 {att.file_name?.substring(0, 8)}...
-                                      </div>
-                                    )}
-                                  </a>
-                                ))}
-                              </div>
+                            <div style={{ marginTop: '6px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                              {issue.attachments.map((att: any, aIdx: number) => (
+                                <a
+                                  key={aIdx}
+                                  href={att.file_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: 'block',
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '4px',
+                                    overflow: 'hidden',
+                                    border: '1px solid #e5e7eb'
+                                  }}
+                                >
+                                  {att.file_type?.startsWith('image/') ? (
+                                    <img
+                                      src={att.file_url}
+                                      alt={att.file_name}
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    />
+                                  ) : (
+                                    <div style={{
+                                      width: '100%',
+                                      height: '100%',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      background: '#f3f4f6',
+                                      fontSize: '8px',
+                                      color: '#6b7280'
+                                    }}>
+                                      <FiDownload size={12} />
+                                    </div>
+                                  )}
+                                </a>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -17237,8 +17256,8 @@ document.body.appendChild(div);`;
                   </div>
                 )}
                 {partDbExpandedSections.has('issues') && partDbData.issues.length === 0 && (
-                  <div style={{ padding: '16px', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>
-                    Mittevastavusi pole registreeritud
+                  <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af', fontSize: '12px' }}>
+                    Mittevastavusi pole
                   </div>
                 )}
               </div>
