@@ -409,6 +409,10 @@ export default function InstallationsScreen({
   const [preassemblies, setPreassemblies] = useState<Preassembly[]>([]);
   const [preassembledGuids, setPreassembledGuids] = useState<Map<string, { preassembledAt: string; userEmail: string; assemblyMark: string; teamMembers?: string; methodName?: string }>>(new Map());
 
+  // Delivery status tracking - for arrival badges
+  const [deliveryItemGuids, setDeliveryItemGuids] = useState<Set<string>>(new Set());
+  const [arrivedGuids, setArrivedGuids] = useState<Set<string>>(new Set());
+
   // Temporary list for tracking items before final save (stored in localStorage)
   const TEMP_LIST_KEY = `installations_temp_list_${projectId}_${user.email}`;
   const [tempList, setTempList] = useState<Set<string>>(() => {
@@ -785,6 +789,7 @@ export default function InstallationsScreen({
     loadPreassemblies();
     loadPreassembledGuids();
     loadMonthLocks();
+    loadDeliveryStatus();
 
     // Enable assembly selection on mount
     const initAssemblySelection = async () => {
@@ -1477,6 +1482,57 @@ export default function InstallationsScreen({
       setPreassembledGuids(guidsMap);
     } catch (e) {
       console.error('Error loading preassembled GUIDs:', e);
+    }
+  };
+
+  // Load delivery status for badges (which items are in delivery schedule, which have arrived)
+  const loadDeliveryStatus = async () => {
+    try {
+      // Load all delivery items for this project
+      const { data: deliveryItems, error: deliveryError } = await supabase
+        .from('trimble_delivery_items')
+        .select('guid, guid_ifc')
+        .eq('trimble_project_id', projectId);
+
+      if (deliveryError) {
+        console.error('Error loading delivery items:', deliveryError);
+      }
+
+      // Build set of GUIDs in delivery schedule
+      const deliveryGuids = new Set<string>();
+      for (const item of deliveryItems || []) {
+        const key = (item.guid_ifc || item.guid || '').toLowerCase();
+        if (key) deliveryGuids.add(key);
+      }
+      setDeliveryItemGuids(deliveryGuids);
+
+      // Load arrived confirmations
+      const { data: arrivalConfs, error: arrivalError } = await supabase
+        .from('arrival_item_confirmations')
+        .select(`
+          item_id,
+          status,
+          trimble_delivery_items!inner(guid, guid_ifc)
+        `)
+        .eq('trimble_project_id', projectId)
+        .in('status', ['ok', 'damaged', 'missing_parts', 'wrong_item']);
+
+      if (arrivalError) {
+        console.error('Error loading arrival confirmations:', arrivalError);
+      }
+
+      // Build set of arrived GUIDs
+      const arrived = new Set<string>();
+      for (const conf of arrivalConfs || []) {
+        const item = (conf as any).trimble_delivery_items;
+        if (item) {
+          const key = (item.guid_ifc || item.guid || '').toLowerCase();
+          if (key) arrived.add(key);
+        }
+      }
+      setArrivedGuids(arrived);
+    } catch (e) {
+      console.error('Error loading delivery status:', e);
     }
   };
 
@@ -6070,6 +6126,11 @@ export default function InstallationsScreen({
                     const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
                     const isInTempList = guid && tempList.has(guid);
 
+                    // Delivery status for badges
+                    const guidLower = guid?.toLowerCase() || '';
+                    const isInDeliverySchedule = guidLower && deliveryItemGuids.has(guidLower);
+                    const hasArrived = guidLower && arrivedGuids.has(guidLower);
+
                     // Format date as dd.mm.yy
                     const formatShortDate = (dateStr: string) => {
                       const d = new Date(dateStr);
@@ -6132,6 +6193,41 @@ export default function InstallationsScreen({
                                 }}
                               >
                                 {statusInfo.type === 'installed' ? 'Paigaldatud' : 'Preassembly'} {statusInfo.date}
+                              </span>
+                            )}
+                            {/* Delivery status badges */}
+                            {!isInstalled && !isInDeliverySchedule && (
+                              <span
+                                className="object-inline-status delivery-warning"
+                                style={{
+                                  backgroundColor: '#f3f4f6',
+                                  color: '#4b5563',
+                                  fontSize: '10px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  marginLeft: '4px'
+                                }}
+                                title="Detail puudub tarnegraafikus"
+                              >
+                                <FiAlertCircle size={10} style={{ marginRight: '3px', verticalAlign: 'text-top' }} />
+                                puudub tarnegraafikus
+                              </span>
+                            )}
+                            {!isInstalled && isInDeliverySchedule && !hasArrived && (
+                              <span
+                                className="object-inline-status arrival-warning"
+                                style={{
+                                  backgroundColor: '#fef3c7',
+                                  color: '#92400e',
+                                  fontSize: '10px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  marginLeft: '4px'
+                                }}
+                                title="Detail on tarnegraafikus, kuid pole märgitud saabunuks"
+                              >
+                                <FiAlertTriangle size={10} style={{ marginRight: '3px', verticalAlign: 'text-top' }} />
+                                pole märgitud saabunuks
                               </span>
                             )}
                           </span>

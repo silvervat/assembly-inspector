@@ -3,6 +3,7 @@ import { FiCheck, FiX, FiCamera, FiMessageSquare, FiInfo, FiFileText, FiVideo, F
 import { supabase, InspectionCheckpoint, ResponseOption, InspectionResult, CheckpointAttachment, InspectionResultPhoto } from '../supabase';
 import { addToQueue } from '../utils/offlineQueue';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
+import { PhotoUploader, ProcessedFile } from './PhotoUploader';
 
 interface CheckpointFormProps {
   checkpoints: InspectionCheckpoint[];
@@ -366,17 +367,12 @@ export default function CheckpointForm({
     });
   };
 
-  // Handle photo add
-  const handlePhotoAdd = async (checkpointId: string, files: FileList) => {
-    const newPhotos: { file: File; preview: string }[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      // Compress image
-      const compressedFile = await compressImage(file);
-      const preview = URL.createObjectURL(compressedFile);
-      newPhotos.push({ file: compressedFile, preview });
-    }
+  // Handle processed photos from PhotoUploader component
+  const handleProcessedPhotos = (checkpointId: string, processedFiles: ProcessedFile[]) => {
+    const newPhotos = processedFiles.map(pf => ({
+      file: pf.file,
+      preview: pf.dataUrl
+    }));
 
     setResponses(prev => ({
       ...prev,
@@ -399,47 +395,6 @@ export default function CheckpointForm({
           photos: photos.filter((_, i) => i !== photoIndex)
         }
       };
-    });
-  };
-
-  // Compress image
-  const compressImage = (file: File, maxWidth = 1920, quality = 0.8): Promise<File> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d')!;
-
-      img.onload = () => {
-        let { width, height } = img;
-
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressedFile = new File([blob], file.name, {
-                type: 'image/jpeg',
-                lastModified: Date.now()
-              });
-              resolve(compressedFile);
-            } else {
-              resolve(file);
-            }
-          },
-          'image/jpeg',
-          quality
-        );
-      };
-
-      img.onerror = () => resolve(file);
-      img.src = URL.createObjectURL(file);
     });
   };
 
@@ -1098,34 +1053,32 @@ export default function CheckpointForm({
                                 </span>
                               </div>
 
-                              <div className="photos-grid">
-                                {response.photos?.map((photo, idx) => (
-                                  <div key={idx} className="photo-thumb">
-                                    <img src={photo.preview} alt={`Foto ${idx + 1}`} />
-                                    <button
-                                      className="photo-remove"
-                                      onClick={() => handlePhotoRemove(checkpoint.id, idx)}
-                                    >
-                                      <FiX />
-                                    </button>
-                                  </div>
-                                ))}
+                              {/* Preview existing photos */}
+                              {response.photos && response.photos.length > 0 && (
+                                <div className="photos-grid">
+                                  {response.photos.map((photo, idx) => (
+                                    <div key={idx} className="photo-thumb">
+                                      <img src={photo.preview} alt={`Foto ${idx + 1}`} />
+                                      <button
+                                        className="photo-remove"
+                                        onClick={() => handlePhotoRemove(checkpoint.id, idx)}
+                                      >
+                                        <FiX />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
 
-                                {(response.photos?.length || 0) < checkpoint.photos_max && (
-                                  <label className="photo-add-btn">
-                                    <FiCamera />
-                                    <span>Lisa foto</span>
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      capture="environment"
-                                      multiple
-                                      onChange={(e) => e.target.files && handlePhotoAdd(checkpoint.id, e.target.files)}
-                                      style={{ display: 'none' }}
-                                    />
-                                  </label>
-                                )}
-                              </div>
+                              {/* PhotoUploader with drag & drop and progress */}
+                              {(response.photos?.length || 0) < checkpoint.photos_max && (
+                                <PhotoUploader
+                                  onUpload={(files) => handleProcessedPhotos(checkpoint.id, files)}
+                                  maxFiles={checkpoint.photos_max - (response.photos?.length || 0)}
+                                  disabled={false}
+                                  showProgress={true}
+                                />
+                              )}
 
                               {needsPhoto && (response.photos?.length || 0) < minPhotos && (
                                 <div className="photos-warning">

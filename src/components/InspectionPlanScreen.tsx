@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiZoomIn, FiSave, FiRefreshCw, FiList, FiGrid, FiChevronDown, FiChevronUp, FiCamera, FiUser, FiCheckCircle, FiClock, FiTarget, FiMessageSquare, FiImage, FiEdit2, FiX, FiCheck, FiSearch, FiFilter, FiFileText } from 'react-icons/fi';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, InspectionTypeRef, InspectionCategory, InspectionPlanItem, InspectionPlanStats, TrimbleExUser } from '../supabase';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
+import { InspectionHistory } from './InspectionHistory';
 
 // Checkpoint result data (from inspection_results table)
 interface CheckpointResultData {
@@ -101,6 +102,9 @@ export default function InspectionPlanScreen({
   const [messageType, setMessageType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
   const [duplicates, setDuplicates] = useState<DuplicateWarning[]>([]);
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
+  // History modal state (v3.0)
+  const [historyItemId, setHistoryItemId] = useState<string | null>(null);
 
   // Editing state for individual results
   const [editingResultId, setEditingResultId] = useState<string | null>(null);
@@ -1416,6 +1420,15 @@ export default function InspectionPlanScreen({
                                                       {new Date(item.checkpointResults[0].inspected_at).toLocaleString('et-EE')}
                                                     </span>
                                                     <button
+                                                      className="btn-history"
+                                                      onClick={(e) => { e.stopPropagation(); setHistoryItemId(item.id); }}
+                                                      title="Vaata ajalugu"
+                                                      style={{ marginRight: '4px', background: '#3B82F6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}
+                                                    >
+                                                      <FiFileText size={12} />
+                                                      Ajalugu
+                                                    </button>
+                                                    <button
                                                       className="btn-delete-results"
                                                       onClick={(e) => { e.stopPropagation(); deleteInspectionResults(item); }}
                                                       title="Kustuta inspektsiooni tulemused"
@@ -1633,6 +1646,14 @@ export default function InspectionPlanScreen({
             </div>
           </div>
         </div>
+      )}
+
+      {/* History Modal (v3.0) */}
+      {historyItemId && (
+        <InspectionHistory
+          planItemId={historyItemId}
+          onClose={() => setHistoryItemId(null)}
+        />
       )}
     </div>
   );
