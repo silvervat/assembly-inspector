@@ -6416,12 +6416,12 @@ button.stat-toggle.off:hover {
 
 .arrived-deliveries .vehicle-code {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .arrived-deliveries .vehicle-factory {
   color: var(--modus-text-secondary);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .arrived-deliveries .vehicle-stats {

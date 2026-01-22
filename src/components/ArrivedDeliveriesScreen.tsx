@@ -4992,10 +4992,17 @@ export default function ArrivedDeliveriesScreen({
                       onClick={() => {
                         setViewMode('by-date');
                         setSelectedDate(vehicle.scheduled_date || '');
+                        // Expand the clicked vehicle (remove from collapsed set, add others)
+                        setCollapsedVehicles(prev => {
+                          const next = new Set(prev);
+                          next.delete(vehicle.id);
+                          return next;
+                        });
                       }}
                     >
                       <span style={{
                         fontWeight: 600,
+                        fontSize: '11px',
                         color: '#1e40af',
                         minWidth: '60px'
                       }}>
@@ -5003,16 +5010,16 @@ export default function ArrivedDeliveriesScreen({
                       </span>
                       {factory && (
                         <span style={{
-                          padding: '2px 8px',
+                          padding: '2px 6px',
                           background: '#e2e8f0',
                           borderRadius: '4px',
-                          fontSize: '11px',
+                          fontSize: '10px',
                           fontWeight: 500
                         }}>
                           {factory.factory_name}
                         </span>
                       )}
-                      <span style={{ color: '#64748b', fontSize: '12px' }}>
+                      <span style={{ color: '#64748b', fontSize: '11px' }}>
                         {vehicleItems.length} detaili
                       </span>
                       {/* Status badges - same as date-by-date view */}
