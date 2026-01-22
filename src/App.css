@@ -490,14 +490,33 @@ body {
   margin-top: 8px;
 }
 
+.page-header-title-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.page-header-subtitle {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1;
+  margin-bottom: 1px;
+}
+
 .page-header-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--modus-text-primary);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .page-header-actions {

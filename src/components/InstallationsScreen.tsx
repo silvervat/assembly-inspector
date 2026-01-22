@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
-import { FiArrowLeft, FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -5895,8 +5895,28 @@ export default function InstallationsScreen({
     <div className="installations-screen">
       {/* PageHeader with hamburger menu */}
       <PageHeader
-        title="Paigaldamised"
-        onBack={handleBackToMenu}
+        title={showList
+          ? (entryMode === 'preassembly' ? 'Preassembly ülevaade' : 'Paigalduste ülevaade')
+          : 'Paigaldamised'
+        }
+        subtitle={showList ? 'Paigaldamised' : undefined}
+        onBack={showList ? async () => {
+          setShowList(false);
+          // Reapply base coloring based on mode
+          if (colorByDay || colorByMonth) {
+            setColorByDay(false);
+            setColorByMonth(false);
+            setDayColors({});
+            setMonthColors({});
+          }
+          if (entryMode === 'preassembly') {
+            await applyPreassemblyColoring();
+            await applyTempListColoring();
+          } else {
+            await applyInstallationColoring(installedGuids);
+            await applyTempListColoring();
+          }
+        } : handleBackToMenu}
         onNavigate={handleHeaderNavigate}
         currentMode="installations"
         user={user}
@@ -7282,54 +7302,6 @@ export default function InstallationsScreen({
       ) : (
         /* List View */
         <div className="installations-list-view">
-          {/* Header with title */}
-          <div className="list-header" style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '8px',
-            padding: '4px 0'
-          }}>
-            <button
-              className="list-back-btn"
-              onClick={async () => {
-                setShowList(false);
-                // Reapply base coloring based on mode
-                if (colorByDay || colorByMonth) {
-                  setColorByDay(false);
-                  setColorByMonth(false);
-                  setDayColors({});
-                  setMonthColors({});
-                }
-                if (entryMode === 'preassembly') {
-                  await applyPreassemblyColoring();
-                  await applyTempListColoring();
-                } else {
-                  await applyInstallationColoring(installedGuids);
-                  await applyTempListColoring();
-                }
-              }}
-              title="Tagasi"
-            >
-              <FiArrowLeft size={14} />
-            </button>
-            <h3 style={{
-              margin: 0,
-              fontSize: '13px',
-              fontWeight: 600,
-              color: entryMode === 'preassembly' ? '#7c3aed' : '#0a3a67',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}>
-              {entryMode === 'preassembly' ? (
-                <><FiPackage size={14} /> Preassembly ülevaade</>
-              ) : (
-                <><FiTool size={14} /> Paigalduste ülevaade</>
-              )}
-            </h3>
-          </div>
-
           {/* Search and filter */}
           <div className="list-controls">
             <div className="search-box compact">
