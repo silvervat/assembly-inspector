@@ -302,8 +302,11 @@ export default function ToolsScreen({
     if (expandedSection !== 'markeerija') return;
 
     const loadPropertiesFromSelection = async () => {
+      setMarkeerijFieldsLoading(true);
       try {
         const selected = await api.viewer.getSelection();
+        console.log('Markeerija: getSelection returned', selected);
+
         let count = 0;
         if (selected && selected.length > 0) {
           for (const sel of selected) {
@@ -311,14 +314,16 @@ export default function ToolsScreen({
           }
         }
         setMarkeerijSelectedCount(count);
+        console.log('Markeerija: count =', count);
 
         // Load properties from first selected object
         const firstSel = selected?.[0];
         const firstRuntimeIds = firstSel?.objectRuntimeIds;
         if (firstSel && firstRuntimeIds && firstRuntimeIds.length > 0) {
-          setMarkeerijFieldsLoading(true);
           const runtimeId = firstRuntimeIds[0];
+          console.log('Markeerija: loading props for', firstSel.modelId, runtimeId);
           const props = await api.viewer.getObjectProperties(firstSel.modelId, [runtimeId]);
+          console.log('Markeerija: props', props);
 
           if (props && props[0]) {
             const propsData = props[0];
@@ -360,21 +365,24 @@ export default function ToolsScreen({
               }
             }
 
+            console.log('Markeerija: fields', fields.length);
             setMarkeerijFields(fields);
           } else {
             setMarkeerijFields([]);
           }
-          setMarkeerijFieldsLoading(false);
         } else {
           setMarkeerijFields([]);
         }
       } catch (e) {
+        console.error('Markeerija: error', e);
         setMarkeerijSelectedCount(0);
         setMarkeerijFields([]);
+      } finally {
         setMarkeerijFieldsLoading(false);
       }
     };
 
+    // Run immediately when section opens
     loadPropertiesFromSelection();
     const listener = () => loadPropertiesFromSelection();
     (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
