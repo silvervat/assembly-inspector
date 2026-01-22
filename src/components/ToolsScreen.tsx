@@ -74,6 +74,7 @@ interface MarkeerijaPropField {
   label: string;
   placeholder: string;
   preview: string;
+  group: string; // Property set name for grouping
 }
 
 // Default markeerija settings
@@ -344,7 +345,8 @@ export default function ToolsScreen({
                           id,
                           label: propName,
                           placeholder: `{${id}}`,
-                          preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue
+                          preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue,
+                          group: setName
                         });
                       }
                     }
@@ -370,11 +372,133 @@ export default function ToolsScreen({
                             id,
                             label: propName,
                             placeholder: `{${id}}`,
-                            preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue
+                            preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue,
+                            group: setName
                           });
                         }
                       }
                     }
+                  }
+                }
+              }
+
+              // Sort fields alphabetically within each group
+              fields.sort((a, b) => {
+                if (a.group !== b.group) return a.group.localeCompare(b.group);
+                return a.label.localeCompare(b.label);
+              });
+
+              // Get GUID for database queries
+              const guids = await api.viewer.convertToObjectIds(modelId, [runtimeIds[0]]);
+              const guid = guids?.[0];
+
+              if (guid && _projectId) {
+                // Fetch database fields for this object
+                const guidLower = guid.toLowerCase();
+                const guidPattern = `%${guidLower}%`;
+
+                // Query delivery, arrival and installation data in parallel
+                const [deliveryResult, arrivalResult, installationResult] = await Promise.all([
+                  // Delivery info
+                  supabase
+                    .from('trimble_delivery_items')
+                    .select(`*, vehicle:trimble_delivery_vehicles(vehicle_code, scheduled_date)`)
+                    .eq('trimble_project_id', _projectId)
+                    .ilike('guid_ifc', guidPattern)
+                    .limit(1),
+                  // Arrival info - first get delivery items, then confirmations
+                  (async () => {
+                    const { data: delItems } = await supabase
+                      .from('trimble_delivery_items')
+                      .select('id')
+                      .eq('trimble_project_id', _projectId)
+                      .ilike('guid_ifc', guidPattern);
+                    if (delItems && delItems.length > 0) {
+                      const itemIds = delItems.map(i => i.id);
+                      const { data: confirmations } = await supabase
+                        .from('trimble_arrival_confirmations')
+                        .select(`*, arrived_vehicle:trimble_arrived_vehicles(arrival_date, unload_location)`)
+                        .in('item_id', itemIds)
+                        .limit(1);
+                      return confirmations;
+                    }
+                    return null;
+                  })(),
+                  // Installation info
+                  supabase
+                    .from('installation_schedule')
+                    .select('scheduled_date, actual_date')
+                    .eq('project_id', _projectId)
+                    .ilike('guid_ifc', guidPattern)
+                    .limit(1)
+                ]);
+
+                const dbGroup = 'Andmebaas';
+
+                // Add delivery fields
+                const deliveryItem = deliveryResult.data?.[0];
+                if (deliveryItem) {
+                  const vehicleCode = deliveryItem.vehicle?.vehicle_code || '';
+                  const scheduledDate = deliveryItem.vehicle?.scheduled_date || '';
+                  if (scheduledDate) {
+                    const dateStr = new Date(scheduledDate).toLocaleDateString('et-EE');
+                    const displayValue = vehicleCode ? `${dateStr} (${vehicleCode})` : dateStr;
+                    fields.push({
+                      id: 'DB_Tarnekuupaev',
+                      label: 'Tarnekuupäev',
+                      placeholder: '{DB_Tarnekuupaev}',
+                      preview: displayValue,
+                      group: dbGroup
+                    });
+                  }
+                  if (vehicleCode) {
+                    fields.push({
+                      id: 'DB_Veok',
+                      label: 'Veok',
+                      placeholder: '{DB_Veok}',
+                      preview: vehicleCode,
+                      group: dbGroup
+                    });
+                  }
+                }
+
+                // Add arrival fields
+                const arrivalItem = arrivalResult?.[0];
+                if (arrivalItem) {
+                  const arrivalDate = arrivalItem.arrived_vehicle?.arrival_date;
+                  const unloadLocation = arrivalItem.arrived_vehicle?.unload_location;
+                  if (arrivalDate) {
+                    fields.push({
+                      id: 'DB_Saabumiskuupaev',
+                      label: 'Saabumiskuupäev',
+                      placeholder: '{DB_Saabumiskuupaev}',
+                      preview: new Date(arrivalDate).toLocaleDateString('et-EE'),
+                      group: dbGroup
+                    });
+                  }
+                  if (unloadLocation) {
+                    fields.push({
+                      id: 'DB_Mahalaadimiskoht',
+                      label: 'Mahalaadimiskoht',
+                      placeholder: '{DB_Mahalaadimiskoht}',
+                      preview: unloadLocation.length > 30 ? unloadLocation.substring(0, 30) + '...' : unloadLocation,
+                      group: dbGroup
+                    });
+                  }
+                }
+
+                // Add installation fields
+                const installItem = installationResult.data?.[0];
+                if (installItem) {
+                  const instDate = installItem.actual_date || installItem.scheduled_date;
+                  if (instDate) {
+                    fields.push({
+                      id: 'DB_Paigalduskuupaev',
+                      label: 'Paigalduskuupäev',
+                      placeholder: '{DB_Paigalduskuupaev}',
+                      preview: new Date(instDate).toLocaleDateString('et-EE'),
+                      group: dbGroup
+                    });
                   }
                 }
               }
@@ -406,7 +530,7 @@ export default function ToolsScreen({
     return () => {
       (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
     };
-  }, [api, expandedSection]);
+  }, [api, expandedSection, _projectId]);
 
   // Color model by category - like Organizer does it
   const colorByCategory = useCallback(async (categoryId: string) => {
@@ -2315,7 +2439,7 @@ export default function ToolsScreen({
                 </button>
               </div>
 
-              {/* Available fields as draggable chips */}
+              {/* Available fields as draggable chips - grouped by property set */}
               <div style={{
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
@@ -2342,53 +2466,96 @@ export default function ToolsScreen({
                   />
                 </div>
 
-                {/* Property chips */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {/* Property chips grouped by property set */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {markeerijFields.length === 0 && !markeerijFieldsLoading && (
                     <span style={{ fontSize: '11px', color: '#9ca3af' }}>Vali mudelist detail, et näha propertisid</span>
                   )}
-                  {availableMarkeerijFields
-                    .filter(f => {
+                  {(() => {
+                    // Filter available fields
+                    const filteredFields = availableMarkeerijFields.filter(f => {
                       if (markeerijaPropSearch) {
                         const search = markeerijaPropSearch.toLowerCase();
                         return f.label.toLowerCase().includes(search) || f.preview.toLowerCase().includes(search);
                       }
                       return true;
-                    })
-                    .map(field => (
-                      <button
-                        key={field.id}
-                        draggable
-                        onDragStart={(e) => handleMarkeerijDragStart(e, field)}
-                        onClick={() => addMarkeerijFieldToLine(field.placeholder)}
-                        style={{
-                          display: 'inline-flex',
+                    });
+
+                    // Group fields by property set
+                    const groupedFields = filteredFields.reduce((acc, field) => {
+                      const group = field.group || 'Unknown';
+                      if (!acc[group]) acc[group] = [];
+                      acc[group].push(field);
+                      return acc;
+                    }, {} as Record<string, MarkeerijaPropField[]>);
+
+                    // Sort groups: 'Andmebaas' always last, others alphabetically
+                    const sortedGroups = Object.keys(groupedFields).sort((a, b) => {
+                      if (a === 'Andmebaas') return 1;
+                      if (b === 'Andmebaas') return -1;
+                      return a.localeCompare(b);
+                    });
+
+                    return sortedGroups.map((groupName, groupIdx) => (
+                      <div key={groupName}>
+                        {/* Group separator/header */}
+                        <div style={{
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          color: groupName === 'Andmebaas' ? '#059669' : '#6b7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          marginBottom: '6px',
+                          marginTop: groupIdx > 0 ? '4px' : 0,
+                          paddingBottom: '4px',
+                          borderBottom: '1px solid #e5e7eb',
+                          display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
-                          padding: '4px 10px',
-                          background: '#dbeafe',
-                          border: '1px solid #3b82f6',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          color: '#1e40af',
-                          cursor: 'grab',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.05)';
-                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)';
-                          e.currentTarget.style.boxShadow = 'none';
-                        }}
-                        title={field.preview}
-                      >
-                        <FiPlus size={10} />
-                        {field.label}
-                      </button>
-                    ))}
+                          gap: '6px'
+                        }}>
+                          {groupName === 'Andmebaas' && <FiDatabase size={10} />}
+                          {groupName}
+                        </div>
+                        {/* Fields in this group */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {groupedFields[groupName].map(field => (
+                            <button
+                              key={field.id}
+                              draggable
+                              onDragStart={(e) => handleMarkeerijDragStart(e, field)}
+                              onClick={() => addMarkeerijFieldToLine(field.placeholder)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '4px 10px',
+                                background: field.group === 'Andmebaas' ? '#d1fae5' : '#dbeafe',
+                                border: `1px solid ${field.group === 'Andmebaas' ? '#10b981' : '#3b82f6'}`,
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 500,
+                                color: field.group === 'Andmebaas' ? '#065f46' : '#1e40af',
+                                cursor: 'grab',
+                                transition: 'all 0.15s'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                                e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.transform = 'scale(1)';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                              title={field.preview}
+                            >
+                              <FiPlus size={10} />
+                              {field.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ));
+                  })()}
                   {availableMarkeerijFields.length === 0 && markeerijFields.length > 0 && (
                     <span style={{ fontSize: '11px', color: '#9ca3af' }}>Kõik väljad kasutatud</span>
                   )}
