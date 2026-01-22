@@ -147,6 +147,9 @@ export default function ToolsScreen({
   // Auto height staggering - alternates heights for close markups
   const [autoStaggerHeight, setAutoStaggerHeight] = useState(false);
 
+  // Markup position on object (left/center/right edge)
+  const [markupPosition, setMarkupPosition] = useState<'left' | 'center' | 'right'>('center');
+
   // Progress overlay state for batch operations
   const [batchProgress, setBatchProgress] = useState<{ message: string; percent: number } | null>(null);
 
@@ -1215,15 +1218,20 @@ export default function ToolsScreen({
 
         const text = lines.join('\n');
         const box = bbox.boundingBox;
-        const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+        // Calculate X position based on markupPosition setting (left/center/right edge)
+        const posX = markupPosition === 'left'
+          ? box.min.x * 1000
+          : markupPosition === 'right'
+            ? box.max.x * 1000
+            : ((box.min.x + box.max.x) / 2) * 1000;
         const centerY = ((box.min.y + box.max.y) / 2) * 1000;
         const topZ = box.max.z * 1000;
 
         // Store markup data without final height (will be calculated later if autoStagger)
         markupsToCreate.push({
           text,
-          start: { positionX: centerX, positionY: centerY, positionZ: topZ },
-          end: { positionX: centerX, positionY: centerY, positionZ: topZ }, // Placeholder, will update
+          start: { positionX: posX, positionY: centerY, positionZ: topZ },
+          end: { positionX: posX, positionY: centerY, positionZ: topZ }, // Placeholder, will update
           color: markupColor
         });
 
@@ -2947,6 +2955,31 @@ export default function ToolsScreen({
                   />
                   Automaatne
                 </label>
+
+                {/* Position selection (left/center/right) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '8px' }}>
+                  <span style={{ fontSize: '11px', fontWeight: 500, color: '#6b7280', marginRight: '4px' }}>Positsioon:</span>
+                  {(['left', 'center', 'right'] as const).map((pos) => (
+                    <button
+                      key={pos}
+                      onClick={() => setMarkupPosition(pos)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '10px',
+                        fontWeight: 500,
+                        border: markupPosition === pos ? '1.5px solid #0891b2' : '1px solid #d1d5db',
+                        borderRadius: '4px',
+                        background: markupPosition === pos ? '#ecfeff' : '#fff',
+                        color: markupPosition === pos ? '#0891b2' : '#6b7280',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s'
+                      }}
+                      title={pos === 'left' ? 'Vasak serv' : pos === 'right' ? 'Parem serv' : 'Keskele'}
+                    >
+                      {pos === 'left' ? '◀' : pos === 'right' ? '▶' : '●'}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Available fields as draggable chips - grouped by property set */}
@@ -3093,19 +3126,7 @@ export default function ToolsScreen({
                     fontSize: '14px',
                     fontWeight: 600,
                     color: '#fff',
-                    cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.2s',
-                    boxShadow: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(8, 145, 178, 0.4)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none';
+                    cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed'
                   }}
                 >
                   {markeerijLoading ? (
@@ -3133,19 +3154,7 @@ export default function ToolsScreen({
                     fontWeight: 600,
                     color: '#fff',
                     cursor: removeLoading ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: removeLoading ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.3)',
                     whiteSpace: 'nowrap'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!removeLoading) {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.4)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = removeLoading ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.3)';
                   }}
                   title="Eemalda kõik markupid mudelist"
                 >
