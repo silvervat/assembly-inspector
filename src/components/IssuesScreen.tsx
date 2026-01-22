@@ -265,7 +265,7 @@ export default function IssuesScreen({
                 .from('trimble_model_objects')
                 .select('assembly_mark, product_name')
                 .eq('trimble_project_id', projectId)
-                .ilike('guid_ifc', guid)
+                .eq('guid_ifc', guid.toLowerCase())
                 .maybeSingle();
               if (dbObj?.assembly_mark) {
                 assemblyMark = dbObj.assembly_mark;
