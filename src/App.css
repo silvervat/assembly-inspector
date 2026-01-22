@@ -16865,7 +16865,8 @@ button.stat-toggle.off:hover {
 .tools-section-desc {
   font-size: 12px;
   color: var(--modus-text-secondary);
-  margin-bottom: 10px;
+  margin-top: 6px;
+  margin-bottom: 8px;
   line-height: 1.4;
 }
 

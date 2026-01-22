@@ -361,7 +361,11 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             {(() => {
               const hasData = data.deliveryItems.length > 0;
               const firstItem = data.deliveryItems[0];
-              const date = firstItem?.vehicle?.scheduled_date ? new Date(firstItem.vehicle.scheduled_date).toLocaleDateString('et-EE') : null;
+              const rawDate = firstItem?.vehicle?.scheduled_date;
+              const date = rawDate ? (() => {
+                const d = new Date(rawDate);
+                return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear().toString().slice(-2)}`;
+              })() : null;
               return (
                 <div
                   onClick={() => hasData && toggleSection('delivery')}
@@ -379,9 +383,9 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   }}
                 >
                   <FiTruck size={14} style={{ color: hasData ? '#d97706' : '#9ca3af', marginBottom: '4px' }} />
-                  <span style={{ fontWeight: 600, color: hasData ? '#92400e' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Tarne</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#92400e' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Tarne</span>
                   {date && (
-                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                    <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
                 </div>
               );
@@ -391,7 +395,11 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             {(() => {
               const hasData = data.arrivalItems.length > 0;
               const firstItem = data.arrivalItems[0];
-              const date = firstItem?.arrived_vehicle?.arrival_date ? new Date(firstItem.arrived_vehicle.arrival_date).toLocaleDateString('et-EE') : null;
+              const rawDate = firstItem?.arrived_vehicle?.arrival_date;
+              const date = rawDate ? (() => {
+                const d = new Date(rawDate);
+                return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear().toString().slice(-2)}`;
+              })() : null;
               return (
                 <div
                   onClick={() => hasData && toggleSection('arrivals')}
@@ -409,9 +417,9 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   }}
                 >
                   <FiBox size={14} style={{ color: hasData ? '#059669' : '#9ca3af', marginBottom: '4px' }} />
-                  <span style={{ fontWeight: 600, color: hasData ? '#065f46' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Saabunud</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#065f46' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Saabunud</span>
                   {date && (
-                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                    <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
                 </div>
               );
@@ -424,7 +432,10 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
               const isInstalled = !!installed;
               // Only show actual installation date, not scheduled
               const rawDate = installed?.installed_at;
-              const date = rawDate ? new Date(rawDate).toLocaleDateString('et-EE') : null;
+              const date = rawDate ? (() => {
+                const d = new Date(rawDate);
+                return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear().toString().slice(-2)}`;
+              })() : null;
               return (
                 <div
                   onClick={() => hasData && toggleSection('installation')}
@@ -446,9 +457,9 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   ) : (
                     <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 14, height: 14, opacity: hasData ? 1 : 0.4, marginBottom: '4px' }} />
                   )}
-                  <span style={{ fontWeight: 600, color: hasData ? '#1e40af' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Paigaldus</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#1e40af' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Paigaldus</span>
                   {date && (
-                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                    <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
                 </div>
               );
@@ -458,7 +469,11 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
             {(() => {
               const hasData = data.inspections.length > 0;
               const firstItem = data.inspections[0];
-              const date = firstItem?.inspected_at ? new Date(firstItem.inspected_at).toLocaleDateString('et-EE') : null;
+              const rawDate = firstItem?.inspected_at;
+              const date = rawDate ? (() => {
+                const d = new Date(rawDate);
+                return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear().toString().slice(-2)}`;
+              })() : null;
               return (
                 <div
                   onClick={() => hasData && toggleSection('inspections')}
@@ -476,9 +491,9 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   }}
                 >
                   <FiCheck size={14} style={{ color: hasData ? '#16a34a' : '#9ca3af', marginBottom: '4px' }} />
-                  <span style={{ fontWeight: 600, color: hasData ? '#166534' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Inspekt.</span>
+                  <span style={{ fontWeight: 600, color: hasData ? '#166534' : '#9ca3af', fontSize: '10px', marginBottom: '2px' }}>Inspekt.</span>
                   {date && (
-                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                    <span style={{ color: '#374151', fontSize: '9px', fontWeight: 500, lineHeight: 1.2 }}>{date}</span>
                   )}
                 </div>
               );

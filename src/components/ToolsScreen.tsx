@@ -1164,6 +1164,83 @@ export default function ToolsScreen({
       // Get color in RGBA format for Trimble API
       const markupColor = { r: markeerijaSett.color.r, g: markeerijaSett.color.g, b: markeerijaSett.color.b, a: 255 };
 
+      // --- Camera-aware position calculation ---
+      // Get camera for determining left/right based on view direction
+      let cameraRightDir: [number, number] = [1, 0]; // Default: right is +X direction
+      try {
+        const cam = await api.viewer.getCamera() as any;
+        if (cam?.position && cam?.target) {
+          // Get camera position and target as arrays
+          const camPos = Array.isArray(cam.position)
+            ? cam.position
+            : [cam.position.x || 0, cam.position.y || 0, cam.position.z || 0];
+          const camTarget = Array.isArray(cam.target)
+            ? cam.target
+            : [cam.target.x || 0, cam.target.y || 0, cam.target.z || 0];
+
+          // Calculate view direction (from camera toward target) - only XY components for horizontal plane
+          const viewX = camTarget[0] - camPos[0];
+          const viewY = camTarget[1] - camPos[1];
+          const viewLen = Math.sqrt(viewX * viewX + viewY * viewY);
+
+          if (viewLen > 0.001) {
+            // Normalize view direction
+            const viewDirX = viewX / viewLen;
+            const viewDirY = viewY / viewLen;
+
+            // Right direction = rotate view by -90 degrees in XY plane
+            // For Z-up coordinate system: right = (viewY, -viewX)
+            cameraRightDir = [viewDirY, -viewDirX];
+          }
+        }
+      } catch {
+        // Use default right direction if camera fails
+      }
+
+      // Helper function to calculate camera-aware markup position
+      const getCameraAwarePosition = (
+        box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } },
+        position: 'left' | 'center' | 'right'
+      ): { posX: number; posY: number } => {
+        const centerX = (box.min.x + box.max.x) / 2;
+        const centerY = (box.min.y + box.max.y) / 2;
+
+        if (position === 'center') {
+          return { posX: centerX * 1000, posY: centerY * 1000 };
+        }
+
+        // Get all 4 corners of the bounding box (XY plane)
+        const corners: [number, number][] = [
+          [box.min.x, box.min.y],
+          [box.max.x, box.min.y],
+          [box.min.x, box.max.y],
+          [box.max.x, box.max.y]
+        ];
+
+        // For each corner, calculate its position along the camera's right vector
+        // relative to the box center
+        const cornersWithRightPos = corners.map(c => {
+          const toCornerX = c[0] - centerX;
+          const toCornerY = c[1] - centerY;
+          // Dot product with camera right direction
+          const rightPos = toCornerX * cameraRightDir[0] + toCornerY * cameraRightDir[1];
+          return { corner: c, rightPos };
+        });
+
+        // Sort by rightPos (negative = left, positive = right)
+        cornersWithRightPos.sort((a, b) => a.rightPos - b.rightPos);
+
+        if (position === 'left') {
+          // Leftmost corner (most negative rightPos)
+          const leftCorner = cornersWithRightPos[0].corner;
+          return { posX: leftCorner[0] * 1000, posY: leftCorner[1] * 1000 };
+        } else {
+          // Rightmost corner (most positive rightPos)
+          const rightCorner = cornersWithRightPos[cornersWithRightPos.length - 1].corner;
+          return { posX: rightCorner[0] * 1000, posY: rightCorner[1] * 1000 };
+        }
+      };
+
       // Process each object
       for (let i = 0; i < allRuntimeIds.length; i++) {
         const objProps = properties[i] as any;
@@ -1232,20 +1309,15 @@ export default function ToolsScreen({
 
         const text = lines.join('\n');
         const box = bbox.boundingBox;
-        // Calculate X position based on markupPosition setting (left/center/right edge)
-        const posX = markupPosition === 'left'
-          ? box.min.x * 1000
-          : markupPosition === 'right'
-            ? box.max.x * 1000
-            : ((box.min.x + box.max.x) / 2) * 1000;
-        const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+        // Calculate position based on markupPosition setting, using camera-aware calculation
+        const { posX, posY } = getCameraAwarePosition(box, markupPosition);
         const topZ = box.max.z * 1000;
 
         // Store markup data without final height (will be calculated later if autoStagger)
         markupsToCreate.push({
           text,
-          start: { positionX: posX, positionY: centerY, positionZ: topZ },
-          end: { positionX: posX, positionY: centerY, positionZ: topZ }, // Placeholder, will update
+          start: { positionX: posX, positionY: posY, positionZ: topZ },
+          end: { positionX: posX, positionY: posY, positionZ: topZ }, // Placeholder, will update
           color: markupColor
         });
 
@@ -2065,34 +2137,17 @@ export default function ToolsScreen({
       )}
 
       <div className="tools-content">
-        {/* Crane Planning Section - Collapsible */}
+        {/* Crane Planning Section - Direct navigation */}
         <div className="tools-section" ref={(el) => { sectionRefs.current['crane'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
-            onClick={() => toggleSection('crane')}
+            onClick={() => onNavigate?.('crane_planner')}
+            style={{ cursor: 'pointer' }}
           >
-            {expandedSection === 'crane' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <FiChevronRight size={18} />
             <FiTarget size={18} style={{ color: '#f97316' }} />
             <h3>Kraanade planeerimine</h3>
           </div>
-
-          {expandedSection === 'crane' && (
-            <>
-              <p className="tools-section-desc">
-                Paiguta ja halda kraanasid mudelis. Lisa kraanaid teegist ja visualiseeri nende ulatust.
-              </p>
-              <div className="tools-buttons">
-                <button
-                  className="tools-btn tools-btn-primary"
-                  onClick={() => onNavigate?.('crane_planner')}
-                  style={{ backgroundColor: '#f97316' }}
-                >
-                  <FiTarget size={16} />
-                  <span>Ava Kraanaplaneeriaja</span>
-                </button>
-              </div>
-            </>
-          )}
         </div>
 
         {/* Bolt Export Section - Collapsible */}
@@ -2808,6 +2863,9 @@ export default function ToolsScreen({
                 </button>
               </div>
 
+              {/* Only show template editor and fields when something is selected */}
+              {markeerijSelectedCount > 0 && (
+              <>
               {/* Preview section */}
               <div style={{
                 background: '#f0f9ff',
@@ -3237,6 +3295,8 @@ export default function ToolsScreen({
               }}>
                 Lohista välju ridadele või klõpsa lisamiseks. Klõpsa × eemaldamiseks. Max {MAX_MARKUPS_PER_BATCH} markupit korraga.
               </p>
+              </>
+              )}
             </>
           )}
         </div>

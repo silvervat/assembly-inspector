@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.856';
+export const APP_VERSION = '3.0.857';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -2271,6 +2271,13 @@ export default function App() {
         {ColorWhiteOverlay}
         <KeyboardShortcutsScreen
           onBackToMenu={handleBackToMenu}
+          onNavigate={setCurrentMode}
+          user={user}
+          onColorModelWhite={handleColorModelWhite}
+          api={api}
+          projectId={projectId}
+          onSelectInspectionType={handleSelectInspectionType}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
