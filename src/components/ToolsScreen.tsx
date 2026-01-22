@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase, MarkeerijPreset } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2 } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2, FiInfo } from 'react-icons/fi';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -1269,17 +1269,17 @@ export default function ToolsScreen({
         const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
         indexed.sort((a, b) => a.x - b.x || a.y - b.y);
 
-        // Check proximity and assign heights (20cm = 200mm, 120cm = 1200mm)
+        // Multi-level height staggering for close markups
+        // Heights: 200mm (20cm), 1400mm (140cm), 2800mm (280cm), ...
         const heights: number[] = new Array(markupsToCreate.length).fill(0);
         const PROXIMITY_THRESHOLD = 4000; // 4000mm = 4m
-        const HEIGHT_LOW = 200;  // 20cm in mm
-        const HEIGHT_HIGH = 1200; // 120cm in mm
+        const HEIGHT_LEVELS = [200, 1400, 2800, 4200, 5600]; // mm values
 
         for (let i = 0; i < indexed.length; i++) {
           const current = indexed[i];
-          let hasCloseNeighborWithLow = false;
 
-          // Check neighbors within range
+          // Find all close neighbors that already have heights assigned
+          const usedHeights = new Set<number>();
           for (let j = 0; j < indexed.length; j++) {
             if (i === j) continue;
             const other = indexed[j];
@@ -1287,17 +1287,20 @@ export default function ToolsScreen({
             const dy = current.y - other.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
-            if (distance < PROXIMITY_THRESHOLD) {
-              // Check if the neighbor already has low height assigned
-              if (heights[other.idx] === HEIGHT_LOW) {
-                hasCloseNeighborWithLow = true;
-                break;
-              }
+            if (distance < PROXIMITY_THRESHOLD && heights[other.idx] > 0) {
+              usedHeights.add(heights[other.idx]);
             }
           }
 
-          // Assign height - alternate if close neighbor has low
-          heights[current.idx] = hasCloseNeighborWithLow ? HEIGHT_HIGH : HEIGHT_LOW;
+          // Find the first available height level not used by close neighbors
+          let assignedHeight = HEIGHT_LEVELS[0];
+          for (const level of HEIGHT_LEVELS) {
+            if (!usedHeights.has(level)) {
+              assignedHeight = level;
+              break;
+            }
+          }
+          heights[current.idx] = assignedHeight;
         }
 
         // Apply calculated heights
@@ -2873,49 +2876,64 @@ export default function ToolsScreen({
                 ))}
               </div>
 
-              {/* Color, height and position controls - compact layout */}
+              {/* Markup settings - organized rows */}
               <div style={{
                 display: 'flex',
-                alignItems: 'center',
+                flexDirection: 'column',
                 gap: '8px',
                 marginBottom: '12px',
-                padding: '8px 10px',
+                padding: '10px',
                 background: '#fafafa',
                 borderRadius: '6px',
-                border: '1px solid #e5e7eb',
-                flexWrap: 'wrap'
+                border: '1px solid #e5e7eb'
               }}>
-                {/* Color picker */}
-                <input
-                  type="color"
-                  value={rgbToHex(markeerijaSett.color)}
-                  onChange={(e) => {
-                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e.target.value);
-                    if (result) {
-                      setMarkeerijaSett(prev => ({
-                        ...prev,
-                        color: {
-                          r: parseInt(result[1], 16),
-                          g: parseInt(result[2], 16),
-                          b: parseInt(result[3], 16)
-                        }
-                      }));
-                    }
-                  }}
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    padding: 0,
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    flexShrink: 0
-                  }}
-                  title="Teksti värv"
-                />
+                {/* Row 1: Color picker */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>Teksti & joonte värv:</span>
+                  <input
+                    type="color"
+                    value={rgbToHex(markeerijaSett.color)}
+                    onChange={(e) => {
+                      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e.target.value);
+                      if (result) {
+                        setMarkeerijaSett(prev => ({
+                          ...prev,
+                          color: {
+                            r: parseInt(result[1], 16),
+                            g: parseInt(result[2], 16),
+                            b: parseInt(result[3], 16)
+                          }
+                        }));
+                      }
+                    }}
+                    style={{
+                      width: '28px',
+                      height: '28px',
+                      padding: 0,
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <button
+                    onClick={() => alert('Määrab markupi teksti ja joonistuse värvi.')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '2px',
+                      cursor: 'pointer',
+                      color: '#9ca3af',
+                      marginLeft: 'auto'
+                    }}
+                    title="Info"
+                  >
+                    <FiInfo size={14} />
+                  </button>
+                </div>
 
-                {/* Height input with auto checkbox */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                {/* Row 2: Height input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#9ca3af' : '#4b5563', minWidth: '130px' }}>Teksti kõrgus detailist:</span>
                   <input
                     type="number"
                     min="1"
@@ -2934,51 +2952,96 @@ export default function ToolsScreen({
                       background: autoStaggerHeight ? '#f3f4f6' : '#fff',
                       color: autoStaggerHeight ? '#9ca3af' : '#1f2937'
                     }}
-                    title="Kõrgus cm"
                   />
-                  <span style={{ fontSize: '10px', color: '#6b7280' }}>cm</span>
+                  <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#9ca3af' : '#6b7280' }}>cm</span>
+                  <button
+                    onClick={() => alert('Kui palju kõrgemal detailist markup tekst kuvatakse. Kehtib kui "Auto kõrgused" pole sisse lülitatud.')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '2px',
+                      cursor: 'pointer',
+                      color: '#9ca3af',
+                      marginLeft: 'auto'
+                    }}
+                    title="Info"
+                  >
+                    <FiInfo size={14} />
+                  </button>
                 </div>
 
-                {/* Auto stagger height checkbox */}
-                <label style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  color: autoStaggerHeight ? '#0891b2' : '#6b7280',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }} title="Lähedased markupid (< 4m vahe) saavad erinevad kõrgused">
-                  <input
-                    type="checkbox"
-                    checked={autoStaggerHeight}
-                    onChange={(e) => setAutoStaggerHeight(e.target.checked)}
-                    style={{ width: '14px', height: '14px', cursor: 'pointer' }}
-                  />
-                  Auto
-                </label>
+                {/* Row 3: Position selection */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>Markupi paiknemine:</span>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    {(['left', 'center', 'right'] as const).map((pos) => (
+                      <button
+                        key={pos}
+                        onClick={() => setMarkupPosition(pos)}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: '12px',
+                          border: markupPosition === pos ? '1.5px solid #0891b2' : '1px solid #d1d5db',
+                          borderRadius: '4px',
+                          background: markupPosition === pos ? '#ecfeff' : '#fff',
+                          color: markupPosition === pos ? '#0891b2' : '#6b7280',
+                          cursor: 'pointer'
+                        }}
+                        title={pos === 'left' ? 'Vasak serv' : pos === 'right' ? 'Parem serv' : 'Keskele'}
+                      >
+                        {pos === 'left' ? '◀' : pos === 'right' ? '▶' : '●'}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => alert('Määrab, kas markup paigutatakse detaili vasakusse, keskele või paremasse serva. Arvestab mudeli hetke vaatepunkti.')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '2px',
+                      cursor: 'pointer',
+                      color: '#9ca3af',
+                      marginLeft: 'auto'
+                    }}
+                    title="Info"
+                  >
+                    <FiInfo size={14} />
+                  </button>
+                </div>
 
-                {/* Position selection (left/center/right) - no label */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: 'auto' }}>
-                  {(['left', 'center', 'right'] as const).map((pos) => (
-                    <button
-                      key={pos}
-                      onClick={() => setMarkupPosition(pos)}
-                      style={{
-                        padding: '4px 8px',
-                        fontSize: '11px',
-                        border: markupPosition === pos ? '1.5px solid #0891b2' : '1px solid #d1d5db',
-                        borderRadius: '4px',
-                        background: markupPosition === pos ? '#ecfeff' : '#fff',
-                        color: markupPosition === pos ? '#0891b2' : '#9ca3af',
-                        cursor: 'pointer'
-                      }}
-                      title={pos === 'left' ? 'Vasak serv' : pos === 'right' ? 'Parem serv' : 'Keskele'}
-                    >
-                      {pos === 'left' ? '◀' : pos === 'right' ? '▶' : '●'}
-                    </button>
-                  ))}
+                {/* Row 4: Auto height stagger */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: '#4b5563', minWidth: '130px' }}>Auto kõrgused:</span>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={autoStaggerHeight}
+                      onChange={(e) => setAutoStaggerHeight(e.target.checked)}
+                      style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '11px', color: autoStaggerHeight ? '#0891b2' : '#6b7280', fontWeight: autoStaggerHeight ? 500 : 400 }}>
+                      {autoStaggerHeight ? 'Sees' : 'Väljas'}
+                    </span>
+                  </label>
+                  <button
+                    onClick={() => alert('Kui sisse lülitatud, siis lähestikku olevad markupid (< 4m vahe) saavad automaatselt erinevad kõrgused:\n\n• 1. markup: 20 cm\n• 2. markup: 140 cm\n• 3. markup: 280 cm\n• jne.\n\nSee aitab vältida markupite kattumist.')}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '2px',
+                      cursor: 'pointer',
+                      color: '#9ca3af',
+                      marginLeft: 'auto'
+                    }}
+                    title="Info"
+                  >
+                    <FiInfo size={14} />
+                  </button>
                 </div>
               </div>
 
