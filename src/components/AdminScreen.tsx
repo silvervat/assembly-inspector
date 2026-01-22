@@ -5732,6 +5732,19 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
                       console.log(`📍 Adding leader markups for ${allRuntimeIds.length} selected objects...`);
 
+                      // Convert hex color to RGBA format for Trimble API
+                      const hexToRgba = (hex: string): { r: number; g: number; b: number; a: number } => {
+                        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                        return result ? {
+                          r: parseInt(result[1], 16),
+                          g: parseInt(result[2], 16),
+                          b: parseInt(result[3], 16),
+                          a: 255
+                        } : { r: 59, g: 130, b: 246, a: 255 }; // Default blue
+                      };
+                      const colorRgba = hexToRgba(markupColor);
+                      console.log('📍 Color RGBA:', colorRgba);
+
                       // Get properties and bounding boxes for all selected objects
                       const properties: any[] = await api.viewer.getObjectProperties(modelId, allRuntimeIds);
                       const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
@@ -5788,9 +5801,9 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                             text: assemblyMark,
                             start: startPos,
                             end: endPos,
-                            color: markupColor.toLowerCase() // Try including color in creation
+                            color: colorRgba // Use RGBA format for Trimble API
                           });
-                          console.log(`📍 Will create leader markup: "${assemblyMark}" with color ${markupColor}`);
+                          console.log(`📍 Will create leader markup: "${assemblyMark}" with color RGBA:`, colorRgba);
                         }
                       }
 
@@ -5820,15 +5833,12 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                       }
                       console.log('📍 Extracted IDs:', createdIds);
 
-                      // Wait a bit before applying color (Trimble API timing issue)
-                      await new Promise(resolve => setTimeout(resolve, 100));
-
-                      // Apply selected color (use lowercase hex)
-                      const colorLower = markupColor.toLowerCase();
-                      console.log('📍 Applying color:', colorLower, 'to IDs:', createdIds);
+                      // Color is already included in addTextMarkup with RGBA format
+                      // Try editMarkup as backup with RGBA format
+                      console.log('📍 Trying editMarkup with RGBA color as backup...');
                       for (const id of createdIds) {
                         try {
-                          const editResult = await (api.markup as any)?.editMarkup?.(id, { color: colorLower });
+                          const editResult = await (api.markup as any)?.editMarkup?.(id, { color: colorRgba });
                           console.log('📍 editMarkup result for ID', id, ':', editResult);
                         } catch (e) {
                           console.warn('Could not set color for markup', id, e);
@@ -5855,6 +5865,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                   onClick={async () => {
                     updateFunctionResult("changeAllMarkupColors", { status: 'pending' });
                     try {
+                      // Convert hex to RGBA for Trimble API
+                      const hexToRgba = (hex: string): { r: number; g: number; b: number; a: number } => {
+                        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                        return result ? {
+                          r: parseInt(result[1], 16),
+                          g: parseInt(result[2], 16),
+                          b: parseInt(result[3], 16),
+                          a: 255
+                        } : { r: 59, g: 130, b: 246, a: 255 };
+                      };
+                      const colorRgba = hexToRgba(markupColor);
+
                       const allMarkups = await api.markup?.getTextMarkups?.() as any[];
                       if (!allMarkups || allMarkups.length === 0) {
                         updateFunctionResult("changeAllMarkupColors", {
@@ -5864,21 +5886,26 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         return;
                       }
 
-                      const allIds = allMarkups.map((m: any) => m.id).filter((id: any) => id !== undefined);
+                      // Try updating via addTextMarkup with existing ID (this replaces)
                       let successCount = 0;
-
-                      for (const id of allIds) {
-                        try {
-                          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
-                          successCount++;
-                        } catch (e) {
-                          console.warn('Could not set color for markup', id, e);
+                      for (const markup of allMarkups) {
+                        if (markup.id !== undefined) {
+                          try {
+                            // Update markup by re-adding with same ID and new color
+                            await api.markup?.addTextMarkup?.([{
+                              ...markup,
+                              color: colorRgba
+                            }]);
+                            successCount++;
+                          } catch (e) {
+                            console.warn('Could not update color for markup', markup.id, e);
+                          }
                         }
                       }
 
                       updateFunctionResult("changeAllMarkupColors", {
                         status: 'success',
-                        result: `${successCount}/${allIds.length} markupi värv muudetud → ${markupColor}`
+                        result: `${successCount}/${allMarkups.length} markupi värv muudetud → ${markupColor}`
                       });
                     } catch (e: any) {
                       updateFunctionResult("changeAllMarkupColors", {
