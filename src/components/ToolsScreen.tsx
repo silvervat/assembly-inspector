@@ -144,6 +144,9 @@ export default function ToolsScreen({
   const [newPresetShared, setNewPresetShared] = useState(false);
   const [presetLoading, setPresetLoading] = useState(false);
 
+  // Auto height staggering - alternates heights for close markups
+  const [autoStaggerHeight, setAutoStaggerHeight] = useState(false);
+
   // Progress overlay state for batch operations
   const [batchProgress, setBatchProgress] = useState<{ message: string; percent: number } | null>(null);
 
@@ -1215,12 +1218,12 @@ export default function ToolsScreen({
         const centerX = ((box.min.x + box.max.x) / 2) * 1000;
         const centerY = ((box.min.y + box.max.y) / 2) * 1000;
         const topZ = box.max.z * 1000;
-        const leaderEndZ = topZ + (markeerijaSett.leaderHeight * 10); // cm to mm
 
+        // Store markup data without final height (will be calculated later if autoStagger)
         markupsToCreate.push({
           text,
           start: { positionX: centerX, positionY: centerY, positionZ: topZ },
-          end: { positionX: centerX, positionY: centerY, positionZ: leaderEndZ },
+          end: { positionX: centerX, positionY: centerY, positionZ: topZ }, // Placeholder, will update
           color: markupColor
         });
 
@@ -1234,6 +1237,57 @@ export default function ToolsScreen({
         setBatchProgress(null);
         setMarkeerijLoading(false);
         return;
+      }
+
+      // Apply heights - either fixed or auto-staggered
+      if (autoStaggerHeight && markupsToCreate.length > 1) {
+        setBatchProgress({ message: 'Arvutan kõrgusi...', percent: 60 });
+
+        // Sort by X position for consistent staggering
+        const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
+        indexed.sort((a, b) => a.x - b.x || a.y - b.y);
+
+        // Check proximity and assign heights (20cm = 200mm, 120cm = 1200mm)
+        const heights: number[] = new Array(markupsToCreate.length).fill(0);
+        const PROXIMITY_THRESHOLD = 4000; // 4000mm = 4m
+        const HEIGHT_LOW = 200;  // 20cm in mm
+        const HEIGHT_HIGH = 1200; // 120cm in mm
+
+        for (let i = 0; i < indexed.length; i++) {
+          const current = indexed[i];
+          let hasCloseNeighborWithLow = false;
+
+          // Check neighbors within range
+          for (let j = 0; j < indexed.length; j++) {
+            if (i === j) continue;
+            const other = indexed[j];
+            const dx = current.x - other.x;
+            const dy = current.y - other.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < PROXIMITY_THRESHOLD) {
+              // Check if the neighbor already has low height assigned
+              if (heights[other.idx] === HEIGHT_LOW) {
+                hasCloseNeighborWithLow = true;
+                break;
+              }
+            }
+          }
+
+          // Assign height - alternate if close neighbor has low
+          heights[current.idx] = hasCloseNeighborWithLow ? HEIGHT_HIGH : HEIGHT_LOW;
+        }
+
+        // Apply calculated heights
+        for (let i = 0; i < markupsToCreate.length; i++) {
+          markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
+        }
+      } else {
+        // Fixed height for all
+        const fixedHeight = markeerijaSett.leaderHeight * 10; // cm to mm
+        for (const markup of markupsToCreate) {
+          markup.end.positionZ = markup.start.positionZ + fixedHeight;
+        }
       }
 
       setBatchProgress({ message: `Loon ${markupsToCreate.length} markupit...`, percent: 65 });
@@ -2860,40 +2914,39 @@ export default function ToolsScreen({
                     step="5"
                     value={markeerijaSett.leaderHeight}
                     onChange={(e) => setMarkeerijaSett(prev => ({ ...prev, leaderHeight: parseInt(e.target.value) || 10 }))}
+                    disabled={autoStaggerHeight}
                     style={{
                       width: '70px',
                       padding: '6px 10px',
                       border: '1px solid #d1d5db',
                       borderRadius: '4px',
                       fontSize: '13px',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      background: autoStaggerHeight ? '#f3f4f6' : '#fff',
+                      color: autoStaggerHeight ? '#9ca3af' : '#1f2937'
                     }}
                   />
                 </div>
 
-                {/* Remove markups button */}
-                <button
-                  onClick={handleRemoveMarkups}
-                  disabled={removeLoading}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: '6px 12px',
-                    background: '#fef3c7',
-                    border: '1px solid #f59e0b',
-                    borderRadius: '6px',
-                    fontSize: '11px',
-                    fontWeight: 500,
-                    color: '#92400e',
-                    cursor: removeLoading ? 'not-allowed' : 'pointer',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title="Eemalda kõik markupid mudelist"
-                >
-                  {removeLoading ? <FiLoader className="spinning" size={12} /> : <FiTrash2 size={12} />}
-                  Eemalda markupid
-                </button>
+                {/* Auto stagger height checkbox */}
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  color: autoStaggerHeight ? '#0891b2' : '#6b7280',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }} title="Lähedased markupid (< 4m vahe) saavad erinevad kõrgused (20cm ja 120cm)">
+                  <input
+                    type="checkbox"
+                    checked={autoStaggerHeight}
+                    onChange={(e) => setAutoStaggerHeight(e.target.checked)}
+                    style={{ width: '14px', height: '14px', cursor: 'pointer' }}
+                  />
+                  Automaatne
+                </label>
               </div>
 
               {/* Available fields as draggable chips - grouped by property set */}
@@ -3019,47 +3072,91 @@ export default function ToolsScreen({
                 </div>
               </div>
 
-              {/* Action button */}
-              <button
-                onClick={handleCreateMarkeerijMarkups}
-                disabled={markeerijLoading || markeerijSelectedCount === 0 || markeerijPreviewLines.length === 0}
-                style={{
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '12px 16px',
-                  background: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0)
-                    ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'
-                    : '#d1d5db',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  color: '#fff',
-                  cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed',
-                  transition: 'all 0.2s',
-                  boxShadow: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none'
-                }}
-                onMouseEnter={(e) => {
-                  if (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) {
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(8, 145, 178, 0.4)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none';
-                }}
-              >
-                {markeerijLoading ? (
-                  <FiLoader className="spinning" size={16} />
-                ) : (
-                  <FiTag size={16} />
-                )}
-                <span>Genereeri sildid ({markeerijSelectedCount})</span>
-              </button>
+              {/* Action buttons row */}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {/* Generate markups button */}
+                <button
+                  onClick={handleCreateMarkeerijMarkups}
+                  disabled={markeerijLoading || markeerijSelectedCount === 0 || markeerijPreviewLines.length === 0}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px 16px',
+                    background: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0)
+                      ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'
+                      : '#d1d5db',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s',
+                    boxShadow: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) {
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(8, 145, 178, 0.4)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none';
+                  }}
+                >
+                  {markeerijLoading ? (
+                    <FiLoader className="spinning" size={16} />
+                  ) : (
+                    <FiTag size={16} />
+                  )}
+                  <span>Genereeri sildid ({markeerijSelectedCount})</span>
+                </button>
+
+                {/* Remove markups button - same row, similar styling */}
+                <button
+                  onClick={handleRemoveMarkups}
+                  disabled={removeLoading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '12px 16px',
+                    background: removeLoading ? '#d1d5db' : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    cursor: removeLoading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: removeLoading ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.3)',
+                    whiteSpace: 'nowrap'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!removeLoading) {
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.4)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = removeLoading ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.3)';
+                  }}
+                  title="Eemalda kõik markupid mudelist"
+                >
+                  {removeLoading ? (
+                    <FiLoader className="spinning" size={16} />
+                  ) : (
+                    <FiTrash2 size={16} />
+                  )}
+                  <span>Eemalda</span>
+                </button>
+              </div>
 
               {/* Info text */}
               <p style={{
