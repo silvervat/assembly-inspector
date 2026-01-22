@@ -5671,7 +5671,7 @@ export default function OrganizerScreen({
       }
 
       // Build markups to create
-      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: string }> = [];
+      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: { r: number; g: number; b: number; a: number } }> = [];
 
       let processedCount = 0;
       for (const { item, group: itemGroup } of itemsWithGroup) {
@@ -5701,17 +5701,17 @@ export default function OrganizerScreen({
             const startPos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
             const endPos = { positionX: centerX, positionY: centerY, positionZ: centerZ + leaderHeightMm };
 
-            // Get color - either from group or custom color
-            let colorHex: string | undefined;
+            // Get color as RGBA for Trimble API - either from group or custom color
+            let colorRgba: { r: number; g: number; b: number; a: number } | undefined;
             if (markupSettings.useGroupColors && itemGroup.color) {
               const { r, g, b } = itemGroup.color;
-              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+              colorRgba = { r, g, b, a: 255 };
             } else if (!markupSettings.useGroupColors && markupSettings.customColor) {
               const { r, g, b } = markupSettings.customColor;
-              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+              colorRgba = { r, g, b, a: 255 };
             }
 
-            markupsToCreate.push({ text, start: startPos, end: endPos, color: colorHex });
+            markupsToCreate.push({ text, start: startPos, end: endPos, color: colorRgba });
           }
         } catch (e) {
           console.warn('Could not get bounding box for', item.guid_ifc, e);
@@ -5736,7 +5736,13 @@ export default function OrganizerScreen({
       const createdIds: number[] = [];
       for (let i = 0; i < markupsToCreate.length; i += MARKUP_BATCH_SIZE) {
         const batch = markupsToCreate.slice(i, i + MARKUP_BATCH_SIZE);
-        const batchData = batch.map(m => ({ text: m.text, start: m.start, end: m.end }));
+        // Include color in RGBA format for Trimble API
+        const batchData = batch.map(m => ({
+          text: m.text,
+          start: m.start,
+          end: m.end,
+          color: m.color // Pass RGBA color directly
+        }));
 
         try {
           const result = await (api.markup as any)?.addTextMarkup?.(batchData);
@@ -5744,17 +5750,6 @@ export default function OrganizerScreen({
             result.forEach((r: any) => {
               if (r?.id != null) createdIds.push(r.id);
             });
-          }
-
-          // Apply colors
-          for (let j = 0; j < batch.length; j++) {
-            if (batch[j].color && createdIds[i + j] != null) {
-              try {
-                await (api.markup as any)?.editMarkup?.(createdIds[i + j], { color: batch[j].color });
-              } catch (e) {
-                console.warn('Could not set markup color', e);
-              }
-            }
           }
         } catch (e) {
           console.error('Error creating markups batch:', e);
@@ -5920,7 +5915,7 @@ export default function OrganizerScreen({
       }
 
       // Build markups
-      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: string }> = [];
+      const markupsToCreate: Array<{ text: string; start: any; end: any; color?: { r: number; g: number; b: number; a: number } }> = [];
 
       for (const item of selectedItems) {
         if (!item.guid_ifc) continue;
@@ -5938,13 +5933,17 @@ export default function OrganizerScreen({
             const text = buildMarkupText(item, selectedGroup, customFields, undefined);
             const pos = { positionX: centerX, positionY: centerY, positionZ: centerZ };
 
-            let colorHex: string | undefined;
+            // Get color as RGBA for Trimble API
+            let colorRgba: { r: number; g: number; b: number; a: number } | undefined;
             if (markupSettings.useGroupColors && selectedGroup.color) {
               const { r, g, b } = selectedGroup.color;
-              colorHex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+              colorRgba = { r, g, b, a: 255 };
+            } else if (!markupSettings.useGroupColors && markupSettings.customColor) {
+              const { r, g, b } = markupSettings.customColor;
+              colorRgba = { r, g, b, a: 255 };
             }
 
-            markupsToCreate.push({ text, start: pos, end: pos, color: colorHex });
+            markupsToCreate.push({ text, start: pos, end: pos, color: colorRgba });
           }
         } catch (e) {
           console.warn('Could not get bounding box for', item.guid_ifc, e);
@@ -5963,25 +5962,20 @@ export default function OrganizerScreen({
 
       for (let i = 0; i < markupsToCreate.length; i += MARKUP_BATCH_SIZE) {
         const batch = markupsToCreate.slice(i, i + MARKUP_BATCH_SIZE);
-        const batchData = batch.map(m => ({ text: m.text, start: m.start, end: m.end }));
+        // Include color in RGBA format for Trimble API
+        const batchData = batch.map(m => ({
+          text: m.text,
+          start: m.start,
+          end: m.end,
+          color: m.color // Pass RGBA color directly
+        }));
 
         try {
-          const result = await (api.markup as any)?.createMarkups?.(batchData);
+          const result = await (api.markup as any)?.addTextMarkup?.(batchData);
           if (Array.isArray(result)) {
             result.forEach((r: any) => {
               if (r?.id != null) createdIds.push(r.id);
             });
-          }
-
-          // Apply colors
-          for (let j = 0; j < batch.length; j++) {
-            if (batch[j].color && createdIds[i + j] != null) {
-              try {
-                await (api.markup as any)?.editMarkup?.(createdIds[i + j], { color: batch[j].color });
-              } catch (e) {
-                console.warn('Could not set markup color', e);
-              }
-            }
           }
         } catch (e) {
           console.error('Error creating markups batch:', e);
@@ -11654,7 +11648,8 @@ export default function OrganizerScreen({
           let result = '';
           element.childNodes.forEach(node => {
             if (node.nodeType === Node.TEXT_NODE) {
-              result += node.textContent || '';
+              // Strip zero-width spaces that were added for editability
+              result += (node.textContent || '').replace(/\u200B/g, '');
             } else if (node.nodeType === Node.ELEMENT_NODE) {
               const el = node as HTMLElement;
               if (el.dataset.placeholder) {
@@ -11662,7 +11657,8 @@ export default function OrganizerScreen({
               } else if (el.tagName === 'BR') {
                 // Ignore line breaks
               } else {
-                result += el.textContent || '';
+                // Strip zero-width spaces from nested elements too
+                result += (el.textContent || '').replace(/\u200B/g, '');
               }
             }
           });
@@ -11711,12 +11707,20 @@ export default function OrganizerScreen({
                   chip.className = 'markup-line-chip';
                   chip.contentEditable = 'false';
                   chip.dataset.placeholder = placeholder;
-                  chip.innerHTML = `<span class="chip-label">${label}</span>`;
+                  chip.innerHTML = `<span class="chip-label">${label}</span><span class="chip-remove" data-remove="${placeholder}">×</span>`;
 
+                  // Insert zero-width space before chip if at beginning or after another chip
+                  const ZWS = '\u200B';
+                  const zwsBefore = document.createTextNode(ZWS);
+                  const zwsAfter = document.createTextNode(ZWS);
+
+                  range.insertNode(zwsAfter);
                   range.insertNode(chip);
+                  range.insertNode(zwsBefore);
 
-                  // Move cursor after chip
+                  // Move cursor after chip (into the ZWS after)
                   range.setStartAfter(chip);
+                  range.setStart(zwsAfter, 1);
                   range.collapse(true);
                   selection.removeAllRanges();
                   selection.addRange(range);
@@ -11737,15 +11741,28 @@ export default function OrganizerScreen({
         };
 
         // Convert template to HTML for contenteditable
+        // Add zero-width spaces around chips to ensure cursor can be positioned
         const templateToHtml = (template: string): string => {
           if (!template) return '';
           const segments = parseTemplateToSegments(template);
-          return segments.map(seg => {
+          const ZWS = '\u200B'; // Zero-width space for cursor positioning
+
+          let html = ZWS; // Start with ZWS so cursor can be placed at beginning
+          segments.forEach((seg, idx) => {
             if (seg.type === 'chip') {
-              return renderChipHtml(seg.value, seg.label || seg.value.slice(1, -1));
+              html += renderChipHtml(seg.value, seg.label || seg.value.slice(1, -1));
+              html += ZWS; // Add ZWS after each chip
+            } else {
+              const text = seg.value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              // If text is empty and between chips, add ZWS
+              if (text.trim() === '' && idx > 0 && idx < segments.length - 1) {
+                html += ZWS;
+              } else {
+                html += text;
+              }
             }
-            return seg.value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-          }).join('');
+          });
+          return html;
         };
 
         // Render template editor for a line - contenteditable with chips
