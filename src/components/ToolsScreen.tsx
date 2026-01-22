@@ -715,11 +715,24 @@ export default function ToolsScreen({
 
     // Run immediately when section opens
     loadPropertiesFromSelection();
-    const listener = () => loadPropertiesFromSelection();
-    (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
+
+    // Add selection change listener using correct API method
+    try {
+      (api.viewer as any).addOnSelectionChanged?.(loadPropertiesFromSelection);
+    } catch (e) {
+      console.warn('Could not add markeerija selection listener:', e);
+    }
+
+    // Fallback polling every 1.5 seconds (in case event listener doesn't work)
+    const interval = setInterval(loadPropertiesFromSelection, 1500);
 
     return () => {
-      (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
+      clearInterval(interval);
+      try {
+        (api.viewer as any).removeOnSelectionChanged?.(loadPropertiesFromSelection);
+      } catch (e) {
+        // Silent
+      }
     };
   }, [api, expandedSection, _projectId]);
 
