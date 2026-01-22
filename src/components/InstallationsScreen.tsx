@@ -5002,32 +5002,67 @@ export default function InstallationsScreen({
     'Keevitaja': 'keevitaja.png'
   };
 
-  // Render resource string with icon (e.g., "Korvtõstuk: 18104 RTJ PRO 16" -> icon + "18104 RTJ PRO 16")
-  const renderResourceWithIcon = (resource: string) => {
-    const colonIndex = resource.indexOf(':');
-    if (colonIndex === -1) {
-      // No colon - just return the text
-      return <span key={resource}>{resource}</span>;
-    }
-    const resourceType = resource.substring(0, colonIndex).trim();
-    const resourceName = resource.substring(colonIndex + 1).trim();
-    const iconFile = RESOURCE_ICON_MAP[resourceType];
+  // Group resources by type and render them grouped (e.g., "Kraana: K1 | K2")
+  const renderGroupedResources = (workers: string[]) => {
+    // Group by resource type
+    const grouped: Record<string, string[]> = {};
+    const RESOURCE_ORDER = ['Kraana', 'Teleskooplaadur', 'Korvtõstuk', 'Käärtõstuk', 'Troppija', 'Monteerija', 'Keevitaja'];
 
-    if (iconFile) {
-      return (
-        <span key={resource} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
-          <img
-            src={`${import.meta.env.BASE_URL}icons/${iconFile}`}
-            alt={resourceType}
-            title={resourceType}
-            style={{ width: '12px', height: '12px', filter: 'grayscale(100%) brightness(30%)' }}
-          />
-          <span>{resourceName}</span>
-        </span>
-      );
+    for (const worker of workers) {
+      const colonIndex = worker.indexOf(':');
+      if (colonIndex === -1) {
+        // No colon - put in "Other" category
+        if (!grouped['Muu']) grouped['Muu'] = [];
+        grouped['Muu'].push(worker);
+      } else {
+        const resourceType = worker.substring(0, colonIndex).trim();
+        const resourceName = worker.substring(colonIndex + 1).trim();
+        if (!grouped[resourceType]) grouped[resourceType] = [];
+        grouped[resourceType].push(resourceName);
+      }
     }
-    // No icon found - just return the original text
-    return <span key={resource}>{resource}</span>;
+
+    // Sort by predefined order
+    const sortedTypes = Object.keys(grouped).sort((a, b) => {
+      const aIdx = RESOURCE_ORDER.indexOf(a);
+      const bIdx = RESOURCE_ORDER.indexOf(b);
+      if (aIdx === -1 && bIdx === -1) return a.localeCompare(b);
+      if (aIdx === -1) return 1;
+      if (bIdx === -1) return -1;
+      return aIdx - bIdx;
+    });
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flex: 1 }}>
+        {sortedTypes.map((resourceType) => {
+          const names = grouped[resourceType];
+          const iconFile = RESOURCE_ICON_MAP[resourceType];
+          return (
+            <div
+              key={resourceType}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                whiteSpace: 'nowrap',
+                flexWrap: 'wrap'
+              }}
+            >
+              {iconFile && (
+                <img
+                  src={`${import.meta.env.BASE_URL}icons/${iconFile}`}
+                  alt={resourceType}
+                  title={resourceType}
+                  style={{ width: '12px', height: '12px', filter: 'grayscale(100%) brightness(30%)' }}
+                />
+              )}
+              <span style={{ fontWeight: 500, minWidth: 'auto' }}>{resourceType}:</span>
+              <span style={{ whiteSpace: 'nowrap' }}>{names.join(' | ')}</span>
+            </div>
+          );
+        })}
+      </div>
+    );
   };
 
   // Open edit modal for a specific group of items
@@ -5772,14 +5807,7 @@ export default function InstallationsScreen({
                       flexWrap: 'wrap'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, flexWrap: 'wrap' }}>
-                      {group.workers.map((worker, idx) => (
-                        <span key={idx} style={{ display: 'inline-flex', alignItems: 'center' }}>
-                          {renderResourceWithIcon(worker)}
-                          {idx < group.workers.length - 1 && <span style={{ marginLeft: '4px', color: '#94a3b8' }}>,</span>}
-                        </span>
-                      ))}
-                    </div>
+                    {renderGroupedResources(group.workers)}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
                       <button
                         onClick={(e) => {
