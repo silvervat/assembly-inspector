@@ -835,6 +835,12 @@ export default function OrganizerScreen({
   const [markupProgress, setMarkupProgress] = useState<{current: number; total: number; action: 'adding' | 'removing'} | null>(null);
   const [hasMarkups, setHasMarkups] = useState(false);
   const [focusedLine, setFocusedLine] = useState<'line1Template' | 'line2Template' | 'line3Template'>('line1Template');
+  // Track which line's HTML needs to be refreshed (after chip operations)
+  const [refreshLineHtml, setRefreshLineHtml] = useState<Record<string, number>>({
+    line1Template: 0,
+    line2Template: 0,
+    line3Template: 0
+  });
 
   // Save markup settings to localStorage when changed
   useEffect(() => {
@@ -11681,12 +11687,6 @@ export default function OrganizerScreen({
           setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
         };
 
-        // Track which line's HTML needs to be refreshed (after chip operations)
-        const [refreshLineHtml, setRefreshLineHtml] = useState<Record<string, number>>({
-          line1Template: 0,
-          line2Template: 0,
-          line3Template: 0
-        });
 
         // Handle click on contenteditable (for chip removal)
         const handleContentClick = (e: React.MouseEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
