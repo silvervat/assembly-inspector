@@ -716,6 +716,13 @@ export default function ArrivedDeliveriesScreen({
     }
   }, [vehicles, arrivedVehicles, selectedDate]);
 
+  // When date changes, collapse all vehicles (only one can be open at a time)
+  useEffect(() => {
+    if (vehicles.length > 0) {
+      setCollapsedVehicles(new Set(vehicles.map(v => v.id)));
+    }
+  }, [selectedDate]);
+
   // Clear message after 3 seconds
   useEffect(() => {
     if (message) {
@@ -4992,12 +4999,11 @@ export default function ArrivedDeliveriesScreen({
                       onClick={() => {
                         setViewMode('by-date');
                         setSelectedDate(vehicle.scheduled_date || '');
-                        // Expand the clicked vehicle (remove from collapsed set, add others)
-                        setCollapsedVehicles(prev => {
-                          const next = new Set(prev);
-                          next.delete(vehicle.id);
-                          return next;
-                        });
+                        // Expand only the clicked vehicle - collapse all others
+                        const allOtherVehicles = new Set(
+                          vehicles.filter(v => v.id !== vehicle.id).map(v => v.id)
+                        );
+                        setCollapsedVehicles(allOtherVehicles);
                       }}
                     >
                       <span style={{
