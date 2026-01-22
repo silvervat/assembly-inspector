@@ -716,6 +716,13 @@ export default function ArrivedDeliveriesScreen({
     }
   }, [vehicles, arrivedVehicles, selectedDate]);
 
+  // When date changes, collapse all vehicles (only one can be open at a time)
+  useEffect(() => {
+    if (vehicles.length > 0) {
+      setCollapsedVehicles(new Set(vehicles.map(v => v.id)));
+    }
+  }, [selectedDate]);
+
   // Clear message after 3 seconds
   useEffect(() => {
     if (message) {
@@ -4992,10 +4999,16 @@ export default function ArrivedDeliveriesScreen({
                       onClick={() => {
                         setViewMode('by-date');
                         setSelectedDate(vehicle.scheduled_date || '');
+                        // Expand only the clicked vehicle - collapse all others
+                        const allOtherVehicles = new Set(
+                          vehicles.filter(v => v.id !== vehicle.id).map(v => v.id)
+                        );
+                        setCollapsedVehicles(allOtherVehicles);
                       }}
                     >
                       <span style={{
                         fontWeight: 600,
+                        fontSize: '11px',
                         color: '#1e40af',
                         minWidth: '60px'
                       }}>
@@ -5003,16 +5016,16 @@ export default function ArrivedDeliveriesScreen({
                       </span>
                       {factory && (
                         <span style={{
-                          padding: '2px 8px',
+                          padding: '2px 6px',
                           background: '#e2e8f0',
                           borderRadius: '4px',
-                          fontSize: '11px',
+                          fontSize: '10px',
                           fontWeight: 500
                         }}>
                           {factory.factory_name}
                         </span>
                       )}
-                      <span style={{ color: '#64748b', fontSize: '12px' }}>
+                      <span style={{ color: '#64748b', fontSize: '11px' }}>
                         {vehicleItems.length} detaili
                       </span>
                       {/* Status badges - same as date-by-date view */}

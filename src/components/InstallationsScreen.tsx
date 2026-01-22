@@ -3078,6 +3078,123 @@ export default function InstallationsScreen({
     }
   };
 
+  // Auto-confirm delivery items when marked as installed
+  const autoConfirmDeliveryItems = async (guidsToConfirm: string[], installDate: string) => {
+    if (guidsToConfirm.length === 0) return;
+
+    try {
+      // Format installation date for the comment
+      const dateObj = new Date(installDate);
+      const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}.${(dateObj.getMonth() + 1).toString().padStart(2, '0')}.${dateObj.getFullYear()}`;
+      const confirmComment = `Märgitud kinnitatuks läbi paigaldus andmete. Paigalduse kuupäev ${formattedDate}`;
+
+      // 1. Find delivery items by GUID
+      const { data: deliveryItems, error: deliveryError } = await supabase
+        .from('trimble_delivery_items')
+        .select('id, vehicle_id, guid, guid_ifc')
+        .eq('trimble_project_id', projectId)
+        .or(guidsToConfirm.map(g => `guid_ifc.ilike.${g},guid.ilike.${g}`).join(','));
+
+      if (deliveryError || !deliveryItems?.length) {
+        console.log('No matching delivery items found for auto-confirm');
+        return;
+      }
+
+      // 2. Get all vehicle IDs from the delivery items
+      const vehicleIds = [...new Set(deliveryItems.map(di => di.vehicle_id))];
+
+      // 3. Find arrived vehicles for these vehicle IDs
+      const { data: arrivedVehicles, error: arrivedError } = await supabase
+        .from('trimble_arrived_vehicles')
+        .select('id, vehicle_id')
+        .eq('trimble_project_id', projectId)
+        .in('vehicle_id', vehicleIds);
+
+      if (arrivedError || !arrivedVehicles?.length) {
+        console.log('No arrived vehicles found for auto-confirm');
+        return;
+      }
+
+      // 4. Create a map of vehicle_id -> arrived_vehicle_id
+      const vehicleToArrival = new Map(arrivedVehicles.map(av => [av.vehicle_id, av.id]));
+
+      // 5. Check existing confirmations to avoid duplicates
+      const itemIds = deliveryItems.map(di => di.id);
+      const { data: existingConfirmations } = await supabase
+        .from('trimble_arrival_confirmations')
+        .select('item_id, arrived_vehicle_id, status')
+        .eq('trimble_project_id', projectId)
+        .in('item_id', itemIds);
+
+      const existingConfMap = new Map(
+        (existingConfirmations || []).map(c => [`${c.arrived_vehicle_id}-${c.item_id}`, c])
+      );
+
+      // 6. Build confirmations to insert/update
+      const toInsert: any[] = [];
+      const toUpdate: { arrivedVehicleId: string; itemId: string }[] = [];
+
+      for (const deliveryItem of deliveryItems) {
+        const arrivedVehicleId = vehicleToArrival.get(deliveryItem.vehicle_id);
+        if (!arrivedVehicleId) continue; // No arrival for this vehicle
+
+        const existingKey = `${arrivedVehicleId}-${deliveryItem.id}`;
+        const existing = existingConfMap.get(existingKey);
+
+        if (existing) {
+          // Update if not already confirmed
+          if (existing.status !== 'confirmed') {
+            toUpdate.push({ arrivedVehicleId, itemId: deliveryItem.id });
+          }
+        } else {
+          // Insert new confirmation
+          toInsert.push({
+            trimble_project_id: projectId,
+            arrived_vehicle_id: arrivedVehicleId,
+            item_id: deliveryItem.id,
+            status: 'confirmed',
+            confirmed_at: new Date().toISOString(),
+            confirmed_by: tcUserEmail,
+            notes: confirmComment
+          });
+        }
+      }
+
+      // 7. Insert new confirmations
+      if (toInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('trimble_arrival_confirmations')
+          .insert(toInsert);
+
+        if (insertError) {
+          console.error('Error inserting auto-confirmations:', insertError);
+        } else {
+          console.log(`Auto-confirmed ${toInsert.length} delivery items as confirmed`);
+        }
+      }
+
+      // 8. Update existing pending confirmations
+      if (toUpdate.length > 0) {
+        for (const upd of toUpdate) {
+          await supabase
+            .from('trimble_arrival_confirmations')
+            .update({
+              status: 'confirmed',
+              confirmed_at: new Date().toISOString(),
+              confirmed_by: tcUserEmail,
+              notes: confirmComment
+            })
+            .eq('arrived_vehicle_id', upd.arrivedVehicleId)
+            .eq('item_id', upd.itemId);
+        }
+        console.log(`Updated ${toUpdate.length} delivery confirmations to confirmed`);
+      }
+    } catch (e) {
+      console.error('Error auto-confirming delivery items:', e);
+      // Don't throw - this is a secondary operation, shouldn't fail the main installation
+    }
+  };
+
   const saveInstallation = async () => {
     // Check assembly selection first
     if (!assemblySelectionEnabled) {
@@ -3265,6 +3382,12 @@ export default function InstallationsScreen({
         // Clear temp list after successful save
         setTempList(new Set());
         setTempListInfo(new Map());
+
+        // Auto-confirm these items in delivery arrivals (if they exist there)
+        const installedGuidsForConfirm = allObjectsToSave
+          .map(obj => obj.guidIfc || obj.guid)
+          .filter(Boolean) as string[];
+        await autoConfirmDeliveryItems(installedGuidsForConfirm, installDate);
 
         // Reload data - skip full recoloring (we'll just color the new objects)
         await Promise.all([loadInstallations(), loadInstalledGuids(true)]);
@@ -4005,6 +4128,12 @@ export default function InstallationsScreen({
         .in('id', itemsToInstall.map(p => p.id));
 
       if (deleteError) throw deleteError;
+
+      // Auto-confirm these items in delivery arrivals (if they exist there)
+      const installedGuidsForConfirm = itemsToInstall
+        .map(item => item.guid_ifc || item.guid)
+        .filter(Boolean) as string[];
+      await autoConfirmDeliveryItems(installedGuidsForConfirm, installDate);
 
       // Show appropriate message
       const installedMsg = `${itemsToInstall.length} detaili paigaldatuks märgitud`;
