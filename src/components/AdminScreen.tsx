@@ -5787,9 +5787,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                           markupsToCreate.push({
                             text: assemblyMark,
                             start: startPos,
-                            end: endPos
+                            end: endPos,
+                            color: markupColor.toLowerCase() // Try including color in creation
                           });
-                          console.log(`📍 Will create leader markup: "${assemblyMark}"`);
+                          console.log(`📍 Will create leader markup: "${assemblyMark}" with color ${markupColor}`);
                         }
                       }
 
@@ -5801,10 +5802,11 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         return;
                       }
 
-                      console.log('📍 Creating', markupsToCreate.length, 'leader markups');
+                      console.log('📍 Creating', markupsToCreate.length, 'leader markups with color:', markupColor);
 
-                      // Create markups
+                      // Create markups (try with color included)
                       const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
+                      console.log('📍 addTextMarkup result:', result);
 
                       // Extract created IDs
                       let createdIds: number[] = [];
@@ -5816,11 +5818,18 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                       } else if (typeof result === 'object' && result?.id) {
                         createdIds.push(Number(result.id));
                       }
+                      console.log('📍 Extracted IDs:', createdIds);
 
-                      // Apply selected color
+                      // Wait a bit before applying color (Trimble API timing issue)
+                      await new Promise(resolve => setTimeout(resolve, 100));
+
+                      // Apply selected color (use lowercase hex)
+                      const colorLower = markupColor.toLowerCase();
+                      console.log('📍 Applying color:', colorLower, 'to IDs:', createdIds);
                       for (const id of createdIds) {
                         try {
-                          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+                          const editResult = await (api.markup as any)?.editMarkup?.(id, { color: colorLower });
+                          console.log('📍 editMarkup result for ID', id, ':', editResult);
                         } catch (e) {
                           console.warn('Could not set color for markup', id, e);
                         }

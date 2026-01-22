@@ -8486,7 +8486,7 @@ export default function InstallationsScreen({
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Paigaldus ressursid</label>
                 {/* Machines row */}
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                   {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
                     const isActive = !!editInstallMethods[method.key];
                     const count = editInstallMethods[method.key] || 0;
@@ -8588,7 +8588,7 @@ export default function InstallationsScreen({
                   })}
                 </div>
                 {/* Labor row */}
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                   {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
                     const isActive = !!editInstallMethods[method.key];
                     const count = editInstallMethods[method.key] || 0;
@@ -8963,7 +8963,7 @@ export default function InstallationsScreen({
               <div className="form-row" style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Paigaldus ressursid *</label>
                 {/* Machines row */}
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                   {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
                     const isActive = !!selectedInstallMethods[method.key];
                     const count = selectedInstallMethods[method.key] || 0;
@@ -9065,7 +9065,7 @@ export default function InstallationsScreen({
                   })}
                 </div>
                 {/* Labor row */}
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
                   {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
                     const isActive = !!selectedInstallMethods[method.key];
                     const count = selectedInstallMethods[method.key] || 0;
