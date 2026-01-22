@@ -106,6 +106,10 @@ interface MarkupSettings {
   line1Template: string;
   line2Template: string;
   line3Template: string;
+  // Per-line colors (optional, falls back to customColor or group color)
+  line1Color?: { r: number; g: number; b: number };
+  line2Color?: { r: number; g: number; b: number };
+  line3Color?: { r: number; g: number; b: number };
   applyToSubgroups: boolean;
   separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
@@ -11639,6 +11643,8 @@ export default function OrganizerScreen({
               ...prev,
               [lineKey]: prev[lineKey] ? prev[lineKey] + placeholder : placeholder
             }));
+            // Trigger HTML refresh for this line
+            setRefreshLineHtml(prev => ({ ...prev, [lineKey]: prev[lineKey] + 1 }));
           }
           setFocusedLine(lineKey);
         };
@@ -11665,12 +11671,19 @@ export default function OrganizerScreen({
           return result;
         };
 
-        // Handle contenteditable input
-        const handleContentInput = (e: React.FormEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
+        // Handle contenteditable blur - sync state only on blur to preserve cursor
+        const handleContentBlur = (e: React.FocusEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
           const element = e.currentTarget;
           const newTemplate = parseContentToTemplate(element);
           setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
         };
+
+        // Track which line's HTML needs to be refreshed (after chip operations)
+        const [refreshLineHtml, setRefreshLineHtml] = useState<Record<string, number>>({
+          line1Template: 0,
+          line2Template: 0,
+          line3Template: 0
+        });
 
         // Handle click on contenteditable (for chip removal)
         const handleContentClick = (e: React.MouseEvent<HTMLDivElement>, lineKey: 'line1Template' | 'line2Template' | 'line3Template') => {
@@ -11684,6 +11697,8 @@ export default function OrganizerScreen({
               const currentTemplate = markupSettings[lineKey];
               const newTemplate = currentTemplate.replace(placeholder, '').trim();
               setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
+              // Trigger HTML refresh for this line
+              setRefreshLineHtml(prev => ({ ...prev, [lineKey]: prev[lineKey] + 1 }));
             }
           }
         };
@@ -11729,6 +11744,8 @@ export default function OrganizerScreen({
                   const element = e.currentTarget;
                   const newTemplate = parseContentToTemplate(element);
                   setMarkupSettings(prev => ({ ...prev, [lineKey]: newTemplate }));
+                  // Trigger HTML refresh
+                  setRefreshLineHtml(prev => ({ ...prev, [lineKey]: prev[lineKey] + 1 }));
                 }
               }
             }
@@ -11765,28 +11782,74 @@ export default function OrganizerScreen({
           return html;
         };
 
+        // Get color for a line
+        const getLineColor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template'): { r: number; g: number; b: number } => {
+          const colorKey = lineKey.replace('Template', 'Color') as 'line1Color' | 'line2Color' | 'line3Color';
+          if (markupSettings[colorKey]) return markupSettings[colorKey]!;
+          if (markupSettings.customColor) return markupSettings.customColor;
+          if (markupSettings.useGroupColors && markupGroup?.color) return markupGroup.color;
+          return { r: 34, g: 197, b: 94 }; // Default green
+        };
+
+        // Set color for a line
+        const setLineColor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', color: { r: number; g: number; b: number }) => {
+          const colorKey = lineKey.replace('Template', 'Color') as 'line1Color' | 'line2Color' | 'line3Color';
+          setMarkupSettings(prev => ({ ...prev, [colorKey]: color }));
+        };
+
         // Render template editor for a line - contenteditable with chips
         const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, _inputRef: React.RefObject<HTMLInputElement>) => {
           const template = markupSettings[lineKey];
           const htmlContent = templateToHtml(template);
+          const lineColor = getLineColor(lineKey);
+          const colorHex = `#${lineColor.r.toString(16).padStart(2, '0')}${lineColor.g.toString(16).padStart(2, '0')}${lineColor.b.toString(16).padStart(2, '0')}`;
 
           return (
             <div
               className={`markup-template-line-chip-editor ${focusedLine === lineKey ? 'active' : ''}`}
               onClick={() => setFocusedLine(lineKey)}
             >
-              <label className="template-label-above">{label}</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <label className="template-label-above" style={{ margin: 0 }}>{label}</label>
+                <input
+                  type="color"
+                  value={colorHex}
+                  onChange={(e) => {
+                    const hex = e.target.value;
+                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                    if (result) {
+                      setLineColor(lineKey, {
+                        r: parseInt(result[1], 16),
+                        g: parseInt(result[2], 16),
+                        b: parseInt(result[3], 16)
+                      });
+                    }
+                  }}
+                  title="Vali rea värv"
+                  style={{
+                    width: '22px',
+                    height: '22px',
+                    padding: '0',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    background: 'none'
+                  }}
+                />
+              </div>
               <div
+                key={`${lineKey}-${refreshLineHtml[lineKey]}`}
                 className={`template-chips-area editable ${focusedLine === lineKey ? 'focused' : ''}`}
                 contentEditable
                 suppressContentEditableWarning
-                onInput={(e) => handleContentInput(e, lineKey)}
+                onBlur={(e) => handleContentBlur(e, lineKey)}
                 onFocus={() => setFocusedLine(lineKey)}
                 onClick={(e) => handleContentClick(e, lineKey)}
                 onDrop={(e) => handleContentDrop(e, lineKey)}
                 onDragOver={handleDragOver}
                 dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
                 data-placeholder="Lohista siia välju või kirjuta tekst..."
+                style={{ borderLeft: `3px solid ${colorHex}` }}
               />
             </div>
           );
