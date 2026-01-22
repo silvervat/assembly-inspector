@@ -344,7 +344,7 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         </div>
       )}
 
-      {/* Timeline / Lifecycle - Vertical with dates */}
+      {/* Timeline / Lifecycle - Horizontal with vertical dates */}
       {!loading && data && (
         <div style={{
           marginBottom: '16px',
@@ -353,10 +353,10 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
           borderRadius: '8px',
           border: '1px solid #e5e7eb'
         }}>
-          <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <div style={{ fontSize: '10px', fontWeight: 600, color: '#6b7280', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Elutsükkel
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: '6px', justifyContent: 'flex-start', flexWrap: 'wrap' }}>
             {/* Tarne */}
             {(() => {
               const hasData = data.deliveryItems.length > 0;
@@ -367,20 +367,22 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   onClick={() => hasData && toggleSection('delivery')}
                   style={{
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
                     background: hasData ? '#fef3c7' : '#f9fafb',
                     border: `1px solid ${hasData ? '#f59e0b' : '#e5e7eb'}`,
                     cursor: hasData ? 'pointer' : 'default',
                     opacity: hasData ? 1 : 0.4,
-                    fontSize: '11px'
+                    minWidth: '60px'
                   }}
                 >
-                  <FiTruck size={12} style={{ color: hasData ? '#d97706' : '#9ca3af', flexShrink: 0 }} />
-                  <span style={{ fontWeight: 500, color: hasData ? '#92400e' : '#9ca3af', minWidth: '55px' }}>Tarne</span>
-                  {date && <span style={{ color: '#6b7280', marginLeft: 'auto' }}>{date}</span>}
+                  <FiTruck size={14} style={{ color: hasData ? '#d97706' : '#9ca3af', marginBottom: '4px' }} />
+                  <span style={{ fontWeight: 600, color: hasData ? '#92400e' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Tarne</span>
+                  {date && (
+                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                  )}
                 </div>
               );
             })()}
@@ -395,55 +397,59 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   onClick={() => hasData && toggleSection('arrivals')}
                   style={{
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
                     background: hasData ? '#d1fae5' : '#f9fafb',
                     border: `1px solid ${hasData ? '#10b981' : '#e5e7eb'}`,
                     cursor: hasData ? 'pointer' : 'default',
                     opacity: hasData ? 1 : 0.4,
-                    fontSize: '11px'
+                    minWidth: '60px'
                   }}
                 >
-                  <FiBox size={12} style={{ color: hasData ? '#059669' : '#9ca3af', flexShrink: 0 }} />
-                  <span style={{ fontWeight: 500, color: hasData ? '#065f46' : '#9ca3af', minWidth: '55px' }}>Saabunud</span>
-                  {date && <span style={{ color: '#6b7280', marginLeft: 'auto' }}>{date}</span>}
+                  <FiBox size={14} style={{ color: hasData ? '#059669' : '#9ca3af', marginBottom: '4px' }} />
+                  <span style={{ fontWeight: 600, color: hasData ? '#065f46' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Saabunud</span>
+                  {date && (
+                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                  )}
                 </div>
               );
             })()}
 
-            {/* Paigaldus */}
+            {/* Paigaldus - only show actual installation date */}
             {(() => {
               const installed = data.installationItems.find((i: any) => i.source === 'installation');
-              const scheduled = data.installationItems.find((i: any) => i.source === 'schedule');
               const hasData = data.installationItems.length > 0;
               const isInstalled = !!installed;
-              const rawDate = installed?.installed_at || scheduled?.scheduled_date;
+              // Only show actual installation date, not scheduled
+              const rawDate = installed?.installed_at;
               const date = rawDate ? new Date(rawDate).toLocaleDateString('et-EE') : null;
               return (
                 <div
                   onClick={() => hasData && toggleSection('installation')}
                   style={{
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
                     background: isInstalled ? '#dbeafe' : hasData ? '#eff6ff' : '#f9fafb',
                     border: `1px solid ${isInstalled ? '#3b82f6' : hasData ? '#93c5fd' : '#e5e7eb'}`,
                     cursor: hasData ? 'pointer' : 'default',
                     opacity: hasData ? 1 : 0.4,
-                    fontSize: '11px'
+                    minWidth: '60px'
                   }}
                 >
                   {isInstalled ? (
-                    <FiCheck size={12} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                    <FiCheck size={14} style={{ color: '#3b82f6', marginBottom: '4px' }} />
                   ) : (
-                    <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 12, height: 12, opacity: hasData ? 1 : 0.4, flexShrink: 0 }} />
+                    <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 14, height: 14, opacity: hasData ? 1 : 0.4, marginBottom: '4px' }} />
                   )}
-                  <span style={{ fontWeight: 500, color: hasData ? '#1e40af' : '#9ca3af', minWidth: '55px' }}>Paigaldus</span>
-                  {date && <span style={{ color: '#6b7280', marginLeft: 'auto' }}>{isInstalled ? '✓ ' : ''}{date}</span>}
+                  <span style={{ fontWeight: 600, color: hasData ? '#1e40af' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Paigaldus</span>
+                  {date && (
+                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                  )}
                 </div>
               );
             })()}
@@ -458,20 +464,22 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                   onClick={() => hasData && toggleSection('inspections')}
                   style={{
                     display: 'flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 8px',
-                    borderRadius: '4px',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
                     background: hasData ? '#dcfce7' : '#f9fafb',
                     border: `1px solid ${hasData ? '#22c55e' : '#e5e7eb'}`,
                     cursor: hasData ? 'pointer' : 'default',
                     opacity: hasData ? 1 : 0.4,
-                    fontSize: '11px'
+                    minWidth: '60px'
                   }}
                 >
-                  <FiCheck size={12} style={{ color: hasData ? '#16a34a' : '#9ca3af', flexShrink: 0 }} />
-                  <span style={{ fontWeight: 500, color: hasData ? '#166534' : '#9ca3af', minWidth: '55px' }}>Inspekt.</span>
-                  {date && <span style={{ color: '#6b7280', marginLeft: 'auto' }}>{date}</span>}
+                  <FiCheck size={14} style={{ color: hasData ? '#16a34a' : '#9ca3af', marginBottom: '4px' }} />
+                  <span style={{ fontWeight: 600, color: hasData ? '#166534' : '#9ca3af', fontSize: '10px', marginBottom: '4px' }}>Inspekt.</span>
+                  {date && (
+                    <span style={{ color: '#6b7280', fontSize: '9px', writingMode: 'vertical-rl', textOrientation: 'mixed', transform: 'rotate(180deg)', lineHeight: 1.2 }}>{date}</span>
+                  )}
                 </div>
               );
             })()}
@@ -482,19 +490,19 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
                 onClick={() => toggleSection('issues')}
                 style={{
                   display: 'flex',
+                  flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '8px',
-                  padding: '6px 8px',
-                  borderRadius: '4px',
+                  padding: '8px 10px',
+                  borderRadius: '6px',
                   background: '#fef3c7',
                   border: '1px solid #f59e0b',
                   cursor: 'pointer',
-                  fontSize: '11px'
+                  minWidth: '60px'
                 }}
               >
-                <FiAlertTriangle size={12} style={{ color: '#d97706', flexShrink: 0 }} />
-                <span style={{ fontWeight: 500, color: '#92400e', minWidth: '55px' }}>Probleem</span>
-                <span style={{ color: '#d97706', marginLeft: 'auto' }}>{data.issues.length} tk</span>
+                <FiAlertTriangle size={14} style={{ color: '#d97706', marginBottom: '4px' }} />
+                <span style={{ fontWeight: 600, color: '#92400e', fontSize: '10px', marginBottom: '4px' }}>Probleem</span>
+                <span style={{ color: '#d97706', fontSize: '9px' }}>{data.issues.length} tk</span>
               </div>
             )}
           </div>
