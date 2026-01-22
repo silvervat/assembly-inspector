@@ -708,6 +708,9 @@ export default function InstallationsScreen({
   const [editDayHoveredMethod, setEditDayHoveredMethod] = useState<InstallMethodType | null>(null);
   const [editDayPhotos, setEditDayPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [savingEditDay, setSavingEditDay] = useState(false);
+  // Edit day resource names (key = method key like 'crane', 'poomtostuk', etc.)
+  const [editDayResourceNames, setEditDayResourceNames] = useState<Record<string, string[]>>({});
+  const [editDayResourceInputs, setEditDayResourceInputs] = useState<Record<string, string>>({});
 
   // Day locks state (stored in same table as month locks, differentiated by lock_type)
   const [dayLocks, setDayLocks] = useState<Map<string, boolean>>(new Map());
@@ -1708,6 +1711,19 @@ export default function InstallationsScreen({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [galleryPhotos, closeGallery, nextGalleryPhoto, prevGalleryPhoto]);
 
+  // ESC handler for closing menus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (dayMenuOpen) setDayMenuOpen(null);
+        if (monthMenuOpen) setMonthMenuOpen(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [dayMenuOpen, monthMenuOpen]);
+
   // Load month locks from database
   const loadMonthLocks = async () => {
     try {
@@ -1919,6 +1935,19 @@ export default function InstallationsScreen({
         })
         .join(', ');
 
+      // Build team_members string from resource names
+      // Format: "Korvtõstuk: Name1, Monteerija: Name2, ..."
+      const teamMembersArray: string[] = [];
+      for (const [methodKey, names] of Object.entries(editDayResourceNames)) {
+        const config = INSTALL_METHODS_CONFIG.find(m => m.key === methodKey);
+        if (config && names.length > 0) {
+          for (const name of names) {
+            teamMembersArray.push(`${config.label}: ${name}`);
+          }
+        }
+      }
+      const teamMembers = teamMembersArray.join(', ');
+
       // Upload photos if any
       let photoUrls: string[] = [];
       if (editDayPhotos.length > 0) {
@@ -1939,6 +1968,9 @@ export default function InstallationsScreen({
       if (methodName) {
         updates.installation_method_name = methodName;
       }
+      if (teamMembers) {
+        updates.team_members = teamMembers;
+      }
       if (editDayNotes.trim()) {
         updates.notes = editDayNotes.trim();
       }
@@ -1947,7 +1979,7 @@ export default function InstallationsScreen({
       }
 
       // Check if there's anything to update besides metadata
-      const hasUpdates = editDayNewDate || methodName || editDayNotes.trim() || photoUrls.length > 0;
+      const hasUpdates = editDayNewDate || methodName || teamMembers || editDayNotes.trim() || photoUrls.length > 0;
       if (!hasUpdates) {
         setSavingEditDay(false);
         setEditDayModalDate(null);
@@ -1982,6 +2014,8 @@ export default function InstallationsScreen({
       setEditDayNewDate('');
       setEditDayMethods({});
       setEditDayNotes('');
+      setEditDayResourceNames({});
+      setEditDayResourceInputs({});
       // Clean up photo previews
       editDayPhotos.forEach(p => URL.revokeObjectURL(p.preview));
       setEditDayPhotos([]);
@@ -4954,6 +4988,91 @@ export default function InstallationsScreen({
   const MONTH_NAMES = ['Jaanuar', 'Veebruar', 'Märts', 'Aprill', 'Mai', 'Juuni', 'Juuli', 'August', 'September', 'Oktoober', 'November', 'Detsember'];
   const currentMonthName = `${MONTH_NAMES[currentMonth.getMonth()]} ${currentMonth.getFullYear()}`;
 
+  // Map resource type names to their icons
+  const RESOURCE_ICON_MAP: Record<string, string> = {
+    'Kraana': 'crane.png',
+    'Teleskooplaadur': 'forklift.png',
+    'Korvtõstuk': 'poomtostuk.png',
+    'Käärtõstuk': 'kaartostuk.png',
+    'Käsitsi': 'manual.png',
+    'Monteerija': 'monteerija.png',
+    'Troppija': 'troppija.png',
+    'Keevitaja': 'keevitaja.png'
+  };
+
+  // Render resource string with icon (e.g., "Korvtõstuk: 18104 RTJ PRO 16" -> icon + "18104 RTJ PRO 16")
+  const renderResourceWithIcon = (resource: string) => {
+    const colonIndex = resource.indexOf(':');
+    if (colonIndex === -1) {
+      // No colon - just return the text
+      return <span key={resource}>{resource}</span>;
+    }
+    const resourceType = resource.substring(0, colonIndex).trim();
+    const resourceName = resource.substring(colonIndex + 1).trim();
+    const iconFile = RESOURCE_ICON_MAP[resourceType];
+
+    if (iconFile) {
+      return (
+        <span key={resource} style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+          <img
+            src={`${import.meta.env.BASE_URL}icons/${iconFile}`}
+            alt={resourceType}
+            title={resourceType}
+            style={{ width: '12px', height: '12px', filter: 'grayscale(100%) brightness(30%)' }}
+          />
+          <span>{resourceName}</span>
+        </span>
+      );
+    }
+    // No icon found - just return the original text
+    return <span key={resource}>{resource}</span>;
+  };
+
+  // Open edit modal for a specific group of items
+  const openEditModalForGroup = (items: Installation[]) => {
+    if (items.length === 0) return;
+
+    // Select the items
+    const itemIds = new Set(items.map(i => i.id));
+    setSelectedInstallationIds(itemIds);
+
+    // Use first item's values as defaults
+    const firstItem = items[0];
+
+    // Use date from first item, convert to datetime-local format
+    const itemDate = new Date(firstItem.installed_at);
+    const offset = itemDate.getTimezoneOffset();
+    const localDate = new Date(itemDate.getTime() - offset * 60000);
+    setEditDate(localDate.toISOString().slice(0, 16));
+
+    // Parse team members from first item (comma-separated string)
+    const teamStr = firstItem.team_members || '';
+    const members = teamStr.split(',').map(m => m.trim()).filter(m => m);
+    setEditTeamMembers(members);
+
+    // Parse install methods from method name string
+    const methodName = firstItem.installation_method_name || '';
+    const methods: InstallMethods = {};
+    methodName.split(',').forEach(part => {
+      const trimmed = part.trim();
+      for (const config of INSTALL_METHODS_CONFIG) {
+        if (trimmed === config.label) {
+          methods[config.key] = 1;
+        } else if (trimmed.match(new RegExp(`^(\\d+)x\\s*${config.label}$`))) {
+          const match = trimmed.match(new RegExp(`^(\\d+)x\\s*${config.label}$`));
+          if (match) methods[config.key] = parseInt(match[1], 10);
+        }
+      }
+    });
+    setEditInstallMethods(methods);
+
+    // Set notes
+    const allSameNotes = items.every(item => item.notes === firstItem.notes);
+    setEditNotes(allSameNotes ? (firstItem.notes || '') : '');
+
+    setShowEditModal(true);
+  };
+
   // Group items within a day by workers (team_members)
   const groupItemsByWorkers = (items: Installation[]): WorkerGroup[] => {
     const workerMap: Record<string, Installation[]> = {};
@@ -5577,31 +5696,62 @@ export default function InstallationsScreen({
                       borderRadius: '4px',
                       marginBottom: '4px',
                       fontSize: '11px',
-                      color: '#0369a1'
+                      color: '#0369a1',
+                      flexWrap: 'wrap'
                     }}
                   >
-                    <FiUsers size={12} />
-                    <span style={{ fontWeight: 500 }}>{group.workers.join(', ')}</span>
-                    <span
-                      className="worker-group-count"
-                      style={{
-                        marginLeft: 'auto',
-                        background: '#0369a1',
-                        color: '#fff',
-                        padding: '1px 6px',
-                        borderRadius: '10px',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        selectInstallations(group.items);
-                      }}
-                      title="Vali need detailid mudelis"
-                    >
-                      {group.items.length}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, flexWrap: 'wrap' }}>
+                      {group.workers.map((worker, idx) => (
+                        <span key={idx} style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {renderResourceWithIcon(worker)}
+                          {idx < group.workers.length - 1 && <span style={{ marginLeft: '4px', color: '#94a3b8' }}>,</span>}
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModalForGroup(group.items);
+                        }}
+                        disabled={isDayLocked(day.dayKey)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          padding: '2px 6px',
+                          background: isDayLocked(day.dayKey) ? '#e5e7eb' : '#fff',
+                          color: isDayLocked(day.dayKey) ? '#9ca3af' : '#0369a1',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '4px',
+                          fontSize: '10px',
+                          cursor: isDayLocked(day.dayKey) ? 'not-allowed' : 'pointer'
+                        }}
+                        title={isDayLocked(day.dayKey) ? 'Päev on lukustatud' : 'Muuda selle meeskonna andmeid'}
+                      >
+                        <FiEdit2 size={10} />
+                        Muuda
+                      </button>
+                      <span
+                        className="worker-group-count"
+                        style={{
+                          background: '#0369a1',
+                          color: '#fff',
+                          padding: '1px 6px',
+                          borderRadius: '10px',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          cursor: 'pointer'
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          selectInstallations(group.items);
+                        }}
+                        title="Vali need detailid mudelis"
+                      >
+                        {group.items.length}
+                      </span>
+                    </div>
                   </div>
                   {group.items.map(inst => renderInstallationItem(inst))}
                 </div>
@@ -9776,7 +9926,7 @@ export default function InstallationsScreen({
                             title={method.label}
                           >
                             <img
-                              src={`/${method.icon}`}
+                              src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
                               alt={method.label}
                               style={{
                                 width: '24px',
@@ -9890,7 +10040,7 @@ export default function InstallationsScreen({
                             title={method.label}
                           >
                             <img
-                              src={`/${method.icon}`}
+                              src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
                               alt={method.label}
                               style={{
                                 width: '24px',
@@ -9962,6 +10112,189 @@ export default function InstallationsScreen({
                       );
                     })}
                   </div>
+
+                  {/* Resource name inputs - shown for selected methods */}
+                  {INSTALL_METHODS_CONFIG.filter(m => editDayMethods[m.key] && editDayMethods[m.key]! > 0).map(method => {
+                    const count = editDayMethods[method.key] || 0;
+                    const names = editDayResourceNames[method.key] || [];
+                    const inputValue = editDayResourceInputs[method.key] || '';
+                    const canAddMore = names.length < count;
+
+                    // Get known names from appropriate source
+                    const knownNames = method.key === 'crane' ? knownKraanad :
+                                       method.key === 'forklift' ? knownTeleskooplaadrid :
+                                       method.key === 'poomtostuk' ? knownKorvtostukid :
+                                       method.key === 'kaartostuk' ? knownKaartostukid :
+                                       method.key === 'monteerija' ? knownTeamMembers :
+                                       method.key === 'troppija' ? knownTeamMembers :
+                                       method.key === 'keevitaja' ? knownTeamMembers :
+                                       [];
+
+                    const filteredSuggestions = inputValue.length > 0
+                      ? knownNames.filter(n =>
+                          n.toLowerCase().includes(inputValue.toLowerCase()) &&
+                          !names.includes(n)
+                        ).slice(0, 5)
+                      : [];
+
+                    return (
+                      <div key={method.key} style={{ marginTop: '8px', paddingLeft: '7px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', marginBottom: '4px', color: '#374151' }}>
+                          <img
+                            src={`${import.meta.env.BASE_URL}icons/${method.icon}`}
+                            alt={method.label}
+                            style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)' }}
+                          />
+                          {method.label} ({names.length}/{count})
+                        </label>
+                        {/* Existing badges */}
+                        {names.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+                            {names.map((name, idx) => (
+                              <span
+                                key={idx}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 8px',
+                                  background: method.bgColor,
+                                  borderRadius: '12px',
+                                  fontSize: '11px',
+                                  color: '#1e293b'
+                                }}
+                              >
+                                {name}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditDayResourceNames(prev => ({
+                                      ...prev,
+                                      [method.key]: (prev[method.key] || []).filter((_, i) => i !== idx)
+                                    }));
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    padding: '0',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                >
+                                  <FiX size={12} color="#64748b" />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {/* Input for adding new names */}
+                        {canAddMore && (
+                          <div style={{ position: 'relative' }}>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <input
+                                type="text"
+                                value={inputValue}
+                                onChange={(e) => {
+                                  setEditDayResourceInputs(prev => ({
+                                    ...prev,
+                                    [method.key]: e.target.value
+                                  }));
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && inputValue.trim()) {
+                                    e.preventDefault();
+                                    setEditDayResourceNames(prev => ({
+                                      ...prev,
+                                      [method.key]: [...(prev[method.key] || []), inputValue.trim()]
+                                    }));
+                                    setEditDayResourceInputs(prev => ({ ...prev, [method.key]: '' }));
+                                  }
+                                }}
+                                placeholder={`${method.label} ${names.length + 1}/${count}`}
+                                style={{
+                                  flex: 1,
+                                  padding: '6px 10px',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '4px',
+                                  fontSize: '12px'
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (inputValue.trim()) {
+                                    setEditDayResourceNames(prev => ({
+                                      ...prev,
+                                      [method.key]: [...(prev[method.key] || []), inputValue.trim()]
+                                    }));
+                                    setEditDayResourceInputs(prev => ({ ...prev, [method.key]: '' }));
+                                  }
+                                }}
+                                disabled={!inputValue.trim()}
+                                style={{
+                                  padding: '6px 10px',
+                                  background: inputValue.trim() ? method.activeBgColor : '#e2e8f0',
+                                  color: inputValue.trim() ? '#fff' : '#94a3b8',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  cursor: inputValue.trim() ? 'pointer' : 'not-allowed',
+                                  display: 'flex',
+                                  alignItems: 'center'
+                                }}
+                              >
+                                <FiPlus size={14} />
+                              </button>
+                            </div>
+                            {/* Autocomplete suggestions */}
+                            {filteredSuggestions.length > 0 && (
+                              <div style={{
+                                position: 'absolute',
+                                top: '100%',
+                                left: 0,
+                                right: 0,
+                                background: '#fff',
+                                border: '1px solid #e2e8f0',
+                                borderRadius: '4px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                                zIndex: 100,
+                                maxHeight: '150px',
+                                overflowY: 'auto'
+                              }}>
+                                {filteredSuggestions.map((suggestion, idx) => (
+                                  <button
+                                    key={idx}
+                                    type="button"
+                                    onClick={() => {
+                                      setEditDayResourceNames(prev => ({
+                                        ...prev,
+                                        [method.key]: [...(prev[method.key] || []), suggestion]
+                                      }));
+                                      setEditDayResourceInputs(prev => ({ ...prev, [method.key]: '' }));
+                                    }}
+                                    style={{
+                                      display: 'block',
+                                      width: '100%',
+                                      padding: '8px 12px',
+                                      border: 'none',
+                                      background: 'transparent',
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                    onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                  >
+                                    {suggestion}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Photo upload */}
