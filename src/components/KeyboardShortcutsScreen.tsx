@@ -1,9 +1,18 @@
 import { useState, useMemo } from 'react';
 import { FiChevronDown, FiChevronRight, FiSearch, FiCommand } from 'react-icons/fi';
 import PageHeader from './PageHeader';
+import { InspectionMode } from './MainMenu';
+import { TrimbleExUser } from '../supabase';
 
 interface KeyboardShortcutsScreenProps {
   onBackToMenu: () => void;
+  onNavigate?: (mode: InspectionMode | null) => void;
+  user?: TrimbleExUser | null;
+  onColorModelWhite?: () => void;
+  api?: any;
+  projectId?: string;
+  onSelectInspectionType?: (typeId: string, typeCode: string, typeName: string) => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface GuideItem {
@@ -65,9 +74,18 @@ const guideCategories: GuideCategory[] = [
   }
 ];
 
-export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortcutsScreenProps) {
+export default function KeyboardShortcutsScreen({
+  onBackToMenu,
+  onNavigate,
+  user,
+  onColorModelWhite,
+  api,
+  projectId,
+  onSelectInspectionType,
+  onOpenPartDatabase
+}: KeyboardShortcutsScreenProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['keyboard_shortcuts']));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
   // Filter items based on search query
   const filteredCategories = useMemo(() => {
@@ -118,6 +136,14 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
       <PageHeader
         title="Kasutusjuhendid"
         onBack={onBackToMenu}
+        onNavigate={onNavigate}
+        currentMode="keyboard_shortcuts"
+        user={user}
+        onColorModelWhite={onColorModelWhite}
+        api={api}
+        projectId={projectId}
+        onSelectInspectionType={onSelectInspectionType}
+        onOpenPartDatabase={onOpenPartDatabase}
       />
 
       {/* Search bar */}
@@ -291,6 +317,22 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
                           </div>
                         </div>
                       ))}
+
+                      {/* Hint note at end of keyboard shortcuts section */}
+                      {category.id === 'keyboard_shortcuts' && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '12px 14px',
+                          background: '#fef3c7',
+                          borderRadius: '8px',
+                          border: '1px solid #fcd34d',
+                          fontSize: '12px',
+                          color: '#92400e',
+                          lineHeight: 1.5
+                        }}>
+                          <strong>Vihje:</strong> Otseteed töötavad, kui extensioni paneel on aktiivne. Vali mudelis detailid, klõpsa seejärel extensioni paneelile ja vajuta otseteed. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -299,21 +341,6 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
           </div>
         )}
 
-        {/* Help note at bottom */}
-        {!searchQuery && (
-          <div style={{
-            marginTop: '20px',
-            padding: '14px 16px',
-            background: '#fef3c7',
-            borderRadius: '8px',
-            border: '1px solid #fcd34d',
-            fontSize: '12px',
-            color: '#92400e',
-            lineHeight: 1.5
-          }}>
-            <strong>Vihje:</strong> Otseteed töötavad, kui extensioni paneel on aktiivne. Vali mudelis detailid, klõpsa seejärel extensioni paneelile ja vajuta otseteed. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
-          </div>
-        )}
       </div>
     </div>
   );
