@@ -13,7 +13,8 @@ import {
   FiChevronDown, FiChevronUp, FiPlus,
   FiUpload, FiImage, FiMessageCircle,
   FiFileText, FiDownload, FiSearch, FiDroplet, FiTrash2,
-  FiExternalLink, FiLoader, FiCopy, FiEdit2, FiMoreVertical, FiShare2
+  FiExternalLink, FiLoader, FiCopy, FiEdit2, FiMoreVertical, FiShare2,
+  FiList, FiSave
 } from 'react-icons/fi';
 import * as XLSX from 'xlsx-js-style';
 import { downloadDeliveryReportPDF } from '../utils/pdfGenerator';
@@ -492,8 +493,14 @@ export default function ArrivedDeliveriesScreen({
   const [shareLinks, setShareLinks] = useState<Record<string, { url: string; token: string }>>({});
 
   // State - View mode and global search
-  const [viewMode, setViewMode] = useState<'by-date' | 'all' | 'unassigned'>('by-date');
+  const [viewMode, setViewMode] = useState<'by-date' | 'all' | 'unassigned' | 'items-list'>('by-date');
   const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+
+  // State - Items list view
+  const [itemsListSearchQuery, setItemsListSearchQuery] = useState('');
+  const [itemsListEditMode, setItemsListEditMode] = useState(false);
+  const [itemsListPendingChanges, setItemsListPendingChanges] = useState<Map<string, ArrivalItemStatus>>(new Map());
+  const [itemsListSaving, setItemsListSaving] = useState(false);
 
   // State - Unassigned arrivals (items found on site without vehicle assignment)
   const [unassignedArrivals, setUnassignedArrivals] = useState<UnassignedArrival[]>([]);
@@ -3554,6 +3561,26 @@ export default function ArrivedDeliveriesScreen({
             Kõik veokid
           </button>
           <button
+            onClick={() => setViewMode('items-list')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '12px',
+              fontWeight: 500,
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              background: viewMode === 'items-list' ? '#fff' : 'transparent',
+              color: viewMode === 'items-list' ? '#1e40af' : '#64748b',
+              boxShadow: viewMode === 'items-list' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <FiList size={12} />
+            Kõik detailid
+          </button>
+          <button
             onClick={() => setViewMode('unassigned')}
             style={{
               padding: '6px 12px',
@@ -5094,6 +5121,401 @@ export default function ArrivedDeliveriesScreen({
               </div>
             ));
           })()}
+        </div>
+      )}
+
+      {/* All items list view */}
+      {viewMode === 'items-list' && (
+        <div className="vehicles-container items-list-view" style={{ padding: '12px' }}>
+          {/* Header with search, edit mode toggle, save button */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '16px',
+            flexWrap: 'wrap'
+          }}>
+            {/* Search */}
+            <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '400px' }}>
+              <FiSearch style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#94a3b8'
+              }} />
+              <input
+                type="text"
+                placeholder="Otsi märgi, toote, tehase või veoki järgi..."
+                value={itemsListSearchQuery}
+                onChange={(e) => setItemsListSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px 8px 36px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  fontSize: '13px'
+                }}
+              />
+              {itemsListSearchQuery && (
+                <button
+                  onClick={() => setItemsListSearchQuery('')}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: '#e5e7eb',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    color: '#6b7280'
+                  }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {/* Edit mode toggle and save */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {!itemsListEditMode ? (
+                <button
+                  onClick={() => setItemsListEditMode(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    background: '#3b82f6',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <FiEdit2 size={14} />
+                  Muutmisrežiim
+                </button>
+              ) : (
+                <>
+                  <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 500 }}>
+                    Muutmisrežiim aktiivne
+                  </span>
+                  {itemsListPendingChanges.size > 0 && (
+                    <span style={{
+                      background: '#fef3c7',
+                      color: '#92400e',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontSize: '11px'
+                    }}>
+                      {itemsListPendingChanges.size} muudatust
+                    </span>
+                  )}
+                  <button
+                    onClick={() => {
+                      setItemsListEditMode(false);
+                      setItemsListPendingChanges(new Map());
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      background: '#f3f4f6',
+                      color: '#374151',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Tühista
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (itemsListPendingChanges.size === 0) {
+                        setItemsListEditMode(false);
+                        return;
+                      }
+                      setItemsListSaving(true);
+                      try {
+                        // Apply all pending changes
+                        for (const [key, status] of itemsListPendingChanges) {
+                          const [arrivedVehicleId, itemId] = key.split('_');
+                          await supabase
+                            .from('trimble_arrival_confirmations')
+                            .update({
+                              status,
+                              confirmed_at: new Date().toISOString(),
+                              confirmed_by: tcUserEmail
+                            })
+                            .eq('arrived_vehicle_id', arrivedVehicleId)
+                            .eq('item_id', itemId);
+                        }
+                        await loadConfirmations();
+                        setItemsListPendingChanges(new Map());
+                        setItemsListEditMode(false);
+                        setMessage(`✓ ${itemsListPendingChanges.size} muudatust salvestatud`);
+                      } catch (e: any) {
+                        console.error('Error saving changes:', e);
+                        setMessage('Viga salvestamisel: ' + e.message);
+                      } finally {
+                        setItemsListSaving(false);
+                      }
+                    }}
+                    disabled={itemsListSaving || itemsListPendingChanges.size === 0}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 16px',
+                      background: itemsListPendingChanges.size > 0 ? '#22c55e' : '#9ca3af',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: itemsListPendingChanges.size > 0 ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    <FiSave size={14} />
+                    {itemsListSaving ? 'Salvestan...' : 'Salvesta'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Items count */}
+          <div style={{ marginBottom: '12px', fontSize: '12px', color: '#64748b' }}>
+            {(() => {
+              const query = itemsListSearchQuery.toLowerCase().trim();
+              const filteredItems = items.filter(item => {
+                if (!query) return true;
+                const vehicle = getVehicle(item.vehicle_id);
+                const factory = getFactory(vehicle?.factory_id);
+                return (
+                  (item.assembly_mark || '').toLowerCase().includes(query) ||
+                  (item.product_name || '').toLowerCase().includes(query) ||
+                  (vehicle?.vehicle_code || '').toLowerCase().includes(query) ||
+                  (factory?.factory_name || '').toLowerCase().includes(query)
+                );
+              });
+              return `${filteredItems.length} detaili${query ? ` (otsing: "${itemsListSearchQuery}")` : ''}`;
+            })()}
+          </div>
+
+          {/* Items table */}
+          <div style={{
+            background: '#fff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}>
+            {/* Table header */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 120px 160px',
+              gap: '8px',
+              padding: '10px 12px',
+              background: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0',
+              fontSize: '11px',
+              fontWeight: 600,
+              color: '#64748b',
+              textTransform: 'uppercase'
+            }}>
+              <div>Assembly mark</div>
+              <div>Toode</div>
+              <div>Veok</div>
+              <div style={{ textAlign: 'center' }}>Staatus</div>
+            </div>
+
+            {/* Items list */}
+            <div style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
+              {(() => {
+                const query = itemsListSearchQuery.toLowerCase().trim();
+                const filteredItems = items
+                  .filter(item => {
+                    if (!query) return true;
+                    const vehicle = getVehicle(item.vehicle_id);
+                    const factory = getFactory(vehicle?.factory_id);
+                    return (
+                      (item.assembly_mark || '').toLowerCase().includes(query) ||
+                      (item.product_name || '').toLowerCase().includes(query) ||
+                      (vehicle?.vehicle_code || '').toLowerCase().includes(query) ||
+                      (factory?.factory_name || '').toLowerCase().includes(query)
+                    );
+                  })
+                  .sort((a, b) => (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et'));
+
+                if (filteredItems.length === 0) {
+                  return (
+                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
+                      <FiSearch size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
+                      <p style={{ margin: 0 }}>
+                        {itemsListSearchQuery ? 'Otsingutulemusi ei leitud' : 'Detaile pole'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filteredItems.map((item, idx) => {
+                  const vehicle = getVehicle(item.vehicle_id);
+                  const arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
+                  const factory = getFactory(vehicle?.factory_id);
+
+                  // Get current status - check pending changes first, then actual status
+                  const confirmationKey = arrivedVehicle ? `${arrivedVehicle.id}_${item.id}` : null;
+                  let currentStatus: ArrivalItemStatus = 'pending';
+                  if (confirmationKey && itemsListPendingChanges.has(confirmationKey)) {
+                    currentStatus = itemsListPendingChanges.get(confirmationKey)!;
+                  } else if (arrivedVehicle) {
+                    currentStatus = getItemConfirmationStatus(arrivedVehicle.id, item.id);
+                  }
+
+                  const isArrived = !!arrivedVehicle;
+
+                  return (
+                    <div
+                      key={item.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 120px 160px',
+                        gap: '8px',
+                        padding: '10px 12px',
+                        borderBottom: idx < filteredItems.length - 1 ? '1px solid #f1f5f9' : 'none',
+                        alignItems: 'center',
+                        fontSize: '13px',
+                        background: itemsListPendingChanges.has(confirmationKey || '') ? '#fefce8' : 'transparent'
+                      }}
+                    >
+                      <div style={{ fontWeight: 500, color: '#1e293b' }}>
+                        {item.assembly_mark || '-'}
+                      </div>
+                      <div style={{ color: '#64748b', fontSize: '12px' }}>
+                        {item.product_name || '-'}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{
+                          fontSize: '11px',
+                          color: '#3b82f6',
+                          fontWeight: 500
+                        }}>
+                          {vehicle?.vehicle_code || '-'}
+                        </span>
+                        {factory && (
+                          <span style={{
+                            fontSize: '10px',
+                            color: '#94a3b8',
+                            background: '#f1f5f9',
+                            padding: '1px 4px',
+                            borderRadius: '3px'
+                          }}>
+                            {factory.factory_name?.substring(0, 8)}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                        {!isArrived ? (
+                          <span style={{
+                            fontSize: '11px',
+                            color: '#94a3b8',
+                            fontStyle: 'italic'
+                          }}>
+                            Veok pole saabunud
+                          </span>
+                        ) : itemsListEditMode ? (
+                          // Edit mode - show clickable status buttons
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button
+                              onClick={() => {
+                                if (!confirmationKey) return;
+                                const newChanges = new Map(itemsListPendingChanges);
+                                newChanges.set(confirmationKey, 'confirmed');
+                                setItemsListPendingChanges(newChanges);
+                              }}
+                              title="Kinnita"
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: currentStatus === 'confirmed' ? '#22c55e' : '#f1f5f9',
+                                color: currentStatus === 'confirmed' ? '#fff' : '#64748b'
+                              }}
+                            >
+                              <FiCheck size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!confirmationKey) return;
+                                const newChanges = new Map(itemsListPendingChanges);
+                                newChanges.set(confirmationKey, 'missing');
+                                setItemsListPendingChanges(newChanges);
+                              }}
+                              title="Puudub"
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: currentStatus === 'missing' ? '#ef4444' : '#f1f5f9',
+                                color: currentStatus === 'missing' ? '#fff' : '#64748b'
+                              }}
+                            >
+                              <FiX size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (!confirmationKey) return;
+                                const newChanges = new Map(itemsListPendingChanges);
+                                newChanges.set(confirmationKey, 'pending');
+                                setItemsListPendingChanges(newChanges);
+                              }}
+                              title="Ootel"
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                background: currentStatus === 'pending' ? '#6b7280' : '#f1f5f9',
+                                color: currentStatus === 'pending' ? '#fff' : '#64748b'
+                              }}
+                            >
+                              <FiClock size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          // View mode - show status badge
+                          <StatusBadge status={currentStatus} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </div>
         </div>
       )}
 
