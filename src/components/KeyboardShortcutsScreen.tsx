@@ -110,9 +110,10 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
   return (
     <div className="screen-container" style={{
       background: '#f5f5f5',
-      minHeight: '100vh',
+      height: '100%',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      overflow: 'hidden'
     }}>
       <PageHeader
         title="Kasutusjuhendid"
@@ -175,7 +176,8 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
         className="keyboard-shortcuts-content"
         style={{
           flex: 1,
-          overflowY: 'scroll',
+          overflowY: 'auto',
+          minHeight: 0,
           padding: '16px',
           scrollbarWidth: 'thin',
           scrollbarColor: '#cbd5e1 #f1f5f9'
@@ -309,7 +311,7 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
             color: '#92400e',
             lineHeight: 1.5
           }}>
-            <strong>Vihje:</strong> Otseteed töötavad igal lehel. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
+            <strong>Vihje:</strong> Otseteed töötavad, kui extensioni paneel on aktiivne. Vali mudelis detailid, klõpsa seejärel extensioni paneelile ja vajuta otseteed. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
           </div>
         )}
       </div>
