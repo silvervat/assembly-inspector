@@ -1,130 +1,312 @@
-import { FiCommand } from 'react-icons/fi';
+import { useState, useMemo } from 'react';
+import { FiChevronDown, FiChevronRight, FiSearch, FiCommand } from 'react-icons/fi';
 import PageHeader from './PageHeader';
 
 interface KeyboardShortcutsScreenProps {
   onBackToMenu: () => void;
 }
 
-interface ShortcutInfo {
-  keys: string;
+interface GuideItem {
+  id: string;
+  title: string;
   description: string;
-  details?: string;
 }
 
-const shortcuts: ShortcutInfo[] = [
+interface GuideCategory {
+  id: string;
+  name: string;
+  icon: React.ReactNode;
+  items: GuideItem[];
+}
+
+// Guide categories and items
+const guideCategories: GuideCategory[] = [
   {
-    keys: 'ALT + SHIFT + A',
-    description: 'Värvi saabunud detailid roheliseks',
-    details: 'Värvib kõik saabunud (kinnitatud) aga paigaldamata detailid roheliseks, ülejäänud mudel värvitakse valgeks.'
-  },
-  {
-    keys: 'ALT + SHIFT + M',
-    description: 'Lisa mustade tekstidega markupid',
-    details: 'Lisab valitud detailidele markupid musta tekstiga ja 500mm joonega. Kui detailid on üksteisele lähemal kui 4m, kasutatakse 2m kõrguserinevust.'
-  },
-  {
-    keys: 'ALT + SHIFT + S',
-    description: 'Ava otsingumodaal',
-    details: 'Avab kiirotsingu modaali, mis võimaldab otsida detaile assembly margi järgi ükskõik milliselt lehelt.'
-  },
-  {
-    keys: 'ALT + SHIFT + W',
-    description: 'Värvi mudel valgeks',
-    details: 'Värvib kogu mudeli valgeks - sama funktsioon mis Tööriistad lehel.'
-  },
-  {
-    keys: 'ALT + SHIFT + B',
-    description: 'Lisa poltide markupid',
-    details: 'Lisab valitud detailidele poltide markupid tumesinises värvis.'
-  },
-  {
-    keys: 'ALT + SHIFT + I',
-    description: 'Ava Paigaldamiste leht',
-    details: 'Avab Paigaldamiste sisestamise lehe otse.'
-  },
-  {
-    keys: 'ALT + SHIFT + D',
-    description: 'Lisa tarne markupid',
-    details: 'Lisab valitud detailidele kaherealised markupid veoki lühendi ja tarnekuupäevaga. Iga veok saab erineva värvi, lähedased markupid saavad erineva kõrguse.'
+    id: 'keyboard_shortcuts',
+    name: 'Globaalsed otseteed',
+    icon: <FiCommand size={18} />,
+    items: [
+      {
+        id: 'alt_shift_a',
+        title: 'ALT + SHIFT + A',
+        description: 'Värvib kõik saabunud (kinnitatud) aga paigaldamata detailid roheliseks, ülejäänud mudel värvitakse valgeks.'
+      },
+      {
+        id: 'alt_shift_m',
+        title: 'ALT + SHIFT + M',
+        description: 'Lisab valitud detailidele markupid musta tekstiga ja 500mm joonega. Kui detailid on üksteisele lähemal kui 4m, kasutatakse 2m kõrguserinevust.'
+      },
+      {
+        id: 'alt_shift_s',
+        title: 'ALT + SHIFT + S',
+        description: 'Avab kiirotsingu modaali ja laiendab extensioni paneeli. Võimaldab otsida detaile assembly margi järgi ükskõik milliselt lehelt.'
+      },
+      {
+        id: 'alt_shift_w',
+        title: 'ALT + SHIFT + W',
+        description: 'Värvib kogu mudeli valgeks - sama funktsioon mis Tööriistad lehel.'
+      },
+      {
+        id: 'alt_shift_b',
+        title: 'ALT + SHIFT + B',
+        description: 'Lisab valitud detailidele poltide markupid tumesinises värvis. Kui poldid on üksteisele lähemal kui 4m, kasutatakse 1.5m kõrguserinevust.'
+      },
+      {
+        id: 'alt_shift_i',
+        title: 'ALT + SHIFT + I',
+        description: 'Avab Paigaldamiste sisestamise lehe otse, sõltumata sellest millisel lehel parasjagu oled.'
+      },
+      {
+        id: 'alt_shift_d',
+        title: 'ALT + SHIFT + D',
+        description: 'Lisab valitud detailidele kaherealised markupid veoki lühendi ja tarnekuupäevaga. Iga veok saab erineva värvi, lähedased markupid saavad erineva kõrguse.'
+      }
+    ]
   }
 ];
 
 export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortcutsScreenProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['keyboard_shortcuts']));
+
+  // Filter items based on search query
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return guideCategories;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return guideCategories.map(category => ({
+      ...category,
+      items: category.items.filter(item =>
+        item.title.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query)
+      )
+    })).filter(category => category.items.length > 0);
+  }, [searchQuery]);
+
+  const toggleCategory = (categoryId: string) => {
+    const newExpanded = new Set(expandedCategories);
+    if (newExpanded.has(categoryId)) {
+      newExpanded.delete(categoryId);
+    } else {
+      newExpanded.add(categoryId);
+    }
+    setExpandedCategories(newExpanded);
+  };
+
+  // Highlight matching text
+  const highlightText = (text: string, query: string) => {
+    if (!query.trim()) return text;
+
+    const parts = text.split(new RegExp(`(${query})`, 'gi'));
+    return parts.map((part, i) =>
+      part.toLowerCase() === query.toLowerCase()
+        ? <mark key={i} style={{ background: '#fef08a', padding: '0 2px', borderRadius: '2px' }}>{part}</mark>
+        : part
+    );
+  };
+
   return (
-    <div className="screen-container" style={{ background: '#f5f5f5', minHeight: '100%' }}>
+    <div className="screen-container" style={{
+      background: '#f5f5f5',
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
       <PageHeader
-        title="Klaviatuuri otseteed"
+        title="Kasutusjuhendid"
         onBack={onBackToMenu}
       />
 
-      <div style={{ padding: '16px', maxWidth: '600px' }}>
+      {/* Search bar */}
+      <div style={{
+        padding: '12px 16px',
+        background: '#fff',
+        borderBottom: '1px solid #e5e7eb',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10
+      }}>
         <div style={{
-          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          background: '#f3f4f6',
           borderRadius: '8px',
-          border: '1px solid #e5e7eb',
-          overflow: 'hidden'
+          padding: '8px 12px'
         }}>
+          <FiSearch size={18} style={{ color: '#9ca3af', flexShrink: 0 }} />
+          <input
+            type="text"
+            placeholder="Otsi juhendeid..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              flex: 1,
+              border: 'none',
+              background: 'transparent',
+              fontSize: '14px',
+              outline: 'none',
+              color: '#1f2937'
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#9ca3af',
+                cursor: 'pointer',
+                padding: '2px',
+                fontSize: '16px',
+                lineHeight: 1
+              }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Scrollable content */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '16px'
+      }}>
+        {filteredCategories.length === 0 ? (
           <div style={{
-            padding: '16px',
-            borderBottom: '1px solid #e5e7eb',
-            background: '#f8fafc',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
+            textAlign: 'center',
+            padding: '40px 20px',
+            color: '#6b7280'
           }}>
-            <FiCommand size={20} style={{ color: '#6366f1' }} />
-            <span style={{ fontWeight: 600, color: '#1f2937' }}>Globaalsed otseteed</span>
+            <div style={{ fontSize: '14px' }}>Otsingule "{searchQuery}" ei leitud tulemusi</div>
           </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {filteredCategories.map(category => {
+              const isExpanded = expandedCategories.has(category.id) || searchQuery.trim().length > 0;
 
-          <div style={{ padding: '8px 0' }}>
-            {shortcuts.map((shortcut, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: '12px 16px',
-                  borderBottom: index < shortcuts.length - 1 ? '1px solid #f3f4f6' : 'none'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                  <code style={{
-                    background: '#f1f5f9',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: '#475569',
-                    whiteSpace: 'nowrap',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    {shortcut.keys}
-                  </code>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500, color: '#1f2937', fontSize: '13px', marginBottom: '4px' }}>
-                      {shortcut.description}
-                    </div>
-                    {shortcut.details && (
-                      <div style={{ fontSize: '12px', color: '#6b7280', lineHeight: 1.4 }}>
-                        {shortcut.details}
-                      </div>
+              return (
+                <div
+                  key={category.id}
+                  style={{
+                    background: '#fff',
+                    borderRadius: '10px',
+                    border: '1px solid #e5e7eb',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Category header */}
+                  <button
+                    onClick={() => toggleCategory(category.id)}
+                    style={{
+                      width: '100%',
+                      padding: '14px 16px',
+                      background: isExpanded ? '#f8fafc' : '#fff',
+                      border: 'none',
+                      borderBottom: isExpanded ? '1px solid #e5e7eb' : 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      cursor: 'pointer',
+                      transition: 'background 0.15s'
+                    }}
+                  >
+                    <span style={{ color: '#6366f1' }}>{category.icon}</span>
+                    <span style={{
+                      flex: 1,
+                      textAlign: 'left',
+                      fontWeight: 600,
+                      fontSize: '15px',
+                      color: '#1f2937'
+                    }}>
+                      {highlightText(category.name, searchQuery)}
+                    </span>
+                    <span style={{
+                      color: '#9ca3af',
+                      fontSize: '12px',
+                      marginRight: '8px'
+                    }}>
+                      {category.items.length} {category.items.length === 1 ? 'teema' : 'teemat'}
+                    </span>
+                    {isExpanded ? (
+                      <FiChevronDown size={18} style={{ color: '#9ca3af' }} />
+                    ) : (
+                      <FiChevronRight size={18} style={{ color: '#9ca3af' }} />
                     )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+                  </button>
 
-        <div style={{
-          marginTop: '16px',
-          padding: '12px',
-          background: '#fef3c7',
-          borderRadius: '6px',
-          border: '1px solid #fcd34d',
-          fontSize: '12px',
-          color: '#92400e'
-        }}>
-          <strong>Vihje:</strong> Otseteed töötavad igal lehel. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
-        </div>
+                  {/* Category items */}
+                  {isExpanded && (
+                    <div style={{ padding: '8px' }}>
+                      {category.items.map((item, index) => (
+                        <div
+                          key={item.id}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: '8px',
+                            background: index % 2 === 0 ? '#fafafa' : '#fff',
+                            marginBottom: index < category.items.length - 1 ? '6px' : 0
+                          }}
+                        >
+                          {/* Item title (shortcut key) */}
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            marginBottom: '8px'
+                          }}>
+                            <code style={{
+                              background: '#e0e7ff',
+                              color: '#4338ca',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              fontFamily: 'ui-monospace, monospace',
+                              border: '1px solid #c7d2fe'
+                            }}>
+                              {highlightText(item.title, searchQuery)}
+                            </code>
+                          </div>
+
+                          {/* Item description */}
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#4b5563',
+                            lineHeight: 1.5,
+                            paddingLeft: '2px'
+                          }}>
+                            {highlightText(item.description, searchQuery)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Help note at bottom */}
+        {!searchQuery && (
+          <div style={{
+            marginTop: '20px',
+            padding: '14px 16px',
+            background: '#fef3c7',
+            borderRadius: '8px',
+            border: '1px solid #fcd34d',
+            fontSize: '12px',
+            color: '#92400e',
+            lineHeight: 1.5
+          }}>
+            <strong>Vihje:</strong> Otseteed töötavad igal lehel. Mõned otseteed (nt markupid) vajavad, et mudelis oleks detail valitud.
+          </div>
+        )}
       </div>
     </div>
   );
