@@ -740,7 +740,7 @@ export default function ArrivedDeliveriesScreen({
 
   // ESC key handler - clear selection and close lightbox
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (modelSelectionMode) {
           setModelSelectionMode(false);
@@ -749,12 +749,19 @@ export default function ArrivedDeliveriesScreen({
           setLightboxPhoto(null);
         } else if (selectedItemsForConfirm.size > 0) {
           setSelectedItemsForConfirm(new Set());
+        } else if (viewMode === 'items-list' && api) {
+          // Clear model selection when in items-list view
+          try {
+            await api.viewer.setSelection({ modelObjectIds: [] }, 'set');
+          } catch (e) {
+            console.warn('Could not clear selection:', e);
+          }
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxPhoto, selectedItemsForConfirm.size, modelSelectionMode]);
+  }, [lightboxPhoto, selectedItemsForConfirm.size, modelSelectionMode, viewMode, api]);
 
   // Helper to get property value from object
   const getPropertyValue = useCallback((obj: any, setName: string | undefined, propName: string | undefined): string | undefined => {
@@ -3615,54 +3622,56 @@ export default function ArrivedDeliveriesScreen({
           </button>
         </div>
 
-        {/* Global search */}
-        <div className="global-search" style={{
-          flex: 1,
-          minWidth: '200px',
-          maxWidth: '400px',
-          position: 'relative'
-        }}>
-          <FiSearch style={{
-            position: 'absolute',
-            left: '10px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: '#94a3b8',
-            pointerEvents: 'none'
-          }} size={14} />
-          <input
-            type="text"
-            placeholder="Otsi detaili, veoki koodi, tehast..."
-            value={globalSearchQuery}
-            onChange={(e) => setGlobalSearchQuery(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '8px 12px 8px 32px',
-              fontSize: '13px',
-              border: '1px solid #e2e8f0',
-              borderRadius: '6px',
-              outline: 'none'
-            }}
-          />
-          {globalSearchQuery && (
-            <button
-              onClick={() => setGlobalSearchQuery('')}
+        {/* Global search - hidden in items-list view which has its own search */}
+        {viewMode !== 'items-list' && (
+          <div className="global-search" style={{
+            flex: 1,
+            minWidth: '200px',
+            maxWidth: '400px',
+            position: 'relative'
+          }}>
+            <FiSearch style={{
+              position: 'absolute',
+              left: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: '#94a3b8',
+              pointerEvents: 'none'
+            }} size={14} />
+            <input
+              type="text"
+              placeholder="Otsi detaili, veoki koodi, tehast..."
+              value={globalSearchQuery}
+              onChange={(e) => setGlobalSearchQuery(e.target.value)}
               style={{
-                position: 'absolute',
-                right: '8px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#94a3b8',
-                padding: '2px'
+                width: '100%',
+                padding: '8px 12px 8px 32px',
+                fontSize: '13px',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                outline: 'none'
               }}
-            >
-              <FiX size={14} />
-            </button>
-          )}
-        </div>
+            />
+            {globalSearchQuery && (
+              <button
+                onClick={() => setGlobalSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#94a3b8',
+                  padding: '2px'
+                }}
+              >
+                <FiX size={14} />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Add unassigned arrival button */}
         {viewMode === 'unassigned' && (
@@ -5126,35 +5135,37 @@ export default function ArrivedDeliveriesScreen({
 
       {/* All items list view */}
       {viewMode === 'items-list' && (
-        <div className="vehicles-container items-list-view" style={{ padding: '12px' }}>
-          {/* Header with search, edit mode toggle, save button */}
+        <div className="vehicles-container items-list-view" style={{ padding: '8px' }}>
+          {/* Compact header with search and edit mode */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '12px',
-            marginBottom: '16px',
+            gap: '8px',
+            marginBottom: '8px',
             flexWrap: 'wrap'
           }}>
             {/* Search */}
-            <div style={{ position: 'relative', flex: '1', minWidth: '200px', maxWidth: '400px' }}>
+            <div style={{ position: 'relative', flex: '1', minWidth: '180px', maxWidth: '300px' }}>
               <FiSearch style={{
                 position: 'absolute',
-                left: '10px',
+                left: '8px',
                 top: '50%',
                 transform: 'translateY(-50%)',
-                color: '#94a3b8'
+                color: '#94a3b8',
+                width: '12px',
+                height: '12px'
               }} />
               <input
                 type="text"
-                placeholder="Otsi märgi, toote, tehase või veoki järgi..."
+                placeholder="Otsi märgi, toote või veoki järgi..."
                 value={itemsListSearchQuery}
                 onChange={(e) => setItemsListSearchQuery(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '8px 12px 8px 36px',
+                  padding: '5px 24px 5px 26px',
                   border: '1px solid #e2e8f0',
-                  borderRadius: '6px',
-                  fontSize: '13px'
+                  borderRadius: '4px',
+                  fontSize: '11px'
                 }}
               />
               {itemsListSearchQuery && (
@@ -5162,19 +5173,19 @@ export default function ArrivedDeliveriesScreen({
                   onClick={() => setItemsListSearchQuery('')}
                   style={{
                     position: 'absolute',
-                    right: '8px',
+                    right: '4px',
                     top: '50%',
                     transform: 'translateY(-50%)',
                     background: '#e5e7eb',
                     border: 'none',
                     borderRadius: '50%',
-                    width: '18px',
-                    height: '18px',
+                    width: '14px',
+                    height: '14px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     cursor: 'pointer',
-                    fontSize: '12px',
+                    fontSize: '10px',
                     color: '#6b7280'
                   }}
                 >
@@ -5183,42 +5194,53 @@ export default function ArrivedDeliveriesScreen({
               )}
             </div>
 
+            {/* Items count */}
+            <span style={{ fontSize: '10px', color: '#64748b' }}>
+              {items.filter(item => {
+                const query = itemsListSearchQuery.toLowerCase().trim();
+                if (!query) return true;
+                const vehicle = getVehicle(item.vehicle_id);
+                return (
+                  (item.assembly_mark || '').toLowerCase().includes(query) ||
+                  (item.product_name || '').toLowerCase().includes(query) ||
+                  (vehicle?.vehicle_code || '').toLowerCase().includes(query)
+                );
+              }).length} tk
+            </span>
+
             {/* Edit mode toggle and save */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: 'auto' }}>
               {!itemsListEditMode ? (
                 <button
                   onClick={() => setItemsListEditMode(true)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
+                    gap: '4px',
+                    padding: '4px 10px',
                     background: '#3b82f6',
                     color: '#fff',
                     border: 'none',
-                    borderRadius: '6px',
-                    fontSize: '13px',
+                    borderRadius: '4px',
+                    fontSize: '11px',
                     fontWeight: 500,
                     cursor: 'pointer'
                   }}
                 >
-                  <FiEdit2 size={14} />
-                  Muutmisrežiim
+                  <FiEdit2 size={11} />
+                  Muuda
                 </button>
               ) : (
                 <>
-                  <span style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 500 }}>
-                    Muutmisrežiim aktiivne
-                  </span>
                   {itemsListPendingChanges.size > 0 && (
                     <span style={{
                       background: '#fef3c7',
                       color: '#92400e',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      fontSize: '11px'
+                      padding: '2px 6px',
+                      borderRadius: '8px',
+                      fontSize: '10px'
                     }}>
-                      {itemsListPendingChanges.size} muudatust
+                      {itemsListPendingChanges.size}
                     </span>
                   )}
                   <button
@@ -5227,12 +5249,12 @@ export default function ArrivedDeliveriesScreen({
                       setItemsListPendingChanges(new Map());
                     }}
                     style={{
-                      padding: '8px 12px',
+                      padding: '4px 8px',
                       background: '#f3f4f6',
                       color: '#374151',
                       border: '1px solid #e5e7eb',
-                      borderRadius: '6px',
-                      fontSize: '13px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
                       cursor: 'pointer'
                     }}
                   >
@@ -5246,7 +5268,6 @@ export default function ArrivedDeliveriesScreen({
                       }
                       setItemsListSaving(true);
                       try {
-                        // Apply all pending changes
                         for (const [key, status] of itemsListPendingChanges) {
                           const [arrivedVehicleId, itemId] = key.split('_');
                           await supabase
@@ -5262,10 +5283,9 @@ export default function ArrivedDeliveriesScreen({
                         await loadConfirmations();
                         setItemsListPendingChanges(new Map());
                         setItemsListEditMode(false);
-                        setMessage(`✓ ${itemsListPendingChanges.size} muudatust salvestatud`);
+                        setMessage(`✓ ${itemsListPendingChanges.size} salvestatud`);
                       } catch (e: any) {
-                        console.error('Error saving changes:', e);
-                        setMessage('Viga salvestamisel: ' + e.message);
+                        setMessage('Viga: ' + e.message);
                       } finally {
                         setItemsListSaving(false);
                       }
@@ -5274,95 +5294,71 @@ export default function ArrivedDeliveriesScreen({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      padding: '8px 16px',
+                      gap: '4px',
+                      padding: '4px 10px',
                       background: itemsListPendingChanges.size > 0 ? '#22c55e' : '#9ca3af',
                       color: '#fff',
                       border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '13px',
+                      borderRadius: '4px',
+                      fontSize: '10px',
                       fontWeight: 500,
                       cursor: itemsListPendingChanges.size > 0 ? 'pointer' : 'not-allowed'
                     }}
                   >
-                    <FiSave size={14} />
-                    {itemsListSaving ? 'Salvestan...' : 'Salvesta'}
+                    <FiSave size={10} />
+                    {itemsListSaving ? '...' : 'Salvesta'}
                   </button>
                 </>
               )}
             </div>
           </div>
 
-          {/* Items count */}
-          <div style={{ marginBottom: '12px', fontSize: '12px', color: '#64748b' }}>
-            {(() => {
-              const query = itemsListSearchQuery.toLowerCase().trim();
-              const filteredItems = items.filter(item => {
-                if (!query) return true;
-                const vehicle = getVehicle(item.vehicle_id);
-                const factory = getFactory(vehicle?.factory_id);
-                return (
-                  (item.assembly_mark || '').toLowerCase().includes(query) ||
-                  (item.product_name || '').toLowerCase().includes(query) ||
-                  (vehicle?.vehicle_code || '').toLowerCase().includes(query) ||
-                  (factory?.factory_name || '').toLowerCase().includes(query)
-                );
-              });
-              return `${filteredItems.length} detaili${query ? ` (otsing: "${itemsListSearchQuery}")` : ''}`;
-            })()}
-          </div>
-
-          {/* Items table */}
+          {/* Compact items table */}
           <div style={{
             background: '#fff',
             border: '1px solid #e2e8f0',
-            borderRadius: '8px',
+            borderRadius: '6px',
             overflow: 'hidden'
           }}>
             {/* Table header */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr 120px 160px',
-              gap: '8px',
-              padding: '10px 12px',
+              gridTemplateColumns: '140px 1fr 160px 70px',
+              gap: '4px',
+              padding: '4px 8px',
               background: '#f8fafc',
               borderBottom: '1px solid #e2e8f0',
-              fontSize: '11px',
+              fontSize: '9px',
               fontWeight: 600,
               color: '#64748b',
               textTransform: 'uppercase'
             }}>
-              <div>Assembly mark</div>
+              <div>Mark</div>
               <div>Toode</div>
-              <div>Veok</div>
+              <div>Veok / Aeg</div>
               <div style={{ textAlign: 'center' }}>Staatus</div>
             </div>
 
             {/* Items list */}
-            <div style={{ maxHeight: 'calc(100vh - 320px)', overflowY: 'auto' }}>
+            <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}>
               {(() => {
                 const query = itemsListSearchQuery.toLowerCase().trim();
                 const filteredItems = items
                   .filter(item => {
                     if (!query) return true;
                     const vehicle = getVehicle(item.vehicle_id);
-                    const factory = getFactory(vehicle?.factory_id);
                     return (
                       (item.assembly_mark || '').toLowerCase().includes(query) ||
                       (item.product_name || '').toLowerCase().includes(query) ||
-                      (vehicle?.vehicle_code || '').toLowerCase().includes(query) ||
-                      (factory?.factory_name || '').toLowerCase().includes(query)
+                      (vehicle?.vehicle_code || '').toLowerCase().includes(query)
                     );
                   })
                   .sort((a, b) => (a.assembly_mark || '').localeCompare(b.assembly_mark || '', 'et'));
 
                 if (filteredItems.length === 0) {
                   return (
-                    <div style={{ padding: '40px 20px', textAlign: 'center', color: '#64748b' }}>
-                      <FiSearch size={32} style={{ marginBottom: '8px', opacity: 0.5 }} />
-                      <p style={{ margin: 0 }}>
-                        {itemsListSearchQuery ? 'Otsingutulemusi ei leitud' : 'Detaile pole'}
-                      </p>
+                    <div style={{ padding: '20px', textAlign: 'center', color: '#64748b', fontSize: '11px' }}>
+                      {itemsListSearchQuery ? 'Ei leitud' : 'Detaile pole'}
                     </div>
                   );
                 }
@@ -5370,9 +5366,7 @@ export default function ArrivedDeliveriesScreen({
                 return filteredItems.map((item, idx) => {
                   const vehicle = getVehicle(item.vehicle_id);
                   const arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
-                  const factory = getFactory(vehicle?.factory_id);
 
-                  // Get current status - check pending changes first, then actual status
                   const confirmationKey = arrivedVehicle ? `${arrivedVehicle.id}_${item.id}` : null;
                   let currentStatus: ArrivalItemStatus = 'pending';
                   if (confirmationKey && itemsListPendingChanges.has(confirmationKey)) {
@@ -5383,58 +5377,108 @@ export default function ArrivedDeliveriesScreen({
 
                   const isArrived = !!arrivedVehicle;
 
+                  // Format vehicle info with dates
+                  const scheduledDate = vehicle?.scheduled_date ? new Date(vehicle.scheduled_date) : null;
+                  const arrivalDate = arrivedVehicle?.arrival_date ? new Date(arrivedVehicle.arrival_date) : null;
+                  const formatDate = (d: Date) => `${d.getDate()}.${d.getMonth() + 1}`;
+
                   return (
                     <div
                       key={item.id}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: '1fr 1fr 120px 160px',
-                        gap: '8px',
-                        padding: '10px 12px',
+                        gridTemplateColumns: '140px 1fr 160px 70px',
+                        gap: '4px',
+                        padding: '3px 8px',
                         borderBottom: idx < filteredItems.length - 1 ? '1px solid #f1f5f9' : 'none',
                         alignItems: 'center',
-                        fontSize: '13px',
+                        fontSize: '11px',
                         background: itemsListPendingChanges.has(confirmationKey || '') ? '#fefce8' : 'transparent'
                       }}
                     >
-                      <div style={{ fontWeight: 500, color: '#1e293b' }}>
+                      {/* Assembly mark - clickable */}
+                      <div
+                        style={{
+                          fontWeight: 500,
+                          color: '#1e40af',
+                          cursor: 'pointer',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap'
+                        }}
+                        onClick={async () => {
+                          if (item.guid_ifc) {
+                            try {
+                              await selectObjectsByGuid(api, [item.guid_ifc]);
+                            } catch (e) {
+                              console.warn('Could not select object:', e);
+                            }
+                          }
+                        }}
+                        title={`${item.assembly_mark || '-'} - kliki et valida mudelis`}
+                      >
                         {item.assembly_mark || '-'}
                       </div>
-                      <div style={{ color: '#64748b', fontSize: '12px' }}>
+
+                      {/* Product */}
+                      <div style={{
+                        color: '#64748b',
+                        fontSize: '10px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
                         {item.product_name || '-'}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <span style={{
-                          fontSize: '11px',
-                          color: '#3b82f6',
-                          fontWeight: 500
-                        }}>
+
+                      {/* Vehicle with date info - clickable */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '1px',
+                          cursor: vehicle ? 'pointer' : 'default'
+                        }}
+                        onClick={async () => {
+                          if (vehicle) {
+                            const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+                            const guids = vehicleItems.map(i => i.guid_ifc).filter(Boolean) as string[];
+                            if (guids.length > 0) {
+                              try {
+                                await selectObjectsByGuid(api, guids);
+                              } catch (e) {
+                                console.warn('Could not select objects:', e);
+                              }
+                            }
+                          }
+                        }}
+                        title={vehicle ? `${vehicle.vehicle_code} - kliki et valida kõik veoki detailid` : ''}
+                      >
+                        <span style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 500 }}>
                           {vehicle?.vehicle_code || '-'}
                         </span>
-                        {factory && (
-                          <span style={{
-                            fontSize: '10px',
-                            color: '#94a3b8',
-                            background: '#f1f5f9',
-                            padding: '1px 4px',
-                            borderRadius: '3px'
-                          }}>
-                            {factory.factory_name?.substring(0, 8)}
-                          </span>
-                        )}
+                        <span style={{ fontSize: '9px', color: '#94a3b8' }}>
+                          {scheduledDate && (
+                            <>
+                              Plan: {formatDate(scheduledDate)}
+                              {vehicle?.unload_start_time && ` ${vehicle.unload_start_time.substring(0, 5)}`}
+                            </>
+                          )}
+                          {arrivedVehicle && (
+                            <span style={{ color: '#22c55e' }}>
+                              {' '}| Saab: {arrivalDate ? formatDate(arrivalDate) : '?'}
+                              {arrivedVehicle.arrival_time && ` ${arrivedVehicle.arrival_time.substring(0, 5)}`}
+                            </span>
+                          )}
+                        </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+
+                      {/* Status - compact buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
                         {!isArrived ? (
-                          <span style={{
-                            fontSize: '11px',
-                            color: '#94a3b8',
-                            fontStyle: 'italic'
-                          }}>
-                            Veok pole saabunud
-                          </span>
+                          <span style={{ fontSize: '9px', color: '#94a3b8' }}>-</span>
                         ) : itemsListEditMode ? (
-                          // Edit mode - show clickable status buttons
-                          <div style={{ display: 'flex', gap: '4px' }}>
+                          <>
                             <button
                               onClick={() => {
                                 if (!confirmationKey) return;
@@ -5444,9 +5488,9 @@ export default function ArrivedDeliveriesScreen({
                               }}
                               title="Kinnita"
                               style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '4px',
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '3px',
                                 border: 'none',
                                 cursor: 'pointer',
                                 display: 'flex',
@@ -5456,7 +5500,7 @@ export default function ArrivedDeliveriesScreen({
                                 color: currentStatus === 'confirmed' ? '#fff' : '#64748b'
                               }}
                             >
-                              <FiCheck size={14} />
+                              <FiCheck size={11} />
                             </button>
                             <button
                               onClick={() => {
@@ -5467,9 +5511,9 @@ export default function ArrivedDeliveriesScreen({
                               }}
                               title="Puudub"
                               style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '4px',
+                                width: '20px',
+                                height: '20px',
+                                borderRadius: '3px',
                                 border: 'none',
                                 cursor: 'pointer',
                                 display: 'flex',
@@ -5479,35 +5523,19 @@ export default function ArrivedDeliveriesScreen({
                                 color: currentStatus === 'missing' ? '#fff' : '#64748b'
                               }}
                             >
-                              <FiX size={14} />
+                              <FiX size={11} />
                             </button>
-                            <button
-                              onClick={() => {
-                                if (!confirmationKey) return;
-                                const newChanges = new Map(itemsListPendingChanges);
-                                newChanges.set(confirmationKey, 'pending');
-                                setItemsListPendingChanges(newChanges);
-                              }}
-                              title="Ootel"
-                              style={{
-                                width: '28px',
-                                height: '28px',
-                                borderRadius: '4px',
-                                border: 'none',
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                background: currentStatus === 'pending' ? '#6b7280' : '#f1f5f9',
-                                color: currentStatus === 'pending' ? '#fff' : '#64748b'
-                              }}
-                            >
-                              <FiClock size={14} />
-                            </button>
-                          </div>
+                          </>
                         ) : (
-                          // View mode - show status badge
-                          <StatusBadge status={currentStatus} />
+                          <span style={{
+                            fontSize: '9px',
+                            padding: '1px 4px',
+                            borderRadius: '3px',
+                            background: currentStatus === 'confirmed' ? '#d1fae5' : currentStatus === 'missing' ? '#fee2e2' : '#f3f4f6',
+                            color: currentStatus === 'confirmed' ? '#059669' : currentStatus === 'missing' ? '#dc2626' : '#6b7280'
+                          }}>
+                            {currentStatus === 'confirmed' ? '✓' : currentStatus === 'missing' ? '✗' : '○'}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -5515,6 +5543,11 @@ export default function ArrivedDeliveriesScreen({
                 });
               })()}
             </div>
+          </div>
+
+          {/* ESC hint */}
+          <div style={{ marginTop: '6px', fontSize: '9px', color: '#94a3b8', textAlign: 'center' }}>
+            ESC - tühista valik mudelis
           </div>
         </div>
       )}
