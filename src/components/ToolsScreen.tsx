@@ -165,9 +165,23 @@ export default function ToolsScreen({
   const markeerijLine2Ref = useRef<HTMLDivElement>(null);
   const markeerijLine3Ref = useRef<HTMLDivElement>(null);
 
-  // Toggle section expansion (accordion style)
+  // Refs for section headers (for auto-scroll)
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Toggle section expansion (accordion style) with auto-scroll
   const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'partdb') => {
+    const isExpanding = expandedSection !== section;
     setExpandedSection(prev => prev === section ? null : section);
+
+    // Auto-scroll to section header when expanding
+    if (isExpanding) {
+      setTimeout(() => {
+        const sectionEl = sectionRefs.current[section];
+        if (sectionEl) {
+          sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+    }
   };
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
@@ -2049,7 +2063,7 @@ export default function ToolsScreen({
 
       <div className="tools-content">
         {/* Crane Planning Section - Collapsible */}
-        <div className="tools-section">
+        <div className="tools-section" ref={(el) => { sectionRefs.current['crane'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
             onClick={() => toggleSection('crane')}
@@ -2079,7 +2093,7 @@ export default function ToolsScreen({
         </div>
 
         {/* Bolt Export Section - Collapsible */}
-        <div className="tools-section">
+        <div className="tools-section" ref={(el) => { sectionRefs.current['export'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
             onClick={() => toggleSection('export')}
@@ -2336,7 +2350,7 @@ export default function ToolsScreen({
         </div>
 
         {/* Bolt Markups Section - Collapsible */}
-        <div className="tools-section">
+        <div className="tools-section" ref={(el) => { sectionRefs.current['markup'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
             onClick={() => toggleSection('markup')}
@@ -2385,7 +2399,7 @@ export default function ToolsScreen({
         </div>
 
         {/* Marker (Märgista) Section - Collapsible */}
-        <div className="tools-section">
+        <div className="tools-section" ref={(el) => { sectionRefs.current['marker'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
             onClick={() => toggleSection('marker')}
@@ -2527,7 +2541,7 @@ export default function ToolsScreen({
         </div>
 
         {/* Markeerija (Text Markup Generator) Section - Collapsible */}
-        <div className="tools-section">
+        <div className="tools-section" ref={(el) => { sectionRefs.current['markeerija'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
             onClick={() => toggleSection('markeerija')}
@@ -2543,20 +2557,14 @@ export default function ToolsScreen({
                 Loo tekst-markupid valitud detailidele. Määra kuni 3 rida tekstimalli koos property-väärtustega.
               </p>
 
-              {/* Presets section */}
+              {/* Presets section - compact row */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
-                marginBottom: '16px',
-                padding: '10px 12px',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px'
+                gap: '6px',
+                marginBottom: '12px',
+                flexWrap: 'wrap'
               }}>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563', whiteSpace: 'nowrap' }}>
-                  Eelseadistused:
-                </label>
                 <select
                   value={selectedPresetId || ''}
                   onChange={(e) => {
@@ -2570,17 +2578,18 @@ export default function ToolsScreen({
                   }}
                   style={{
                     flex: 1,
-                    padding: '6px 10px',
+                    minWidth: '120px',
+                    padding: '6px 8px',
                     border: '1px solid #d1d5db',
                     borderRadius: '6px',
-                    fontSize: '13px',
+                    fontSize: '12px',
                     background: '#fff'
                   }}
                 >
-                  <option value="">-- Vali eelseadistus --</option>
+                  <option value="">Eelseadistus...</option>
                   {markeerijPresets.map(preset => (
                     <option key={preset.id} value={preset.id}>
-                      {preset.name} {preset.is_shared ? '(jagatud)' : preset.created_by !== user.email ? '(kellegi oma)' : ''}
+                      {preset.name} {preset.is_shared ? '(j)' : ''}
                     </option>
                   ))}
                 </select>
@@ -2590,23 +2599,20 @@ export default function ToolsScreen({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '4px',
-                    padding: '6px 10px',
+                    justifyContent: 'center',
+                    padding: '6px 8px',
                     background: '#dbeafe',
-                    border: '1px solid #3b82f6',
+                    border: '1px solid #93c5fd',
                     borderRadius: '6px',
                     fontSize: '11px',
-                    fontWeight: 500,
                     color: '#1e40af',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap'
+                    cursor: 'pointer'
                   }}
                   title="Salvesta praegused seaded uue eelseadistusena"
                 >
-                  <FiSave size={12} />
-                  Salvesta
+                  <FiSave size={14} />
                 </button>
-                {/* Share/Delete buttons for own presets */}
+                {/* Share/Delete buttons for own presets - icon only */}
                 {selectedPresetId && markeerijPresets.find(p => p.id === selectedPresetId)?.created_by === user.email && (
                   <>
                     {user.role === 'admin' && (
@@ -2615,21 +2621,17 @@ export default function ToolsScreen({
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
-                          padding: '6px 10px',
+                          justifyContent: 'center',
+                          padding: '6px 8px',
                           background: markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#d1fae5' : '#fef3c7',
-                          border: `1px solid ${markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#10b981' : '#f59e0b'}`,
+                          border: `1px solid ${markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#6ee7b7' : '#fcd34d'}`,
                           borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: 500,
                           color: markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#065f46' : '#92400e',
-                          cursor: 'pointer',
-                          whiteSpace: 'nowrap'
+                          cursor: 'pointer'
                         }}
                         title={markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? 'Peata jagamine' : 'Jaga kõigiga'}
                       >
-                        <FiShare2 size={12} />
-                        {markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? 'Jagatud' : 'Jaga'}
+                        <FiShare2 size={14} />
                       </button>
                     )}
                     <button
@@ -2641,20 +2643,17 @@ export default function ToolsScreen({
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        padding: '6px 10px',
+                        justifyContent: 'center',
+                        padding: '6px 8px',
                         background: '#fee2e2',
                         border: '1px solid #fca5a5',
                         borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: 500,
                         color: '#dc2626',
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap'
+                        cursor: 'pointer'
                       }}
                       title="Kustuta eelseadistus"
                     >
-                      <FiTrash2 size={12} />
+                      <FiTrash2 size={14} />
                     </button>
                   </>
                 )}
@@ -2758,20 +2757,22 @@ export default function ToolsScreen({
                 </div>
               )}
 
-              {/* Selection count row with Tühjenda button */}
+              {/* Selection count row with Tühjenda button - equal heights */}
               <div style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '16px'
+                alignItems: 'stretch',
+                gap: '8px',
+                marginBottom: '12px'
               }}>
                 <div style={{
                   flex: 1,
-                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '8px 12px',
                   background: markeerijSelectedCount > 0 ? '#ecfdf5' : '#fef3c7',
-                  border: `1px solid ${markeerijSelectedCount > 0 ? '#10b981' : '#f59e0b'}`,
-                  borderRadius: '8px',
-                  fontSize: '13px',
+                  border: `1px solid ${markeerijSelectedCount > 0 ? '#6ee7b7' : '#fcd34d'}`,
+                  borderRadius: '6px',
+                  fontSize: '12px',
                   fontWeight: 500,
                   color: markeerijSelectedCount > 0 ? '#065f46' : '#92400e'
                 }}>
@@ -2779,7 +2780,7 @@ export default function ToolsScreen({
                     ? `${markeerijSelectedCount} detaili valitud`
                     : 'Vali mudelist detailid'}
                 </div>
-                {/* Tühjenda button moved here */}
+                {/* Tühjenda button - same height as selection count */}
                 <button
                   onClick={clearAllMarkeerijTemplates}
                   disabled={!markeerijaSett.line1Template && !markeerijaSett.line2Template && !markeerijaSett.line3Template}
@@ -2872,49 +2873,49 @@ export default function ToolsScreen({
                 ))}
               </div>
 
-              {/* Color and height controls */}
+              {/* Color, height and position controls - compact layout */}
               <div style={{
                 display: 'flex',
-                gap: '16px',
-                marginBottom: '16px',
-                padding: '12px',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '12px',
+                padding: '8px 10px',
                 background: '#fafafa',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb'
+                borderRadius: '6px',
+                border: '1px solid #e5e7eb',
+                flexWrap: 'wrap'
               }}>
                 {/* Color picker */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563' }}>Värv:</label>
-                  <input
-                    type="color"
-                    value={rgbToHex(markeerijaSett.color)}
-                    onChange={(e) => {
-                      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e.target.value);
-                      if (result) {
-                        setMarkeerijaSett(prev => ({
-                          ...prev,
-                          color: {
-                            r: parseInt(result[1], 16),
-                            g: parseInt(result[2], 16),
-                            b: parseInt(result[3], 16)
-                          }
-                        }));
-                      }
-                    }}
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      padding: 0,
-                      border: '2px solid #d1d5db',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                  />
-                </div>
+                <input
+                  type="color"
+                  value={rgbToHex(markeerijaSett.color)}
+                  onChange={(e) => {
+                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e.target.value);
+                    if (result) {
+                      setMarkeerijaSett(prev => ({
+                        ...prev,
+                        color: {
+                          r: parseInt(result[1], 16),
+                          g: parseInt(result[2], 16),
+                          b: parseInt(result[3], 16)
+                        }
+                      }));
+                    }
+                  }}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    padding: 0,
+                    border: '1px solid #d1d5db',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                  title="Teksti värv"
+                />
 
-                {/* Height input */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <label style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563', whiteSpace: 'nowrap' }}>Kõrgus (cm):</label>
+                {/* Height input with auto checkbox */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <input
                     type="number"
                     min="1"
@@ -2924,55 +2925,54 @@ export default function ToolsScreen({
                     onChange={(e) => setMarkeerijaSett(prev => ({ ...prev, leaderHeight: parseInt(e.target.value) || 10 }))}
                     disabled={autoStaggerHeight}
                     style={{
-                      width: '70px',
-                      padding: '6px 10px',
+                      width: '50px',
+                      padding: '4px 6px',
                       border: '1px solid #d1d5db',
                       borderRadius: '4px',
-                      fontSize: '13px',
+                      fontSize: '12px',
                       textAlign: 'center',
                       background: autoStaggerHeight ? '#f3f4f6' : '#fff',
                       color: autoStaggerHeight ? '#9ca3af' : '#1f2937'
                     }}
+                    title="Kõrgus cm"
                   />
+                  <span style={{ fontSize: '10px', color: '#6b7280' }}>cm</span>
                 </div>
 
                 {/* Auto stagger height checkbox */}
                 <label style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: '4px',
                   fontSize: '11px',
                   fontWeight: 500,
                   color: autoStaggerHeight ? '#0891b2' : '#6b7280',
                   cursor: 'pointer',
                   whiteSpace: 'nowrap'
-                }} title="Lähedased markupid (< 4m vahe) saavad erinevad kõrgused (20cm ja 120cm)">
+                }} title="Lähedased markupid (< 4m vahe) saavad erinevad kõrgused">
                   <input
                     type="checkbox"
                     checked={autoStaggerHeight}
                     onChange={(e) => setAutoStaggerHeight(e.target.checked)}
                     style={{ width: '14px', height: '14px', cursor: 'pointer' }}
                   />
-                  Automaatne
+                  Auto
                 </label>
 
-                {/* Position selection (left/center/right) */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '8px' }}>
-                  <span style={{ fontSize: '11px', fontWeight: 500, color: '#6b7280', marginRight: '4px' }}>Positsioon:</span>
+                {/* Position selection (left/center/right) - no label */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: 'auto' }}>
                   {(['left', 'center', 'right'] as const).map((pos) => (
                     <button
                       key={pos}
                       onClick={() => setMarkupPosition(pos)}
                       style={{
                         padding: '4px 8px',
-                        fontSize: '10px',
-                        fontWeight: 500,
+                        fontSize: '11px',
                         border: markupPosition === pos ? '1.5px solid #0891b2' : '1px solid #d1d5db',
                         borderRadius: '4px',
                         background: markupPosition === pos ? '#ecfeff' : '#fff',
-                        color: markupPosition === pos ? '#0891b2' : '#6b7280',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s'
+                        color: markupPosition === pos ? '#0891b2' : '#9ca3af',
+                        cursor: 'pointer'
                       }}
                       title={pos === 'left' ? 'Vasak serv' : pos === 'right' ? 'Parem serv' : 'Keskele'}
                     >
@@ -2987,26 +2987,24 @@ export default function ToolsScreen({
                 background: '#f8fafc',
                 border: '1px solid #e2e8f0',
                 borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '16px'
+                padding: '10px',
+                marginBottom: '12px'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563' }}>Saadaolevad väljad</span>
-                  {markeerijFieldsLoading && <FiLoader className="spinning" size={12} style={{ color: '#6366f1' }} />}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
                   <input
                     type="text"
-                    placeholder="Otsi..."
+                    placeholder="Otsi välju..."
                     value={markeerijaPropSearch}
                     onChange={(e) => setMarkeerijaPropSearch(e.target.value)}
                     style={{
-                      marginLeft: 'auto',
-                      width: '120px',
-                      padding: '4px 8px',
+                      flex: 1,
+                      padding: '6px 10px',
                       border: '1px solid #cbd5e1',
-                      borderRadius: '4px',
-                      fontSize: '11px'
+                      borderRadius: '6px',
+                      fontSize: '12px'
                     }}
                   />
+                  {markeerijFieldsLoading && <FiLoader className="spinning" size={14} style={{ color: '#6366f1' }} />}
                 </div>
 
                 {/* Property chips grouped by property set */}
@@ -3181,7 +3179,7 @@ export default function ToolsScreen({
         </div>
 
         {/* Part Database Section - Collapsible */}
-        <div className="tools-section">
+        <div className="tools-section" ref={(el) => { sectionRefs.current['partdb'] = el; }}>
           <div
             className="tools-section-header tools-section-header-clickable"
             onClick={() => toggleSection('partdb')}

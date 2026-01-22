@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.852';
+export const APP_VERSION = '3.0.853';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -947,6 +947,7 @@ export default function App() {
       // ALT+SHIFT+S - Expand SidePanel and open global search modal
       if (key === 's') {
         e.preventDefault();
+        e.stopPropagation();
         try {
           // First expand the SidePanel (extension panel)
           await api.ui.setUI({ name: 'SidePanel', state: 'expanded' });
@@ -960,6 +961,7 @@ export default function App() {
       // ALT+SHIFT+I - Open Installations page
       if (key === 'i') {
         e.preventDefault();
+        e.stopPropagation();
         setCurrentMode('installations');
         return;
       }
@@ -967,6 +969,7 @@ export default function App() {
       // ALT+SHIFT+W - Color model white
       if (key === 'w') {
         e.preventDefault();
+        e.stopPropagation();
         handleColorModelWhite();
         return;
       }
@@ -974,6 +977,7 @@ export default function App() {
       // ALT+SHIFT+A - Color arrived parts green, rest white
       if (key === 'a') {
         e.preventDefault();
+        e.stopPropagation();
         if (shortcutLoading) return;
         setShortcutLoading('a');
 
@@ -1075,9 +1079,10 @@ export default function App() {
         return;
       }
 
-      // CTRL+SHIFT+M - Add black markups with auto-stagger
+      // ALT+SHIFT+M - Add black markups with auto-stagger
       if (key === 'm') {
         e.preventDefault();
+        e.stopPropagation();
         if (shortcutLoading) return;
         setShortcutLoading('m');
 
@@ -1197,7 +1202,7 @@ export default function App() {
 
           showGlobalToast(`${markupsToCreate.length} markupit loodud`, 'success');
         } catch (err) {
-          console.error('CTRL+SHIFT+M error:', err);
+          console.error('ALT+SHIFT+M error:', err);
           showGlobalToast('Viga markupite loomisel', 'error');
         } finally {
           setShortcutLoading(null);
@@ -1205,9 +1210,10 @@ export default function App() {
         return;
       }
 
-      // CTRL+SHIFT+B - Add bolt markups (dark blue) with 1500mm stagger
+      // ALT+SHIFT+B - Add bolt markups (dark blue) with 1500mm stagger
       if (key === 'b') {
         e.preventDefault();
+        e.stopPropagation();
         if (shortcutLoading) return;
         setShortcutLoading('b');
 
@@ -1368,9 +1374,10 @@ export default function App() {
         return;
       }
 
-      // CTRL+SHIFT+D - Add delivery markups (truck + date, different colors)
+      // ALT+SHIFT+D - Add delivery markups (truck + date, different colors)
       if (key === 'd') {
         e.preventDefault();
+        e.stopPropagation();
         if (shortcutLoading) return;
         setShortcutLoading('d');
 
@@ -1516,7 +1523,7 @@ export default function App() {
 
           showGlobalToast(`${markupsToCreate.length} tarne markupit loodud`, 'success');
         } catch (err) {
-          console.error('CTRL+SHIFT+D error:', err);
+          console.error('ALT+SHIFT+D error:', err);
           showGlobalToast('Viga tarne markupite loomisel', 'error');
         } finally {
           setShortcutLoading(null);
@@ -1525,8 +1532,9 @@ export default function App() {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    // Use capture phase to intercept events before they reach Trimble viewer
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [api, projectId, shortcutLoading, handleColorModelWhite, showGlobalToast]);
 
   // Helper: normalize GUID
