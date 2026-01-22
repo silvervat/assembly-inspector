@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.853';
+export const APP_VERSION = '3.0.856';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1198,7 +1198,27 @@ export default function App() {
           }
 
           // Create markups
-          await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+          const result = await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+
+          // Get created markup IDs for coloring
+          const createdIds: number[] = [];
+          if (Array.isArray(result)) {
+            result.forEach((r: any) => {
+              if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+              else if (typeof r === 'number') createdIds.push(r);
+            });
+          } else if (typeof result === 'object' && result?.id) {
+            createdIds.push(Number(result.id));
+          }
+
+          // Color markups black using editMarkup (addTextMarkup color param doesn't work reliably)
+          for (const id of createdIds) {
+            try {
+              await (api.markup as any)?.editMarkup?.(id, { color: '#000000' });
+            } catch (e) {
+              console.warn('Could not set color for markup', id, e);
+            }
+          }
 
           showGlobalToast(`${markupsToCreate.length} markupit loodud`, 'success');
         } catch (err) {
@@ -1518,8 +1538,28 @@ export default function App() {
             markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
           }
 
-          // Create markups (colors are included in markup data)
-          await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+          // Create markups
+          const result = await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+
+          // Get created markup IDs for coloring
+          const createdIds: number[] = [];
+          if (Array.isArray(result)) {
+            result.forEach((r: any) => {
+              if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+              else if (typeof r === 'number') createdIds.push(r);
+            });
+          } else if (typeof result === 'object' && result?.id) {
+            createdIds.push(Number(result.id));
+          }
+
+          // Color markups with their delivery colors using editMarkup
+          for (let i = 0; i < createdIds.length && i < markupsToCreate.length; i++) {
+            try {
+              await (api.markup as any)?.editMarkup?.(createdIds[i], { color: markupsToCreate[i].color });
+            } catch (e) {
+              console.warn('Could not set color for markup', createdIds[i], e);
+            }
+          }
 
           showGlobalToast(`${markupsToCreate.length} tarne markupit loodud`, 'success');
         } catch (err) {

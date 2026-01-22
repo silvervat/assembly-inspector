@@ -10,6 +10,7 @@ import { findObjectsInLoadedModels } from '../utils/navigationHelper';
 
 interface PageHeaderProps {
   title: string;
+  subtitle?: string; // Small text shown above title
   onBack: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   currentMode?: InspectionMode;
@@ -49,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function PageHeader({
   title,
+  subtitle,
   onBack,
   onNavigate,
   currentMode,
@@ -411,7 +413,12 @@ export default function PageHeader({
           )}
         </div>
 
-        <h1 className="page-header-title">{title}</h1>
+        <div className="page-header-title-wrapper">
+          {subtitle && (
+            <span className="page-header-subtitle">{subtitle}</span>
+          )}
+          <h1 className="page-header-title">{title}</h1>
+        </div>
       </div>
 
       {children && (
