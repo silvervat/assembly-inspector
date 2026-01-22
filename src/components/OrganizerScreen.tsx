@@ -49,6 +49,7 @@ interface OrganizerScreenProps {
   onColorModelWhite?: () => void;
   expandGroupId?: string | null;
   onGroupExpanded?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface SelectedObject {
@@ -450,7 +451,8 @@ export default function OrganizerScreen({
   onNavigate,
   onColorModelWhite,
   expandGroupId,
-  onGroupExpanded
+  onGroupExpanded,
+  onOpenPartDatabase
 }: OrganizerScreenProps) {
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
   const { getCachedData, setCachedData, isCacheValid } = useOrganizerCache(projectId);
@@ -9866,6 +9868,7 @@ export default function OrganizerScreen({
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       >
         <button
           className="org-icon-btn"

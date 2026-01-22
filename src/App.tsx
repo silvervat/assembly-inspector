@@ -31,7 +31,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.832';
+export const APP_VERSION = '3.0.833';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -192,6 +192,9 @@ export default function App() {
 
   // Pending group to expand in Organizer (from zoom link)
   const [pendingExpandGroupId, setPendingExpandGroupId] = useState<string | null>(null);
+
+  // Tools screen initial expanded section (when navigating from menu)
+  const [toolsInitialSection, setToolsInitialSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'partdb' | null>(null);
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
@@ -534,6 +537,14 @@ export default function App() {
     setCurrentMode(null);
     setSelectedInspectionType(null);
   };
+
+  // Navigate to Tools screen and open Part Database section
+  const handleOpenPartDatabase = useCallback(() => {
+    setToolsInitialSection('partdb');
+    setCurrentMode('tools');
+    // Clear the initial section after a short delay so it's only used once
+    setTimeout(() => setToolsInitialSection(null), 100);
+  }, []);
 
   // Color all model objects white using database - optimized with cache like InstallationsScreen
   const [colorWhiteProgress, setColorWhiteProgress] = useState<{ message: string; percent: number } | null>(null);
@@ -1039,6 +1050,7 @@ export default function App() {
           user={user}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1097,6 +1109,7 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1118,6 +1131,7 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1139,6 +1153,7 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1160,6 +1175,7 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1179,6 +1195,7 @@ export default function App() {
           onBack={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1202,6 +1219,7 @@ export default function App() {
           onColorModelWhite={handleColorModelWhite}
           expandGroupId={pendingExpandGroupId}
           onGroupExpanded={() => setPendingExpandGroupId(null)}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1223,6 +1241,7 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          onOpenPartDatabase={handleOpenPartDatabase}
         />
         <VersionFooter />
       </>
@@ -1242,6 +1261,7 @@ export default function App() {
           onBackToMenu={handleBackToMenu}
           onNavigate={setCurrentMode}
           onColorModelWhite={handleColorModelWhite}
+          initialExpandedSection={toolsInitialSection}
         />
         <VersionFooter />
       </>

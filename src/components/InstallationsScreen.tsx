@@ -73,6 +73,7 @@ interface InstallationsScreenProps {
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface SelectedObject {
@@ -386,7 +387,8 @@ export default function InstallationsScreen({
   tcUserName,
   onBackToMenu,
   onNavigate,
-  onColorModelWhite
+  onColorModelWhite,
+  onOpenPartDatabase
 }: InstallationsScreenProps) {
   // Property mappings for this project
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
@@ -5901,6 +5903,7 @@ export default function InstallationsScreen({
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       />
 
       {/* Coloring progress indicator - floating overlay */}

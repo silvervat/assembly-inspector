@@ -31,6 +31,7 @@ interface ArrivedDeliveriesScreenProps {
   onBack: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 // Time options for dropdowns
@@ -398,7 +399,8 @@ export default function ArrivedDeliveriesScreen({
   projectId,
   onBack,
   onNavigate,
-  onColorModelWhite
+  onColorModelWhite,
+  onOpenPartDatabase
 }: ArrivedDeliveriesScreenProps) {
   // User email
   const tcUserEmail = user?.email || 'unknown';
@@ -3494,6 +3496,7 @@ export default function ArrivedDeliveriesScreen({
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       >
         {/* Color toggle button */}
         <button

@@ -44,6 +44,7 @@ interface IssuesScreenProps {
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface SelectedObject {
@@ -155,7 +156,8 @@ export default function IssuesScreen({
   tcUserName,
   onBackToMenu,
   onNavigate,
-  onColorModelWhite
+  onColorModelWhite,
+  onOpenPartDatabase
 }: IssuesScreenProps) {
   // ============================================
   // STATE
@@ -1275,6 +1277,7 @@ export default function IssuesScreen({
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       >
         <button
           className="icon-button"

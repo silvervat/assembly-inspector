@@ -24,6 +24,7 @@ interface AdminScreenProps {
   user?: TrimbleExUser;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface PropertySet {
@@ -215,7 +216,7 @@ const RESOURCE_TYPES = [
   { key: 'keevitaja', label: 'Keevitaja', icon: `${import.meta.env.BASE_URL}icons/keevitaja.png` },
 ] as const;
 
-export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite }: AdminScreenProps) {
+export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, user, onNavigate, onColorModelWhite, onOpenPartDatabase }: AdminScreenProps) {
   // View mode: 'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'
   const [adminView, setAdminView] = useState<'main' | 'properties' | 'assemblyList' | 'guidImport' | 'modelObjects' | 'propertyMappings' | 'userPermissions' | 'dataExport' | 'fontTester' | 'resources' | 'cameraPositions' | 'deliveryScheduleAdmin'>('main');
 
@@ -4119,6 +4120,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       />
 
       {/* Main Tools View */}
