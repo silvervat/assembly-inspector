@@ -5113,10 +5113,23 @@ export default function InstallationsScreen({
     return guid && installedGuids.has(guid.toLowerCase());
   }).length;
 
+  // Count selected objects that are NOT installed AND NOT already in tempList (to avoid double-counting)
+  const selectedNewCount = selectedObjects.filter(obj => {
+    const guid = getObjectGuid(obj);
+    if (!guid) return false;
+    if (installedGuids.has(guid.toLowerCase())) return false;
+    if (tempList.has(guid)) return false;
+    return true;
+  }).length;
+
   // Count temp list items that are not already installed
   const tempListNewCount = Array.from(tempList).filter(guid => !installedGuids.has(guid.toLowerCase())).length;
 
-  const newObjectsCount = (selectedObjects.length - alreadyInstalledCount) + tempListNewCount;
+  // Total new objects = selected items (not in tempList, not installed) + tempList items (not installed)
+  const newObjectsCount = selectedNewCount + tempListNewCount;
+
+  // Count how many selected items can be added to temp list (not installed, not already in tempList)
+  const addableToTempListCount = selectedNewCount;
 
   // Toggle installation selection
   const toggleInstallationSelect = (id: string, e: React.MouseEvent) => {
@@ -7000,11 +7013,11 @@ export default function InstallationsScreen({
                       className="add-to-temp-list-btn"
                       onClick={addSelectedToTempList}
                       title="Lisa valitud ajutisse nimekirja"
-                      disabled={selectedObjects.length === 0}
+                      disabled={selectedObjects.length === 0 || addableToTempListCount === 0}
                     >
                       + Lisa ajutisse listi
-                      {tempList.size > 0 && (
-                        <span className="temp-list-badge">{tempList.size}</span>
+                      {addableToTempListCount > 0 && (
+                        <span className="temp-list-badge">{addableToTempListCount}</span>
                       )}
                     </button>
                   </div>
