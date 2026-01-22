@@ -304,69 +304,85 @@ export default function ToolsScreen({
     const loadPropertiesFromSelection = async () => {
       setMarkeerijFieldsLoading(true);
       try {
-        const selected = await api.viewer.getSelection();
-        console.log('Markeerija: getSelection returned', selected);
+        const selection = await api.viewer.getSelection();
 
         let count = 0;
-        if (selected && selected.length > 0) {
-          for (const sel of selected) {
-            if (sel.objectRuntimeIds) count += sel.objectRuntimeIds.length;
+        if (selection && selection.length > 0) {
+          for (const modelSel of selection) {
+            if (modelSel.objectRuntimeIds) count += modelSel.objectRuntimeIds.length;
           }
         }
         setMarkeerijSelectedCount(count);
-        console.log('Markeerija: count =', count);
 
         // Load properties from first selected object
-        const firstSel = selected?.[0];
-        const firstRuntimeIds = firstSel?.objectRuntimeIds;
-        if (firstSel && firstRuntimeIds && firstRuntimeIds.length > 0) {
-          const runtimeId = firstRuntimeIds[0];
-          console.log('Markeerija: loading props for', firstSel.modelId, runtimeId);
-          const props = await api.viewer.getObjectProperties(firstSel.modelId, [runtimeId]);
-          console.log('Markeerija: props', props);
+        if (selection && selection.length > 0) {
+          const firstModelSel = selection[0];
+          const modelId = firstModelSel.modelId;
+          const runtimeIds = firstModelSel.objectRuntimeIds || [];
 
-          if (props && props[0]) {
-            const propsData = props[0];
-            const sets = (propsData as any).propertySets || (propsData as any).properties || [];
-            const fields: MarkeerijaPropField[] = [];
+          if (modelId && runtimeIds.length > 0) {
+            // Use includeHidden: true like AdminScreen does
+            const props = await (api.viewer as any).getObjectProperties(modelId, runtimeIds.slice(0, 1), { includeHidden: true });
 
-            for (const set of sets) {
-              const setName = set.name || set.setName || '';
-              const properties = set.properties || {};
+            if (props && props[0]) {
+              const objProps = props[0] as any;
+              const fields: MarkeerijaPropField[] = [];
 
-              // Handle both array and object formats
-              if (Array.isArray(properties)) {
-                for (const prop of properties) {
-                  const propName = prop.name || '';
-                  const propValue = String(prop.value ?? prop.displayValue ?? '');
-                  if (propName && propValue) {
-                    const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
-                    fields.push({
-                      id,
-                      label: propName,
-                      placeholder: `{${id}}`,
-                      preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue
-                    });
-                  }
-                }
-              } else {
-                for (const [propName, propValue] of Object.entries(properties)) {
-                  const val = String(propValue ?? '');
-                  if (propName && val) {
-                    const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
-                    fields.push({
-                      id,
-                      label: propName,
-                      placeholder: `{${id}}`,
-                      preview: val.length > 30 ? val.substring(0, 30) + '...' : val
-                    });
+              // Handle properties array format (from getObjectProperties with includeHidden)
+              if (objProps.properties && Array.isArray(objProps.properties)) {
+                for (const pset of objProps.properties) {
+                  const setName = pset.set || pset.name || 'Unknown';
+                  const propsArray = pset.properties || [];
+
+                  if (Array.isArray(propsArray)) {
+                    for (const prop of propsArray) {
+                      const propName = prop.name || '';
+                      const propValue = String(prop.value ?? prop.displayValue ?? '');
+                      if (propName) {
+                        const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
+                        fields.push({
+                          id,
+                          label: propName,
+                          placeholder: `{${id}}`,
+                          preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue
+                        });
+                      }
+                    }
                   }
                 }
               }
-            }
 
-            console.log('Markeerija: fields', fields.length);
-            setMarkeerijFields(fields);
+              // Also handle propertySets format
+              if (objProps.propertySets && Array.isArray(objProps.propertySets)) {
+                for (const pset of objProps.propertySets) {
+                  const setName = pset.name || 'Unknown';
+                  const propsArray = pset.properties || [];
+
+                  if (Array.isArray(propsArray)) {
+                    for (const prop of propsArray) {
+                      const propName = prop.name || '';
+                      const propValue = String(prop.value ?? '');
+                      if (propName) {
+                        const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
+                        // Avoid duplicates
+                        if (!fields.find(f => f.id === id)) {
+                          fields.push({
+                            id,
+                            label: propName,
+                            placeholder: `{${id}}`,
+                            preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue
+                          });
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              setMarkeerijFields(fields);
+            } else {
+              setMarkeerijFields([]);
+            }
           } else {
             setMarkeerijFields([]);
           }
@@ -374,7 +390,7 @@ export default function ToolsScreen({
           setMarkeerijFields([]);
         }
       } catch (e) {
-        console.error('Markeerija: error', e);
+        console.error('Markeerija: error loading properties', e);
         setMarkeerijSelectedCount(0);
         setMarkeerijFields([]);
       } finally {
@@ -757,8 +773,8 @@ export default function ToolsScreen({
 
       setBatchProgress({ message: 'Loen propertisid...', percent: 10 });
 
-      // Get properties for all selected objects
-      const properties: any[] = await api.viewer.getObjectProperties(modelId, allRuntimeIds);
+      // Get properties for all selected objects (with includeHidden like AdminScreen)
+      const properties: any[] = await (api.viewer as any).getObjectProperties(modelId, allRuntimeIds, { includeHidden: true });
       const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
 
       setBatchProgress({ message: 'Genereerin markupe...', percent: 30 });
@@ -767,7 +783,7 @@ export default function ToolsScreen({
 
       // Process each object
       for (let i = 0; i < allRuntimeIds.length; i++) {
-        const props = properties[i];
+        const objProps = properties[i] as any;
         const bbox = bboxes[i];
 
         if (!bbox?.boundingBox) continue;
@@ -775,27 +791,40 @@ export default function ToolsScreen({
         // Build property map from object - match field IDs like "SetName_PropName"
         const propMap: Record<string, string> = {};
 
-        const propsData = props;
-        const sets = (propsData as any)?.propertySets || (propsData as any)?.properties || [];
+        // Handle properties array format (from getObjectProperties with includeHidden)
+        if (objProps?.properties && Array.isArray(objProps.properties)) {
+          for (const pset of objProps.properties) {
+            const setName = pset.set || pset.name || 'Unknown';
+            const propsArray = pset.properties || [];
 
-        for (const set of sets) {
-          const setName = set.name || set.setName || '';
-          const properties = set.properties || {};
-
-          // Handle both array and object formats
-          if (Array.isArray(properties)) {
-            for (const prop of properties) {
-              const propName = prop.name || '';
-              const propValue = String(prop.value ?? prop.displayValue ?? '');
-              if (propName) {
-                const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
-                propMap[id] = propValue;
+            if (Array.isArray(propsArray)) {
+              for (const prop of propsArray) {
+                const propName = prop.name || '';
+                const propValue = String(prop.value ?? prop.displayValue ?? '');
+                if (propName) {
+                  const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
+                  propMap[id] = propValue;
+                }
               }
             }
-          } else {
-            for (const [propName, propValue] of Object.entries(properties)) {
-              const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
-              propMap[id] = String(propValue ?? '');
+          }
+        }
+
+        // Also handle propertySets format
+        if (objProps?.propertySets && Array.isArray(objProps.propertySets)) {
+          for (const pset of objProps.propertySets) {
+            const setName = pset.name || 'Unknown';
+            const propsArray = pset.properties || [];
+
+            if (Array.isArray(propsArray)) {
+              for (const prop of propsArray) {
+                const propName = prop.name || '';
+                const propValue = String(prop.value ?? '');
+                if (propName) {
+                  const id = `${setName}_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
+                  if (!propMap[id]) propMap[id] = propValue;
+                }
+              }
             }
           }
         }
