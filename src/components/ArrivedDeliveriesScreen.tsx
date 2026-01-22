@@ -5191,7 +5191,7 @@ export default function ArrivedDeliveriesScreen({
           if ((e.target as HTMLElement).closest('button')) return;
 
           if (e.ctrlKey || e.metaKey) {
-            // Toggle selection
+            // CTRL+click: Toggle selection (add/remove from multi-select)
             setItemsListSelectedIds(prev => {
               const newSet = new Set(prev);
               if (newSet.has(item.id)) {
@@ -5203,7 +5203,7 @@ export default function ArrivedDeliveriesScreen({
             });
             setItemsListLastClickedId(item.id);
           } else if (e.shiftKey && itemsListLastClickedId) {
-            // Range selection
+            // SHIFT+click: Range selection
             const lastIdx = filteredItems.findIndex(i => i.id === itemsListLastClickedId);
             const currentIdx = filteredItems.findIndex(i => i.id === item.id);
             if (lastIdx !== -1 && currentIdx !== -1) {
@@ -5213,7 +5213,18 @@ export default function ArrivedDeliveriesScreen({
               setItemsListSelectedIds(prev => new Set([...prev, ...rangeIds]));
             }
           } else {
-            // Single click without modifiers - just track for shift-click
+            // Single click without modifiers - toggle single selection
+            setItemsListSelectedIds(prev => {
+              const newSet = new Set(prev);
+              if (newSet.has(item.id)) {
+                newSet.delete(item.id);
+              } else {
+                // Clear previous selections and select only this one
+                newSet.clear();
+                newSet.add(item.id);
+              }
+              return newSet;
+            });
             setItemsListLastClickedId(item.id);
           }
         };
@@ -5277,6 +5288,66 @@ export default function ArrivedDeliveriesScreen({
             await loadConfirmations();
             setItemsListSelectedIds(new Set());
             setMessage(`✓ ${updated} staatust uuendatud`);
+          } catch (e: any) {
+            setMessage('Viga: ' + e.message);
+          } finally {
+            setItemsListSaving(false);
+          }
+        };
+
+        // Apply status to a single item
+        const applyStatusToSingleItem = async (itemId: string, status: ArrivalItemStatus) => {
+          setItemsListSaving(true);
+          try {
+            const item = items.find(i => i.id === itemId);
+            if (!item) return;
+            const vehicle = getVehicle(item.vehicle_id);
+            let arrivedVehicle = vehicle ? getArrivedVehicle(vehicle.id) : null;
+
+            // Create arrival record if doesn't exist
+            if (!arrivedVehicle && vehicle) {
+              const { data, error } = await supabase
+                .from('trimble_arrived_vehicles')
+                .insert({
+                  vehicle_id: vehicle.id,
+                  project_id: projectId,
+                  arrival_date: new Date().toISOString().split('T')[0],
+                  arrival_time: new Date().toTimeString().substring(0, 5),
+                  status: 'arrived',
+                  created_by: tcUserEmail
+                })
+                .select()
+                .single();
+
+              if (!error && data) {
+                arrivedVehicle = data;
+                // Create confirmation records for all vehicle items
+                const vehicleItems = items.filter(i => i.vehicle_id === vehicle.id);
+                await supabase.from('trimble_arrival_confirmations').insert(
+                  vehicleItems.map(vi => ({
+                    arrived_vehicle_id: data.id,
+                    item_id: vi.id,
+                    status: 'pending',
+                    created_by: tcUserEmail
+                  }))
+                );
+                await loadArrivedVehicles();
+                await loadConfirmations();
+              }
+            }
+
+            if (arrivedVehicle) {
+              await supabase
+                .from('trimble_arrival_confirmations')
+                .update({
+                  status,
+                  confirmed_at: new Date().toISOString(),
+                  confirmed_by: tcUserEmail
+                })
+                .eq('arrived_vehicle_id', arrivedVehicle.id)
+                .eq('item_id', itemId);
+              await loadConfirmations();
+            }
           } catch (e: any) {
             setMessage('Viga: ' + e.message);
           } finally {
@@ -5533,17 +5604,48 @@ export default function ArrivedDeliveriesScreen({
                         </span>
                       </div>
 
-                      {/* Status - compact indicator */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                        <span style={{
-                          fontSize: '9px',
-                          padding: '1px 4px',
-                          borderRadius: '3px',
-                          background: currentStatus === 'confirmed' ? '#d1fae5' : currentStatus === 'missing' ? '#fee2e2' : '#f3f4f6',
-                          color: currentStatus === 'confirmed' ? '#059669' : currentStatus === 'missing' ? '#dc2626' : '#6b7280'
-                        }}>
-                          {currentStatus === 'confirmed' ? '✓' : currentStatus === 'missing' ? '✗' : '○'}
-                        </span>
+                      {/* Status - clickable buttons */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '2px' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            applyStatusToSingleItem(item.id, 'confirmed');
+                          }}
+                          disabled={itemsListSaving}
+                          style={{
+                            padding: '2px 6px',
+                            fontSize: '10px',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            background: currentStatus === 'confirmed' ? '#22c55e' : '#e5e7eb',
+                            color: currentStatus === 'confirmed' ? '#fff' : '#6b7280',
+                            transition: 'all 0.15s'
+                          }}
+                          title="Kinnita saabunuks"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            applyStatusToSingleItem(item.id, 'missing');
+                          }}
+                          disabled={itemsListSaving}
+                          style={{
+                            padding: '2px 6px',
+                            fontSize: '10px',
+                            border: 'none',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                            background: currentStatus === 'missing' ? '#ef4444' : '#e5e7eb',
+                            color: currentStatus === 'missing' ? '#fff' : '#6b7280',
+                            transition: 'all 0.15s'
+                          }}
+                          title="Märgi puuduvaks"
+                        >
+                          ✗
+                        </button>
                       </div>
                     </div>
                   );
