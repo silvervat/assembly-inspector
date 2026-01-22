@@ -505,6 +505,7 @@ export default function ArrivedDeliveriesScreen({
   const [itemsListSortField, setItemsListSortField] = useState<'mark' | 'vehicle' | 'status'>('mark');
   const [itemsListSortDir, setItemsListSortDir] = useState<'asc' | 'desc'>('asc');
   const [itemsListLastClickedId, setItemsListLastClickedId] = useState<string | null>(null);
+  const [itemsListEditVehicleId, setItemsListEditVehicleId] = useState<string | null>(null); // For edit modal
 
   // State - Unassigned arrivals (items found on site without vehicle assignment)
   const [unassignedArrivals, setUnassignedArrivals] = useState<UnassignedArrival[]>([]);
@@ -5562,8 +5563,9 @@ export default function ArrivedDeliveriesScreen({
                         className="items-list-vehicle"
                         style={{
                           display: 'flex',
-                          flexDirection: 'column',
-                          gap: '1px',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: '6px',
                           cursor: vehicle ? 'pointer' : 'default',
                           transition: 'opacity 0.15s'
                         }}
@@ -5585,23 +5587,48 @@ export default function ArrivedDeliveriesScreen({
                         }}
                         title={vehicle ? `${vehicle.vehicle_code} - kliki et valida kõik veoki detailid` : ''}
                       >
-                        <span style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 500 }}>
-                          {vehicle?.vehicle_code || '-'}
-                        </span>
-                        <span style={{ fontSize: '9px', color: '#94a3b8' }}>
-                          {scheduledDate && (
-                            <>
-                              Plan: {formatDate(scheduledDate)}
-                              {vehicle?.unload_start_time && ` ${vehicle.unload_start_time.substring(0, 5)}`}
-                            </>
-                          )}
-                          {arrivedVehicle && (
-                            <span style={{ color: '#22c55e' }}>
-                              {' '}| Saab: {arrivalDate ? formatDate(arrivalDate) : '?'}
-                              {arrivedVehicle.arrival_time && ` ${arrivedVehicle.arrival_time.substring(0, 5)}`}
-                            </span>
-                          )}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', flex: 1, minWidth: 0 }}>
+                          <span style={{ fontSize: '10px', color: '#3b82f6', fontWeight: 500 }}>
+                            {vehicle?.vehicle_code || '-'}
+                          </span>
+                          <span style={{ fontSize: '9px', color: '#94a3b8' }}>
+                            {scheduledDate && (
+                              <>
+                                Plan: {formatDate(scheduledDate)}
+                                {vehicle?.unload_start_time && ` ${vehicle.unload_start_time.substring(0, 5)}`}
+                              </>
+                            )}
+                            {arrivedVehicle && (
+                              <span style={{ color: '#22c55e' }}>
+                                {' '}| Saab: {arrivalDate ? formatDate(arrivalDate) : '?'}
+                                {arrivedVehicle.arrival_time && ` ${arrivedVehicle.arrival_time.substring(0, 5)}`}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {/* Edit button for arrived vehicle */}
+                        {arrivedVehicle && !arrivedVehicle.is_confirmed && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setItemsListEditVehicleId(arrivedVehicle.id);
+                            }}
+                            style={{
+                              padding: '2px 4px',
+                              background: '#f1f5f9',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}
+                            title="Muuda saabumise andmeid"
+                          >
+                            <FiEdit2 size={10} color="#64748b" />
+                          </button>
+                        )}
                       </div>
 
                       {/* Status - clickable buttons */}
@@ -6781,6 +6808,223 @@ export default function ArrivedDeliveriesScreen({
                   title="Sulge (ESC)"
                 >
                   <FiX size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Items-list edit modal for arrival vehicle */}
+      {itemsListEditVehicleId && (() => {
+        const editVehicle = arrivedVehicles.find(av => av.id === itemsListEditVehicleId);
+        if (!editVehicle) return null;
+        const scheduledVehicle = vehicles.find(v => v.id === editVehicle.vehicle_id);
+        const factory = scheduledVehicle ? factories.find(f => f.id === scheduledVehicle.factory_id) : null;
+
+        return (
+          <div className="modal-overlay" onClick={() => setItemsListEditVehicleId(null)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+              <div className="modal-header">
+                <h2>
+                  <FiEdit2 style={{ marginRight: '8px', verticalAlign: 'text-bottom' }} />
+                  {scheduledVehicle?.vehicle_code || 'Veok'}
+                  {factory && <span style={{ fontWeight: 400, fontSize: '14px', color: '#64748b' }}> ({factory.factory_name})</span>}
+                </h2>
+                <button className="close-btn" onClick={() => setItemsListEditVehicleId(null)}>
+                  <FiX />
+                </button>
+              </div>
+              <div className="modal-body" style={{ padding: '16px' }}>
+                {/* Arrival date & time */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                      <FiCalendar style={{ marginRight: '4px' }} />
+                      Saabumise kuupäev
+                    </label>
+                    <input
+                      type="date"
+                      value={editVehicle.arrival_date || ''}
+                      onChange={(e) => updateArrival(editVehicle.id, { arrival_date: e.target.value }, true)}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                      <FiClock style={{ marginRight: '4px' }} />
+                      Saabumise aeg
+                    </label>
+                    <input
+                      type="text"
+                      list="items-list-edit-arrival-times"
+                      value={editVehicle.arrival_time || ''}
+                      onChange={(e) => updateArrival(editVehicle.id, { arrival_time: e.target.value }, true)}
+                      placeholder="HH:MM"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                    />
+                    <datalist id="items-list-edit-arrival-times">
+                      {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Unload times */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                      <FiClock style={{ marginRight: '4px' }} />
+                      Mahalaadimine algus
+                    </label>
+                    <input
+                      type="text"
+                      list="items-list-edit-unload-start"
+                      value={editVehicle.unload_start_time || ''}
+                      onChange={(e) => updateArrival(editVehicle.id, { unload_start_time: e.target.value }, true)}
+                      placeholder="HH:MM"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                    />
+                    <datalist id="items-list-edit-unload-start">
+                      {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
+                    </datalist>
+                  </div>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                      <FiClock style={{ marginRight: '4px' }} />
+                      Mahalaadimine lõpp
+                    </label>
+                    <input
+                      type="text"
+                      list="items-list-edit-unload-end"
+                      value={editVehicle.unload_end_time || ''}
+                      onChange={(e) => updateArrival(editVehicle.id, { unload_end_time: e.target.value }, true)}
+                      placeholder="HH:MM"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                    />
+                    <datalist id="items-list-edit-unload-end">
+                      {TIME_OPTIONS.map(t => <option key={t} value={t} />)}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Vehicle registration */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                      <FiTruck style={{ marginRight: '4px' }} />
+                      Registri number
+                    </label>
+                    <input
+                      type="text"
+                      value={editVehicle.reg_number || ''}
+                      onChange={(e) => updateArrival(editVehicle.id, { reg_number: e.target.value }, true)}
+                      placeholder="Nt. 123ABC"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                      <FiTruck style={{ marginRight: '4px' }} />
+                      Haagise number
+                    </label>
+                    <input
+                      type="text"
+                      value={editVehicle.trailer_number || ''}
+                      onChange={(e) => updateArrival(editVehicle.id, { trailer_number: e.target.value }, true)}
+                      placeholder="Nt. 456DEF"
+                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Unload location */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                    <FiMapPin style={{ marginRight: '4px' }} />
+                    Mahalaadimise asukoht
+                  </label>
+                  <input
+                    type="text"
+                    value={editVehicle.unload_location || ''}
+                    onChange={(e) => updateArrival(editVehicle.id, { unload_location: e.target.value }, true)}
+                    placeholder="Nt. Plats A, hoone 2 juures..."
+                    style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                  />
+                </div>
+
+                {/* Controllers */}
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '4px', fontWeight: 500, fontSize: '12px', color: '#64748b' }}>
+                    👷 Kontrollijad
+                  </label>
+                  <input
+                    type="text"
+                    value={editVehicle.checked_by_workers || ''}
+                    onChange={(e) => updateArrival(editVehicle.id, { checked_by_workers: e.target.value }, true)}
+                    placeholder="Nt. Jaan Tamm, Mari Mets..."
+                    style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                  />
+                </div>
+              </div>
+              <div className="modal-footer" style={{ padding: '12px 16px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  onClick={() => setItemsListEditVehicleId(null)}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#f1f5f9',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '13px'
+                  }}
+                >
+                  Sulge
+                </button>
+                <button
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      const { error } = await supabase
+                        .from('trimble_arrived_vehicles')
+                        .update({
+                          arrival_date: editVehicle.arrival_date,
+                          arrival_time: editVehicle.arrival_time,
+                          unload_start_time: editVehicle.unload_start_time,
+                          unload_end_time: editVehicle.unload_end_time,
+                          reg_number: editVehicle.reg_number,
+                          trailer_number: editVehicle.trailer_number,
+                          unload_location: editVehicle.unload_location,
+                          checked_by_workers: editVehicle.checked_by_workers,
+                          updated_at: new Date().toISOString(),
+                          updated_by: tcUserEmail
+                        })
+                        .eq('id', editVehicle.id);
+
+                      if (error) throw error;
+                      setMessage('Andmed salvestatud');
+                      setItemsListEditVehicleId(null);
+                    } catch (e: any) {
+                      setMessage('Viga salvestamisel: ' + e.message);
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#10b981',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <FiCheck size={14} />
+                  {saving ? 'Salvestab...' : 'Salvesta'}
                 </button>
               </div>
             </div>
