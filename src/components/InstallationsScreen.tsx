@@ -3115,7 +3115,7 @@ export default function InstallationsScreen({
       // If no GUID, allow saving (can't check duplicates)
       if (!guid) return true;
       // Check if already installed
-      const existingInfo = installedGuids.get(guid);
+      const existingInfo = installedGuids.get(guid.toLowerCase());
       if (existingInfo) {
         duplicates.push({
           assemblyMark: obj.assemblyMark || existingInfo.assemblyMark,
@@ -4833,7 +4833,7 @@ export default function InstallationsScreen({
 
   const alreadyInstalledCount = selectedObjects.filter(obj => {
     const guid = getObjectGuid(obj);
-    return guid && installedGuids.has(guid);
+    return guid && installedGuids.has(guid.toLowerCase());
   }).length;
 
   // Count temp list items that are not already installed
@@ -6703,14 +6703,14 @@ export default function InstallationsScreen({
                 <div className="selected-objects-list">
                   {selectedObjects.map((obj, idx) => {
                     const guid = getObjectGuid(obj);
-                    const installedInfo = guid ? installedGuids.get(guid) : null;
+                    const guidLower = guid?.toLowerCase() || '';
+                    const installedInfo = guidLower ? installedGuids.get(guidLower) : null;
                     const isInstalled = !!installedInfo;
-                    const preassemblyRecord = guid ? preassemblies.find(p => p.guid_ifc === guid || p.guid === guid) : null;
-                    const preassemblyInfo = guid ? preassembledGuids.get(guid) : null;
+                    const preassemblyRecord = guidLower ? preassemblies.find(p => (p.guid_ifc || '').toLowerCase() === guidLower || (p.guid || '').toLowerCase() === guidLower) : null;
+                    const preassemblyInfo = guidLower ? preassembledGuids.get(guidLower) : null;
                     const isInTempList = guid && tempList.has(guid);
 
                     // Delivery status for badges
-                    const guidLower = guid?.toLowerCase() || '';
                     const isInDeliverySchedule = guidLower && deliveryItemGuids.has(guidLower);
                     const hasArrived = guidLower && arrivedGuids.has(guidLower);
 
