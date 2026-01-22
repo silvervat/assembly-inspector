@@ -344,6 +344,174 @@ export default function PartDatabasePanel({ api, projectId, compact = false, onN
         </div>
       )}
 
+      {/* Timeline / Lifecycle */}
+      {!loading && data && (
+        <div style={{
+          marginBottom: '16px',
+          padding: '12px',
+          background: '#fafafa',
+          borderRadius: '8px',
+          border: '1px solid #e5e7eb'
+        }}>
+          <div style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            color: '#6b7280',
+            marginBottom: '10px',
+            textTransform: 'uppercase',
+            letterSpacing: '0.5px'
+          }}>
+            Elutsükkel
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            overflowX: 'auto',
+            paddingBottom: '4px'
+          }}>
+            {/* Tarnegraafik */}
+            <div
+              onClick={() => data.deliveryItems.length > 0 && toggleSection('delivery')}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                background: data.deliveryItems.length > 0 ? '#fef3c7' : '#f3f4f6',
+                border: `2px solid ${data.deliveryItems.length > 0 ? '#f59e0b' : '#e5e7eb'}`,
+                cursor: data.deliveryItems.length > 0 ? 'pointer' : 'default',
+                opacity: data.deliveryItems.length > 0 ? 1 : 0.5,
+                minWidth: '60px',
+                transition: 'all 0.15s'
+              }}
+            >
+              <FiTruck size={16} style={{ color: data.deliveryItems.length > 0 ? '#d97706' : '#9ca3af' }} />
+              <span style={{ fontSize: '9px', marginTop: '4px', fontWeight: 500, color: data.deliveryItems.length > 0 ? '#92400e' : '#9ca3af' }}>Tarne</span>
+              {data.deliveryItems.length > 0 && (
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#d97706' }}>{data.deliveryItems.length}</span>
+              )}
+            </div>
+
+            {/* Arrow */}
+            <div style={{ color: '#d1d5db', fontSize: '16px' }}>→</div>
+
+            {/* Saabunud */}
+            <div
+              onClick={() => data.arrivalItems.length > 0 && toggleSection('arrivals')}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                background: data.arrivalItems.length > 0 ? '#d1fae5' : '#f3f4f6',
+                border: `2px solid ${data.arrivalItems.length > 0 ? '#10b981' : '#e5e7eb'}`,
+                cursor: data.arrivalItems.length > 0 ? 'pointer' : 'default',
+                opacity: data.arrivalItems.length > 0 ? 1 : 0.5,
+                minWidth: '60px',
+                transition: 'all 0.15s'
+              }}
+            >
+              <FiBox size={16} style={{ color: data.arrivalItems.length > 0 ? '#059669' : '#9ca3af' }} />
+              <span style={{ fontSize: '9px', marginTop: '4px', fontWeight: 500, color: data.arrivalItems.length > 0 ? '#065f46' : '#9ca3af' }}>Saabunud</span>
+              {data.arrivalItems.length > 0 && (
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#059669' }}>{data.arrivalItems.length}</span>
+              )}
+            </div>
+
+            {/* Arrow */}
+            <div style={{ color: '#d1d5db', fontSize: '16px' }}>→</div>
+
+            {/* Paigaldatud */}
+            {(() => {
+              const installedCount = data.installationItems.filter((i: any) => i.source === 'installation').length;
+              const hasInstall = data.installationItems.length > 0;
+              return (
+                <div
+                  onClick={() => hasInstall && toggleSection('installation')}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    background: installedCount > 0 ? '#dbeafe' : hasInstall ? '#eff6ff' : '#f3f4f6',
+                    border: `2px solid ${installedCount > 0 ? '#3b82f6' : hasInstall ? '#93c5fd' : '#e5e7eb'}`,
+                    cursor: hasInstall ? 'pointer' : 'default',
+                    opacity: hasInstall ? 1 : 0.5,
+                    minWidth: '60px',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <img src={`${import.meta.env.BASE_URL}icons/monteerija.png`} alt="" style={{ width: 16, height: 16, opacity: hasInstall ? 1 : 0.4 }} />
+                  <span style={{ fontSize: '9px', marginTop: '4px', fontWeight: 500, color: hasInstall ? '#1e40af' : '#9ca3af' }}>Paigaldus</span>
+                  {hasInstall && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: installedCount > 0 ? '#2563eb' : '#60a5fa' }}>
+                      {installedCount > 0 ? `✓${installedCount}` : data.installationItems.length}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Arrow */}
+            <div style={{ color: '#d1d5db', fontSize: '16px' }}>→</div>
+
+            {/* Inspektsioon */}
+            <div
+              onClick={() => data.inspections.length > 0 && toggleSection('inspections')}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                padding: '8px 10px',
+                borderRadius: '6px',
+                background: data.inspections.length > 0 ? '#dcfce7' : '#f3f4f6',
+                border: `2px solid ${data.inspections.length > 0 ? '#22c55e' : '#e5e7eb'}`,
+                cursor: data.inspections.length > 0 ? 'pointer' : 'default',
+                opacity: data.inspections.length > 0 ? 1 : 0.5,
+                minWidth: '60px',
+                transition: 'all 0.15s'
+              }}
+            >
+              <FiCheck size={16} style={{ color: data.inspections.length > 0 ? '#16a34a' : '#9ca3af' }} />
+              <span style={{ fontSize: '9px', marginTop: '4px', fontWeight: 500, color: data.inspections.length > 0 ? '#166534' : '#9ca3af' }}>Inspekt.</span>
+              {data.inspections.length > 0 && (
+                <span style={{ fontSize: '10px', fontWeight: 700, color: '#16a34a' }}>{data.inspections.length}</span>
+              )}
+            </div>
+
+            {/* Issues indicator (separate, not in flow) */}
+            {data.issues.length > 0 && (
+              <>
+                <div style={{ color: '#d1d5db', fontSize: '12px', margin: '0 4px' }}>|</div>
+                <div
+                  onClick={() => toggleSection('issues')}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    background: '#fef3c7',
+                    border: '2px solid #f59e0b',
+                    cursor: 'pointer',
+                    minWidth: '60px',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <FiAlertTriangle size={16} style={{ color: '#d97706' }} />
+                  <span style={{ fontSize: '9px', marginTop: '4px', fontWeight: 500, color: '#92400e' }}>Probleem</span>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color: '#d97706' }}>{data.issues.length}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Loading */}
       {loading && (
         <div style={{ textAlign: 'center', padding: '30px' }}>

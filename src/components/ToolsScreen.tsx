@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiSearch } from 'react-icons/fi';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -59,6 +59,66 @@ interface BoltSummaryItem {
   washerCount: number;
 }
 
+// Markeerija (text markup generator) settings
+interface MarkeerijaSett {
+  line1Template: string;
+  line2Template: string;
+  line3Template: string;
+  color: { r: number; g: number; b: number };
+  leaderHeight: number; // cm
+}
+
+// Markeerija property field definition
+interface MarkeerijaPropField {
+  id: string;
+  label: string;
+  placeholder: string;
+  propertySet: string;
+  propertyName: string;
+  isDefault: boolean; // Show before "Näita rohkem"
+  category: 'assembly' | 'bolt' | 'other';
+}
+
+// Default markeerija property fields
+const MARKEERIJA_FIELDS: MarkeerijaPropField[] = [
+  // Assembly/Cast unit properties - shown by default
+  { id: 'assemblyMark', label: 'Assembly Mark', placeholder: '{assemblyMark}', propertySet: 'Tekla Assembly', propertyName: 'Assembly_Mark', isDefault: true, category: 'assembly' },
+  { id: 'positionCode', label: 'Position Code', placeholder: '{positionCode}', propertySet: 'Tekla Assembly', propertyName: 'Assembly_Position_Code', isDefault: true, category: 'assembly' },
+  { id: 'topElevation', label: 'Top Elevation', placeholder: '{topElevation}', propertySet: 'Tekla Assembly', propertyName: 'Top_Elevation', isDefault: true, category: 'assembly' },
+  { id: 'bottomElevation', label: 'Bottom Elevation', placeholder: '{bottomElevation}', propertySet: 'Tekla Assembly', propertyName: 'Bottom_Elevation', isDefault: true, category: 'assembly' },
+  { id: 'weight', label: 'Weight', placeholder: '{weight}', propertySet: 'Tekla Assembly', propertyName: 'Weight_Gross', isDefault: true, category: 'assembly' },
+  { id: 'productName', label: 'Product Name', placeholder: '{productName}', propertySet: 'Tekla Common', propertyName: 'Product_Name', isDefault: true, category: 'assembly' },
+  // Bolt properties - shown by default
+  { id: 'boltName', label: 'Bolt Name', placeholder: '{boltName}', propertySet: 'Tekla Bolt', propertyName: 'Name', isDefault: true, category: 'bolt' },
+  { id: 'boltStandard', label: 'Bolt Standard', placeholder: '{boltStandard}', propertySet: 'Tekla Bolt', propertyName: 'Standard', isDefault: true, category: 'bolt' },
+  { id: 'boltCount', label: 'Bolt Count', placeholder: '{boltCount}', propertySet: 'Tekla Bolt', propertyName: 'Number_Of_Bolts', isDefault: true, category: 'bolt' },
+  { id: 'washerName', label: 'Washer Name', placeholder: '{washerName}', propertySet: 'Tekla Bolt', propertyName: 'Washer_Name', isDefault: true, category: 'bolt' },
+  { id: 'washerType', label: 'Washer Type', placeholder: '{washerType}', propertySet: 'Tekla Bolt', propertyName: 'Washer_Type', isDefault: true, category: 'bolt' },
+  // Additional properties - hidden by default (shown after "Näita rohkem")
+  { id: 'castUnitMark', label: 'Cast Unit Mark', placeholder: '{castUnitMark}', propertySet: 'Tekla Assembly', propertyName: 'Cast_Unit_Mark', isDefault: false, category: 'assembly' },
+  { id: 'phase', label: 'Phase', placeholder: '{phase}', propertySet: 'Tekla Assembly', propertyName: 'Phase', isDefault: false, category: 'assembly' },
+  { id: 'material', label: 'Material', placeholder: '{material}', propertySet: 'Tekla Common', propertyName: 'Material', isDefault: false, category: 'assembly' },
+  { id: 'profile', label: 'Profile', placeholder: '{profile}', propertySet: 'Tekla Common', propertyName: 'Profile', isDefault: false, category: 'assembly' },
+  { id: 'volume', label: 'Volume', placeholder: '{volume}', propertySet: 'Tekla Quantity', propertyName: 'Volume_Net', isDefault: false, category: 'assembly' },
+  { id: 'area', label: 'Area', placeholder: '{area}', propertySet: 'Tekla Quantity', propertyName: 'Area_Gross', isDefault: false, category: 'assembly' },
+  { id: 'length', label: 'Length', placeholder: '{length}', propertySet: 'Tekla Common', propertyName: 'Length', isDefault: false, category: 'assembly' },
+  { id: 'width', label: 'Width', placeholder: '{width}', propertySet: 'Tekla Common', propertyName: 'Width', isDefault: false, category: 'assembly' },
+  { id: 'height', label: 'Height', placeholder: '{height}', propertySet: 'Tekla Common', propertyName: 'Height', isDefault: false, category: 'assembly' },
+  { id: 'class', label: 'Class', placeholder: '{class}', propertySet: 'Tekla Common', propertyName: 'Class', isDefault: false, category: 'assembly' },
+  { id: 'boltSize', label: 'Bolt Size', placeholder: '{boltSize}', propertySet: 'Tekla Bolt', propertyName: 'Size', isDefault: false, category: 'bolt' },
+  { id: 'boltLength', label: 'Bolt Length', placeholder: '{boltLength}', propertySet: 'Tekla Bolt', propertyName: 'Length', isDefault: false, category: 'bolt' },
+  { id: 'nutName', label: 'Nut Name', placeholder: '{nutName}', propertySet: 'Tekla Bolt', propertyName: 'Nut_Name', isDefault: false, category: 'bolt' },
+];
+
+// Default markeerija settings
+const DEFAULT_MARKEERIJA_SETTINGS: MarkeerijaSett = {
+  line1Template: '{assemblyMark}',
+  line2Template: '',
+  line3Template: '',
+  color: { r: 0, g: 63, b: 135 }, // Trimble blue
+  leaderHeight: 10
+};
+
 export default function ToolsScreen({
   api,
   user,
@@ -77,7 +137,7 @@ export default function ToolsScreen({
   const [hasSelection, setHasSelection] = useState(false);
 
   // Accordion state - which section is expanded (null = all collapsed by default)
-  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'partdb' | null>(null);
+  const [expandedSection, setExpandedSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'partdb' | null>(null);
 
   // Marker (Märgista) feature state
   const [markerCategories, setMarkerCategories] = useState<MarkerCategory[]>([
@@ -91,6 +151,22 @@ export default function ToolsScreen({
   const [markerLoading, setMarkerLoading] = useState(false);
   const [coloringCategory, setColoringCategory] = useState<string | null>(null);
 
+  // Markeerija (text markup generator) state
+  const [markeerijaSett, setMarkeerijaSett] = useState<MarkeerijaSett>(() => {
+    try {
+      const saved = localStorage.getItem('tools_markeerija_settings');
+      if (saved) return { ...DEFAULT_MARKEERIJA_SETTINGS, ...JSON.parse(saved) };
+    } catch (e) {
+      console.warn('Failed to load markeerija settings:', e);
+    }
+    return DEFAULT_MARKEERIJA_SETTINGS;
+  });
+  const [markeerijaPropSearch, setMarkeerijaPropSearch] = useState('');
+  const [markeerijaPropShowAll, setMarkeerijaPropShowAll] = useState(false);
+  const [markeerijFocusedLine, setMarkeerijFocusedLine] = useState<'line1Template' | 'line2Template' | 'line3Template'>('line1Template');
+  const [markeerijLoading, setMarkeerijLoading] = useState(false);
+  const [markeerijSelectedCount, setMarkeerijSelectedCount] = useState(0);
+
   // Progress overlay state for batch operations
   const [batchProgress, setBatchProgress] = useState<{ message: string; percent: number } | null>(null);
 
@@ -101,8 +177,13 @@ export default function ToolsScreen({
   // Ref for bolt summary table (for image copy)
   const boltSummaryRef = useRef<HTMLDivElement>(null);
 
+  // Refs for markeerija template lines
+  const markeerijLine1Ref = useRef<HTMLDivElement>(null);
+  const markeerijLine2Ref = useRef<HTMLDivElement>(null);
+  const markeerijLine3Ref = useRef<HTMLDivElement>(null);
+
   // Toggle section expansion (accordion style)
-  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'partdb') => {
+  const toggleSection = (section: 'crane' | 'export' | 'markup' | 'marker' | 'markeerija' | 'partdb') => {
     setExpandedSection(prev => prev === section ? null : section);
   };
 
@@ -238,6 +319,43 @@ export default function ToolsScreen({
       (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
     };
   }, [api]);
+
+  // Save markeerija settings to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('tools_markeerija_settings', JSON.stringify(markeerijaSett));
+    } catch (e) {
+      console.warn('Failed to save markeerija settings:', e);
+    }
+  }, [markeerijaSett]);
+
+  // Track selected objects count for markeerija
+  useEffect(() => {
+    if (expandedSection !== 'markeerija') return;
+
+    const updateCount = async () => {
+      try {
+        const selected = await api.viewer.getSelection();
+        let count = 0;
+        if (selected && selected.length > 0) {
+          for (const sel of selected) {
+            if (sel.objectRuntimeIds) count += sel.objectRuntimeIds.length;
+          }
+        }
+        setMarkeerijSelectedCount(count);
+      } catch (e) {
+        setMarkeerijSelectedCount(0);
+      }
+    };
+
+    updateCount();
+    const listener = () => updateCount();
+    (api.viewer as any).addEventListener?.('onSelectionChanged', listener);
+
+    return () => {
+      (api.viewer as any).removeEventListener?.('onSelectionChanged', listener);
+    };
+  }, [api, expandedSection]);
 
   // Color model by category - like Organizer does it
   const colorByCategory = useCallback(async (categoryId: string) => {
@@ -402,6 +520,238 @@ export default function ToolsScreen({
       onBackToMenu();
     } else if (onNavigate) {
       onNavigate(mode);
+    }
+  };
+
+  // Helper: Convert template string to HTML with chips
+  const templateToHtml = (template: string): string => {
+    if (!template) return '';
+    const THIN_SPACE = '\u2009';
+    return template.replace(/\{(\w+)\}/g, (_match, id) => {
+      const field = MARKEERIJA_FIELDS.find(f => f.id === id);
+      const label = field?.label || id;
+      return `<span class="markup-chip" data-field="${id}" contenteditable="false">${label}</span>${THIN_SPACE}`;
+    });
+  };
+
+  // Helper: Parse HTML back to template string
+  const parseContentToTemplate = (el: HTMLElement): string => {
+    let result = '';
+    el.childNodes.forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        // Strip thin spaces and zero-width spaces
+        result += (node.textContent || '').replace(/[\u2009\u200B]/g, '');
+      } else if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).classList?.contains('markup-chip')) {
+        const fieldId = (node as HTMLElement).getAttribute('data-field');
+        if (fieldId) result += `{${fieldId}}`;
+      }
+    });
+    return result;
+  };
+
+  // Helper: Insert property chip at cursor
+  const insertMarkeerijProperty = (fieldId: string) => {
+    const field = MARKEERIJA_FIELDS.find(f => f.id === fieldId);
+    if (!field) return;
+
+    const lineRef =
+      markeerijFocusedLine === 'line1Template' ? markeerijLine1Ref :
+      markeerijFocusedLine === 'line2Template' ? markeerijLine2Ref :
+      markeerijLine3Ref;
+
+    const el = lineRef.current;
+    if (!el) return;
+
+    // Create chip element
+    const THIN_SPACE = '\u2009';
+    const chip = document.createElement('span');
+    chip.className = 'markup-chip';
+    chip.setAttribute('data-field', fieldId);
+    chip.contentEditable = 'false';
+    chip.textContent = field.label;
+
+    const space = document.createTextNode(THIN_SPACE);
+
+    // Insert at cursor or end
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(space);
+      range.insertNode(chip);
+      range.setStartAfter(space);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      el.appendChild(chip);
+      el.appendChild(space);
+    }
+
+    // Update state
+    const newTemplate = parseContentToTemplate(el);
+    setMarkeerijaSett(prev => ({ ...prev, [markeerijFocusedLine]: newTemplate }));
+  };
+
+  // Helper: Handle input in template line
+  const handleMarkeerijLineInput = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', el: HTMLDivElement) => {
+    const newTemplate = parseContentToTemplate(el);
+    setMarkeerijaSett(prev => ({ ...prev, [lineKey]: newTemplate }));
+  };
+
+  // Create markups for selected objects
+  const handleCreateMarkeerijMarkups = async () => {
+    setMarkeerijLoading(true);
+    setBatchProgress({ message: 'Loen valikut...', percent: 0 });
+
+    try {
+      const selected = await api.viewer.getSelection();
+      if (!selected || selected.length === 0) {
+        showToast('Vali mudelist detailid!', 'error');
+        setBatchProgress(null);
+        setMarkeerijLoading(false);
+        return;
+      }
+
+      // Collect all runtime IDs
+      const allRuntimeIds: number[] = [];
+      let modelId = '';
+      for (const sel of selected) {
+        if (!modelId) modelId = sel.modelId;
+        if (sel.objectRuntimeIds) allRuntimeIds.push(...sel.objectRuntimeIds);
+      }
+
+      if (!modelId || allRuntimeIds.length === 0) {
+        showToast('Valitud objektidel puudub info', 'error');
+        setBatchProgress(null);
+        setMarkeerijLoading(false);
+        return;
+      }
+
+      // Check batch limit
+      if (allRuntimeIds.length > MAX_MARKUPS_PER_BATCH) {
+        showToast(`Liiga palju objekte (${allRuntimeIds.length}). Max ${MAX_MARKUPS_PER_BATCH} korraga!`, 'error');
+        setBatchProgress(null);
+        setMarkeerijLoading(false);
+        return;
+      }
+
+      setBatchProgress({ message: 'Loen propertisid...', percent: 10 });
+
+      // Get properties for all selected objects
+      const properties: any[] = await api.viewer.getObjectProperties(modelId, allRuntimeIds);
+      const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
+
+      setBatchProgress({ message: 'Genereerin markupe...', percent: 30 });
+
+      const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
+
+      // Process each object
+      for (let i = 0; i < allRuntimeIds.length; i++) {
+        const props = properties[i];
+        const bbox = bboxes[i];
+
+        if (!bbox?.boundingBox) continue;
+
+        // Build property map from object
+        const propMap: Record<string, string> = {};
+
+        if (props?.properties && Array.isArray(props.properties)) {
+          for (const pset of props.properties) {
+            const psetNameLower = (pset.name || '').replace(/\s+/g, '').toLowerCase();
+
+            for (const p of pset.properties || []) {
+              const propNameLower = (p.name || '').replace(/\s+/g, '').toLowerCase();
+              const val = String(p.value ?? p.displayValue ?? '');
+
+              // Match fields by property set and name
+              for (const field of MARKEERIJA_FIELDS) {
+                const fieldPsetLower = field.propertySet.replace(/\s+/g, '').toLowerCase();
+                const fieldNameLower = field.propertyName.replace(/\s+/g, '').toLowerCase();
+
+                if (psetNameLower.includes(fieldPsetLower.replace('tekla', '')) &&
+                    propNameLower.includes(fieldNameLower.replace(/_/g, '').toLowerCase())) {
+                  propMap[field.id] = val;
+                }
+              }
+            }
+          }
+        }
+
+        // Generate text from templates
+        const lines: string[] = [];
+        for (const tmpl of [markeerijaSett.line1Template, markeerijaSett.line2Template, markeerijaSett.line3Template]) {
+          if (!tmpl) continue;
+          const line = tmpl.replace(/\{(\w+)\}/g, (_m, id) => propMap[id] || '');
+          if (line.trim()) lines.push(line);
+        }
+
+        if (lines.length === 0) continue;
+
+        const text = lines.join('\n');
+        const box = bbox.boundingBox;
+        const centerX = ((box.min.x + box.max.x) / 2) * 1000;
+        const centerY = ((box.min.y + box.max.y) / 2) * 1000;
+        const topZ = box.max.z * 1000;
+        const leaderEndZ = topZ + (markeerijaSett.leaderHeight * 10); // cm to mm
+
+        markupsToCreate.push({
+          text,
+          start: { positionX: centerX, positionY: centerY, positionZ: topZ },
+          end: { positionX: centerX, positionY: centerY, positionZ: leaderEndZ }
+        });
+
+        if (i % 20 === 0) {
+          setBatchProgress({ message: `Genereerin markupe... ${i}/${allRuntimeIds.length}`, percent: 30 + Math.round((i / allRuntimeIds.length) * 30) });
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        showToast('Markupe ei loodud (template tühi või propertid puuduvad)', 'error');
+        setBatchProgress(null);
+        setMarkeerijLoading(false);
+        return;
+      }
+
+      setBatchProgress({ message: `Loon ${markupsToCreate.length} markupit...`, percent: 65 });
+
+      // Create markups
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
+
+      // Extract created IDs
+      const createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      } else if (typeof result === 'object' && result?.id) {
+        createdIds.push(Number(result.id));
+      }
+
+      // Color markups with selected color
+      setBatchProgress({ message: 'Värvin markupe...', percent: 85 });
+      const hexColor = rgbToHex(markeerijaSett.color);
+
+      for (let i = 0; i < createdIds.length; i++) {
+        try {
+          await (api.markup as any)?.editMarkup?.(createdIds[i], { color: hexColor });
+        } catch (e) {
+          console.warn('Could not set color for markup', createdIds[i], e);
+        }
+        if (i % 20 === 0) {
+          setBatchProgress({ message: `Värvin markupe... ${i}/${createdIds.length}`, percent: 85 + Math.round((i / createdIds.length) * 15) });
+        }
+      }
+
+      setBatchProgress(null);
+      showToast(`${createdIds.length} markupit loodud`, 'success');
+    } catch (e: any) {
+      console.error('Markeerija error:', e);
+      setBatchProgress(null);
+      showToast(e.message || 'Viga markupite loomisel', 'error');
+    } finally {
+      setMarkeerijLoading(false);
     }
   };
 
@@ -1604,6 +1954,269 @@ export default function ToolsScreen({
                 lineHeight: 1.4
               }}>
                 Värvimisel muudetakse ülejäänud mudel valgeks ja valitud kategooria detailid värviliseks. <strong>Klõpsa kategooria nimel</strong> detailide kiireks märgistamiseks.
+              </p>
+            </>
+          )}
+        </div>
+
+        {/* Markeerija (Text Markup Generator) Section - Collapsible */}
+        <div className="tools-section">
+          <div
+            className="tools-section-header tools-section-header-clickable"
+            onClick={() => toggleSection('markeerija')}
+          >
+            {expandedSection === 'markeerija' ? <FiChevronDown size={18} /> : <FiChevronRight size={18} />}
+            <FiTag size={18} style={{ color: '#0891b2' }} />
+            <h3>Markeerija</h3>
+          </div>
+
+          {expandedSection === 'markeerija' && (
+            <>
+              <p className="tools-section-desc">
+                Loo tekst-markupid valitud detailidele. Määra kuni 3 rida tekstimalli koos property-väärtustega.
+              </p>
+
+              {/* Selection count */}
+              <div style={{
+                padding: '10px 14px',
+                background: markeerijSelectedCount > 0 ? '#ecfdf5' : '#fef3c7',
+                border: `1px solid ${markeerijSelectedCount > 0 ? '#10b981' : '#f59e0b'}`,
+                borderRadius: '8px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: markeerijSelectedCount > 0 ? '#065f46' : '#92400e'
+              }}>
+                {markeerijSelectedCount > 0
+                  ? `✓ ${markeerijSelectedCount} detaili valitud`
+                  : '⚠️ Vali mudelist detailid'}
+              </div>
+
+              {/* Template lines */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                {(['line1Template', 'line2Template', 'line3Template'] as const).map((lineKey, idx) => (
+                  <div key={lineKey}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#4b5563' }}>
+                      Rida {idx + 1}
+                    </label>
+                    <div
+                      ref={lineKey === 'line1Template' ? markeerijLine1Ref : lineKey === 'line2Template' ? markeerijLine2Ref : markeerijLine3Ref}
+                      className="template-chips-area editable"
+                      contentEditable
+                      suppressContentEditableWarning
+                      onFocus={() => setMarkeerijFocusedLine(lineKey)}
+                      onInput={(e) => handleMarkeerijLineInput(lineKey, e.currentTarget)}
+                      dangerouslySetInnerHTML={{ __html: templateToHtml(markeerijaSett[lineKey]) }}
+                      style={{
+                        minHeight: '38px',
+                        padding: '8px 10px',
+                        border: markeerijFocusedLine === lineKey ? '2px solid #0891b2' : '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        background: '#fff',
+                        fontSize: '13px',
+                        lineHeight: 1.6
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Property chips - search and fields */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <FiSearch size={14} style={{ color: '#64748b' }} />
+                  <input
+                    type="text"
+                    placeholder="Otsi propertit..."
+                    value={markeerijaPropSearch}
+                    onChange={(e) => setMarkeerijaPropSearch(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '6px 10px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '4px',
+                      fontSize: '12px'
+                    }}
+                  />
+                </div>
+
+                {/* Property chips */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {MARKEERIJA_FIELDS
+                    .filter(f => {
+                      // Filter by search
+                      if (markeerijaPropSearch) {
+                        const search = markeerijaPropSearch.toLowerCase();
+                        return f.label.toLowerCase().includes(search) ||
+                               f.propertyName.toLowerCase().includes(search) ||
+                               f.propertySet.toLowerCase().includes(search);
+                      }
+                      // Show default fields or all if expanded
+                      return f.isDefault || markeerijaPropShowAll;
+                    })
+                    .map(field => (
+                      <button
+                        key={field.id}
+                        onClick={() => insertMarkeerijProperty(field.id)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 10px',
+                          background: field.category === 'bolt' ? '#fef3c7' : '#dbeafe',
+                          border: `1px solid ${field.category === 'bolt' ? '#f59e0b' : '#3b82f6'}`,
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          color: field.category === 'bolt' ? '#92400e' : '#1e40af',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                        title={`${field.propertySet} → ${field.propertyName}`}
+                      >
+                        <FiPlus size={10} />
+                        {field.label}
+                      </button>
+                    ))}
+                </div>
+
+                {/* Show more toggle */}
+                {!markeerijaPropSearch && (
+                  <button
+                    onClick={() => setMarkeerijaPropShowAll(!markeerijaPropShowAll)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      marginTop: '10px',
+                      padding: '4px 8px',
+                      background: 'none',
+                      border: 'none',
+                      color: '#6366f1',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {markeerijaPropShowAll ? (
+                      <>
+                        <FiChevronDown size={14} style={{ transform: 'rotate(180deg)' }} />
+                        Näita vähem
+                      </>
+                    ) : (
+                      <>
+                        <FiChevronDown size={14} />
+                        Näita rohkem ({MARKEERIJA_FIELDS.filter(f => !f.isDefault).length})
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* Color and height controls */}
+              <div style={{
+                display: 'flex',
+                gap: '16px',
+                marginBottom: '16px',
+                padding: '12px',
+                background: '#fafafa',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb'
+              }}>
+                {/* Color picker */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563' }}>Värv:</label>
+                  <input
+                    type="color"
+                    value={rgbToHex(markeerijaSett.color)}
+                    onChange={(e) => {
+                      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(e.target.value);
+                      if (result) {
+                        setMarkeerijaSett(prev => ({
+                          ...prev,
+                          color: {
+                            r: parseInt(result[1], 16),
+                            g: parseInt(result[2], 16),
+                            b: parseInt(result[3], 16)
+                          }
+                        }));
+                      }
+                    }}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      padding: 0,
+                      border: '2px solid #d1d5db',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  />
+                </div>
+
+                {/* Height input */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                  <label style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563', whiteSpace: 'nowrap' }}>Kõrgus (cm):</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    step="5"
+                    value={markeerijaSett.leaderHeight}
+                    onChange={(e) => setMarkeerijaSett(prev => ({ ...prev, leaderHeight: parseInt(e.target.value) || 10 }))}
+                    style={{
+                      width: '70px',
+                      padding: '6px 10px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      fontSize: '13px',
+                      textAlign: 'center'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="tools-buttons-grid">
+                <button
+                  className="tools-btn tools-btn-primary"
+                  onClick={handleCreateMarkeerijMarkups}
+                  disabled={markeerijLoading || markeerijSelectedCount === 0}
+                  style={{
+                    gridColumn: 'span 2',
+                    background: markeerijSelectedCount > 0 ? '#0891b2' : '#9ca3af'
+                  }}
+                >
+                  {markeerijLoading ? (
+                    <FiLoader className="spinning" size={16} />
+                  ) : (
+                    <FiTag size={16} />
+                  )}
+                  <span>Loo markupid ({markeerijSelectedCount})</span>
+                </button>
+              </div>
+
+              {/* Info text */}
+              <p style={{
+                marginTop: '12px',
+                fontSize: '11px',
+                color: '#6b7280',
+                lineHeight: 1.4
+              }}>
+                Klõpsa property-nupul, et lisada see valitud reale. Max {MAX_MARKUPS_PER_BATCH} markupit korraga.
               </p>
             </>
           )}
