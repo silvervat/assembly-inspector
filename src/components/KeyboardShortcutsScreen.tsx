@@ -170,12 +170,17 @@ export default function KeyboardShortcutsScreen({ onBackToMenu }: KeyboardShortc
         </div>
       </div>
 
-      {/* Scrollable content */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        padding: '16px'
-      }}>
+      {/* Scrollable content with visible scrollbar */}
+      <div
+        className="keyboard-shortcuts-content"
+        style={{
+          flex: 1,
+          overflowY: 'scroll',
+          padding: '16px',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#cbd5e1 #f1f5f9'
+        }}
+      >
         {filteredCategories.length === 0 ? (
           <div style={{
             textAlign: 'center',
