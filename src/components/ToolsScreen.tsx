@@ -8,7 +8,6 @@ import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
 import { findObjectsInLoadedModels, selectObjectsByGuid } from '../utils/navigationHelper';
-import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 
 // Constants
 const MAX_MARKUPS_PER_BATCH = 200;
@@ -96,9 +95,6 @@ export default function ToolsScreen({
   onColorModelWhite,
   initialExpandedSection
 }: ToolsScreenProps) {
-  // Property mappings for assembly mark extraction
-  const { mappings: propertyMappings } = useProjectPropertyMappings(_projectId);
-
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
@@ -465,91 +461,6 @@ export default function ToolsScreen({
       console.warn('Failed to save markeerija settings:', e);
     }
   }, [markeerijaSett]);
-
-  // Keyboard shortcut: CTRL + SHIFT + A to copy assembly mark to clipboard
-  useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      // Check for CTRL + SHIFT + A
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
-        e.preventDefault();
-
-        try {
-          // Get current selection
-          const selected = await api.viewer.getSelection();
-          if (!selected || selected.length === 0) {
-            showToast('Detaili pole valitud', 'error');
-            return;
-          }
-
-          // Get the first selected object
-          const firstModelSel = selected[0];
-          const modelId = firstModelSel.modelId;
-          const runtimeIds = firstModelSel.objectRuntimeIds || [];
-          if (!modelId || runtimeIds.length === 0) {
-            showToast('Detaili pole valitud', 'error');
-            return;
-          }
-
-          // Fetch properties
-          const props = await (api.viewer as any).getObjectProperties(modelId, [runtimeIds[0]], { includeHidden: true });
-          if (!props || props.length === 0) {
-            showToast('Ei leidnud propertisid', 'error');
-            return;
-          }
-
-          const objProps = props[0];
-          let assemblyMark: string | null = null;
-
-          // Normalize function for property matching
-          const normalize = (s: string) => s.replace(/\s+/g, '').toLowerCase();
-          const targetSet = normalize(propertyMappings.assembly_mark_set);
-          const targetProp = normalize(propertyMappings.assembly_mark_prop);
-
-          // Try to find assembly mark in propertySets
-          if (objProps.propertySets && Array.isArray(objProps.propertySets)) {
-            for (const set of objProps.propertySets) {
-              const setName = normalize(set.name || '');
-              if (setName === targetSet && set.properties) {
-                for (const prop of set.properties) {
-                  const propName = normalize(prop.name || '');
-                  if (propName === targetProp) {
-                    assemblyMark = prop.displayValue || String(prop.value || '');
-                    break;
-                  }
-                }
-              }
-              if (assemblyMark) break;
-            }
-          }
-
-          // Try properties array format as fallback
-          if (!assemblyMark && objProps.properties && Array.isArray(objProps.properties)) {
-            for (const prop of objProps.properties) {
-              const setName = normalize(prop.propertySetName || '');
-              const propName = normalize(prop.name || '');
-              if (setName === targetSet && propName === targetProp) {
-                assemblyMark = prop.displayValue || String(prop.value || '');
-                break;
-              }
-            }
-          }
-
-          if (assemblyMark && assemblyMark.trim()) {
-            await navigator.clipboard.writeText(assemblyMark);
-            showToast(`"${assemblyMark}" kopeeritud`, 'success');
-          } else {
-            showToast('Assembly mark ei leitud', 'error');
-          }
-        } catch (err) {
-          console.error('Error copying assembly mark:', err);
-          showToast('Viga assembly marki kopeerimisel', 'error');
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [api, propertyMappings, showToast]);
 
   // Track selected objects and load properties for markeerija
   useEffect(() => {
