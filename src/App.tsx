@@ -944,28 +944,34 @@ export default function App() {
 
       const key = e.key.toLowerCase();
 
-      // CTRL+SHIFT+S - Open global search modal
+      // ALT+SHIFT+S - Expand SidePanel and open global search modal
       if (key === 's') {
         e.preventDefault();
+        try {
+          // First expand the SidePanel (extension panel)
+          await api.ui.setUI({ name: 'SidePanel', state: 'expanded' });
+        } catch (err) {
+          console.warn('Could not expand SidePanel:', err);
+        }
         setGlobalSearchOpen(true);
         return;
       }
 
-      // CTRL+SHIFT+I - Open Installations page
+      // ALT+SHIFT+I - Open Installations page
       if (key === 'i') {
         e.preventDefault();
         setCurrentMode('installations');
         return;
       }
 
-      // CTRL+SHIFT+W - Color model white
+      // ALT+SHIFT+W - Color model white
       if (key === 'w') {
         e.preventDefault();
         handleColorModelWhite();
         return;
       }
 
-      // CTRL+SHIFT+A - Color arrived parts green, rest white
+      // ALT+SHIFT+A - Color arrived parts green, rest white
       if (key === 'a') {
         e.preventDefault();
         if (shortcutLoading) return;
