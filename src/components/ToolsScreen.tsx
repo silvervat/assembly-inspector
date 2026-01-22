@@ -38,6 +38,7 @@ interface ToolsScreenProps {
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  initialExpandedSection?: 'crane' | 'export' | 'markup' | 'marker' | 'partdb' | null;
 }
 
 interface Toast {
@@ -64,7 +65,8 @@ export default function ToolsScreen({
   projectId: _projectId,
   onBackToMenu,
   onNavigate,
-  onColorModelWhite
+  onColorModelWhite,
+  initialExpandedSection
 }: ToolsScreenProps) {
   const [boltLoading, setBoltLoading] = useState(false);
   const [removeLoading, setRemoveLoading] = useState(false);
@@ -206,6 +208,13 @@ export default function ToolsScreen({
       loadMarkerData();
     }
   }, [expandedSection, loadMarkerData]);
+
+  // Set expanded section from prop (e.g. when navigating from menu)
+  useEffect(() => {
+    if (initialExpandedSection) {
+      setExpandedSection(initialExpandedSection);
+    }
+  }, [initialExpandedSection]);
 
   // Check if there's a selection in the model (for bolt scanning)
   useEffect(() => {

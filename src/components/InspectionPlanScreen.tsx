@@ -41,6 +41,7 @@ interface InspectionPlanScreenProps {
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 // Selected object data from Trimble
@@ -73,7 +74,8 @@ export default function InspectionPlanScreen({
   user,
   onBackToMenu,
   onNavigate,
-  onColorModelWhite
+  onColorModelWhite,
+  onOpenPartDatabase
 }: InspectionPlanScreenProps) {
   // View state
   const [viewMode, setViewMode] = useState<ViewMode>('add');
@@ -991,6 +993,7 @@ export default function InspectionPlanScreen({
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       />
 
       {/* View Mode Toggle */}

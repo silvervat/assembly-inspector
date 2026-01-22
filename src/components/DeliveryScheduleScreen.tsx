@@ -42,6 +42,7 @@ interface Props {
   onNavigate?: (mode: InspectionMode | null) => void;
   isPopupMode?: boolean;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface SelectedObject {
@@ -380,7 +381,7 @@ const generateDateColors = (dates: string[]): Record<string, { r: number; g: num
 // MAIN COMPONENT
 // ============================================
 
-export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, onNavigate, onColorModelWhite, isPopupMode }: Props) {
+export default function DeliveryScheduleScreen({ api, projectId, user: _user, tcUserEmail = '', tcUserName: _tcUserName, onBackToMenu, onBack: _onBack, onNavigate, onColorModelWhite, isPopupMode, onOpenPartDatabase }: Props) {
   // ============================================
   // STATE
   // ============================================
@@ -7955,6 +7956,7 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       >
         <button
           className={`view-toggle-btn ${viewMode === 'dates' ? 'active' : ''}`}

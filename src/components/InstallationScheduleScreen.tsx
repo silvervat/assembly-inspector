@@ -33,6 +33,7 @@ interface Props {
   onBackToMenu: () => void;
   onNavigate?: (mode: InspectionMode | null) => void;
   onColorModelWhite?: () => void;
+  onOpenPartDatabase?: () => void;
 }
 
 interface SelectedObject {
@@ -196,7 +197,7 @@ const saveDefaultCounts = (defaults: Record<InstallMethodType, number>) => {
   }
 };
 
-export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu, onNavigate, onColorModelWhite }: Props) {
+export default function InstallationScheduleScreen({ api, projectId, user, tcUserEmail, tcUserName, onBackToMenu, onNavigate, onColorModelWhite, onOpenPartDatabase }: Props) {
   // Property mappings for reading Tekla properties
   const { mappings: propertyMappings } = useProjectPropertyMappings(projectId);
 
@@ -6310,6 +6311,7 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         onColorModelWhite={onColorModelWhite}
         api={api}
         projectId={projectId}
+        onOpenPartDatabase={onOpenPartDatabase}
       >
         {/* Three-dot menu for schedule-specific actions */}
         <div className="schedule-actions-menu" ref={hamburgerMenuRef}>
