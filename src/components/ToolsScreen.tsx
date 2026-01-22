@@ -2,8 +2,8 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
-import { TrimbleExUser, supabase } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye } from 'react-icons/fi';
+import { TrimbleExUser, supabase, MarkeerijPreset } from '../supabase';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye, FiSave, FiShare2 } from 'react-icons/fi';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -136,6 +136,14 @@ export default function ToolsScreen({
   const [markeerijFieldsLoading, setMarkeerijFieldsLoading] = useState(false);
   const [refreshMarkeerijLineHtml, setRefreshMarkeerijLineHtml] = useState({ line1Template: 0, line2Template: 0, line3Template: 0 });
 
+  // Markeerija presets state
+  const [markeerijPresets, setMarkeerijPresets] = useState<MarkeerijPreset[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [presetSaveModalOpen, setPresetSaveModalOpen] = useState(false);
+  const [newPresetName, setNewPresetName] = useState('');
+  const [newPresetShared, setNewPresetShared] = useState(false);
+  const [presetLoading, setPresetLoading] = useState(false);
+
   // Progress overlay state for batch operations
   const [batchProgress, setBatchProgress] = useState<{ message: string; percent: number } | null>(null);
 
@@ -161,6 +169,156 @@ export default function ToolsScreen({
     setToast({ message, type });
     toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
   }, []);
+
+  // Load markeerija presets from database
+  const loadMarkeerijPresets = useCallback(async () => {
+    if (!_projectId) return;
+    setPresetLoading(true);
+    try {
+      // Get presets that user can see: their own OR shared ones
+      const { data, error } = await supabase
+        .from('markeerij_presets')
+        .select('*')
+        .eq('trimble_project_id', _projectId)
+        .or(`created_by.eq.${user.email},is_shared.eq.true`)
+        .order('name');
+
+      if (error) {
+        console.error('Error loading presets:', error);
+        return;
+      }
+      setMarkeerijPresets(data || []);
+    } catch (e) {
+      console.error('Error loading presets:', e);
+    } finally {
+      setPresetLoading(false);
+    }
+  }, [_projectId, user.email]);
+
+  // Apply a preset to the current settings
+  const applyPreset = useCallback((preset: MarkeerijPreset) => {
+    setMarkeerijaSett({
+      line1Template: preset.line1_template || '',
+      line2Template: preset.line2_template || '',
+      line3Template: preset.line3_template || '',
+      color: { r: preset.color_r, g: preset.color_g, b: preset.color_b },
+      leaderHeight: preset.leader_height
+    });
+    setSelectedPresetId(preset.id);
+    // Refresh HTML for all lines
+    setRefreshMarkeerijLineHtml(prev => ({
+      line1Template: prev.line1Template + 1,
+      line2Template: prev.line2Template + 1,
+      line3Template: prev.line3Template + 1
+    }));
+    showToast(`Eelseadistus "${preset.name}" laetud`, 'success');
+  }, [showToast]);
+
+  // Save current settings as a new preset
+  const saveNewPreset = useCallback(async () => {
+    if (!newPresetName.trim()) {
+      showToast('Sisesta eelseadistuse nimi', 'error');
+      return;
+    }
+    setPresetLoading(true);
+    try {
+      const newPreset = {
+        trimble_project_id: _projectId,
+        name: newPresetName.trim(),
+        line1_template: markeerijaSett.line1Template,
+        line2_template: markeerijaSett.line2Template,
+        line3_template: markeerijaSett.line3Template,
+        color_r: markeerijaSett.color.r,
+        color_g: markeerijaSett.color.g,
+        color_b: markeerijaSett.color.b,
+        leader_height: markeerijaSett.leaderHeight,
+        is_shared: newPresetShared && user.role === 'admin',
+        created_by: user.email,
+        created_by_name: user.name || user.email
+      };
+
+      const { data, error } = await supabase
+        .from('markeerij_presets')
+        .insert(newPreset)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error saving preset:', error);
+        showToast('Viga salvestamisel', 'error');
+        return;
+      }
+
+      setMarkeerijPresets(prev => [...prev, data as MarkeerijPreset].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedPresetId(data.id);
+      setPresetSaveModalOpen(false);
+      setNewPresetName('');
+      setNewPresetShared(false);
+      showToast('Eelseadistus salvestatud', 'success');
+    } catch (e) {
+      console.error('Error saving preset:', e);
+      showToast('Viga salvestamisel', 'error');
+    } finally {
+      setPresetLoading(false);
+    }
+  }, [_projectId, user.email, user.name, user.role, newPresetName, newPresetShared, markeerijaSett, showToast]);
+
+  // Toggle share status of a preset (admin only)
+  const togglePresetShare = useCallback(async (presetId: string) => {
+    if (user.role !== 'admin') return;
+    const preset = markeerijPresets.find(p => p.id === presetId);
+    if (!preset || preset.created_by !== user.email) return;
+
+    try {
+      const { error } = await supabase
+        .from('markeerij_presets')
+        .update({ is_shared: !preset.is_shared, updated_at: new Date().toISOString() })
+        .eq('id', presetId);
+
+      if (error) {
+        console.error('Error toggling share:', error);
+        return;
+      }
+
+      setMarkeerijPresets(prev => prev.map(p =>
+        p.id === presetId ? { ...p, is_shared: !p.is_shared } : p
+      ));
+      showToast(preset.is_shared ? 'Jagamine peatatud' : 'Eelseadistus jagatud', 'success');
+    } catch (e) {
+      console.error('Error toggling share:', e);
+    }
+  }, [user.role, user.email, markeerijPresets, showToast]);
+
+  // Delete a preset
+  const deletePreset = useCallback(async (presetId: string) => {
+    const preset = markeerijPresets.find(p => p.id === presetId);
+    if (!preset || preset.created_by !== user.email) return;
+
+    try {
+      const { error } = await supabase
+        .from('markeerij_presets')
+        .delete()
+        .eq('id', presetId);
+
+      if (error) {
+        console.error('Error deleting preset:', error);
+        return;
+      }
+
+      setMarkeerijPresets(prev => prev.filter(p => p.id !== presetId));
+      if (selectedPresetId === presetId) setSelectedPresetId(null);
+      showToast('Eelseadistus kustutatud', 'success');
+    } catch (e) {
+      console.error('Error deleting preset:', e);
+    }
+  }, [user.email, markeerijPresets, selectedPresetId, showToast]);
+
+  // Load presets when markeerija section opens
+  useEffect(() => {
+    if (expandedSection === 'markeerija') {
+      loadMarkeerijPresets();
+    }
+  }, [expandedSection, loadMarkeerijPresets]);
 
   // Load marker data from database
   const loadMarkerData = useCallback(async () => {
@@ -329,6 +487,39 @@ export default function ToolsScreen({
               const objProps = props[0] as any;
               const fields: MarkeerijaPropField[] = [];
 
+              // Add Object Metadata fields (Product info) - like AdminScreen does
+              const product = objProps?.product;
+              if (product) {
+                const metadataGroup = 'Object Metadata';
+                if (product.name) {
+                  fields.push({
+                    id: 'META_name',
+                    label: 'name',
+                    placeholder: '{META_name}',
+                    preview: String(product.name).length > 30 ? String(product.name).substring(0, 30) + '...' : String(product.name),
+                    group: metadataGroup
+                  });
+                }
+                if (product.objectType) {
+                  fields.push({
+                    id: 'META_objectType',
+                    label: 'objectType',
+                    placeholder: '{META_objectType}',
+                    preview: String(product.objectType).length > 30 ? String(product.objectType).substring(0, 30) + '...' : String(product.objectType),
+                    group: metadataGroup
+                  });
+                }
+                if (product.description) {
+                  fields.push({
+                    id: 'META_description',
+                    label: 'description',
+                    placeholder: '{META_description}',
+                    preview: String(product.description).length > 30 ? String(product.description).substring(0, 30) + '...' : String(product.description),
+                    group: metadataGroup
+                  });
+                }
+              }
+
               // Handle properties array format (from getObjectProperties with includeHidden)
               if (objProps.properties && Array.isArray(objProps.properties)) {
                 for (const pset of objProps.properties) {
@@ -442,12 +633,12 @@ export default function ToolsScreen({
                   const scheduledDate = deliveryItem.vehicle?.scheduled_date || '';
                   if (scheduledDate) {
                     const dateStr = new Date(scheduledDate).toLocaleDateString('et-EE');
-                    const displayValue = vehicleCode ? `${dateStr} (${vehicleCode})` : dateStr;
+                    // Only date, no vehicle code
                     fields.push({
                       id: 'DB_Tarnekuupaev',
                       label: 'Tarnekuupäev',
                       placeholder: '{DB_Tarnekuupaev}',
-                      preview: displayValue,
+                      preview: dateStr,
                       group: dbGroup
                     });
                   }
@@ -949,6 +1140,14 @@ export default function ToolsScreen({
 
         // Build property map from object - match field IDs like "SetName_PropName"
         const propMap: Record<string, string> = {};
+
+        // Add Object Metadata fields (from product info)
+        const product = objProps?.product;
+        if (product) {
+          if (product.name) propMap['META_name'] = String(product.name);
+          if (product.objectType) propMap['META_objectType'] = String(product.objectType);
+          if (product.description) propMap['META_description'] = String(product.description);
+        }
 
         // Handle properties array format (from getObjectProperties with includeHidden)
         if (objProps?.properties && Array.isArray(objProps.properties)) {
@@ -2269,20 +2468,265 @@ export default function ToolsScreen({
                 Loo tekst-markupid valitud detailidele. Määra kuni 3 rida tekstimalli koos property-väärtustega.
               </p>
 
-              {/* Selection count */}
+              {/* Presets section */}
               <div style={{
-                padding: '10px 14px',
-                background: markeerijSelectedCount > 0 ? '#ecfdf5' : '#fef3c7',
-                border: `1px solid ${markeerijSelectedCount > 0 ? '#10b981' : '#f59e0b'}`,
-                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
                 marginBottom: '16px',
-                fontSize: '13px',
-                fontWeight: 500,
-                color: markeerijSelectedCount > 0 ? '#065f46' : '#92400e'
+                padding: '10px 12px',
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px'
               }}>
-                {markeerijSelectedCount > 0
-                  ? `${markeerijSelectedCount} detaili valitud`
-                  : 'Vali mudelist detailid'}
+                <label style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563', whiteSpace: 'nowrap' }}>
+                  Eelseadistused:
+                </label>
+                <select
+                  value={selectedPresetId || ''}
+                  onChange={(e) => {
+                    const presetId = e.target.value;
+                    if (presetId) {
+                      const preset = markeerijPresets.find(p => p.id === presetId);
+                      if (preset) applyPreset(preset);
+                    } else {
+                      setSelectedPresetId(null);
+                    }
+                  }}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    background: '#fff'
+                  }}
+                >
+                  <option value="">-- Vali eelseadistus --</option>
+                  {markeerijPresets.map(preset => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name} {preset.is_shared ? '(jagatud)' : preset.created_by !== user.email ? '(kellegi oma)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* Save current as new preset button */}
+                <button
+                  onClick={() => setPresetSaveModalOpen(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 10px',
+                    background: '#dbeafe',
+                    border: '1px solid #3b82f6',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    color: '#1e40af',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Salvesta praegused seaded uue eelseadistusena"
+                >
+                  <FiSave size={12} />
+                  Salvesta
+                </button>
+                {/* Share/Delete buttons for own presets */}
+                {selectedPresetId && markeerijPresets.find(p => p.id === selectedPresetId)?.created_by === user.email && (
+                  <>
+                    {user.role === 'admin' && (
+                      <button
+                        onClick={() => togglePresetShare(selectedPresetId)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '6px 10px',
+                          background: markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#d1fae5' : '#fef3c7',
+                          border: `1px solid ${markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#10b981' : '#f59e0b'}`,
+                          borderRadius: '6px',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          color: markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? '#065f46' : '#92400e',
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                        title={markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? 'Peata jagamine' : 'Jaga kõigiga'}
+                      >
+                        <FiShare2 size={12} />
+                        {markeerijPresets.find(p => p.id === selectedPresetId)?.is_shared ? 'Jagatud' : 'Jaga'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        if (window.confirm('Kas oled kindel, et soovid selle eelseadistuse kustutada?')) {
+                          deletePreset(selectedPresetId);
+                        }
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '6px 10px',
+                        background: '#fee2e2',
+                        border: '1px solid #fca5a5',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        color: '#dc2626',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title="Kustuta eelseadistus"
+                    >
+                      <FiTrash2 size={12} />
+                    </button>
+                  </>
+                )}
+                {presetLoading && <FiLoader className="spinning" size={14} style={{ color: '#6366f1' }} />}
+              </div>
+
+              {/* Save preset modal */}
+              {presetSaveModalOpen && (
+                <div style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  background: 'rgba(0,0,0,0.5)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 1000
+                }}>
+                  <div style={{
+                    background: '#fff',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    width: '320px',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
+                  }}>
+                    <h3 style={{ margin: '0 0 16px', fontSize: '16px', color: '#1f2937' }}>Salvesta eelseadistus</h3>
+                    <input
+                      type="text"
+                      placeholder="Eelseadistuse nimi"
+                      value={newPresetName}
+                      onChange={(e) => setNewPresetName(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        marginBottom: '12px'
+                      }}
+                      autoFocus
+                    />
+                    {user.role === 'admin' && (
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        fontSize: '13px',
+                        color: '#4b5563',
+                        marginBottom: '16px',
+                        cursor: 'pointer'
+                      }}>
+                        <input
+                          type="checkbox"
+                          checked={newPresetShared}
+                          onChange={(e) => setNewPresetShared(e.target.checked)}
+                          style={{ width: '16px', height: '16px' }}
+                        />
+                        Jaga kõigi kasutajatega
+                      </label>
+                    )}
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => {
+                          setPresetSaveModalOpen(false);
+                          setNewPresetName('');
+                          setNewPresetShared(false);
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          background: '#f3f4f6',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          color: '#4b5563',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Tühista
+                      </button>
+                      <button
+                        onClick={saveNewPreset}
+                        disabled={!newPresetName.trim() || presetLoading}
+                        style={{
+                          padding: '8px 16px',
+                          background: newPresetName.trim() ? '#3b82f6' : '#d1d5db',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                          color: '#fff',
+                          cursor: newPresetName.trim() && !presetLoading ? 'pointer' : 'not-allowed'
+                        }}
+                      >
+                        {presetLoading ? 'Salvestamine...' : 'Salvesta'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Selection count row with Tühjenda button */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '16px'
+              }}>
+                <div style={{
+                  flex: 1,
+                  padding: '10px 14px',
+                  background: markeerijSelectedCount > 0 ? '#ecfdf5' : '#fef3c7',
+                  border: `1px solid ${markeerijSelectedCount > 0 ? '#10b981' : '#f59e0b'}`,
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  color: markeerijSelectedCount > 0 ? '#065f46' : '#92400e'
+                }}>
+                  {markeerijSelectedCount > 0
+                    ? `${markeerijSelectedCount} detaili valitud`
+                    : 'Vali mudelist detailid'}
+                </div>
+                {/* Tühjenda button moved here */}
+                <button
+                  onClick={clearAllMarkeerijTemplates}
+                  disabled={!markeerijaSett.line1Template && !markeerijaSett.line2Template && !markeerijaSett.line3Template}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '8px 12px',
+                    background: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#fee2e2' : '#f3f4f6',
+                    border: `1px solid ${(markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#fca5a5' : '#d1d5db'}`,
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#dc2626' : '#9ca3af',
+                    cursor: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? 'pointer' : 'not-allowed',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Eemalda kõik väljad mallidest"
+                >
+                  <FiX size={12} />
+                  Tühjenda
+                </button>
               </div>
 
               {/* Preview section */}
@@ -2414,28 +2858,28 @@ export default function ToolsScreen({
                   />
                 </div>
 
-                {/* Clear all button */}
+                {/* Remove markups button */}
                 <button
-                  onClick={clearAllMarkeerijTemplates}
-                  disabled={!markeerijaSett.line1Template && !markeerijaSett.line2Template && !markeerijaSett.line3Template}
+                  onClick={handleRemoveMarkups}
+                  disabled={removeLoading}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
                     padding: '6px 12px',
-                    background: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#fee2e2' : '#f3f4f6',
-                    border: `1px solid ${(markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#fca5a5' : '#d1d5db'}`,
+                    background: '#fef3c7',
+                    border: '1px solid #f59e0b',
                     borderRadius: '6px',
                     fontSize: '11px',
                     fontWeight: 500,
-                    color: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#dc2626' : '#9ca3af',
-                    cursor: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? 'pointer' : 'not-allowed',
+                    color: '#92400e',
+                    cursor: removeLoading ? 'not-allowed' : 'pointer',
                     whiteSpace: 'nowrap'
                   }}
-                  title="Eemalda kõik väljad mallidest"
+                  title="Eemalda kõik markupid mudelist"
                 >
-                  <FiX size={12} />
-                  Tühjenda
+                  {removeLoading ? <FiLoader className="spinning" size={12} /> : <FiTrash2 size={12} />}
+                  Eemalda markupid
                 </button>
               </div>
 
