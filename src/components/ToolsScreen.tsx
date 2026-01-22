@@ -589,8 +589,24 @@ export default function ToolsScreen({
     if (!template) return '';
     return template.replace(/\{([^}]+)\}/g, (_m, id) => {
       const field = markeerijFields.find(f => f.id === id);
-      return field?.preview || `{${id}}`;
+      // Always show the actual value from the first selected detail, or show placeholder if no fields loaded
+      return field?.preview || (markeerijFields.length > 0 ? '—' : `{${id}}`);
     });
+  };
+
+  // Clear all markeerija templates
+  const clearAllMarkeerijTemplates = () => {
+    setMarkeerijaSett(prev => ({
+      ...prev,
+      line1Template: '',
+      line2Template: '',
+      line3Template: ''
+    }));
+    setRefreshMarkeerijLineHtml(prev => ({
+      line1Template: prev.line1Template + 1,
+      line2Template: prev.line2Template + 1,
+      line3Template: prev.line3Template + 1
+    }));
   };
 
   // Get preview lines for display
@@ -2213,86 +2229,6 @@ export default function ToolsScreen({
                 ))}
               </div>
 
-              {/* Available fields as draggable chips */}
-              <div style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                padding: '12px',
-                marginBottom: '16px'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563' }}>Saadaolevad väljad</span>
-                  {markeerijFieldsLoading && <FiLoader className="spinning" size={12} style={{ color: '#6366f1' }} />}
-                  <input
-                    type="text"
-                    placeholder="Otsi..."
-                    value={markeerijaPropSearch}
-                    onChange={(e) => setMarkeerijaPropSearch(e.target.value)}
-                    style={{
-                      marginLeft: 'auto',
-                      width: '120px',
-                      padding: '4px 8px',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '4px',
-                      fontSize: '11px'
-                    }}
-                  />
-                </div>
-
-                {/* Property chips */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '120px', overflowY: 'auto' }}>
-                  {markeerijFields.length === 0 && !markeerijFieldsLoading && (
-                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Vali mudelist detail, et näha propertisid</span>
-                  )}
-                  {availableMarkeerijFields
-                    .filter(f => {
-                      if (markeerijaPropSearch) {
-                        const search = markeerijaPropSearch.toLowerCase();
-                        return f.label.toLowerCase().includes(search) || f.preview.toLowerCase().includes(search);
-                      }
-                      return true;
-                    })
-                    .map(field => (
-                      <button
-                        key={field.id}
-                        draggable
-                        onDragStart={(e) => handleMarkeerijDragStart(e, field)}
-                        onClick={() => addMarkeerijFieldToLine(field.placeholder)}
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '4px 10px',
-                          background: '#dbeafe',
-                          border: '1px solid #3b82f6',
-                          borderRadius: '12px',
-                          fontSize: '11px',
-                          fontWeight: 500,
-                          color: '#1e40af',
-                          cursor: 'grab',
-                          transition: 'all 0.15s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = 'scale(1.05)';
-                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = 'scale(1)';
-                          e.currentTarget.style.boxShadow = 'none';
-                        }}
-                        title={field.preview}
-                      >
-                        <FiPlus size={10} />
-                        {field.label}
-                      </button>
-                    ))}
-                  {availableMarkeerijFields.length === 0 && markeerijFields.length > 0 && (
-                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Kõik väljad kasutatud</span>
-                  )}
-                </div>
-              </div>
-
               {/* Color and height controls */}
               <div style={{
                 display: 'flex',
@@ -2352,6 +2288,110 @@ export default function ToolsScreen({
                       textAlign: 'center'
                     }}
                   />
+                </div>
+
+                {/* Clear all button */}
+                <button
+                  onClick={clearAllMarkeerijTemplates}
+                  disabled={!markeerijaSett.line1Template && !markeerijaSett.line2Template && !markeerijaSett.line3Template}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    background: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#fee2e2' : '#f3f4f6',
+                    border: `1px solid ${(markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#fca5a5' : '#d1d5db'}`,
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    color: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? '#dc2626' : '#9ca3af',
+                    cursor: (markeerijaSett.line1Template || markeerijaSett.line2Template || markeerijaSett.line3Template) ? 'pointer' : 'not-allowed',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Eemalda kõik väljad mallidest"
+                >
+                  <FiX size={12} />
+                  Tühjenda
+                </button>
+              </div>
+
+              {/* Available fields as draggable chips */}
+              <div style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 500, color: '#4b5563' }}>Saadaolevad väljad</span>
+                  {markeerijFieldsLoading && <FiLoader className="spinning" size={12} style={{ color: '#6366f1' }} />}
+                  <input
+                    type="text"
+                    placeholder="Otsi..."
+                    value={markeerijaPropSearch}
+                    onChange={(e) => setMarkeerijaPropSearch(e.target.value)}
+                    style={{
+                      marginLeft: 'auto',
+                      width: '120px',
+                      padding: '4px 8px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '4px',
+                      fontSize: '11px'
+                    }}
+                  />
+                </div>
+
+                {/* Property chips */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {markeerijFields.length === 0 && !markeerijFieldsLoading && (
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Vali mudelist detail, et näha propertisid</span>
+                  )}
+                  {availableMarkeerijFields
+                    .filter(f => {
+                      if (markeerijaPropSearch) {
+                        const search = markeerijaPropSearch.toLowerCase();
+                        return f.label.toLowerCase().includes(search) || f.preview.toLowerCase().includes(search);
+                      }
+                      return true;
+                    })
+                    .map(field => (
+                      <button
+                        key={field.id}
+                        draggable
+                        onDragStart={(e) => handleMarkeerijDragStart(e, field)}
+                        onClick={() => addMarkeerijFieldToLine(field.placeholder)}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 10px',
+                          background: '#dbeafe',
+                          border: '1px solid #3b82f6',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          color: '#1e40af',
+                          cursor: 'grab',
+                          transition: 'all 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                        title={field.preview}
+                      >
+                        <FiPlus size={10} />
+                        {field.label}
+                      </button>
+                    ))}
+                  {availableMarkeerijFields.length === 0 && markeerijFields.length > 0 && (
+                    <span style={{ fontSize: '11px', color: '#9ca3af' }}>Kõik väljad kasutatud</span>
+                  )}
                 </div>
               </div>
 
