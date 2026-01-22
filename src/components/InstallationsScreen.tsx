@@ -703,8 +703,10 @@ export default function InstallationsScreen({
   const [editDayModalType, setEditDayModalType] = useState<'installation' | 'preassembly' | null>(null);
   const [editDayModalItemCount, setEditDayModalItemCount] = useState(0);
   const [editDayNewDate, setEditDayNewDate] = useState('');
-  const [editDayResource, setEditDayResource] = useState('');
   const [editDayNotes, setEditDayNotes] = useState('');
+  const [editDayMethods, setEditDayMethods] = useState<InstallMethods>({});
+  const [editDayHoveredMethod, setEditDayHoveredMethod] = useState<InstallMethodType | null>(null);
+  const [editDayPhotos, setEditDayPhotos] = useState<{ file: File; preview: string }[]>([]);
   const [savingEditDay, setSavingEditDay] = useState(false);
 
   // Day locks state (stored in same table as month locks, differentiated by lock_type)
@@ -1908,6 +1910,23 @@ export default function InstallationsScreen({
     setSavingEditDay(true);
 
     try {
+      // Build method name string from selected methods
+      const methodName = Object.entries(editDayMethods)
+        .filter(([, count]) => count && count > 0)
+        .map(([key, count]) => {
+          const config = INSTALL_METHODS_CONFIG.find(m => m.key === key);
+          return count === 1 ? config?.label : `${count}x ${config?.label}`;
+        })
+        .join(', ');
+
+      // Upload photos if any
+      let photoUrls: string[] = [];
+      if (editDayPhotos.length > 0) {
+        setMessage('Laadin üles pilte...');
+        const dateStr = editDayModalDate.replace(/-/g, '');
+        photoUrls = await uploadPhotos(editDayPhotos, `paigaldus_bulk_${dateStr}_${projectId}`);
+      }
+
       // Build update object
       const updates: any = {
         updated_by: user.email,
@@ -1917,14 +1936,19 @@ export default function InstallationsScreen({
       if (editDayNewDate) {
         updates.installed_at = `${editDayNewDate}T12:00:00Z`;
       }
-      if (editDayResource.trim()) {
-        updates.resource = editDayResource.trim();
+      if (methodName) {
+        updates.installation_method_name = methodName;
       }
       if (editDayNotes.trim()) {
         updates.notes = editDayNotes.trim();
       }
+      if (photoUrls.length > 0) {
+        updates.photo_urls = photoUrls;
+      }
 
-      if (Object.keys(updates).length === 2) {
+      // Check if there's anything to update besides metadata
+      const hasUpdates = editDayNewDate || methodName || editDayNotes.trim() || photoUrls.length > 0;
+      if (!hasUpdates) {
         setSavingEditDay(false);
         setEditDayModalDate(null);
         return;
@@ -1952,12 +1976,15 @@ export default function InstallationsScreen({
         loadPreassemblies();
       }
 
-      // Close modal
+      // Close modal and reset state
       setEditDayModalDate(null);
       setEditDayModalType(null);
       setEditDayNewDate('');
-      setEditDayResource('');
+      setEditDayMethods({});
       setEditDayNotes('');
+      // Clean up photo previews
+      editDayPhotos.forEach(p => URL.revokeObjectURL(p.preview));
+      setEditDayPhotos([]);
     } catch (e) {
       console.error('Error updating day:', e);
       setMessage('Viga päeva muutmisel');
@@ -9688,7 +9715,7 @@ export default function InstallationsScreen({
       {/* Edit day modal */}
       {editDayModalDate && editDayModalType && (
         <div className="modal-overlay" onClick={() => setEditDayModalDate(null)}>
-          <div className="comment-modal" onClick={e => e.stopPropagation()}>
+          <div className="comment-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
             <div className="modal-header">
               <h3>Muuda päeva: {editDayModalDate} ({editDayModalItemCount} detaili)</h3>
               <button onClick={() => setEditDayModalDate(null)}><FiX size={18} /></button>
@@ -9704,16 +9731,316 @@ export default function InstallationsScreen({
                     className="form-input"
                   />
                 </div>
+
+                {/* Resources / Methods - Machines */}
                 <div className="form-group">
-                  <label>Ressurss (valikuline):</label>
-                  <input
-                    type="text"
-                    value={editDayResource}
-                    onChange={e => setEditDayResource(e.target.value)}
-                    placeholder="Nt: Kraana 1, Meeskond A"
-                    className="form-input"
-                  />
+                  <label style={{ display: 'block', marginBottom: '8px' }}>Paigaldus ressursid (valikuline):</label>
+                  <div style={{ display: 'flex', gap: '6px', marginBottom: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
+                    {INSTALL_METHODS_CONFIG.filter(m => m.category === 'machine').map(method => {
+                      const isActive = !!editDayMethods[method.key];
+                      const count = editDayMethods[method.key] || 0;
+                      const isHovered = editDayHoveredMethod === method.key;
+
+                      return (
+                        <div
+                          key={method.key}
+                          className="method-selector-wrapper"
+                          onMouseEnter={() => setEditDayHoveredMethod(method.key)}
+                          onMouseLeave={() => setEditDayHoveredMethod(null)}
+                          style={{ position: 'relative' }}
+                        >
+                          <button
+                            type="button"
+                            style={{
+                              padding: '8px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onClick={() => {
+                              setEditDayMethods(prev => {
+                                const newMethods = { ...prev };
+                                if (newMethods[method.key]) {
+                                  delete newMethods[method.key];
+                                } else {
+                                  newMethods[method.key] = method.defaultCount;
+                                }
+                                return newMethods;
+                              });
+                            }}
+                            title={method.label}
+                          >
+                            <img
+                              src={`/${method.icon}`}
+                              alt={method.label}
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                filter: isActive ? 'brightness(0) invert(1)' : method.filterCss
+                              }}
+                            />
+                          </button>
+                          {isActive && count > 0 && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: '#fff',
+                              color: method.activeBgColor,
+                              borderRadius: '50%',
+                              width: '16px',
+                              height: '16px',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: `2px solid ${method.activeBgColor}`
+                            }}>
+                              {count}
+                            </span>
+                          )}
+                          {isActive && isHovered && method.maxCount > 1 && (
+                            <div className="method-qty-dropdown" style={{
+                              position: 'absolute',
+                              top: 'calc(100% - 4px)',
+                              left: '-7px',
+                              backgroundColor: '#fff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '6px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              padding: '4px',
+                              zIndex: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px'
+                            }}>
+                              {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditDayMethods(prev => ({ ...prev, [method.key]: num }));
+                                  }}
+                                  style={{
+                                    padding: '4px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    backgroundColor: count === num ? method.activeBgColor : 'transparent',
+                                    color: count === num ? '#fff' : '#1e293b',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: count === num ? 600 : 400
+                                  }}
+                                >
+                                  {num}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Labor row */}
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingLeft: '7px' }}>
+                    {INSTALL_METHODS_CONFIG.filter(m => m.category === 'labor').map(method => {
+                      const isActive = !!editDayMethods[method.key];
+                      const count = editDayMethods[method.key] || 0;
+                      const isHovered = editDayHoveredMethod === method.key;
+
+                      return (
+                        <div
+                          key={method.key}
+                          className="method-selector-wrapper"
+                          onMouseEnter={() => setEditDayHoveredMethod(method.key)}
+                          onMouseLeave={() => setEditDayHoveredMethod(null)}
+                          style={{ position: 'relative' }}
+                        >
+                          <button
+                            type="button"
+                            style={{
+                              padding: '8px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              backgroundColor: isActive ? method.activeBgColor : method.bgColor,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onClick={() => {
+                              setEditDayMethods(prev => {
+                                const newMethods = { ...prev };
+                                if (newMethods[method.key]) {
+                                  delete newMethods[method.key];
+                                } else {
+                                  newMethods[method.key] = method.defaultCount;
+                                }
+                                return newMethods;
+                              });
+                            }}
+                            title={method.label}
+                          >
+                            <img
+                              src={`/${method.icon}`}
+                              alt={method.label}
+                              style={{
+                                width: '24px',
+                                height: '24px',
+                                filter: isActive ? 'brightness(0) invert(1)' : method.filterCss
+                              }}
+                            />
+                          </button>
+                          {isActive && count > 0 && (
+                            <span style={{
+                              position: 'absolute',
+                              top: '-4px',
+                              right: '-4px',
+                              backgroundColor: '#fff',
+                              color: method.activeBgColor,
+                              borderRadius: '50%',
+                              width: '16px',
+                              height: '16px',
+                              fontSize: '10px',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: `2px solid ${method.activeBgColor}`
+                            }}>
+                              {count}
+                            </span>
+                          )}
+                          {isActive && isHovered && method.maxCount > 1 && (
+                            <div className="method-qty-dropdown" style={{
+                              position: 'absolute',
+                              top: 'calc(100% - 4px)',
+                              left: '-7px',
+                              backgroundColor: '#fff',
+                              border: '1px solid #e2e8f0',
+                              borderRadius: '6px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                              padding: '4px',
+                              zIndex: 100,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '2px'
+                            }}>
+                              {Array.from({ length: method.maxCount }, (_, i) => i + 1).map(num => (
+                                <button
+                                  key={num}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditDayMethods(prev => ({ ...prev, [method.key]: num }));
+                                  }}
+                                  style={{
+                                    padding: '4px 12px',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    backgroundColor: count === num ? method.activeBgColor : 'transparent',
+                                    color: count === num ? '#fff' : '#1e293b',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: count === num ? 600 : 400
+                                  }}
+                                >
+                                  {num}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+
+                {/* Photo upload */}
+                <div className="form-group">
+                  <label style={{ display: 'block', marginBottom: '8px' }}>Fotod (valikuline):</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
+                    {editDayPhotos.map((photo, idx) => (
+                      <div key={idx} style={{ position: 'relative' }}>
+                        <img
+                          src={photo.preview}
+                          alt={`Photo ${idx + 1}`}
+                          style={{
+                            width: '60px',
+                            height: '60px',
+                            objectFit: 'cover',
+                            borderRadius: '6px',
+                            border: '1px solid #e2e8f0'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            URL.revokeObjectURL(photo.preview);
+                            setEditDayPhotos(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '-6px',
+                            right: '-6px',
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            border: 'none',
+                            backgroundColor: '#ef4444',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '12px'
+                          }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <label
+                      style={{
+                        width: '60px',
+                        height: '60px',
+                        border: '2px dashed #cbd5e1',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        backgroundColor: '#f8fafc'
+                      }}
+                    >
+                      <FiCamera size={20} color="#94a3b8" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          const newPhotos = files.map(file => ({
+                            file,
+                            preview: URL.createObjectURL(file)
+                          }));
+                          setEditDayPhotos(prev => [...prev, ...newPhotos]);
+                          e.target.value = '';
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 <div className="form-group">
                   <label>Märkmed (valikuline):</label>
                   <textarea
@@ -9731,7 +10058,12 @@ export default function InstallationsScreen({
                 <div className="modal-actions">
                   <button
                     className="cancel-btn"
-                    onClick={() => setEditDayModalDate(null)}
+                    onClick={() => {
+                      editDayPhotos.forEach(p => URL.revokeObjectURL(p.preview));
+                      setEditDayPhotos([]);
+                      setEditDayMethods({});
+                      setEditDayModalDate(null);
+                    }}
                     disabled={savingEditDay}
                   >
                     Tühista
@@ -9739,7 +10071,7 @@ export default function InstallationsScreen({
                   <button
                     className="save-btn"
                     onClick={saveEditDay}
-                    disabled={savingEditDay || (!editDayNewDate && !editDayResource.trim() && !editDayNotes.trim())}
+                    disabled={savingEditDay || (!editDayNewDate && Object.keys(editDayMethods).length === 0 && !editDayNotes.trim() && editDayPhotos.length === 0)}
                   >
                     {savingEditDay ? 'Salvestan...' : 'Salvesta'}
                   </button>
