@@ -211,3 +211,48 @@ LEFT JOIN trimble_delivery_vehicles dv ON di.vehicle_id = dv.id
 WHERE di.trimble_project_id = $1
 ORDER BY dv.sort_order, di.sort_order;
 ```
+
+### 10. markeerij_presets
+Markeerija eelseadistused (text markup generator presets).
+
+| Veerg | Tüüp | Kirjeldus |
+|-------|------|-----------|
+| `id` | UUID | Primary key |
+| `trimble_project_id` | TEXT | Projekti ID |
+| `name` | TEXT | Eelseadistuse nimi |
+| `line1_template` | TEXT | Esimese rea mall |
+| `line2_template` | TEXT | Teise rea mall |
+| `line3_template` | TEXT | Kolmanda rea mall |
+| `color_r` | INTEGER | Värvi R komponent (0-255) |
+| `color_g` | INTEGER | Värvi G komponent (0-255) |
+| `color_b` | INTEGER | Värvi B komponent (0-255) |
+| `leader_height` | INTEGER | Juhi kõrgus (cm) |
+| `is_shared` | BOOLEAN | Kas jagatud kõigiga |
+| `created_by` | TEXT | Looja email |
+| `created_by_name` | TEXT | Looja nimi |
+| `created_at` | TIMESTAMP | Loomise aeg |
+| `updated_at` | TIMESTAMP | Viimane muudatus |
+
+**SQL:**
+```sql
+CREATE TABLE markeerij_presets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  trimble_project_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  line1_template TEXT DEFAULT '',
+  line2_template TEXT DEFAULT '',
+  line3_template TEXT DEFAULT '',
+  color_r INTEGER DEFAULT 0,
+  color_g INTEGER DEFAULT 63,
+  color_b INTEGER DEFAULT 135,
+  leader_height INTEGER DEFAULT 10,
+  is_shared BOOLEAN DEFAULT FALSE,
+  created_by TEXT NOT NULL,
+  created_by_name TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_markeerij_presets_project ON markeerij_presets(trimble_project_id);
+CREATE INDEX idx_markeerij_presets_shared ON markeerij_presets(trimble_project_id, is_shared);
+```

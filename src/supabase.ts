@@ -2391,3 +2391,27 @@ export interface DailyActivityStats {
   approvals: number;
 }
 
+// ============================================
+// MARKEERIJA PRESETS (Text Markup Generator presets)
+// ============================================
+
+export interface MarkeerijPreset {
+  id: string;
+  trimble_project_id: string;
+  name: string;
+  // Template settings
+  line1_template: string;
+  line2_template: string;
+  line3_template: string;
+  color_r: number;
+  color_g: number;
+  color_b: number;
+  leader_height: number;
+  // Sharing
+  is_shared: boolean;         // If true, visible to all users in project
+  created_by: string;         // User email
+  created_by_name?: string;
+  created_at: string;
+  updated_at: string;
+}
+
