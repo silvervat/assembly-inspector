@@ -250,6 +250,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
   const [functionResults, setFunctionResults] = useState<Record<string, FunctionTestResult>>({});
   const [exportLanguage, setExportLanguage] = useState<'et' | 'en'>('et');
 
+  // Markup settings state (for "Detailide markupid" section)
+  const [markupColor, setMarkupColor] = useState('#3B82F6'); // Blue default
+  const [markupLeaderHeight, setMarkupLeaderHeight] = useState(30); // 30cm default
+
   // Team members state
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [teamMembersLoading, setTeamMembersLoading] = useState(false);
@@ -5617,12 +5621,80 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
               </div>
             </div>
 
-            {/* LEADER MARKUPS section - markups with 30cm vertical line */}
+            {/* LEADER MARKUPS section - markups with vertical line */}
             <div className="function-section">
               <h4>📍 Detailide markupid (joonega)</h4>
               <p style={{ fontSize: '11px', color: '#666', marginBottom: '8px' }}>
-                Vali mudelist detailid ja lisa markupid 30cm vertikaalse joonega. Joon algab detaili keskelt, teksti saab lohistada.
+                Vali mudelist detailid ja lisa markupid vertikaalse joonega. Joon algab detaili keskelt, teksti saab lohistada.
               </p>
+
+              {/* Markup Settings */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px', padding: '10px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                {/* Color picker */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>🎨 Värv</label>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      type="color"
+                      value={markupColor}
+                      onChange={(e) => setMarkupColor(e.target.value)}
+                      style={{ width: '36px', height: '28px', padding: 0, border: '1px solid #d1d5db', borderRadius: '4px', cursor: 'pointer' }}
+                    />
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {['#3B82F6', '#22C55E', '#EF4444', '#F59E0B', '#8B5CF6', '#000000'].map(color => (
+                        <button
+                          key={color}
+                          onClick={() => setMarkupColor(color)}
+                          style={{
+                            width: '20px',
+                            height: '20px',
+                            background: color,
+                            border: markupColor === color ? '2px solid #1e40af' : '1px solid #d1d5db',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Leader height */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: 600, color: '#374151' }}>📏 Joone kõrgus (cm)</label>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      type="number"
+                      value={markupLeaderHeight}
+                      onChange={(e) => setMarkupLeaderHeight(Math.max(5, Math.min(500, parseInt(e.target.value) || 30)))}
+                      min={5}
+                      max={500}
+                      style={{ width: '60px', padding: '4px 8px', border: '1px solid #d1d5db', borderRadius: '4px', fontSize: '12px' }}
+                    />
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      {[10, 30, 50, 100].map(h => (
+                        <button
+                          key={h}
+                          onClick={() => setMarkupLeaderHeight(h)}
+                          style={{
+                            padding: '2px 6px',
+                            fontSize: '10px',
+                            background: markupLeaderHeight === h ? '#3b82f6' : '#e5e7eb',
+                            color: markupLeaderHeight === h ? '#fff' : '#374151',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {h}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div className="function-grid">
                 <FunctionButton
                   name="🏷️ Lisa joonega markupid"
@@ -5665,7 +5737,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                       const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
 
                       const markupsToCreate: any[] = [];
-                      const LEADER_HEIGHT_MM = 300; // 30cm = 300mm vertical line
+                      const LEADER_HEIGHT_MM = markupLeaderHeight * 10; // Convert cm to mm
 
                       for (let i = 0; i < allRuntimeIds.length; i++) {
                         const props = properties[i];
@@ -5700,7 +5772,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                           const centerY = ((box.min.y + box.max.y) / 2) * 1000;
                           const centerZ = ((box.min.z + box.max.z) / 2) * 1000;
 
-                          // Start at object center, end 30cm above
+                          // Start at object center, end at specified height above
                           const startPos = {
                             positionX: centerX,
                             positionY: centerY,
@@ -5745,11 +5817,10 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                         createdIds.push(Number(result.id));
                       }
 
-                      // Color them blue
-                      const blueColor = '#3B82F6';
+                      // Apply selected color
                       for (const id of createdIds) {
                         try {
-                          await (api.markup as any)?.editMarkup?.(id, { color: blueColor });
+                          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
                         } catch (e) {
                           console.warn('Could not set color for markup', id, e);
                         }
@@ -5757,7 +5828,7 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
 
                       updateFunctionResult("addLeaderMarkups", {
                         status: 'success',
-                        result: `${createdIds.length} joonega markupit loodud`
+                        result: `${createdIds.length} markupit loodud (${markupLeaderHeight}cm, ${markupColor})`
                       });
                     } catch (e: any) {
                       console.error('Leader markup error:', e);
@@ -5768,7 +5839,124 @@ export default function AdminScreen({ api, onBackToMenu, projectId, userEmail, u
                     }
                   }}
                 />
+
+                <FunctionButton
+                  name="🎨 Muuda kõigi markupite värvi"
+                  result={functionResults["changeAllMarkupColors"]}
+                  onClick={async () => {
+                    updateFunctionResult("changeAllMarkupColors", { status: 'pending' });
+                    try {
+                      const allMarkups = await api.markup?.getTextMarkups?.() as any[];
+                      if (!allMarkups || allMarkups.length === 0) {
+                        updateFunctionResult("changeAllMarkupColors", {
+                          status: 'error',
+                          error: 'Markupeid ei leitud'
+                        });
+                        return;
+                      }
+
+                      const allIds = allMarkups.map((m: any) => m.id).filter((id: any) => id !== undefined);
+                      let successCount = 0;
+
+                      for (const id of allIds) {
+                        try {
+                          await (api.markup as any)?.editMarkup?.(id, { color: markupColor });
+                          successCount++;
+                        } catch (e) {
+                          console.warn('Could not set color for markup', id, e);
+                        }
+                      }
+
+                      updateFunctionResult("changeAllMarkupColors", {
+                        status: 'success',
+                        result: `${successCount}/${allIds.length} markupi värv muudetud → ${markupColor}`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("changeAllMarkupColors", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+
+                <FunctionButton
+                  name="📋 Näita kõiki markupeid"
+                  result={functionResults["listAllMarkups"]}
+                  onClick={async () => {
+                    updateFunctionResult("listAllMarkups", { status: 'pending' });
+                    try {
+                      const allMarkups = await api.markup?.getTextMarkups?.() as any[];
+                      if (!allMarkups || allMarkups.length === 0) {
+                        updateFunctionResult("listAllMarkups", {
+                          status: 'success',
+                          result: 'Markupeid ei ole'
+                        });
+                        return;
+                      }
+
+                      const summary = allMarkups.slice(0, 10).map((m: any, i: number) =>
+                        `${i + 1}. ID:${m.id} "${m.text || '(tühi)'}" ${m.color || ''}`
+                      ).join('\n');
+
+                      updateFunctionResult("listAllMarkups", {
+                        status: 'success',
+                        result: `Kokku ${allMarkups.length} markupit:\n${summary}${allMarkups.length > 10 ? '\n...' : ''}`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("listAllMarkups", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
+
+                <FunctionButton
+                  name="🗑️ Eemalda kõik markupid"
+                  result={functionResults["removeAllLeaderMarkups"]}
+                  onClick={async () => {
+                    updateFunctionResult("removeAllLeaderMarkups", { status: 'pending' });
+                    try {
+                      const allMarkups = await api.markup?.getTextMarkups?.() as any[];
+                      if (!allMarkups || allMarkups.length === 0) {
+                        updateFunctionResult("removeAllLeaderMarkups", {
+                          status: 'success',
+                          result: 'Markupeid polnud'
+                        });
+                        return;
+                      }
+
+                      const allIds = allMarkups.map((m: any) => m.id).filter((id: any) => id !== undefined);
+                      await api.markup?.removeMarkups?.(allIds);
+
+                      updateFunctionResult("removeAllLeaderMarkups", {
+                        status: 'success',
+                        result: `${allIds.length} markupit eemaldatud`
+                      });
+                    } catch (e: any) {
+                      updateFunctionResult("removeAllLeaderMarkups", {
+                        status: 'error',
+                        error: e.message
+                      });
+                    }
+                  }}
+                />
               </div>
+
+              {/* API Info */}
+              <details style={{ marginTop: '12px', fontSize: '11px', color: '#6b7280' }}>
+                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>ℹ️ Trimble Markup API võimalused</summary>
+                <div style={{ padding: '8px', background: '#f1f5f9', borderRadius: '6px', marginTop: '6px' }}>
+                  <p><strong>addTextMarkup</strong> - Tekst + joon (start/end positsioon)</p>
+                  <p><strong>addFreelineMarkups</strong> - Vabad jooned (värv, joonte massiiv)</p>
+                  <p><strong>addMeasurementMarkups</strong> - Mõõtejooned</p>
+                  <p><strong>editMarkup(id, &#123;color&#125;)</strong> - Muuda värvi (hex)</p>
+                  <p><strong>getTextMarkups()</strong> - Loe kõik markupid</p>
+                  <p><strong>removeMarkups(ids)</strong> - Eemalda markupid</p>
+                  <p style={{ marginTop: '6px', color: '#9ca3af' }}>Värv: editMarkup toetab hex värve (#RRGGBB). addFreelineMarkups kasutab RGBA &#123;r,g,b,a&#125; formaati.</p>
+                </div>
+              </details>
             </div>
 
             {/* CAMERA / VIEW section */}
