@@ -15,6 +15,7 @@ import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
+import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
 import { InspectionAdminPanel } from './components/InspectionAdminPanel';
 import { UserProfileModal } from './components/UserProfileModal';
 import { supabase, TrimbleExUser } from './supabase';
@@ -31,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.851';
+export const APP_VERSION = '3.0.852';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -166,6 +167,248 @@ if (zoomProject && zoomModel && zoomGuid && !isPopupMode && !zoomId) {
 // Log app load for debugging
 console.log('🔗 [ZOOM] App loaded, isPopupMode:', isPopupMode);
 
+// Global Search Modal Component
+interface GlobalSearchModalProps {
+  api: WorkspaceAPI.WorkspaceAPI | null;
+  projectId: string;
+  onClose: () => void;
+}
+
+function GlobalSearchModalComponent({ api, projectId, onClose }: GlobalSearchModalProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [exactMatch, setExactMatch] = useState(true);
+  const [searching, setSearching] = useState(false);
+  const [searchResult, setSearchResult] = useState<{ count: number; message: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Focus input on mount
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  // Handle escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  // Debounced search
+  const handleSearch = useCallback(async (query: string) => {
+    if (!query.trim() || !api || !projectId) {
+      setSearchResult(null);
+      return;
+    }
+
+    setSearching(true);
+    setSearchResult(null);
+
+    try {
+      let dbQuery = supabase
+        .from('trimble_model_objects')
+        .select('guid_ifc, assembly_mark')
+        .eq('trimble_project_id', projectId);
+
+      if (exactMatch) {
+        dbQuery = dbQuery.eq('assembly_mark', query.trim());
+      } else {
+        dbQuery = dbQuery.ilike('assembly_mark', `%${query.trim()}%`);
+      }
+
+      const { data, error } = await dbQuery.limit(500);
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        setSearchResult({ count: 0, message: `"${query}" - ei leitud` });
+        setSearching(false);
+        return;
+      }
+
+      const guids = data.map(d => d.guid_ifc).filter(Boolean) as string[];
+
+      if (guids.length === 0) {
+        setSearchResult({ count: 0, message: `"${query}" - GUID puudub` });
+        setSearching(false);
+        return;
+      }
+
+      const foundObjects = await findObjectsInLoadedModels(api, guids);
+
+      if (foundObjects.size === 0) {
+        setSearchResult({ count: data.length, message: `${data.length} leitud andmebaasist, mudel pole laaditud` });
+        setSearching(false);
+        return;
+      }
+
+      // Group by model for selection
+      const byModel: Record<string, number[]> = {};
+      for (const [, found] of foundObjects) {
+        if (!byModel[found.modelId]) byModel[found.modelId] = [];
+        byModel[found.modelId].push(found.runtimeId);
+      }
+
+      const modelSelection = Object.entries(byModel).map(([modelId, runtimeIds]) => ({
+        modelId,
+        objectRuntimeIds: runtimeIds
+      }));
+
+      await api.viewer.setSelection({ modelObjectIds: modelSelection }, 'set');
+
+      if (foundObjects.size <= 10) {
+        await api.viewer.setCamera({ selected: true }, { animationTime: 500 });
+      }
+
+      setSearchResult({
+        count: foundObjects.size,
+        message: `${foundObjects.size} detaili valitud mudelis`
+      });
+    } catch (e) {
+      console.error('Global search error:', e);
+      setSearchResult({ count: 0, message: 'Otsingu viga' });
+    } finally {
+      setSearching(false);
+    }
+  }, [api, projectId, exactMatch]);
+
+  // Handle input change with debounce
+  const handleInputChange = (value: string) => {
+    setSearchQuery(value);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (value.trim().length >= 2) {
+      searchTimeoutRef.current = setTimeout(() => {
+        handleSearch(value);
+      }, 400);
+    } else {
+      setSearchResult(null);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        zIndex: 10001,
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        paddingTop: '15vh'
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#fff',
+          borderRadius: '12px',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+          width: '90%',
+          maxWidth: '480px',
+          padding: '20px'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+          <span style={{ fontSize: '24px' }}>🔍</span>
+          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#1f2937' }}>Kiirotsing</h2>
+          <button
+            onClick={onClose}
+            style={{
+              marginLeft: 'auto',
+              background: 'none',
+              border: 'none',
+              fontSize: '20px',
+              cursor: 'pointer',
+              color: '#6b7280',
+              padding: '4px'
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <input
+          ref={inputRef}
+          type="text"
+          value={searchQuery}
+          onChange={(e) => handleInputChange(e.target.value)}
+          placeholder="Otsi assembly marki..."
+          style={{
+            width: '100%',
+            padding: '12px 16px',
+            fontSize: '15px',
+            border: '2px solid #e5e7eb',
+            borderRadius: '8px',
+            outline: 'none',
+            boxSizing: 'border-box'
+          }}
+          onFocus={(e) => (e.target.style.borderColor = '#6366f1')}
+          onBlur={(e) => (e.target.style.borderColor = '#e5e7eb')}
+        />
+
+        <label style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginTop: '12px',
+          fontSize: '13px',
+          color: '#6b7280',
+          cursor: 'pointer'
+        }}>
+          <input
+            type="checkbox"
+            checked={exactMatch}
+            onChange={(e) => {
+              setExactMatch(e.target.checked);
+              if (searchQuery.trim().length >= 2) {
+                handleSearch(searchQuery);
+              }
+            }}
+            style={{ width: '16px', height: '16px' }}
+          />
+          Täpne vaste
+        </label>
+
+        {searching && (
+          <div style={{ marginTop: '12px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>
+            ⏳ Otsin...
+          </div>
+        )}
+
+        {searchResult && !searching && (
+          <div style={{
+            marginTop: '12px',
+            padding: '10px 14px',
+            borderRadius: '6px',
+            fontSize: '13px',
+            background: searchResult.count > 0 ? '#dcfce7' : '#fef3c7',
+            color: searchResult.count > 0 ? '#166534' : '#92400e'
+          }}>
+            {searchResult.message}
+          </div>
+        )}
+
+        <div style={{ marginTop: '16px', fontSize: '11px', color: '#9ca3af', textAlign: 'center' }}>
+          ESC sulgemiseks • Sisesta vähemalt 2 märki
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
   const [user, setUser] = useState<TrimbleExUser | null>(null);
@@ -195,6 +438,12 @@ export default function App() {
 
   // Tools screen initial expanded section (when navigating from menu)
   const [toolsInitialSection, setToolsInitialSection] = useState<'crane' | 'export' | 'markup' | 'marker' | 'partdb' | null>(null);
+
+  // Global keyboard shortcuts state
+  const [globalToast, setGlobalToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const globalToastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [shortcutLoading, setShortcutLoading] = useState<string | null>(null); // which shortcut is loading
 
   // Kasutaja initsiaalid (S.V) - eesnime ja perekonnanime esitähed
   const getUserInitials = (tcUserData: TrimbleConnectUser | null): string => {
@@ -678,6 +927,602 @@ export default function App() {
     }
   }, [api, projectId]);
 
+  // Global toast function
+  const showGlobalToast = useCallback((message: string, type: 'success' | 'error' | 'info') => {
+    if (globalToastTimeoutRef.current) clearTimeout(globalToastTimeoutRef.current);
+    setGlobalToast({ message, type });
+    globalToastTimeoutRef.current = setTimeout(() => setGlobalToast(null), 3000);
+  }, []);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    if (!api || !projectId) return;
+
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Only handle ALT + SHIFT combinations (CTRL+SHIFT conflicts with Chrome)
+      if (!e.altKey || !e.shiftKey) return;
+
+      const key = e.key.toLowerCase();
+
+      // CTRL+SHIFT+S - Open global search modal
+      if (key === 's') {
+        e.preventDefault();
+        setGlobalSearchOpen(true);
+        return;
+      }
+
+      // CTRL+SHIFT+I - Open Installations page
+      if (key === 'i') {
+        e.preventDefault();
+        setCurrentMode('installations');
+        return;
+      }
+
+      // CTRL+SHIFT+W - Color model white
+      if (key === 'w') {
+        e.preventDefault();
+        handleColorModelWhite();
+        return;
+      }
+
+      // CTRL+SHIFT+A - Color arrived parts green, rest white
+      if (key === 'a') {
+        e.preventDefault();
+        if (shortcutLoading) return;
+        setShortcutLoading('a');
+
+        try {
+          // Get all arrived (confirmed) items from database
+          const { data: arrivedItems, error } = await supabase
+            .from('arrived_delivery_confirmations')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .eq('status', 'confirmed');
+
+          if (error) throw error;
+
+          if (!arrivedItems || arrivedItems.length === 0) {
+            showGlobalToast('Saabunud detaile ei leitud', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const arrivedGuids = arrivedItems.map(i => i.guid_ifc).filter(Boolean) as string[];
+          const arrivedGuidsSet = new Set(arrivedGuids.map(g => g.toLowerCase()));
+
+          // Get all objects from database
+          const { data: allObjects } = await supabase
+            .from('trimble_model_objects')
+            .select('guid_ifc')
+            .eq('trimble_project_id', projectId)
+            .not('guid_ifc', 'is', null);
+
+          const allGuids = (allObjects || []).map(o => o.guid_ifc).filter(Boolean) as string[];
+
+          // Find objects in model
+          const foundObjects = await findObjectsInLoadedModels(api, allGuids);
+
+          if (foundObjects.size === 0) {
+            showGlobalToast('Mudel pole laaditud', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Separate arrived and non-arrived
+          const greenObjects: { modelId: string; runtimeId: number }[] = [];
+          const whiteObjects: { modelId: string; runtimeId: number }[] = [];
+
+          for (const [guid, found] of foundObjects) {
+            if (arrivedGuidsSet.has(guid.toLowerCase())) {
+              greenObjects.push(found);
+            } else {
+              whiteObjects.push(found);
+            }
+          }
+
+          // Group by model for coloring
+          const greenByModel: Record<string, number[]> = {};
+          const whiteByModel: Record<string, number[]> = {};
+
+          for (const obj of greenObjects) {
+            if (!greenByModel[obj.modelId]) greenByModel[obj.modelId] = [];
+            greenByModel[obj.modelId].push(obj.runtimeId);
+          }
+          for (const obj of whiteObjects) {
+            if (!whiteByModel[obj.modelId]) whiteByModel[obj.modelId] = [];
+            whiteByModel[obj.modelId].push(obj.runtimeId);
+          }
+
+          // Color white first
+          const white = { r: 255, g: 255, b: 255, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(whiteByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: white }
+              );
+            }
+          }
+
+          // Color green
+          const green = { r: 34, g: 197, b: 94, a: 255 };
+          for (const [modelId, runtimeIds] of Object.entries(greenByModel)) {
+            const BATCH_SIZE = 500;
+            for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+              const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+              await api.viewer.setObjectState(
+                { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                { color: green }
+              );
+            }
+          }
+
+          showGlobalToast(`${greenObjects.length} saabunud detaili roheliseks`, 'success');
+        } catch (err) {
+          console.error('CTRL+SHIFT+A error:', err);
+          showGlobalToast('Viga värvimisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // CTRL+SHIFT+M - Add black markups with auto-stagger
+      if (key === 'm') {
+        e.preventDefault();
+        if (shortcutLoading) return;
+        setShortcutLoading('m');
+
+        try {
+          const selected = await api.viewer.getSelection();
+          if (!selected || selected.length === 0) {
+            showGlobalToast('Vali mudelist detailid!', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Collect all runtime IDs
+          const allRuntimeIds: number[] = [];
+          let modelId = '';
+          for (const sel of selected) {
+            if (!modelId) modelId = sel.modelId;
+            if (sel.objectRuntimeIds) {
+              allRuntimeIds.push(...sel.objectRuntimeIds);
+            }
+          }
+
+          if (!modelId || allRuntimeIds.length === 0) {
+            showGlobalToast('Valitud objektidel puudub info', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Get bounding boxes for positions
+          const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
+
+          // Get assembly marks from database
+          const externalIds = await api.viewer.convertToObjectIds(modelId, allRuntimeIds);
+          const guidToMark: Record<string, string> = {};
+
+          if (externalIds && externalIds.length > 0) {
+            const guidsToQuery = externalIds.filter(Boolean) as string[];
+            if (guidsToQuery.length > 0) {
+              const { data: dbObjects } = await supabase
+                .from('trimble_model_objects')
+                .select('guid_ifc, assembly_mark')
+                .eq('trimble_project_id', projectId)
+                .in('guid_ifc', guidsToQuery);
+
+              for (const obj of dbObjects || []) {
+                if (obj.guid_ifc && obj.assembly_mark) {
+                  guidToMark[obj.guid_ifc.toLowerCase()] = obj.assembly_mark;
+                }
+              }
+            }
+          }
+
+          // Create markups
+          const markupsToCreate: any[] = [];
+          for (let i = 0; i < allRuntimeIds.length; i++) {
+            const bbox = bboxes[i];
+            if (!bbox?.boundingBox) continue;
+
+            const box = bbox.boundingBox;
+            const guid = externalIds?.[i]?.toLowerCase() || '';
+            const assemblyMark = guidToMark[guid] || `Detail ${i + 1}`;
+
+            const posX = ((box.min.x + box.max.x) / 2) * 1000;
+            const posY = ((box.min.y + box.max.y) / 2) * 1000;
+            const topZ = box.max.z * 1000;
+
+            markupsToCreate.push({
+              text: assemblyMark,
+              start: { positionX: posX, positionY: posY, positionZ: topZ },
+              end: { positionX: posX, positionY: posY, positionZ: topZ },
+              color: '#000000'
+            });
+          }
+
+          if (markupsToCreate.length === 0) {
+            showGlobalToast('Markupe ei saanud luua', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Apply auto-stagger heights (500mm base, 2000mm if close < 4m)
+          const PROXIMITY_THRESHOLD = 4000;
+          const HEIGHT_LOW = 500;
+          const HEIGHT_HIGH = 2500; // 500 + 2000
+
+          const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
+          indexed.sort((a, b) => a.x - b.x || a.y - b.y);
+
+          const heights: number[] = new Array(markupsToCreate.length).fill(HEIGHT_LOW);
+
+          for (let i = 0; i < indexed.length; i++) {
+            const current = indexed[i];
+            let hasCloseNeighborWithLow = false;
+
+            for (let j = 0; j < indexed.length; j++) {
+              if (i === j) continue;
+              const other = indexed[j];
+              const dx = current.x - other.x;
+              const dy = current.y - other.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+
+              if (distance < PROXIMITY_THRESHOLD && heights[other.idx] === HEIGHT_LOW) {
+                hasCloseNeighborWithLow = true;
+                break;
+              }
+            }
+
+            heights[current.idx] = hasCloseNeighborWithLow ? HEIGHT_HIGH : HEIGHT_LOW;
+          }
+
+          // Apply heights
+          for (let i = 0; i < markupsToCreate.length; i++) {
+            markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
+          }
+
+          // Create markups
+          await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+
+          showGlobalToast(`${markupsToCreate.length} markupit loodud`, 'success');
+        } catch (err) {
+          console.error('CTRL+SHIFT+M error:', err);
+          showGlobalToast('Viga markupite loomisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // CTRL+SHIFT+B - Add bolt markups (dark blue) with 1500mm stagger
+      if (key === 'b') {
+        e.preventDefault();
+        if (shortcutLoading) return;
+        setShortcutLoading('b');
+
+        try {
+          const selected = await api.viewer.getSelection();
+          if (!selected || selected.length === 0) {
+            showGlobalToast('Vali mudelist detailid!', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const allRuntimeIds: number[] = [];
+          let modelId = '';
+          for (const sel of selected) {
+            if (!modelId) modelId = sel.modelId;
+            if (sel.objectRuntimeIds) {
+              allRuntimeIds.push(...sel.objectRuntimeIds);
+            }
+          }
+
+          if (!modelId || allRuntimeIds.length === 0) {
+            showGlobalToast('Valitud objektidel puudub info', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const markupsToCreate: any[] = [];
+
+          // Process each selected object to find bolts
+          for (const runtimeId of allRuntimeIds) {
+            try {
+              const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+
+              if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+                const childIds = hierarchyChildren.map((c: any) => c.id);
+
+                if (childIds.length > 0) {
+                  const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+                  const childBBoxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+                  for (let i = 0; i < childProps.length; i++) {
+                    const childProp = childProps[i];
+                    const childBBox = childBBoxes[i];
+
+                    if (childProp?.properties && Array.isArray(childProp.properties)) {
+                      let boltName = '';
+                      let hasTeklaBolt = false;
+                      let washerCount = -1;
+
+                      for (const pset of childProp.properties) {
+                        const psetNameLower = (pset.name || '').toLowerCase();
+                        if (psetNameLower.includes('tekla') && psetNameLower.includes('bolt')) {
+                          hasTeklaBolt = true;
+                          for (const p of pset.properties || []) {
+                            const propName = (p.name || '').toLowerCase();
+                            const val = String(p.value ?? p.displayValue ?? '');
+                            if (propName === 'bolt_name' || propName === 'bolt.name' || (propName.includes('bolt') && propName.includes('name'))) {
+                              boltName = val;
+                            }
+                            if (propName.includes('washer') && propName.includes('count')) {
+                              washerCount = parseInt(val) || 0;
+                            }
+                          }
+                        }
+                      }
+
+                      if (!hasTeklaBolt || washerCount === 0 || !boltName) continue;
+
+                      if (childBBox?.boundingBox) {
+                        const box = childBBox.boundingBox;
+                        const pos = {
+                          positionX: ((box.min.x + box.max.x) / 2) * 1000,
+                          positionY: ((box.min.y + box.max.y) / 2) * 1000,
+                          positionZ: ((box.min.z + box.max.z) / 2) * 1000,
+                        };
+                        markupsToCreate.push({ text: boltName, start: { ...pos }, end: { ...pos } });
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (err) {
+              console.warn('Could not get children for', runtimeId, err);
+            }
+          }
+
+          if (markupsToCreate.length === 0) {
+            showGlobalToast('Polte ei leitud', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Apply auto-stagger heights (500mm base, 1500mm difference if close < 4m)
+          const PROXIMITY_THRESHOLD = 4000;
+          const HEIGHT_LOW = 500;
+          const HEIGHT_HIGH = 2000; // 500 + 1500
+
+          const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
+          indexed.sort((a, b) => a.x - b.x || a.y - b.y);
+
+          const heights: number[] = new Array(markupsToCreate.length).fill(HEIGHT_LOW);
+
+          for (let i = 0; i < indexed.length; i++) {
+            const current = indexed[i];
+            let hasCloseNeighborWithLow = false;
+
+            for (let j = 0; j < indexed.length; j++) {
+              if (i === j) continue;
+              const other = indexed[j];
+              const dx = current.x - other.x;
+              const dy = current.y - other.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+
+              if (distance < PROXIMITY_THRESHOLD && heights[other.idx] === HEIGHT_LOW) {
+                hasCloseNeighborWithLow = true;
+                break;
+              }
+            }
+
+            heights[current.idx] = hasCloseNeighborWithLow ? HEIGHT_HIGH : HEIGHT_LOW;
+          }
+
+          // Apply heights
+          for (let i = 0; i < markupsToCreate.length; i++) {
+            markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
+          }
+
+          // Create markups
+          const result = await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+
+          // Color them dark blue
+          const darkBlue = '#1e3a5f';
+          const createdIds: number[] = [];
+          if (Array.isArray(result)) {
+            result.forEach((r: any) => {
+              if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+              else if (typeof r === 'number') createdIds.push(r);
+            });
+          } else if (typeof result === 'object' && result?.id) {
+            createdIds.push(Number(result.id));
+          }
+
+          for (const id of createdIds) {
+            try {
+              await (api.markup as any)?.editMarkup?.(id, { color: darkBlue });
+            } catch (err) {
+              console.warn('Could not set color for markup', id, err);
+            }
+          }
+
+          showGlobalToast(`${markupsToCreate.length} poltide markupit loodud`, 'success');
+        } catch (err) {
+          console.error('CTRL+SHIFT+B error:', err);
+          showGlobalToast('Viga poltide markupite loomisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // CTRL+SHIFT+D - Add delivery markups (truck + date, different colors)
+      if (key === 'd') {
+        e.preventDefault();
+        if (shortcutLoading) return;
+        setShortcutLoading('d');
+
+        try {
+          const selected = await api.viewer.getSelection();
+          if (!selected || selected.length === 0) {
+            showGlobalToast('Vali mudelist detailid!', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          const allRuntimeIds: number[] = [];
+          let modelId = '';
+          for (const sel of selected) {
+            if (!modelId) modelId = sel.modelId;
+            if (sel.objectRuntimeIds) {
+              allRuntimeIds.push(...sel.objectRuntimeIds);
+            }
+          }
+
+          if (!modelId || allRuntimeIds.length === 0) {
+            showGlobalToast('Valitud objektidel puudub info', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Get GUIDs for selected objects
+          const externalIds = await api.viewer.convertToObjectIds(modelId, allRuntimeIds);
+          const guidsToQuery = (externalIds || []).filter(Boolean) as string[];
+
+          if (guidsToQuery.length === 0) {
+            showGlobalToast('Ei leidnud GUID-e', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Get delivery info from database
+          const { data: deliveryItems } = await supabase
+            .from('trimble_delivery_items')
+            .select(`
+              guid_ifc,
+              planned_date,
+              vehicle_id,
+              trimble_delivery_vehicles!inner (
+                short_code,
+                color
+              )
+            `)
+            .eq('trimble_project_id', projectId)
+            .in('guid_ifc', guidsToQuery);
+
+          if (!deliveryItems || deliveryItems.length === 0) {
+            showGlobalToast('Valitud detailid pole tarnegraafikus', 'info');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Map GUID to delivery info
+          const guidToDelivery: Record<string, { truck: string; date: string; color: string }> = {};
+          for (const item of deliveryItems) {
+            if (item.guid_ifc) {
+              const vehicle = item.trimble_delivery_vehicles as any;
+              const dateStr = item.planned_date ? new Date(item.planned_date).toLocaleDateString('et-EE') : '';
+              guidToDelivery[item.guid_ifc.toLowerCase()] = {
+                truck: vehicle?.short_code || '',
+                date: dateStr,
+                color: vehicle?.color || '#6b7280'
+              };
+            }
+          }
+
+          // Get bounding boxes
+          const bboxes = await api.viewer.getObjectBoundingBoxes(modelId, allRuntimeIds);
+
+          // Create markups
+          const markupsToCreate: any[] = [];
+          for (let i = 0; i < allRuntimeIds.length; i++) {
+            const bbox = bboxes[i];
+            if (!bbox?.boundingBox) continue;
+
+            const guid = externalIds?.[i]?.toLowerCase() || '';
+            const delivery = guidToDelivery[guid];
+            if (!delivery) continue;
+
+            const box = bbox.boundingBox;
+            const posX = ((box.min.x + box.max.x) / 2) * 1000;
+            const posY = ((box.min.y + box.max.y) / 2) * 1000;
+            const topZ = box.max.z * 1000;
+
+            const text = `${delivery.truck}\n${delivery.date}`;
+
+            markupsToCreate.push({
+              text,
+              start: { positionX: posX, positionY: posY, positionZ: topZ },
+              end: { positionX: posX, positionY: posY, positionZ: topZ },
+              color: delivery.color
+            });
+          }
+
+          if (markupsToCreate.length === 0) {
+            showGlobalToast('Markupe ei saanud luua', 'error');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Apply auto-stagger heights (500mm base, 2000mm if close < 4m)
+          const PROXIMITY_THRESHOLD = 4000;
+          const HEIGHT_LOW = 500;
+          const HEIGHT_HIGH = 2500;
+
+          const indexed = markupsToCreate.map((m, idx) => ({ m, idx, x: m.start.positionX, y: m.start.positionY }));
+          indexed.sort((a, b) => a.x - b.x || a.y - b.y);
+
+          const heights: number[] = new Array(markupsToCreate.length).fill(HEIGHT_LOW);
+
+          for (let i = 0; i < indexed.length; i++) {
+            const current = indexed[i];
+            let hasCloseNeighborWithLow = false;
+
+            for (let j = 0; j < indexed.length; j++) {
+              if (i === j) continue;
+              const other = indexed[j];
+              const dx = current.x - other.x;
+              const dy = current.y - other.y;
+              const distance = Math.sqrt(dx * dx + dy * dy);
+
+              if (distance < PROXIMITY_THRESHOLD && heights[other.idx] === HEIGHT_LOW) {
+                hasCloseNeighborWithLow = true;
+                break;
+              }
+            }
+
+            heights[current.idx] = hasCloseNeighborWithLow ? HEIGHT_HIGH : HEIGHT_LOW;
+          }
+
+          // Apply heights
+          for (let i = 0; i < markupsToCreate.length; i++) {
+            markupsToCreate[i].end.positionZ = markupsToCreate[i].start.positionZ + heights[i];
+          }
+
+          // Create markups (colors are included in markup data)
+          await (api.markup as any)?.addTextMarkup?.(markupsToCreate);
+
+          showGlobalToast(`${markupsToCreate.length} tarne markupit loodud`, 'success');
+        } catch (err) {
+          console.error('CTRL+SHIFT+D error:', err);
+          showGlobalToast('Viga tarne markupite loomisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [api, projectId, shortcutLoading, handleColorModelWhite, showGlobalToast]);
+
   // Helper: normalize GUID
   const normalizeGuid = (s: string): string => {
     return s.replace(/^urn:(uuid:)?/i, "").trim();
@@ -915,6 +1760,36 @@ export default function App() {
     );
   }, [colorWhiteProgress]);
 
+  // Global toast overlay
+  const GlobalToastOverlay = globalToast ? (
+    <div style={{
+      position: 'fixed',
+      top: '16px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 10000,
+      padding: '12px 20px',
+      borderRadius: '8px',
+      fontSize: '13px',
+      fontWeight: 500,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      background: globalToast.type === 'success' ? '#22c55e' : globalToast.type === 'error' ? '#ef4444' : '#3b82f6',
+      color: '#fff'
+    }}>
+      {shortcutLoading && '⏳ '}
+      {globalToast.message}
+    </div>
+  ) : null;
+
+  // Global search modal
+  const GlobalSearchModal = globalSearchOpen ? (
+    <GlobalSearchModalComponent
+      api={api}
+      projectId={projectId}
+      onClose={() => setGlobalSearchOpen(false)}
+    />
+  ) : null;
+
   const NavigationOverlay = () => {
     if (!isNavigating && !navigationStatus) return null;
 
@@ -1013,6 +1888,8 @@ export default function App() {
   if (!currentMode) {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <MainMenu
@@ -1040,6 +1917,8 @@ export default function App() {
   if (currentMode === 'admin') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <AdminScreen
@@ -1061,6 +1940,8 @@ export default function App() {
   if (currentMode === 'inspection_plans') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <InspectionPlansScreen
@@ -1081,6 +1962,8 @@ export default function App() {
   if (currentMode === 'inspection_admin') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <InspectionAdminPanel
@@ -1098,6 +1981,8 @@ export default function App() {
   if (currentMode === 'inspection_plan') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <InspectionPlanScreen
@@ -1120,6 +2005,8 @@ export default function App() {
   if (currentMode === 'installations') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <InstallationsScreen
@@ -1142,6 +2029,8 @@ export default function App() {
   if (currentMode === 'schedule') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <InstallationScheduleScreen
@@ -1164,6 +2053,8 @@ export default function App() {
   if (currentMode === 'delivery_schedule') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <DeliveryScheduleScreen
@@ -1186,6 +2077,8 @@ export default function App() {
   if (currentMode === 'arrived_deliveries') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <ArrivedDeliveriesScreen
@@ -1206,6 +2099,8 @@ export default function App() {
   if (currentMode === 'organizer') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <OrganizerScreen
@@ -1230,6 +2125,8 @@ export default function App() {
   if (currentMode === 'issues') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <IssuesScreen
@@ -1252,6 +2149,8 @@ export default function App() {
   if (currentMode === 'tools') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <ToolsScreen
@@ -1272,6 +2171,8 @@ export default function App() {
   if (currentMode === 'crane_planner') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <CranePlannerScreen
@@ -1291,6 +2192,8 @@ export default function App() {
   if (currentMode === 'crane_library') {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <CraneLibraryScreen
@@ -1304,10 +2207,28 @@ export default function App() {
     );
   }
 
+  // Klaviatuuri otseteed ekraan
+  if (currentMode === 'keyboard_shortcuts') {
+    return (
+      <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
+        <NavigationOverlay />
+        {ColorWhiteOverlay}
+        <KeyboardShortcutsScreen
+          onBackToMenu={handleBackToMenu}
+        />
+        <VersionFooter />
+      </>
+    );
+  }
+
   // Inspection type mode - show inspector with selected type
   if (currentMode === 'inspection_type' && selectedInspectionType) {
     return (
       <>
+        {GlobalToastOverlay}
+        {GlobalSearchModal}
         <NavigationOverlay />
         {ColorWhiteOverlay}
         <InspectorScreen
@@ -1331,6 +2252,8 @@ export default function App() {
   // Näita valitud inspektsiooni ekraani (legacy modes)
   return (
     <>
+      {GlobalToastOverlay}
+      {GlobalSearchModal}
       <NavigationOverlay />
       {ColorWhiteOverlay}
       <InspectorScreen

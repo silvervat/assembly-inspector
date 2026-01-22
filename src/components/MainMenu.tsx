@@ -3,7 +3,7 @@ import { TrimbleExUser, supabase } from '../supabase';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import {
   FiTool, FiAlertTriangle, FiChevronRight, FiSettings,
-  FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder, FiSearch
+  FiShield, FiClipboard, FiTruck, FiCalendar, FiFolder, FiSearch, FiBook
 } from 'react-icons/fi';
 import { PiCraneTowerFill } from 'react-icons/pi';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -30,7 +30,8 @@ export type InspectionMode =
   | 'issues' // Probleemid (mittevastavused)
   | 'tools' // Tööriistad
   | 'crane_planner' // Kraanade planeerimine
-  | 'crane_library'; // Kraanade andmebaas (admin)
+  | 'crane_library' // Kraanade andmebaas (admin)
+  | 'keyboard_shortcuts'; // Klaviatuuri otseteed
 
 interface MainMenuProps {
   user: TrimbleExUser;
@@ -337,6 +338,23 @@ export default function MainMenu({
               <div className="menu-item-content">
                 <span className="menu-item-title">Tööriistad</span>
                 <span className="menu-item-desc">Ekspordid, markup'id ja märgistamine</span>
+              </div>
+              <span className="menu-item-arrow">
+                <FiChevronRight size={18} />
+              </span>
+            </button>
+
+            {/* Kasutusjuhendid - guides */}
+            <button
+              className="menu-item enabled"
+              onClick={() => onSelectMode('keyboard_shortcuts')}
+            >
+              <span className="menu-item-icon" style={{ color: '#8b5cf6' }}>
+                <FiBook size={20} />
+              </span>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Kasutusjuhendid</span>
+                <span className="menu-item-desc">Klaviatuuri otseteed ja juhendid</span>
               </div>
               <span className="menu-item-arrow">
                 <FiChevronRight size={18} />

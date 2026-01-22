@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   FiArrowLeft, FiMenu, FiTruck, FiCalendar, FiClipboard,
-  FiFolder, FiAlertTriangle, FiShield, FiX, FiTool, FiChevronRight, FiSearch, FiLoader
+  FiFolder, FiAlertTriangle, FiShield, FiX, FiTool, FiChevronRight, FiSearch, FiLoader, FiBook
 } from 'react-icons/fi';
 import { PiCraneTowerFill } from 'react-icons/pi';
 import { InspectionMode } from './MainMenu';
@@ -41,6 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { mode: 'issues', label: 'Mittevastavaused', icon: <FiAlertTriangle size={18} />, color: '#dc2626' },
   { mode: 'organizer', label: 'Organiseerija', icon: <FiFolder size={18} />, color: '#7c3aed' },
   { mode: 'tools', label: 'Tööriistad', icon: <FiTool size={18} />, color: '#f59e0b', hasSubmenu: true },
+  { mode: 'keyboard_shortcuts', label: 'Kasutusjuhendid', icon: <FiBook size={18} />, color: '#8b5cf6' },
   { mode: 'inspection_plan', label: 'Inspektsiooni kava', icon: <FiClipboard size={18} />, color: '#6b7280', adminOnly: true },
   { mode: 'admin', label: 'Administratsioon', icon: <FiShield size={18} />, color: '#6b7280', adminOnly: true },
   { mode: null, label: 'Peamenüü', icon: <FiMenu size={18} />, color: '#6b7280' },
