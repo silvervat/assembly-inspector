@@ -147,6 +147,9 @@ export default function ToolsScreen({
   // Auto height staggering - alternates heights for close markups
   const [autoStaggerHeight, setAutoStaggerHeight] = useState(false);
 
+  // Kinnitustarvikud (fasteners/bolts with washerCount=0) loading state
+  const [kinnitustarvikudLoading, setKinnitustarvikudLoading] = useState(false);
+
   // Markup position on object (left/center/right edge)
   const [markupPosition, setMarkupPosition] = useState<'left' | 'center' | 'right'>('center');
 
@@ -606,7 +609,6 @@ export default function ToolsScreen({
               if (guid && _projectId) {
                 // Fetch database fields for this object
                 const guidLower = guid.toLowerCase();
-                const guidPattern = `%${guidLower}%`;
 
                 // Query delivery, arrival and installation data in parallel
                 const [deliveryResult, arrivalResult, installationResult] = await Promise.all([
@@ -615,7 +617,7 @@ export default function ToolsScreen({
                     .from('trimble_delivery_items')
                     .select(`*, vehicle:trimble_delivery_vehicles(vehicle_code, scheduled_date)`)
                     .eq('trimble_project_id', _projectId)
-                    .ilike('guid_ifc', guidPattern)
+                    .eq('guid_ifc', guidLower)
                     .limit(1),
                   // Arrival info - first get delivery items, then confirmations
                   (async () => {
@@ -623,7 +625,7 @@ export default function ToolsScreen({
                       .from('trimble_delivery_items')
                       .select('id')
                       .eq('trimble_project_id', _projectId)
-                      .ilike('guid_ifc', guidPattern);
+                      .eq('guid_ifc', guidLower);
                     if (delItems && delItems.length > 0) {
                       const itemIds = delItems.map(i => i.id);
                       const { data: confirmations } = await supabase
@@ -640,7 +642,7 @@ export default function ToolsScreen({
                     .from('installation_schedule')
                     .select('scheduled_date, actual_date')
                     .eq('project_id', _projectId)
-                    .ilike('guid_ifc', guidPattern)
+                    .eq('guid_ifc', guidLower)
                     .limit(1)
                 ]);
 
@@ -712,6 +714,71 @@ export default function ToolsScreen({
                     });
                   }
                 }
+              }
+
+              // --- Load bolt children for Kinnitustarvikud section ---
+              try {
+                const hierarchy = await (api.viewer as any).getObjectHierarchy?.(modelId, [runtimeIds[0]]);
+                let childIds: number[] = [];
+                if (hierarchy?.[0]?.children && Array.isArray(hierarchy[0].children)) {
+                  childIds = hierarchy[0].children.map((c: any) => c.runtimeId).filter((id: any) => typeof id === 'number');
+                }
+
+                if (childIds.length > 0) {
+                  const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+                  const boltGroup = 'Kinnitustarvikud';
+                  const boltFieldsAdded = new Set<string>();
+
+                  for (let ci = 0; ci < childProps.length; ci++) {
+                    const childProp = childProps[ci];
+
+                    if (childProp?.properties && Array.isArray(childProp.properties)) {
+                      let hasTeklaBolt = false;
+                      let washerCount = -1;
+                      const boltProperties: Record<string, string> = {};
+
+                      for (const pset of childProp.properties) {
+                        const psetNameLower = (pset.name || '').toLowerCase();
+                        if (psetNameLower.includes('tekla') && psetNameLower.includes('bolt')) {
+                          hasTeklaBolt = true;
+                          for (const p of pset.properties || []) {
+                            const propName = (p.name || '').toLowerCase();
+                            const val = String(p.value ?? p.displayValue ?? '');
+                            boltProperties[propName] = val;
+                            if (propName.includes('washer') && propName.includes('count')) {
+                              washerCount = parseInt(val) || 0;
+                            }
+                          }
+                        }
+                      }
+
+                      // Only include bolts where washerCount === 0
+                      if (hasTeklaBolt && washerCount === 0) {
+                        // Add bolt fields to the fields array (only unique labels)
+                        for (const [propName, propValue] of Object.entries(boltProperties)) {
+                          const id = `BOLT_${propName}`.replace(/[^a-zA-Z0-9]/g, '_');
+                          if (!boltFieldsAdded.has(id)) {
+                            boltFieldsAdded.add(id);
+                            // Make friendly label
+                            const label = propName.replace(/_/g, ' ').replace(/\./g, ' ')
+                              .split(' ')
+                              .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                              .join(' ');
+                            fields.push({
+                              id,
+                              label,
+                              placeholder: `{${id}}`,
+                              preview: propValue.length > 30 ? propValue.substring(0, 30) + '...' : propValue,
+                              group: boltGroup
+                            });
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              } catch (boltErr) {
+                console.warn('Could not load bolt children for Kinnitustarvikud:', boltErr);
               }
 
               setMarkeerijFields(fields);
@@ -1575,6 +1642,152 @@ export default function ToolsScreen({
       showToast(e.message || 'Viga markupite lisamisel', 'error');
     } finally {
       setBoltLoading(false);
+    }
+  };
+
+  // Add Kinnitustarvikud (fasteners) markups - only for bolts where washerCount = 0
+  const handleAddKinnitustarvikudMarkups = async () => {
+    setKinnitustarvikudLoading(true);
+    try {
+      const selected = await api.viewer.getSelection();
+      if (!selected || selected.length === 0) {
+        showToast('Vali mudelist detailid!', 'error');
+        setKinnitustarvikudLoading(false);
+        return;
+      }
+
+      const allRuntimeIds: number[] = [];
+      let modelId = '';
+      for (const sel of selected) {
+        if (!modelId) modelId = sel.modelId;
+        if (sel.objectRuntimeIds) {
+          allRuntimeIds.push(...sel.objectRuntimeIds);
+        }
+      }
+
+      if (!modelId || allRuntimeIds.length === 0) {
+        showToast('Valitud objektidel puudub info', 'error');
+        setKinnitustarvikudLoading(false);
+        return;
+      }
+
+      const showProgress = allRuntimeIds.length > 10;
+      if (showProgress) {
+        setBatchProgress({ message: 'Kogun kinnitustarvikute andmeid', percent: 0 });
+      }
+
+      const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
+
+      for (let idx = 0; idx < allRuntimeIds.length; idx++) {
+        const runtimeId = allRuntimeIds[idx];
+
+        if (showProgress && idx % 5 === 0) {
+          setBatchProgress({ message: 'Kogun kinnitustarvikute andmeid', percent: Math.round((idx / allRuntimeIds.length) * 50) });
+        }
+
+        try {
+          const hierarchyChildren = await (api.viewer as any).getHierarchyChildren?.(modelId, [runtimeId]);
+
+          if (hierarchyChildren && Array.isArray(hierarchyChildren) && hierarchyChildren.length > 0) {
+            const childIds = hierarchyChildren.map((c: any) => c.id);
+
+            if (childIds.length > 0) {
+              const childProps: any[] = await api.viewer.getObjectProperties(modelId, childIds);
+              const childBBoxes = await api.viewer.getObjectBoundingBoxes(modelId, childIds);
+
+              for (let i = 0; i < childProps.length; i++) {
+                const childProp = childProps[i];
+                const childBBox = childBBoxes[i];
+
+                if (childProp?.properties && Array.isArray(childProp.properties)) {
+                  let boltName = '';
+                  let hasTeklaBolt = false;
+                  let washerCount = -1;
+
+                  for (const pset of childProp.properties) {
+                    const psetNameLower = (pset.name || '').toLowerCase();
+                    if (psetNameLower.includes('tekla') && psetNameLower.includes('bolt')) {
+                      hasTeklaBolt = true;
+                      for (const p of pset.properties || []) {
+                        const propName = (p.name || '').toLowerCase();
+                        const val = String(p.value ?? p.displayValue ?? '');
+                        if (propName === 'bolt_name' || propName === 'bolt.name' || (propName.includes('bolt') && propName.includes('name'))) {
+                          boltName = val;
+                        }
+                        if (propName.includes('washer') && propName.includes('count')) {
+                          washerCount = parseInt(val) || 0;
+                        }
+                      }
+                    }
+                  }
+
+                  // Only include bolts where washerCount === 0 (opposite of handleAddBoltMarkups)
+                  if (!hasTeklaBolt || washerCount !== 0 || !boltName) continue;
+
+                  if (childBBox?.boundingBox) {
+                    const box = childBBox.boundingBox;
+                    const pos = {
+                      positionX: ((box.min.x + box.max.x) / 2) * 1000,
+                      positionY: ((box.min.y + box.max.y) / 2) * 1000,
+                      positionZ: ((box.min.z + box.max.z) / 2) * 1000,
+                    };
+                    markupsToCreate.push({ text: boltName, start: pos, end: pos });
+                  }
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Could not get children for', runtimeId, e);
+        }
+      }
+
+      if (markupsToCreate.length === 0) {
+        setBatchProgress(null);
+        showToast('Kinnitustarvikuid washer count = 0 ei leitud', 'success');
+        setKinnitustarvikudLoading(false);
+        return;
+      }
+
+      if (markupsToCreate.length > MAX_MARKUPS_PER_BATCH) {
+        setBatchProgress(null);
+        showToast(`Liiga palju markupe (${markupsToCreate.length}). Max ${MAX_MARKUPS_PER_BATCH} korraga!`, 'error');
+        setKinnitustarvikudLoading(false);
+        return;
+      }
+
+      if (showProgress) {
+        setBatchProgress({ message: 'Loon markupe', percent: 60 });
+      }
+
+      const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
+
+      // Color markups dark orange
+      const createdIds: number[] = [];
+      if (Array.isArray(result)) {
+        result.forEach((r: any) => {
+          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
+          else if (typeof r === 'number') createdIds.push(r);
+        });
+      }
+
+      if (createdIds.length > 0) {
+        const orangeColor = { r: 220, g: 100, b: 0, a: 255 };
+        for (const id of createdIds) {
+          try {
+            await (api.markup as any).editMarkup(id, { color: orangeColor });
+          } catch { /* ignore */ }
+        }
+      }
+
+      setBatchProgress(null);
+      showToast(`Loodud ${markupsToCreate.length} kinnitustarviku markupit`, 'success');
+    } catch (e: any) {
+      console.error('Kinnitustarvikud markup error:', e);
+      setBatchProgress(null);
+      showToast(e.message || 'Viga markupite lisamisel', 'error');
+    } finally {
+      setKinnitustarvikudLoading(false);
     }
   };
 
@@ -3180,7 +3393,17 @@ export default function ToolsScreen({
                         </div>
                         {/* Fields in this group */}
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                          {groupedFields[groupName].map(field => (
+                          {groupedFields[groupName].map(field => {
+                            // Determine colors based on group
+                            let bgColor = '#dbeafe';
+                            let borderColor = '#3b82f6';
+                            let textColor = '#1e40af';
+                            if (field.group === 'Andmebaas') {
+                              bgColor = '#d1fae5'; borderColor = '#10b981'; textColor = '#065f46';
+                            } else if (field.group === 'Kinnitustarvikud') {
+                              bgColor = '#ffedd5'; borderColor = '#f97316'; textColor = '#c2410c';
+                            }
+                            return (
                             <button
                               key={field.id}
                               draggable
@@ -3191,12 +3414,12 @@ export default function ToolsScreen({
                                 alignItems: 'center',
                                 gap: '4px',
                                 padding: '4px 10px',
-                                background: field.group === 'Andmebaas' ? '#d1fae5' : '#dbeafe',
-                                border: `1px solid ${field.group === 'Andmebaas' ? '#10b981' : '#3b82f6'}`,
+                                background: bgColor,
+                                border: `1px solid ${borderColor}`,
                                 borderRadius: '12px',
                                 fontSize: '11px',
                                 fontWeight: 500,
-                                color: field.group === 'Andmebaas' ? '#065f46' : '#1e40af',
+                                color: textColor,
                                 cursor: 'grab',
                                 transition: 'all 0.15s'
                               }}
@@ -3213,7 +3436,7 @@ export default function ToolsScreen({
                               <FiPlus size={10} />
                               {field.label}
                             </button>
-                          ))}
+                          );})}
                         </div>
                       </div>
                     ));
@@ -3285,6 +3508,49 @@ export default function ToolsScreen({
                   <span>Eemalda</span>
                 </button>
               </div>
+
+              {/* Kinnitustarvikud (fasteners) button - shown when bolt fields are available */}
+              {markeerijFields.some(f => f.group === 'Kinnitustarvikud') && (
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={handleAddKinnitustarvikudMarkups}
+                    disabled={kinnitustarvikudLoading || markeerijSelectedCount === 0}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      padding: '10px 16px',
+                      background: (markeerijSelectedCount > 0 && !kinnitustarvikudLoading)
+                        ? 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)'
+                        : '#d1d5db',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      color: '#fff',
+                      cursor: (markeerijSelectedCount > 0 && !kinnitustarvikudLoading) ? 'pointer' : 'not-allowed'
+                    }}
+                    title="Loo markupid kinnitustarvikutele (poldid washer count = 0)"
+                  >
+                    {kinnitustarvikudLoading ? (
+                      <FiLoader className="spinning" size={14} />
+                    ) : (
+                      <FiTag size={14} />
+                    )}
+                    <span>Loo kinnitustarvikute markupid ({markeerijSelectedCount})</span>
+                  </button>
+                  <p style={{
+                    marginTop: '6px',
+                    fontSize: '10px',
+                    color: '#9ca3af',
+                    lineHeight: 1.3
+                  }}>
+                    Loob markupid alamdetailide poltidele, kus washer count = 0
+                  </p>
+                </div>
+              )}
 
               {/* Info text */}
               <p style={{

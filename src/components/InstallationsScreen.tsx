@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
-import { FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage } from 'react-icons/fi';
+import { FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage, FiBookmark } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
 import { findObjectsInLoadedModels } from '../utils/navigationHelper';
@@ -5103,6 +5103,63 @@ export default function InstallationsScreen({
     return groups.length > 1; // Only show groups if there are multiple different worker combinations
   };
 
+  // Set resources from a worker group as presets for the entry form
+  const setResourcesAsPreset = (workers: string[]) => {
+    // Parse workers into resource types
+    const resources: Record<string, string[]> = {
+      crane: [],
+      forklift: [],
+      poomtostuk: [],
+      kaartostuk: [],
+      troppija: [],
+      monteerija: [],
+      keevitaja: []
+    };
+
+    for (const worker of workers) {
+      const colonIndex = worker.indexOf(':');
+      if (colonIndex === -1) continue;
+
+      const typeLabel = worker.slice(0, colonIndex).trim().toLowerCase();
+      const name = worker.slice(colonIndex + 1).trim();
+      if (!name) continue;
+
+      if (typeLabel.includes('kraana') || typeLabel.includes('crane')) {
+        resources.crane.push(name);
+      } else if (typeLabel.includes('teleskoop') || typeLabel.includes('forklift')) {
+        resources.forklift.push(name);
+      } else if (typeLabel.includes('korv') || typeLabel.includes('poom') || typeLabel.includes('boom')) {
+        resources.poomtostuk.push(name);
+      } else if (typeLabel.includes('käär') || typeLabel.includes('scissor')) {
+        resources.kaartostuk.push(name);
+      } else if (typeLabel.includes('tropp') || typeLabel.includes('rigger')) {
+        resources.troppija.push(name);
+      } else if (typeLabel.includes('monteer') || typeLabel.includes('install')) {
+        resources.monteerija.push(name);
+      } else if (typeLabel.includes('keevit') || typeLabel.includes('weld')) {
+        resources.keevitaja.push(name);
+      }
+    }
+
+    // Set all resource states
+    setCraneOperators(resources.crane);
+    setForkliftOperators(resources.forklift);
+    setPoomtostukOperators(resources.poomtostuk);
+    setKaartostukOperators(resources.kaartostuk);
+    setTroppijad(resources.troppija);
+    setMonteerijad(resources.monteerija);
+    setKeevitajad(resources.keevitaja);
+
+    // Also save to localStorage
+    localStorage.setItem(`last_kraanad_${projectId}`, JSON.stringify(resources.crane));
+    localStorage.setItem(`last_teleskooplaadrid_${projectId}`, JSON.stringify(resources.forklift));
+    localStorage.setItem(`last_korvtostukid_${projectId}`, JSON.stringify(resources.poomtostuk));
+    localStorage.setItem(`last_kaartostukid_${projectId}`, JSON.stringify(resources.kaartostuk));
+    localStorage.setItem(`last_troppijad_${projectId}`, JSON.stringify(resources.troppija));
+    localStorage.setItem(`last_monteerijad_${projectId}`, JSON.stringify(resources.monteerija));
+    localStorage.setItem(`last_keevitajad_${projectId}`, JSON.stringify(resources.keevitaja));
+  };
+
   // Check which selected objects are already installed
   const getObjectGuid = (obj: SelectedObject): string | undefined => {
     return obj.guidIfc || obj.guid || undefined;
@@ -5746,6 +5803,29 @@ export default function InstallationsScreen({
                       >
                         <FiEdit2 size={10} />
                         Muuda
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setResourcesAsPreset(group.workers);
+                          setShowList(false); // Close list and return to form
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          padding: '2px 6px',
+                          background: '#f0fdf4',
+                          color: '#059669',
+                          border: '1px solid #86efac',
+                          borderRadius: '4px',
+                          fontSize: '10px',
+                          cursor: 'pointer'
+                        }}
+                        title="Salvesta need ressursid eelseadeks sisestusvormi jaoks"
+                      >
+                        <FiBookmark size={10} />
+                        Eelseade
                       </button>
                       <span
                         className="worker-group-count"
