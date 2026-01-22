@@ -13696,6 +13696,7 @@ button.stat-toggle.off:hover {
 
 /* Editable template area */
 .template-chips-area.editable {
+  display: block; /* Override flex from parent - needed for cursor positioning */
   min-height: 32px;
   padding: 6px 10px;
   border: 1px solid #e5e7eb;
@@ -13704,7 +13705,9 @@ button.stat-toggle.off:hover {
   cursor: text;
   outline: none;
   font-size: 13px;
-  line-height: 1.6;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 .template-chips-area.editable:focus {

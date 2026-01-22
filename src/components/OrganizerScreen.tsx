@@ -107,10 +107,6 @@ interface MarkupSettings {
   line1Template: string;
   line2Template: string;
   line3Template: string;
-  // Per-line colors (optional, falls back to customColor or group color)
-  line1Color?: { r: number; g: number; b: number };
-  line2Color?: { r: number; g: number; b: number };
-  line3Color?: { r: number; g: number; b: number };
   applyToSubgroups: boolean;
   separator: 'newline' | 'comma' | 'space' | 'dash' | 'pipe';
   useGroupColors: boolean;
@@ -11661,10 +11657,11 @@ export default function OrganizerScreen({
         // Parse contenteditable HTML back to template string
         const parseContentToTemplate = (element: HTMLElement): string => {
           let result = '';
+          // Regex to strip both zero-width spaces and thin spaces added for editability
+          const stripSpaces = (text: string) => text.replace(/[\u200B\u2009]/g, '');
           element.childNodes.forEach(node => {
             if (node.nodeType === Node.TEXT_NODE) {
-              // Strip zero-width spaces that were added for editability
-              result += (node.textContent || '').replace(/\u200B/g, '');
+              result += stripSpaces(node.textContent || '');
             } else if (node.nodeType === Node.ELEMENT_NODE) {
               const el = node as HTMLElement;
               if (el.dataset.placeholder) {
@@ -11672,8 +11669,7 @@ export default function OrganizerScreen({
               } else if (el.tagName === 'BR') {
                 // Ignore line breaks
               } else {
-                // Strip zero-width spaces from nested elements too
-                result += (el.textContent || '').replace(/\u200B/g, '');
+                result += stripSpaces(el.textContent || '');
               }
             }
           });
@@ -11761,22 +11757,23 @@ export default function OrganizerScreen({
         };
 
         // Convert template to HTML for contenteditable
-        // Add zero-width spaces around chips to ensure cursor can be positioned
+        // Add thin spaces around chips to ensure cursor can be positioned via click
         const templateToHtml = (template: string): string => {
           if (!template) return '';
           const segments = parseTemplateToSegments(template);
-          const ZWS = '\u200B'; // Zero-width space for cursor positioning
+          // Use thin space (U+2009) which is visible and clickable
+          const THIN_SPACE = '\u2009';
 
-          let html = ZWS; // Start with ZWS so cursor can be placed at beginning
+          let html = THIN_SPACE; // Start with space so cursor can be placed at beginning
           segments.forEach((seg, idx) => {
             if (seg.type === 'chip') {
               html += renderChipHtml(seg.value, seg.label || seg.value.slice(1, -1));
-              html += ZWS; // Add ZWS after each chip
+              html += THIN_SPACE; // Add space after each chip
             } else {
               const text = seg.value.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-              // If text is empty and between chips, add ZWS
+              // If text is empty and between chips, add thin space
               if (text.trim() === '' && idx > 0 && idx < segments.length - 1) {
-                html += ZWS;
+                html += THIN_SPACE;
               } else {
                 html += text;
               }
@@ -11785,61 +11782,17 @@ export default function OrganizerScreen({
           return html;
         };
 
-        // Get color for a line
-        const getLineColor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template'): { r: number; g: number; b: number } => {
-          const colorKey = lineKey.replace('Template', 'Color') as 'line1Color' | 'line2Color' | 'line3Color';
-          if (markupSettings[colorKey]) return markupSettings[colorKey]!;
-          if (markupSettings.customColor) return markupSettings.customColor;
-          if (markupSettings.useGroupColors && markupGroup?.color) return markupGroup.color;
-          return { r: 34, g: 197, b: 94 }; // Default green
-        };
-
-        // Set color for a line
-        const setLineColor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', color: { r: number; g: number; b: number }) => {
-          const colorKey = lineKey.replace('Template', 'Color') as 'line1Color' | 'line2Color' | 'line3Color';
-          setMarkupSettings(prev => ({ ...prev, [colorKey]: color }));
-        };
-
         // Render template editor for a line - contenteditable with chips
         const renderTemplateEditor = (lineKey: 'line1Template' | 'line2Template' | 'line3Template', label: string, _inputRef: React.RefObject<HTMLInputElement>) => {
           const template = markupSettings[lineKey];
           const htmlContent = templateToHtml(template);
-          const lineColor = getLineColor(lineKey);
-          const colorHex = `#${lineColor.r.toString(16).padStart(2, '0')}${lineColor.g.toString(16).padStart(2, '0')}${lineColor.b.toString(16).padStart(2, '0')}`;
 
           return (
             <div
               className={`markup-template-line-chip-editor ${focusedLine === lineKey ? 'active' : ''}`}
               onClick={() => setFocusedLine(lineKey)}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <label className="template-label-above" style={{ margin: 0 }}>{label}</label>
-                <input
-                  type="color"
-                  value={colorHex}
-                  onChange={(e) => {
-                    const hex = e.target.value;
-                    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-                    if (result) {
-                      setLineColor(lineKey, {
-                        r: parseInt(result[1], 16),
-                        g: parseInt(result[2], 16),
-                        b: parseInt(result[3], 16)
-                      });
-                    }
-                  }}
-                  title="Vali rea värv"
-                  style={{
-                    width: '22px',
-                    height: '22px',
-                    padding: '0',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    background: 'none'
-                  }}
-                />
-              </div>
+              <label className="template-label-above">{label}</label>
               <div
                 key={`${lineKey}-${refreshLineHtml[lineKey]}`}
                 className={`template-chips-area editable ${focusedLine === lineKey ? 'focused' : ''}`}
@@ -11852,7 +11805,6 @@ export default function OrganizerScreen({
                 onDragOver={handleDragOver}
                 dangerouslySetInnerHTML={{ __html: htmlContent || '<span class="template-placeholder-text"></span>' }}
                 data-placeholder="Lohista siia välju või kirjuta tekst..."
-                style={{ borderLeft: `3px solid ${colorHex}` }}
               />
             </div>
           );
