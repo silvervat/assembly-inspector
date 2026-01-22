@@ -3,7 +3,7 @@ import * as WorkspaceAPI from 'trimble-connect-workspace-api';
 import * as XLSX from 'xlsx-js-style';
 import html2canvas from 'html2canvas';
 import { TrimbleExUser, supabase } from '../supabase';
-import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus } from 'react-icons/fi';
+import { FiTag, FiTrash2, FiLoader, FiDownload, FiCopy, FiRefreshCw, FiCamera, FiX, FiChevronDown, FiChevronRight, FiDroplet, FiTarget, FiDatabase, FiPlus, FiEye } from 'react-icons/fi';
 import PartDatabasePanel from './PartDatabasePanel';
 import PageHeader from './PageHeader';
 import { InspectionMode } from './MainMenu';
@@ -584,6 +584,22 @@ export default function ToolsScreen({
   });
   const availableMarkeerijFields = markeerijFields.filter(f => !usedMarkeerijFieldIds.has(f.id));
 
+  // Generate preview text from template by replacing placeholders with actual values
+  const generateMarkeerijPreview = (template: string): string => {
+    if (!template) return '';
+    return template.replace(/\{([^}]+)\}/g, (_m, id) => {
+      const field = markeerijFields.find(f => f.id === id);
+      return field?.preview || `{${id}}`;
+    });
+  };
+
+  // Get preview lines for display
+  const markeerijPreviewLines = [
+    generateMarkeerijPreview(markeerijaSett.line1Template),
+    generateMarkeerijPreview(markeerijaSett.line2Template),
+    generateMarkeerijPreview(markeerijaSett.line3Template)
+  ].filter(line => line.trim());
+
   // Render chip HTML with X button for removal
   const renderMarkeerijChipHtml = (placeholder: string, label: string): string => {
     return `<span class="markup-line-chip" contenteditable="false" data-placeholder="${placeholder}"><span class="chip-label">${label}</span><span class="chip-remove" data-remove="${placeholder}">×</span></span>`;
@@ -779,7 +795,10 @@ export default function ToolsScreen({
 
       setBatchProgress({ message: 'Genereerin markupe...', percent: 30 });
 
-      const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number } }[] = [];
+      const markupsToCreate: { text: string; start: { positionX: number; positionY: number; positionZ: number }; end: { positionX: number; positionY: number; positionZ: number }; color: { r: number; g: number; b: number; a: number } }[] = [];
+
+      // Get color in RGBA format for Trimble API
+      const markupColor = { r: markeerijaSett.color.r, g: markeerijaSett.color.g, b: markeerijaSett.color.b, a: 255 };
 
       // Process each object
       for (let i = 0; i < allRuntimeIds.length; i++) {
@@ -849,7 +868,8 @@ export default function ToolsScreen({
         markupsToCreate.push({
           text,
           start: { positionX: centerX, positionY: centerY, positionZ: topZ },
-          end: { positionX: centerX, positionY: centerY, positionZ: leaderEndZ }
+          end: { positionX: centerX, positionY: centerY, positionZ: leaderEndZ },
+          color: markupColor
         });
 
         if (i % 20 === 0) {
@@ -866,37 +886,19 @@ export default function ToolsScreen({
 
       setBatchProgress({ message: `Loon ${markupsToCreate.length} markupit...`, percent: 65 });
 
-      // Create markups
+      // Create markups with color included
       const result = await api.markup?.addTextMarkup?.(markupsToCreate as any) as any;
 
-      // Extract created IDs
-      const createdIds: number[] = [];
+      // Count created markups
+      let createdCount = 0;
       if (Array.isArray(result)) {
-        result.forEach((r: any) => {
-          if (typeof r === 'object' && r?.id) createdIds.push(Number(r.id));
-          else if (typeof r === 'number') createdIds.push(r);
-        });
-      } else if (typeof result === 'object' && result?.id) {
-        createdIds.push(Number(result.id));
-      }
-
-      // Color markups with selected color
-      setBatchProgress({ message: 'Värvin markupe...', percent: 85 });
-      const hexColor = rgbToHex(markeerijaSett.color);
-
-      for (let i = 0; i < createdIds.length; i++) {
-        try {
-          await (api.markup as any)?.editMarkup?.(createdIds[i], { color: hexColor });
-        } catch (e) {
-          console.warn('Could not set color for markup', createdIds[i], e);
-        }
-        if (i % 20 === 0) {
-          setBatchProgress({ message: `Värvin markupe... ${i}/${createdIds.length}`, percent: 85 + Math.round((i / createdIds.length) * 15) });
-        }
+        createdCount = result.length;
+      } else if (result) {
+        createdCount = 1;
       }
 
       setBatchProgress(null);
-      showToast(`${createdIds.length} markupit loodud`, 'success');
+      showToast(`${createdCount || markupsToCreate.length} markupit loodud`, 'success');
     } catch (e: any) {
       console.error('Markeerija error:', e);
       setBatchProgress(null);
@@ -2139,8 +2141,76 @@ export default function ToolsScreen({
                 color: markeerijSelectedCount > 0 ? '#065f46' : '#92400e'
               }}>
                 {markeerijSelectedCount > 0
-                  ? `✓ ${markeerijSelectedCount} detaili valitud`
-                  : '⚠️ Vali mudelist detailid'}
+                  ? `${markeerijSelectedCount} detaili valitud`
+                  : 'Vali mudelist detailid'}
+              </div>
+
+              {/* Preview section */}
+              <div style={{
+                background: '#f0f9ff',
+                border: '1px solid #0891b2',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}>
+                  <FiEye size={14} style={{ color: '#0891b2' }} />
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#0e7490' }}>Eelvaade</span>
+                </div>
+                <div style={{
+                  background: '#fff',
+                  border: '1px solid #e0f2fe',
+                  borderRadius: '6px',
+                  padding: '10px 12px',
+                  minHeight: '50px',
+                  fontFamily: 'monospace',
+                  fontSize: '13px',
+                  lineHeight: 1.6,
+                  color: markeerijPreviewLines.length > 0 ? '#0c4a6e' : '#9ca3af',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {markeerijPreviewLines.length > 0
+                    ? markeerijPreviewLines.join('\n')
+                    : 'Lisa mallile välju, et näha eelvaadet...'}
+                </div>
+              </div>
+
+              {/* Template lines */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                {(['line1Template', 'line2Template', 'line3Template'] as const).map((lineKey, idx) => (
+                  <div
+                    key={lineKey}
+                    className={`markup-template-line-chip-editor ${markeerijFocusedLine === lineKey ? 'active' : ''}`}
+                    onClick={() => setMarkeerijFocusedLine(lineKey)}
+                  >
+                    <label className="template-label-above" style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#4b5563' }}>
+                      Rida {idx + 1}
+                    </label>
+                    <div
+                      key={`${lineKey}-${refreshMarkeerijLineHtml[lineKey]}`}
+                      ref={lineKey === 'line1Template' ? markeerijLine1Ref : lineKey === 'line2Template' ? markeerijLine2Ref : markeerijLine3Ref}
+                      className={`template-chips-area editable ${markeerijFocusedLine === lineKey ? 'focused' : ''}`}
+                      contentEditable
+                      suppressContentEditableWarning
+                      onBlur={(e) => handleMarkeerijContentBlur(e, lineKey)}
+                      onFocus={() => setMarkeerijFocusedLine(lineKey)}
+                      onClick={(e) => handleMarkeerijContentClick(e, lineKey)}
+                      onDrop={(e) => handleMarkeerijContentDrop(e, lineKey)}
+                      onDragOver={handleMarkeerijDragOver}
+                      dangerouslySetInnerHTML={{ __html: markeerijTemplateToHtml(markeerijaSett[lineKey]) || '<span class="template-placeholder-text"></span>' }}
+                      data-placeholder="Lohista siia välju või kirjuta tekst..."
+                      style={{
+                        minHeight: '38px',
+                        padding: '8px 10px',
+                        border: markeerijFocusedLine === lineKey ? '2px solid #0891b2' : '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        background: '#fff',
+                        fontSize: '13px',
+                        lineHeight: 1.6
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
 
               {/* Available fields as draggable chips */}
@@ -2223,44 +2293,6 @@ export default function ToolsScreen({
                 </div>
               </div>
 
-              {/* Template lines */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
-                {(['line1Template', 'line2Template', 'line3Template'] as const).map((lineKey, idx) => (
-                  <div
-                    key={lineKey}
-                    className={`markup-template-line-chip-editor ${markeerijFocusedLine === lineKey ? 'active' : ''}`}
-                    onClick={() => setMarkeerijFocusedLine(lineKey)}
-                  >
-                    <label className="template-label-above" style={{ display: 'block', fontSize: '12px', fontWeight: 500, marginBottom: '4px', color: '#4b5563' }}>
-                      Rida {idx + 1}
-                    </label>
-                    <div
-                      key={`${lineKey}-${refreshMarkeerijLineHtml[lineKey]}`}
-                      ref={lineKey === 'line1Template' ? markeerijLine1Ref : lineKey === 'line2Template' ? markeerijLine2Ref : markeerijLine3Ref}
-                      className={`template-chips-area editable ${markeerijFocusedLine === lineKey ? 'focused' : ''}`}
-                      contentEditable
-                      suppressContentEditableWarning
-                      onBlur={(e) => handleMarkeerijContentBlur(e, lineKey)}
-                      onFocus={() => setMarkeerijFocusedLine(lineKey)}
-                      onClick={(e) => handleMarkeerijContentClick(e, lineKey)}
-                      onDrop={(e) => handleMarkeerijContentDrop(e, lineKey)}
-                      onDragOver={handleMarkeerijDragOver}
-                      dangerouslySetInnerHTML={{ __html: markeerijTemplateToHtml(markeerijaSett[lineKey]) || '<span class="template-placeholder-text"></span>' }}
-                      data-placeholder="Lohista siia välju või kirjuta tekst..."
-                      style={{
-                        minHeight: '38px',
-                        padding: '8px 10px',
-                        border: markeerijFocusedLine === lineKey ? '2px solid #0891b2' : '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        background: '#fff',
-                        fontSize: '13px',
-                        lineHeight: 1.6
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-
               {/* Color and height controls */}
               <div style={{
                 display: 'flex',
@@ -2323,25 +2355,47 @@ export default function ToolsScreen({
                 </div>
               </div>
 
-              {/* Action buttons */}
-              <div className="tools-buttons-grid">
-                <button
-                  className="tools-btn tools-btn-primary"
-                  onClick={handleCreateMarkeerijMarkups}
-                  disabled={markeerijLoading || markeerijSelectedCount === 0}
-                  style={{
-                    gridColumn: 'span 2',
-                    background: markeerijSelectedCount > 0 ? '#0891b2' : '#9ca3af'
-                  }}
-                >
-                  {markeerijLoading ? (
-                    <FiLoader className="spinning" size={16} />
-                  ) : (
-                    <FiTag size={16} />
-                  )}
-                  <span>Loo markupid ({markeerijSelectedCount})</span>
-                </button>
-              </div>
+              {/* Action button */}
+              <button
+                onClick={handleCreateMarkeerijMarkups}
+                disabled={markeerijLoading || markeerijSelectedCount === 0 || markeerijPreviewLines.length === 0}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px 16px',
+                  background: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0)
+                    ? 'linear-gradient(135deg, #0891b2 0%, #0e7490 100%)'
+                    : '#d1d5db',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  color: '#fff',
+                  cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s',
+                  boxShadow: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none'
+                }}
+                onMouseEnter={(e) => {
+                  if (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(8, 145, 178, 0.4)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none';
+                }}
+              >
+                {markeerijLoading ? (
+                  <FiLoader className="spinning" size={16} />
+                ) : (
+                  <FiTag size={16} />
+                )}
+                <span>Genereeri sildid ({markeerijSelectedCount})</span>
+              </button>
 
               {/* Info text */}
               <p style={{
