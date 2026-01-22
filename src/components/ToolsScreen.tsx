@@ -3093,19 +3093,7 @@ export default function ToolsScreen({
                     fontSize: '14px',
                     fontWeight: 600,
                     color: '#fff',
-                    cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.2s',
-                    boxShadow: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(8, 145, 178, 0.4)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? '0 2px 8px rgba(8, 145, 178, 0.3)' : 'none';
+                    cursor: (markeerijSelectedCount > 0 && markeerijPreviewLines.length > 0) ? 'pointer' : 'not-allowed'
                   }}
                 >
                   {markeerijLoading ? (
@@ -3133,19 +3121,7 @@ export default function ToolsScreen({
                     fontWeight: 600,
                     color: '#fff',
                     cursor: removeLoading ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: removeLoading ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.3)',
                     whiteSpace: 'nowrap'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!removeLoading) {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(245, 158, 11, 0.4)';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = removeLoading ? 'none' : '0 2px 8px rgba(245, 158, 11, 0.3)';
                   }}
                   title="Eemalda kõik markupid mudelist"
                 >
