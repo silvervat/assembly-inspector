@@ -26,15 +26,15 @@ interface MethodConfig {
 
 const INSTALL_METHODS_CONFIG: MethodConfig[] = [
   // Machines
-  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 4, defaultCount: 1, category: 'machine' },
-  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 8, defaultCount: 2, category: 'machine' },
+  { key: 'crane', label: 'Kraana', icon: 'crane.png', bgColor: '#dbeafe', activeBgColor: '#3b82f6', filterCss: 'invert(25%) sepia(90%) saturate(1500%) hue-rotate(200deg) brightness(95%)', maxCount: 2, defaultCount: 1, category: 'machine' },
+  { key: 'forklift', label: 'Teleskooplaadur', icon: 'forklift.png', bgColor: '#fee2e2', activeBgColor: '#ef4444', filterCss: 'invert(20%) sepia(100%) saturate(2500%) hue-rotate(350deg) brightness(90%)', maxCount: 2, defaultCount: 1, category: 'machine' },
+  { key: 'manual', label: 'Käsitsi', icon: 'manual.png', bgColor: '#d1fae5', activeBgColor: '#009537', filterCss: 'invert(30%) sepia(90%) saturate(1000%) hue-rotate(110deg) brightness(90%)', maxCount: 1, defaultCount: 1, category: 'machine' },
+  { key: 'poomtostuk', label: 'Korvtõstuk', icon: 'poomtostuk.png', bgColor: '#fef3c7', activeBgColor: '#f59e0b', filterCss: 'invert(70%) sepia(90%) saturate(500%) hue-rotate(5deg) brightness(95%)', maxCount: 4, defaultCount: 2, category: 'machine' },
   { key: 'kaartostuk', label: 'Käärtõstuk', icon: 'kaartostuk.png', bgColor: '#ffedd5', activeBgColor: '#f5840b', filterCss: 'invert(50%) sepia(90%) saturate(1500%) hue-rotate(360deg) brightness(100%)', maxCount: 4, defaultCount: 1, category: 'machine' },
   // Labor
   { key: 'troppija', label: 'Troppija', icon: 'troppija.png', bgColor: '#ccfbf1', activeBgColor: '#11625b', filterCss: 'invert(30%) sepia(40%) saturate(800%) hue-rotate(140deg) brightness(80%)', maxCount: 4, defaultCount: 1, category: 'labor' },
-  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 15, defaultCount: 1, category: 'labor' },
-  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 5, defaultCount: 1, category: 'labor' },
+  { key: 'monteerija', label: 'Monteerija', icon: 'monteerija.png', bgColor: '#ccfbf1', activeBgColor: '#279989', filterCss: 'invert(45%) sepia(50%) saturate(600%) hue-rotate(140deg) brightness(85%)', maxCount: 8, defaultCount: 1, category: 'labor' },
+  { key: 'keevitaja', label: 'Keevitaja', icon: 'keevitaja.png', bgColor: '#e5e7eb', activeBgColor: '#6b7280', filterCss: 'grayscale(100%) brightness(30%)', maxCount: 4, defaultCount: 1, category: 'labor' },
 ];
 
 // Load default counts from localStorage
@@ -5848,7 +5848,7 @@ export default function InstallationsScreen({
             {/* Kraana (equipment model/company) */}
             {selectedInstallMethods.crane && selectedInstallMethods.crane > 0 && (
               <div className="form-row">
-                <label><FiTruck size={14} /> Kraana ({selectedInstallMethods.crane})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Kraana ({selectedInstallMethods.crane})</label>
                 <div className="team-members-input">
                   {craneOperators.length > 0 && (
                     <div className="team-chips">
@@ -5939,7 +5939,7 @@ export default function InstallationsScreen({
             {/* Teleskooplaadur (equipment model/company) */}
             {selectedInstallMethods.forklift && selectedInstallMethods.forklift > 0 && (
               <div className="form-row">
-                <label><FiTruck size={14} /> Teleskooplaadur ({selectedInstallMethods.forklift})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/forklift.png`} alt="Teleskooplaadur" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Teleskooplaadur ({selectedInstallMethods.forklift})</label>
                 <div className="team-members-input">
                   {forkliftOperators.length > 0 && (
                     <div className="team-chips">
@@ -6030,7 +6030,7 @@ export default function InstallationsScreen({
             {/* Korvtõstuk (equipment model/company) */}
             {selectedInstallMethods.poomtostuk && selectedInstallMethods.poomtostuk > 0 && (
               <div className="form-row">
-                <label><FiTruck size={14} /> Korvtõstuk ({selectedInstallMethods.poomtostuk})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/poomtostuk.png`} alt="Korvtõstuk" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Korvtõstuk ({selectedInstallMethods.poomtostuk})</label>
                 <div className="team-members-input">
                   {poomtostukOperators.length > 0 && (
                     <div className="team-chips">
@@ -6121,7 +6121,7 @@ export default function InstallationsScreen({
             {/* Käärtõstuk (equipment model/company) */}
             {selectedInstallMethods.kaartostuk && selectedInstallMethods.kaartostuk > 0 && (
               <div className="form-row">
-                <label><FiTruck size={14} /> Käärtõstuk ({selectedInstallMethods.kaartostuk})</label>
+                <label><img src={`${import.meta.env.BASE_URL}icons/kaartostuk.png`} alt="Käärtõstuk" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)', verticalAlign: 'middle', marginRight: '4px' }} /> Käärtõstuk ({selectedInstallMethods.kaartostuk})</label>
                 <div className="team-members-input">
                   {kaartostukOperators.length > 0 && (
                     <div className="team-chips">
@@ -9424,7 +9424,7 @@ export default function InstallationsScreen({
               {selectedInstallMethods.crane && selectedInstallMethods.crane > 0 && (
                 <div className="form-row" style={{ marginBottom: '16px' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px', fontWeight: 500 }}>
-                    <FiTruck size={14} /> Kraana operaatorid ({selectedInstallMethods.crane})
+                    <img src={`${import.meta.env.BASE_URL}icons/crane.png`} alt="Kraana" style={{ width: '14px', height: '14px', filter: 'grayscale(100%) brightness(30%)' }} /> Kraana operaatorid ({selectedInstallMethods.crane})
                   </label>
                   {craneOperators.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
