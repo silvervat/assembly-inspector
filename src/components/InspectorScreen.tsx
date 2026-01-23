@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult } from '../supabase';
+import { supabase, TrimbleExUser, Inspection, InspectionPlanItem, InspectionTypeRef, InspectionCategory, InspectionCheckpoint, InspectionResult, escapePostgrestValue } from '../supabase';
 import { InspectionMode } from './MainMenu';
 import { FiArrowLeft, FiClipboard, FiAlertCircle, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { useEos2Navigation } from '../hooks/useEos2Navigation';
@@ -456,7 +456,7 @@ export default function InspectorScreen({
               )
             `)
             .eq('project_id', projectId)
-            .or(`guid.eq.${guidToCheck},guid_ifc.eq.${guidToCheck}`);
+            .or(`guid.eq.${escapePostgrestValue(guidToCheck)},guid_ifc.eq.${escapePostgrestValue(guidToCheck)}`);
 
           // Filter by inspection type if in inspection_type mode
           if (inspectionMode === 'inspection_type' && inspectionTypeId) {
@@ -1758,7 +1758,7 @@ export default function InspectorScreen({
           .from('inspection_plan_items')
           .select('assembly_selection_mode')
           .eq('project_id', projectId)
-          .or(`guid.eq.${guidToCheck},guid_ifc.eq.${guidToCheck}`)
+          .or(`guid.eq.${escapePostgrestValue(guidToCheck)},guid_ifc.eq.${escapePostgrestValue(guidToCheck)}`)
           .single();
 
         if (planData && !error) {

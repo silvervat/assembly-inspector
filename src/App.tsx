@@ -18,7 +18,7 @@ import CraneLibraryScreen from './components/CraneLibraryScreen';
 import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
 import { InspectionAdminPanel } from './components/InspectionAdminPanel';
 import { UserProfileModal } from './components/UserProfileModal';
-import { supabase, TrimbleExUser } from './supabase';
+import { supabase, TrimbleExUser, escapePostgrestValue } from './supabase';
 import {
   getPendingNavigation,
   fetchInspectionForNavigation,
@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.861';
+export const APP_VERSION = '3.0.862';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1591,8 +1591,11 @@ export default function App() {
     }
 
     try {
-      // Build OR condition for all GUIDs
-      const guidConditions = guids.map(g => `guid.eq.${g},guid_ifc.eq.${g}`).join(',');
+      // Build OR condition for all GUIDs (escape special characters like / to avoid 400 errors)
+      const guidConditions = guids.map(g => {
+        const escaped = escapePostgrestValue(g);
+        return `guid.eq.${escaped},guid_ifc.eq.${escaped}`;
+      }).join(',');
 
       // Get plan items that match these GUIDs
       const { data, error } = await supabase
@@ -1614,7 +1617,7 @@ export default function App() {
         setMatchedTypeIds(uniqueTypeIds);
 
         // Now check which of these have completed inspection results
-        const guidOrCondition = guids.map(g => `assembly_guid.eq.${g}`).join(',');
+        const guidOrCondition = guids.map(g => `assembly_guid.eq.${escapePostgrestValue(g)}`).join(',');
         const { data: resultsData, error: resultsError } = await supabase
           .from('inspection_results')
           .select('assembly_guid, plan_item_id, inspection_plan_items!inner(inspection_type_id)')

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import * as WorkspaceAPI from 'trimble-connect-workspace-api';
-import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType } from '../supabase';
+import { supabase, TrimbleExUser, Installation, Preassembly, InstallMethods, InstallMethodType, InstallationMonthLock, WorkRecordType, escapePostgrestValue } from '../supabase';
 import { FiPlus, FiSearch, FiChevronDown, FiChevronRight, FiChevronLeft, FiZoomIn, FiX, FiTrash2, FiTruck, FiCalendar, FiEdit2, FiEye, FiInfo, FiUsers, FiDroplet, FiRefreshCw, FiPlay, FiPause, FiSquare, FiLock, FiUnlock, FiMoreVertical, FiDownload, FiPackage, FiTool, FiAlertTriangle, FiAlertCircle, FiCamera, FiUpload, FiImage, FiBookmark } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { useProjectPropertyMappings } from '../contexts/PropertyMappingsContext';
@@ -3151,12 +3151,15 @@ export default function InstallationsScreen({
       const formattedDate = `${dateObj.getDate().toString().padStart(2, '0')}.${(dateObj.getMonth() + 1).toString().padStart(2, '0')}.${dateObj.getFullYear()}`;
       const confirmComment = `Märgitud kinnitatuks läbi paigaldus andmete. Paigalduse kuupäev ${formattedDate}`;
 
-      // 1. Find delivery items by GUID
+      // 1. Find delivery items by GUID (escape special characters like / to avoid 400 errors)
       const { data: deliveryItems, error: deliveryError } = await supabase
         .from('trimble_delivery_items')
         .select('id, vehicle_id, guid, guid_ifc')
         .eq('trimble_project_id', projectId)
-        .or(guidsToConfirm.map(g => `guid_ifc.ilike.${g},guid.ilike.${g}`).join(','));
+        .or(guidsToConfirm.map(g => {
+          const escaped = escapePostgrestValue(g);
+          return `guid_ifc.ilike.${escaped},guid.ilike.${escaped}`;
+        }).join(','));
 
       if (deliveryError || !deliveryItems?.length) {
         console.log('No matching delivery items found for auto-confirm');

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkspaceAPI } from 'trimble-connect-workspace-api';
-import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion, ScheduleLock } from '../supabase';
+import { supabase, ScheduleItem, TrimbleExUser, InstallMethods, InstallMethodType, ScheduleComment, ScheduleVersion, ScheduleLock, escapePostgrestValue } from '../supabase';
 import * as XLSX from 'xlsx-js-style';
 import {
   findObjectsInLoadedModels,
@@ -6213,12 +6213,14 @@ export default function InstallationScheduleScreen({ api, projectId, user, tcUse
         const guidIdentifier = row.guid_ms || row.guid_ifc;
 
         if (importMode === 'overwrite') {
-          // Check if item exists by GUID
+          // Check if item exists by GUID (escape special characters like / to avoid 400 errors)
+          const escapedGuidMs = escapePostgrestValue(row.guid_ms || '');
+          const escapedGuidIfc = escapePostgrestValue(row.guid_ifc || '');
           const { data: existing } = await supabase
             .from('installation_schedule')
             .select('id')
             .eq('project_id', projectId)
-            .or(`guid_ms.eq.${row.guid_ms},guid_ifc.eq.${row.guid_ifc},guid.eq.${row.guid_ifc}`)
+            .or(`guid_ms.eq.${escapedGuidMs},guid_ifc.eq.${escapedGuidIfc},guid.eq.${escapedGuidIfc}`)
             .maybeSingle();
 
           if (existing) {

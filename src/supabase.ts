@@ -6,6 +6,19 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-k
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// Helper function to escape special characters in PostgREST filter values
+// Used when building raw filter strings for .or() method
+// Characters that need escaping: / , ( ) \ and others that break URL parsing
+export function escapePostgrestValue(value: string): string {
+  // Encode characters that can break PostgREST filter parsing
+  return value
+    .replace(/\\/g, '\\\\')  // Escape backslashes first
+    .replace(/,/g, '%2C')    // Commas separate filter conditions
+    .replace(/\(/g, '%28')   // Parentheses for grouping
+    .replace(/\)/g, '%29')
+    .replace(/\//g, '%2F');  // Forward slashes can break URL paths
+}
+
 // TypeScript tüübid
 
 // Tabel - trimble_inspection_users (kasutaja kontroll email ja projekti järgi)
