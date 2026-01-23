@@ -682,21 +682,21 @@ export default function ToolsScreen({
 
     // Listen for selection changes using correct Trimble API method
     console.log('Steps marker: Adding selection listener');
-    const listener = () => {
-      console.log('Steps marker: Selection changed');
-      handleStepsSelection();
-    };
 
     try {
-      (api.viewer as any).addOnSelectionChanged?.(listener);
+      (api.viewer as any).addOnSelectionChanged?.(handleStepsSelection);
     } catch (e) {
       console.warn('Could not add steps selection listener:', e);
     }
 
+    // Fallback polling every 500ms (event listener may not always fire)
+    const interval = setInterval(handleStepsSelection, 500);
+
     return () => {
       console.log('Steps marker: Removing selection listener');
+      clearInterval(interval);
       try {
-        (api.viewer as any).removeOnSelectionChanged?.(listener);
+        (api.viewer as any).removeOnSelectionChanged?.(handleStepsSelection);
       } catch (e) {
         // Silent
       }
