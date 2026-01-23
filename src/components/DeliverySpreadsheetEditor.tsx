@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase, DeliveryVehicle, DeliveryFactory } from '../supabase';
+import { supabase, DeliveryVehicle } from '../supabase';
 import { FiSave, FiRefreshCw, FiX, FiCheck, FiAlertTriangle } from 'react-icons/fi';
 import './DeliverySpreadsheetEditor.css';
 
@@ -18,41 +18,38 @@ interface SpreadsheetRow {
   guid: string;
   guid_ifc: string | null;
   assembly_mark: string;
+  product_name: string;
+  cast_unit_weight: string;
   sort_order: number;
-  // Track changes
   isModified: boolean;
   originalData: {
     vehicle_id: string | null;
     scheduled_date: string | null;
-    unload_start_time: string | null;
-    assembly_mark: string;
-    sort_order: number;
   };
 }
+
+type CellKey = `${number}-${string}`;
+
+// Editable fields only - assembly_mark, product_name, weight are read-only
+const EDITABLE_FIELDS = ['vehicle_code', 'scheduled_date', 'unload_start_time'];
+const ALL_FIELDS = ['vehicle_code', 'scheduled_date', 'unload_start_time', 'guid', 'assembly_mark', 'product_name', 'cast_unit_weight'];
 
 // Parse date from various formats to YYYY-MM-DD
 const parseDate = (value: string): string | null => {
   if (!value || value.trim() === '') return null;
-
-  // Try DD.MM.YYYY format
   const ddmmyyyy = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if (ddmmyyyy) {
     const [, day, month, year] = ddmmyyyy;
     return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
-
-  // Try DD.MM.YY format
   const ddmmyy = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2})$/);
   if (ddmmyy) {
     const [, day, month, year] = ddmmyy;
     const fullYear = parseInt(year) > 50 ? `19${year}` : `20${year}`;
     return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
   }
-
-  // Try YYYY-MM-DD format (ISO)
   const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) return value;
-
   return null;
 };
 
@@ -61,10 +58,7 @@ const formatDate = (date: string | null): string => {
   if (!date) return '';
   try {
     const d = new Date(date);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    return `${day}.${month}.${year}`;
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
   } catch {
     return date;
   }
@@ -73,21 +67,10 @@ const formatDate = (date: string | null): string => {
 // Parse time from various formats to HH:MM
 const parseTime = (value: string): string | null => {
   if (!value || value.trim() === '') return null;
-
-  // Try HH:MM format
   const hhmm = value.match(/^(\d{1,2}):(\d{2})$/);
-  if (hhmm) {
-    const [, hour, minute] = hhmm;
-    return `${hour.padStart(2, '0')}:${minute}`;
-  }
-
-  // Try HHMM format (no colon)
+  if (hhmm) return `${hhmm[1].padStart(2, '0')}:${hhmm[2]}`;
   const nocolon = value.match(/^(\d{2})(\d{2})$/);
-  if (nocolon) {
-    const [, hour, minute] = nocolon;
-    return `${hour}:${minute}`;
-  }
-
+  if (nocolon) return `${nocolon[1]}:${nocolon[2]}`;
   return null;
 };
 
@@ -98,27 +81,34 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
 
   const [rows, setRows] = useState<SpreadsheetRow[]>([]);
   const [vehicles, setVehicles] = useState<DeliveryVehicle[]>([]);
-  const [_factories, setFactories] = useState<DeliveryFactory[]>([]); // eslint-disable-line @typescript-eslint/no-unused-vars
 
-  const [selectedCell, setSelectedCell] = useState<{ rowIndex: number; field: string } | null>(null);
+  // Multi-cell selection
+  const [selectedCells, setSelectedCells] = useState<Set<CellKey>>(new Set());
   const [editingCell, setEditingCell] = useState<{ rowIndex: number; field: string; value: string } | null>(null);
+  const [selectionStart, setSelectionStart] = useState<{ rowIndex: number; field: string } | null>(null);
+
+  // Column widths (resizable)
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({
+    vehicle_code: 80,
+    scheduled_date: 90,
+    unload_start_time: 70,
+    guid: 240,
+    assembly_mark: 120,
+    product_name: 150,
+    cast_unit_weight: 70
+  });
+  const [resizingColumn, setResizingColumn] = useState<string | null>(null);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(0);
 
   const tableRef = useRef<HTMLTableElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Load data
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load factories
-      const { data: factoriesData } = await supabase
-        .from('trimble_delivery_factories')
-        .select('*')
-        .eq('trimble_project_id', projectId)
-        .order('sort_order', { ascending: true });
-
-      setFactories(factoriesData || []);
-
       // Load vehicles
       const { data: vehiclesData } = await supabase
         .from('trimble_delivery_vehicles')
@@ -139,14 +129,11 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
 
       if (error) throw error;
 
-      // Create vehicle code lookup
+      // Create vehicle lookup maps
       const vehicleCodeMap = new Map<string, string>();
-      const vehicleDateMap = new Map<string, string | null>();
       const vehicleTimeMap = new Map<string, string | null>();
-
       (vehiclesData || []).forEach(v => {
         vehicleCodeMap.set(v.id, v.vehicle_code);
-        vehicleDateMap.set(v.id, v.scheduled_date);
         vehicleTimeMap.set(v.id, v.unload_start_time || null);
       });
 
@@ -160,19 +147,19 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
         unload_start_time: item.vehicle_id ? (vehicleTimeMap.get(item.vehicle_id) || null) : null,
         guid: item.guid,
         guid_ifc: item.guid_ifc || null,
-        assembly_mark: item.assembly_mark,
+        assembly_mark: item.assembly_mark || '',
+        product_name: item.product_name || '',
+        cast_unit_weight: item.cast_unit_weight || '',
         sort_order: item.sort_order,
         isModified: false,
         originalData: {
           vehicle_id: item.vehicle_id || null,
-          scheduled_date: item.scheduled_date,
-          unload_start_time: item.vehicle_id ? (vehicleTimeMap.get(item.vehicle_id) || null) : null,
-          assembly_mark: item.assembly_mark,
-          sort_order: item.sort_order
+          scheduled_date: item.scheduled_date
         }
       }));
 
       setRows(spreadsheetRows);
+      setSelectedCells(new Set());
     } catch (e) {
       console.error('Error loading data:', e);
       setMessage({ text: 'Viga andmete laadimisel', type: 'error' });
@@ -193,36 +180,92 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
     }
   }, [editingCell]);
 
-  // Handle cell click
-  const handleCellClick = (rowIndex: number, field: string) => {
-    setSelectedCell({ rowIndex, field });
+  // Column resize handlers
+  const handleResizeStart = (e: React.MouseEvent, field: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setResizingColumn(field);
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = columnWidths[field];
+  };
+
+  useEffect(() => {
+    if (!resizingColumn) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const diff = e.clientX - resizeStartX.current;
+      const newWidth = Math.max(40, resizeStartWidth.current + diff);
+      setColumnWidths(prev => ({ ...prev, [resizingColumn]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      setResizingColumn(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingColumn]);
+
+  // Cell key helper
+  const cellKey = (rowIndex: number, field: string): CellKey => `${rowIndex}-${field}`;
+
+  // Handle cell click (with Ctrl for multi-select)
+  const handleCellClick = (e: React.MouseEvent, rowIndex: number, field: string) => {
+    if (editingCell) {
+      commitCellEdit();
+    }
+
+    const key = cellKey(rowIndex, field);
+
+    if (e.ctrlKey || e.metaKey) {
+      // Toggle selection
+      setSelectedCells(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) {
+          next.delete(key);
+        } else {
+          next.add(key);
+        }
+        return next;
+      });
+    } else if (e.shiftKey && selectionStart) {
+      // Range selection
+      const startRow = Math.min(selectionStart.rowIndex, rowIndex);
+      const endRow = Math.max(selectionStart.rowIndex, rowIndex);
+      const startFieldIdx = ALL_FIELDS.indexOf(selectionStart.field);
+      const endFieldIdx = ALL_FIELDS.indexOf(field);
+      const startField = Math.min(startFieldIdx, endFieldIdx);
+      const endField = Math.max(startFieldIdx, endFieldIdx);
+
+      const newSelection = new Set<CellKey>();
+      for (let r = startRow; r <= endRow; r++) {
+        for (let f = startField; f <= endField; f++) {
+          newSelection.add(cellKey(r, ALL_FIELDS[f]));
+        }
+      }
+      setSelectedCells(newSelection);
+    } else {
+      // Single selection
+      setSelectedCells(new Set([key]));
+      setSelectionStart({ rowIndex, field });
+    }
   };
 
   // Handle cell double click to edit
   const handleCellDoubleClick = (rowIndex: number, field: string) => {
+    if (!EDITABLE_FIELDS.includes(field)) return; // Only editable fields
+
     const row = rows[rowIndex];
     let value = '';
-
     switch (field) {
-      case 'vehicle_code':
-        value = row.vehicle_code;
-        break;
-      case 'scheduled_date':
-        value = formatDate(row.scheduled_date);
-        break;
-      case 'unload_start_time':
-        value = row.unload_start_time || '';
-        break;
-      case 'guid':
-        value = row.guid_ifc || row.guid;
-        break;
-      case 'assembly_mark':
-        value = row.assembly_mark;
-        break;
-      default:
-        return;
+      case 'vehicle_code': value = row.vehicle_code; break;
+      case 'scheduled_date': value = formatDate(row.scheduled_date); break;
+      case 'unload_start_time': value = row.unload_start_time || ''; break;
     }
-
     setEditingCell({ rowIndex, field, value });
   };
 
@@ -244,10 +287,7 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
 
       switch (field) {
         case 'vehicle_code': {
-          // Find vehicle by code
-          const vehicle = vehicles.find(v =>
-            v.vehicle_code.toLowerCase() === value.toLowerCase()
-          );
+          const vehicle = vehicles.find(v => v.vehicle_code.toLowerCase() === value.toLowerCase());
           if (vehicle) {
             updatedRow.vehicle_id = vehicle.id;
             updatedRow.vehicle_code = vehicle.vehicle_code;
@@ -260,109 +300,197 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
           break;
         }
         case 'scheduled_date': {
-          const parsed = parseDate(value);
-          updatedRow.scheduled_date = parsed;
+          updatedRow.scheduled_date = parseDate(value);
           break;
         }
         case 'unload_start_time': {
-          const parsed = parseTime(value);
-          updatedRow.unload_start_time = parsed;
+          updatedRow.unload_start_time = parseTime(value);
           break;
         }
-        case 'assembly_mark':
-          updatedRow.assembly_mark = value;
-          break;
       }
 
-      // Check if modified
       updatedRow.isModified =
         updatedRow.vehicle_id !== updatedRow.originalData.vehicle_id ||
-        updatedRow.scheduled_date !== updatedRow.originalData.scheduled_date ||
-        updatedRow.assembly_mark !== updatedRow.originalData.assembly_mark ||
-        updatedRow.sort_order !== updatedRow.originalData.sort_order;
+        updatedRow.scheduled_date !== updatedRow.originalData.scheduled_date;
 
       updated[rowIndex] = updatedRow;
       return updated;
     });
 
     setEditingCell(null);
-    setSelectedCell({ rowIndex, field });
   };
 
-  // Cancel cell edit
-  const cancelCellEdit = () => {
-    setEditingCell(null);
+  // Delete selected cells (clear editable fields)
+  const deleteSelectedCells = () => {
+    if (selectedCells.size === 0) return;
+
+    setRows(prev => {
+      const updated = [...prev];
+      selectedCells.forEach(key => {
+        const [rowStr, field] = key.split('-');
+        const rowIndex = parseInt(rowStr);
+        if (!EDITABLE_FIELDS.includes(field)) return; // Only clear editable fields
+
+        const updatedRow = { ...updated[rowIndex] };
+        switch (field) {
+          case 'vehicle_code':
+            updatedRow.vehicle_id = null;
+            updatedRow.vehicle_code = '';
+            break;
+          case 'scheduled_date':
+            updatedRow.scheduled_date = null;
+            break;
+          case 'unload_start_time':
+            updatedRow.unload_start_time = null;
+            break;
+        }
+        updatedRow.isModified =
+          updatedRow.vehicle_id !== updatedRow.originalData.vehicle_id ||
+          updatedRow.scheduled_date !== updatedRow.originalData.scheduled_date;
+        updated[rowIndex] = updatedRow;
+      });
+      return updated;
+    });
   };
 
-  // Handle keyboard navigation
+  // Handle paste from clipboard
+  const handlePaste = async (e: ClipboardEvent) => {
+    if (selectedCells.size === 0) return;
+
+    const text = e.clipboardData?.getData('text');
+    if (!text) return;
+
+    e.preventDefault();
+
+    // Parse pasted data (tab-separated columns, newline-separated rows)
+    const pastedRows = text.split('\n').map(line => line.split('\t'));
+
+    // Find top-left of selection
+    let minRow = Infinity, minFieldIdx = Infinity;
+    selectedCells.forEach(key => {
+      const [rowStr, field] = key.split('-');
+      const rowIndex = parseInt(rowStr);
+      const fieldIdx = ALL_FIELDS.indexOf(field);
+      if (rowIndex < minRow) minRow = rowIndex;
+      if (fieldIdx < minFieldIdx) minFieldIdx = fieldIdx;
+    });
+
+    setRows(prev => {
+      const updated = [...prev];
+      pastedRows.forEach((pastedCols, pasteRowOffset) => {
+        const targetRow = minRow + pasteRowOffset;
+        if (targetRow >= updated.length) return;
+
+        pastedCols.forEach((value, pasteColOffset) => {
+          const targetFieldIdx = minFieldIdx + pasteColOffset;
+          if (targetFieldIdx >= ALL_FIELDS.length) return;
+
+          const field = ALL_FIELDS[targetFieldIdx];
+          if (!EDITABLE_FIELDS.includes(field)) return;
+
+          const updatedRow = { ...updated[targetRow] };
+          switch (field) {
+            case 'vehicle_code': {
+              const vehicle = vehicles.find(v => v.vehicle_code.toLowerCase() === value.toLowerCase());
+              if (vehicle) {
+                updatedRow.vehicle_id = vehicle.id;
+                updatedRow.vehicle_code = vehicle.vehicle_code;
+                updatedRow.scheduled_date = vehicle.scheduled_date;
+                updatedRow.unload_start_time = vehicle.unload_start_time || null;
+              } else if (value.trim() === '') {
+                updatedRow.vehicle_id = null;
+                updatedRow.vehicle_code = '';
+              }
+              break;
+            }
+            case 'scheduled_date':
+              updatedRow.scheduled_date = parseDate(value);
+              break;
+            case 'unload_start_time':
+              updatedRow.unload_start_time = parseTime(value);
+              break;
+          }
+          updatedRow.isModified =
+            updatedRow.vehicle_id !== updatedRow.originalData.vehicle_id ||
+            updatedRow.scheduled_date !== updatedRow.originalData.scheduled_date;
+          updated[targetRow] = updatedRow;
+        });
+      });
+      return updated;
+    });
+  };
+
+  // Handle keyboard navigation and actions
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (editingCell) {
       if (e.key === 'Enter') {
         e.preventDefault();
         commitCellEdit();
-        // Move to next row
-        if (editingCell.rowIndex < rows.length - 1) {
-          setSelectedCell({ rowIndex: editingCell.rowIndex + 1, field: editingCell.field });
-        }
       } else if (e.key === 'Escape') {
-        cancelCellEdit();
+        setEditingCell(null);
       } else if (e.key === 'Tab') {
         e.preventDefault();
         commitCellEdit();
-        // Move to next field
-        const fields = ['vehicle_code', 'scheduled_date', 'unload_start_time', 'guid', 'assembly_mark'];
-        const currentIndex = fields.indexOf(editingCell.field);
-        if (e.shiftKey) {
-          if (currentIndex > 0) {
-            setSelectedCell({ rowIndex: editingCell.rowIndex, field: fields[currentIndex - 1] });
-          } else if (editingCell.rowIndex > 0) {
-            setSelectedCell({ rowIndex: editingCell.rowIndex - 1, field: fields[fields.length - 1] });
-          }
-        } else {
-          if (currentIndex < fields.length - 1) {
-            setSelectedCell({ rowIndex: editingCell.rowIndex, field: fields[currentIndex + 1] });
-          } else if (editingCell.rowIndex < rows.length - 1) {
-            setSelectedCell({ rowIndex: editingCell.rowIndex + 1, field: fields[0] });
-          }
-        }
       }
-    } else if (selectedCell) {
-      const fields = ['vehicle_code', 'scheduled_date', 'unload_start_time', 'guid', 'assembly_mark'];
-      const currentFieldIndex = fields.indexOf(selectedCell.field);
+      return;
+    }
 
-      if (e.key === 'Enter' || e.key === 'F2') {
-        e.preventDefault();
-        handleCellDoubleClick(selectedCell.rowIndex, selectedCell.field);
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (selectedCell.rowIndex < rows.length - 1) {
-          setSelectedCell({ rowIndex: selectedCell.rowIndex + 1, field: selectedCell.field });
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (selectedCell.rowIndex > 0) {
-          setSelectedCell({ rowIndex: selectedCell.rowIndex - 1, field: selectedCell.field });
-        }
-      } else if (e.key === 'ArrowRight' || e.key === 'Tab') {
-        e.preventDefault();
-        if (currentFieldIndex < fields.length - 1) {
-          setSelectedCell({ rowIndex: selectedCell.rowIndex, field: fields[currentFieldIndex + 1] });
-        } else if (selectedCell.rowIndex < rows.length - 1) {
-          setSelectedCell({ rowIndex: selectedCell.rowIndex + 1, field: fields[0] });
-        }
-      } else if (e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey)) {
-        e.preventDefault();
-        if (currentFieldIndex > 0) {
-          setSelectedCell({ rowIndex: selectedCell.rowIndex, field: fields[currentFieldIndex - 1] });
-        } else if (selectedCell.rowIndex > 0) {
-          setSelectedCell({ rowIndex: selectedCell.rowIndex - 1, field: fields[fields.length - 1] });
-        }
-      } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        // Start editing on any character key
-        handleCellDoubleClick(selectedCell.rowIndex, selectedCell.field);
-      }
+    // Delete key - clear selected cells
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      deleteSelectedCells();
+      return;
+    }
+
+    // Get first selected cell for navigation
+    if (selectedCells.size === 0) return;
+    const firstKey = [...selectedCells][0];
+    const [rowStr, field] = firstKey.split('-');
+    const rowIndex = parseInt(rowStr);
+    const fieldIdx = ALL_FIELDS.indexOf(field);
+
+    // Enter or F2 to edit
+    if ((e.key === 'Enter' || e.key === 'F2') && EDITABLE_FIELDS.includes(field)) {
+      e.preventDefault();
+      handleCellDoubleClick(rowIndex, field);
+      return;
+    }
+
+    // Arrow navigation
+    let newRow = rowIndex;
+    let newFieldIdx = fieldIdx;
+
+    if (e.key === 'ArrowDown') newRow = Math.min(rows.length - 1, rowIndex + 1);
+    else if (e.key === 'ArrowUp') newRow = Math.max(0, rowIndex - 1);
+    else if (e.key === 'ArrowRight' || e.key === 'Tab') newFieldIdx = Math.min(ALL_FIELDS.length - 1, fieldIdx + 1);
+    else if (e.key === 'ArrowLeft') newFieldIdx = Math.max(0, fieldIdx - 1);
+    else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && EDITABLE_FIELDS.includes(field)) {
+      handleCellDoubleClick(rowIndex, field);
+      return;
+    } else {
+      return;
+    }
+
+    e.preventDefault();
+    const newKey = cellKey(newRow, ALL_FIELDS[newFieldIdx]);
+
+    if (e.shiftKey) {
+      setSelectedCells(prev => new Set([...prev, newKey]));
+    } else {
+      setSelectedCells(new Set([newKey]));
+      setSelectionStart({ rowIndex: newRow, field: ALL_FIELDS[newFieldIdx] });
     }
   };
+
+  // Setup paste listener
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const pasteHandler = (e: Event) => handlePaste(e as ClipboardEvent);
+    container.addEventListener('paste', pasteHandler);
+    return () => container.removeEventListener('paste', pasteHandler);
+  }, [selectedCells, vehicles, rows]);
 
   // Save all changes
   const saveChanges = async () => {
@@ -380,14 +508,11 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       let errorCount = 0;
 
       for (const row of modifiedRows) {
-        // Update item
         const { error: itemError } = await supabase
           .from('trimble_delivery_items')
           .update({
             vehicle_id: row.vehicle_id,
             scheduled_date: row.scheduled_date,
-            assembly_mark: row.assembly_mark,
-            sort_order: row.sort_order,
             updated_at: new Date().toISOString()
           })
           .eq('id', row.item_id);
@@ -404,7 +529,6 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
         setMessage({ text: `${successCount} salvestatud, ${errorCount} viga`, type: 'error' });
       } else {
         setMessage({ text: `${successCount} muudatust salvestatud`, type: 'success' });
-        // Reload to get fresh data and reset modified flags
         await loadData();
       }
     } catch (e) {
@@ -415,31 +539,24 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
     }
   };
 
-  // Get count of modified rows
   const modifiedCount = rows.filter(r => r.isModified).length;
 
   // Render cell content
   const renderCell = (row: SpreadsheetRow, rowIndex: number, field: string) => {
-    const isSelected = selectedCell?.rowIndex === rowIndex && selectedCell?.field === field;
+    const key = cellKey(rowIndex, field);
+    const isSelected = selectedCells.has(key);
     const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.field === field;
+    const isEditable = EDITABLE_FIELDS.includes(field);
 
     let displayValue = '';
     switch (field) {
-      case 'vehicle_code':
-        displayValue = row.vehicle_code;
-        break;
-      case 'scheduled_date':
-        displayValue = formatDate(row.scheduled_date);
-        break;
-      case 'unload_start_time':
-        displayValue = row.unload_start_time || '';
-        break;
-      case 'guid':
-        displayValue = row.guid_ifc || row.guid;
-        break;
-      case 'assembly_mark':
-        displayValue = row.assembly_mark;
-        break;
+      case 'vehicle_code': displayValue = row.vehicle_code; break;
+      case 'scheduled_date': displayValue = formatDate(row.scheduled_date); break;
+      case 'unload_start_time': displayValue = row.unload_start_time || ''; break;
+      case 'guid': displayValue = row.guid_ifc || row.guid; break;
+      case 'assembly_mark': displayValue = row.assembly_mark; break;
+      case 'product_name': displayValue = row.product_name; break;
+      case 'cast_unit_weight': displayValue = row.cast_unit_weight ? `${row.cast_unit_weight}` : ''; break;
     }
 
     if (isEditing) {
@@ -457,8 +574,8 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
 
     return (
       <div
-        className={`cell-content${isSelected ? ' selected' : ''}${row.isModified ? ' modified' : ''}`}
-        onClick={() => handleCellClick(rowIndex, field)}
+        className={`cell-content${isSelected ? ' selected' : ''}${row.isModified ? ' modified' : ''}${!isEditable ? ' readonly' : ''}`}
+        onClick={(e) => handleCellClick(e, rowIndex, field)}
         onDoubleClick={() => handleCellDoubleClick(rowIndex, field)}
       >
         {displayValue}
@@ -478,7 +595,12 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
   }
 
   return (
-    <div className="spreadsheet-editor" onKeyDown={handleKeyDown} tabIndex={0}>
+    <div
+      ref={containerRef}
+      className="spreadsheet-editor"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
       {/* Header */}
       <div className="spreadsheet-header">
         <h1>Tarnegraafiku redaktor</h1>
@@ -493,19 +615,10 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
           {modifiedCount > 0 && (
             <span className="modified-count">{modifiedCount} muudetud</span>
           )}
-          <button
-            className="btn-refresh"
-            onClick={loadData}
-            disabled={saving}
-            title="Värskenda"
-          >
+          <button className="btn-refresh" onClick={loadData} disabled={saving} title="Värskenda">
             <FiRefreshCw size={16} />
           </button>
-          <button
-            className="btn-save"
-            onClick={saveChanges}
-            disabled={saving || modifiedCount === 0}
-          >
+          <button className="btn-save" onClick={saveChanges} disabled={saving || modifiedCount === 0}>
             <FiSave size={16} />
             {saving ? 'Salvestan...' : 'Salvesta'}
           </button>
@@ -519,10 +632,11 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
 
       {/* Instructions */}
       <div className="spreadsheet-instructions">
-        <span>Topeltklikk või Enter - muuda lahtrit</span>
-        <span>Tab - järgmine lahter</span>
-        <span>Nooled - navigeeri</span>
-        <span>Esc - tühista</span>
+        <span>Topeltklikk/Enter - muuda</span>
+        <span>Ctrl+klikk - mitu lahtrit</span>
+        <span>Shift+klikk - vahemik</span>
+        <span>Delete - tühjenda</span>
+        <span>Ctrl+V - kleebi</span>
       </div>
 
       {/* Table */}
@@ -530,23 +644,48 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
         <table ref={tableRef} className="spreadsheet-table">
           <thead>
             <tr>
-              <th className="col-nr">#</th>
-              <th className="col-vehicle">Veok</th>
-              <th className="col-date">Kuupäev</th>
-              <th className="col-time">Kellaaeg</th>
-              <th className="col-guid">GUID</th>
-              <th className="col-mark">Assembly Mark</th>
+              <th className="col-nr" style={{ width: 40 }}>#</th>
+              <th style={{ width: columnWidths.vehicle_code }}>
+                Veok
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'vehicle_code')} />
+              </th>
+              <th style={{ width: columnWidths.scheduled_date }}>
+                Kuupäev
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'scheduled_date')} />
+              </th>
+              <th style={{ width: columnWidths.unload_start_time }}>
+                Kell
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'unload_start_time')} />
+              </th>
+              <th style={{ width: columnWidths.guid }}>
+                GUID
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'guid')} />
+              </th>
+              <th style={{ width: columnWidths.assembly_mark }}>
+                Mark
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'assembly_mark')} />
+              </th>
+              <th style={{ width: columnWidths.product_name }}>
+                Toode
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'product_name')} />
+              </th>
+              <th style={{ width: columnWidths.cast_unit_weight }}>
+                Kaal
+                <div className="resize-handle" onMouseDown={(e) => handleResizeStart(e, 'cast_unit_weight')} />
+              </th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, rowIndex) => (
               <tr key={row.id} className={row.isModified ? 'row-modified' : ''}>
                 <td className="col-nr">{rowIndex + 1}</td>
-                <td className="col-vehicle">{renderCell(row, rowIndex, 'vehicle_code')}</td>
-                <td className="col-date">{renderCell(row, rowIndex, 'scheduled_date')}</td>
-                <td className="col-time">{renderCell(row, rowIndex, 'unload_start_time')}</td>
+                <td>{renderCell(row, rowIndex, 'vehicle_code')}</td>
+                <td>{renderCell(row, rowIndex, 'scheduled_date')}</td>
+                <td>{renderCell(row, rowIndex, 'unload_start_time')}</td>
                 <td className="col-guid">{renderCell(row, rowIndex, 'guid')}</td>
-                <td className="col-mark">{renderCell(row, rowIndex, 'assembly_mark')}</td>
+                <td>{renderCell(row, rowIndex, 'assembly_mark')}</td>
+                <td>{renderCell(row, rowIndex, 'product_name')}</td>
+                <td>{renderCell(row, rowIndex, 'cast_unit_weight')}</td>
               </tr>
             ))}
           </tbody>
@@ -556,7 +695,7 @@ export default function DeliverySpreadsheetEditor({ projectId, onClose }: Props)
       {/* Footer */}
       <div className="spreadsheet-footer">
         <span>{rows.length} rida</span>
-        <span>{vehicles.length} veokid</span>
+        <span>{selectedCells.size} valitud</span>
       </div>
     </div>
   );
