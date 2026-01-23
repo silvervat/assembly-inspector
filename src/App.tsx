@@ -32,7 +32,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.867';
+export const APP_VERSION = '3.0.869';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -1668,6 +1668,133 @@ export default function App() {
         } catch (err) {
           console.error('ALT+SHIFT+C error:', err);
           showGlobalToast('Viga värvimisel', 'error');
+        } finally {
+          setShortcutLoading(null);
+        }
+        return;
+      }
+
+      // ALT+SHIFT+T - Open delivery schedule, show today's deliveries and color them
+      if (key === 't') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (shortcutLoading) return;
+        setShortcutLoading('t');
+
+        try {
+          // Get today's date in database format (YYYY-MM-DD)
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+          // Get vehicles scheduled for today
+          const { data: todayVehicles, error: vError } = await supabase
+            .from('trimble_delivery_vehicles')
+            .select('id, vehicle_code')
+            .eq('trimble_project_id', projectId)
+            .eq('scheduled_date', todayStr);
+
+          if (vError) throw vError;
+
+          if (!todayVehicles || todayVehicles.length === 0) {
+            showGlobalToast('Täna pole tarneid planeeritud', 'info');
+            setCurrentMode('delivery_schedule');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Get all items for today's vehicles
+          const vehicleIds = todayVehicles.map(v => v.id);
+          const { data: todayItems, error: iError } = await supabase
+            .from('trimble_delivery_items')
+            .select('guid_ifc, vehicle_id')
+            .eq('trimble_project_id', projectId)
+            .in('vehicle_id', vehicleIds);
+
+          if (iError) throw iError;
+
+          if (!todayItems || todayItems.length === 0) {
+            showGlobalToast('Tänastes veokites pole detaile', 'info');
+            setCurrentMode('delivery_schedule');
+            setShortcutLoading(null);
+            return;
+          }
+
+          // Color the model white first
+          await handleColorModelWhite();
+
+          // Generate colors for each vehicle using golden ratio
+          const goldenRatio = 0.618033988749895;
+          let hue = 0;
+          const vehicleColors: Record<string, { r: number; g: number; b: number }> = {};
+
+          for (const vehicle of todayVehicles) {
+            hue = (hue + goldenRatio) % 1;
+            const h = hue * 360;
+            const s = 0.7;
+            const l = 0.55;
+            const c = (1 - Math.abs(2 * l - 1)) * s;
+            const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+            const m = l - c / 2;
+            let r = 0, g = 0, b = 0;
+            if (h < 60) { r = c; g = x; }
+            else if (h < 120) { r = x; g = c; }
+            else if (h < 180) { g = c; b = x; }
+            else if (h < 240) { g = x; b = c; }
+            else if (h < 300) { r = x; b = c; }
+            else { r = c; b = x; }
+            vehicleColors[vehicle.id] = {
+              r: Math.round((r + m) * 255),
+              g: Math.round((g + m) * 255),
+              b: Math.round((b + m) * 255)
+            };
+          }
+
+          // Group items by vehicle
+          const itemsByVehicle: Record<string, string[]> = {};
+          for (const item of todayItems) {
+            if (!item.guid_ifc) continue;
+            if (!itemsByVehicle[item.vehicle_id]) {
+              itemsByVehicle[item.vehicle_id] = [];
+            }
+            itemsByVehicle[item.vehicle_id].push(item.guid_ifc);
+          }
+
+          // Find objects in model and color by vehicle
+          let coloredCount = 0;
+          for (const [vehicleId, guids] of Object.entries(itemsByVehicle)) {
+            const color = vehicleColors[vehicleId];
+            if (!color || guids.length === 0) continue;
+
+            const foundObjects = await findObjectsInLoadedModels(api, guids);
+            if (foundObjects.size === 0) continue;
+
+            // Group by model for batch coloring
+            const byModel: Record<string, number[]> = {};
+            for (const [, found] of foundObjects) {
+              if (!byModel[found.modelId]) byModel[found.modelId] = [];
+              byModel[found.modelId].push(found.runtimeId);
+            }
+
+            // Apply color
+            const BATCH_SIZE = 500;
+            for (const [modelId, runtimeIds] of Object.entries(byModel)) {
+              for (let i = 0; i < runtimeIds.length; i += BATCH_SIZE) {
+                const batch = runtimeIds.slice(i, i + BATCH_SIZE);
+                await api.viewer.setObjectState(
+                  { modelObjectIds: [{ modelId, objectRuntimeIds: batch }] },
+                  { color: { r: color.r, g: color.g, b: color.b, a: 255 } }
+                );
+              }
+            }
+            coloredCount += foundObjects.size;
+          }
+
+          // Navigate to delivery schedule
+          setCurrentMode('delivery_schedule');
+          showGlobalToast(`Täna ${todayVehicles.length} veoki, ${coloredCount} detaili värvitud`, 'success');
+        } catch (err) {
+          console.error('ALT+SHIFT+T error:', err);
+          showGlobalToast('Viga tarnete laadimisel', 'error');
         } finally {
           setShortcutLoading(null);
         }

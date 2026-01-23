@@ -79,6 +79,11 @@ const guideCategories: GuideCategory[] = [
         id: 'alt_shift_c',
         title: 'ALT + SHIFT + C',
         description: 'Värvib kogu mudeli valgeks (nagu ALT+SHIFT+W), aga mudelis valitud detailid värvitakse tumeroheliseks. Kasulik kindlate detailide esiletoomiseks.'
+      },
+      {
+        id: 'alt_shift_t',
+        title: 'ALT + SHIFT + T',
+        description: 'Avab tarnegraafiku ja värvib tänased tarned. Iga veok saab erineva värvi (sama mis tarnegraafiku listis). Kui tänaseks pole tarneid, annab teada.'
       }
     ]
   }
