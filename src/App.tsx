@@ -13,6 +13,7 @@ import ArrivedDeliveriesScreen from './components/ArrivedDeliveriesScreen';
 import IssuesScreen from './components/IssuesScreen';
 import ToolsScreen from './components/ToolsScreen';
 import DeliveryShareGallery from './components/DeliveryShareGallery';
+import DeliverySpreadsheetEditor from './components/DeliverySpreadsheetEditor';
 import CranePlannerScreen from './components/CranePlannerScreen';
 import CraneLibraryScreen from './components/CraneLibraryScreen';
 import KeyboardShortcutsScreen from './components/KeyboardShortcutsScreen';
@@ -32,7 +33,7 @@ import './App.css';
 // Initialize offline queue on app load
 initOfflineQueue();
 
-export const APP_VERSION = '3.0.874';
+export const APP_VERSION = '3.0.875';
 
 // Super admin - always has full access regardless of database settings
 const SUPER_ADMIN_EMAIL = 'silver.vatsel@rivest.ee';
@@ -52,7 +53,9 @@ interface SelectedInspectionType {
 }
 
 // Check if running in popup mode
-const isPopupMode = new URLSearchParams(window.location.search).get('popup') === 'delivery';
+const popupType = new URLSearchParams(window.location.search).get('popup');
+const isPopupMode = popupType === 'delivery';
+const isSpreadsheetMode = popupType === 'spreadsheet';
 const popupProjectId = new URLSearchParams(window.location.search).get('projectId') || '';
 
 // Check if this is a share gallery page
@@ -413,9 +416,9 @@ export default function App() {
   const [api, setApi] = useState<WorkspaceAPI.WorkspaceAPI | null>(null);
   const [user, setUser] = useState<TrimbleExUser | null>(null);
   const [tcUser, setTcUser] = useState<TrimbleConnectUser | null>(null);
-  const [loading, setLoading] = useState(isPopupMode ? false : true);
+  const [loading, setLoading] = useState(isPopupMode || isSpreadsheetMode ? false : true);
   const [error, setError] = useState<string>('');
-  const [projectId, setProjectId] = useState<string>(isPopupMode ? popupProjectId : '');
+  const [projectId, setProjectId] = useState<string>(isPopupMode || isSpreadsheetMode ? popupProjectId : '');
   const [currentMode, setCurrentMode] = useState<InspectionMode | null>(isPopupMode ? 'delivery_schedule' : null);
   const [selectedInspectionType, setSelectedInspectionType] = useState<SelectedInspectionType | null>(null);
   const [authError, setAuthError] = useState<string>('');
@@ -466,9 +469,9 @@ export default function App() {
 
   // Ühenduse loomine Trimble Connect'iga ja kasutaja kontroll
   useEffect(() => {
-    // Skip Trimble initialization in popup mode
-    if (isPopupMode) {
-      console.log('Running in popup mode, skipping Trimble Connect initialization');
+    // Skip Trimble initialization in popup/spreadsheet mode
+    if (isPopupMode || isSpreadsheetMode) {
+      console.log('Running in popup/spreadsheet mode, skipping Trimble Connect initialization');
       return;
     }
 
@@ -2090,6 +2093,18 @@ export default function App() {
   // Share gallery mode - public page without authentication
   if (isShareMode && shareToken) {
     return <DeliveryShareGallery token={shareToken} />;
+  }
+
+  // Spreadsheet editor mode - standalone spreadsheet editor window
+  if (isSpreadsheetMode && popupProjectId) {
+    return (
+      <div className="container spreadsheet-mode">
+        <DeliverySpreadsheetEditor
+          projectId={popupProjectId}
+          onClose={() => window.close()}
+        />
+      </div>
+    );
   }
 
   // Popup mode - show only delivery schedule

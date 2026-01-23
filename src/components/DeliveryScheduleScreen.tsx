@@ -8025,6 +8025,15 @@ export default function DeliveryScheduleScreen({ api, projectId, user: _user, tc
                 <button onClick={() => { setShowImportExportMenu(false); setShowExportModal(true); }}>
                   <FiDownload size={14} /> Eksport
                 </button>
+                <div className="dropdown-divider" />
+                <button onClick={() => {
+                  setShowImportExportMenu(false);
+                  const baseUrl = window.location.origin + (import.meta.env.BASE_URL || '/');
+                  const url = `${baseUrl}?popup=spreadsheet&projectId=${projectId}`;
+                  window.open(url, '_blank', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
+                }}>
+                  <FiEdit2 size={14} /> Ava tabelina
+                </button>
               </div>
             )}
           </div>
